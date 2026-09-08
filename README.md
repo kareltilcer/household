@@ -25,6 +25,7 @@ commercially:
 |---|---|
 | [`docs/prd/README.md`](docs/prd/README.md) | PRD index and reading order |
 | [`docs/api/openapi.yaml`](docs/api/openapi.yaml) | The complete HTTP contract (OpenAPI 3.1) |
+| [`docs/design/README.md`](docs/design/README.md) | Design handoff — the brief, foundations, components, patterns and screen inventory derived from the PRD |
 
 Start with [`docs/prd/00-overview.md`](docs/prd/00-overview.md).
 
