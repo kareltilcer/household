@@ -1,0 +1,20 @@
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Go
+/bin/
+*.exe
+
+# Local environment
+.env
+.env.local
