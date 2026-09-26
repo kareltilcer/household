@@ -206,7 +206,7 @@ Phase 0 · after — · size M
 - **Done when**
   - A fresh clone reaches a green `test` with only docker, pnpm and Go installed.
   - CI is green, and the committed `openapi.yaml` validates under both validators.
-- **PR:** —
+- **PR:** [#4](https://github.com/kareltilcer/household/pull/4)
 
 ### 2 · Server skeleton and contract enforcement · `planned`
 
