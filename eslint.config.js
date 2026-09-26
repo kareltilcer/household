@@ -5,6 +5,54 @@ import eslint from '@eslint/js'
 import { defineConfig, globalIgnores } from 'eslint/config'
 import tseslint from 'typescript-eslint'
 
+// 06-clients §8: "zero suppressions without a linked issue". A suppression cites the issue
+// that removes it as `#123` or an `…/issues/123` link.
+const linkedIssue = String.raw`(#|/issues/)\d+`
+
+/**
+ * Holds ESLint's own suppressions to that rule. An `eslint-disable`, `eslint-disable-line`
+ * or `eslint-disable-next-line` directive, or an inline `eslint` rule setting, carries the
+ * issue in its description: `// eslint-disable-next-line <rule> -- #123 <why>`. Without
+ * this, one comment switches off `no-explicit-any` or `ban-ts-comment` and CI stays green.
+ * @type {import('eslint').Rule.RuleModule}
+ */
+const linkedSuppressions = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'Require every ESLint suppression to cite the issue that removes it' },
+    schema: [],
+    messages: {
+      unlinked:
+        'A suppression cites the issue that removes it (06-clients §8): add it after ` -- `, ' +
+        'as `#123` or an …/issues/123 link.',
+    },
+  },
+  create(context) {
+    const issue = new RegExp(linkedIssue, 'u')
+    // ESLint reads only the `-line` forms from a `//` comment, and every form from `/* */`.
+    const inLine = new Set(['eslint-disable-line', 'eslint-disable-next-line'])
+    const inBlock = new Set([...inLine, 'eslint-disable', 'eslint'])
+    return {
+      Program() {
+        // Each comment is split as ESLint splits a directive: the directive, then the
+        // description after the first ` -- `.
+        for (const comment of context.sourceCode.getAllComments()) {
+          const separator = /\s-{2,}\s/u.exec(comment.value)
+          const directive = separator ? comment.value.slice(0, separator.index) : comment.value
+          const description = separator
+            ? comment.value.slice(separator.index + separator[0].length)
+            : ''
+          const label = /^([a-z]+(?:-[a-z]+)*)(?:\s|$)/u.exec(directive.trim())?.[1] ?? ''
+          const suppresses = (comment.type === 'Block' ? inBlock : inLine).has(label)
+          if (suppresses && !issue.test(description) && comment.loc) {
+            context.report({ loc: comment.loc, messageId: 'unlinked' })
+          }
+        }
+      },
+    }
+  },
+}
+
 export default defineConfig(
   globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/']),
   {
@@ -23,6 +71,9 @@ export default defineConfig(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    plugins: {
+      household: { rules: { 'linked-suppressions': linkedSuppressions } },
+    },
     rules: {
       // 06-clients: "No `any`, no non-null assertions — both are lint errors, not
       // warnings." strictTypeChecked already sets both; they are restated so that a
@@ -31,14 +82,15 @@ export default defineConfig(
       '@typescript-eslint/no-non-null-assertion': 'error',
       // 06-clients §8: "zero suppressions without a linked issue". `@ts-ignore` and
       // `@ts-nocheck` stay banned outright, and `@ts-expect-error` must cite the issue
-      // that removes it, as `#123` or an `…/issues/123` link.
+      // that removes it; ESLint's own disable comments must too.
       '@typescript-eslint/ban-ts-comment': [
         'error',
         {
           minimumDescriptionLength: 10,
-          'ts-expect-error': { descriptionFormat: String.raw`(#|/issues/)\d+` },
+          'ts-expect-error': { descriptionFormat: linkedIssue },
         },
       ],
+      'household/linked-suppressions': 'error',
     },
   },
   {

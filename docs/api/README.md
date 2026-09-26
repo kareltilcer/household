@@ -96,5 +96,7 @@ Three authoring hazards this document has already been bitten by, worth remember
    — while PyYAML and `openapi-spec-validator` accept it, so the other validator below stays green
    and hides the break. Keep every `{ ... }` on one line.
 
-CI runs the validator, a `$ref` resolution check and a route/contract diff against the
-implementation ([07-nonfunctional.md](../prd/07-nonfunctional.md) §6).
+CI runs both validators, openapi-spec-validator and Redocly, and each of them resolves every
+`$ref`. The route/contract diff against the implementation
+([07-nonfunctional.md](../prd/07-nonfunctional.md) §6) joins them with the server skeleton, plan
+item 2.

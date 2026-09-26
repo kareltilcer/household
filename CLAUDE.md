@@ -88,7 +88,9 @@ pnpm run down         # stop the services; volumes are kept
   cannot be tested against one.
 - **TypeScript is strict**: `strict` plus `noUncheckedIndexedAccess`,
   `exactOptionalPropertyTypes`, `noImplicitOverride` and `noFallthroughCasesInSwitch`. `any`
-  and non-null assertions are lint errors, and lint warnings fail the build.
+  and non-null assertions are lint errors, and lint warnings fail the build. A suppression
+  cites the issue that removes it: `// @ts-expect-error #123 …` or
+  `// eslint-disable-next-line <rule> -- #123 …`; `@ts-ignore` is banned.
 
 ## Working from the plan
 

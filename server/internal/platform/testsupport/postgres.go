@@ -17,10 +17,12 @@ import (
 const DatabaseURLEnv = "HOUSEHOLD_TEST_DATABASE_URL"
 
 // DefaultDatabaseURL is the postgres service in docker-compose.yml, so a fresh clone
-// needs no configuration once `pnpm run up` has started it.
+// needs no configuration once `pnpm run up` has started it. It names 127.0.0.1, the only
+// address compose publishes on: `localhost` can resolve to ::1 first, where another
+// PostgreSQL on the machine would answer instead.
 //
 //nolint:gosec // G101: the compose default, public and bound to 127.0.0.1; not a secret.
-const DefaultDatabaseURL = "postgres://postgres:postgres@localhost:5432/household?sslmode=disable"
+const DefaultDatabaseURL = "postgres://postgres:postgres@127.0.0.1:5432/household?sslmode=disable"
 
 // DatabaseURL returns the value of DatabaseURLEnv when it is set and not empty, and
 // DefaultDatabaseURL otherwise.

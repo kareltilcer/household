@@ -54,22 +54,29 @@ const packages = strings(workspace.packages)
   .map((dir) => dir.split('\\').join('/'))
   .sort()
 
-// Where the lint guard asks ESLint for its settings: sources (src/, and app/, where
-// expo-router keeps its routes) and the unit, component and end-to-end test files the
-// clients add (items 24 and 28), in every TypeScript extension. A `files` override that
-// relaxes a rule for tests relaxes it as surely as one on src/.
+// Where the lint guard asks ESLint for its settings, in every TypeScript extension: sources
+// (src/; app/, where expo-router keeps its routes; the Expo template's top-level
+// components/, hooks/ and constants/), a config file at the package root (vite.config.ts,
+// playwright.config.ts), and the unit, component and end-to-end test files the clients add
+// (items 24 and 28). A `files` override that relaxes a rule for tests relaxes it as surely
+// as one on src/.
 const lintProbes = [
+  'probe.config',
   'src/probe',
   'src/probe.test',
   'src/__tests__/probe',
   'e2e/probe.spec',
   'app/probe',
+  'components/probe',
+  'hooks/probe',
+  'constants/probe',
 ].flatMap((stem) => ['ts', 'tsx', 'mts', 'cts'].map((ext) => `${stem}.${ext}`))
 
 const lintRules = [
   '@typescript-eslint/no-explicit-any',
   '@typescript-eslint/no-non-null-assertion',
   '@typescript-eslint/ban-ts-comment',
+  'household/linked-suppressions',
 ]
 
 // Each whole setting, options included. A rule can stay at `error` while its options switch
@@ -87,6 +94,8 @@ const strictLint = {
       'ts-expect-error': { descriptionFormat: String.raw`(#|/issues/)\d+` },
     },
   ],
+  // And so does an ESLint disable comment, or one comment could switch off any rule above.
+  'household/linked-suppressions': [2],
   reportUnusedDisableDirectives: 2,
 }
 
@@ -130,6 +139,36 @@ describe('the workspace', () => {
       }
     }
     expect(drift).toEqual([])
+  })
+})
+
+describe('an ESLint suppression', () => {
+  // The rule reads comments, not types, so a JavaScript probe exercises it without a
+  // TypeScript project behind it. `undefinedName` gives each directive something to suppress.
+  const probe = join(root, 'tooling', 'src', 'suppression-probe.js')
+  async function unlinked(code: string): Promise<number> {
+    const [result] = await eslint.lintText(code, { filePath: probe })
+    return (result?.messages ?? []).filter(
+      (message) => message.ruleId === 'household/linked-suppressions',
+    ).length
+  }
+
+  it.each([
+    '// eslint-disable-next-line no-undef\nundefinedName()\n',
+    'undefinedName() // eslint-disable-line no-undef -- defined by the host page\n',
+    '/* eslint-disable no-undef */\nundefinedName()\n',
+    '/* eslint no-undef: "off" */\nundefinedName()\n',
+  ])('fails without a linked issue: %j', async (code) => {
+    expect(await unlinked(code)).toBe(1)
+  })
+
+  it.each([
+    '// eslint-disable-next-line no-undef -- #12 defined by the host page\nundefinedName()\n',
+    'undefinedName() // eslint-disable-line no-undef -- https://github.com/o/r/issues/12\n',
+    '/* eslint-disable no-undef -- #12 */\nundefinedName()\n',
+    '/* eslint no-undef: "off" -- #12 */\nundefinedName()\n',
+  ])('passes with one: %j', async (code) => {
+    expect(await unlinked(code)).toBe(0)
   })
 })
 
@@ -255,9 +294,12 @@ describe('a developer machine and CI', () => {
       ...(isRecord(scripts) ? Object.values(scripts) : []),
     ]
       .filter((command): command is string => typeof command === 'string')
-      .flatMap((command) => command.split('\n'))
-      .filter((line) => /\bgo test\b/.test(line))
+      // One shell command each, so every `go test` is judged on its own flags: continued
+      // lines joined, then split at line ends, `;`, `&&` and `||`.
+      .flatMap((script) => script.replace(/\\\r?\n/g, ' ').split(/\r?\n|;|&&|\|\|/))
+      .map((command) => command.trim())
+      .filter((command) => /\bgo test\b/.test(command))
     expect(goTests, 'no `go test` in any workflow or the root scripts').not.toEqual([])
-    expect(goTests.filter((line) => !/\s-count=1\b/.test(line))).toEqual([])
+    expect(goTests.filter((command) => !/\s--?count[=\s]+1\b/.test(command))).toEqual([])
   })
 })

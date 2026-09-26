@@ -12,8 +12,9 @@ linters:
     - noctx
     - rowserrcheck
     - sqlclosecheck
-    # A switch over an enum must name every member: the ProblemCode switch the API
-    # README promises is exhaustive only if something checks it.
+    # A switch over a Go enum must name every member, so a ProblemCode, role or merge
+    # policy added later fails the build where it is not handled. (The clients' switch on
+    # `code`, which the API README calls exhaustive, is TypeScript's to check.)
     - exhaustive
     - gosec
     # A //nolint must name the linter it silences and say why.
