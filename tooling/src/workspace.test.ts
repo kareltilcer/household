@@ -54,6 +54,49 @@ const packages = strings(workspace.packages)
   .map((dir) => dir.split('\\').join('/'))
   .sort()
 
+// Where the lint guard asks ESLint for its settings: sources (src/, and app/, where
+// expo-router keeps its routes) and the unit, component and end-to-end test files the
+// clients add (items 24 and 28), in every TypeScript extension. A `files` override that
+// relaxes a rule for tests relaxes it as surely as one on src/.
+const lintProbes = [
+  'src/probe',
+  'src/probe.test',
+  'src/__tests__/probe',
+  'e2e/probe.spec',
+  'app/probe',
+].flatMap((stem) => ['ts', 'tsx', 'mts', 'cts'].map((ext) => `${stem}.${ext}`))
+
+const lintRules = [
+  '@typescript-eslint/no-explicit-any',
+  '@typescript-eslint/no-non-null-assertion',
+  '@typescript-eslint/ban-ts-comment',
+]
+
+// Each whole setting, options included. A rule can stay at `error` while its options switch
+// off what it checks: `ignoreRestArgs`, `'ts-ignore': false`, or a descriptionFormat of `.*`.
+// A probe that no config covers, or that is ignored, has no settings and fails too.
+const strictLint = {
+  '@typescript-eslint/no-explicit-any': [2],
+  '@typescript-eslint/no-non-null-assertion': [2],
+  // 06-clients §8: a type-check suppression links the issue that removes it. `@ts-ignore`
+  // and `@ts-nocheck` are left at the rule's default, which bans them.
+  '@typescript-eslint/ban-ts-comment': [
+    2,
+    {
+      minimumDescriptionLength: 10,
+      'ts-expect-error': { descriptionFormat: String.raw`(#|/issues/)\d+` },
+    },
+  ],
+  reportUnusedDisableDirectives: 2,
+}
+
+function lintSettings(config: unknown): Json {
+  return {
+    ...Object.fromEntries(lintRules.map((name) => [name, field(config, 'rules', name)])),
+    reportUnusedDisableDirectives: field(config, 'linterOptions', 'reportUnusedDisableDirectives'),
+  }
+}
+
 describe('the workspace', () => {
   it('holds the packages PL-1 lays out', () => {
     expect(packages).toEqual(
@@ -95,10 +138,13 @@ describe.each(packages)('%s', (dir) => {
     const scripts = field(readRecord(`${dir}/package.json`), 'scripts')
     // Exact commands, not patterns. The guards below read tsconfig.json and the ESLint
     // config file, so `tsc -p <another project>` or `eslint --rule …` would compile or lint
-    // under settings neither guard sees. A package that needs another command extends
-    // these guards to cover it.
-    expect(field(scripts, 'typecheck')).toBe('tsc --noEmit')
-    expect(field(scripts, 'lint')).toBe('eslint . --max-warnings=0')
+    // under settings neither guard sees.
+    const remedy =
+      'the strictness guards read only tsconfig.json and the ESLint config, so they vouch for ' +
+      'no other command. For another layout (`tsc -b` over project references, say), first ' +
+      'extend tooling/src/workspace.test.ts to check what that command compiles or lints'
+    expect(field(scripts, 'typecheck'), `${dir} typecheck: ${remedy}`).toBe('tsc --noEmit')
+    expect(field(scripts, 'lint'), `${dir} lint: ${remedy}`).toBe('eslint . --max-warnings=0')
   })
 
   it('is configured with the strict flags of 06-clients', () => {
@@ -151,55 +197,67 @@ describe.each(packages)('%s', (dir) => {
     expect(family.filter((flag) => options[flag] === false)).toEqual([])
   })
 
-  it.each(['ts', 'tsx'])(
-    'lints `any`, non-null assertions and unlinked suppressions in .%s as errors',
-    async (ext) => {
-      const config: unknown = await eslint.calculateConfigForFile(
-        join(root, dir, 'src', `probe.${ext}`),
-      )
-      const rule = (name: string): unknown => field(config, 'rules', name)
-      // Each whole setting, options included. A rule can stay at `error` while its options
-      // switch off what it checks: `ignoreRestArgs`, `'ts-ignore': false`, or a
-      // descriptionFormat of `.*`.
-      expect(rule('@typescript-eslint/no-explicit-any')).toEqual([2])
-      expect(rule('@typescript-eslint/no-non-null-assertion')).toEqual([2])
-      expect(field(config, 'linterOptions', 'reportUnusedDisableDirectives')).toBe(2)
-      // 06-clients §8: a type-check suppression links the issue that removes it.
-      // `@ts-ignore` and `@ts-nocheck` are left at the rule's default, which bans them.
-      expect(rule('@typescript-eslint/ban-ts-comment')).toEqual([
-        2,
-        {
-          minimumDescriptionLength: 10,
-          'ts-expect-error': { descriptionFormat: String.raw`(#|/issues/)\d+` },
-        },
-      ])
-    },
-  )
+  it('lints `any`, non-null assertions and unlinked suppressions as errors, in tests too', async () => {
+    const settings = await Promise.all(
+      lintProbes.map(async (probe) => {
+        const config: unknown = await eslint.calculateConfigForFile(join(root, dir, probe))
+        return [probe, lintSettings(config)] as const
+      }),
+    )
+    expect(Object.fromEntries(settings)).toEqual(
+      Object.fromEntries(lintProbes.map((probe) => [probe, strictLint])),
+    )
+  })
 })
 
 describe('a developer machine and CI', () => {
-  const ci = readRecord('.github/workflows/ci.yml')
+  // Every job of every workflow, named `<file>#<job>`. A job added later (a nightly
+  // conformance run, an end-to-end suite) is held to the same pins as the go job.
+  const jobs = globSync(['.github/workflows/*.yml', '.github/workflows/*.yaml'], { cwd: root })
+    .map((path) => path.split('\\').join('/'))
+    .sort()
+    .flatMap((path) => {
+      const defined = field(readRecord(path), 'jobs')
+      return isRecord(defined)
+        ? Object.entries(defined).map(([name, job]) => [`${path}#${name}`, job] as const)
+        : []
+    })
 
   it('run the same PostgreSQL image', () => {
     const compose = readRecord('docker-compose.yml')
     const local = field(compose, 'services', 'postgres', 'image')
     expect(local).toMatch(/^postgres:17\./)
-    expect(field(ci, 'jobs', 'go', 'services', 'postgres', 'image')).toBe(local)
+    expect(
+      field(readRecord('.github/workflows/ci.yml'), 'jobs', 'go', 'services', 'postgres', 'image'),
+    ).toBe(local)
+
+    const postgres = jobs.flatMap(([job, definition]) => {
+      const services = field(definition, 'services')
+      if (!isRecord(services)) return []
+      return Object.entries(services)
+        .map(([name, service]) => [`${job} ${name}`, field(service, 'image')] as const)
+        .filter(([, image]) => typeof image === 'string' && /(^|\/)postgres[:@]/.test(image))
+    })
+    expect(Object.fromEntries(postgres)).toEqual(
+      Object.fromEntries(postgres.map(([where]) => [where, local])),
+    )
   })
 
   // A cached `go test` result passes a database test without running it: CI restores Go's
   // cache through setup-go, and locally the compose Postgres may not be running.
   it('run the Go tests uncached', () => {
-    const steps = field(ci, 'jobs', 'go', 'steps')
     const scripts = field(readRecord('package.json'), 'scripts')
     const goTests = [
-      ...(Array.isArray(steps) ? steps.map((step: unknown) => field(step, 'run')) : []),
+      ...jobs.flatMap(([, definition]) => {
+        const steps = field(definition, 'steps')
+        return Array.isArray(steps) ? steps.map((step: unknown) => field(step, 'run')) : []
+      }),
       ...(isRecord(scripts) ? Object.values(scripts) : []),
     ]
       .filter((command): command is string => typeof command === 'string')
       .flatMap((command) => command.split('\n'))
       .filter((line) => /\bgo test\b/.test(line))
-    expect(goTests, 'no `go test` in the CI go job or the root scripts').not.toEqual([])
+    expect(goTests, 'no `go test` in any workflow or the root scripts').not.toEqual([])
     expect(goTests.filter((line) => !/\s-count=1\b/.test(line))).toEqual([])
   })
 })

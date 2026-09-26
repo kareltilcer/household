@@ -37,13 +37,15 @@ Both clients consume a generated, typed client — a contract change that breaks
 build ([06-clients.md](../prd/06-clients.md) §1).
 
 ```bash
-npx openapi-typescript docs/api/openapi.yaml -o packages/api/src/schema.d.ts
+pnpm dlx openapi-typescript docs/api/openapi.yaml -o packages/api/src/schema.d.ts
 ```
 
 ## Read
 
+Render the reference to a single HTML file (`dist/` is git-ignored) and open it in a browser:
+
 ```bash
-npx @redocly/cli preview-docs docs/api/openapi.yaml
+pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
 ```
 
 ## Conventions worth knowing before reading

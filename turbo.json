@@ -2,7 +2,12 @@
   "$schema": "https://turborepo.com/schema.json",
   "globalDependencies": ["tsconfig.base.json", "eslint.config.js"],
   "tasks": {
+    // `gen` also serves as the transit task below: typecheck, lint and test depend on
+    // `^gen`, so their hashes cover the files of the workspace packages they import. The
+    // chain has to recurse, or only direct dependencies count, and an edit two packages
+    // down would replay a cached pass.
     "gen": {
+      "dependsOn": ["^gen"],
       "cache": false
     },
     "typecheck": {

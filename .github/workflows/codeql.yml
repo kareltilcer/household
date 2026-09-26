@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   analyze:
     name: CodeQL (${{ matrix.language }})
@@ -44,7 +48,8 @@ jobs:
           build-mode: ${{ matrix.build-mode }}
           queries: security-extended
           # design/v1 is the clickable prototype, a behavioural reference that never ships
-          # (implementation plan, "Precedence of sources").
+          # (implementation plan, "Precedence of sources"); docs/ holds the specification,
+          # with no code to analyse.
           config: |
             paths-ignore:
               - design/**
