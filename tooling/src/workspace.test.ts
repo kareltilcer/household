@@ -91,10 +91,14 @@ describe('the workspace', () => {
 })
 
 describe.each(packages)('%s', (dir) => {
-  it('is typechecked and linted, with warnings failing the lint', () => {
+  it('is typechecked and linted by exactly the commands these guards read', () => {
     const scripts = field(readRecord(`${dir}/package.json`), 'scripts')
-    expect(field(scripts, 'typecheck')).toMatch(/\btsc\b/)
-    expect(field(scripts, 'lint')).toMatch(/\beslint\b.*--max-warnings=0/)
+    // Exact commands, not patterns. The guards below read tsconfig.json and the ESLint
+    // config file, so `tsc -p <another project>` or `eslint --rule …` would compile or lint
+    // under settings neither guard sees. A package that needs another command extends
+    // these guards to cover it.
+    expect(field(scripts, 'typecheck')).toBe('tsc --noEmit')
+    expect(field(scripts, 'lint')).toBe('eslint . --max-warnings=0')
   })
 
   it('is configured with the strict flags of 06-clients', () => {
@@ -112,6 +116,9 @@ describe.each(packages)('%s', (dir) => {
     expect(parsed.errors.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual(
       [],
     )
+    // A solution-style tsconfig (`files: []` plus references) would pass every flag below
+    // while `tsc --noEmit` compiled nothing.
+    expect(parsed.fileNames, `${dir}/tsconfig.json compiles no files`).not.toEqual([])
 
     const { options } = parsed
     expect({
@@ -150,22 +157,22 @@ describe.each(packages)('%s', (dir) => {
       const config: unknown = await eslint.calculateConfigForFile(
         join(root, dir, 'src', `probe.${ext}`),
       )
-      const severity = (rule: string): unknown => {
-        const setting = field(config, 'rules', rule)
-        return Array.isArray(setting) ? setting[0] : setting
-      }
-      const options = (rule: string): unknown => {
-        const setting = field(config, 'rules', rule)
-        return Array.isArray(setting) ? setting[1] : undefined
-      }
-      expect(severity('@typescript-eslint/no-explicit-any')).toBe(2)
-      expect(severity('@typescript-eslint/no-non-null-assertion')).toBe(2)
+      const rule = (name: string): unknown => field(config, 'rules', name)
+      // Each whole setting, options included. A rule can stay at `error` while its options
+      // switch off what it checks: `ignoreRestArgs`, `'ts-ignore': false`, or a
+      // descriptionFormat of `.*`.
+      expect(rule('@typescript-eslint/no-explicit-any')).toEqual([2])
+      expect(rule('@typescript-eslint/no-non-null-assertion')).toEqual([2])
       expect(field(config, 'linterOptions', 'reportUnusedDisableDirectives')).toBe(2)
       // 06-clients §8: a type-check suppression links the issue that removes it.
-      expect(severity('@typescript-eslint/ban-ts-comment')).toBe(2)
-      expect(
-        field(options('@typescript-eslint/ban-ts-comment'), 'ts-expect-error', 'descriptionFormat'),
-      ).toEqual(expect.any(String))
+      // `@ts-ignore` and `@ts-nocheck` are left at the rule's default, which bans them.
+      expect(rule('@typescript-eslint/ban-ts-comment')).toEqual([
+        2,
+        {
+          minimumDescriptionLength: 10,
+          'ts-expect-error': { descriptionFormat: String.raw`(#|/issues/)\d+` },
+        },
+      ])
     },
   )
 })
@@ -178,5 +185,21 @@ describe('a developer machine and CI', () => {
     const local = field(compose, 'services', 'postgres', 'image')
     expect(local).toMatch(/^postgres:17\./)
     expect(field(ci, 'jobs', 'go', 'services', 'postgres', 'image')).toBe(local)
+  })
+
+  // A cached `go test` result passes a database test without running it: CI restores Go's
+  // cache through setup-go, and locally the compose Postgres may not be running.
+  it('run the Go tests uncached', () => {
+    const steps = field(ci, 'jobs', 'go', 'steps')
+    const scripts = field(readRecord('package.json'), 'scripts')
+    const goTests = [
+      ...(Array.isArray(steps) ? steps.map((step: unknown) => field(step, 'run')) : []),
+      ...(isRecord(scripts) ? Object.values(scripts) : []),
+    ]
+      .filter((command): command is string => typeof command === 'string')
+      .flatMap((command) => command.split('\n'))
+      .filter((line) => /\bgo test\b/.test(line))
+    expect(goTests, 'no `go test` in the CI go job or the root scripts').not.toEqual([])
+    expect(goTests.filter((line) => !/\s-count=1\b/.test(line))).toEqual([])
   })
 })

@@ -24,7 +24,7 @@
     "test:go": "cd server && go test -count=1 ./...",
     "audit:go": "cd server && go tool -modfile=tools/govulncheck.mod govulncheck ./...",
     "audit:ts": "pnpm audit --audit-level=high",
-    "secrets": "cd server && go tool -modfile=tools/gitleaks.mod gitleaks git --redact --no-banner ..",
+    "secrets": "cd server && go tool -modfile=tools/gitleaks.mod gitleaks git --redact --no-banner --verbose ..",
     "format": "prettier --write . && cd server && go tool -modfile=tools/golangci-lint.mod golangci-lint fmt",
     "format:check": "prettier --check ."
   },

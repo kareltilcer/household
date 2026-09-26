@@ -18,9 +18,9 @@ func TestDatabaseURLPrefersTheEnvironment(t *testing.T) {
 	}
 }
 
-// The compose service and the CI service container both run PostgreSQL 17, the major
-// production runs (PL-8). A test suite green against another major proves nothing about
-// row-level security or planner behaviour on the one that ships.
+// The compose service and the CI service container both run PostgreSQL 17, the major the
+// server is built on (PRD 01 §1, PL-2). A test suite green against another major proves
+// nothing about row-level security or planner behaviour on the one that ships.
 func TestTheTestDatabaseIsPostgres17(t *testing.T) {
 	conn := testsupport.Connect(t)
 	var version int

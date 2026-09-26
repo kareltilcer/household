@@ -49,7 +49,7 @@ Follow the [module model](https://github.com/kareltilcer/household/blob/main/doc
 - [ ] **Identity and structure.** A stable module id; its own goose migration block; routes under the tenant and grant middleware.
 - [ ] **Audit actions** with summary keys.
 - [ ] **Sync entities**, each with a merge policy; the `state_set` key and resolution where the policy is `state_set`; any `additive` cross-row invariant; a redacted projection where one is needed.
-- [ ] **Offline-write flags** set for the D-84 phase.
+- [ ] **Offline-write flags** set for the D-84 phase. A `strict_version` entity whose server item merges after item 67 ships with offline writes on; item 67 turns them on for every module merged before it.
 - [ ] **Export and erase** implemented.
 - [ ] **Catalog contributions**: widgets with their D-42 client projection, metrics, lists, reminder kinds, search scopes and storage.
 - [ ] **Absence.** `404`, not `403`. The nine absence surfaces are tested for a member with `none`.
