@@ -45,7 +45,15 @@ const linkedSuppressions = {
           const label = /^([a-z]+(?:-[a-z]+)*)(?:\s|$)/u.exec(directive.trim())?.[1] ?? ''
           const suppresses = (comment.type === 'Block' ? inBlock : inLine).has(label)
           if (suppresses && !issue.test(description) && comment.loc) {
-            context.report({ loc: comment.loc, messageId: 'unlinked' })
+            // Reported one column before the comment. A directive takes effect from its own
+            // position, so a report on the comment itself is silenced by the very directive
+            // it is about: a bare `/* eslint-disable */` or `// eslint-disable-line`, or one
+            // naming this rule, would pass unlinked. Column -1 sorts ahead of every
+            // directive on the line (the technique of eslint-plugin-eslint-comments).
+            context.report({
+              loc: { start: { line: comment.loc.start.line, column: -1 }, end: comment.loc.end },
+              messageId: 'unlinked',
+            })
           }
         }
       },

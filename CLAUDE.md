@@ -45,7 +45,8 @@ pnpm run down         # stop the services; volumes are kept
   `HOUSEHOLD_TEST_DATABASE_URL` to point them elsewhere.
 - CI ([`.github/workflows/`](.github/workflows/)) runs the checks above (typecheck, lint,
   format check and test), plus openapi-spec-validator, govulncheck, pnpm audit, gitleaks
-  and CodeQL. It does not run `gen`.
+  and CodeQL. Typecheck, lint and test depend on each package's `gen` in turbo, so CI
+  runs every package's `gen` script too; it does not run `go generate`.
 
 ## Layout
 

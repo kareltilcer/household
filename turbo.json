@@ -2,28 +2,29 @@
   "$schema": "https://turborepo.com/schema.json",
   "globalDependencies": ["tsconfig.base.json", "eslint.config.js"],
   "tasks": {
-    // `gen` also serves as the transit task below: typecheck, lint and test depend on
-    // `^gen`, so their hashes cover the files of the workspace packages they import. The
-    // chain has to recurse, or only direct dependencies count, and an edit two packages
-    // down would replay a cached pass.
+    // `gen` also serves as the transit task below. It depends on `^gen`, which recurses, and
+    // typecheck, lint and test depend on their own package's `gen`, so their hashes cover the
+    // files of every workspace package they import, directly or not. Without the recursion
+    // only direct dependencies would count, and an edit two packages down would replay a
+    // cached pass.
     "gen": {
       "dependsOn": ["^gen"],
       "cache": false
     },
     "typecheck": {
-      "dependsOn": ["gen", "^gen"]
+      "dependsOn": ["gen"]
     },
     "lint": {
-      "dependsOn": ["gen", "^gen"]
+      "dependsOn": ["gen"]
     },
     "test": {
-      "dependsOn": ["gen", "^gen"]
+      "dependsOn": ["gen"]
     },
     // The workspace guards read files outside tooling/ (docker-compose.yml, the CI
     // workflow, every package's manifest and tsconfig), none of which are in this task's
     // hash. A cached result would pass a guard over files it never re-read.
     "@household/tooling#test": {
-      "dependsOn": ["gen", "^gen"],
+      "dependsOn": ["gen"],
       "cache": false
     }
   }

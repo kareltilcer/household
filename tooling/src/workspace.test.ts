@@ -128,7 +128,12 @@ describe('the workspace', () => {
     const drift: string[] = []
     for (const dir of ['.', ...packages]) {
       const manifest = readRecord(`${dir}/package.json`)
-      for (const kind of ['dependencies', 'devDependencies']) {
+      for (const kind of [
+        'dependencies',
+        'devDependencies',
+        'peerDependencies',
+        'optionalDependencies',
+      ]) {
         const deps = field(manifest, kind)
         if (!isRecord(deps)) continue
         for (const [name, spec] of Object.entries(deps)) {
@@ -158,6 +163,10 @@ describe('an ESLint suppression', () => {
     'undefinedName() // eslint-disable-line no-undef -- defined by the host page\n',
     '/* eslint-disable no-undef */\nundefinedName()\n',
     '/* eslint no-undef: "off" */\nundefinedName()\n',
+    // A directive that switches off every rule, or this one, must not silence its own report.
+    '/* eslint-disable */\nundefinedName()\n',
+    'undefinedName() // eslint-disable-line\n',
+    '/* eslint-disable household/linked-suppressions */\nundefinedName() // eslint-disable-line no-undef\n',
   ])('fails without a linked issue: %j', async (code) => {
     expect(await unlinked(code)).toBe(1)
   })
@@ -167,6 +176,8 @@ describe('an ESLint suppression', () => {
     'undefinedName() // eslint-disable-line no-undef -- https://github.com/o/r/issues/12\n',
     '/* eslint-disable no-undef -- #12 */\nundefinedName()\n',
     '/* eslint no-undef: "off" -- #12 */\nundefinedName()\n',
+    '/* eslint-disable -- #12 */\nundefinedName()\n',
+    'undefinedName() // eslint-disable-line -- #12 defined by the host page\n',
   ])('passes with one: %j', async (code) => {
     expect(await unlinked(code)).toBe(0)
   })
@@ -273,9 +284,11 @@ describe('a developer machine and CI', () => {
     const postgres = jobs.flatMap(([job, definition]) => {
       const services = field(definition, 'services')
       if (!isRecord(services)) return []
+      // Every PostgreSQL image: tagged, pinned by digest, or bare (`postgres`, meaning latest).
+      const isPostgres = /(^|\/)postgres([:@]|$)/
       return Object.entries(services)
         .map(([name, service]) => [`${job} ${name}`, field(service, 'image')] as const)
-        .filter(([, image]) => typeof image === 'string' && /(^|\/)postgres[:@]/.test(image))
+        .filter(([, image]) => typeof image === 'string' && isPostgres.test(image))
     })
     expect(Object.fromEntries(postgres)).toEqual(
       Object.fromEntries(postgres.map(([where]) => [where, local])),

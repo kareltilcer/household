@@ -38,7 +38,8 @@ jobs:
           --health-timeout 5s
           --health-retries 30
     env:
-      HOUSEHOLD_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/household?sslmode=disable
+      # 127.0.0.1, not localhost, for the reason testsupport.DefaultDatabaseURL gives.
+      HOUSEHOLD_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/household?sslmode=disable
     defaults:
       run:
         working-directory: server
@@ -138,4 +139,7 @@ jobs:
         with:
           install: false
       - name: pnpm audit
+        # `pnpm run` otherwise installs the whole workspace before running a script.
+        env:
+          PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'
         run: pnpm run audit:ts
