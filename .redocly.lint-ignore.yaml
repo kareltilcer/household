@@ -1,7 +1,7 @@
 # Redocly findings in openapi.yaml that were reviewed and are kept on purpose. Each entry
 # silences one location only, so the same rule still fails on anything new.
-# Regenerate with `pnpm exec redocly lint docs/api/openapi.yaml --generate-ignore-file`,
-# then restore these comments.
+# Regenerate with `pnpm exec redocly lint docs/api/openapi.yaml --extends=recommended-strict
+# --generate-ignore-file`, then restore these comments.
 docs/api/openapi.yaml:
   # No public licence yet; the legal pages arrive with plan item 94.
   info-license-strict:

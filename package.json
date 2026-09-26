@@ -19,7 +19,7 @@
     "lint": "pnpm run lint:ts && pnpm run lint:go && pnpm run lint:api && pnpm run format:check",
     "lint:ts": "turbo run lint",
     "lint:go": "cd server && go tool -modfile=tools/golangci-lint.mod golangci-lint run",
-    "lint:api": "redocly lint docs/api/openapi.yaml",
+    "lint:api": "redocly lint docs/api/openapi.yaml --extends=recommended-strict",
     "test": "turbo run test && pnpm run test:go",
     "test:go": "cd server && go test -count=1 ./...",
     "audit:go": "cd server && go tool -modfile=tools/govulncheck.mod govulncheck ./...",

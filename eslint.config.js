@@ -62,7 +62,9 @@ const linkedSuppressions = {
 }
 
 export default defineConfig(
-  globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/']),
+  // design/ holds the clickable ES5 prototype, a reference that never ships; Prettier and
+  // CodeQL skip it too. An editor that lints it with this file would flag every script.
+  globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/', 'design/']),
   {
     linterOptions: {
       // A suppression that suppresses nothing is an error, so a rule cannot be switched

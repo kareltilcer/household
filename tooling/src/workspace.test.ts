@@ -58,14 +58,17 @@ const packages = strings(workspace.packages)
 // (src/; app/, where expo-router keeps its routes; the Expo template's top-level
 // components/, hooks/ and constants/), a config file at the package root (vite.config.ts,
 // playwright.config.ts), and the unit, component and end-to-end test files the clients add
-// (items 24 and 28). A `files` override that relaxes a rule for tests relaxes it as surely
-// as one on src/.
+// (items 24 and 28) wherever their runners look by default: co-located, in __tests__/ (Jest)
+// and in e2e/ or tests/ (Playwright). A `files` override that relaxes a rule for tests
+// relaxes it as surely as one on src/.
 const lintProbes = [
   'probe.config',
   'src/probe',
   'src/probe.test',
   'src/__tests__/probe',
+  '__tests__/probe',
   'e2e/probe.spec',
+  'tests/probe.spec',
   'app/probe',
   'components/probe',
   'hooks/probe',
@@ -83,25 +86,53 @@ const lintRules = [
 // off what it checks: `ignoreRestArgs`, `'ts-ignore': false`, or a descriptionFormat of `.*`.
 // A probe that no config covers, or that is ignored, has no settings and fails too.
 const strictLint = {
-  '@typescript-eslint/no-explicit-any': [2],
-  '@typescript-eslint/no-non-null-assertion': [2],
-  // 06-clients §8: a type-check suppression links the issue that removes it. `@ts-ignore`
-  // and `@ts-nocheck` are left at the rule's default, which bans them.
-  '@typescript-eslint/ban-ts-comment': [
-    2,
-    {
-      minimumDescriptionLength: 10,
-      'ts-expect-error': { descriptionFormat: String.raw`(#|/issues/)\d+` },
-    },
-  ],
-  // And so does an ESLint disable comment, or one comment could switch off any rule above.
-  'household/linked-suppressions': [2],
-  reportUnusedDisableDirectives: 2,
+  rules: {
+    '@typescript-eslint/no-explicit-any': [2],
+    '@typescript-eslint/no-non-null-assertion': [2],
+    // 06-clients §8: a type-check suppression links the issue that removes it. `@ts-ignore`
+    // and `@ts-nocheck` are left at the rule's default, which bans them.
+    '@typescript-eslint/ban-ts-comment': [
+      2,
+      {
+        minimumDescriptionLength: 10,
+        'ts-expect-error': { descriptionFormat: String.raw`(#|/issues/)\d+` },
+      },
+    ],
+    // And so does an ESLint disable comment, or one comment could switch off any rule above.
+    'household/linked-suppressions': [2],
+  },
+  linterOptions: { reportUnusedDisableDirectives: 2 },
 }
 
+/** `over` merged into `base`, objects key by key and anything else replaced whole. */
+function merged(base: unknown, over: unknown): unknown {
+  if (over === undefined) return base
+  if (!isRecord(base) || !isRecord(over)) return over
+  const result: Json = { ...base }
+  for (const [key, value] of Object.entries(over)) result[key] = merged(base[key], value)
+  return result
+}
+
+// A setting as its rule applies it: the severity, then each configured option merged over the
+// rule's default. ESLint reports a setting with the rule's `meta.defaultOptions` already
+// merged in, and typescript-eslint keeps its defaults beside `meta` for now, so the same
+// setting reads `[2]` today and `[2, { fixToUnknown: false, … }]` once a release moves them.
+// Compared this way, neither that move nor a default restated in eslint.config.js fails the
+// guard, and a relaxed default still does.
 function lintSettings(config: unknown): Json {
+  const effective = (name: string): unknown => {
+    const setting = field(config, 'rules', name)
+    if (!Array.isArray(setting)) return setting
+    const [severity, ...options] = setting as unknown[]
+    const slash = name.lastIndexOf('/')
+    const rule = field(config, 'plugins', name.slice(0, slash), 'rules', name.slice(slash + 1))
+    const found = field(rule, 'meta', 'defaultOptions') ?? field(rule, 'defaultOptions')
+    const defaults: unknown[] = Array.isArray(found) ? found : []
+    const length = Math.max(options.length, defaults.length)
+    return [severity, ...Array.from({ length }, (_, i) => merged(defaults[i], options[i]))]
+  }
   return {
-    ...Object.fromEntries(lintRules.map((name) => [name, field(config, 'rules', name)])),
+    ...Object.fromEntries(lintRules.map((name) => [name, effective(name)])),
     reportUnusedDisableDirectives: field(config, 'linterOptions', 'reportUnusedDisableDirectives'),
   }
 }
@@ -251,11 +282,13 @@ describe.each(packages)('%s', (dir) => {
     const settings = await Promise.all(
       lintProbes.map(async (probe) => {
         const config: unknown = await eslint.calculateConfigForFile(join(root, dir, probe))
-        return [probe, lintSettings(config)] as const
+        // The expectation takes its defaults from the same rules the probe's config loaded.
+        const expected = lintSettings({ ...strictLint, plugins: field(config, 'plugins') })
+        return [probe, { actual: lintSettings(config), expected }] as const
       }),
     )
-    expect(Object.fromEntries(settings)).toEqual(
-      Object.fromEntries(lintProbes.map((probe) => [probe, strictLint])),
+    expect(Object.fromEntries(settings.map(([probe, { actual }]) => [probe, actual]))).toEqual(
+      Object.fromEntries(settings.map(([probe, { expected }]) => [probe, expected])),
     )
   })
 })

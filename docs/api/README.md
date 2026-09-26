@@ -26,10 +26,11 @@ And Redocly, pinned in the workspace:
 pnpm run lint:api
 ```
 
-Redocly runs its `recommended-strict` ruleset ([`redocly.yaml`](../../redocly.yaml)), so every
-finding is an error. The findings reviewed and kept on purpose are listed one location at a
-time, each with its reason, in [`.redocly.lint-ignore.yaml`](../../.redocly.lint-ignore.yaml);
-the same rule still fails anywhere else.
+`lint:api` runs Redocly's `recommended-strict` ruleset, so every finding is an error. The
+findings reviewed and kept on purpose are listed one location at a time, each with its reason,
+in [`.redocly.lint-ignore.yaml`](../../.redocly.lint-ignore.yaml); the same rule still fails
+anywhere else. A bare `redocly lint` reads [`redocly.yaml`](../../redocly.yaml), which says why
+it names the lenient `recommended` set instead.
 
 ## Generate clients
 
@@ -39,6 +40,9 @@ build ([06-clients.md](../prd/06-clients.md) §1).
 ```bash
 pnpm dlx openapi-typescript docs/api/openapi.yaml -o packages/api/src/schema.d.ts
 ```
+
+It prints a warning for each finding in `.redocly.lint-ignore.yaml`, a file openapi-typescript
+does not read, and generates the client all the same.
 
 ## Read
 
