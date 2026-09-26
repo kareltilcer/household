@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./shopping.js"></script>
+<script src="./dashboard.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">The host that owns no data</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Dashboard and all twenty-four widgets</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-household)">stage 10 · 10 rows · 17 client layouts</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="8">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="6">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">The reflow is a function in dashboard.js. This page runs it at all three widths; the gate reads the result rather than a description of it.</div>
+      <a href="./Shopping.dc.html" style="font-family:var(--mono);font-size:11px">← stage 09 · shopping</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <sc-if value="{{ isScreens }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:26px;align-items:start">
+          <sc-for list="{{ screens }}" as="s" hint-placeholder-count="1">
+            <div style="display:flex;flex-direction:column;gap:11px;min-width:0;grid-column:{{ s.col }}">
+
+              <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+                <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-household)">{{ s.id }}</span>
+                <h3 style="margin:0;font-size:15px;font-weight:600">{{ s.name }}</h3>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--positive)">{{ s.drawnLabel }}</span>
+              </div>
+
+              <div data-watch="1" data-name="{{ s.id }}" data-locked="{{ s.lockedFlag }}" style="width:100%;max-width:{{ s.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:{{ s.radius }};background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+                <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.route }}</span>
+                  <span style="flex:0 0 auto">{{ s.clientLabel }}</span>
+                </div>
+
+                <div style="flex:1 1 auto;padding:1.05em 0.9em 1em;display:flex;flex-direction:column;gap:0.8em;min-width:0">
+
+                  <div style="display:flex;flex-direction:column;gap:0.3em">
+                    <div style="font-size:1.15em;font-weight:600;line-height:1.25">{{ s.title }}</div>
+                    <sc-if value="{{ s.hasLede }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.82em;line-height:1.5;color:var(--text-muted)">{{ s.lede }}</div>
+                    </sc-if>
+                  </div>
+
+                  <sc-for list="{{ s.notices }}" as="n" hint-placeholder-count="1">
+                    <div style="border:1px solid {{ n.colour }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.7em 0.8em;display:flex;flex-direction:column;gap:0.25em">
+                      <sc-if value="{{ n.hasTitle }}" hint-placeholder-val="{{ true }}">
+                        <div style="font-size:0.8em;font-weight:600;color:{{ n.colour }}">{{ n.title }}</div>
+                      </sc-if>
+                      <div style="font-size:0.78em;line-height:1.5;color:var(--text-primary)">{{ n.body }}</div>
+                    </div>
+                  </sc-for>
+
+                  <sc-if value="{{ s.isImpossible }}" hint-placeholder-val="{{ false }}">
+                    <div style="border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.8em;display:flex;flex-direction:column;gap:0.35em">
+                      <div style="font-family:var(--mono);font-size:0.62em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ s.impossibleTag }}</div>
+                      <div style="font-size:0.78em;line-height:1.55;color:var(--text-primary)">{{ s.impossibleWhy }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isEmptyDash }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.6em;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:1.1em 1em">
+                      <div style="font-size:0.92em;line-height:1.5">{{ s.emptySentence }}</div>
+                      <div style="font-size:0.8em;line-height:1.5;color:var(--text-muted)">{{ s.emptyExample }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isGrid }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-direction:column;gap:0.5em;min-width:0">
+                      <div style="display:grid;grid-template-columns:{{ s.gridCols }};grid-auto-rows:minmax(116px,auto);gap:0.6em;min-width:0">
+                        <sc-for list="{{ s.cells }}" as="w" hint-placeholder-count="6">
+                          <div style="grid-column:span {{ w.span }};grid-row:span {{ w.rowspan }};border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);box-shadow:var(--shadow-1);padding:0.6em 0.65em;display:flex;flex-direction:column;gap:0.45em;min-width:0;overflow:hidden">
+
+                            <div style="display:flex;align-items:baseline;gap:0.45em;min-width:0">
+                              <span style="flex:1 1 auto;min-width:0;font-size:0.82em;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ w.title }}</span>
+                              <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.56em;color:{{ w.chipColour }}">{{ w.module }}</span>
+                              <sc-if value="{{ w.hasRefresh }}" hint-placeholder-val="{{ false }}">
+                                <button onClick="{{ w.refresh }}" data-target="1" data-name="{{ w.key }} refresh" aria-label="Refresh {{ w.title }}" title="Refresh this widget alone" style="flex:0 0 auto;min-width:44px;min-height:44px;margin:-0.3em -0.25em -0.3em 0;border:0;background:transparent;color:var(--text-muted);font-family:var(--mono);font-size:0.6em">↻</button>
+                              </sc-if>
+                            </div>
+
+                            <sc-if value="{{ w.isSkeleton }}" hint-placeholder-val="{{ false }}">
+                              <div style="display:flex;flex-direction:column;gap:0.4em">
+                                <sc-for list="{{ w.skeleton }}" as="k" hint-placeholder-count="3">
+                                  <div style="height:{{ k.h }};width:{{ k.w }};border-radius:var(--radius-control);background:var(--skeleton-bg)"></div>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+
+                            <sc-if value="{{ w.isUnavailable }}" hint-placeholder-val="{{ false }}">
+                              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:0.4em;justify-content:center">
+                                <div style="font-size:0.76em;line-height:1.5;color:var(--text-primary)">{{ w.unavailableBody }}</div>
+                                <button onClick="{{ w.refresh }}" data-target="1" data-name="{{ w.key }} retry" style="align-self:flex-start;min-height:44px;padding:0 0.8em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-primary);font-size:0.72em">Try this one again</button>
+                              </div>
+                            </sc-if>
+
+                            <sc-if value="{{ w.isWidgetEmpty }}" hint-placeholder-val="{{ false }}">
+                              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:0.35em;justify-content:center">
+                                <div style="font-size:0.74em;line-height:1.5;color:var(--text-primary)">{{ w.emptyBody }}</div>
+                                <sc-if value="{{ w.hasEmptyAction }}" hint-placeholder-val="{{ false }}">
+                                  <button data-target="1" data-name="{{ w.key }} empty action" style="align-self:flex-start;min-height:44px;padding:0 0.7em;border:1px solid var(--accent);border-radius:var(--radius-control);background:transparent;color:var(--accent);font-size:0.7em">{{ w.emptyAction }}</button>
+                                </sc-if>
+                              </div>
+                            </sc-if>
+
+                            <sc-if value="{{ w.isList }}" hint-placeholder-val="{{ true }}">
+                              <div style="display:flex;flex-direction:column;min-width:0">
+                                <sc-for list="{{ w.rows }}" as="r" hint-placeholder-count="3">
+                                  <button onPointerDown="{{ r.down }}" onPointerUp="{{ r.up }}" onPointerLeave="{{ r.up }}" onKeyDown="{{ r.key }}" onClick="{{ r.open }}" data-target="1" data-name="{{ w.key }} {{ r.title }}" style="display:flex;align-items:center;gap:0.5em;min-height:44px;padding:0.3em 0.15em;border:0;border-bottom:1px solid var(--divider);background:transparent;text-align:left;color:var(--text-primary);min-width:0;width:100%;position:relative">
+                                    <sc-if value="{{ r.hasBar }}" hint-placeholder-val="{{ false }}">
+                                      <span style="flex:0 0 auto;width:0.22em;align-self:stretch;border-radius:999px;background:{{ r.bar }}"></span>
+                                    </sc-if>
+                                    <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.05em">
+                                      <span style="font-size:0.74em;line-height:1.35;color:{{ r.titleColour }};text-decoration:{{ r.strike }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</span>
+                                      <span style="font-size:0.6em;color:{{ r.metaColour }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.meta }}</span>
+                                    </span>
+                                    <sc-if value="{{ r.hasChip }}" hint-placeholder-val="{{ false }}">
+                                      <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.54em;color:{{ r.chipColour }}">{{ r.chip }}</span>
+                                    </sc-if>
+                                    <sc-if value="{{ r.holding }}" hint-placeholder-val="{{ false }}">
+                                      <span style="position:absolute;left:0;bottom:0;height:0.18em;width:{{ r.pct }};background:var(--hold-fill)"></span>
+                                    </sc-if>
+                                  </button>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+
+                            <sc-if value="{{ w.isCount }}" hint-placeholder-val="{{ false }}">
+                              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:0.25em;min-width:0">
+                                <div style="display:flex;align-items:baseline;gap:0.35em">
+                                  <span style="font-family:var(--mono);font-size:1.5em;line-height:1;color:var(--text-primary)">{{ w.countValue }}</span>
+                                  <span style="font-size:0.62em;color:var(--text-muted)">{{ w.countLabel }}</span>
+                                </div>
+                                <sc-for list="{{ w.countRows }}" as="r" hint-placeholder-count="2">
+                                  <div style="font-size:0.62em;line-height:1.45;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r }}</div>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+
+                            <sc-if value="{{ w.isSplit }}" hint-placeholder-val="{{ false }}">
+                              <div style="display:flex;flex-direction:column;min-width:0">
+                                <sc-for list="{{ w.splits }}" as="r" hint-placeholder-count="3">
+                                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5em;padding:0.28em 0;border-bottom:1px solid var(--divider);min-width:0">
+                                    <span style="flex:1 1 auto;min-width:0;font-size:0.68em;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.k }}</span>
+                                    <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.72em;color:var(--text-primary)">{{ r.v }}</span>
+                                  </div>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+
+                            <sc-if value="{{ w.isBars }}" hint-placeholder-val="{{ false }}">
+                              <div style="display:flex;flex-direction:column;gap:0.4em;min-width:0">
+                                <sc-for list="{{ w.bars }}" as="b" hint-placeholder-count="3">
+                                  <div style="display:flex;flex-direction:column;gap:0.15em;min-width:0">
+                                    <div style="display:flex;justify-content:space-between;gap:0.5em;min-width:0">
+                                      <span style="flex:1 1 auto;min-width:0;font-size:0.66em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.label }}</span>
+                                      <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.6em;color:{{ b.colour }}">{{ b.value }}</span>
+                                    </div>
+                                    <div style="height:0.3em;border-radius:999px;background:var(--hold-track);overflow:hidden">
+                                      <div style="height:100%;width:{{ b.width }};background:{{ b.colour }}"></div>
+                                    </div>
+                                  </div>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+
+                            <sc-if value="{{ w.isAgenda }}" hint-placeholder-val="{{ false }}">
+                              <div style="display:flex;flex-direction:column;gap:0.3em;min-width:0">
+                                <sc-for list="{{ w.days }}" as="d" hint-placeholder-count="4">
+                                  <div style="display:grid;grid-template-columns:4.2em 1fr;gap:0.5em;align-items:baseline;min-width:0">
+                                    <span style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ d.day }}</span>
+                                    <span style="min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                                      <sc-for list="{{ d.items }}" as="i" hint-placeholder-count="1">
+                                        <span style="font-size:0.68em;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ i }}</span>
+                                      </sc-for>
+                                      <sc-if value="{{ d.quiet }}" hint-placeholder-val="{{ false }}">
+                                        <span style="font-size:0.62em;color:var(--text-muted)">nothing</span>
+                                      </sc-if>
+                                    </span>
+                                  </div>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+
+                            <sc-if value="{{ w.isMatrix }}" hint-placeholder-val="{{ false }}">
+                              <div style="display:flex;flex-direction:column;gap:0.25em;min-width:0;overflow:auto">
+                                <div style="display:grid;grid-template-columns:{{ w.matrixCols }};gap:0.2em;align-items:center">
+                                  <span></span>
+                                  <sc-for list="{{ w.matrixHead }}" as="h" hint-placeholder-count="5">
+                                    <span style="font-family:var(--mono);font-size:0.54em;color:var(--text-muted);text-align:center">{{ h }}</span>
+                                  </sc-for>
+                                </div>
+                                <sc-for list="{{ w.matrixRows }}" as="r" hint-placeholder-count="4">
+                                  <div style="display:grid;grid-template-columns:{{ w.matrixCols }};gap:0.2em;align-items:center">
+                                    <span style="font-size:0.6em;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span>
+                                    <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="5">
+                                      <span title="{{ c.title }}" style="height:1.1em;border-radius:0.2em;background:{{ c.bg }};display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:0.5em;color:{{ c.fg }}">{{ c.mark }}</span>
+                                    </sc-for>
+                                  </div>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+
+                            <sc-if value="{{ w.hasFoot }}" hint-placeholder-val="{{ false }}">
+                              <div style="margin-top:auto;font-family:var(--mono);font-size:0.54em;line-height:1.5;color:{{ w.footColour }}">{{ w.foot }}</div>
+                            </sc-if>
+                          </div>
+                        </sc-for>
+                      </div>
+
+                      <sc-if value="{{ s.hasIgnored }}" hint-placeholder-val="{{ false }}">
+                        <sc-for list="{{ s.ignored }}" as="i" hint-placeholder-count="1">
+                          <div style="border:1px dashed var(--border-strong);border-radius:var(--radius-card);padding:0.6em 0.7em;display:flex;flex-direction:column;gap:0.2em">
+                            <div style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ i.key }} · dropped on load</div>
+                            <div style="font-size:0.7em;line-height:1.5;color:var(--text-primary)">{{ i.why }}</div>
+                          </div>
+                        </sc-for>
+                      </sc-if>
+
+                      <sc-if value="{{ s.hasToast }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;align-items:center;gap:0.6em;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface-inverse);color:var(--text-inverse);padding:0.5em 0.7em;min-width:0">
+                          <span style="flex:1 1 auto;min-width:0;font-size:0.72em;line-height:1.4">{{ s.toastBody }}</span>
+                          <button onClick="{{ s.undo }}" data-target="1" data-name="undo" style="flex:0 0 auto;min-height:44px;padding:0 0.7em;border:1px solid var(--text-inverse);border-radius:var(--radius-control);background:transparent;color:var(--text-inverse);font-size:0.7em">Undo</button>
+                        </div>
+                      </sc-if>
+
+                      <div style="font-family:var(--mono);font-size:0.58em;line-height:1.55;color:var(--text-muted)">{{ s.gridNote }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isCatalog }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.7em;min-width:0">
+                      <div style="font-family:var(--mono);font-size:0.6em;color:var(--accent-family-household)">{{ s.catalogLine }}</div>
+                      <sc-for list="{{ s.catalogGroups }}" as="g" hint-placeholder-count="4">
+                        <div style="display:flex;flex-direction:column;gap:0.25em;min-width:0">
+                          <div style="font-family:var(--mono);font-size:0.58em;letter-spacing:0.1em;text-transform:uppercase;color:{{ g.colour }}">{{ g.name }}</div>
+                          <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                            <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2">
+                              <div style="display:flex;align-items:center;gap:0.5em;min-height:52px;padding:0.4em 0.6em;border-bottom:1px solid var(--divider);background:var(--surface-raised);min-width:0">
+                                <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                                  <span style="font-size:0.78em;font-weight:500">{{ r.title }}</span>
+                                  <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.key }} · {{ r.size }} · {{ r.gate }}</span>
+                                </span>
+                                <sc-if value="{{ r.canAdd }}" hint-placeholder-val="{{ true }}">
+                                  <button onClick="{{ r.add }}" data-target="1" data-name="add {{ r.key }}" style="flex:0 0 auto;min-height:44px;padding:0 0.7em;border:1px solid var(--accent);border-radius:var(--radius-control);background:transparent;color:var(--accent);font-size:0.7em">{{ r.addLabel }}</button>
+                                </sc-if>
+                                <sc-if value="{{ r.onScreen }}" hint-placeholder-val="{{ false }}">
+                                  <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">on your home screen</span>
+                                </sc-if>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-for>
+                      <div style="font-family:var(--mono);font-size:0.58em;line-height:1.55;color:var(--text-muted)">{{ s.catalogFoot }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isArrange }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.5em;min-width:0">
+                      <sc-for list="{{ s.arrange }}" as="a" hint-placeholder-count="6">
+                        <div style="display:flex;align-items:center;gap:0.4em;min-height:52px;padding:0.35em 0.5em;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);min-width:0">
+                          <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.62em;color:var(--text-muted);width:1.4em">{{ a.n }}</span>
+                          <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.08em">
+                            <span style="font-size:0.78em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a.title }}</span>
+                            <span style="font-family:var(--mono);font-size:0.56em;color:var(--text-muted)">{{ a.footprint }}</span>
+                          </span>
+                          <button onClick="{{ a.cycle }}" data-arrange="1" data-target="1" data-name="size {{ a.key }}" title="Cycle small · medium · large" style="flex:0 0 auto;min-height:44px;min-width:44px;padding:0 0.6em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-primary);font-family:var(--mono);font-size:0.62em">{{ a.size }}</button>
+                          <button onClick="{{ a.up }}" data-arrange="1" data-target="1" data-name="up {{ a.key }}" aria-label="Move {{ a.title }} up" style="flex:0 0 auto;min-height:44px;min-width:44px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-primary);font-size:0.7em">↑</button>
+                          <button onClick="{{ a.down }}" data-arrange="1" data-target="1" data-name="down {{ a.key }}" aria-label="Move {{ a.title }} down" style="flex:0 0 auto;min-height:44px;min-width:44px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-primary);font-size:0.7em">↓</button>
+                          <button onClick="{{ a.remove }}" data-arrange="1" data-target="1" data-name="remove {{ a.key }}" aria-label="Remove {{ a.title }}" style="flex:0 0 auto;min-height:44px;min-width:44px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-muted);font-size:0.7em">×</button>
+                        </div>
+                      </sc-for>
+                      <div style="font-family:var(--mono);font-size:0.58em;line-height:1.55;color:var(--text-muted)">{{ s.arrangeFoot }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isOwner }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.6em;min-width:0">
+                      <sc-for list="{{ s.ownerScopes }}" as="o" hint-placeholder-count="3">
+                        <div style="display:flex;flex-direction:column;gap:0.25em;border:1px solid {{ o.border }};border-radius:var(--radius-card);background:var(--surface-raised);padding:0.6em 0.7em;min-width:0">
+                          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5em">
+                            <span style="font-size:0.8em;font-weight:600">{{ o.name }}</span>
+                            <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ o.count }}</span>
+                          </div>
+                          <div style="font-size:0.72em;line-height:1.5;color:var(--text-muted)">{{ o.body }}</div>
+                          <div style="font-family:var(--mono);font-size:0.58em;line-height:1.5;color:var(--text-primary)">{{ o.keys }}</div>
+                        </div>
+                      </sc-for>
+                      <div style="font-family:var(--mono);font-size:0.58em;line-height:1.55;color:var(--text-muted)">{{ s.ownerFoot }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isAdopt }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.6em;min-width:0">
+                      <div style="border:1px solid var(--info);border-radius:var(--radius-card);background:var(--surface-raised);padding:0.75em 0.8em;display:flex flex-direction:column;gap:0.35em;display:flex;flex-direction:column">
+                        <div style="font-size:0.82em;font-weight:600">{{ s.adoptTitle }}</div>
+                        <div style="font-size:0.76em;line-height:1.55;color:var(--text-primary)">{{ s.adoptBody }}</div>
+                        <div style="font-family:var(--mono);font-size:0.58em;line-height:1.5;color:var(--text-muted)">{{ s.adoptDiff }}</div>
+                      </div>
+                      <div style="font-family:var(--mono);font-size:0.58em;line-height:1.55;color:var(--text-muted)">{{ s.adoptFoot }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.writesAbsent }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-family:var(--mono);font-size:0.6em;line-height:1.5;color:var(--warning)">{{ s.writesAbsentLine }}</div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.hasControls }}" hint-placeholder-val="{{ true }}">
+                    <div style="margin-top:auto;padding-top:0.7em;display:flex;flex-wrap:wrap;gap:0.4em;align-items:center">
+                      <sc-if value="{{ s.hasPrimary }}" hint-placeholder-val="{{ true }}">
+                        <button data-target="1" data-name="{{ s.id }} primary" style="min-height:48px;padding:0 1em;border:1px solid var(--accent);border-radius:var(--radius-control);background:var(--accent);color:var(--text-on-accent);font-size:0.8em;font-weight:500">{{ s.primary }}</button>
+                      </sc-if>
+                      <sc-for list="{{ s.secondaries }}" as="b" hint-placeholder-count="2">
+                        <button data-arrange="{{ s.arrangeFlag }}" data-target="1" data-name="{{ s.id }} {{ b }}" style="min-height:48px;padding:0 0.9em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-primary);font-size:0.78em">{{ b }}</button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:6px;max-width:{{ s.frameMax }}">
+                <div style="font-size:12.5px;line-height:1.55;color:var(--text-primary)">{{ s.note }}</div>
+                <div style="font-family:var(--mono);font-size:10.5px;line-height:1.55;color:var(--text-muted)">{{ s.foot }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ showReflow }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:18px;border-top:1px solid var(--border);padding-top:24px">
+            <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+              <h3 style="margin:0;font-family:var(--serif);font-size:20px;font-weight:400">The same ordered list, placed at 2, 4 and 6 columns</h3>
+              <span style="font-family:var(--mono);font-size:11px;color:{{ reflowColour }}">{{ reflowVerdict }}</span>
+            </div>
+            <p style="margin:0;max-width:78ch;font-size:13.5px;line-height:1.6;color:var(--text-muted)">The placement below is what <span style="font-family:var(--mono);font-size:0.92em">reflow()</span> returns for the live layout. Nothing about a widget's own content or the widths it will be seen at enters into it: the ordered list and the column count are the only inputs, and a widget that does not fit the space left in a row starts the next one rather than swapping places with something smaller.</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;align-items:start">
+              <sc-for list="{{ reflows }}" as="r" hint-placeholder-count="3">
+                <div style="display:flex;flex-direction:column;gap:9px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:14px">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+                    <span style="font-size:14px;font-weight:600">{{ r.name }}</span>
+                    <span style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ r.meta }}</span>
+                  </div>
+                  <div style="display:grid;grid-template-columns:{{ r.cols }};gap:3px">
+                    <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="6">
+                      <div title="{{ c.title }}" style="grid-column:span {{ c.span }};grid-row:span {{ c.rowspan }};min-height:{{ c.h }};display:flex;align-items:center;border:1px solid {{ c.border }};border-radius:5px;background:{{ c.bg }};padding:4px 5px;font-family:var(--mono);font-size:9px;line-height:1.3;color:var(--text-primary);overflow:hidden"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.label }}</span></div>
+                    </sc-for>
+                  </div>
+                  <div style="font-family:var(--mono);font-size:10px;line-height:1.5;color:{{ r.gapColour }}">{{ r.gapLine }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+              <sc-for list="{{ outcomes }}" as="o" hint-placeholder-count="3">
+                <div style="display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--divider);padding-top:10px">
+                  <div style="font-family:var(--mono);font-size:11px;color:{{ o.colour }}">{{ o.name }} · {{ o.verdict }}</div>
+                  <div style="font-size:12.5px;line-height:1.55;color:var(--text-primary)">{{ o.detail }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showAudit }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:14px;border-top:1px solid var(--border);padding-top:24px">
+            <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+              <h3 style="margin:0;font-family:var(--serif);font-size:20px;font-weight:400">Where the twenty-four keys were</h3>
+              <span style="font-family:var(--mono);font-size:11px;color:{{ auditColour }}">{{ auditVerdict }}</span>
+            </div>
+            <p style="margin:0;max-width:78ch;font-size:13.5px;line-height:1.6;color:var(--text-muted)">The ledger recorded this as the gap blocking the stage: twenty-four widgets named, no list of keys. There is one — distributed. Each module page names its own contributions, and the module model's table carries the count each page is asserted against. Collected below and checked module by module.</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:var(--divider);border:1px solid var(--divider)">
+              <sc-for list="{{ auditRows }}" as="a" hint-placeholder-count="8">
+                <div style="background:var(--surface-raised);padding:11px 13px;display:flex;flex-direction:column;gap:4px">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                    <span style="font-size:13px;font-weight:600">{{ a.module }}</span>
+                    <span style="font-family:var(--mono);font-size:10.5px;color:{{ a.colour }}">{{ a.count }}</span>
+                  </div>
+                  <div style="font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--text-muted)">{{ a.keys }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isGate }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:30px;max-width:1100px">
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <h3 style="margin:0;font-family:var(--serif);font-size:22px;font-weight:400">The gate</h3>
+          <p style="margin:0;max-width:78ch;font-size:14px;line-height:1.6;color:var(--text-muted)">The stage's own line is that reflow is deterministic from the ordered list alone at all three widths. It is checked by running the function, not by reading the rule. The rest is computed from dashboard.js or measured on this page at the current theme, density and text size.</p>
+          <div style="display:flex;flex-direction:column;gap:1px;background:var(--divider);border:1px solid var(--divider)">
+            <sc-for list="{{ checks }}" as="c" hint-placeholder-count="10">
+              <div style="background:var(--surface-raised);padding:14px 16px;display:grid;grid-template-columns:56px 1fr;gap:14px;align-items:start">
+                <span style="font-family:var(--mono);font-size:10.5px;color:{{ c.colour }};padding-top:2px">{{ c.verdict }}</span>
+                <span style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                  <span style="font-size:14px;font-weight:600">{{ c.name }}</span>
+                  <span style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</span>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h3 style="margin:0;font-family:var(--serif);font-size:20px;font-weight:400">Measured live</h3>
+            <span style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ measuredContext }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;background:var(--divider);border:1px solid var(--divider)">
+            <sc-for list="{{ measurements }}" as="m" hint-placeholder-count="4">
+              <div style="background:var(--surface-raised);padding:14px;display:flex;flex-direction:column;gap:5px">
+                <span style="font-family:var(--mono);font-size:24px;line-height:1;color:{{ m.colour }}">{{ m.value }}</span>
+                <span style="font-size:12.5px;color:var(--text-primary)">{{ m.label }}</span>
+                <span style="font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--text-muted)">{{ m.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h3 style="margin:0;font-family:var(--serif);font-size:20px;font-weight:400">Twelve states, per row</h3>
+            <span style="font-family:var(--mono);font-size:10.5px;color:var(--positive)">{{ occurrenceLine }}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px;background:var(--divider);border:1px solid var(--divider)">
+            <sc-for list="{{ occurrence }}" as="o" hint-placeholder-count="8">
+              <div style="background:var(--surface-raised);padding:12px 14px;display:grid;grid-template-columns:minmax(160px,240px) 92px 1fr;gap:14px;align-items:start">
+                <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                  <span style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-household)">{{ o.id }}</span>
+                  <span style="font-size:13px">{{ o.name }}</span>
+                </span>
+                <span style="font-family:var(--mono);font-size:10.5px;color:{{ o.colour }}">{{ o.possible }} · {{ o.drawn }} drawn</span>
+                <span style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ o.impossible }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h3 style="margin:0;font-family:var(--serif);font-size:20px;font-weight:400">What this stage settled, and what it opens</h3>
+          <div style="display:flex;flex-direction:column;gap:1px;background:var(--divider);border:1px solid var(--divider)">
+            <sc-for list="{{ open }}" as="o" hint-placeholder-count="4">
+              <div style="background:var(--surface-raised);padding:14px 16px;display:flex;flex-direction:column;gap:5px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                  <span style="font-size:14px;font-weight:600">{{ o.title }}</span>
+                  <span style="font-family:var(--mono);font-size:10px;color:{{ o.tagColour }}">{{ o.tag }}</span>
+                </div>
+                <span style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ o.detail }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dashboard&quot;,&quot;widgets&quot;,&quot;shell&quot;,&quot;catalog&quot;,&quot;arrange&quot;,&quot;owner&quot;,&quot;child&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Stage 10&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100,
+            st: "populated", cols: 6, member: "jana", layout: null, source: "jana",
+            failing: false, hold: null, done: {}, toast: null, measured: null };
+
+  get S() { return window.HH_DASHBOARD; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (window.HH_DASHBOARD && window.HH_TOKENS && window.HH_FIXTURES) {
+        clearInterval(this._boot);
+        this.setState({ layout: window.HH_DASHBOARD.layouts.jana.slice() });
+        this._schedule();
+      }
+    }, 60);
+    this._onResize = () => this._schedule();
+    window.addEventListener("resize", this._onResize);
+  }
+  componentWillUnmount() {
+    clearInterval(this._boot);
+    clearInterval(this._holdTimer);
+    window.removeEventListener("resize", this._onResize);
+    if (this._raf) cancelAnimationFrame(this._raf);
+  }
+  componentDidUpdate() { this._schedule(); }
+
+  _schedule() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = requestAnimationFrame(() => this._measure());
+  }
+
+  _measure() {
+    var targets = [].slice.call(document.querySelectorAll('[data-target="1"]'));
+    var fails = [], min = 0;
+    targets.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      var h = Math.round(r.height), w = Math.round(r.width);
+      if (!h && !w) return;
+      if (!min || h < min) min = h;
+      if (h < 44) fails.push((el.getAttribute("data-name") || "").slice(0, 26) + " " + w + "\u00d7" + h);
+    });
+    var watched = [].slice.call(document.querySelectorAll('[data-watch="1"]'));
+    var over = [];
+    watched.forEach(function (el) {
+      if (el.scrollWidth - el.clientWidth > 2) over.push(el.getAttribute("data-name") || "?");
+    });
+    var locked = document.querySelectorAll('[data-locked="1"] [data-arrange="1"]').length;
+    var m = { targets: targets.length, tFail: fails.length, tMin: min, tNames: fails.slice(0, 3),
+              watched: watched.length, oFail: over.length, oNames: over.slice(0, 3), locked: locked };
+    if (JSON.stringify(m) !== JSON.stringify(this.state.measured)) this.setState({ measured: m });
+  }
+
+  view() { return this.state.view || this.props.startView || "dashboard"; }
+
+  tone(t) {
+    return t === "danger" ? "var(--danger)" : t === "warning" ? "var(--warning)"
+      : t === "info" ? "var(--info)" : "var(--border-strong)";
+  }
+
+  moduleColour(key) {
+    var T = window.HH_TOKENS;
+    if (!T) return "var(--text-muted)";
+    var hit = T.accentMap.filter(function (a) { return a[0] === key; })[0];
+    if (!hit) return "var(--text-muted)";
+    return hit[2] === "garden" ? "var(--accent-garden)" : "var(--accent-family-" + hit[2] + ")";
+  }
+
+  moduleName(key) {
+    var T = window.HH_TOKENS;
+    var hit = T ? T.accentMap.filter(function (a) { return a[0] === key; })[0] : null;
+    return hit ? hit[1] : key;
+  }
+
+  /* ── the live layout ───────────────────────────────────────────────────── */
+
+  entries() {
+    var S = this.S;
+    if (this.state.source !== "jana") return S.layouts[this.state.source].slice();
+    return this.state.layout || S.layouts.jana.slice();
+  }
+
+  resolved() { return this.S.resolve(this.entries(), this.state.member); }
+
+  setEntries(next) {
+    if (this.state.source !== "jana") { this.setState({ source: "jana", layout: next }); return; }
+    this.setState({ layout: next });
+  }
+
+  move(key, dir) {
+    var e = this.entries().slice();
+    var i = e.map(function (x) { return x.key; }).indexOf(key), j = i + dir;
+    if (i < 0 || j < 0 || j >= e.length) return;
+    var t = e[i]; e[i] = e[j]; e[j] = t;
+    this.setEntries(e);
+  }
+
+  cycle(key) {
+    var S = this.S;
+    this.setEntries(this.entries().map(function (x) {
+      if (x.key !== key) return x;
+      var n = (S.sizes.indexOf(x.size) + 1) % S.sizes.length;
+      return { key: x.key, size: S.sizes[n] };
+    }));
+  }
+
+  drop(key) {
+    this.setEntries(this.entries().filter(function (x) { return x.key !== key; }));
+  }
+
+  addWidget(key) {
+    var S = this.S;
+    if (this.entries().filter(function (x) { return x.key === key; }).length) return;
+    this.setEntries(this.entries().concat([{ key: key, size: S.byKey[key].size }]));
+  }
+
+  /* ── hold to complete (FR-DB6, 02-components §4.1) ─────────────────────── */
+
+  startHold(id) {
+    var self = this;
+    clearInterval(this._holdTimer);
+    this.setState({ hold: { id: id, pct: 0 } });
+    this._holdTimer = setInterval(function () {
+      var h = self.state.hold;
+      if (!h) { clearInterval(self._holdTimer); return; }
+      var pct = h.pct + 10;                     /* ten steps of 200 ms — stepped, not swept */
+      if (pct >= 100) {
+        clearInterval(self._holdTimer);
+        self.complete(id);
+        return;
+      }
+      self.setState({ hold: { id: id, pct: pct } });
+    }, 200);
+  }
+
+  endHold() { clearInterval(this._holdTimer); if (this.state.hold) this.setState({ hold: null }); }
+
+  complete(id, viaKeyboard) {
+    var done = Object.assign({}, this.state.done);
+    done[id] = true;
+    this.setState({
+      hold: null, done: done,
+      toast: { body: "Completed \u201c" + id.split("|")[1] + "\u201d \u00b7 sent to the owning module with via = dashboard" +
+                     (viaKeyboard ? ", from the keyboard" : ""), id: id }
+    });
+  }
+
+  undo() {
+    var t = this.state.toast;
+    if (!t) return;
+    var done = Object.assign({}, this.state.done);
+    delete done[t.id];
+    this.setState({ done: done, toast: null });
+  }
+
+  /* ── one widget ────────────────────────────────────────────────────────── */
+
+  widgetVals(entry, ctx) {
+    var self = this, S = this.S, w = entry.widget || S.byKey[entry.key];
+    var cols = ctx.cols, size = entry.size || w.size;
+    var st = ctx.st;
+    var unavailable = ctx.unavailable === w.key || (ctx.perWidgetError && st === "error");
+    var skeleton = st === "loading";
+    var widgetEmpty = st === "empty" && ctx.widgetEmpty;
+    var canAct = !!w.act && ctx.canAct && (entry.level === undefined || entry.level === "contribute" || entry.level === "manage" || ctx.owner);
+    var out = {
+      key: w.key, title: w.title, module: w.module,
+      chipColour: this.moduleColour(w.module),
+      span: String(S.span(size, cols)), rowspan: String(S.rowspan(size, cols)),
+      hasRefresh: !skeleton && !unavailable && ctx.refreshable,
+      refresh: function () { self.setState({ failing: false }); },
+      isSkeleton: skeleton,
+      skeleton: [{ h: "0.7em", w: "80%" }, { h: "0.7em", w: "62%" }, { h: "0.7em", w: "74%" }],
+      isUnavailable: unavailable,
+      unavailableBody: "This widget is unavailable just now. Everything else on the screen is fine.",
+      isWidgetEmpty: widgetEmpty,
+      emptyBody: "Nothing here yet. " + w.says,
+      hasEmptyAction: !!w.act && canAct,
+      emptyAction: w.act ? (w.act.verb === "add" ? "Add the first one" : "Open " + this.moduleName(w.module)) : "",
+      isList: false, isCount: false, isSplit: false, isBars: false, isAgenda: false, isMatrix: false,
+      hasFoot: false, foot: "", footColour: "var(--text-muted)"
+    };
+    if (skeleton || unavailable || widgetEmpty) return out;
+
+    var body = w.kind;
+    if (w.key === "shopping.lists") {
+      var SH = window.HH_SHOPPING;
+      out.isSplit = true;
+      out.splits = SH
+        ? SH.lists.map(function (l) { return { k: l.name, v: l.open ? String(l.open) : "\u2014" }; })
+        : [{ k: "Shopping", v: "8" }, { k: "Hardware store", v: "3" }];
+      out.hasFoot = true;
+      out.foot = SH ? "counts read from shopping.js" : "shopping.js not loaded";
+    } else if (body === "list") {
+      out.isList = true;
+      out.rows = w.data.map(function (r, i) {
+        var id = w.key + "|" + r.title;
+        var isDone = !!self.state.done[id] || r.done;
+        var holding = self.state.hold && self.state.hold.id === id;
+        var holdable = !!r.hold && canAct && !isDone;
+        return {
+          title: r.title, meta: isDone && !r.done ? "done \u00b7 just now, from here" : r.meta,
+          titleColour: isDone ? "var(--text-muted)" : "var(--text-primary)",
+          strike: isDone ? "line-through" : "none",
+          metaColour: r.tone === "danger" ? "var(--danger)" : r.tone === "warning" ? "var(--warning)" : "var(--text-muted)",
+          hasBar: !!r.bar, bar: r.bar || "transparent",
+          hasChip: !!r.chip && r.chip !== w.module, chip: r.chip ? self.moduleName(r.chip) : "",
+          chipColour: self.moduleColour(r.chip || w.module),
+          holding: !!holding, pct: holding ? self.state.hold.pct + "%" : "0%",
+          down: holdable ? function () { self.startHold(id); } : function () {},
+          up: holdable ? function () { self.endHold(); } : function () {},
+          key: holdable ? function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); self.complete(id, true); } } : function () {},
+          open: function () {}
+        };
+      });
+      if (canAct) {
+        out.hasFoot = true;
+        out.foot = "hold 2000 ms to complete \u00b7 Enter completes without the hold";
+      } else if (w.act) {
+        out.hasFoot = true;
+        out.foot = "read here \u2014 completing needs contribute, so the control is absent";
+      }
+    } else if (body === "count") {
+      out.isCount = true;
+      out.countValue = w.data.value; out.countLabel = w.data.label; out.countRows = w.data.rows;
+    } else if (body === "split") {
+      out.isSplit = true;
+      out.splits = w.data.map(function (r) { return { k: r[0], v: r[1] }; });
+    } else if (body === "bars") {
+      out.isBars = true;
+      out.bars = w.data.map(function (b) {
+        var over = b[1] > 100, none = b[1] === 0;
+        return { label: b[0], value: b[2], width: Math.min(b[1], 100) + "%",
+                 colour: none ? "var(--warning)" : over ? "var(--danger)" : "var(--accent)" };
+      });
+    } else if (body === "agenda") {
+      out.isAgenda = true;
+      out.days = w.data.map(function (d) { return { day: d.day, items: d.items, quiet: d.items.length === 0 }; });
+    } else if (body === "grid") {
+      out.isMatrix = true;
+      out.matrixHead = w.data.days;
+      out.matrixCols = "3.2em repeat(" + w.data.days.length + ", 1fr)";
+      out.matrixRows = w.data.members.map(function (m, i) {
+        return { name: m, cells: w.data.cells[i].map(function (v, j) {
+          return { mark: v === 2 ? "\u2713\u2713" : v === 1 ? "\u2713" : "",
+                   title: m + " \u00b7 " + w.data.days[j] + " \u00b7 " + (v ? v + " done" : "nothing due"),
+                   bg: v ? "color-mix(in oklab, var(--accent-family-time) " + (v * 22) + "%, transparent)" : "var(--surface-sunken)",
+                   fg: "var(--text-primary)" };
+        }) };
+      });
+    }
+    return out;
+  }
+
+  /* ── one screen ────────────────────────────────────────────────────────── */
+
+  screenVals(s) {
+    var S = this.S, self = this, st = this.state.st;
+    var allowed = s.preset === "D" ? S.allStates : ["populated"];
+    if (allowed.indexOf(st) < 0) st = "populated";
+    var imp = (s.impossible || {})[st];
+    var wide = this.state.cols !== 2;
+    var locked = s.id === "C-7";
+    var child = s.view === "child";
+    var perWidgetError = s.kind === "shell" || s.kind === "set";
+    var loading = st === "loading" && !imp;
+    var erroring = st === "error" && !!s.error && !imp && !perWidgetError;
+    var isEmptyState = st === "empty";
+    var treatment = !imp && ["offline", "pending", "syncing", "conflicted", "rejected",
+                             "absent", "withdrawn", "readonly"].indexOf(st) >= 0
+      ? ((s.states || {})[st] || S.treatments[st]) : null;
+    var bodyGone = !!imp || st === "absent" || st === "withdrawn" || erroring;
+    var canWrite = !bodyGone && st !== "readonly" && !loading;
+    var notices = [];
+    if (erroring) notices.push(s.error);
+    else if (treatment) notices.push(treatment);
+    var showBody = !bodyGone;
+    var impCount = Object.keys(s.impossible || {}).length;
+    var cols = child ? 2 : this.state.cols;
+
+    var out = {
+      id: s.id, name: s.name, route: s.route, title: s.title,
+      lede: s.lede, hasLede: !!s.lede && !bodyGone,
+      foot: s.foot, note: s.note,
+      lockedFlag: locked ? "1" : "0",
+      arrangeFlag: s.kind === "arrange" ? "1" : "0",
+      clientLabel: s.client === "b" ? "both clients" : cols === 2 ? "phone \u00b7 2 columns" : cols === 4 ? "tablet \u00b7 4 columns" : "web \u00b7 6 columns",
+      col: s.client === "b" || (!child && s.kind === "dashboard") || s.kind === "set" ? "1 / -1" : "auto",
+      frameMax: child ? (this.state.scale === 200 ? "560px" : "400px")
+        : cols === 2 ? (this.state.scale === 200 ? "560px" : "400px")
+        : cols === 4 ? "760px" : "1180px",
+      radius: cols === 2 && s.client !== "b" ? "22px" : "var(--radius-card)",
+      notices: notices.map(function (n) {
+        return { colour: self.tone(n.tone), title: n.title, hasTitle: !!n.title, body: n.body };
+      }),
+      isImpossible: !!imp,
+      impossibleTag: st + " cannot occur here",
+      impossibleWhy: imp || "",
+      isGrid: false, isCatalog: false, isArrange: false, isOwner: false, isAdopt: false,
+      isEmptyDash: false,
+      writesAbsent: !bodyGone && !loading && st === "readonly",
+      writesAbsentLine: "Arranging, adding and completing are absent, not disabled. The banner above is the whole explanation.",
+      hasControls: !loading && !bodyGone && !(locked) && (!!s.primary || (s.secondary || []).length > 0),
+      hasPrimary: !loading && !bodyGone && st !== "readonly" && !!s.primary,
+      primary: s.primary,
+      secondaries: loading || bodyGone || st === "readonly" || locked ? [] : (s.secondary || []),
+      drawnLabel: (allowed.length - impCount) + " of " + allowed.length + " states",
+      hasToast: false, hasIgnored: false, ignored: []
+    };
+
+    if (!showBody) return out;
+
+    if (s.kind === "dashboard" || s.kind === "set" || s.kind === "shell" || s.kind === "unavailable") {
+      out.isGrid = !isEmptyState || s.kind !== "dashboard";
+      out.gridCols = "repeat(" + cols + ", minmax(0, 1fr))";
+      var ctx = { cols: cols, st: st, unavailable: null, perWidgetError: perWidgetError,
+                  canAct: canWrite, refreshable: s.kind !== "set", widgetEmpty: s.kind !== "dashboard",
+                  owner: this.state.member === "jana" };
+
+      if (s.kind === "dashboard") {
+        var r = child ? S.resolve(S.layouts.child, "adam") : this.resolved();
+        if (this.state.failing && !child) ctx.unavailable = "reminders.due";
+        if (isEmptyState) {
+          out.isGrid = false;
+          out.isEmptyDash = true;
+          out.emptySentence = S.empty.sentence;
+          out.emptyExample = S.empty.example;
+          out.primary = S.empty.action;
+          out.hasPrimary = true;
+          out.hasControls = true;
+          out.secondaries = [];
+        } else {
+          if (locked) ctx.canAct = canWrite;
+          out.cells = r.entries.map(function (e) { return self.widgetVals(e, ctx); });
+          out.hasIgnored = r.ignored.length > 0 && !child;
+          out.ignored = r.ignored;
+          var pl = S.reflow(r.entries, cols);
+          out.gridNote = pl.rows.length + " rows \u00b7 " + pl.units + " row units \u00b7 " +
+            pl.interiorGaps + " interior gap cells \u00b7 " + pl.trailingGap + " trailing" +
+            (locked ? " \u00b7 no arrange control in this frame" : "");
+          out.hasToast = !!this.state.toast && canWrite && !child;
+          out.toastBody = this.state.toast ? this.state.toast.body : "";
+          out.undo = function () { self.undo(); };
+        }
+      }
+
+      if (s.kind === "unavailable") {
+        ctx.unavailable = "utilities.overview";
+        ctx.canAct = true;
+        var sample = S.resolve(S.layouts.household, "jana");
+        out.cells = sample.entries.slice(0, 4).concat([{ key: "utilities.overview", size: "medium", widget: S.byKey["utilities.overview"], level: "manage" }])
+          .map(function (e) { return self.widgetVals(e, ctx); });
+        out.gridNote = "One widget returned { key, error: \u201cunavailable\u201d }. Four resolved and rendered, and the failing one carries its own retry.";
+      }
+
+      if (s.kind === "shell") {
+        out.cells = [
+          { key: "utilities.readings_due", size: "small", widget: S.byKey["utilities.readings_due"], level: "manage" },
+          { key: "reminders.due", size: "medium", widget: S.byKey["reminders.due"], level: "manage" },
+          { key: "chores.week", size: "large", widget: S.byKey["chores.week"], level: "manage" }
+        ].map(function (e) { return self.widgetVals(e, ctx); });
+        out.gridNote = "small " + S.span("small", cols) + "\u00d7" + S.rowspan("small", cols) +
+          " \u00b7 medium " + S.span("medium", cols) + "\u00d7" + S.rowspan("medium", cols) +
+          " \u00b7 large " + S.span("large", cols) + "\u00d7" + S.rowspan("large", cols) +
+          " in a " + cols + "-column grid. The row rhythm is a floor of " + S.rhythm.unit + " px, so the tallest widget sets the row and 200 % text grows it rather than clipping.";
+      }
+
+      if (s.kind === "set") {
+        out.gridCols = "repeat(6, minmax(0, 1fr))";
+        ctx.cols = 6;
+        out.cells = S.widgets.map(function (w) {
+          return self.widgetVals({ key: w.key, size: w.size, widget: w, level: "manage" }, ctx);
+        });
+        out.gridNote = S.widgets.length + " widgets at their default size in a 6-column grid \u00b7 " +
+          S.widgets.filter(function (w) { return w.size === "small"; }).length + " small, " +
+          S.widgets.filter(function (w) { return w.size === "medium"; }).length + " medium, " +
+          S.widgets.filter(function (w) { return w.size === "large"; }).length + " large \u00b7 " +
+          S.widgets.filter(function (w) { return !!w.act; }).length + " carry a write";
+      }
+    }
+
+    if (s.kind === "catalog") {
+      var cat = S.catalogFor(this.state.member);
+      var have = {};
+      this.entries().forEach(function (e) { have[e.key] = 1; });
+      var byModule = {};
+      cat.entries.forEach(function (e) {
+        (byModule[e.widget.module] = byModule[e.widget.module] || []).push(e);
+      });
+      out.isCatalog = true;
+      out.catalogLine = isEmptyState
+        ? "No module contributes a widget to this member at all"
+        : cat.entries.length + " of " + S.widgets.length + " widgets \u00b7 " + cat.modules.length + " modules \u00b7 " + cat.hidden + " not offered";
+      out.catalogGroups = isEmptyState ? [] : Object.keys(byModule).map(function (m) {
+        return {
+          name: self.moduleName(m), colour: self.moduleColour(m),
+          rows: byModule[m].map(function (e) {
+            return {
+              title: e.widget.title, key: e.widget.key, size: e.widget.size,
+              gate: e.widget.act ? (e.canAct ? "can use its action" : "read only \u2014 needs contribute") : "read",
+              canAdd: !have[e.key] && canWrite && self.state.member === "jana",
+              addLabel: "Add",
+              onScreen: !!have[e.key] && self.state.member === "jana",
+              add: function () { self.addWidget(e.key); }
+            };
+          })
+        };
+      });
+      out.catalogFoot = cat.closedModules.length
+        ? cat.closedModules.length + " modules contribute nothing here, and are named nowhere on the screen: " +
+          cat.closedModules.map(function (m) { return self.moduleName(m); }).join(", ") + " (review scaffolding \u2014 the member sees no such line)"
+        : "Every module with a widget is offered to this member.";
+      if (isEmptyState) {
+        out.notices = [{ colour: "var(--info)", title: "", hasTitle: false,
+          body: "This member holds no module that contributes a widget. The catalog says so in one sentence rather than showing an empty list with a filter on it." }];
+      }
+    }
+
+    if (s.kind === "arrange") {
+      var e2 = this.entries();
+      out.isArrange = true;
+      out.arrange = (isEmptyState ? [] : e2).filter(function (x) { return !!S.byKey[x.key]; }).map(function (x, i) {
+        var w = S.byKey[x.key];
+        return {
+          n: String(i + 1), key: x.key, title: w.title, size: x.size,
+          footprint: S.span(x.size, cols) + " of " + cols + " columns" +
+            (S.rowspan(x.size, cols) > 1 ? " \u00b7 " + S.rowspan(x.size, cols) + " rows" : ""),
+          cycle: canWrite ? function () { self.cycle(x.key); } : function () {},
+          up: canWrite ? function () { self.move(x.key, -1); } : function () {},
+          down: canWrite ? function () { self.move(x.key, 1); } : function () {},
+          remove: canWrite ? function () { self.drop(x.key); } : function () {}
+        };
+      });
+      out.arrangeFoot = "Order and size are the whole model. Move something here and the dashboard view reflows at 2, 4 and 6 columns from this list alone.";
+      if (isEmptyState) {
+        out.notices = [{ colour: "var(--info)", title: "", hasTitle: false,
+          body: "Nothing is on the home screen to arrange. The catalog is one tap away, and the household default is offered back \u2014 an empty arrange screen is not a dead end." }];
+      }
+    }
+
+    if (s.kind === "owner") {
+      out.isOwner = true;
+      out.ownerScopes = ["household", "invitation", "child"].map(function (k) {
+        var src = S.layoutSource[k], l = S.layouts[k];
+        return { name: src[0], body: src[1], count: l.length + " widgets",
+                 border: k === "household" ? "var(--accent)" : "var(--border)",
+                 keys: l.map(function (x) { return x.key + " \u00b7 " + x.size; }).join("   ") };
+      });
+      out.ownerFoot = "Three scopes, one shape. A child layout adds the locked switch and nothing else.";
+      if (isEmptyState) {
+        out.notices = [{ colour: "var(--info)", title: "", hasTitle: false,
+          body: "No default has been set, so a new member starts with the six the product proposes. The screen offers those six as a starting point rather than an empty list." }];
+      }
+    }
+
+    if (s.kind === "adopt") {
+      var mine = this.resolved().entries.length;
+      out.isAdopt = true;
+      out.adoptTitle = "The household default changed";
+      out.adoptBody = "Jana updated what a new member's home screen starts with. Yours is still exactly as you arranged it \u2014 this is an offer, and dismissing it keeps yours for good.";
+      out.adoptDiff = "yours: " + mine + " widgets \u00b7 the new default: " + S.layouts.household.length +
+        " \u00b7 adopting replaces your order and sizes, and you can arrange again afterwards";
+      out.adoptFoot = "The notice is dismissible and appears once. A changed default never re-flattens a customised layout (FR-DB4).";
+    }
+
+    return out;
+  }
+
+  renderVals() {
+    var S = this.S;
+    if (!S || !window.HH_FIXTURES) {
+      return { theme: this.state.theme, density: this.state.density, fontPx: "15px" };
+    }
+    var self = this, v = this.view();
+    var opt = function (key, val, label, title, cur) {
+      return { label: label, title: title || label, on: cur === val ? 1 : 0,
+               pick: function () { var p = {}; p[key] = val; self.setState(p); } };
+    };
+
+    var VIEWS = [
+      ["dashboard", "The dashboard", "1"],
+      ["widgets", "All 24 widgets", "1"],
+      ["shell", "The widget shell", "2"],
+      ["catalog", "Catalog", "1"],
+      ["arrange", "Arrange", "1"],
+      ["owner", "Owner default", "2"],
+      ["child", "Child layouts", "2"],
+      ["gate", "The gate", "12"]
+    ];
+    var TITLES = {
+      dashboard: ["The dashboard", "C-1 \u00b7 FR-DB2 \u00b7 FR-DB3 \u00b7 DD-2 \u00b7 the gate screen"],
+      widgets: ["All twenty-four widgets", "C-10 \u00b7 the seventeen modules' own catalog contributions"],
+      shell: ["The widget shell", "C-9 \u00b7 C-8 \u00b7 02-components \u00a74.8"],
+      catalog: ["Widget catalog", "C-2 \u00b7 FR-DB1"],
+      arrange: ["Arrange mode", "C-3 \u00b7 FR-DB2"],
+      owner: ["The household default", "C-4 \u00b7 C-5 \u00b7 FR-DB4"],
+      child: ["Child layouts", "C-6 \u00b7 C-7 \u00b7 FR-DB5 \u00b7 D-41"],
+      gate: ["The gate", "computed from dashboard.js \u00b7 measured live"]
+    };
+    var INTROS = {
+      dashboard: "A host that owns no feature data: nine stored entries, one of them a key from a module this version does not ship, rendered through one shell. Switch the width in the rail and the same ordered list reflows at 2, 4 and 6 columns \u2014 hold a row for two seconds to complete it, and the write goes to the owning module.",
+      widgets: "Every key named by a module page, at the default size the catalog carries, with the line it was collected from. This is the stage's real deliverable: twenty-four is not a number to be sampled.",
+      shell: "One frame with three sizes and twelve states, and next to it the case FR-DB3 exists for \u2014 a widget that timed out, with the rest of the screen untouched.",
+      catalog: "Filtered by grant, computed from the fixture. Switch member in the rail: K\u00e1ra is offered two widgets and Adam nine, and a module either of them holds none on is named nowhere.",
+      arrange: "Order and size, and nothing else, because that is the whole stored model. Move something and the dashboard view follows at all three widths.",
+      owner: "The three scopes an owner can set, and the notice a member who arranged their own screen gets instead of having it rearranged for them.",
+      child: "The same four widgets, suggested and locked. In the locked one the arrange controls are absent, and the count of them in the frame is measured on this page rather than asserted."
+    };
+
+    var screens = S.screens.filter(function (s) { return s.view === v; });
+
+    var stateOpts = [["loading", "loading"], ["empty", "empty"], ["populated", "populated"],
+      ["error", "error"], ["offline", "offline"], ["pending", "pending"], ["syncing", "syncing"],
+      ["conflicted", "conflict"], ["rejected", "rejected"], ["absent", "absent"],
+      ["withdrawn", "withdrawn"], ["readonly", "read-only"]];
+
+    var F = window.HH_FIXTURES;
+    var controls = [
+      { label: "state", options: stateOpts.map(function (x) {
+          return opt("st", x[0], x[1], x[0] + " \u2014 drawn where it can occur, explained where it cannot", self.state.st); }) },
+      { label: "width", options: [
+        opt("cols", 2, "phone \u00b7 2", "Two columns. large is full width and takes two rows", this.state.cols),
+        opt("cols", 4, "tablet \u00b7 4", "Four columns. large is full width", this.state.cols),
+        opt("cols", 6, "web \u00b7 6", "Six columns. large is half", this.state.cols)] },
+      { label: "seen by", options: F.members.map(function (m) {
+          return opt("member", m.id, m.name.toLowerCase(),
+            m.name + " \u2014 " + S.catalogFor(m.id).entries.length + " of 24 widgets offered", self.state.member); }) },
+      { label: "layout", options: [
+        opt("source", "jana", "custom", "A member's own arrangement \u2014 the live one you can edit", this.state.source),
+        opt("source", "household", "household default", "What an owner set for everybody who has not customised", this.state.source),
+        opt("source", "invitation", "per-invitation", "What the inviting owner set for one invitee", this.state.source),
+        opt("source", "child", "child", "What an owner set for a child, suggested or locked", this.state.source)] },
+      { label: "one widget fails", options: [
+        opt("failing", false, "all resolve", "Every widget resolves", this.state.failing),
+        opt("failing", true, "one times out", "FR-DB3: the failing widget states it and the rest render", this.state.failing)] },
+      { label: "theme", options: [
+        opt("theme", "light", "light", "Light theme", this.state.theme),
+        opt("theme", "dark", "dark", "Dark theme", this.state.theme)] },
+      { label: "text", options: [
+        opt("scale", 100, "100 %", "Base text size", this.state.scale),
+        opt("scale", 200, "200 %", "The 07-delivery sweep \u2014 the row rhythm grows rather than clipping", this.state.scale)] },
+      { label: "density", options: [
+        opt("density", "comfortable", "comfortable", "Mobile\u2019s only mode", this.state.density),
+        opt("density", "compact", "compact", "Web only \u2014 the 44 pt floor still binds", this.state.density)] }
+    ];
+
+    var live = { entries: this.resolved().entries,
+                 unavailable: this.state.failing ? { key: "reminders.due", others: this.resolved().entries.length - 1 } : null,
+                 lockedArrangeControls: this.state.measured ? this.state.measured.locked : null };
+    var checks = S.checks(live);
+    var openChecks = checks.filter(function (c) { return !c.pass; }).length;
+    var m = this.state.measured;
+    var occ = S.occurrence();
+    var possibleTotal = occ.reduce(function (a, o) { return a + o.possible; }, 0);
+    var drawnTotal = occ.reduce(function (a, o) { return a + o.drawn; }, 0);
+    var det = S.determinism(live.entries);
+    var audit = S.keyAudit();
+    var outc = S.outcomes();
+
+    return {
+      theme: this.state.theme,
+      density: this.state.density,
+      fontPx: this.state.scale === 200 ? "26px" : "15px",
+
+      views: VIEWS.map(function (x) {
+        return { label: x[1], count: x[2], on: v === x[0] ? 1 : 0,
+                 pick: function () { self.setState({ view: x[0] }); } };
+      }),
+      controls: controls,
+      pageTitle: TITLES[v][0], pageMeta: TITLES[v][1],
+      gateLine: openChecks ? openChecks + " of " + checks.length + " gate checks open" : "gate: " + checks.length + " checks pass",
+      gateColour: openChecks ? "var(--warning)" : "var(--positive)",
+
+      isScreens: !!INTROS[v], isGate: v === "gate",
+      viewIntro: INTROS[v] || "",
+      screens: screens.map(function (s) { return self.screenVals(s); }),
+
+      showReflow: v === "dashboard" || v === "arrange",
+      reflowVerdict: det.every(function (d) { return d.stable && d.ordered && d.fits; })
+        ? "same list in, same rows out, at all three widths" : "placement is not stable",
+      reflowColour: det.every(function (d) { return d.stable && d.ordered && d.fits; }) ? "var(--positive)" : "var(--danger)",
+      reflows: S.widths.map(function (wd) {
+        var pl = S.reflow(live.entries, wd[0]);
+        var cells = [];
+        pl.rows.forEach(function (r) {
+          r.cells.forEach(function (c) {
+            var w = S.byKey[c.key];
+            cells.push({
+              span: String(c.span), rowspan: String(c.rowspan),
+              h: c.rowspan > 1 ? "62px" : "28px",
+              label: w ? w.title : c.key,
+              title: c.key + " \u00b7 " + c.size + " \u00b7 " + c.span + " of " + wd[0] + " columns",
+              bg: c.size === "large" ? "color-mix(in oklab, var(--accent) 16%, transparent)"
+                : c.size === "medium" ? "color-mix(in oklab, var(--accent) 9%, transparent)" : "var(--surface-sunken)",
+              border: "var(--border)"
+            });
+          });
+        });
+        return {
+          name: wd[1] + " \u00b7 " + wd[0] + " columns",
+          cols: "repeat(" + wd[0] + ", minmax(0, 1fr))",
+          meta: pl.rows.length + " rows \u00b7 " + pl.units + " units",
+          cells: cells,
+          gapLine: pl.interiorGaps + " interior gap cells, " + pl.trailingGap + " trailing" +
+            (pl.interiorGaps ? " \u2014 left as they are, because reaching forward for a smaller widget would make the result depend on what comes later" : ""),
+          gapColour: pl.interiorGaps ? "var(--text-muted)" : "var(--positive)"
+        };
+      }),
+      outcomes: outc.map(function (o) {
+        return { name: o.name, verdict: o.distinct ? "three distinct footprints" : "sizes collide",
+                 colour: o.distinct ? "var(--positive)" : "var(--danger)",
+                 detail: o.detail + " \u2014 " + o.footprints.join(" / ") + " cells" };
+      }),
+
+      showAudit: v === "widgets",
+      auditVerdict: audit.ok ? audit.collected + " collected \u00b7 " + audit.declared + " declared \u00b7 every module agrees"
+        : "the collection disagrees with 00-module-model \u00a76",
+      auditColour: audit.ok ? "var(--positive)" : "var(--danger)",
+      auditRows: audit.rows.filter(function (r) { return r.declared > 0 || r.collected > 0; }).map(function (r) {
+        return { module: self.moduleName(r.module), count: r.collected + " of " + r.declared,
+                 colour: r.ok ? "var(--positive)" : "var(--danger)",
+                 keys: r.keys.join("  ") };
+      }),
+
+      checks: checks.map(function (c) {
+        return { name: c.name, detail: c.detail, verdict: c.pass ? "pass" : "open",
+                 colour: c.pass ? "var(--positive)" : "var(--warning)" };
+      }),
+      measurements: m ? [
+        { value: String(m.targets), label: "interactive targets measured", colour: "var(--text-primary)",
+          note: "live rectangles on this view, at this text size and density" },
+        { value: m.tFail ? String(m.tFail) : "0", label: "under the 44 pt floor",
+          colour: m.targets === 0 ? "var(--text-muted)" : m.tFail ? "var(--danger)" : "var(--positive)",
+          note: m.targets === 0 ? "nothing measured here" : m.tFail ? m.tNames.join(" \u00b7 ") : "smallest measured target is " + m.tMin + " px high" },
+        { value: String(m.watched), label: "frames watched for overflow", colour: "var(--text-primary)",
+          note: m.watched === 0 ? "no screen frames on this view" : "each drawn screen in its own box" },
+        { value: m.oFail ? String(m.oFail) : "0", label: "frames overflowing",
+          colour: m.watched === 0 ? "var(--text-muted)" : m.oFail ? "var(--danger)" : "var(--positive)",
+          note: m.watched === 0 ? "nothing measured here" : m.oFail ? m.oNames.join(" \u00b7 ") : "nothing is wider than the frame it is given" }
+      ] : [],
+      measuredContext: TITLES[v][0].toLowerCase() + " \u00b7 " + this.state.theme + " \u00b7 " +
+        this.state.density + " \u00b7 " + this.state.scale + " % text \u00b7 " + this.state.cols + " columns \u00b7 state: " + this.state.st,
+
+      occurrenceLine: drawnTotal + " of " + possibleTotal + " reachable states drawn across " + occ.length + " twelve-state rows",
+      occurrence: occ.map(function (o) {
+        return { id: o.id, name: o.name, possible: o.possible + " of 12", drawn: String(o.drawn),
+                 colour: o.drawn >= o.possible ? "var(--positive)" : "var(--warning)",
+                 impossible: o.impossible.length
+                   ? o.impossible.join(", ") + " \u2014 " + o.reasons[o.impossible[0]]
+                   : "all twelve occur" };
+      }),
+      open: S.open.map(function (o) {
+        return { title: o[0], detail: o[1], tag: o[2],
+                 tagColour: o[2].indexOf("resolved") === 0 ? "var(--positive)" : "var(--warning)" };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

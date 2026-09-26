@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./components.js"></script>
+<script src="./tasks.js"></script>
+<script src="./reminders.js"></script>
+<script src="./ledger.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">Dates, and a board</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Reminders and Tasks</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-time)">{{ stageLine }}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="12">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">The twenty-one reminder kinds are collected from the ten module pages, with the line each came from. Everything on the list screens is the grants, the subscriptions and the lead windows, computed.</div>
+      <a href="./Today and Cross-cutting Screens.dc.html" style="font-family:var(--mono);font-size:11px">← stage 11 · Today</a>
+      <a href="./Dashboard and Widgets.dc.html" style="font-family:var(--mono);font-size:11px">stage 10 · the widgets</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+
+      <p style="margin:0;max-width:82ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="0">
+        <div style="border-left:2px solid var(--accent);padding:2px 0 2px 12px;max-width:82ch;font-size:13.5px;line-height:1.6;color:var(--text-primary)">{{ n.text }}</div>
+      </sc-for>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+        <sc-for list="{{ frames }}" as="f" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0;grid-column:{{ f.col }}">
+
+            <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-time)">{{ f.id }}</span>
+              <h3 style="margin:0;font-size:15px;font-weight:600">{{ f.name }}</h3>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ f.stateLabel }}</span>
+            </div>
+
+            <div style="width:100%;max-width:{{ f.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+              <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.route }}</span>
+                <span style="flex:0 0 auto">{{ f.clientLabel }}</span>
+              </div>
+
+              <sc-if value="{{ f.hasBar }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.45em 0.75em;background:var(--surface-sunken);color:var(--status-offline);font-family:var(--mono);font-size:0.62em;border-bottom:1px solid var(--divider)">{{ f.barText }}</div>
+              </sc-if>
+
+              <div style="flex:1 1 auto;padding:1em 0.9em;display:flex;flex-direction:column;gap:0.8em;min-width:0">
+
+                <div style="display:flex;flex-direction:column;gap:0.2em">
+                  <div style="font-size:1.1em;font-weight:600;line-height:1.2">{{ f.title }}</div>
+                  <sc-if value="{{ f.hasLede }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ f.lede }}</div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ f.hasBanner }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid {{ f.bannerTone }};border-left:3px solid {{ f.bannerTone }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.3em">
+                    <sc-if value="{{ f.hasBannerTitle }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.78em;font-weight:600;color:{{ f.bannerTone }}">{{ f.bannerTitle }}</div>
+                    </sc-if>
+                    <div style="font-size:0.76em;line-height:1.5;color:var(--text-primary)">{{ f.bannerBody }}</div>
+                    <div style="display:flex;gap:0.4em;flex-wrap:wrap;margin-top:0.15em">
+                      <sc-for list="{{ f.bannerActions }}" as="a" hint-placeholder-count="0">
+                        <span style="font-family:var(--mono);font-size:0.62em;border:1px solid var(--border-strong);border-radius:4px;padding:0.25em 0.5em;color:var(--text-primary)">{{ a.label }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.skeleton }}" as="k" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.6em;align-items:flex-start;border:1px solid var(--border);border-radius:var(--radius-card);padding:0.6em 0.7em;min-height:2.8em">
+                    <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.35em">
+                      <div style="height:0.85em;width:{{ k.w1 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                      <div style="height:0.7em;width:{{ k.w2 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                    </div>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.fields }}" as="x" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.25em">
+                    <div style="font-family:var(--mono);font-size:0.6em;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">{{ x.label }}</div>
+                    <div style="border:1px solid var(--border-strong);border-radius:var(--radius-control);background:{{ x.bg }};padding:0.55em 0.65em;font-size:0.85em;min-height:2.5em;display:flex;align-items:center;justify-content:space-between;gap:0.5em">
+                      <span style="min-width:0">{{ x.value }}</span>
+                      <sc-if value="{{ x.hasHint }}" hint-placeholder-val="{{ false }}">
+                        <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--text-muted)">{{ x.hint }}</span>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ x.hasNote }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:0.7em;line-height:1.5;color:var(--text-muted)">{{ x.note }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.4em;flex-wrap:wrap">
+                    <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="2">
+                      <span style="display:inline-flex;align-items:center;gap:0.35em;white-space:nowrap;border:1px solid var({{ c.colour }});border-radius:999px;padding:0.2em 0.55em;font-size:0.68em;color:var(--text-primary)">
+                        <span style="width:0.5em;height:0.5em;border-radius:50%;background:var({{ c.colour }})"></span>{{ c.name }}
+                      </span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.cols }}" as="col" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.4em;min-width:0">
+                    <div style="display:flex;align-items:baseline;gap:0.5em;justify-content:space-between">
+                      <span style="font-size:0.8em;font-weight:600">{{ col.name }}</span>
+                      <span style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ col.kindLabel }}</span>
+                    </div>
+                    <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="2">
+                      <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:var(--surface-raised);padding:0.55em 0.65em;display:flex;flex-direction:column;gap:0.3em;min-width:0">
+                        <div style="font-size:0.82em;font-weight:500;line-height:1.35;text-decoration:{{ c.strike }}">{{ c.title }}</div>
+                        <sc-if value="{{ c.hasMeta }}" hint-placeholder-val="{{ false }}">
+                          <div style="font-size:0.68em;color:var(--text-muted);line-height:1.4">{{ c.meta }}</div>
+                        </sc-if>
+                        <div style="display:flex;gap:0.35em;flex-wrap:wrap;align-items:center">
+                          <sc-for list="{{ c.chips }}" as="p" hint-placeholder-count="0">
+                            <span style="display:inline-flex;align-items:center;gap:0.3em;white-space:nowrap;border:1px solid var({{ p.colour }});border-radius:999px;padding:0.1em 0.45em;font-size:0.6em">
+                              <span style="width:0.4em;height:0.4em;border-radius:50%;background:var({{ p.colour }})"></span>{{ p.name }}
+                            </span>
+                          </sc-for>
+                          <sc-if value="{{ c.hasMark }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-family:var(--mono);font-size:0.6em;color:{{ c.markColour }}">{{ c.markWord }}</span>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.blocks }}" as="b" hint-placeholder-count="0">
+                  <div data-block="{{ b.key }}" data-rows="{{ b.count }}" style="display:flex;flex-direction:column;gap:0.4em">
+                    <sc-if value="{{ b.hasHeading }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap">
+                        <span style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:{{ b.labelColour }}">{{ b.label }}</span>
+                        <sc-if value="{{ b.hasRule }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ b.rule }}</span>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="3">
+                      <div style="display:flex;gap:0.6em;align-items:flex-start;background:{{ r.bg }};border:1px solid {{ r.border }};border-left:{{ r.leftRule }};border-radius:var(--radius-card);padding:0.55em 0.65em;min-width:0">
+                        <span style="flex:0 0 auto;width:0.5em;height:0.5em;border-radius:50%;background:var({{ r.token }});margin-top:0.45em"></span>
+                        <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.15em">
+                          <span style="display:flex;gap:0.5em;align-items:baseline;min-width:0">
+                            <span style="font-size:0.85em;font-weight:500;line-height:1.35;min-width:0;text-decoration:{{ r.strike }}">{{ r.title }}</span>
+                            <sc-if value="{{ r.hasRight }}" hint-placeholder-val="{{ false }}">
+                              <span style="margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:0.64em;color:{{ r.rightColour }}">{{ r.right }}</span>
+                            </sc-if>
+                          </span>
+                          <sc-if value="{{ r.hasMeta }}" hint-placeholder-val="{{ true }}">
+                            <span style="font-size:0.72em;line-height:1.4;color:var(--text-muted)">{{ r.meta }}</span>
+                          </sc-if>
+                          <span style="display:flex;gap:0.4em;align-items:center;flex-wrap:wrap;margin-top:0.1em">
+                            <sc-if value="{{ r.hasChip }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;padding:0.15em 0.4em;border-radius:3px;border:1px solid var({{ r.token }});color:var({{ r.token }})">{{ r.chip }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasMark }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;color:{{ r.markColour }}">{{ r.markWord }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-size:0.66em;color:var(--text-muted)">{{ r.note }}</span>
+                            </sc-if>
+                          </span>
+                        </span>
+                        <sc-if value="{{ r.hasAction }}" hint-placeholder-val="{{ false }}">
+                          <span style="flex:0 0 auto;display:flex;gap:0.3em;align-items:center">
+                            <button onClick="{{ r.act }}" style="background:var(--surface-sunken);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;min-height:2.6em">{{ r.actionLabel }}</button>
+                            <sc-if value="{{ r.hasAction2 }}" hint-placeholder-val="{{ false }}">
+                              <button onClick="{{ r.act2 }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;min-height:2.6em">{{ r.action2Label }}</button>
+                            </sc-if>
+                          </span>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.checks }}" as="c" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.55em;align-items:center;min-width:0">
+                    <span style="flex:0 0 auto;width:1em;height:1em;border-radius:3px;border:1px solid {{ c.boxBorder }};background:{{ c.boxBg }}"></span>
+                    <span style="font-size:0.78em;line-height:1.4;color:{{ c.colour }};text-decoration:{{ c.strike }}">{{ c.text }}</span>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.comments }}" as="c" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.2em;border-top:1px solid var(--divider);padding-top:0.5em">
+                    <div style="display:flex;gap:0.5em;align-items:baseline">
+                      <span style="font-size:0.75em;font-weight:600">{{ c.who }}</span>
+                      <span style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ c.at }}</span>
+                    </div>
+                    <div style="font-size:0.76em;line-height:1.5">{{ c.text }}</div>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasHold }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.4em;border:1px solid var(--border);border-radius:var(--radius-card);padding:0.6em 0.7em">
+                    <div style="font-size:0.78em;font-weight:500">{{ f.holdTitle }}</div>
+                    <div style="height:0.5em;border-radius:999px;background:var(--surface-sunken);overflow:hidden">
+                      <div style="height:100%;width:{{ holdPct }};background:var(--accent)"></div>
+                    </div>
+                    <div style="display:flex;gap:0.4em;flex-wrap:wrap;align-items:center">
+                      <button onPointerDown="{{ holdStart }}" onPointerUp="{{ holdStop }}" onPointerLeave="{{ holdStop }}" onKeyDown="{{ holdKey }}" style="background:var(--accent);color:var(--text-on-accent);border:1px solid var(--accent);border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.9em">{{ holdLabel }}</button>
+                      <span style="font-family:var(--mono);font-size:0.62em;color:var(--text-muted)">{{ f.holdNote }}</span>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em;align-items:flex-start;padding:0.8em 0.2em 0.4em">
+                    <div style="width:100%;height:3.2em;border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken)"></div>
+                    <div style="font-size:0.92em;font-weight:600;line-height:1.3">{{ f.emptyTitle }}</div>
+                    <div style="font-size:0.78em;line-height:1.55;color:var(--text-muted)">{{ f.emptyBody }}</div>
+                    <sc-if value="{{ f.hasEmptyAction }}" hint-placeholder-val="{{ true }}">
+                      <span style="background:var(--accent);color:var(--text-on-accent);border-radius:var(--radius-control);padding:0.5em 0.85em;font-size:0.78em">{{ f.emptyAction }}</span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasAbsent }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.35em;padding:1.2em 0.4em;align-items:center;text-align:center">
+                    <div style="font-size:0.85em;font-weight:600">{{ f.absentTitle }}</div>
+                    <div style="font-size:0.75em;line-height:1.55;color:var(--text-muted);max-width:26em">{{ f.absentBody }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasActions }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.45em;flex-wrap:wrap;margin-top:0.1em">
+                    <sc-for list="{{ f.actions }}" as="a" hint-placeholder-count="1">
+                      <span style="background:{{ a.bg }};color:{{ a.colour }};border:1px solid {{ a.border }};border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.8em;display:inline-flex;align-items:center">{{ a.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasFooter }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:auto;padding-top:0.55em;border-top:1px solid var(--divider);font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ f.footer }}</div>
+                </sc-if>
+
+              </div>
+            </div>
+
+            <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ f.caption }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-for list="{{ tables }}" as="t" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ t.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ t.meta }}</span>
+          </div>
+          <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">{{ t.note }}</p>
+          </sc-if>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow-x:auto">
+            <div style="display:grid;grid-template-columns:{{ t.cols }};gap:0 14px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken);min-width:{{ t.minWidth }}">
+              <sc-for list="{{ t.head }}" as="h" hint-placeholder-count="3">
+                <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ h.text }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:{{ t.cols }};gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--divider);align-items:baseline;min-width:{{ t.minWidth }}">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+                  <div style="font-family:{{ c.font }};font-size:{{ c.size }};line-height:1.5;color:{{ c.colour }};min-width:0;overflow-wrap:anywhere">{{ c.text }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-time)">{{ g.id }}</span>
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.name }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;align-items:start">
+            <sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="12">
+              <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:{{ c.bg }};padding:10px 11px;display:flex;flex-direction:column;gap:6px;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:6px;justify-content:space-between">
+                  <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:{{ c.wordColour }}">{{ c.word }}</span>
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ c.tag }}</span>
+                </div>
+                <div style="font-size:11.5px;line-height:1.5;color:var(--text-primary)">{{ c.body }}</div>
+                <div style="font-size:10.5px;line-height:1.5;color:var(--text-muted)">{{ c.rule }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ checks }}" as="c" hint-placeholder-count="0">
+        <div style="display:grid;grid-template-columns:16px 1fr;gap:0 12px;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+          <div style="width:10px;height:10px;border-radius:50%;background:{{ c.colour }};margin-top:5px"></div>
+          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <div style="font-size:14px;font-weight:600;line-height:1.35">{{ c.name }}</div>
+            <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+        <div style="position:sticky;bottom:14px;align-self:flex-start;background:var(--text-primary);color:var(--surface);border-radius:var(--radius-control);padding:10px 14px;font-family:var(--mono);font-size:11.5px;box-shadow:var(--shadow-2)">{{ toast }}</div>
+      </sc-if>
+
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;kinds&quot;,&quot;defaults&quot;,&quot;list&quot;,&quot;editor&quot;,&quot;recurrence&quot;,&quot;subs&quot;,&quot;board&quot;,&quot;card&quot;,&quot;columns&quot;,&quot;merge&quot;,&quot;states&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;kinds&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startMember&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;jana&quot;,&quot;petr&quot;,&quot;adam&quot;,&quot;klara&quot;,&quot;milos&quot;],&quot;default&quot;:&quot;jana&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100,
+            member: null, toast: null, hold: 0, tick: 0 };
+
+  get R() { return window.HH_REMINDERS; }
+  get T() { return window.HH_TASKS; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (window.HH_REMINDERS && window.HH_TASKS && window.HH_TOKENS && window.HH_FIXTURES) {
+        clearInterval(this._boot); this.forceUpdate();
+      }
+    }, 60);
+  }
+  componentWillUnmount() { clearInterval(this._boot); clearTimeout(this._t); clearInterval(this._h); }
+
+  get view() { return this.state.view || this.props.startView || "kinds"; }
+  get who() { return this.state.member || this.props.startMember || "jana"; }
+
+  say(text) {
+    clearTimeout(this._t);
+    this.setState({ toast: text });
+    this._t = setTimeout(() => this.setState({ toast: null }), 3200);
+  }
+
+  pickers(list, current, set) {
+    return list.map((o) => ({
+      label: o[1], title: o[2] || "", on: current === o[0] ? "1" : "0",
+      pick: () => { this.setState(set(o[0])); }
+    }));
+  }
+
+  /* ── shape helpers ─────────────────────────────────────────────────── */
+
+  F(o) {
+    const f = Object.assign({
+      id: "", name: "", stateLabel: "", caption: "", col: "auto", frameMax: "460px",
+      route: "", clientLabel: "mobile", title: "", lede: "",
+      bannerTone: "var(--border)", bannerTitle: "", bannerBody: "", bannerActions: [],
+      skeleton: [], blocks: [], cols: [], chips: [], fields: [], checks: [], comments: [],
+      actions: [], emptyTitle: "", emptyBody: "", emptyAction: "",
+      absentTitle: "", absentBody: "", footer: "", barText: "",
+      holdTitle: "", holdNote: ""
+    }, o);
+    f.hasLede = !!f.lede;
+    f.hasBanner = !!f.bannerBody;
+    f.hasBannerTitle = !!f.bannerTitle;
+    f.hasChips = f.chips.length > 0;
+    f.hasEmpty = !!f.emptyTitle;
+    f.hasEmptyAction = !!f.emptyAction;
+    f.hasAbsent = !!f.absentTitle;
+    f.hasActions = f.actions.length > 0;
+    f.hasFooter = !!f.footer;
+    f.hasBar = !!f.barText;
+    f.hasHold = !!f.holdTitle;
+    f.bannerActions = f.bannerActions.map((a) => (typeof a === "string" ? { label: a } : a));
+    f.actions = f.actions.map((a, i) => (typeof a === "string"
+      ? { label: a, bg: i === 0 ? "var(--accent)" : "var(--surface)", colour: i === 0 ? "var(--text-on-accent)" : "var(--text-muted)", border: i === 0 ? "var(--accent)" : "var(--border)" }
+      : a));
+    f.blocks = f.blocks.map((b, i) => Object.assign({
+      key: (f.id || "b") + "-" + i, label: "", rule: "", labelColour: "var(--text-muted)"
+    }, b, {
+      count: (b.rows || []).length, rows: (b.rows || []).map((r) => this.row(r)),
+      hasHeading: !!b.label, hasRule: !!b.rule
+    }));
+    f.cols = f.cols.map((c) => Object.assign({ name: "", kindLabel: "", cards: [] }, c, {
+      cards: (c.cards || []).map((k) => Object.assign({
+        title: "", meta: "", chips: [], markWord: "", markColour: "var(--text-muted)",
+        border: "var(--border)", strike: "none"
+      }, k, { hasMeta: !!k.meta, hasMark: !!k.markWord }))
+    }));
+    f.checks = f.checks.map((c) => ({
+      text: c.text, strike: c.done ? "line-through" : "none",
+      colour: c.done ? "var(--text-muted)" : "var(--text-primary)",
+      boxBg: c.done ? "var(--accent)" : "var(--surface)",
+      boxBorder: c.done ? "var(--accent)" : "var(--border-strong)"
+    }));
+    f.fields = f.fields.map((x) => Object.assign({ label: "", value: "", hint: "", note: "", bg: "var(--surface-sunken)" }, x,
+      { hasHint: !!x.hint, hasNote: !!x.note }));
+    return f;
+  }
+
+  row(r) {
+    const o = Object.assign({
+      title: "", meta: "", chip: "", token: "--accent-family-household", right: "",
+      rightColour: "var(--text-muted)", markWord: "", markColour: "var(--text-muted)",
+      note: "", bg: "var(--surface)", border: "var(--border)", leftRule: "1px solid var(--border)",
+      actionLabel: "", action2Label: "", strike: "none", act: () => {}, act2: () => {}
+    }, r);
+    o.hasMeta = !!o.meta; o.hasChip = !!o.chip; o.hasRight = !!o.right;
+    o.hasMark = !!o.markWord; o.hasNote = !!o.note;
+    o.hasAction = !!o.actionLabel; o.hasAction2 = !!o.action2Label;
+    return o;
+  }
+
+  plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+
+  /* A table's tracks are px floors, so the grid has a natural minimum. The card scrolls to
+     it rather than clipping a column off the end of a narrow preview. */
+  tableMin(cols) {
+    const tracks = String(cols || "").split(/\s+(?![^(]*\))/).filter(Boolean);
+    let n = 0;
+    tracks.forEach((t) => {
+      const m = /minmax\((\d+)px/.exec(t) || /^(\d+)px$/.exec(t);
+      n += m ? Number(m[1]) : 90;
+    });
+    return (n + Math.max(0, tracks.length - 1) * 14 + 28) + "px";
+  }
+
+  cell(text, opt) {
+    const o = opt || {};
+    return { text: text, font: o.mono ? "var(--mono)" : "var(--sans)",
+             size: o.mono ? "11.5px" : "13px",
+             colour: o.muted ? "var(--text-muted)" : o.tone || "var(--text-primary)" };
+  }
+
+  /* ── the unified list, live ────────────────────────────────────────── */
+
+  agendaFrame(memberId, client, opts) {
+    const R = this.R, o = opts || {};
+    const a = R.agendaFor(memberId);
+    const blocks = a.blocks.map((b) => ({
+      label: b.label, rule: b.rule,
+      labelColour: b.id === "overdue" ? "var(--status-overdue)" : "var(--text-muted)",
+      rows: b.rows.map((r) => this.agendaRow(r, memberId, o))
+    }));
+    const foot = a.agedOut.length
+      ? a.agedOut.length + " older item stopped appearing here after " + R.overdueWindow + " days. It is still in " + this.moduleName(a.agedOut[0].kind.split(".")[0]) + "."
+      : "";
+    return this.F(Object.assign({
+      id: "C-11", name: a.name + " \u2014 " + (client === "w" ? "web" : "phone"),
+      stateLabel: a.empty ? "empty" : "populated",
+      route: "/reminders", clientLabel: client === "w" ? "web \u00b7 1440" : "mobile \u00b7 390",
+      frameMax: client === "w" ? "760px" : "420px",
+      title: "Reminders", lede: a.empty ? "" : this.plural(a.rowCount, "reminder") + " over " + this.plural(a.modules.length, "module"),
+      blocks: blocks,
+      emptyTitle: a.empty ? "Nothing is due, and nothing is late." : "",
+      emptyBody: a.empty ? "A boiler service, a passport, a chore \u2014 anything with a date arrives here from the module that owns it." : "",
+      emptyAction: a.empty ? "Add a reminder" : "",
+      footer: foot
+    }, o.frame || {}));
+  }
+
+  agendaRow(r, memberId, o) {
+    const R = this.R;
+    const opts = o || {};
+    return {
+      title: r.title, meta: r.meta, chip: r.moduleName, token: r.token,
+      right: r.overdue ? r.overdue + " d" : r.when,
+      rightColour: r.overdue ? "var(--status-overdue)" : "var(--text-muted)",
+      bg: r.overdue ? "var(--surface-sunken)" : "var(--surface)",
+      leftRule: r.overdue ? "3px solid var(--status-overdue)" : "1px solid var(--border)",
+      note: r.anniversary ? "passes \u2014 nothing to complete" : (r.leadChanged ? "your notice: " + r.lead + " d" : ""),
+      markWord: opts.mark || "", markColour: opts.markColour || "var(--status-pending)",
+      actionLabel: opts.live && r.completable ? "Done" : "",
+      action2Label: opts.live && r.completable ? "Not now" : "",
+      act: () => {
+        const occ = this.occ(r.id);
+        const res = R.complete(occ, memberId);
+        this.say(res.note + " \u00b7 " + (R.scopeOf(occ) === "household" ? "household scope, so it leaves everybody\u2019s list" : "personal scope, so only yours") + " \u00b7 " + res.status);
+        this.forceUpdate();
+      },
+      act2: () => {
+        const occ = this.occ(r.id);
+        const until = R.snooze(occ, memberId, 7).until;
+        this.say("Snoozed until " + R.fmtLong(until) + " \u2014 for you only. Nobody was told it is done.");
+        this.forceUpdate();
+      }
+    };
+  }
+
+  occ(id) {
+    const R = this.R;
+    const all = R.allOccurrences("2026-01-01", "2028-01-01");
+    return all.filter((o) => o.id === id)[0];
+  }
+
+  moduleName(id) {
+    const F = window.HH_FIXTURES;
+    const hit = F && F.modules.filter((m) => m[0] === id)[0];
+    return hit ? hit[1] : id;
+  }
+  tokenOf(id) {
+    const T = window.HH_TOKENS;
+    const hit = T && T.accentMap.filter((m) => m[0] === id)[0];
+    const fam = hit ? hit[2] : "household";
+    return fam === "garden" ? "--accent-garden" : "--accent-family-" + fam;
+  }
+
+  /* ── the board ─────────────────────────────────────────────────────── */
+
+  boardCols(boardId, opts) {
+    const T = this.T, o = opts || {};
+    const b = T.board(boardId);
+    return b.columns.filter((c) => !o.only || o.only.indexOf(c.id) >= 0).map((col) => ({
+      name: col.name,
+      kindLabel: T.vocab.filter((v) => v.kind === col.kind)[0].pick,
+      cards: T.cardsOf(boardId, col.id).map((c) => ({
+        title: c.title,
+        meta: [c.assignee ? this.firstName(c.assignee) : "", c.due ? "due " + this.R.fmt(c.due) : "",
+               c.checklist[1] ? c.checklist[0] + "/" + c.checklist[1] : "",
+               c.comments ? c.comments + " comment" + (c.comments > 1 ? "s" : "") : ""].filter(Boolean).join(" \u00b7 "),
+        chips: c.labels.map((l) => T.labelOf(l)),
+        strike: c.doneAt ? "line-through" : "none",
+        markWord: o.marks && o.marks[c.id] ? o.marks[c.id] : "",
+        markColour: "var(--status-pending)",
+        border: o.marks && o.marks[c.id] ? "var(--status-pending)" : "var(--border)"
+      }))
+    }));
+  }
+  firstName(id) {
+    const F = window.HH_FIXTURES;
+    const m = F && F.members.filter((x) => x.id === id)[0];
+    return m ? m.name : id;
+  }
+
+  /* ── hold-to-complete, with its keyboard path ──────────────────────── */
+
+  holdStart = () => {
+    clearInterval(this._h);
+    const step = 100, total = this.T ? this.T.hold.ms : 2000;
+    this._h = setInterval(() => {
+      const next = this.state.hold + (step / total) * 100;
+      if (next >= 100) {
+        clearInterval(this._h);
+        this.setState({ hold: 0 });
+        this.say("Held for " + total + " ms \u2014 the card is finished and the date is stamped. The same gesture completes a reminder occurrence.");
+      } else this.setState({ hold: next });
+    }, step);
+  };
+  holdStop = () => { clearInterval(this._h); if (this.state.hold) this.setState({ hold: 0 }); };
+  holdKey = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      this.say("Enter is the keyboard path, and it is mandatory \u2014 a two-second press is not reachable from a keyboard, so the same completion is one key.");
+    }
+  };
+
+  /* ── the twelve-state matrix, generated from the treatments ────────── */
+
+  stateGroups() {
+    const R = this.R, T = this.T;
+    const C = window.HH_COMPONENTS;
+    const rows = R.screens.concat(T.screens);
+    const order = R.allStates;
+    return rows.map((s) => {
+      const preset = s.preset === "F" ? ["loading", "populated", "error"]
+                   : s.preset === "S" ? ["populated"] : order;
+      const imp = s.impossible || {};
+      const cells = preset.map((st) => {
+        const excluded = !!imp[st];
+        const t = C ? C.treatments[st] : null;
+        const rule = s.states && s.states[st] ? s.states[st] : (t ? t.rule : "");
+        return {
+          word: st, tag: excluded ? "cannot occur" : (s.id + " \u00b7 " + s.client),
+          body: excluded ? imp[st] : this.stateBody(s, st),
+          rule: excluded ? "" : rule,
+          bg: excluded ? "var(--surface-sunken)" : "var(--surface-raised)",
+          border: excluded ? "var(--border)" : "var(--border-strong)",
+          wordColour: excluded ? "var(--text-muted)" : this.stateColour(st)
+        };
+      });
+      const drawn = cells.filter((c) => c.tag !== "cannot occur").length;
+      return { id: s.id, name: s.name, cells: cells,
+               meta: drawn + " of " + preset.length + " states drawn \u00b7 " + Object.keys(imp).length + " cannot occur \u00b7 " + s.route };
+    });
+  }
+
+  stateColour(st) {
+    const m = { error: "var(--danger)", rejected: "var(--status-rejected)", conflicted: "var(--status-conflict)",
+                pending: "var(--status-pending)", syncing: "var(--status-syncing)", offline: "var(--status-offline)",
+                readonly: "var(--warning)", withdrawn: "var(--text-muted)", absent: "var(--text-muted)" };
+    return m[st] || "var(--accent-family-time)";
+  }
+
+  stateBody(s, st) {
+    if (st === "loading") return "Skeleton at the height of " + this.bodyWord(s) + ", so nothing jumps when the rows arrive.";
+    if (st === "empty") return s.empty && s.empty.s ? s.empty.s + " " + s.empty.e : "Nothing here yet.";
+    if (st === "error") return s.error;
+    if (st === "rejected") return s.rejected || s.error;
+    if (st === "withdrawn") return s.withdrawn || "Access changed, so this device dropped its copy.";
+    if (st === "readonly") return s.readonly;
+    if (st === "absent") return "Gone, not disabled: no label, no tooltip, no greyed control.";
+    if (st === "offline") return "The same read, with the bar above it. " + this.bodyWord(s) + " is on the device.";
+    if (st === "pending") return "A queued write on " + this.bodyWord(s) + ", marked in a word and a glyph, still editable.";
+    if (st === "syncing") return "Past the 800 ms threshold only.";
+    if (st === "conflicted") return "A row flag that opens the comparison, plus an inbox entry \u2014 never a modal at reconnect.";
+    return this.bodyWord(s) + ", with no mark at all: synced is the absence of a mark.";
+  }
+  bodyWord(s) {
+    const m = { agenda: "the grouped list", editor: "the form", subs: "the twenty-two rows", snooze: "the sheet",
+                board: "four columns of cards", card: "the card", template: "four templates", labels: "five labels",
+                checklist: "three items", comments: "two comments", move: "board and column", coledit: "four columns" };
+    return m[s.kind] || "the content";
+  }
+
+  /* ── views ─────────────────────────────────────────────────────────── */
+
+  renderVals() {
+    const R = this.R, T = this.T;
+    if (!R || !T || !window.HH_TOKENS) {
+      return { views: [], controls: [], frames: [], tables: [], groups: [], checks: [], notes: [],
+               pageTitle: "Reminders and Tasks", pageMeta: "loading", stageLine: "stage 12",
+               gateLine: "", gateColour: "var(--text-muted)", viewIntro: "", hasToast: false,
+               theme: "light", density: "comfortable", fontPx: "16px", holdPct: "0%", holdLabel: "Hold to finish" };
+    }
+
+    const view = this.view, who = this.who;
+    const rChecks = R.checks(), tChecks = T.checks();
+    const all = rChecks.concat(tChecks);
+    const passed = all.filter((c) => c.pass).length;
+    const audit = R.kindAudit();
+    const da = R.defaultsAudit();
+    const groups = this.stateGroups();
+    const cells = groups.reduce((n, g) => n + g.cells.filter((c) => c.tag !== "cannot occur").length, 0);
+
+    const VIEWS = [
+      ["kinds", "the 21 kinds", audit.screenRows],
+      ["defaults", "the defaults", da.total],
+      ["list", "the unified list", 5],
+      ["editor", "own reminder", 3],
+      ["recurrence", "recurrence", R.vectors.length],
+      ["subs", "subscriptions", 2],
+      ["board", "the board", 3],
+      ["card", "card detail", 2],
+      ["columns", "columns", 2],
+      ["merge", "the drag merge", 2],
+      ["states", "every state", cells],
+      ["gate", "the gate", all.length]
+    ];
+
+    const out = {
+      theme: this.state.theme, density: this.state.density,
+      fontPx: Math.round(16 * this.state.scale / 100) + "px",
+      stageLine: "stage 12 \u00b7 12 rows \u00b7 " + cells + " cells",
+      views: VIEWS.map((v) => ({ label: v[1], count: v[2], on: view === v[0] ? "1" : "0",
+                                 pick: () => this.setState({ view: v[0] }) })),
+      controls: [
+        { label: "Member", options: this.pickers(
+            (window.HH_FIXTURES.members || []).map((m) => [m.id, m.name, m.note]), who, (v) => ({ member: v })) },
+        { label: "Theme", options: this.pickers([["light", "light"], ["dark", "dark"]], this.state.theme, (v) => ({ theme: v })) },
+        { label: "Density", options: this.pickers([["comfortable", "comfortable"], ["compact", "compact"]], this.state.density, (v) => ({ density: v })) },
+        { label: "Text", options: this.pickers([[100, "100 %"], [200, "200 %"]], this.state.scale, (v) => ({ scale: v })) },
+        { label: "Fixture", options: [{ label: "reset completions", on: "0", title: "Clears the snoozes and completions made on this page",
+            pick: () => { R.reset(); this.say("Snoozes and completions cleared \u2014 the lists are back to the fixture."); this.forceUpdate(); } }] }
+      ],
+      gateLine: passed + " / " + all.length + " checks pass",
+      gateColour: passed === all.length ? "var(--accent-family-keeping)" : "var(--danger)",
+      hasToast: !!this.state.toast, toast: this.state.toast || "",
+      holdPct: Math.round(this.state.hold) + "%",
+      holdLabel: this.state.hold ? "Holding\u2026" : "Hold to finish",
+      frames: [], tables: [], groups: [], checks: [], notes: []
+    };
+
+    if (view === "kinds") {
+      out.pageTitle = "The reminder-kind catalog";
+      out.pageMeta = audit.collected + " kinds \u00b7 " + audit.modules + " modules \u00b7 " + audit.screenRows + " rows on the screen";
+      out.viewIntro = "05-screens calls the subscriptions screen a twenty-one-row surface and the ledger recorded the keys as unenumerated. They are enumerated \u2014 one line at a time, on ten module pages. Collected here with the line each came from, and checked module by module against 00-module-model \u00a76, which is the table the catalog registry is asserted against.";
+      out.notes = [{ text: "With the module\u2019s own standalone reminders the screen is " + audit.screenRows + " rows, not twenty-one. The twenty-second is the only kind whose completion scope is a column on the row rather than a property of the kind." }];
+      out.tables = [
+        { title: "The twenty-one, plus the module\u2019s own", meta: audit.withSource + " of " + audit.screenRows + " with a source line",
+          cols: "minmax(150px,1.1fr) 84px minmax(160px,1.4fr) 92px 74px minmax(150px,1.2fr)",
+          head: [{ text: "Key" }, { text: "Module" }, { text: "What it is" }, { text: "Scope" }, { text: "Notice" }, { text: "Stated at" }],
+          rows: R.allKinds.map((k) => {
+            const lead = R.leadFor(k);
+            return { cells: [
+              this.cell(k.key, { mono: true }),
+              this.cell(this.moduleName(k.module), { muted: true }),
+              this.cell(k.label),
+              this.cell(k.scope, { mono: true, tone: k.scopeStated ? "var(--text-primary)" : "var(--text-muted)" }),
+              this.cell(lead.label, { mono: true, tone: lead.custom ? "var(--warning)" : "var(--text-primary)" }),
+              this.cell(k.src, { mono: true, muted: true })
+            ] };
+          }) },
+        { title: "Checked against 00-module-model \u00a76", meta: audit.ok ? "ten of ten agree" : "mismatch",
+          note: "The same check Stage 10 ran on the twenty-four widget keys: the count in the model table is what the registry asserts, so the collection has to reconcile with it module by module rather than in total.",
+          cols: "minmax(140px,1fr) 90px 90px minmax(200px,2fr)",
+          head: [{ text: "Module" }, { text: "\u00a76 says" }, { text: "Collected" }, { text: "Keys" }],
+          rows: audit.rows.map((r) => ({ cells: [
+            this.cell(this.moduleName(r.module)),
+            this.cell(String(r.expected), { mono: true }),
+            this.cell(String(r.got), { mono: true, tone: r.ok ? "var(--accent-family-keeping)" : "var(--danger)" }),
+            this.cell(r.keys.join(", "), { mono: true, muted: true })
+          ] })) }
+      ];
+    }
+
+    if (view === "defaults") {
+      out.pageTitle = "The defaults, and the screen for the minority";
+      out.pageMeta = da.total + " defaults from " + R.classes.length + " classes \u00b7 " + da.custom.length + " outside the preset set";
+      out.viewIntro = "05-screens names the design risk plainly: a twenty-one-row configuration surface most members will never open, whose defaults are what make the feature work. Twenty-two numbers chosen one at a time would be twenty-two arguments to have again next year. Five classes are one argument, applied \u2014 and the class is a property of what the member has to do about the date, not of the module it came from.";
+      out.tables = [
+        { title: "Five classes", meta: "each with the sentence that sets its number",
+          cols: "minmax(150px,1fr) 70px 70px minmax(280px,3fr)",
+          head: [{ text: "Class" }, { text: "Notice" }, { text: "Kinds" }, { text: "Why" }],
+          rows: R.classes.map((c) => ({ cells: [
+            this.cell(c.label),
+            this.cell(c.days === null ? "the entity" : c.days + " d", { mono: true }),
+            this.cell(String(da.byClass.filter((b) => b.cls === c.id)[0].n), { mono: true, muted: true }),
+            this.cell(c.why, { muted: true })
+          ] })) },
+        { title: "What each kind gets", meta: da.inSet + " land on a preset \u00b7 " + da.custom.length + " need the custom field",
+          note: "FR-RM2\u2019s offered set stops at three months, and two of the defaults the handoff itself states are longer than that \u2014 a passport at six months, a supply contract at three. So \u201ccustom\u201d is not the edge case on this screen; it is where the notice and renewal kinds live, and the control has to be designed for that rather than tucked behind an \u201cother\u201d row.",
+          cols: "minmax(150px,1.2fr) 92px 78px 78px minmax(200px,1.8fr)",
+          head: [{ text: "Kind" }, { text: "Class" }, { text: "Notice" }, { text: "Set" }, { text: "Taken from" }],
+          rows: R.defaultsTable().map((r) => ({ cells: [
+            this.cell(r.key, { mono: true }),
+            this.cell(r.cls, { muted: true }),
+            this.cell(r.label, { mono: true }),
+            this.cell(r.preset, { mono: true, tone: r.custom ? "var(--warning)" : "var(--text-muted)" }),
+            this.cell(r.from, { muted: true })
+          ] })) }
+      ];
+    }
+
+    if (view === "list") {
+      const jana = R.agendaFor("jana"), petr = R.agendaFor("petr"), klara = R.agendaFor("klara");
+      out.pageTitle = "The unified list";
+      out.pageMeta = R.agendaTable().map((r) => r.name + " " + r.rows).join(" \u00b7 ");
+      out.viewIntro = "Every reminder the member is subscribed to, from every module, overdue first and then by week. Nothing below is authored per member: one Wednesday and the fixture\u2019s grants, subscriptions and lead windows produce five different screens. Tick Done or Not now on any row \u2014 the lists recompute, and the difference between the two verbs is the whole of D-43.";
+      out.frames = [
+        this.agendaFrame("jana", "m", { live: true }),
+        this.agendaFrame("petr", "m", { live: true }),
+        this.agendaFrame("adam", "m", { live: true }),
+        this.agendaFrame("klara", "m", {}),
+        this.agendaFrame("jana", "w", { live: true, frame: { col: "span 2", name: "Jana \u2014 web, two columns" } })
+      ];
+      out.frames[0].caption = "Jana holds everything, so her list is the widest test: " + jana.rowCount + " rows over " + jana.modules.length + " modules, overdue first and oldest first inside it. Every row names the module that owns the date and opens that entity \u2014 the list owns none of them.";
+      out.frames[1].caption = "Petr holds three modules. He set the reading reminder to one day, so Friday\u2019s electricity reading is not on his list yet and is already on Jana\u2019s. Two members, one occurrence, two right answers.";
+      out.frames[2].caption = "Adam turned the calendar category off. The dentist appointment is still an event in Calendar and simply does not reach him here \u2014 a subscription is per kind, per member, and off is one of the four channels.";
+      out.frames[3].caption = "Kl\u00e1ra holds no module that produces a date. Her screen is the one teaching empty state rather than a stack of empty week headings, and it is computed from her grants, not written for her.";
+      out.frames[4].caption = "The same function on the web shell. The grouping does the work at both widths, because the group is a property of the date and not a layout decision.";
+      out.tables = [{
+        title: "One day, five members", meta: "computed from the fixture",
+        cols: "minmax(120px,1fr) 70px 70px 90px 90px 90px",
+        head: [{ text: "Member" }, { text: "Rows" }, { text: "Blocks" }, { text: "Overdue" }, { text: "Modules" }, { text: "Aged out" }],
+        rows: R.agendaTable().map((r) => ({ cells: [
+          this.cell(r.name), this.cell(String(r.rows), { mono: true }), this.cell(String(r.blocks), { mono: true }),
+          this.cell(String(r.overdue), { mono: true, tone: r.overdue ? "var(--status-overdue)" : "var(--text-muted)" }),
+          this.cell(String(r.modules), { mono: true, muted: true }), this.cell(String(r.agedOut), { mono: true, muted: true })
+        ] }))
+      }];
+      out.notes = [{ text: "Kl\u00e1ra: " + klara.droppedGrant.length + " occurrences exist today and none of them is hers. They appear in no row, no heading and no count \u2014 the ninth surface, checked here rather than asserted." },
+                   { text: "Petr sees " + this.plural(petr.rowCount, "row") + ". The " + petr.droppedGrant.length + " he cannot see are not greyed, not counted and not mentioned." }];
+    }
+
+    if (view === "editor") {
+      const kettle = R.expand({ freq: "weekly", interval: 6, start: "2026-09-09" }, "2026-09-09", "2027-06-01");
+      const ann = R.anniversary(1946, "2026-09-12");
+      out.pageTitle = "The member\u2019s own reminders";
+      out.pageMeta = "due_on is a date \u00b7 series-only edits \u00b7 anniversaries pass";
+      out.viewIntro = "The module\u2019s own standalone reminders: the things that belong to no other module. The editor\u2019s one hard rule is that a reminder is a day. Anything that needs a time is a Calendar event, and keeping that boundary sharp is what stops two modules growing into each other.";
+      out.frames = [
+        this.F({ id: "C-12", name: "New reminder", stateLabel: "populated", route: "/reminders/new",
+          title: "Descale the kettle", lede: "",
+          fields: [
+            { label: "Title", value: "Descale the kettle" },
+            { label: "Day", value: "Wednesday 9 September 2026", hint: "no time", note: "A date, not an instant. The field offers no clock at all \u2014 an option that is never right is worse than an option that is missing." },
+            { label: "Repeats", value: "Every 6 weeks", hint: "weekly \u00d7 6" },
+            { label: "Ends", value: "Never", hint: "or a date, or a count" },
+            { label: "Who it is for", value: "The household", note: "completion_scope. \u201cDescale the kettle\u201d is done once for everybody; \u201crenew my passport\u201d would be personal." }
+          ],
+          blocks: [{ label: "The next six occurrences", rule: "expanded on this device",
+            rows: kettle.dates.slice(0, 6).map((d) => ({ title: R.fmtLong(d), meta: "", chip: "expanded", token: "--accent-family-time" })) }],
+          actions: ["Save", "Delete"],
+          footer: "Occurrences are never materialised as rows. This list came out of the rule, here, with no network.",
+          caption: "Editing a recurring reminder edits the series \u2014 there are no per-occurrence exceptions, carried from home. A one-off is a new reminder, which is one sentence of copy instead of a second data model." }),
+        this.F({ id: "C-12", name: "An anniversary", stateLabel: "populated", route: "/reminders/grandma",
+          title: "Grandma\u2019s birthday",
+          fields: [
+            { label: "Day", value: "12 September", hint: "yearly" },
+            { label: "Since", value: "1946", note: "The year makes the count. It is the small thing a household calendar is used for constantly." },
+            { label: "This year", value: ann.says, hint: "the 80th" }
+          ],
+          blocks: [{ label: "On the day", rows: [{ title: "Grandma\u2019s birthday \u2014 " + ann.says, meta: "12 September", chip: "Reminders", token: this.tokenOf("reminders"), note: "passes \u2014 nothing to complete" }] }],
+          actions: ["Save"],
+          footer: ann.note,
+          caption: "An anniversary is the one occurrence with no completion: no hold control, no tick, no completion row. It passes at midnight and comes back next year one higher." }),
+        this.F({ id: "C-12", name: "Linked to something else", stateLabel: "populated", route: "/reminders/new",
+          title: "Bleed the radiators",
+          fields: [
+            { label: "Day", value: "1 October 2026" },
+            { label: "Repeats", value: "Yearly" },
+            { label: "About", value: "Boiler \u00b7 Vaillant", hint: "Property", note: "An optional link to an entity in another module. The row in the unified list opens the boiler, not this reminder." }
+          ],
+          actions: ["Save"],
+          footer: "A linked entity is a reference resolved by the platform (D-40), never a join.",
+          caption: "The link is what keeps the module from becoming a second place to describe the house. If Property already knows about the boiler, the reminder points at it." })
+      ];
+    }
+
+    if (view === "recurrence") {
+      const runs = R.vectorRuns();
+      out.pageTitle = "Recurrence, expanded on the client";
+      out.pageMeta = runs.filter((r) => r.ok).length + " of " + runs.length + " vectors pass \u00b7 cap " + R.cap;
+      out.viewIntro = "FR-RE2 is an RRULE subset with two sentences that are easy to skip and expensive to get wrong: the 31st clamps to the end of a short month, and the expansion is capped. Both are run here rather than described, because the same function has to give the same answer on the server and on a phone in aeroplane mode \u2014 that is what makes the offline list complete rather than a cached window.";
+      out.tables = [{
+        title: "The test table, run on this page", meta: "shared vectors, as 06-clients \u00a71 requires",
+        cols: "minmax(150px,1.1fr) minmax(200px,2fr) 60px minmax(200px,2fr)",
+        head: [{ text: "Rule" }, { text: "Result" }, { text: "" }, { text: "Why this case" }],
+        rows: runs.map((r) => ({ cells: [
+          this.cell(r.name), this.cell(r.shown, { mono: true }),
+          this.cell(r.ok ? "pass" : "fail", { mono: true, tone: r.ok ? "var(--accent-family-keeping)" : "var(--danger)" }),
+          this.cell(r.why, { muted: true })
+        ] }))
+      }];
+      out.notes = [{ text: "No natural-language input, no location, no per-occurrence exceptions. Three non-goals that between them keep this to one function with a test table instead of a feature with a backlog." }];
+    }
+
+    if (view === "subs") {
+      const mk = (id) => {
+        const subs = R.subscriptionsFor(id).filter((s) => s.offered);
+        const byMod = {};
+        subs.forEach((s) => { (byMod[s.module] = byMod[s.module] || []).push(s); });
+        const blocks = Object.keys(byMod).map((m) => ({
+          label: this.moduleName(m),
+          rows: byMod[m].map((s) => ({
+            title: s.label, token: this.tokenOf(s.module),
+            meta: s.changed ? s.why : "",
+            right: (s.days === 0 ? "on the day" : s.days + " d") + " \u00b7 " + (s.channel === "in_app" ? "in app" : s.channel),
+            rightColour: s.changed ? "var(--accent)" : "var(--text-muted)",
+            note: s.changed ? "changed from " + s.defaultDays + " d" : "",
+            border: s.changed ? "var(--accent)" : "var(--border)"
+          }))
+        }));
+        const st = R.subsTable().filter((r) => r.id === id)[0];
+        return this.F({ id: "C-13", name: st.name + " \u2014 " + st.offered + " rows", stateLabel: "populated",
+          route: "/reminders/subscriptions", frameMax: "520px",
+          title: "What you are told about", lede: st.changed + " changed of " + st.offered + " offered",
+          blocks: blocks,
+          footer: "Notice: on the day \u00b7 1 d \u00b7 3 d \u00b7 1 w \u00b7 2 w \u00b7 1 m \u00b7 3 m \u00b7 or a number of days. The set is the strand\u2019s (FR-RM2).",
+          caption: "" });
+      };
+      const jf = mk("jana"), pf = mk("petr");
+      jf.caption = "Twenty-two rows, grouped by the module that owns them, all on their designed default except one. The screen is built for the member who opens it once and changes nothing, and it has to survive the one who changes everything.";
+      pf.caption = "Petr holds three modules, so his screen is four rows. A kind from a module he does not hold is not offered \u2014 the sixth of the nine surfaces, and the reason this screen can never be a fixed list of twenty-two.";
+      out.pageTitle = "Subscriptions";
+      out.pageMeta = "per kind \u00b7 per member \u00b7 lead and channel";
+      out.viewIntro = "A member subscribes per kind, with their own lead time and their own channel. Two members can want different notice for the same boiler service and both be right, which is why this is a personal preference requiring only view rather than a household setting.";
+      out.frames = [jf, pf];
+      out.tables = [{
+        title: "Who actually opens this screen", meta: "computed from the fixture",
+        cols: "minmax(120px,1fr) 90px 90px 90px",
+        head: [{ text: "Member" }, { text: "Offered" }, { text: "Changed" }, { text: "Turned off" }],
+        rows: R.subsTable().map((r) => ({ cells: [
+          this.cell(r.name), this.cell(r.offered + " / " + r.of, { mono: true }),
+          this.cell(String(r.changed), { mono: true, tone: r.changed ? "var(--accent)" : "var(--text-muted)" }),
+          this.cell(String(r.off), { mono: true, muted: true })
+        ] }))
+      }];
+    }
+
+    if (view === "board") {
+      out.pageTitle = "The board";
+      out.pageMeta = T.boards.length + " boards \u00b7 " + T.cards.length + " cards \u00b7 hold " + T.hold.ms + " ms";
+      out.viewIntro = "A kanban board makes no assumptions about a household, which is why Tasks needed the least work to become commercial. What it needed was three things: a position merge that never asks a question, a column kind that never becomes jargon, and a due date that belongs to the reminder strand rather than to this module.";
+      out.frames = [
+        this.F({ id: "C-15", name: "D\u016fm \u2014 web", stateLabel: "populated", route: "/tasks/dum",
+          clientLabel: "web \u00b7 1440", frameMax: "900px", col: "span 2",
+          title: "D\u016fm", lede: "Backlog \u00b7 This week \u00b7 Doing \u00b7 Done",
+          cols: this.boardCols("dum"),
+          footer: "Ordering is lexorank, so an insert is a local operation and two members reordering offline never meet.",
+          caption: "Four columns from the Household template, which is the default because \u201cthis week\u201d is what makes a household board get looked at on a Sunday. Every card face carries what you decide by: who, when, how far through, and whether anybody has said anything." }),
+        this.F({ id: "C-15", name: "One column on a phone", stateLabel: "populated", route: "/tasks/dum",
+          frameMax: "380px", title: "D\u016fm \u00b7 This week", lede: "Swipe between columns; the order is the same order",
+          cols: this.boardCols("dum", { only: ["week"] }),
+          holdTitle: "Book the STK", holdNote: "or " + T.hold.keyboard + " \u2014 the keyboard path is mandatory",
+          footer: "The hold is " + T.hold.ms + " ms and stepped, exactly as in the dashboard\u2019s widgets.",
+          caption: "Press and hold the button, or focus it and press Enter. One product, one hold: a completion that stamps a date or moves a rotation is worth two seconds, and a keyboard must be able to do it in one key." }),
+        this.F({ id: "C-15", name: "Two moves queued offline", stateLabel: "pending", route: "/tasks/dum",
+          frameMax: "380px", barText: "Offline \u2014 two changes waiting",
+          title: "D\u016fm \u00b7 Doing", lede: "",
+          cols: this.boardCols("dum", { only: ["doing"], marks: { hallway: "waiting to sync", drill: "waiting to sync" } }),
+          footer: "A position is an ordinary field, so these two apply without meeting anybody else\u2019s.",
+          caption: "Both moves are marked in a word and a glyph, both are still draggable, and neither reads as an error. The mark belongs to the row, so the board around it is untouched." })
+      ];
+    }
+
+    if (view === "card") {
+      const stk = T.cards.filter((c) => c.id === "stk")[0];
+      const cl = T.checklists.filter((c) => c.card === "stk")[0];
+      const ass = T.assignable();
+      out.pageTitle = "Card detail";
+      out.pageMeta = "labels \u00b7 checklist \u00b7 comments \u00b7 assignee \u00b7 due";
+      out.viewIntro = "One card, everything on it, with the board still behind it. The due date is the interesting field: it makes the card a reminder occurrence of kind tasks.card_due with personal completion \u2014 and every part of that sentence is the strand\u2019s, not this module\u2019s.";
+      out.frames = [
+        this.F({ id: "C-16", name: "Book the STK", stateLabel: "populated", route: "/tasks/dum/cards/stk",
+          frameMax: "520px", title: stk.title, lede: stk.body,
+          chips: stk.labels.map((l) => T.labelOf(l)),
+          fields: [
+            { label: "Due", value: "Wednesday 9 September 2026", hint: "tasks.card_due", note: "On the day, personal completion \u2014 the lead time is a subscription in Reminders, and there is none of it in this module." },
+            { label: "Assigned to", value: "Jana", hint: "notified" }
+          ],
+          checks: cl.items.map((i) => ({ text: i[0], done: i[1] })),
+          comments: T.comments.filter((c) => c.card === "stk").map((c) => ({ who: this.firstName(c.who), at: c.at, text: c.text })),
+          blocks: [{ label: "Assign to", rows: ass.map((a) => ({
+            title: a.name, meta: a.offered ? "" : "not offered \u2014 no Tasks",
+            token: a.offered ? "--accent-family-things" : "--border",
+            actionLabel: "Pick",
+            act: () => { const r = T.assign(a.id); this.say(r.status + " \u00b7 " + r.says + (r.safe ? " " + r.safe : "")); }
+          })) }],
+          actions: ["Save", "Move", "Delete"],
+          footer: "Progress is a fraction, never a bar with no numbers. No attachments: a card links to a Document instead (D-40).",
+          caption: "The picker offers the two members who could see the card. Press Pick on one of the other three to see FR-TA5\u2019s 422 \u2014 which exists for the offline and stale-cache case, and which names the reason because every member can already read the grant matrix." }),
+        this.F({ id: "C-20", name: "Comments with mentions", stateLabel: "populated", route: "/tasks/dum/cards/plumber",
+          frameMax: "460px", title: "Call the plumber about the boiler",
+          fields: [{ label: "Due", value: "Tuesday 8 September \u00b7 overdue by a day", hint: "personal" }],
+          comments: T.comments.filter((c) => c.card === "plumber").map((c) => ({ who: this.firstName(c.who), at: c.at, text: c.text })),
+          footer: "additive: a comment is created and never merged, so two replicas cannot disagree about one.",
+          caption: "The conversation that would otherwise be in Chat, kept beside the thing it is about. A mention notifies in the direct category and the picker offers the same members the assignee picker does \u2014 mentioning somebody who cannot open the card is a notification about nothing." })
+      ];
+    }
+
+    if (view === "columns") {
+      out.pageTitle = "Templates and the column editor";
+      out.pageMeta = T.templates.length + " templates \u00b7 " + T.vocab.length + " kinds, none of them named on screen";
+      out.viewIntro = "FR-TA2\u2019s column kind is what lets the Doing widget and the completion semantics work without hardcoding column names. It is also three API tokens on a screen a household reads, so it is translated rather than hidden \u2014 hiding it would mean hardcoding the names, which is the thing the kind exists to avoid.";
+      out.frames = [
+        this.F({ id: "C-17", name: "Four starters", stateLabel: "populated", route: "/tasks/new",
+          frameMax: "440px", title: "Start a board", lede: "Pick a shape. None of them brings any content.",
+          blocks: [{ rows: T.templates.map((t) => ({
+            title: t.name + (t.def ? " \u2014 default" : ""), meta: t.columns.length ? t.columns.map((c) => c[0]).join(" \u00b7 ") : "No columns",
+            note: t.why, token: "--accent-family-things" })) }],
+          actions: ["Create the board"],
+          footer: "Templates are translated reference data: a shape, not content. home seeded a Czech board; a commercial product cannot.",
+          caption: "Every column in every template resolves to one of the three kinds, which is what lets the Doing widget work on a board nobody has configured." }),
+        this.F({ id: "C-22", name: "What happens in this column", stateLabel: "populated", route: "/tasks/dum/columns",
+          frameMax: "460px", title: "Columns", lede: "Name it, order it, and say what happens in it.",
+          blocks: [{ label: "This week", rule: "second of four",
+            rows: T.vocab.map((v) => ({ title: v.pick, meta: v.effect,
+              token: v.kind === "now" ? "--accent-family-time" : v.kind === "done" ? "--accent-family-keeping" : "--border",
+              right: v.kind === "now" ? "chosen" : "", rightColour: "var(--accent)" })) }],
+          actions: ["Save", "Add a column"],
+          footer: "Three consequences in three sentences. The API words appear on no screen \u2014 scanned, not claimed.",
+          caption: "The consequence is in the option, not in a tooltip: a member picks \u201cwe are on it\u201d and reads that cards there show up on Today. That is the difference between surfacing a concept and leaking a field name." })
+      ];
+    }
+
+    if (view === "merge") {
+      const m = T.mergeProof();
+      out.pageTitle = "The drag that must never ask a question";
+      out.pageMeta = m.ops + " offline reorders \u00b7 " + m.dialogs + " dialogs \u00b7 " + m.rebalanced + " rebalance";
+      out.viewIntro = "Lexorank was chosen in home because it makes an insert a local operation. Offline it earns its place twice over: two members reordering the same column produce interleaved ranks that both apply, and the result is a defensible order even if it is not the order either of them pictured. The one real collision \u2014 the same gap used twice \u2014 is honest last-write-wins with a server rebalance, and a conflict dialog for a drag would be absurd.";
+      out.tables = [
+        { title: "The op log", meta: "two members, one evening, no signal",
+          cols: "70px minmax(240px,3fr) 90px 90px",
+          head: [{ text: "At" }, { text: "What happened" }, { text: "Rank" }, { text: "" }],
+          rows: T.ops.map((op, i) => ({ cells: [
+            this.cell(op.at, { mono: true, muted: true }), this.cell(op.says),
+            this.cell(m.a.log[i].rank, { mono: true }),
+            this.cell(m.a.log[i].rebalanced ? "rebalanced" : "applied", { mono: true, tone: m.a.log[i].rebalanced ? "var(--warning)" : "var(--accent-family-keeping)" })
+          ] })) },
+        { title: "Both receive orders", meta: m.converged ? "identical in " + m.keys.length + " columns" : "diverged",
+          note: "The server can receive Jana\u2019s batch first or Petr\u2019s. Both runs are computed here and compared column by column \u2014 the property that matters is not that the order is what somebody pictured, but that it is the same order for everybody.",
+          cols: "minmax(140px,1fr) minmax(200px,2fr) minmax(200px,2fr) 70px",
+          head: [{ text: "Column" }, { text: "Jana first" }, { text: "Petr first" }, { text: "" }],
+          rows: m.keys.filter((k) => m.a.final[k].length).map((k) => ({ cells: [
+            this.cell(k, { mono: true, muted: true }),
+            this.cell(m.a.final[k].join(" \u00b7 "), { mono: true }),
+            this.cell(m.b.final[k].join(" \u00b7 "), { mono: true }),
+            this.cell(m.a.final[k].join("|") === m.b.final[k].join("|") ? "same" : "differs",
+              { mono: true, tone: m.a.final[k].join("|") === m.b.final[k].join("|") ? "var(--accent-family-keeping)" : "var(--danger)" })
+          ] })) }
+      ];
+      out.notes = [{ text: "Where two ranks collide exactly the server rebalances the column and emits the new ranks as an ordinary change. Nobody is asked anything, because there is nothing to decide: both members wanted the card in that gap, and it is in that gap." }];
+    }
+
+    if (view === "states") {
+      out.pageTitle = "Every state these twelve rows can reach";
+      out.pageMeta = cells + " cells drawn \u00b7 " + groups.reduce((n, g) => n + g.cells.filter((c) => c.tag === "cannot occur").length, 0) + " cannot occur";
+      out.viewIntro = "Twelve states are not twelve drawings: each state is a treatment applied to one body, as Stage 4 established. A row declares the states its own surface cannot reach, each with the reason, and the reason is drawn where the state would have been \u2014 so a row cannot be recorded complete while a cell of it is undrawn, and an exclusion cannot be quietly assumed.";
+      out.groups = groups;
+    }
+
+    if (view === "gate") {
+      out.pageTitle = "The gate";
+      out.pageMeta = passed + " of " + all.length + " pass \u00b7 " + rChecks.length + " reminders \u00b7 " + tChecks.length + " tasks";
+      out.viewIntro = "The stage\u2019s own line is the last two: drag ordering never produces a conflict dialog, and hold-to-complete has its keyboard path. Both are computed here \u2014 the first by replaying six offline reorders in both receive orders, the second by counting the completion affordances in the stage and checking each one for a key.";
+      out.checks = all.map((c) => ({ name: c.name, detail: c.detail,
+        colour: c.pass ? "var(--accent-family-keeping)" : "var(--danger)" }));
+    }
+
+    out.tables = out.tables.map((t) => Object.assign({}, t, {
+      hasNote: !!t.note, note: t.note || "", minWidth: this.tableMin(t.cols)
+    }));
+    return out;
+  }
+}
+</script>
+</body>
+</html>

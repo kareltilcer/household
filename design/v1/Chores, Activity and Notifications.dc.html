@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./components.js"></script>
+<script src="./reminders.js"></script>
+<script src="./documents.js"></script>
+<script src="./chores.js"></script>
+<script src="./activity.js"></script>
+<script src="./notify.js"></script>
+<script src="./ledger.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">Whose turn, what changed, who was told</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Chores, Activity and Notifications</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-time)">{{ stageLine }}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="12">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">A rotation that stays credible, a log a household can read, and a rule builder that refuses to become one. Every date, balance, audience and refusal on these screens is computed from the fixture.</div>
+      <a href="./Notes and Documents.dc.html" style="font-family:var(--mono);font-size:11px">← stage 13 · Notes and Documents</a>
+      <a href="./Reminders and Tasks.dc.html" style="font-family:var(--mono);font-size:11px">stage 12 · the strand that reminds</a>
+      <a href="./Household and Billing.dc.html" style="font-family:var(--mono);font-size:11px">stage 8 · grants and settings</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+
+      <p style="margin:0;max-width:82ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+      <sc-if value="{{ hasField }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input value="{{ queryValue }}" onInput="{{ onQuery }}" placeholder="Type a query" style="width:220px;background:var(--surface-raised);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:9px 11px;font-size:13.5px;min-height:40px" />
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <sc-for list="{{ queryChips }}" as="q" hint-placeholder-count="4">
+              <button onClick="{{ q.pick }}" data-on="{{ q.on }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:6px 11px;font-size:11.5px;font-family:var(--mono);min-height:32px">{{ q.label }}</button>
+            </sc-for>
+          </div>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ queryMeta }}</span>
+        </div>
+      </sc-if>
+
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="0">
+        <div style="border-left:2px solid var(--accent);padding:2px 0 2px 12px;max-width:82ch;font-size:13.5px;line-height:1.6;color:var(--text-primary)">{{ n.text }}</div>
+      </sc-for>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+        <sc-for list="{{ frames }}" as="f" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0;grid-column:{{ f.col }}">
+
+            <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-time)">{{ f.id }}</span>
+              <h3 style="margin:0;font-size:15px;font-weight:600">{{ f.name }}</h3>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ f.stateLabel }}</span>
+            </div>
+
+            <div style="width:100%;max-width:{{ f.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+              <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.route }}</span>
+                <span style="flex:0 0 auto">{{ f.clientLabel }}</span>
+              </div>
+
+              <sc-if value="{{ f.hasBar }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.45em 0.75em;background:var(--surface-sunken);color:var(--status-offline);font-family:var(--mono);font-size:0.62em;border-bottom:1px solid var(--divider)">{{ f.barText }}</div>
+              </sc-if>
+
+              <div style="flex:1 1 auto;padding:1em 0.9em;display:flex;flex-direction:column;gap:0.8em;min-width:0">
+
+                <div style="display:flex;flex-direction:column;gap:0.2em">
+                  <div style="font-size:1.1em;font-weight:600;line-height:1.2">{{ f.title }}</div>
+                  <sc-if value="{{ f.hasLede }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ f.lede }}</div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ f.hasBanner }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid {{ f.bannerTone }};border-left:3px solid {{ f.bannerTone }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.3em">
+                    <sc-if value="{{ f.hasBannerTitle }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.78em;font-weight:600;color:{{ f.bannerTone }}">{{ f.bannerTitle }}</div>
+                    </sc-if>
+                    <div style="font-size:0.76em;line-height:1.5;color:var(--text-primary)">{{ f.bannerBody }}</div>
+                    <div style="display:flex;gap:0.4em;flex-wrap:wrap;margin-top:0.15em">
+                      <sc-for list="{{ f.bannerActions }}" as="a" hint-placeholder-count="0">
+                        <span style="font-family:var(--mono);font-size:0.62em;border:1px solid var(--border-strong);border-radius:4px;padding:0.25em 0.5em;color:var(--text-primary)">{{ a.label }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.skeleton }}" as="k" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.6em;align-items:flex-start;border:1px solid var(--border);border-radius:var(--radius-card);padding:0.6em 0.7em;min-height:2.8em">
+                    <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.35em">
+                      <div style="height:0.85em;width:{{ k.w1 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                      <div style="height:0.7em;width:{{ k.w2 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                    </div>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.fields }}" as="x" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.25em">
+                    <div style="font-family:var(--mono);font-size:0.6em;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">{{ x.label }}</div>
+                    <div style="border:1px solid var(--border-strong);border-radius:var(--radius-control);background:{{ x.bg }};padding:0.55em 0.65em;font-size:0.85em;min-height:2.5em;display:flex;align-items:center;justify-content:space-between;gap:0.5em">
+                      <span style="min-width:0">{{ x.value }}</span>
+                      <sc-if value="{{ x.hasHint }}" hint-placeholder-val="{{ false }}">
+                        <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--text-muted)">{{ x.hint }}</span>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ x.hasNote }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:0.7em;line-height:1.5;color:var(--text-muted)">{{ x.note }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.4em;flex-wrap:wrap">
+                    <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="2">
+                      <span style="display:inline-flex;align-items:center;gap:0.35em;white-space:nowrap;border:1px solid var({{ c.colour }});border-radius:999px;padding:0.2em 0.55em;font-size:0.68em;color:var(--text-primary)">
+                        <span style="width:0.5em;height:0.5em;border-radius:50%;background:var({{ c.colour }})"></span>{{ c.name }}
+                      </span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.cols }}" as="col" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.4em;min-width:0">
+                    <div style="display:flex;align-items:baseline;gap:0.5em;justify-content:space-between">
+                      <span style="font-size:0.8em;font-weight:600">{{ col.name }}</span>
+                      <span style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ col.kindLabel }}</span>
+                    </div>
+                    <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="2">
+                      <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:var(--surface-raised);padding:0.55em 0.65em;display:flex;flex-direction:column;gap:0.3em;min-width:0">
+                        <div style="font-size:0.82em;font-weight:500;line-height:1.35;text-decoration:{{ c.strike }}">{{ c.title }}</div>
+                        <sc-if value="{{ c.hasMeta }}" hint-placeholder-val="{{ false }}">
+                          <div style="font-size:0.68em;color:var(--text-muted);line-height:1.4">{{ c.meta }}</div>
+                        </sc-if>
+                        <div style="display:flex;gap:0.35em;flex-wrap:wrap;align-items:center">
+                          <sc-for list="{{ c.chips }}" as="p" hint-placeholder-count="0">
+                            <span style="display:inline-flex;align-items:center;gap:0.3em;white-space:nowrap;border:1px solid var({{ p.colour }});border-radius:999px;padding:0.1em 0.45em;font-size:0.6em">
+                              <span style="width:0.4em;height:0.4em;border-radius:50%;background:var({{ p.colour }})"></span>{{ p.name }}
+                            </span>
+                          </sc-for>
+                          <sc-if value="{{ c.hasMark }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-family:var(--mono);font-size:0.6em;color:{{ c.markColour }}">{{ c.markWord }}</span>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.blocks }}" as="b" hint-placeholder-count="0">
+                  <div data-block="{{ b.key }}" data-rows="{{ b.count }}" style="display:flex;flex-direction:column;gap:0.4em">
+                    <sc-if value="{{ b.hasHeading }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap">
+                        <span style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:{{ b.labelColour }}">{{ b.label }}</span>
+                        <sc-if value="{{ b.hasRule }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ b.rule }}</span>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="3">
+                      <div style="display:flex;gap:0.6em;align-items:flex-start;background:{{ r.bg }};border:1px solid {{ r.border }};border-left:{{ r.leftRule }};border-radius:var(--radius-card);padding:0.55em 0.65em 0.55em {{ r.padLeft }};min-width:0">
+                        <span style="flex:0 0 auto;width:0.5em;height:0.5em;border-radius:50%;background:var({{ r.token }});margin-top:0.45em"></span>
+                        <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.15em">
+                          <span style="display:flex;gap:0.5em;align-items:baseline;min-width:0">
+                            <span style="font-size:0.85em;font-weight:500;line-height:1.35;min-width:0;text-decoration:{{ r.strike }}">{{ r.title }}</span>
+                            <sc-if value="{{ r.hasRight }}" hint-placeholder-val="{{ false }}">
+                              <span style="margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:0.64em;color:{{ r.rightColour }}">{{ r.right }}</span>
+                            </sc-if>
+                          </span>
+                          <sc-if value="{{ r.hasMeta }}" hint-placeholder-val="{{ true }}">
+                            <span style="font-size:0.72em;line-height:1.4;color:var(--text-muted)">{{ r.meta }}</span>
+                          </sc-if>
+                          <span style="display:flex;gap:0.4em;align-items:center;flex-wrap:wrap;margin-top:0.1em">
+                            <sc-if value="{{ r.hasChip }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;padding:0.15em 0.4em;border-radius:3px;border:1px solid var({{ r.token }});color:var({{ r.token }})">{{ r.chip }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasMark }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;color:{{ r.markColour }}">{{ r.markWord }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-size:0.66em;color:var(--text-muted)">{{ r.note }}</span>
+                            </sc-if>
+                          </span>
+                        </span>
+                        <sc-if value="{{ r.hasAction }}" hint-placeholder-val="{{ false }}">
+                          <span style="flex:0 0 auto;display:flex;gap:0.3em;align-items:center">
+                            <button onClick="{{ r.act }}" style="background:var(--surface-sunken);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;min-height:2.6em">{{ r.actionLabel }}</button>
+                            <sc-if value="{{ r.hasAction2 }}" hint-placeholder-val="{{ false }}">
+                              <button onClick="{{ r.act2 }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;min-height:2.6em">{{ r.action2Label }}</button>
+                            </sc-if>
+                          </span>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.checks }}" as="c" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.55em;align-items:center;min-width:0">
+                    <span style="flex:0 0 auto;width:1em;height:1em;border-radius:3px;border:1px solid {{ c.boxBorder }};background:{{ c.boxBg }}"></span>
+                    <span style="font-size:0.78em;line-height:1.4;color:{{ c.colour }};text-decoration:{{ c.strike }}">{{ c.text }}</span>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.comments }}" as="c" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.2em;border-top:1px solid var(--divider);padding-top:0.5em">
+                    <div style="display:flex;gap:0.5em;align-items:baseline">
+                      <span style="font-size:0.75em;font-weight:600">{{ c.who }}</span>
+                      <span style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ c.at }}</span>
+                    </div>
+                    <div style="font-size:0.76em;line-height:1.5">{{ c.text }}</div>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasHold }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.4em;border:1px solid var(--border);border-radius:var(--radius-card);padding:0.6em 0.7em">
+                    <div style="font-size:0.78em;font-weight:500">{{ f.holdTitle }}</div>
+                    <div style="height:0.5em;border-radius:999px;background:var(--surface-sunken);overflow:hidden">
+                      <div style="height:100%;width:{{ holdPct }};background:var(--accent)"></div>
+                    </div>
+                    <div style="display:flex;gap:0.4em;flex-wrap:wrap;align-items:center">
+                      <button onPointerDown="{{ holdStart }}" onPointerUp="{{ holdStop }}" onPointerLeave="{{ holdStop }}" onKeyDown="{{ holdKey }}" style="background:var(--accent);color:var(--text-on-accent);border:1px solid var(--accent);border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.9em">{{ holdLabel }}</button>
+                      <span style="font-family:var(--mono);font-size:0.62em;color:var(--text-muted)">{{ f.holdNote }}</span>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em;align-items:flex-start;padding:0.8em 0.2em 0.4em">
+                    <div style="width:100%;height:3.2em;border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken)"></div>
+                    <div style="font-size:0.92em;font-weight:600;line-height:1.3">{{ f.emptyTitle }}</div>
+                    <div style="font-size:0.78em;line-height:1.55;color:var(--text-muted)">{{ f.emptyBody }}</div>
+                    <sc-if value="{{ f.hasEmptyAction }}" hint-placeholder-val="{{ true }}">
+                      <span style="background:var(--accent);color:var(--text-on-accent);border-radius:var(--radius-control);padding:0.5em 0.85em;font-size:0.78em">{{ f.emptyAction }}</span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasAbsent }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.35em;padding:1.2em 0.4em;align-items:center;text-align:center">
+                    <div style="font-size:0.85em;font-weight:600">{{ f.absentTitle }}</div>
+                    <div style="font-size:0.75em;line-height:1.55;color:var(--text-muted);max-width:26em">{{ f.absentBody }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasActions }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.45em;flex-wrap:wrap;margin-top:0.1em">
+                    <sc-for list="{{ f.actions }}" as="a" hint-placeholder-count="1">
+                      <span style="background:{{ a.bg }};color:{{ a.colour }};border:1px solid {{ a.border }};border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.8em;display:inline-flex;align-items:center">{{ a.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasFooter }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:auto;padding-top:0.55em;border-top:1px solid var(--divider);font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ f.footer }}</div>
+                </sc-if>
+
+              </div>
+            </div>
+
+            <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ f.caption }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-for list="{{ grids }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface-raised);overflow-x:auto;max-width:100%">
+            <div style="display:grid;grid-template-columns:{{ g.cols }};min-width:{{ g.minWidth }};font-size:{{ g.fontPx }}">
+              <sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="24">
+                <div style="border-right:1px solid var(--divider);border-bottom:1px solid var(--divider);padding:0.5em 0.6em;background:{{ c.bg }};position:{{ c.pos }};left:0;z-index:{{ c.z }};min-width:0;display:flex;flex-direction:column;gap:0.3em">
+                  <div style="font-family:{{ c.font }};font-size:0.72em;font-weight:{{ c.weight }};color:{{ c.colour }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.label }}</div>
+                  <sc-for list="{{ c.items }}" as="i" hint-placeholder-count="0">
+                    <div style="border:1px solid var({{ i.token }});border-left:0.25em solid var({{ i.token }});border-radius:4px;padding:0.25em 0.4em;background:var(--surface);display:flex;flex-direction:column;gap:0.1em;min-width:0">
+                      <span style="font-size:0.7em;line-height:1.3;text-decoration:{{ i.strike }};color:var(--text-primary)">{{ i.text }}</span>
+                      <span style="font-family:var(--mono);font-size:0.58em;color:{{ i.markColour }}">{{ i.mark }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <p style="margin:0;max-width:82ch;font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ g.note }}</p>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ tables }}" as="t" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ t.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ t.meta }}</span>
+          </div>
+          <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">{{ t.note }}</p>
+          </sc-if>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow-x:auto">
+            <div style="display:grid;grid-template-columns:{{ t.cols }};gap:0 14px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken);min-width:{{ t.minWidth }}">
+              <sc-for list="{{ t.head }}" as="h" hint-placeholder-count="3">
+                <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ h.text }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:{{ t.cols }};gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--divider);align-items:baseline;min-width:{{ t.minWidth }}">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+                  <div style="font-family:{{ c.font }};font-size:{{ c.size }};line-height:1.5;color:{{ c.colour }};min-width:0;overflow-wrap:anywhere">{{ c.text }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-time)">{{ g.id }}</span>
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.name }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;align-items:start">
+            <sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="12">
+              <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:{{ c.bg }};padding:10px 11px;display:flex;flex-direction:column;gap:6px;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:6px;justify-content:space-between">
+                  <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:{{ c.wordColour }}">{{ c.word }}</span>
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ c.tag }}</span>
+                </div>
+                <div style="font-size:11.5px;line-height:1.5;color:var(--text-primary)">{{ c.body }}</div>
+                <div style="font-size:10.5px;line-height:1.5;color:var(--text-muted)">{{ c.rule }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ checks }}" as="c" hint-placeholder-count="0">
+        <div style="display:grid;grid-template-columns:16px 1fr;gap:0 12px;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+          <div style="width:10px;height:10px;border-radius:50%;background:{{ c.colour }};margin-top:5px"></div>
+          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <div style="font-size:14px;font-weight:600;line-height:1.35">{{ c.name }}</div>
+            <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+        <div style="position:sticky;bottom:14px;align-self:flex-start;background:var(--text-primary);color:var(--surface);border-radius:var(--radius-control);padding:10px 14px;font-family:var(--mono);font-size:11.5px;box-shadow:var(--shadow-2)">{{ toast }}</div>
+      </sc-if>
+
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;today&quot;,&quot;week&quot;,&quot;schedules&quot;,&quot;rotation&quot;,&quot;points&quot;,&quot;rewards&quot;,&quot;queues&quot;,&quot;prune&quot;,&quot;feed&quot;,&quot;timeline&quot;,&quot;composer&quot;,&quot;delivery&quot;,&quot;setup&quot;,&quot;states&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;today&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startMember&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;jana&quot;,&quot;petr&quot;,&quot;adam&quot;,&quot;klara&quot;,&quot;milos&quot;],&quot;default&quot;:&quot;jana&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;gridMembers&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2,&quot;min&quot;:2,&quot;max&quot;:12,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;View&quot;,&quot;unit&quot;:&quot; members&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100,
+            member: null, toast: null, hold: 0, done: {}, query: null, cols: null, tick: 0 };
+
+  get C() { return window.HH_CHORES; }
+  get A() { return window.HH_ACTIVITY; }
+  get N() { return window.HH_NOTIFY; }
+  get G() { return window.HH_DOCS; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (this.C && this.A && this.N && window.HH_TOKENS && window.HH_FIXTURES) {
+        clearInterval(this._boot);
+        this.forceUpdate();
+      }
+    }, 60);
+  }
+  componentWillUnmount() { clearInterval(this._boot); clearTimeout(this._t); clearInterval(this._h); }
+
+  get view() { return this.state.view || this.props.startView || "today"; }
+  get who() { return this.state.member || this.props.startMember || "jana"; }
+  get query() { return this.state.query === null ? "skoda" : this.state.query; }
+  get gridCols() { return this.state.cols || this.props.gridMembers || 2; }
+
+  say(text) {
+    clearTimeout(this._t);
+    this.setState({ toast: text });
+    this._t = setTimeout(() => this.setState({ toast: null }), 7000);
+  }
+
+  /* hold to complete — FR-CO3's 2000 ms, with Enter as the mandatory keyboard path */
+  holdStart = () => {
+    clearInterval(this._h);
+    const step = 100, total = this.C ? this.C.holdMs : 2000;
+    this._h = setInterval(() => {
+      const next = this.state.hold + step / total;
+      if (next >= 1) { clearInterval(this._h); this.finish("held for " + total + " ms"); }
+      else this.setState({ hold: next });
+    }, step);
+  };
+  holdStop = () => { clearInterval(this._h); if (this.state.hold < 1) this.setState({ hold: 0 }); };
+  holdKey = (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); clearInterval(this._h); this.finish("Enter"); }
+  };
+  finish(how) {
+    const C = this.C;
+    const occ = C.todayFor("adam").mine[0];
+    this.setState({ hold: 0, done: Object.assign({}, this.state.done, { [occ.chore]: true }) });
+    this.say(occ.name + " — finished by " + how + ". +" + occ.points + " to Adam with the reason on the row, and the rotation moved to " +
+      C.firstName(C.predictedAssignee(C.choreOf(occ.chore), occ.key, 1)) + " (predicted; the server's value is the one that counts).");
+  }
+
+  pickers(list, current, set) {
+    return list.map((o) => ({
+      label: o[1], title: o[2] || "", on: current === o[0] ? "1" : "0",
+      pick: () => this.setState(set(o[0]))
+    }));
+  }
+
+  /* ── shape helpers, as Stage 13 ─────────────────────────────────────── */
+
+  F(o) {
+    const f = Object.assign({
+      id: "", name: "", stateLabel: "", caption: "", col: "auto", frameMax: "460px",
+      route: "", clientLabel: "mobile", title: "", lede: "",
+      bannerTone: "var(--border)", bannerTitle: "", bannerBody: "", bannerActions: [],
+      skeleton: [], blocks: [], cols: [], chips: [], fields: [], checks: [], comments: [],
+      actions: [], emptyTitle: "", emptyBody: "", emptyAction: "",
+      absentTitle: "", absentBody: "", footer: "", barText: "",
+      holdTitle: "", holdNote: ""
+    }, o);
+    f.hasLede = !!f.lede;
+    f.hasBanner = !!f.bannerBody;
+    f.hasBannerTitle = !!f.bannerTitle;
+    f.hasChips = f.chips.length > 0;
+    f.hasEmpty = !!f.emptyTitle;
+    f.hasEmptyAction = !!f.emptyAction;
+    f.hasAbsent = !!f.absentTitle;
+    f.hasActions = f.actions.length > 0;
+    f.hasFooter = !!f.footer;
+    f.hasBar = !!f.barText;
+    f.hasHold = !!f.holdTitle;
+    f.bannerActions = f.bannerActions.map((a) => (typeof a === "string" ? { label: a } : a));
+    f.actions = f.actions.map((a, i) => (typeof a === "string"
+      ? { label: a, bg: i === 0 ? "var(--accent)" : "var(--surface)", colour: i === 0 ? "var(--text-on-accent)" : "var(--text-muted)", border: i === 0 ? "var(--accent)" : "var(--border)" }
+      : a));
+    f.blocks = f.blocks.map((b, i) => Object.assign({
+      key: (f.id || "b") + "-" + i, label: "", rule: "", labelColour: "var(--text-muted)"
+    }, b, {
+      count: (b.rows || []).length, rows: (b.rows || []).map((r) => this.row(r)),
+      hasHeading: !!b.label, hasRule: !!b.rule
+    }));
+    f.cols = f.cols.map((c) => Object.assign({ name: "", kindLabel: "", cards: [] }, c, {
+      cards: (c.cards || []).map((k) => Object.assign({
+        title: "", meta: "", chips: [], markWord: "", markColour: "var(--text-muted)",
+        border: "var(--border)", strike: "none"
+      }, k, { hasMeta: !!k.meta, hasMark: !!k.markWord }))
+    }));
+    f.checks = f.checks.map((c) => ({
+      text: c.text, strike: c.done ? "line-through" : "none",
+      colour: c.done ? "var(--text-muted)" : "var(--text-primary)",
+      boxBg: c.done ? "var(--accent)" : "var(--surface)",
+      boxBorder: c.done ? "var(--accent)" : "var(--border-strong)"
+    }));
+    f.fields = f.fields.map((x) => Object.assign({ label: "", value: "", hint: "", note: "", bg: "var(--surface-sunken)" }, x,
+      { hasHint: !!x.hint, hasNote: !!x.note }));
+    return f;
+  }
+
+  row(r) {
+    const o = Object.assign({
+      title: "", meta: "", chip: "", token: "--accent-family-household", right: "",
+      rightColour: "var(--text-muted)", markWord: "", markColour: "var(--text-muted)",
+      note: "", bg: "var(--surface)", border: "var(--border)", leftRule: "1px solid var(--border)",
+      padLeft: "0.65em", actionLabel: "", action2Label: "", strike: "none",
+      act: () => {}, act2: () => {}
+    }, r);
+    o.hasMeta = !!o.meta; o.hasChip = !!o.chip; o.hasRight = !!o.right;
+    o.hasMark = !!o.markWord; o.hasNote = !!o.note;
+    o.hasAction = !!o.actionLabel; o.hasAction2 = !!o.action2Label;
+    return o;
+  }
+
+  plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+
+  tableMin(cols) {
+    const tracks = String(cols || "").split(/\s+(?![^(]*\))/).filter(Boolean);
+    let n = 0;
+    tracks.forEach((t) => {
+      const m = /minmax\((\d+)px/.exec(t) || /^(\d+)px$/.exec(t);
+      n += m ? Number(m[1]) : 90;
+    });
+    return (n + Math.max(0, tracks.length - 1) * 14 + 28) + "px";
+  }
+
+  cell(text, opt) {
+    const o = opt || {};
+    return { text: text, font: o.mono ? "var(--mono)" : "var(--sans)",
+             size: o.mono ? "11.5px" : "13px",
+             colour: o.muted ? "var(--text-muted)" : o.tone || "var(--text-primary)" };
+  }
+
+  firstName(id) {
+    const F = window.HH_FIXTURES;
+    const m = F && F.members.filter((x) => x.id === id)[0];
+    return m ? m.name : id;
+  }
+  tokenOf(id) {
+    const T = window.HH_TOKENS;
+    const hit = T && T.accentMap.filter((m) => m[0] === id)[0];
+    const fam = hit ? hit[2] : "household";
+    return fam === "garden" ? "--accent-garden" : "--accent-family-" + fam;
+  }
+  grantOf(id, mod) {
+    const F = window.HH_FIXTURES;
+    const m = F && F.members.filter((x) => x.id === id)[0];
+    return m ? (m.grants[mod] || "none") : "none";
+  }
+
+  occRow(o, viewer) {
+    const C = this.C;
+    const done = !!this.state.done[o.chore];
+    return {
+      title: o.name,
+      meta: o.room + " · " + o.minutes + " min" + (o.points ? " · " + o.points + " points" : ""),
+      token: this.tokenOf("chores"),
+      right: o.late ? o.late + " days late" : o.due ? "due " + C.fmt(o.due) : "no date",
+      rightColour: o.late ? "var(--status-overdue)" : "var(--text-muted)",
+      chip: o.who ? (o.who === viewer ? "yours" : this.firstName(o.who)) : "anyone",
+      markWord: done ? "finished" : o.awaiting ? "waiting to be checked" : o.swap ? "swap asked" : "",
+      markColour: done ? "var(--accent-family-keeping)" : "var(--status-pending)",
+      strike: done ? "line-through" : "none",
+      note: o.claim ? "claimed this morning" : o.mode === "weekly_rotation" ? "this week's turn, done or not" : "",
+      border: o.late ? "var(--status-overdue)" : "var(--border)"
+    };
+  }
+
+  /* ── the twelve-state matrix, over all three files' rows ────────────── */
+
+  stateGroups() {
+    const C = window.HH_COMPONENTS;
+    const rows = this.C.screens.concat(this.A.screens).concat(this.N.screens);
+    const order = this.C.allStates;
+    return rows.map((s) => {
+      const preset = s.preset === "F" ? ["loading", "populated", "error"]
+                   : s.preset === "S" ? ["populated"] : order;
+      const imp = s.impossible || {};
+      const cells = preset.map((st) => {
+        const excluded = !!imp[st];
+        const t = C ? C.treatments[st] : null;
+        const rule = t ? t.rule : "";
+        return {
+          word: st, tag: excluded ? "cannot occur" : (s.id + " · " + s.client),
+          body: excluded ? imp[st] : this.stateBody(s, st),
+          rule: excluded ? "" : rule,
+          bg: excluded ? "var(--surface-sunken)" : "var(--surface-raised)",
+          border: excluded ? "var(--border)" : "var(--border-strong)",
+          wordColour: excluded ? "var(--text-muted)" : this.stateColour(st)
+        };
+      });
+      const drawn = cells.filter((c) => c.tag !== "cannot occur").length;
+      return { id: s.id, name: s.name, cells: cells,
+               meta: drawn + " of " + preset.length + " states drawn · " + Object.keys(imp).length + " cannot occur · " + s.route };
+    });
+  }
+
+  stateColour(st) {
+    const m = { error: "var(--danger)", rejected: "var(--status-rejected)", conflicted: "var(--status-conflict)",
+                pending: "var(--status-pending)", syncing: "var(--status-syncing)", offline: "var(--status-offline)",
+                readonly: "var(--warning)", withdrawn: "var(--text-muted)", absent: "var(--text-muted)" };
+    return m[st] || "var(--accent-family-keeping)";
+  }
+
+  stateBody(s, st) {
+    if (st === "loading") return "Skeleton at the height of " + this.bodyWord(s) + ", so nothing jumps when it arrives.";
+    if (st === "empty") return s.empty && s.empty.s ? s.empty.s + " " + s.empty.e : "Nothing here yet.";
+    if (st === "error") return s.error;
+    if (st === "rejected") return s.rejected || s.error;
+    if (st === "withdrawn") return s.withdrawn || "Access changed, so this device dropped its copy.";
+    if (st === "readonly") return s.readonly;
+    if (st === "absent") return (s.states && s.states.absent) || "Gone, not disabled: no label, no tooltip, no greyed control.";
+    if (st === "offline") return (s.states && s.states.offline) || "The same read, with the bar above it. " + this.bodyWord(s) + " is on the device.";
+    if (st === "pending") return (s.states && s.states.pending) || "A queued write on " + this.bodyWord(s) + ", marked in a word and a glyph, still editable.";
+    if (st === "syncing") return "Past the 800 ms threshold only.";
+    if (st === "conflicted") return (s.states && s.states.conflicted) || "A row flag that opens the comparison, never a modal at reconnect.";
+    return (s.states && s.states.populated) || this.bodyWord(s) + ", with no mark at all: synced is the absence of a mark.";
+  }
+  bodyWord(s) {
+    const m = { list: "today's chores", grid: "the week", definitions: "the definitions", editor: "the chore",
+                ledger: "the rows", rewards: "the rewards", queue: "the queue", swap: "the swaps",
+                prune: "the flagged chore", feed: "the feed", timeline: "the timeline", diff: "the fields",
+                composer: "the rules", log: "the attempts", setup: "the module list" };
+    return m[s.kind] || "the content";
+  }
+
+  /* ── views ─────────────────────────────────────────────────────────── */
+
+  renderVals() {
+    const C = this.C, A = this.A, N = this.N;
+    if (!C || !A || !N || !window.HH_TOKENS) {
+      return { views: [], controls: [], frames: [], tables: [], groups: [], checks: [], notes: [], grids: [],
+               pageTitle: "Chores, Activity and Notifications", pageMeta: "loading", stageLine: "stage 14",
+               gateLine: "", gateColour: "var(--text-muted)", viewIntro: "", hasToast: false,
+               hasField: false, queryChips: [], queryValue: "", queryMeta: "",
+               theme: "light", density: "comfortable", fontPx: "16px", holdPct: "0%", holdLabel: "" };
+    }
+
+    const view = this.view, who = this.who;
+    const all = C.checks().concat(A.checks()).concat(N.checks());
+    const passed = all.filter((c) => c.pass).length;
+    const groups = this.stateGroups();
+    const cells = groups.reduce((n, g) => n + g.cells.filter((c) => c.tag !== "cannot occur").length, 0);
+
+    const VIEWS = [
+      ["today", "today, mine first", C.todayFor(who).count || 0],
+      ["week", "the weekly grid", C.weekGrid(2).occurrences],
+      ["schedules", "four kinds, one anchor", C.scheduleKinds.length],
+      ["rotation", "turns, skips, two devices", C.modes.length],
+      ["points", "the ledger", C.pointEntries.length],
+      ["rewards", "rewards", C.rewards.length],
+      ["queues", "checking and swapping", C.swaps.length + C.verificationQueue().length],
+      ["prune", "overdue, once", C.overdueRows().length],
+      ["feed", "the activity log", A.feedFor(who).rows.length],
+      ["timeline", "one thing's history", A.timelineFor("d-servis-skoda").length],
+      ["composer", "the composer", N.offers.length],
+      ["delivery", "sending, and the log", N.log.length],
+      ["setup", "setup re-entry", N.setup.length],
+      ["states", "every state", cells],
+      ["gate", "the gate", all.length]
+    ];
+
+    const out = {
+      theme: this.state.theme, density: this.state.density,
+      fontPx: Math.round(16 * this.state.scale / 100) + "px",
+      stageLine: "stage 14 · 16 rows · " + cells + " cells",
+      views: VIEWS.map((v) => ({ label: v[1], count: v[2], on: view === v[0] ? "1" : "0",
+                                 pick: () => this.setState({ view: v[0] }) })),
+      controls: [
+        { label: "Member", options: this.pickers(
+            (window.HH_FIXTURES.members || []).map((m) => [m.id, m.name, m.note]), who, (v) => ({ member: v })) },
+        { label: "Theme", options: this.pickers([["light", "light"], ["dark", "dark"]], this.state.theme, (v) => ({ theme: v })) },
+        { label: "Density", options: this.pickers([["comfortable", "comfortable"], ["compact", "compact"]], this.state.density, (v) => ({ density: v })) },
+        { label: "Text", options: this.pickers([[100, "100 %"], [200, "200 %"]], this.state.scale, (v) => ({ scale: v })) },
+        { label: "Grid members", options: this.pickers([[2, "2 · real"], [6, "6"], [12, "12 · stress"]], this.gridCols, (v) => ({ cols: v })) }
+      ],
+      gateLine: passed + " / " + all.length + " checks pass",
+      gateColour: passed === all.length ? "var(--accent-family-keeping)" : "var(--danger)",
+      hasToast: !!this.state.toast, toast: this.state.toast || "",
+      holdPct: Math.round(this.state.hold * 100) + "%",
+      holdLabel: this.state.hold > 0 ? "keep holding…" : "Hold to finish",
+      holdStart: this.holdStart, holdStop: this.holdStop, holdKey: this.holdKey,
+      hasField: false, queryChips: [], queryValue: this.query, queryMeta: "",
+      frames: [], tables: [], groups: [], checks: [], notes: [], grids: []
+    };
+
+    if (view === "today") this.viewToday(out);
+    if (view === "week") this.viewWeek(out);
+    if (view === "schedules") this.viewSchedules(out);
+    if (view === "rotation") this.viewRotation(out);
+    if (view === "points") this.viewPoints(out);
+    if (view === "rewards") this.viewRewards(out);
+    if (view === "queues") this.viewQueues(out);
+    if (view === "prune") this.viewPrune(out);
+    if (view === "feed") this.viewFeed(out);
+    if (view === "timeline") this.viewTimeline(out);
+    if (view === "composer") this.viewComposer(out);
+    if (view === "delivery") this.viewDelivery(out);
+    if (view === "setup") this.viewSetup(out);
+    if (view === "states") {
+      out.pageTitle = "Every state these sixteen rows can reach";
+      out.pageMeta = cells + " cells drawn · " + groups.reduce((n, g) => n + g.cells.filter((c) => c.tag === "cannot occur").length, 0) + " cannot occur";
+      out.viewIntro = "Twelve states are a treatment applied to one body, as Stage 4 established. A row declares the states its own surface cannot reach with the reason, and the reason is drawn where the state would have been. The exclusions here come from three facts: an occurrence is lww_field and a completion is state_set, a two-party state machine refuses rather than forks, and neither the activity log nor a notification rule is a synced entity at all.";
+      out.groups = groups;
+    }
+    if (view === "gate") {
+      out.pageTitle = "The gate";
+      out.pageMeta = passed + " of " + all.length + " pass · " + C.checks().length + " chores · " + A.checks().length + " activity · " + N.checks().length + " notifications";
+      out.viewIntro = "The stage's own line is that Adam's chores read as his product rather than as assigned work, and it is counted rather than claimed: how many balances his screens draw, how many belong to somebody else, how many rankings exist, and how many things he can do himself against how many he cannot. The rest of the gate is arithmetic — two anchoring rules run over one completion history, two receive orders of one offline completion, and one rule resolved recipient by recipient at send time.";
+      const L = window.HH_LEDGER;
+      const extra = [];
+      if (L) {
+        const mm = L.mismatches();
+        const st = L.stageStatus().filter((s) => s.num === 14)[0];
+        extra.push({
+          name: "The declared exclusions match the ledger's mirror, checked where they are drawn",
+          detail: mm.length === 0
+            ? "This page loads ledger.js as well as the three stage files, so the comparison runs here rather than being asserted: the impossible maps in chores.js, activity.js and notify.js are identical to EXCLUSIONS for all sixteen rows. Stage 14 computes " +
+              st.built + " of " + st.rows + " client rows built and " + st.drawnStates + " of " + st.reqStates +
+              " states drawn — " + st.status + "."
+            : "MISMATCH: " + mm.join(" · "),
+          pass: mm.length === 0 && st.status === "closed"
+        });
+      }
+      const shown = all.concat(extra);
+      out.pageMeta = shown.filter((c) => c.pass).length + " of " + shown.length + " pass · " +
+        C.checks().length + " chores · " + A.checks().length + " activity · " + N.checks().length + " notifications";
+      out.gateLine = shown.filter((c) => c.pass).length + " / " + shown.length + " checks pass";
+      out.gateColour = shown.every((c) => c.pass) ? "var(--accent-family-keeping)" : "var(--danger)";
+      out.checks = shown.map((c) => ({ name: c.name, detail: c.detail,
+        colour: c.pass ? "var(--accent-family-keeping)" : "var(--danger)" }));
+    }
+
+    out.tables = out.tables.map((tb) => Object.assign({}, tb, {
+      hasNote: !!tb.note, note: tb.note || "", minWidth: this.tableMin(tb.cols)
+    }));
+    return out;
+  }
+
+  /* ── today ─────────────────────────────────────────────────────────── */
+
+  viewToday(out) {
+    const C = this.C;
+    const adam = C.todayFor("adam"), jana = C.todayFor("jana"), klara = C.todayFor("klara");
+    const prog = C.householdProgress();
+    const child = C.childView("adam");
+
+    const mine = this.F({ id: "C-36", name: "Adam's today", stateLabel: "populated", route: "/chores",
+      frameMax: "420px", title: "Chores", lede: adam.says,
+      blocks: [
+        { label: "Yours", rows: adam.mine.map((o) => this.occRow(o, "adam")) },
+        { label: "Anything going", rule: "no turn attached", rows: adam.anyone.map((o) => this.occRow(o, "adam")) },
+        { label: "Somebody else is on", rows: adam.others.map((o) => this.occRow(o, "adam")) }
+      ],
+      holdTitle: adam.mine[0] ? adam.mine[0].name : "",
+      holdNote: "2000 ms, or Enter — it moves the rotation and awards points",
+      footer: "Points balance " + child.balance + " · " + child.streak + " weeks in a row. No other number on this screen belongs to anybody else.",
+      caption: "Mine first, and then the household's work underneath it rather than filtered away — a list that shows only your own turns is how a rotation stops being legible to the person in it." });
+
+    const owner = this.F({ id: "C-36", name: "Jana's today", stateLabel: "populated", route: "/chores",
+      frameMax: "420px", title: "Chores", lede: jana.says,
+      blocks: [
+        { label: "Yours", rows: jana.mine.map((o) => this.occRow(o, "jana")) },
+        { label: "Anything going", rows: jana.anyone.map((o) => this.occRow(o, "jana")) },
+        { label: "Adam is on", rows: jana.others.map((o) => this.occRow(o, "jana")) }
+      ],
+      blocksAfter: [],
+      footer: prog.says,
+      caption: "The same screen with the same rules produces a different list, because the rotation and the modes decide it. Nothing here is authored per member." });
+
+    const absent = this.F({ id: "C-36", name: "Klára", stateLabel: "permission-absent", route: "/chores",
+      frameMax: "300px", title: "", lede: "",
+      absentTitle: "Not available",
+      absentBody: "Chores is not shared with Klára. There is no tab, no empty board and no explanation of what she is missing — three screens is her whole app, and it reads as finished.",
+      caption: "The absent state is computed from the grant, not drawn: her app never renders the module." });
+
+    out.pageTitle = "Today, mine first";
+    out.pageMeta = C.chores.length + " chores · " + adam.count + " open for Adam · " + prog.done + " of " + prog.toDate + " done this week";
+    out.viewIntro = "Every date on this screen is derived: the open occurrence of each chore is the first one after its last completion, so an overdue chore is one row and never a stack. Hold the button — it takes two seconds, because completing a chore moves a rotation and awards points, and both are expensive to undo.";
+    out.frames = [mine, owner, absent];
+    out.tables = [{
+      title: "The ten chores, and what each is open on today",
+      meta: "computed from the last completion, not from a grid",
+      cols: "minmax(160px,1.4fr) minmax(120px,1fr) 110px 90px 90px minmax(150px,1.2fr)",
+      head: [{ text: "Chore" }, { text: "Schedule" }, { text: "Mode" }, { text: "Open" }, { text: "State" }, { text: "Whose" }],
+      rows: C.chores.map((c) => {
+        const o = C.openOccurrence(c);
+        const late = o && o.due ? C.diff(C.today, o.due) : 0;
+        const who = o ? (o.claimedBy || C.assigneeFor(c, o.key)) : null;
+        return { cells: [
+          this.cell(c.name),
+          this.cell(c.sched.says, { muted: true }),
+          this.cell(C.modeOf(c.mode).label, { muted: true }),
+          this.cell(o && o.due ? C.fmt(o.due) : "on demand", { mono: true }),
+          this.cell(late > 0 ? late + " d late" : late === 0 && o && o.due ? "today" : "ahead",
+            { mono: true, tone: late > 0 ? "var(--status-overdue)" : "var(--text-muted)" }),
+          this.cell(who ? this.firstName(who) : "anyone", { muted: !who })
+        ] };
+      })
+    }];
+    out.notes = [{ text: "Klára and Petr and Miloš hold none on Chores, so this module is two people. Every rotation, audience and grid column on these screens is what two people actually produce — the twelve-member grid is generated and labelled as a layout stress, because pretending the household is bigger would make the grid a drawing rather than a computation." }];
+  }
+
+  /* ── the weekly grid ───────────────────────────────────────────────── */
+
+  viewWeek(out) {
+    const C = this.C;
+    const n = this.gridCols;
+    const g = C.weekGrid(n);
+    const scale = this.state.scale;
+    const layout = C.gridLayout(g.members.length, 1280, scale);
+    const phone = C.gridLayout(g.members.length, 390, scale);
+
+    const cells = [];
+    const push = (label, opt) => cells.push(Object.assign({
+      label: label, items: [], bg: "var(--surface-raised)", pos: "static", z: "0",
+      font: "var(--sans)", weight: "500", colour: "var(--text-primary)"
+    }, opt || {}));
+
+    push("", { bg: "var(--surface-sunken)", pos: "sticky", z: "3", font: "var(--mono)" });
+    g.members.forEach((m) => push(m.name, {
+      bg: "var(--surface-sunken)", weight: "600",
+      colour: m.real ? "var(--text-primary)" : "var(--text-muted)"
+    }));
+    push("Anyone", { bg: "var(--surface-sunken)", weight: "600", colour: "var(--text-muted)" });
+
+    g.days.forEach((d) => {
+      push(d.label + " " + d.date, {
+        bg: d.today ? "var(--surface-sunken)" : "var(--surface-raised)", pos: "sticky", z: "2",
+        font: "var(--mono)", weight: d.today ? "600" : "400",
+        colour: d.today ? "var(--accent)" : "var(--text-muted)"
+      });
+      d.cells.forEach((c) => push("", {
+        bg: d.today ? "var(--surface-sunken)" : "var(--surface)",
+        items: c.items.map((o) => ({
+          text: o.name, token: this.tokenOf("chores"),
+          strike: o.done ? "line-through" : "none",
+          mark: o.done ? "done · " + this.firstName(o.doneBy) : o.awaiting ? "to check"
+              : o.late ? o.late + " d late" : o.predicted ? "predicted" : o.points + " pts",
+          markColour: o.done ? "var(--accent-family-keeping)" : o.late ? "var(--status-overdue)" : "var(--text-muted)"
+        }))
+      }));
+      push("", {
+        bg: d.today ? "var(--surface-sunken)" : "var(--surface)",
+        items: d.anyone.map((o) => ({
+          text: o.name, token: "--border",
+          strike: o.done ? "line-through" : "none",
+          mark: o.done ? "done · " + this.firstName(o.doneBy) : o.late ? o.late + " d late" : "anyone",
+          markColour: o.done ? "var(--accent-family-keeping)" : "var(--text-muted)"
+        }))
+      });
+    });
+
+    const col = layout.col + "px";
+    out.grids = [{
+      title: "This week · " + g.members.length + (g.members.length > 2 ? " members (stress)" : " members"),
+      meta: g.occurrences + " occurrences · " + layout.shape + " at 1280 px · " + phone.shape + " at 390 px",
+      cols: layout.dayCol + "px repeat(" + (g.members.length + 1) + ", minmax(" + col + ", 1fr))",
+      minWidth: layout.need + "px",
+      fontPx: Math.round(16 * scale / 100) + "px",
+      cells: cells,
+      note: layout.says + " " + phone.says
+    }];
+
+    const pivot = this.F({ id: "C-37", name: "The phone, pivoted", stateLabel: "populated", route: "/chores/week",
+      frameMax: "360px", title: "This week", lede: "Wednesday 9 September",
+      blocks: g.days.filter((d) => d.today || d.day === C.addDays(C.today, 1)).map((d) => ({
+        label: d.label + " " + d.date,
+        rule: d.today ? "today" : "",
+        rows: d.cells.concat([{ name: "Anyone", items: d.anyone }]).reduce((acc, c) => acc.concat(
+          (c.items || []).map((o) => ({
+            title: o.name,
+            meta: (c.name || this.firstName(c.member)) + " · " + o.points + " points",
+            token: this.tokenOf("chores"),
+            right: o.done ? "done" : o.late ? o.late + " d" : "",
+            rightColour: o.done ? "var(--accent-family-keeping)" : "var(--status-overdue)",
+            strike: o.done ? "line-through" : "none"
+          }))), [])
+      })),
+      footer: "One day per section, members as rows inside it. Nothing is dropped and no name is abbreviated.",
+      caption: "A grid that does not fit is not made to fit by shrinking a name to four characters. On a phone the axes swap, which keeps every cell readable at 200 % text." });
+
+    out.pageTitle = "This week — the grid, and what it does when it does not fit";
+    out.pageMeta = g.members.length + " columns of " + layout.col + " px · needs " + layout.need + " px";
+    out.viewIntro = "Members across, days down: the view that makes a rotation legible, and the one 05-screens flags as the layout risk. The decision is arithmetic rather than a breakpoint guess — a legible member column is 108 px at 100 % text and 216 px at 200 %, plus a day column that sticks. Switch the member count and the text size in the rail and watch the shape change.";
+    out.frames = [pivot];
+    out.tables = [{
+      title: "Every case, computed", meta: "2 and 12 members · three viewports · both text sizes",
+      note: "Twelve members is not this household. Chores is shared with two people here, so the extra columns are generated and drawn in muted type — the arithmetic is real even where the names are not.",
+      cols: "90px 90px 80px 90px 90px minmax(240px,2.4fr)",
+      head: [{ text: "Members" }, { text: "Viewport" }, { text: "Text" }, { text: "Needs" }, { text: "Shape" }, { text: "" }],
+      rows: C.gridCases().map((x) => ({ cells: [
+        this.cell(String(x.members), { mono: true }),
+        this.cell(x.viewport + " px", { mono: true, muted: true }),
+        this.cell(x.scale + " %", { mono: true, muted: true }),
+        this.cell(x.need + " px", { mono: true }),
+        this.cell(x.shape, { mono: true, tone: x.fits ? "var(--accent-family-keeping)" : "var(--warning)" }),
+        this.cell(x.says, { muted: true })
+      ] }))
+    }];
+  }
+
+  /* ── the four schedule kinds, and D-49 ─────────────────────────────── */
+
+  viewSchedules(out) {
+    const C = this.C;
+    const anchor = C.anchorProof();
+    const hoover = anchor.filter((a) => a.id === "hoover")[0];
+
+    const anchored = this.F({ id: "C-38", name: "Anchored on the last completion", stateLabel: "populated",
+      route: "/chores/hoover", frameMax: "360px", title: "Hoover the living room", lede: "Every 7 days",
+      blocks: [{ label: "Open", rows: [{
+        title: "Hoover the living room", meta: "last done 25 August by Adam",
+        token: this.tokenOf("chores"), right: hoover.anchoredOverdue + " days late",
+        rightColour: "var(--status-overdue)", border: "var(--status-overdue)",
+        note: "Do it today and the next one is 16 September. Nothing is owed for the weeks it was missed."
+      }] }],
+      footer: "One row. That is the whole list.",
+      caption: "D-49 in a screen: the clock starts when the thing was last done, so being late costs you being late and nothing more." });
+
+    const gridded = this.F({ id: "C-38", name: "The same chore on a grid", stateLabel: "rejected alternative",
+      route: "—", frameMax: "360px", title: "Hoover the living room", lede: "Every 7 days from 1 June",
+      bannerTone: "var(--danger)", bannerTitle: "This is not what the module does",
+      bannerBody: "Anchoring the interval to a grid produces " + hoover.gridDebt + " rows nobody will ever tick, and every one of them is overdue on the day it appears.",
+      blocks: [{ rows: C.gridOccurrences(C.choreOf("hoover"), C.today).slice(-5).map((d) => ({
+        title: "Hoover the living room", meta: "due " + C.fmt(d),
+        token: "--status-overdue", right: C.diff(C.today, d) + " d late", rightColour: "var(--status-overdue)"
+      })) }],
+      footer: "Five of " + hoover.gridDebt + " shown. A household that opens this once learns to stop opening it.",
+      caption: "Grid-anchored recurrence is correct for a bin collection, which is why the calendar kind exists, and wrong for everything a household controls itself." });
+
+    out.pageTitle = "Four schedule kinds, and where a chore app goes wrong";
+    out.pageMeta = "fixed_interval · calendar · monthly_nth · on_demand";
+    out.viewIntro = "The schedule kind is the one decision on the editor that a household gets wrong, and the difference is not a preference: it is whether the list stays credible. Both recurrence rules are implemented in chores.js and run over the same completion history here.";
+    out.frames = [anchored, gridded];
+    out.tables = [
+      { title: "The four kinds", meta: "and what each is for",
+        cols: "minmax(140px,1.1fr) minmax(150px,1.2fr) minmax(160px,1.2fr) minmax(240px,2.4fr)",
+        head: [{ text: "On the screen" }, { text: "What it means" }, { text: "Example" }, { text: "Why it exists" }],
+        rows: C.scheduleKinds.map((k) => ({ cells: [
+          this.cell(k.label), this.cell(k.says, { muted: true }),
+          this.cell(k.example, { muted: true }), this.cell(k.why, { muted: true })
+        ] })) },
+      { title: "Anchored against grid-anchored, over the same history",
+        meta: "every fixed_interval chore in the fixture",
+        note: "The right-hand column is the counterfactual: how many occurrences would exist today if the interval ran from the day the chore was created instead of from the last time it was done. It is computed, not estimated, because 'a debt of missed occurrences' is easy to say and easy to under-imagine.",
+        cols: "minmax(160px,1.3fr) 80px 100px 110px 100px 110px minmax(160px,1.4fr)",
+        head: [{ text: "Chore" }, { text: "Every" }, { text: "Last done" }, { text: "Open now" }, { text: "Anchored" }, { text: "On a grid" }, { text: "" }],
+        rows: anchor.map((a) => ({ cells: [
+          this.cell(a.name),
+          this.cell(a.every + " d", { mono: true, muted: true }),
+          this.cell(a.lastDone ? C.fmt(a.lastDone) : "never", { mono: true, muted: true }),
+          this.cell(a.anchoredNext ? C.fmt(a.anchoredNext) : "—", { mono: true }),
+          this.cell(a.anchoredOpen + " row", { mono: true, tone: "var(--accent-family-keeping)" }),
+          this.cell(a.gridDebt + " rows", { mono: true, tone: "var(--danger)" }),
+          this.cell(a.says, { muted: true })
+        ] })) }
+    ];
+  }
+
+  /* ── rotation, skip, and two offline devices ───────────────────────── */
+
+  viewRotation(out) {
+    const C = this.C;
+    const merge = C.mergeProof();
+    const cand = C.rotationCandidates();
+
+    const editor = this.F({ id: "C-39", name: "Chore editor", stateLabel: "populated", route: "/chores/bins/edit",
+      frameMax: "400px", title: "Take the bins out", lede: "Sunday · takes turns",
+      fields: [
+        { label: "When", value: "Every Sunday", hint: "calendar" },
+        { label: "Who", value: "Takes turns: Jana, then Adam", hint: "rotating",
+          note: "Moves on each time it is done. Your turn stays yours until then, which is why a skip does not move it." },
+        { label: "Worth", value: "5 points", hint: "points are on" },
+        { label: "Checked by an owner", value: "No", note: "Off, as it is on nine of the ten chores here." }
+      ],
+      blocks: [{ label: "In the rotation", rows: cand.map((m) => ({
+        title: m.name, meta: m.says, token: m.eligible ? this.tokenOf("chores") : "--border",
+        right: m.grant, rightColour: m.eligible ? "var(--text-muted)" : "var(--status-rejected)",
+        markWord: m.eligible ? "" : "cannot be added", markColour: "var(--status-rejected)"
+      })) }],
+      footer: "Rotation state is stored, so reordering this list is an edit and not a recomputation of the past.",
+      caption: "Two of five members can be in a rotation here, and the other three say why rather than disappearing — the same refusal shape as the Tasks assignee picker." });
+
+    const conflictA = this.F({ id: "C-36", name: "Adam's phone, offline", stateLabel: "pending", route: "/chores",
+      frameMax: "330px", title: "Chores", lede: "Sunday 6 September, 19:12",
+      barText: "No signal — anything you finish is saved here",
+      blocks: [{ rows: [{ title: "Take the bins out", meta: "yours · 5 points", token: this.tokenOf("chores"),
+        markWord: "finished, not sent yet", markColour: "var(--status-pending)", strike: "line-through",
+        note: "predicted next: Jana" }] }],
+      footer: "Held for two seconds on a phone with no signal, which is the ordinary case.",
+      caption: "The client shows the rotation it predicts. The server's value is canonical, and the two agree here — but the design cannot depend on that." });
+
+    const conflictB = this.F({ id: "C-36", name: "Jana's phone, offline", stateLabel: "pending", route: "/chores",
+      frameMax: "330px", title: "Chores", lede: "Sunday 6 September, 19:14",
+      barText: "No signal — anything you finish is saved here",
+      blocks: [{ rows: [{ title: "Take the bins out", meta: "Adam's turn · she did it anyway", token: this.tokenOf("chores"),
+        markWord: "finished, not sent yet", markColour: "var(--status-pending)", strike: "line-through" }] }],
+      footer: "Two minutes later, in the same street, with no way to know.",
+      caption: "Both devices are right, and neither is asked anything when they reconnect." });
+
+    const after = this.F({ id: "C-36", name: "After both arrive", stateLabel: "populated", route: "/chores",
+      frameMax: "330px", title: "Take the bins out", lede: "Sunday 6 September",
+      blocks: [{ label: "Who finished it", rows: merge.first.rows === 2 ? [
+        { title: this.firstName(merge.first.credited), meta: "19:12 · +5 points", token: this.tokenOf("chores"),
+          right: "credited", rightColour: "var(--accent-family-keeping)" },
+        { title: this.firstName(merge.first.secondRow), meta: "19:14 · did it too", token: "--border",
+          right: "no second award", rightColour: "var(--text-muted)",
+          note: "A ledger that pays twice for one bin bag is a ledger nobody trusts." }
+      ] : [] }],
+      footer: "Next turn: " + this.firstName(merge.first.nextAssignee) + ". One advancement, " + merge.first.questions + " questions asked.",
+      caption: "Completion is state_set keyed by occurrence and user, so both rows survive; the rotation advances from the occurrence, so it advances once." });
+
+    out.pageTitle = "Whose turn it is, and what happens when two people answer";
+    out.pageMeta = "4 modes · " + merge.first.rows + " rows, " + merge.first.awards + " award, " + merge.first.advancements + " advancement";
+    out.viewIntro = "Rotation is stored rather than derived from history, which is what makes adding or reordering a member comprehensible instead of a recomputation of everything that already happened. The offline case below is D-52 run in both receive orders.";
+    out.frames = [editor, conflictA, conflictB, after];
+    out.tables = [
+      { title: "The four assignment modes", meta: "and what a skip does to each",
+        cols: "minmax(150px,1.1fr) minmax(190px,1.4fr) 110px 110px minmax(220px,2fr)",
+        head: [{ text: "On the screen" }, { text: "What it does" }, { text: "Completion" }, { text: "Skip" }, { text: "Why" }],
+        rows: C.modes.map((m) => ({ cells: [
+          this.cell(m.label), this.cell(m.says, { muted: true }),
+          this.cell(m.advancesOnComplete ? "moves on" : "stays", { mono: true, muted: !m.advancesOnComplete }),
+          this.cell(m.advancesOnSkip ? "moves on" : "stays", { mono: true, muted: !m.advancesOnSkip }),
+          this.cell(m.why, { muted: true })
+        ] })) },
+      { title: "A skip, run on three chores", meta: "FR-CO4's asymmetry, computed",
+        cols: "minmax(160px,1.3fr) minmax(140px,1fr) 110px 110px minmax(240px,2.2fr)",
+        head: [{ text: "Chore" }, { text: "Mode" }, { text: "Before" }, { text: "After" }, { text: "" }],
+        rows: ["bins", "dishwasher", "plants", "guineapig"].map((id) => {
+          const s = C.skipEffect(id);
+          return { cells: [
+            this.cell(s.name), this.cell(s.modeLabel, { muted: true }),
+            this.cell(s.before ? this.firstName(s.before) : "anyone", { mono: true }),
+            this.cell(s.after ? this.firstName(s.after) : "anyone", { mono: true, tone: s.moved ? "var(--accent)" : "var(--text-muted)" }),
+            this.cell(s.says, { muted: true })
+          ] };
+        }) },
+      { title: "Both receive orders", meta: merge.converges ? "identical in every column" : "DIVERGE",
+        note: "The rotation advances from the occurrence rather than from the mutation, which is why the order the server happens to receive two offline completions in changes nothing at all.",
+        cols: "minmax(120px,1fr) 80px 110px 90px 120px 90px",
+        head: [{ text: "Order" }, { text: "Rows" }, { text: "Credited" }, { text: "Awards" }, { text: "Next turn" }, { text: "Questions" }],
+        rows: [["Adam then Jana", merge.first], ["Jana then Adam", merge.second]].map((p) => ({ cells: [
+          this.cell(p[0]), this.cell(String(p[1].rows), { mono: true }),
+          this.cell(this.firstName(p[1].credited), { mono: true }),
+          this.cell(String(p[1].awards), { mono: true }),
+          this.cell(this.firstName(p[1].nextAssignee), { mono: true }),
+          this.cell(String(p[1].questions), { mono: true, tone: "var(--accent-family-keeping)" })
+        ] })) }
+    ];
+  }
+
+  /* ── the points ledger ─────────────────────────────────────────────── */
+
+  viewPoints(out) {
+    const C = this.C;
+    const led = C.ledgerFor("adam");
+    const audit = C.ledgerAudit();
+    const child = C.childView("adam");
+
+    const kindTone = (k) => k === "penalty" ? "var(--status-rejected)"
+      : k === "redemption" ? "var(--text-muted)"
+      : k === "bonus" ? "var(--accent)" : k === "adjustment" ? "var(--warning)" : "var(--accent-family-keeping)";
+
+    const screen = this.F({ id: "C-40", name: "Adam's points", stateLabel: "populated", route: "/chores/points/adam",
+      frameMax: "420px", title: audit.balance + " points", lede: child.streak + " weeks in a row",
+      blocks: [{ label: "Where they came from", rows: led.map((e) => ({
+        title: (e.delta > 0 ? "+" : "") + e.delta + " · " + e.reason,
+        meta: C.fmt(e.on) + " · " + (e.actor === e.member ? "you" : this.firstName(e.actor)),
+        token: "--border", chip: C.entryKinds.filter((k) => k.kind === e.kind)[0].label,
+        rightColour: kindTone(e.kind), border: e.kind === "penalty" ? "var(--status-rejected)" : "var(--border)"
+      })) }],
+      footer: "Nothing on this screen can be edited, by anybody. A row is added or it is not there.",
+      caption: "Every row names an actor and a reason, including the one that took points off. A silent deduction is worse than none, and a counter an owner can quietly edit is not something a child believes in twice." });
+
+    const penalty = this.F({ id: "C-40", name: "The one that took points off", stateLabel: "populated",
+      route: "/chores/points/adam#p-08", frameMax: "360px",
+      title: "−5 points", lede: "2 September, by Jana",
+      bannerTone: "var(--status-rejected)", bannerTitle: "",
+      bannerBody: audit.penalties[0].reason,
+      blocks: [{ rows: [
+        { title: "Before", meta: "38 points", token: "--border", right: "38", rightColour: "var(--text-muted)" },
+        { title: "After", meta: "33 points", token: "--border", right: "33", rightColour: "var(--status-rejected)" }
+      ] }],
+      footer: "Shown to him in full, in his own list, in the same shape as an award.",
+      caption: "Penalties are possible because pretending they are not is how they turn into silent edits. Requiring a reason and showing it whole is the whole of the safeguard." });
+
+    const owner = this.F({ id: "C-40", name: "Giving points", stateLabel: "populated", route: "/chores/points/adam/new",
+      frameMax: "360px", title: "Extra points", lede: "For something that was not on the board",
+      fields: [
+        { label: "How many", value: "10", hint: "+" },
+        { label: "Why", value: "Carried all the shopping in on Saturday without being asked",
+          note: "Required. It is what the row will say on his screen for as long as the household exists." }
+      ],
+      actions: ["Give 10 points", "Cancel"],
+      footer: "Written as a row with your name on it.",
+      caption: "The reason field is not optional and is not a dropdown — a ledger of 'adjustment' rows explains nothing to the person it happened to." });
+
+    out.pageTitle = "Points are a ledger, not a counter";
+    out.pageMeta = audit.rows + " rows · " + audit.withActor + " with an actor · balance " + audit.balance;
+    out.viewIntro = "The balance on this screen is the sum of the rows under it, recomputed on render, and nothing else writes it. That is the difference between a number a child can check and a number they are told.";
+    out.frames = [screen, penalty, owner];
+    out.tables = [{
+      title: "Every row in the ledger", meta: "append-only · " + audit.byKind.map((k) => k.n + " " + k.label.toLowerCase()).join(" · "),
+      note: "Only child profiles have a ledger, which is a decision this stage makes and states: an adult with a points balance is a leaderboard with extra steps. This household has one child, so it has one balance and nothing to compare it with — and the two-children case is run in the gate rather than promised.",
+      cols: "90px 70px minmax(110px,1fr) minmax(260px,2.6fr) 100px",
+      head: [{ text: "When" }, { text: "Points" }, { text: "Kind" }, { text: "Reason" }, { text: "By" }],
+      rows: led.map((e) => ({ cells: [
+        this.cell(C.fmt(e.on), { mono: true, muted: true }),
+        this.cell((e.delta > 0 ? "+" : "") + e.delta, { mono: true, tone: kindTone(e.kind) }),
+        this.cell(C.entryKinds.filter((k) => k.kind === e.kind)[0].label, { muted: true }),
+        this.cell(e.reason),
+        this.cell(this.firstName(e.actor), { muted: true })
+      ] }))
+    }];
+    out.notes = [{ text: "There is deliberately no ranking of members against each other (D-51). A leaderboard between siblings, or between partners, produces exactly one outcome and it is not more clean dishes — so the module has no screen that takes a member id and returns somebody else's number." }];
+  }
+
+  /* ── rewards ───────────────────────────────────────────────────────── */
+
+  viewRewards(out) {
+    const C = this.C;
+    const board = C.rewardBoard("adam");
+    const queue = C.approvalQueue();
+
+    const child = this.F({ id: "C-41", name: "Adam's rewards", stateLabel: "populated", route: "/chores/rewards",
+      frameMax: "380px", title: "Rewards", lede: board.balance + " points",
+      blocks: [{ rows: board.rows.map((r) => ({
+        title: r.name, meta: r.cost + " points",
+        token: r.affordable ? this.tokenOf("chores") : "--border",
+        right: r.state === "requested" ? "asked" : r.affordable ? "you can ask" : r.short + " to go",
+        rightColour: r.state === "requested" ? "var(--status-pending)"
+          : r.affordable ? "var(--accent-family-keeping)" : "var(--text-muted)",
+        note: r.says
+      })) }],
+      footer: "Household-defined, non-monetary, and nothing here moves money.",
+      caption: "The refusal is a number and a distance rather than a disabled button: seventeen more, which is three bin days. That is the difference between a wall and a target." });
+
+    const short = board.rows.filter((r) => !r.affordable)[0];
+    const refusal = this.F({ id: "C-41", name: "Asking for one he cannot afford", stateLabel: "rejected",
+      route: "/chores/rewards/r-sleepover", frameMax: "340px",
+      title: short.name, lede: short.cost + " points",
+      bannerTone: "var(--status-rejected)", bannerTitle: "Not yet",
+      bannerBody: short.refusal,
+      actions: ["See today's chores"],
+      footer: "Refused on the device, before anybody is asked.",
+      caption: "A request an owner has to decline for arithmetic reasons is a conversation nobody needed. The client already knows the balance." });
+
+    const approve = this.F({ id: "C-41", name: "Jana's approvals", stateLabel: "populated", route: "/chores/rewards/requests",
+      frameMax: "380px", title: "Asked for", lede: queue.length + " waiting",
+      blocks: [{ rows: queue.map((q) => ({
+        title: this.firstName(q.who) + " — " + q.name, meta: "asked " + C.fmt(q.requested),
+        token: this.tokenOf("chores"), right: q.cost + " points",
+        note: "He has " + q.balance + ", so approving leaves " + q.after + ".",
+        actionLabel: "Approve", action2Label: "Not this time",
+        act: () => this.say("Approved. The ledger takes a row: −" + q.cost + ", " + q.name + " — approved. Nothing else changes, and he can see it before you have put the phone down."),
+        act2: () => this.say("Declined. Nothing is written to the ledger, and he gets a sentence from you rather than a form.")
+      })) }],
+      footer: queue[0] ? queue[0].says : "",
+      caption: "Approving is the only path that debits the ledger, and the row it writes names the reward — which is why the balance is always explainable." });
+
+    out.pageTitle = "Rewards, and the two ways of saying no";
+    out.pageMeta = C.rewards.length + " rewards · " + C.redemptions.length + " requests · balance " + board.balance;
+    out.viewIntro = "Points are not currency and Household does not move funds — the rewards are whatever the household says they are, which is usually an hour of something rather than anything with a price on it. The interesting design here is the two refusals: the arithmetic one, which happens on the device, and the human one, which is an owner saying no in words.";
+    out.frames = [child, refusal, approve];
+    out.tables = [{
+      title: "The rewards", meta: "defined by an owner · non-monetary by default",
+      cols: "minmax(180px,1.4fr) 90px 110px minmax(240px,2.4fr)",
+      head: [{ text: "Reward" }, { text: "Cost" }, { text: "State" }, { text: "What Adam's screen says" }],
+      rows: board.rows.map((r) => ({ cells: [
+        this.cell(r.name), this.cell(r.cost + " pts", { mono: true }),
+        this.cell(r.state, { mono: true, muted: true }), this.cell(r.says, { muted: true })
+      ] }))
+    }];
+  }
+
+  /* ── verification and swaps ────────────────────────────────────────── */
+
+  viewQueues(out) {
+    const C = this.C;
+    const vq = C.verificationQueue();
+    const vs = C.verificationShape();
+    const swaps = C.swapRows();
+
+    const verify = this.F({ id: "C-42", name: "Jana's queue", stateLabel: "populated", route: "/chores/verify",
+      frameMax: "380px", title: "To check", lede: vq.length + " waiting",
+      blocks: [{ rows: vq.map((v) => ({
+        title: v.name, meta: this.firstName(v.by) + " · finished at " + v.at.slice(11, 16),
+        token: this.tokenOf("chores"), right: v.points + " points",
+        note: v.says, actionLabel: "Yes, done", action2Label: "Not yet",
+        act: () => this.say("Confirmed. +" + v.points + " to Adam, and the ledger row says 'checked by Jana' — the actor on an award is whoever confirmed it."),
+        act2: () => this.say(v.returnCopy)
+      })) }],
+      footer: vs.says,
+      caption: "Verification is per chore and off by default: a household that wants trust-based chores should not have to switch supervision off first." });
+
+    const returned = this.F({ id: "C-42", name: "Sent back", stateLabel: "populated", route: "/chores/desk",
+      frameMax: "340px", title: "Tidy your desk", lede: "Friday 4 September",
+      bannerTone: "var(--warning)", bannerTitle: "Jana sent this back",
+      bannerBody: "\u201cThe floor still has everything on it — do that bit and I'll say yes.\u201d",
+      blocks: [{ rows: [{ title: "Still due", meta: "3 points when it is checked", token: this.tokenOf("chores"),
+        markWord: "nothing was taken off", markColour: "var(--accent-family-keeping)" }] }],
+      footer: "A return is not a penalty and does not touch the ledger.",
+      caption: "The note is the feature. 'Rejected' with no words is how a child learns the queue is a mood rather than a standard." });
+
+    const swap = this.F({ id: "C-43", name: "Swaps", stateLabel: "populated", route: "/chores/swaps",
+      frameMax: "380px", title: "Swaps", lede: "Ask somebody to take a turn",
+      blocks: [{ rows: swaps.map((s) => ({
+        title: s.line, meta: "\u201c" + s.note + "\u201d",
+        token: this.tokenOf("chores"),
+        right: s.state, rightColour: s.state === "requested" ? "var(--status-pending)" : "var(--accent-family-keeping)",
+        note: s.says,
+        actionLabel: s.actions[0] || "", action2Label: s.actions[1] || "",
+        act: () => this.say("Taken. The occurrence is Jana's now and the rotation did not move — a swap moves the turn, not the order."),
+        act2: () => this.say("Declined. It is still Adam's, and he was told in the direct category rather than left to notice.")
+      })) }],
+      footer: "Notified in the direct category, because somebody meant you.",
+      caption: "This is what makes a rotation survive a real week: football on Sunday, a late shift, a night at the other parent's. Without it the rotation is a fiction by the third week." });
+
+    out.pageTitle = "Checking, and asking somebody else";
+    out.pageMeta = vs.on + " of " + vs.total + " chores need checking · " + swaps.length + " swaps";
+    out.viewIntro = "Two two-party state machines, both strict_version, both refusing rather than forking: a merge of 'requested' and 'accepted' would produce a state neither person agreed to. What that means on the screen is that this is the one place in Chores where you can be told no.";
+    out.frames = [verify, returned, swap];
+    out.tables = [{
+      title: "Swap states", meta: "requested → accepted or declined",
+      cols: "minmax(200px,1.6fr) 110px 110px 110px minmax(220px,2fr)",
+      head: [{ text: "Ask" }, { text: "From" }, { text: "To" }, { text: "State" }, { text: "" }],
+      rows: swaps.map((s) => ({ cells: [
+        this.cell(s.name + " · " + C.fmt(s.key)),
+        this.cell(this.firstName(s.from), { muted: true }),
+        this.cell(this.firstName(s.to), { muted: true }),
+        this.cell(s.state, { mono: true, tone: s.state === "requested" ? "var(--status-pending)" : "var(--accent-family-keeping)" }),
+        this.cell(s.says, { muted: true })
+      ] }))
+    }];
+  }
+
+  /* ── overdue once, and the prune ───────────────────────────────────── */
+
+  viewPrune(out) {
+    const C = this.C;
+    const over = C.overdueRows();
+    const stale = C.staleRows();
+    const copy = C.pruneCopy(stale[0]);
+
+    const quiet = this.F({ id: "C-36", name: "Overdue, and quiet about it", stateLabel: "populated", route: "/chores",
+      frameMax: "400px", title: "Chores", lede: "Three things are late",
+      blocks: [{ rows: over.map((r) => ({
+        title: r.name, meta: "due " + C.fmt(r.due) + " · " + (r.assignee ? this.firstName(r.assignee) : "anyone"),
+        token: this.tokenOf("chores"), right: r.late + " days",
+        rightColour: "var(--status-overdue)", border: "var(--status-overdue)",
+        note: "Notified once, on the day. Since then: " + r.renotifications + " reminders."
+      })) }],
+      footer: "Overdue is a state, not a campaign.",
+      caption: "Shown once, prominently, and then it stops escalating. The alternative trains everybody to swipe the app away, and then the credible chores go with it." });
+
+    const prune = this.F({ id: "C-44", name: "Jana, after fourteen days", stateLabel: "populated", route: "/chores/prune",
+      frameMax: "380px", title: copy.title, lede: "",
+      bannerTone: "var(--warning)", bannerTitle: "",
+      bannerBody: copy.body,
+      bannerActions: copy.actions,
+      blocks: [{ rows: [{ title: stale[0].name, meta: "every 30 days · unassigned · 10 points",
+        token: this.tokenOf("chores"), right: stale[0].late + " days late", rightColour: "var(--status-overdue)",
+        note: "Snoozed once in July and untouched since." }] }],
+      footer: copy.quiet,
+      caption: "Pruning the list is a feature. Without this, 'stops escalating' quietly becomes a list of dead rows, which is the same failure by a slower route." });
+
+    const adam = this.F({ id: "C-44", name: "Adam, the same day", stateLabel: "permission-absent", route: "/chores",
+      frameMax: "300px", title: "", lede: "",
+      absentTitle: "Nothing here",
+      absentBody: "The prune is owner-facing. Adam's board simply does not include the windows: they are unassigned, quiet, and not his to delete.",
+      caption: "Two members, one household, one stale chore, and only one of them is asked about it." });
+
+    out.pageTitle = "Overdue once, then the prune";
+    out.pageMeta = over.length + " overdue · " + stale.length + " stale at " + C.staleDays + " days";
+    out.viewIntro = "A chore nobody ever ticks is worse than no chore, because it teaches everyone to ignore the screen. So the escalation stops after one notice, and fourteen days later the row is put in front of an owner with two actions on it.";
+    out.frames = [quiet, prune, adam];
+    out.tables = [{
+      title: "Every overdue chore", meta: "escalations per chore: one",
+      cols: "minmax(170px,1.4fr) 100px 90px 100px 110px 110px minmax(140px,1.2fr)",
+      head: [{ text: "Chore" }, { text: "Due" }, { text: "Late" }, { text: "Notices" }, { text: "Since" }, { text: "Untouched" }, { text: "" }],
+      rows: over.map((r) => ({ cells: [
+        this.cell(r.name),
+        this.cell(C.fmt(r.due), { mono: true, muted: true }),
+        this.cell(r.late + " d", { mono: true, tone: "var(--status-overdue)" }),
+        this.cell(String(r.escalations), { mono: true }),
+        this.cell(String(r.renotifications), { mono: true, tone: "var(--accent-family-keeping)" }),
+        this.cell(r.untouchedDays + " d", { mono: true, muted: true }),
+        this.cell(r.stale ? "flagged to an owner" : "quiet", { muted: !r.stale, tone: r.stale ? "var(--warning)" : "" })
+      ] }))
+    }];
+  }
+
+  /* ── the activity feed ─────────────────────────────────────────────── */
+
+  viewFeed(out) {
+    const A = this.A;
+    const who = this.who;
+    const feed = A.feedFor(who);
+    const gp = A.grantProof();
+    const red = A.redactionProof();
+    const q = this.query;
+    const search = A.search(q, who);
+
+    const rows = feed.rows.slice(0, 8).map((e) => {
+      const r = A.redactFor(e, who, "en");
+      const act = A.actionOf(e.key);
+      return {
+        title: r.summary,
+        meta: A.fmt(e.at) + ", " + A.clock(e.at) + " · " + A.viaWords(e.via),
+        token: r.redacted ? "--border" : this.tokenOf(act.module),
+        chip: r.redacted ? "" : act.module,
+        markWord: e.actorType === "service" ? "Household itself" : r.redacted ? "private" : "",
+        markColour: e.actorType === "service" ? "var(--accent-family-time)" : "var(--text-muted)",
+        note: (r.diff || []).length ? r.diff.map((d) => d.field + ": " + d.from + " → " + d.to).join(" · ") : ""
+      };
+    });
+
+    const main = this.F({ id: "C-45", name: this.firstName(who) + "'s feed", stateLabel: feed.ownOnly ? "permission-absent" : "populated",
+      route: "/activity", frameMax: "440px", title: feed.ownOnly ? "What you did" : "What changed",
+      lede: feed.says,
+      chips: feed.ownOnly ? [] : feed.modules.slice(0, 6).map((m) => ({ name: m, colour: this.tokenOf(m) })),
+      blocks: [{ rows: rows }],
+      footer: feed.rows.length + " events. " + (feed.ownOnly ? "No count on this screen mentions the ones you cannot see." : "Filter by module, action, actor, level or date."),
+      caption: feed.ownOnly
+        ? "Without a grant this is not an empty feed: it is your own actions, which every member can always read. Switch member in the rail — Petr, Adam and Klára all land here, with different rows."
+        : "A member-facing audit log, worded as a feature rather than a log file. 'Who changed the amount' is a question between people, and a product that answers it is one people trust." });
+
+    const offline = this.F({ id: "C-48", name: "Offline", stateLabel: "the exception", route: "/activity",
+      frameMax: "340px", title: "What changed", lede: "",
+      barText: "No signal",
+      blocks: [{ rows: rows.slice(0, 2) }],
+      bannerTone: "var(--status-offline)", bannerTitle: "The rest is on the server",
+      bannerBody: A.offlineState(who).body,
+      footer: A.offlineState(who).why,
+      caption: "Everywhere else in Household a read offline is indistinguishable from a read online. This is the one deliberate exception, so it explains itself rather than spinning." });
+
+    const priv = this.F({ id: "C-45", name: "The same event, two readers", stateLabel: "populated", route: "/activity",
+      frameMax: "380px", title: "Redaction on read", lede: "",
+      blocks: [
+        { label: "Adam — his own note", rows: [{ title: red.ownerBody, meta: "entity id present · diff present",
+          token: this.tokenOf("notes") }] },
+        { label: "Jana, Miloš, Klára — identical to the character", rows: red.bodies.map((b, i) => ({
+          title: b, meta: ["owner of the household", "another member", "another member"][i],
+          token: "--border", markWord: i === 0 ? "may open his private root in Notes" : "",
+          markColour: "var(--text-muted)" })) }
+      ],
+      footer: "And in search it is not there at all: " + search.says,
+      caption: "Two rules, deliberately, because one rule leaks — a redacted hit still confirms that the search term occurs in a private title." });
+
+    out.hasField = true;
+    out.queryValue = q;
+    out.queryMeta = search.hits.length + " of " + search.scope + " in scope for " + this.firstName(who);
+    out.queryChips = ["skoda", "denik", "porek", "tarif"].map((s) => ({
+      label: s, on: q === s ? "1" : "0", pick: () => this.setState({ query: s })
+    }));
+    out.onQuery = (e) => this.setState({ query: e.target.value });
+
+    out.pageTitle = "The activity log, as a feature";
+    out.pageMeta = A.allEvents().length + " events · " + feed.rows.length + " visible to " + this.firstName(who);
+    out.viewIntro = "Every row is a key and its arguments, rendered in the reader's language on the way to the screen — which is how two members of one household read the same event correctly in two languages, and why the chore rows here are computed from chores.js rather than written twice.";
+    out.frames = [main, offline, priv];
+    out.tables = [
+      { title: "Five members, five feeds", meta: "grant filtering, and the one permission that ignores it",
+        note: "Reading the household feed needs view on Activity. Reading your own actions needs nothing at all — a member can always see what they themselves did, which is the line in the permissions table that does the most work.",
+        cols: "110px 110px 90px 110px minmax(260px,2.6fr)",
+        head: [{ text: "Member" }, { text: "Activity" }, { text: "Rows" }, { text: "Modules" }, { text: "" }],
+        rows: gp.map((g) => ({ cells: [
+          this.cell(g.name), this.cell(g.grant, { mono: true, muted: true }),
+          this.cell(String(g.rows), { mono: true }),
+          this.cell(g.ownOnly ? "—" : String(g.modules), { mono: true, muted: true }),
+          this.cell(A.feedFor(g.member).says, { muted: true })
+        ] })) },
+      { title: "One row, two languages", meta: "nothing is stored rendered (D-21)",
+        cols: "minmax(150px,1.2fr) minmax(230px,2fr) minmax(230px,2fr)",
+        head: [{ text: "Action key" }, { text: "English" }, { text: "Czech" }],
+        rows: A.allEvents().slice(0, 7).map((e) => ({ cells: [
+          this.cell(e.key, { mono: true, muted: true }),
+          this.cell(A.render(e, "en")),
+          this.cell(A.render(e, "cs"), { muted: true })
+        ] })) },
+      { title: "What Household did to this household", meta: A.platformRows().length + " platform actions",
+        note: "A support agent extending a trial, a legal request answered, an automated retention deletion. Each writes into the household's own log with actor_type service — this is the transparency half of the no-content-access guarantee, and it is what makes the guarantee checkable rather than stated.",
+        cols: "100px 110px minmax(300px,3fr) minmax(160px,1.4fr)",
+        head: [{ text: "When" }, { text: "Kind" }, { text: "What it says" }, { text: "Diff" }],
+        rows: A.platformRows().map((p) => ({ cells: [
+          this.cell(A.fmt(p.at), { mono: true, muted: true }),
+          this.cell(p.kind, { mono: true, muted: true }),
+          this.cell(p.summary),
+          this.cell(p.diff.length ? p.diff.map((d) => d.from + " → " + d.to).join("; ") : "—", { mono: true, muted: true })
+        ] })) }
+    ];
+  }
+
+  /* ── one thing's history, and the field diff ───────────────────────── */
+
+  viewTimeline(out) {
+    const A = this.A;
+    const tl = A.timelineProof();
+    const diffs = A.diffRows();
+    const money = diffs.filter((d) => d.module === "finance")[0];
+
+    const timeline = this.F({ id: "C-46", name: "One file, four events", stateLabel: "populated",
+      route: "/activity/entity/documents.document/d-servis-skoda", frameMax: "420px",
+      title: tl.label || "Servisní faktura Škoda", lede: "Oldest first",
+      blocks: [{ rows: tl.rows.map((e) => ({
+        title: A.render(e, "en"),
+        meta: A.fmt(e.at) + " · " + A.actionOf(e.key).module + " · " + A.viaWords(e.via),
+        token: this.tokenOf(A.actionOf(e.key).module)
+      })) }],
+      footer: tl.modules.length + " modules on one list. The vehicle's name comes from the documents reverse index, not from this module.",
+      caption: "Why is this file here — asked a year later, which is when it is always asked. A timeline that stopped at its own module's events would answer the least interesting half of it." });
+
+    const diff = this.F({ id: "C-47", name: "The field diff", stateLabel: "populated", route: "/activity#diff",
+      frameMax: "360px", title: money ? A.render(A.allEvents().filter((e) => e.id === money.id)[0], "en") : "",
+      lede: money ? A.fmt(money.at) + ", " + A.clock(money.at) + " · " + money.actor : "",
+      blocks: [{ label: "What changed", rows: (money ? money.fields : []).map((f) => ({
+        title: f.field, meta: f.says, token: "--accent-family-money",
+        right: f.from + " → " + f.to, rightColour: "var(--text-primary)"
+      })) }],
+      footer: "In the diff set because it is money-bearing. Everything money-bearing is, by requirement.",
+      caption: "This is the row Stage 5 draws as a conflict: Jana set 450 on her phone, Petr set 500 at 18:40. The log stores the fields rather than a phrase, which is what lets it be read in either language next year." });
+
+    const redacted = this.F({ id: "C-47", name: "A diff nobody else gets", stateLabel: "permission-absent",
+      route: "/activity#diff", frameMax: "320px", title: "Something in a private note was changed by its owner.",
+      lede: "",
+      absentTitle: "No fields",
+      absentBody: "A redacted event carries no entity id and no diff at all — not an empty one, not a masked one. There is nothing on the row to inspect.",
+      caption: "The component has one state the referring screen cannot predict, because the redaction is applied on read and the reader is who decides it." });
+
+    out.pageTitle = "One thing's history, and what actually changed";
+    out.pageMeta = tl.rows.length + " events on the file · " + diffs.length + " events carry diffs";
+    out.viewIntro = "A timeline is per entity and crosses modules, because the interesting events about a document mostly happen somewhere other than Documents. The diff set is the requirement's — money, tariffs, permissions, memberships — plus whatever each module nominates for itself.";
+    out.frames = [timeline, diff, redacted];
+    out.tables = [{
+      title: "Every diff in the fixture", meta: A.diffSet().says,
+      cols: "100px 110px minmax(160px,1.3fr) minmax(140px,1.1fr) minmax(220px,1.8fr) minmax(180px,1.6fr)",
+      head: [{ text: "When" }, { text: "Module" }, { text: "Entity" }, { text: "Field" }, { text: "From → to" }, { text: "Why it is in the set" }],
+      rows: diffs.reduce((acc, d) => acc.concat(d.fields.map((f, i) => ({ cells: [
+        this.cell(i === 0 ? A.fmt(d.at) : "", { mono: true, muted: true }),
+        this.cell(i === 0 ? d.module : "", { mono: true, muted: true }),
+        this.cell(i === 0 ? d.entity.label : "", { muted: i > 0 }),
+        this.cell(f.field, { mono: true }),
+        this.cell(f.from + " → " + f.to),
+        this.cell(i === 0 ? (d.nominated ? "nominated by its module" : "money, tariff or permission") : "", { muted: true })
+      ] }))), [])
+    }];
+  }
+
+  /* ── the composer ──────────────────────────────────────────────────── */
+
+  viewComposer(out) {
+    const N = this.N;
+    const ps = N.predicateSpace();
+    const refused = N.saveCheck(N.ruleOf("r-5"));
+    const sections = N.offers.map((o) => o.section).filter((s, i, a) => a.indexOf(s) === i);
+
+    const picker = this.F({ id: "C-52", name: "Pick the thing that happens", stateLabel: "populated",
+      route: "/settings/notifications/new", frameMax: "420px",
+      title: "Tell us about…", lede: "Twelve things that happen in a household",
+      blocks: sections.map((s) => ({
+        label: s,
+        rows: N.offers.filter((o) => o.section === s).map((o) => ({
+          title: o.label, meta: o.says,
+          token: this.tokenOf(N.moduleOfOffer(o) || "admin"),
+          chip: o.category === "direct" ? "just you" : ""
+        }))
+      })),
+      footer: "Keys are picked, never typed. The rule underneath matches " + ps.actions + " action keys and their prefixes.",
+      caption: "The design risk on this screen is that it becomes a rule builder, so the first screen is a list of sentences. The predicate exists — it is just not the member's problem." });
+
+    const detail = this.F({ id: "C-52", name: "One rule", stateLabel: "populated", route: "/settings/notifications/r-1",
+      frameMax: "400px", title: "An amount changes", lede: "On since 2 June",
+      fields: [
+        { label: "Who hears about it", value: "Everyone in the household", hint: "4 filtered out",
+          note: "Filtered at send time by each member's own grant, so a member without Finance never learns the rule exists." },
+        { label: "What it says", value: "{actor} changed an amount — {entry}: {old} → {new}", hint: "en · cs",
+          note: "One template per language. Tokens come from the event, so the same rule fires correctly for a Czech reader and an English one." },
+        { label: "Repeats", value: "Group anything within 15 minutes", hint: "coalesce" }
+      ],
+      actions: ["Save", "Send me a test"],
+      footer: "Category: things you asked to hear about.",
+      caption: "Everything an owner sets here is in words a household uses. The four API category names appear on no label on this screen." });
+
+    const refusal = this.F({ id: "C-52", name: "A rule nobody could receive", stateLabel: "rejected",
+      route: "/settings/notifications/new", frameMax: "360px",
+      title: "A tariff is updated", lede: "Klára only",
+      bannerTone: "var(--status-rejected)", bannerTitle: "This would never fire",
+      bannerBody: refused.refusal,
+      actions: ["Share Utilities with Klára", "Pick somebody else"],
+      footer: "Checked at save, not discovered in the delivery log three weeks later.",
+      caption: "The same rule the send path would silently drop, refused at the moment it is written — with the two ways out named rather than left as an exercise." });
+
+    out.pageTitle = "The composer, and the thing it refuses to be";
+    out.pageMeta = ps.offers + " offers · " + ps.space.toLocaleString("en-GB") + " ways to say it by hand";
+    out.viewIntro = "05-screens calls this the most business-software-shaped screen in a consumer product and says it must not become one. The bias is measurable: picking a household-meaningful event is one tap from a list of twelve; composing the same thing out of action keys, entity filters, levels and audiences is a four-digit number of combinations.";
+    out.frames = [picker, detail, refusal];
+    out.tables = [
+      { title: "The twelve offers", meta: "each one maps to action keys the modules declared",
+        note: "Nothing here is invented for the composer. Every module declares its own audit actions, which is what lets both this screen and the activity log offer them without either keeping a list of its own.",
+        cols: "110px minmax(170px,1.3fr) minmax(190px,1.5fr) 110px minmax(230px,2fr)",
+        head: [{ text: "Section" }, { text: "Offer" }, { text: "What it means" }, { text: "Category" }, { text: "Why it is offered" }],
+        rows: N.offers.map((o) => ({ cells: [
+          this.cell(o.section, { muted: true }), this.cell(o.label),
+          this.cell(o.says, { muted: true }),
+          this.cell(o.category, { mono: true, muted: true }),
+          this.cell(o.why, { muted: true })
+        ] })) },
+      { title: "The rules this household has", meta: N.rules.filter((r) => r.on).length + " on · " + N.rules.filter((r) => !r.on).length + " off or refused",
+        cols: "80px minmax(160px,1.3fr) minmax(140px,1.1fr) 90px 90px minmax(220px,2fr)",
+        head: [{ text: "Rule" }, { text: "Offer" }, { text: "Audience" }, { text: "Coalesce" }, { text: "State" }, { text: "" }],
+        rows: N.rules.map((r) => {
+          const chk = N.saveCheck(r);
+          return { cells: [
+            this.cell(r.id, { mono: true, muted: true }),
+            this.cell(N.offerOf(r.offer).label),
+            this.cell(N.audienceLabel(r.audience), { muted: true }),
+            this.cell(r.coalesce ? r.coalesce + " min" : "none", { mono: true, muted: true }),
+            this.cell(r.refused ? "refused" : r.on ? "on" : "off",
+              { mono: true, tone: r.refused ? "var(--status-rejected)" : r.on ? "var(--accent-family-keeping)" : "var(--text-muted)" }),
+            this.cell(r.note || chk.refusal || "", { muted: true })
+          ] };
+        }) },
+      { title: "What picking replaces", meta: ps.says, cols: "minmax(200px,1.6fr) 120px",
+        head: [{ text: "" }, { text: "Count" }],
+        rows: [["Action keys and prefixes", ps.actions + ps.prefixes], ["Entity filters", ps.entities + 1],
+               ["Levels", ps.levels], ["Audiences", ps.audiences], ["Combinations", ps.space],
+               ["Offers on the screen", ps.offers]].map((r) => ({ cells: [
+          this.cell(r[0]), this.cell(String(r[1]), { mono: true, tone: r[0] === "Offers on the screen" ? "var(--accent)" : "var(--text-primary)" })
+        ] })) }
+    ];
+  }
+
+  /* ── send time, digests and the log ────────────────────────────────── */
+
+  viewDelivery(out) {
+    const N = this.N;
+    const run = N.sendRun("r-2", "2026-09-04T07:35");
+    const night = N.sendRun("r-2", "2026-09-04T23:10");
+    const log = N.logRows();
+    const audit = N.logAudit();
+    const clamp = N.clampProof();
+    const digests = ["jana", "adam", "milos"].map((m) => N.digestFor("dg-month", m));
+
+    const send = this.F({ id: "C-53", name: "One rule, five recipients", stateLabel: "populated",
+      route: "/settings/notifications/r-2", frameMax: "420px",
+      title: "A reading was not accepted", lede: "Rendered once, at 07:35",
+      blocks: [{ rows: run.rows.map((r) => ({
+        title: r.name, meta: r.detail,
+        token: r.outcome === "delivered" ? this.tokenOf("utilities") : "--border",
+        right: r.outcome, rightColour: r.outcome === "delivered" ? "var(--accent-family-keeping)"
+          : r.outcome === "deferred" ? "var(--status-pending)" : "var(--text-muted)",
+        markWord: r.reason, markColour: "var(--text-muted)"
+      })) }],
+      footer: run.renderings + " rendering · " + run.delivered + " delivered · " + run.dropped + " not sent",
+      caption: "Grant, then the member's own mute, then quiet hours, then a live subscription. Every step that stops a notification records why, and that reason is what the delivery log stores." });
+
+    const quiet = this.F({ id: "C-53", name: "The same rule at 23:10", stateLabel: "populated",
+      route: "/settings/notifications/r-2", frameMax: "360px",
+      title: "A reading was not accepted", lede: "Rendered once, at 23:10",
+      blocks: [{ rows: night.rows.filter((r) => r.outcome === "deferred").map((r) => ({
+        title: r.name, meta: r.detail, token: "--status-pending",
+        right: "held until " + r.until, rightColour: "var(--status-pending)"
+      })) }],
+      footer: "Quiet hours defer. Nothing is dropped by them, and the security and billing emails ignore them entirely.",
+      caption: "Held rather than dropped, in the member's own timezone — the difference between a product that respects the night and one that loses your notifications in it." });
+
+    const test = this.F({ id: "C-53", name: "Test send", stateLabel: "populated", route: "/settings/notifications/log",
+      frameMax: "360px", title: "Send yourself a test", lede: "",
+      blocks: [{ rows: ["jana", "klara", "milos"].map((m) => {
+        const t = N.testSend(m, "2026-09-09T21:40");
+        return { title: this.firstName(m), meta: t.says,
+          token: t.ok ? this.tokenOf("admin") : "--border",
+          right: t.ok ? "sent" : "nothing to send to",
+          rightColour: t.ok ? "var(--accent-family-keeping)" : "var(--status-rejected)" };
+      }) }],
+      footer: "A test ignores quiet hours, because holding it until the morning would tell you nothing.",
+      caption: "Klára's subscription answered 410 last week and was deleted; Miloš's tablet is stale after five failures. The test says which, rather than reporting success into a void." });
+
+    out.pageTitle = "Send time, and the log that settles the argument";
+    out.pageMeta = audit.rows + " attempts · " + audit.withBody + " still carry a body · " + audit.dropped + " dropped at " + audit.retention + " days";
+    out.viewIntro = "Delivery is filtered per recipient at send time and not when the rule is written, because grants, mutes and devices all change after a rule is saved. One rendering goes to the whole audience — a second per-owner rendering is how a private body ends up on the wrong queue.";
+    out.frames = [send, quiet, test];
+    out.tables = [
+      { title: "The delivery log", meta: audit.says,
+        cols: "100px 90px 100px 110px 110px minmax(180px,1.6fr) minmax(200px,1.8fr)",
+        head: [{ text: "When" }, { text: "Rule" }, { text: "To" }, { text: "Transport" }, { text: "Outcome" }, { text: "Reason" }, { text: "Body" }],
+        rows: log.map((r) => ({ cells: [
+          this.cell(N.fmt(r.at) + " " + N.clock(r.at), { mono: true, muted: true }),
+          this.cell(r.rule || "—", { mono: true, muted: true }),
+          this.cell(r.name),
+          this.cell(r.transport, { mono: true, muted: true }),
+          this.cell(r.outcome, { mono: true, tone: r.outcome === "delivered" ? "var(--accent-family-keeping)"
+            : r.outcome === "deferred" ? "var(--status-pending)" : r.outcome === "gone" || r.outcome === "failed" ? "var(--status-rejected)" : "var(--text-muted)" }),
+          this.cell(r.reason || (r.ms ? r.ms + " ms" : ""), { muted: true }),
+          this.cell(r.body || r.bodyState, { muted: !r.body })
+        ] })) },
+      { title: "One digest, three bodies", meta: "metric tokens resolve per recipient (FR-NT4)",
+        note: "The schedule is one row on the server. The body is not: {chores.points_balance} is a number for a child and a dash for everybody else, and {chores.overdue} counts what that member can actually see. A digest with one body for the household would be a digest that tells four people about a fifth person's points.",
+        cols: "110px minmax(320px,3fr) 110px",
+        head: [{ text: "Recipient" }, { text: "Body" }, { text: "Wants it" }],
+        rows: digests.map((d) => ({ cells: [
+          this.cell(d.name), this.cell(d.body),
+          this.cell(d.wanted ? "yes" : "digest off", { mono: true, muted: !d.wanted })
+        ] })) },
+      { title: "Month end, and the clamp", meta: clamp.available ? clamp.source : "reminders.js not loaded",
+        note: "The digest schedule can be set to day 31, and February has to do something sensible. This file implements no clamp: it calls the reminders strand's expand(), because a digest that fires on a different day from a reminder is two calendars in one product.",
+        cols: "minmax(140px,1.2fr) minmax(300px,3fr)",
+        head: [{ text: "Rule" }, { text: "Fires on" }],
+        rows: [{ cells: [this.cell("Day 31, monthly", { mono: true }),
+                         this.cell(clamp.available ? clamp.dates.join(" · ") : "—", { mono: true })] }] }
+    ];
+  }
+
+  /* ── setup re-entry ────────────────────────────────────────────────── */
+
+  viewSetup(out) {
+    const N = this.N;
+    const mine = N.setupFor(this.who);
+    const petr = N.setupFor("petr");
+
+    const list = this.F({ id: "C-58", name: this.firstName(this.who) + "'s setups", stateLabel: mine.rows.length ? "populated" : "permission-absent",
+      route: "/settings/modules/setup", frameMax: "400px", title: "Set up again", lede: mine.says,
+      blocks: mine.rows.length ? [{ rows: mine.rows.map((s) => ({
+        title: s.label, meta: s.steps.length + " steps · last changed " + N.fmt(s.changed),
+        token: this.tokenOf(s.module),
+        right: s.state, rightColour: s.state === "done" ? "var(--accent-family-keeping)" : "var(--status-pending)",
+        note: s.says
+      })) }] : [],
+      absentTitle: mine.rows.length ? "" : "Nothing to set up",
+      absentBody: mine.rows.length ? "" : mine.says,
+      footer: mine.rows.length ? "Each one reopens its own module's setup with this household's answers already in it." : "",
+      caption: "Re-entry is not the wizard replayed: it is the same steps with the household's answers in them, which is how Utilities gets upgraded from bills-only with nothing lost." });
+
+    const upgrade = this.F({ id: "C-58", name: "Re-entering Utilities", stateLabel: "populated",
+      route: "/utilities/setup?step=3", frameMax: "380px", title: "Plyn", lede: "Step 3 of 4 · already answered",
+      fields: [
+        { label: "What we know", value: "Bills only", hint: "since June", note: "Two services are further along. This one has never had a reading." },
+        { label: "Add", value: "Meter readings", hint: "upgrade", note: "Nothing recorded so far is discarded — the bills stay, and the readings start from today." }
+      ],
+      actions: ["Continue", "Leave it as it is"],
+      footer: "The step it opens on is the first one that has something left to answer.",
+      caption: "The reason this is a P2 screen rather than a link: a setup you can only run once is a decision a household makes on its worst-informed day." });
+
+    out.pageTitle = "Getting back into a module's setup";
+    out.pageMeta = N.setup.length + " modules state a setup · " + mine.rows.length + " are " + this.firstName(this.who) + "'s";
+    out.viewIntro = "The last row of §C, and the smallest: a way back into each module's own setup. It follows manage rather than view, so it is a different list per member — and for a member who manages nothing, it is not a section at all.";
+    out.frames = [list, upgrade];
+    out.tables = [{
+      title: "The setups the handoff states", meta: "four of sixteen modules",
+      note: "Four module pages describe a setup. Whether the other twelve have one, and what re-entry means for a module that was set up correctly the first time, is not stated anywhere — recorded as an enumeration gap rather than invented here.",
+      cols: "110px minmax(300px,2.6fr) 100px 130px minmax(150px,1.3fr)",
+      head: [{ text: "Module" }, { text: "Steps" }, { text: "State" }, { text: "Stated in" }, { text: "Who can re-enter" }],
+      rows: N.setup.map((s) => ({ cells: [
+        this.cell(s.label),
+        this.cell(s.steps.join(" · "), { muted: true }),
+        this.cell(s.state, { mono: true, tone: s.state === "done" ? "var(--accent-family-keeping)" : "var(--status-pending)" }),
+        this.cell(s.stated, { mono: true, muted: true }),
+        this.cell((window.HH_FIXTURES.members || []).filter((m) => (m.grants[s.module] || "none") === "manage")
+          .map((m) => m.name).join(", ") || "nobody", { muted: true })
+      ] }))
+    }];
+    out.notes = [{ text: petr.says }];
+  }
+}
+</script>
+</body>
+</html>

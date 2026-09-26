@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./ledger.js"></script>
+<script src="./fixtures.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: oklch(0.975 0.006 275); --s1: oklch(1 0 0); --s2: oklch(0.955 0.008 275);
+    --fg: oklch(0.24 0.018 275); --fg2: oklch(0.46 0.02 275); --fg3: oklch(0.615 0.015 275);
+    --ln: oklch(0.88 0.01 275); --ln2: oklch(0.925 0.008 275);
+    --acc: oklch(0.48 0.13 248); --ok: oklch(0.47 0.11 155); --warn: oklch(0.52 0.12 70); --bad: oklch(0.51 0.17 25);
+    --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --serif: Newsreader, Georgia, serif; --rp: 9px;
+  }
+  [data-theme="dark"] {
+    --bg: oklch(0.175 0.012 275); --s1: oklch(0.215 0.014 275); --s2: oklch(0.245 0.014 275);
+    --fg: oklch(0.945 0.006 275); --fg2: oklch(0.745 0.012 275); --fg3: oklch(0.585 0.014 275);
+    --ln: oklch(0.33 0.016 275); --ln2: oklch(0.27 0.014 275);
+    --acc: oklch(0.74 0.12 248); --ok: oklch(0.76 0.11 155); --warn: oklch(0.79 0.12 78); --bad: oklch(0.72 0.15 25);
+  }
+  [data-density="compact"] { --rp: 5px; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { text-wrap: pretty; box-sizing: border-box; }
+  button { font: inherit; cursor: pointer; }
+  a { color: var(--acc); }
+  a:hover { color: var(--fg); }
+  [data-seg="1"] { background: var(--acc) !important; border-color: var(--acc) !important; color: var(--bg) !important; }
+  [data-chip="1"] { background: var(--acc) !important; border-color: var(--acc) !important; color: var(--bg) !important; }
+  [data-clip], [data-clip] > * { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  [data-scale="200"] .hh-scale { font-size: 200%; }
+</style>
+</helmet>
+<div style="display:flex;align-items:stretch;min-height:100vh;background:var(--bg)">
+
+  <aside style="width:240px;flex:0 0 240px;border-right:1px solid var(--ln);background:var(--s2);padding:16px 14px 40px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--fg3)">Household · dev rail</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Prototype skeleton</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--acc)">stage 01 · the instrument</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="3">
+        <button onClick="{{ v.pick }}" data-seg="{{ v.on }}" style="text-align:left;background:var(--s1);color:var(--fg2);border:1px solid var(--ln);border-radius:6px;padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.6">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--ln)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="11">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--fg3)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2">
+              <button onClick="{{ o.pick }}" data-seg="{{ o.on }}" title="{{ o.title }}" style="background:var(--s1);color:var(--fg2);border:1px solid var(--ln);border-radius:5px;padding:4px 7px;font-size:10.5px;font-family:var(--mono)">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--ln);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--fg3)">Nothing here is designed. The rail switches states; it does not draw them. Twelve states are reached by switching, not by twelve copies.</div>
+      <a href="./Foundations.dc.html" style="font-family:var(--mono);font-size:11px">stage 02 · foundations →</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty-two stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--ln);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--s1)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--fg3)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--fg2);display:flex;gap:14px;flex-wrap:wrap">
+        <span>{{ railSummary }}</span>
+      </div>
+    </div>
+
+    <sc-if value="{{ isCoverage }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:30px;max-width:1180px">
+
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--ln);border:1px solid var(--ln);border-radius:9px;overflow:hidden;max-width:760px">
+          <sc-for list="{{ stats }}" as="s" hint-placeholder-count="6">
+            <div style="background:var(--s1);padding:16px 16px 14px">
+              <div style="font-family:var(--mono);font-size:27px;line-height:1;color:var(--acc)">{{ s.value }}</div>
+              <div style="font-size:12px;line-height:1.4;color:var(--fg2);margin-top:7px">{{ s.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The Stage 1 gate</h2>
+          <div style="display:flex;flex-direction:column;gap:0;border:1px solid var(--ln);border-radius:9px;overflow:hidden">
+            <sc-for list="{{ gate }}" as="g" hint-placeholder-count="2">
+              <div style="display:grid;grid-template-columns:26px 1fr;gap:12px;padding:14px 16px;background:var(--s1);border-bottom:1px solid var(--ln2);align-items:start">
+                <div style="font-family:var(--mono);font-size:15px;line-height:1.2;color:{{ g.color }}">{{ g.mark }}</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:14px;font-weight:600">{{ g.title }}</div>
+                  <div style="font-size:13px;color:var(--fg2);line-height:1.5">{{ g.detail }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Stages one to seven, as delivered</h2>
+          <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.6;color:var(--fg2)">Six vocabulary stages and the first stage of screens. Four close on their own gate; three stay open, two of them on the same question, and the ledger is what says so.</p>
+          <div style="display:flex;flex-direction:column;gap:0;border:1px solid var(--ln);border-radius:9px;overflow:hidden">
+            <sc-for list="{{ stageCards }}" as="c" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:40px 1fr;gap:0 14px;padding:16px;background:var(--s1);border-bottom:1px solid var(--ln2)">
+                <div style="font-family:var(--mono);font-size:17px;line-height:1.15;color:var(--acc)">{{ c.num }}</div>
+                <div style="display:flex;flex-direction:column;gap:7px;min-width:0">
+                  <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+                    <a href="{{ c.href }}" style="font-size:14px;font-weight:600;text-decoration:none">{{ c.name }}</a>
+                    <span style="font-family:var(--mono);font-size:10.5px;padding:2px 6px;border:1px solid var(--ln);border-radius:4px;color:{{ c.statusColour }}">{{ c.statusLabel }}</span>
+                    <span style="font-family:var(--mono);font-size:10.5px;color:var(--fg3)">{{ c.rowLabel }}</span>
+                  </div>
+                  <div style="font-size:13px;line-height:1.55;color:var(--fg2);max-width:88ch">{{ c.delivered }}</div>
+                  <div style="font-size:12.5px;line-height:1.5;color:var(--fg3);max-width:88ch">{{ c.gateNote }}</div>
+                  <sc-if value="{{ c.hasRemainder }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:3px;padding:9px 11px;border:1px solid var(--ln);border-left:2px solid var(--warn);border-radius:6px;background:var(--s2)">
+                      <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--warn)">rows keeping this stage open</div>
+                      <sc-for list="{{ c.remainder }}" as="r" hint-placeholder-count="2">
+                        <div style="font-family:var(--mono);font-size:11px;color:var(--fg2)">{{ r }}</div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Coverage by stage</h2>
+          <div style="border:1px solid var(--ln);border-radius:9px;overflow:hidden">
+            <sc-for list="{{ byStage }}" as="s" hint-placeholder-count="20">
+              <div style="display:grid;grid-template-columns:34px 1fr 84px 150px 82px;gap:14px;align-items:center;padding:var(--rp) 16px;background:var(--s1);border-bottom:1px solid var(--ln2)">
+                <div style="font-family:var(--mono);font-size:12px;color:var(--acc)">{{ s.num }}</div>
+                <div style="font-size:13px;min-width:0" data-clip="1">{{ s.name }}</div>
+                <div style="font-family:var(--mono);font-size:10.5px;color:{{ s.statusColour }}">{{ s.statusLabel }}</div>
+                <div style="height:6px;border-radius:3px;background:var(--ln2);overflow:hidden">
+                  <div style="height:100%;width:{{ s.pct }};background:{{ s.barColour }}"></div>
+                </div>
+                <div style="font-family:var(--mono);font-size:11.5px;color:var(--fg2);text-align:right">{{ s.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Coverage by inventory group</h2>
+          <div style="border:1px solid var(--ln);border-radius:9px;overflow:hidden">
+            <sc-for list="{{ byGroup }}" as="g" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:26px 1fr 90px 72px 90px;gap:14px;align-items:center;padding:var(--rp) 16px;background:var(--s1);border-bottom:1px solid var(--ln2)">
+                <div style="font-family:var(--mono);font-size:13px;color:var(--acc)">{{ g.key }}</div>
+                <div style="font-size:13px;min-width:0">{{ g.name }}</div>
+                <div style="font-family:var(--mono);font-size:11px;color:var(--fg3)">{{ g.priority }}</div>
+                <div style="font-family:var(--mono);font-size:11.5px;color:var(--fg2)">{{ g.sources }}</div>
+                <div style="font-family:var(--mono);font-size:11.5px;color:var(--fg2);text-align:right">{{ g.rows }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What the enumeration exposed</h2>
+          <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.6;color:var(--fg2)">{{ gapsIntro }}</p>
+          <div style="display:flex;flex-direction:column;gap:0;border:1px solid var(--ln);border-radius:9px;overflow:hidden">
+            <sc-for list="{{ gaps }}" as="g" hint-placeholder-count="6">
+              <div style="display:flex;flex-direction:column;gap:6px;padding:16px;background:var(--s1);border-bottom:1px solid var(--ln2)">
+                <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+                  <div style="font-size:14px;font-weight:600">{{ g.title }}</div>
+                  <div style="font-family:var(--mono);font-size:10.5px;padding:2px 6px;border:1px solid var(--ln);border-radius:4px;color:var(--fg2)">{{ g.tag }}</div>
+                </div>
+                <div style="font-size:13px;line-height:1.55;color:var(--fg2);max-width:82ch">{{ g.detail }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isLedger }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:20px 26px 40px;display:flex;flex-direction:column;gap:16px">
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--fg3);width:64px;flex:0 0 64px">{{ f.label }}</div>
+              <sc-for list="{{ f.options }}" as="o" hint-placeholder-count="6">
+                <button onClick="{{ o.pick }}" data-chip="{{ o.on }}" style="background:var(--s1);color:var(--fg2);border:1px solid var(--ln);border-radius:5px;padding:4px 8px;font-size:10.5px;font-family:var(--mono)">{{ o.label }}</button>
+              </sc-for>
+            </div>
+          </sc-for>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--fg3);width:64px;flex:0 0 64px">Find</div>
+            <input onInput="{{ onQuery }}" placeholder="id, screen, module, risk" style="flex:1 1 auto;max-width:340px;background:var(--s1);color:var(--fg);border:1px solid var(--ln);border-radius:5px;padding:7px 9px;font-size:12px;font-family:var(--mono);min-height:34px" />
+            <div style="font-family:var(--mono);font-size:11px;color:var(--fg2)">{{ resultCount }}</div>
+          </div>
+        </div>
+
+        <div style="border:1px solid var(--ln);border-radius:9px;overflow:hidden">
+          <div style="display:grid;grid-template-columns:84px minmax(120px,2.4fr) minmax(64px,1fr) 30px 54px 56px 16px;gap:10px;padding:9px 14px;background:var(--s2);border-bottom:1px solid var(--ln);font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg3)">
+            <div>id</div><div>screen</div><div>module</div><div>st</div><div>client</div><div>states</div><div title="a named design risk">!</div>
+          </div>
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="14">
+            <button onClick="{{ r.open }}" title="{{ r.risk }}" style="width:100%;text-align:left;display:grid;grid-template-columns:84px minmax(120px,2.4fr) minmax(64px,1fr) 30px 54px 56px 16px;gap:10px;padding:var(--rp) 14px;background:var(--s1);border:0;border-bottom:1px solid var(--ln2);align-items:baseline;min-height:34px">
+              <div style="font-family:var(--mono);font-size:11.5px;color:var(--acc)">{{ r.id }}</div>
+              <div data-clip="1" style="font-size:12.5px;color:var(--fg)">{{ r.name }}</div>
+              <div data-clip="1" style="font-family:var(--mono);font-size:10.5px;color:var(--fg2)">{{ r.module }}</div>
+              <div style="font-family:var(--mono);font-size:11px;color:var(--fg2)">{{ r.stage }}</div>
+              <div style="font-family:var(--mono);font-size:10.5px;color:var(--fg3)">{{ r.clientLabel }}</div>
+              <div style="font-family:var(--mono);font-size:10.5px;color:var(--fg3);white-space:nowrap">{{ r.stateLabel }}</div>
+              <div style="font-family:var(--mono);font-size:11px;color:var(--warn);min-width:0;overflow:hidden">{{ r.riskMark }}</div>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isFixtures }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:28px;max-width:1180px">
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Two households, one dataset</h2>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+            <sc-for list="{{ households }}" as="h" hint-placeholder-count="2">
+              <div style="border:1px solid var(--ln);border-radius:9px;background:var(--s1);padding:16px;display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:15px;font-weight:600">{{ h.name }}</div>
+                <div style="font-family:var(--mono);font-size:11px;color:var(--fg2);line-height:1.6">{{ h.meta }}</div>
+                <div style="font-size:12.5px;color:var(--fg2);line-height:1.5">{{ h.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The grant matrix, as data</h2>
+          <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.6;color:var(--fg2)">Seventeen modules by four levels, per member. This is the fixture, not the screen — the screen is C-52 and it is not built. Every <span style="font-family:var(--mono)">none</span> below is a module that must leave no trace anywhere in that member's app.</p>
+          <div style="overflow:auto;border:1px solid var(--ln);border-radius:9px">
+            <div style="min-width:640px">
+              <div style="display:grid;grid-template-columns:160px repeat(5,1fr);gap:0;background:var(--s2);border-bottom:1px solid var(--ln)">
+                <div style="padding:10px 12px;font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg3)">module</div>
+                <sc-for list="{{ members }}" as="m" hint-placeholder-count="5">
+                  <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px;border-left:1px solid var(--ln)">
+                    <div style="font-size:12.5px;font-weight:600">{{ m.name }}</div>
+                    <div style="font-family:var(--mono);font-size:9.5px;color:var(--fg3)">{{ m.role }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-for list="{{ matrix }}" as="row" hint-placeholder-count="17">
+                <div style="display:grid;grid-template-columns:160px repeat(5,1fr);gap:0;background:var(--s1);border-bottom:1px solid var(--ln2)">
+                  <div style="padding:7px 12px;font-size:12.5px">{{ row.module }}</div>
+                  <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="5">
+                    <div style="padding:7px 12px;border-left:1px solid var(--ln2);font-family:var(--mono);font-size:10.5px;color:{{ c.color }}">{{ c.level }}</div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What the fixture carries</h2>
+          <div style="border:1px solid var(--ln);border-radius:9px;overflow:hidden">
+            <sc-for list="{{ fixtureData }}" as="d" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:120px 1fr;gap:16px;padding:12px 16px;background:var(--s1);border-bottom:1px solid var(--ln2)">
+                <div style="font-family:var(--mono);font-size:11.5px;color:var(--acc)">{{ d.k }}</div>
+                <div style="font-size:13px;color:var(--fg2);line-height:1.5">{{ d.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The five personas</h2>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+            <sc-for list="{{ members }}" as="m" hint-placeholder-count="5">
+              <div style="border:1px solid var(--ln);border-radius:9px;background:var(--s1);padding:16px;display:flex;flex-direction:column;gap:7px">
+                <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+                  <div style="font-size:15px;font-weight:600">{{ m.name }}</div>
+                  <div style="font-family:var(--mono);font-size:10px;color:var(--fg3)">{{ m.device }}</div>
+                </div>
+                <div style="font-family:var(--mono);font-size:10.5px;color:var(--acc)">{{ m.reach }}</div>
+                <div style="font-size:12.5px;color:var(--fg2);line-height:1.5">{{ m.note }}</div>
+                <button onClick="{{ m.pick }}" style="margin-top:4px;align-self:flex-start;background:var(--s2);color:var(--fg2);border:1px solid var(--ln);border-radius:5px;padding:6px 10px;font-size:11px;font-family:var(--mono);min-height:32px">be {{ m.name }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isScreen }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:flex-start;gap:0;flex-wrap:wrap">
+
+        <div style="flex:1 1 460px;min-width:0;padding:22px 26px 40px;display:flex;flex-direction:column;gap:16px;border-right:1px solid var(--ln)">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button onClick="{{ goPrev }}" style="background:var(--s1);border:1px solid var(--ln);color:var(--fg2);border-radius:5px;padding:5px 9px;font-family:var(--mono);font-size:11px;min-height:32px">← prev</button>
+            <button onClick="{{ goNext }}" style="background:var(--s1);border:1px solid var(--ln);color:var(--fg2);border-radius:5px;padding:5px 9px;font-family:var(--mono);font-size:11px;min-height:32px">next →</button>
+            <button onClick="{{ goLedger }}" style="background:var(--s1);border:1px solid var(--ln);color:var(--fg2);border-radius:5px;padding:5px 9px;font-family:var(--mono);font-size:11px;min-height:32px">back to ledger</button>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--fg3)">{{ cursor }}</div>
+          </div>
+
+          <div style="border:1px solid var(--ln);border-radius:9px;background:var(--s1);overflow:hidden">
+            <sc-for list="{{ meta }}" as="m" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:104px 1fr;gap:14px;padding:9px 16px;border-bottom:1px solid var(--ln2)">
+                <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.09em;text-transform:uppercase;color:var(--fg3)">{{ m.k }}</div>
+                <div style="font-size:12.5px;color:var(--fg);line-height:1.5">{{ m.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg3)">required states · {{ stateCount }} · none drawn</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <sc-for list="{{ screenStates }}" as="s" hint-placeholder-count="12">
+                <button onClick="{{ s.pick }}" data-chip="{{ s.on }}" title="{{ s.note }}" style="background:var(--s1);color:var(--fg2);border:1px dashed var(--ln);border-radius:5px;padding:5px 8px;font-family:var(--mono);font-size:10.5px;min-height:30px">{{ s.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-if value="{{ showChecklist }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg3)">definition of done · 07-delivery §3</div>
+              <div style="border:1px solid var(--ln);border-radius:9px;overflow:hidden">
+                <sc-for list="{{ checklist }}" as="c" hint-placeholder-count="18">
+                  <div style="display:grid;grid-template-columns:20px 1fr;gap:10px;padding:7px 14px;background:var(--s1);border-bottom:1px solid var(--ln2);align-items:start">
+                    <div style="font-family:var(--mono);font-size:11px;color:var(--fg3)">☐</div>
+                    <div style="font-size:12px;color:var(--fg2);line-height:1.45">{{ c }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="flex:1 1 440px;min-width:0;padding:22px 26px 40px;display:flex;flex-direction:column;gap:12px;align-items:center;background:var(--s2)">
+          <div style="align-self:stretch;font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg3)">{{ shellLabel }}</div>
+          <div style="width:100%;max-width:{{ shellWidth }};border:1px solid var(--ln);border-radius:{{ shellRadius }};background:var(--bg);overflow:hidden;display:flex;flex-direction:column;height:{{ shellHeight }}">
+
+            <div style="padding:7px 12px;background:var(--s1);border-bottom:1px solid var(--ln);display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--fg3)">
+              <span>{{ statusLeft }}</span><span>{{ statusRight }}</span>
+            </div>
+
+            <sc-if value="{{ hasBanner }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:8px 12px;background:var(--s2);border-bottom:1px solid var(--ln);font-size:11.5px;color:var(--fg2);display:flex;gap:8px;align-items:center">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--warn)">{{ bannerTag }}</span>
+                <span>{{ bannerText }}</span>
+              </div>
+            </sc-if>
+
+            <div style="flex:1 1 auto;min-height:0;display:flex;align-items:stretch;overflow:hidden">
+              <sc-if value="{{ isWeb }}" hint-placeholder-val="{{ false }}">
+                <div style="width:184px;flex:0 0 184px;border-right:1px solid var(--ln);background:var(--s1);padding:10px 8px;display:flex;flex-direction:column;gap:8px;overflow:auto">
+                  <div style="font-family:var(--mono);font-size:10px;color:var(--fg3);padding:0 4px">{{ householdName }}</div>
+                  <div style="border:1px solid var(--ln);border-radius:5px;padding:6px 8px;font-size:11px;color:var(--fg3);background:var(--bg)">Search everything</div>
+                  <div style="display:flex;flex-direction:column;gap:1px">
+                    <sc-for list="{{ navModules }}" as="m" hint-placeholder-count="8">
+                      <div style="padding:6px 8px;border-radius:4px;font-size:12px;color:var(--fg2);display:flex;justify-content:space-between;gap:8px">
+                        <span>{{ m.name }}</span><span style="font-family:var(--mono);font-size:9px;color:var(--fg3)">{{ m.level }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="margin-top:auto;font-family:var(--mono);font-size:9px;color:var(--fg3);padding:6px 4px 0;border-top:1px solid var(--ln2)">{{ navNote }}</div>
+                </div>
+              </sc-if>
+
+              <div class="hh-scale" style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;overflow:auto">
+                <div style="padding:9px 12px;border-bottom:1px solid var(--ln);display:flex;justify-content:space-between;gap:10px;align-items:baseline;background:var(--bg)">
+                  <div style="font-size:13px;font-weight:600;min-width:0">{{ screenName }}</div>
+                  <div style="font-family:var(--mono);font-size:9.5px;color:var(--fg3)">{{ dateLabel }}</div>
+                </div>
+                <div style="flex:1 1 auto;padding:14px;display:flex;flex-direction:column;gap:10px;align-items:stretch;justify-content:center">
+                  <div style="border:1px dashed var(--ln);border-radius:8px;padding:18px 16px;display:flex;flex-direction:column;gap:9px;background:var(--s1)">
+                    <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg3)">{{ stubTag }}</div>
+                    <div style="font-family:var(--serif);font-size:17px;line-height:1.2">{{ stubTitle }}</div>
+                    <div style="font-size:12px;line-height:1.55;color:var(--fg2)">{{ stubBody }}</div>
+                    <div style="font-family:var(--mono);font-size:10.5px;color:var(--acc)">{{ stubState }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+              <div style="border-top:1px solid var(--ln);background:var(--s1);display:flex">
+                <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+                  <div style="flex:1 1 0;min-width:0;padding:9px 4px 11px;display:flex;flex-direction:column;align-items:center;gap:4px">
+                    <div style="width:18px;height:18px;border:1px solid var(--ln);border-radius:4px"></div>
+                    <div style="font-size:9.5px;color:var(--fg3)">{{ t.name }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+          <div style="align-self:stretch;font-family:var(--mono);font-size:10.5px;color:var(--fg3);line-height:1.6">{{ shellNote }}</div>
+        </div>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900},&quot;showGateChecklist&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Instrument&quot;},&quot;defaultView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;coverage&quot;,&quot;ledger&quot;,&quot;fixtures&quot;],&quot;default&quot;:&quot;coverage&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Instrument&quot;}}">
+class Component extends DCLogic {
+  state = {
+    ready: false, view: null, screenId: null,
+    persona: "jana", household: "hh-tilcer", client: "m", theme: "light",
+    density: "comfortable", locale: "en-GB", ent: "active", net: "online",
+    sync: "synced", st: "populated", scale: "100",
+    fGroup: "all", fStage: "all", fClient: "all", fKind: "all", q: ""
+  };
+
+  CHECKLIST = [
+    "Both themes, with no colour defined only inside the dark block.",
+    "200 % text without clipping or loss of function.",
+    "English and German, and the layout survives the longer one.",
+    "Every status is colour and icon and text.",
+    "Keyboard-reachable with a visible focus ring on both surfaces; every icon-only control labelled.",
+    "All hit targets ≥ 44×44 pt, in compact density too.",
+    "Declared contrast pairs only — no ad-hoc colour combinations.",
+    "Only semantic tokens referenced.",
+    "The empty state teaches: one sentence, one example, one action.",
+    "The loading state is a skeleton shape-matched to the content, not a spinner.",
+    "The error state is named in words, with an action.",
+    "Offline, pending, syncing, conflicted and rejected are drawn for every row that can be in them.",
+    "Permission-absent behaves as absence, not disabling — nothing hints the module exists.",
+    "Withdrawn is drawn for any row that can be retracted while on screen.",
+    "Entitlement read-only is drawn: content visible, writes gone, banner explains.",
+    "Every destructive action names the object and what will be lost.",
+    "No number the product has not earned; not-enough-information states name what is missing.",
+    "No literal user-facing string — every one is a key.",
+    "Where the hold gesture appears, the keyboard and screen-reader path is specified.",
+    "prefers-reduced-motion behaviour is specified for any motion."
+  ];
+
+  MODMAP = {
+    Shopping: "shopping", Dashboard: "dashboard", Reminders: "reminders", Tasks: "tasks",
+    Notes: "notes", Documents: "documents", Chores: "chores", Activity: "activity",
+    Utilities: "utilities", Finance: "finance", Garden: "garden", Calendar: "calendar",
+    Assets: "property", Property: "property", Vehicles: "vehicles", Pets: "pets", Chat: "chat",
+    Today: "today"
+  };
+
+  componentDidMount() {
+    this.boot();
+    window.addEventListener("hashchange", this.onHash);
+    this.onHash();
+    this.applyDoc();
+  }
+  componentWillUnmount() { window.removeEventListener("hashchange", this.onHash); }
+  componentDidUpdate() { this.applyDoc(); }
+
+  applyDoc() {
+    var r = document.documentElement;
+    r.setAttribute("data-theme", this.state.theme);
+    r.setAttribute("data-density", this.state.density);
+    r.setAttribute("data-scale", this.state.scale);
+  }
+
+  boot() {
+    var tries = 0;
+    var tick = () => {
+      if (window.HH_LEDGER && window.HH_FIXTURES) { this.setState({ ready: true }); return; }
+      if (tries++ < 120) setTimeout(tick, 40);
+    };
+    tick();
+  }
+
+  onHash = () => {
+    var h = (location.hash || "").replace(/^#\/?/, "");
+    if (h.indexOf("s/") === 0) this.setState({ view: "screen", screenId: h.slice(2) });
+    else if (h === "ledger" || h === "fixtures" || h === "coverage") this.setState({ view: h, screenId: null });
+    else this.setState({ view: null, screenId: null });
+  };
+
+  go(hash) { location.hash = "#/" + hash; }
+
+  L() { return window.HH_LEDGER || { rows: [], stages: [], groups: {}, states: [], gaps: [], estimate: 0 }; }
+  F() { return window.HH_FIXTURES || { modules: [], members: [], households: [], data: [], levels: [] }; }
+
+  view() { return this.state.view || this.props.defaultView || "coverage"; }
+
+  member() {
+    var f = this.F();
+    return f.members.filter(m => m.id === this.state.persona)[0] || f.members[0] || null;
+  }
+  hh() {
+    var f = this.F();
+    return f.households.filter(h => h.id === this.state.household)[0] || f.households[0] || null;
+  }
+  grantFor(moduleLabel) {
+    var m = this.member();
+    var key = this.MODMAP[moduleLabel];
+    if (!m || !key) return null;
+    return m.grants[key] || "none";
+  }
+  entState() {
+    var h = this.hh();
+    return this.state.ent === "inherit" ? (h ? h.entitlement : "active") : this.state.ent;
+  }
+
+  seg(label, key, opts) {
+    return {
+      label: label,
+      options: opts.map(o => ({
+        label: o[1], title: o[2] || o[1], on: this.state[key] === o[0] ? 1 : 0,
+        pick: () => this.setState({ [key]: o[0] })
+      }))
+    };
+  }
+
+  filteredRows() {
+    var s = this.state;
+    var q = (s.q || "").toLowerCase();
+    return this.L().rows.filter(r => {
+      if (s.fGroup !== "all" && r.group !== s.fGroup) return false;
+      if (s.fStage !== "all" && String(r.stage) !== s.fStage) return false;
+      if (s.fClient !== "all" && r.client !== s.fClient) return false;
+      if (s.fKind !== "all" && r.kind !== s.fKind) return false;
+      if (q && (r.id + " " + r.name + " " + r.module + " " + r.risk).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+  }
+
+  clientLabel(c) { return c === "m" ? "mobile" : c === "w" ? "web" : c === "t" ? "tablet" : "both"; }
+
+  renderVals() {
+    var L = this.L(), F = this.F(), s = this.state;
+    var view = this.view();
+    var rows = L.rows;
+    var sources = {};
+    rows.forEach(r => { sources[r.group + "-" + r.n] = 1; });
+    var sourceCount = Object.keys(sources).length;
+    var built = rows.filter(r => r.built).length;
+    var stateSum = rows.reduce((a, r) => a + r.states.length, 0);
+    var riskCount = rows.filter(r => r.risk).length;
+
+    var vals = {
+      views: [
+        ["coverage", "Coverage", rows.length ? built + "/" + rows.length : "—"],
+        ["ledger", "The ledger", String(rows.length)],
+        ["fixtures", "Fixture household", "2"]
+      ].map(v => ({
+        label: v[1], count: v[2], on: view === v[0] ? 1 : 0, pick: () => this.go(v[0])
+      })),
+      controls: [
+        this.seg("Persona", "persona", F.members.map(m => [m.id, m.name, m.note])),
+        this.seg("Household", "household", F.households.map(h => [h.id, h.name])),
+        this.seg("Client", "client", [["m", "phone"], ["t", "tablet"], ["w", "web"]]),
+        this.seg("Theme", "theme", [["light", "light"], ["dark", "dark"]]),
+        this.seg("Text", "scale", [["100", "100 %"], ["200", "200 %"]]),
+        this.seg("Density", "density", [["comfortable", "comfortable"], ["compact", "compact"]]),
+        this.seg("Locale", "locale", [["en-GB", "en"], ["de-DE", "de"], ["cs-CZ", "cs"]]),
+        this.seg("Entitlement", "ent", [["active", "active"], ["trialing", "trialing"], ["past_due", "past_due"], ["grace", "grace"], ["read_only", "read_only"], ["canceled", "canceled"], ["restricted", "restricted"], ["suspended", "suspended"]]),
+        this.seg("Connectivity", "net", [["online", "online"], ["offline", "offline"]]),
+        this.seg("Sync", "sync", [["synced", "synced"], ["pending", "pending"], ["syncing", "syncing"], ["conflicted", "conflicted"], ["rejected", "rejected"]]),
+        this.seg("State under review", "st", (L.states || []).map(st => [st[0], st[1], st[2]]))
+      ],
+      isCoverage: view === "coverage", isLedger: view === "ledger",
+      isFixtures: view === "fixtures", isScreen: view === "screen",
+      railSummary: (this.member() ? this.member().name : "—") + " · " + this.clientLabel(s.client === "t" ? "m" : s.client) + " · " + s.theme + " · " + this.entState() + " · " + s.net
+    };
+
+    if (view === "coverage") {
+      var status = L.stageStatus ? L.stageStatus() : [];
+      var delivered = status.filter(s => s.artifact);
+      var closed = delivered.filter(s => s.status === "closed" || s.status === "delivered").length;
+      vals.pageTitle = "Coverage";
+      vals.pageMeta = "generated from the ledger · " + delivered.length + " stages delivered · " + built + " of " + rows.length + " rows built";
+      vals.stats = [
+        { value: sourceCount, label: "source rows enumerated from 05-screens" },
+        { value: rows.length, label: "ledger rows — mobile, tablet and web counted apart" },
+        { value: L.estimate ? "≈" + L.estimate : "—", label: "the plan's estimate, now superseded" },
+        { value: stateSum, label: "state renderings required across all rows" },
+        { value: riskCount, label: "rows carrying a named design risk" },
+        { value: built, label: "rows built. Stages 1 to 4 draw no screen at all" }
+      ];
+      vals.gate = [
+        {
+          mark: "✓", color: "var(--ok)", title: "Every row in 05-screens has an id and a stage",
+          detail: "All " + rows.length + " ledger rows carry a stable id, the section they came from, their client, their required states and a stage between 5 and 21. No row is unassigned."
+        },
+        {
+          mark: L.version === "1.0-frozen" ? "✓" : "○",
+          color: L.version === "1.0-frozen" ? "var(--ok)" : "var(--warn)",
+          title: "The count is agreed and frozen",
+          detail: L.version === "1.0-frozen"
+            ? "Frozen in Stage 20 at " + rows.filter(function (r) { return r.client !== "t"; }).length + " mobile and web client rows over " + rows.filter(function (r) { return r.client !== "t"; }).reduce(function (a, r) { return a + r.states.length; }, 0) + " required states, all of them drawn. Stage 21 added the tablet alongside that freeze rather than reopening it: " + rows.filter(function (r) { return r.client === "t"; }).length + " rows more, counted apart. The plan's ≈" + L.estimate + " was an estimate of screens; this is an enumeration of rows, and the difference is the clients counted apart."
+            : "Open. The enumeration reads " + rows.length + " against the plan's ≈" + L.estimate + ", and the questions below change it. The count freezes when you agree them."
+        },
+        {
+          mark: built ? "✓" : "○", color: built ? "var(--ok)" : "var(--warn)",
+          title: "The instrument records delivery, not memory",
+          detail: closed + " of " + delivered.length + " delivered stages close on their own gate. " + built + " rows are built and " + rows.filter(r => r.partial).length + " are part-drawn, each naming which of its states exist — which is what keeps a stage open."
+        }
+      ];
+      var statusColour = st => st === "closed" || st === "delivered" ? "var(--ok)" : st === "open" ? "var(--warn)" : "var(--fg3)";
+      vals.byStage = status.map(s => ({
+        num: String(s.num).padStart(2, "0"), name: s.name,
+        statusLabel: s.status, statusColour: statusColour(s.status),
+        pct: (s.artifact ? s.pct : 0) + "%",
+        barColour: s.status === "open" ? "var(--warn)" : "var(--acc)",
+        label: s.rows ? s.built + " / " + s.rows + " rows" : (s.artifact ? "no rows" : s.sort)
+      }));
+      vals.stageCards = delivered.map(s => ({
+        num: String(s.num).padStart(2, "0"), name: s.name,
+        href: "./" + s.artifact.file,
+        statusLabel: s.status === "delivered" ? "delivered · no ledger rows" : s.status,
+        statusColour: statusColour(s.status),
+        rowLabel: s.rows ? s.drawnStates + " of " + s.reqStates + " state renderings drawn"
+          : s.sort === "application" ? "no rows of its own — it redraws bodies for rows already counted"
+          : s.sort === "instrument" ? "the instrument, not a screen"
+          : "vocabulary, not screens",
+        delivered: s.artifact.delivered,
+        gateNote: s.artifact.gateNote,
+        hasRemainder: s.remainder.length > 0,
+        remainder: s.remainder
+      }));
+      vals.byGroup = Object.keys(L.groups || {}).map(k => {
+        var g = L.groups[k];
+        var gr = rows.filter(r => r.group === k);
+        var srcs = {};
+        gr.forEach(r => { srcs[r.n] = 1; });
+        return {
+          key: k, name: g[0], priority: g[1],
+          sources: Object.keys(srcs).length + " src",
+          rows: gr.length + " rows"
+        };
+      });
+      vals.gaps = (L.gaps || []).map(g => ({ title: g[0], detail: g[1], tag: g[2] }));
+      var openGaps = (L.gaps || []).filter(g => !/^settled|^resolved|^fixed/.test(g[2])).length;
+      var takenGaps = (L.gaps || []).length - openGaps;
+      var aliasCount = Object.keys(L.aliases || {}).length;
+      vals.gapsIntro = (L.gaps || []).length + " things the handoff leaves undecided, double-counted or since settled. " +
+        takenGaps + " are decided and recorded against the screen that raised them. The other " + openGaps +
+        " are still open and none of them is a design decision: the count froze in Stage 20, and each of these now waits on a requirement sentence, a translator or a figure stated once. " +
+        (aliasCount ? aliasCount + " of the rows is one screen enumerated twice and says so on its own row, so no id reads as an unrouted screen." : "");
+    }
+
+    if (view === "ledger") {
+      var fr = this.filteredRows();
+      var stagesPresent = [];
+      rows.forEach(r => { if (stagesPresent.indexOf(r.stage) < 0) stagesPresent.push(r.stage); });
+      stagesPresent.sort((a, b) => a - b);
+      var chip = (key, val, label) => ({
+        label: label, on: this.state[key] === val ? 1 : 0,
+        pick: () => this.setState({ [key]: val })
+      });
+      vals.pageTitle = "The ledger";
+      vals.pageMeta = sourceCount + " source rows · " + rows.length + " client rows · frozen candidate " + L.version;
+      vals.filters = [
+        { label: "Group", options: [chip("fGroup", "all", "all")].concat(Object.keys(L.groups || {}).map(k => chip("fGroup", k, k))) },
+        { label: "Stage", options: [chip("fStage", "all", "all")].concat(stagesPresent.map(n => chip("fStage", String(n), String(n)))) },
+        { label: "Client", options: [chip("fClient", "all", "all"), chip("fClient", "m", "mobile"), chip("fClient", "w", "web"), chip("fClient", "b", "both")] },
+        { label: "Kind", options: [chip("fKind", "all", "all"), chip("fKind", "screen", "screen"), chip("fKind", "component", "component"), chip("fKind", "state-set", "state-set"), chip("fKind", "widget-set", "widget-set"), chip("fKind", "print", "print")] }
+      ];
+      vals.onQuery = (e) => this.setState({ q: e.target.value });
+      vals.resultCount = fr.length + " shown";
+      vals.rows = fr.map(r => ({
+        id: r.id, name: r.name, module: r.module, stage: String(r.stage),
+        clientLabel: this.clientLabel(r.client),
+        stateLabel: r.built ? r.states.length + " ✓" : r.drawn.length ? r.drawn.length + "/" + r.states.length : String(r.states.length),
+        risk: r.risk || "",
+        riskMark: r.risk ? "!" : "",
+        open: () => this.openRow(r)
+      }));
+    }
+
+    if (view === "fixtures") {
+      vals.pageTitle = "Fixture household";
+      vals.pageMeta = "one dataset, five personas, two households";
+      vals.households = F.households.map(h => ({
+        name: h.name,
+        meta: h.country + " · " + h.tz + " · " + h.currency + " · " + h.locale + " · " + h.members.length + " members · " + h.entitlement,
+        note: h.note || "The primary household. Jana is owner and billing payer."
+      }));
+      vals.members = F.members.map(m => {
+        var reach = F.modules.filter(mo => m.grants[mo[0]] !== "none").length;
+        return {
+          name: m.name, role: m.role, device: m.device, note: m.note,
+          reach: reach + " of 17 modules" + (m.locked ? " · locked dashboard" : ""),
+          pick: () => this.setState({ persona: m.id })
+        };
+      });
+      vals.matrix = F.modules.map(mo => ({
+        module: mo[1],
+        cells: F.members.map(m => {
+          var lv = m.grants[mo[0]];
+          return { level: lv, color: lv === "none" ? "var(--fg3)" : lv === "manage" ? "var(--acc)" : "var(--fg2)" };
+        })
+      }));
+      vals.fixtureData = F.data.map(d => ({ k: d[0], v: d[1] }));
+    }
+
+    if (view === "screen") {
+      var all = rows;
+      var idx = all.findIndex(r => r.id === s.screenId);
+      var r = all[idx] || all[0] || null;
+      if (r) {
+        var grant = this.grantFor(r.module);
+        var absent = grant === "none";
+        var stageName = ((L.stages || []).filter(st => st[0] === r.stage)[0] || [0, ""])[1];
+        var client = r.client === "b" ? (s.client === "w" ? "w" : "m") : r.client;
+        var isWeb = client === "w";
+        var tablet = !isWeb && s.client === "t";
+        var m = this.member();
+        var ent = this.entState();
+
+        vals.pageTitle = r.name;
+        vals.pageMeta = r.id + " · " + r.src + " · stage " + r.stage;
+        vals.cursor = (idx + 1) + " of " + all.length;
+        vals.goPrev = () => this.openRow(all[(idx - 1 + all.length) % all.length]);
+        vals.goNext = () => this.openRow(all[(idx + 1) % all.length]);
+        vals.goLedger = () => this.go("ledger");
+        vals.meta = [
+          { k: "id", v: r.id },
+          { k: "screen", v: r.name },
+          { k: "source", v: r.src + " · row " + r.n },
+          { k: "module", v: r.module + (grant ? " · this persona holds " + grant : " · platform, always present") },
+          { k: "client", v: this.clientLabel(r.client) + (r.kind === "screen" ? " layout" : " · " + r.kind + ", one deliverable") },
+          { k: "stage", v: String(r.stage).padStart(2, "0") + " — " + stageName },
+          { k: "priority", v: r.priority },
+          { k: "status", v: r.built ? "built · all " + r.states.length + " required states drawn in " + r.by
+              : r.drawn.length ? "part-drawn · " + r.drawn.length + " of " + r.states.length + " states in " + r.by + " · " + r.states.filter(k => r.drawn.indexOf(k) < 0).join(", ") + " undrawn"
+              : "not built · 0 of " + r.states.length + " states drawn" },
+          { k: "risk", v: r.risk || "none named in the handoff" }
+        ].concat(r.alias ? [{ k: "same screen as", v: r.alias + " · " + r.aliasRoute + " — " + r.aliasWhy }] : []);
+        vals.stateCount = r.states.length;
+        vals.screenStates = r.states.map(k => {
+          var def = (L.states || []).filter(x => x[0] === k)[0] || [k, k, ""];
+          return { label: def[1], note: def[2], on: s.st === k ? 1 : 0, pick: () => this.setState({ st: k }) };
+        });
+        vals.showChecklist = this.props.showGateChecklist !== false;
+        vals.checklist = this.CHECKLIST;
+
+        vals.isWeb = isWeb;
+        vals.isMobile = !isWeb;
+        vals.shellLabel = isWeb ? "web shell · persistent sidebar" : tablet ? "tablet shell · four or five destinations" : "phone shell · four or five destinations";
+        vals.shellWidth = isWeb ? "100%" : tablet ? "560px" : "372px";
+        vals.shellHeight = isWeb ? "560px" : tablet ? "620px" : "660px";
+        vals.shellRadius = isWeb ? "9px" : "22px";
+        vals.householdName = this.hh() ? this.hh().name : "—";
+        vals.statusLeft = (m ? m.name : "—") + " · " + vals.householdName;
+        vals.statusRight = (s.net === "offline" ? "offline" : "online") + " · " + s.sync + " · " + s.locale;
+        vals.dateLabel = new Date("2026-09-09T09:00:00Z").toLocaleDateString(s.locale, { weekday: "short", day: "numeric", month: "long" });
+
+        var banners = {
+          trialing: "Your trial ends in 9 days.", past_due: "A payment did not go through.",
+          grace: "Billing needs attention. Everything still works.", read_only: "Writes are paused. Deletion date shown.",
+          canceled: "Cancelled. Deletion date shown.", restricted: "Processing restricted at your request."
+        };
+        vals.hasBanner = !!banners[ent] || s.net === "offline";
+        vals.bannerTag = s.net === "offline" ? "offline" : ent;
+        vals.bannerText = s.net === "offline" ? "Changes are saved and will sync." : (banners[ent] || "");
+
+        var granted = F.modules.filter(mo => m && m.grants[mo[0]] !== "none" && mo[0] !== "today");
+        vals.navModules = granted.map(mo => ({ name: mo[1], level: m.grants[mo[0]] }));
+        vals.navNote = granted.length + " of 17 · the rest leave no trace";
+        var chat = m && m.grants.chat !== "none";
+        vals.tabs = [{ name: "Home" }, { name: "Today" }, { name: "Add" }].concat(chat ? [{ name: "Chat" }] : []).concat([{ name: "More" }]);
+
+        vals.screenName = r.name;
+        if (ent === "suspended") {
+          vals.stubTag = "route intercepted";
+          vals.stubTitle = "Suspended lockout";
+          vals.stubBody = "suspended refuses reads, so no household content renders on any route and there is no export affordance. A-31 is the screen this resolves to; it is not built.";
+          vals.stubState = "A-31-" + client;
+        } else if (absent) {
+          vals.stubTag = "route intercepted";
+          vals.stubTitle = "Not available";
+          vals.stubBody = m.name + " holds none on " + r.module + ", so this route resolves to the neutral not-available landing and nothing in the shell hints the module exists. F-17 is that screen, drawn in Stage 6.";
+          vals.stubState = "F-17-" + client + " · built";
+        } else if (r.drawn.length) {
+          vals.stubTag = (r.built ? "built" : "part-drawn") + " · stage " + String(r.stage).padStart(2, "0");
+          vals.stubTitle = r.name;
+          vals.stubBody = (r.risk ? r.risk + " — d" : "D") + "rawn in " + r.by + ". The skeleton still routes here and reports the state; the artifact is where the surface itself is designed.";
+          vals.stubState = "state under review · " + s.st + " · " + (r.drawn.indexOf(s.st) >= 0 ? "drawn" : "undrawn") + " · " + r.drawn.length + " of " + r.states.length;
+        } else {
+          vals.stubTag = "not built · stage " + String(r.stage).padStart(2, "0");
+          vals.stubTitle = r.name;
+          vals.stubBody = r.risk || "Assembled from the component set once stage " + r.stage + " opens. The skeleton routes here, carries the shell, and reports the state — it does not draw the screen.";
+          vals.stubState = "state under review · " + s.st + " · 0 of " + r.states.length + " drawn";
+        }
+        vals.shellNote = isWeb
+          ? "Sidebar is the per-member ordered module list (04-navigation §4). Density and 200 % text apply here."
+          : "Tab bar is " + vals.tabs.length + " slots for " + m.name + " — Chat is the one that can be absent (DD-11).";
+      }
+    }
+
+    return vals;
+  }
+
+  openRow(r) { if (r) this.go("s/" + r.id); }
+}
+
+</script>
+</body>
+</html>

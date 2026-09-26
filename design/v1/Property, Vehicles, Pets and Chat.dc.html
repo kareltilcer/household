@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./components.js"></script>
+<script src="./nav.js"></script>
+<script src="./household.js"></script>
+<script src="./assets.js"></script>
+<script src="./chat.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent-family-things) !important; border-color: var(--accent-family-things) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .sc-interp { white-space: inherit; text-wrap: inherit; text-overflow: inherit; overflow: hidden; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:242px;flex:0 0 242px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">One engine, three vocabularies</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Property, Vehicles, Pets &mdash; and Chat</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-things)">{{ stageLine }}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="7">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">Twenty-eight rows over one asset engine and one messaging module. Every date here is Wednesday 9 September 2026, and every number on the page is arithmetic on the fixture rather than a figure typed into a caption.</div>
+      <a href="./Calendar.dc.html" style="font-family:var(--mono);font-size:11px">&larr; stage 18 &middot; calendar</a>
+      <a href="./Notes and Documents.dc.html" style="font-family:var(--mono);font-size:11px">stage 13 &middot; where the bytes go</a>
+      <a href="./Utilities.dc.html" style="font-family:var(--mono);font-size:11px">stage 15 &middot; the meter this reading reuses</a>
+      <a href="./Reminders and Tasks.dc.html" style="font-family:var(--mono);font-size:11px">stage 12 &middot; the nine reminder kinds</a>
+      <a href="./Household and Billing.dc.html" style="font-family:var(--mono);font-size:11px">stage 8 &middot; storage and grants</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger &middot; coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+
+      <p style="margin:0;max-width:82ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="0">
+        <div style="border-left:2px solid var(--accent-family-things);padding:2px 0 2px 12px;max-width:82ch;font-size:13.5px;line-height:1.6;color:var(--text-primary)">{{ n.text }}</div>
+      </sc-for>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+        <sc-for list="{{ frames }}" as="f" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0;grid-column:{{ f.col }}">
+
+            <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-things)">{{ f.id }}</span>
+              <h3 style="margin:0;font-size:15px;font-weight:600">{{ f.name }}</h3>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ f.stateLabel }}</span>
+            </div>
+
+            <div style="width:100%;max-width:{{ f.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+              <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.route }}</span>
+                <span style="flex:0 0 auto">{{ f.clientLabel }}</span>
+              </div>
+
+              <sc-if value="{{ f.hasBar }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.45em 0.75em;background:var(--surface-sunken);color:var(--status-offline);font-family:var(--mono);font-size:0.62em;border-bottom:1px solid var(--divider)">{{ f.barText }}</div>
+              </sc-if>
+
+              <div style="flex:1 1 auto;padding:1em 0.9em;display:flex;flex-direction:column;gap:0.8em;min-width:0">
+
+                <div style="display:flex;flex-direction:column;gap:0.2em">
+                  <div style="font-size:1.1em;font-weight:600;line-height:1.2">{{ f.title }}</div>
+                  <sc-if value="{{ f.hasLede }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ f.lede }}</div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ f.hasBanner }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid {{ f.bannerTone }};border-left:3px solid {{ f.bannerTone }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.3em">
+                    <sc-if value="{{ f.hasBannerTitle }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.78em;font-weight:600;color:{{ f.bannerTone }}">{{ f.bannerTitle }}</div>
+                    </sc-if>
+                    <div style="font-size:0.76em;line-height:1.5;color:var(--text-primary)">{{ f.bannerBody }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.fields }}" as="x" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.25em">
+                    <div style="font-family:var(--mono);font-size:0.6em;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">{{ x.label }}</div>
+                    <div style="border:1px solid {{ x.border }};border-radius:var(--radius-control);background:{{ x.bg }};padding:0.55em 0.65em;font-size:0.85em;min-height:2.5em;display:flex;align-items:center;justify-content:space-between;gap:0.5em">
+                      <span style="min-width:0;font-family:{{ x.font }};color:{{ x.colour }}">{{ x.value }}</span>
+                      <sc-if value="{{ x.hasHint }}" hint-placeholder-val="{{ false }}">
+                        <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--text-muted)">{{ x.hint }}</span>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ x.hasNote }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:0.7em;line-height:1.5;color:var(--text-muted)">{{ x.note }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasBars }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.35em">
+                    <sc-if value="{{ f.hasBarsLabel }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ f.barsLabel }}</div>
+                    </sc-if>
+                    <sc-for list="{{ f.bars }}" as="bar" hint-placeholder-count="4">
+                      <div style="display:grid;grid-template-columns:minmax(4.5em,7em) 1fr auto;gap:0.5em;align-items:center;min-width:0">
+                        <span style="font-size:0.7em;line-height:1.35;color:var(--text-muted);min-width:0;overflow-wrap:anywhere">{{ bar.label }}</span>
+                        <span style="height:0.85em;background:var(--surface-sunken);border:1px solid var(--border);border-radius:2px;display:block;position:relative;min-width:0">
+                          <span style="position:absolute;left:0;top:0;bottom:0;width:{{ bar.pct }};background:{{ bar.tone }};border-radius:1px"></span>
+                        </span>
+                        <span style="font-family:var(--mono);font-size:0.68em;color:var(--text-primary);white-space:nowrap">{{ bar.value }}</span>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ f.hasBarsNote }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:0.68em;line-height:1.5;color:var(--text-muted)">{{ f.barsNote }}</div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasBubbles }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em">
+                    <sc-for list="{{ f.bubbles }}" as="m" hint-placeholder-count="5">
+                      <div style="display:flex;flex-direction:column;gap:0.2em;align-items:{{ m.align }};min-width:0">
+                        <sc-if value="{{ m.hasDivider }}" hint-placeholder-val="{{ false }}">
+                          <div style="align-self:stretch;display:flex;align-items:center;gap:0.5em;padding:0.2em 0">
+                            <span style="flex:1 1 auto;height:1px;background:{{ m.dividerTone }}"></span>
+                            <span style="font-family:var(--mono);font-size:0.58em;color:{{ m.dividerTone }};white-space:nowrap">{{ m.dividerText }}</span>
+                            <span style="flex:1 1 auto;height:1px;background:{{ m.dividerTone }}"></span>
+                          </div>
+                        </sc-if>
+                        <div style="max-width:84%;min-width:0;border:1px solid {{ m.border }};border-radius:var(--radius-card);background:{{ m.bg }};padding:0.45em 0.6em;display:flex;flex-direction:column;gap:0.2em">
+                          <sc-if value="{{ m.hasWho }}" hint-placeholder-val="{{ true }}">
+                            <span style="font-family:var(--mono);font-size:0.58em;color:{{ m.whoTone }}">{{ m.who }}</span>
+                          </sc-if>
+                          <span style="font-size:0.78em;line-height:1.45;color:{{ m.textTone }}">{{ m.text }}</span>
+                          <sc-if value="{{ m.hasAtt }}" hint-placeholder-val="{{ false }}">
+                            <span style="display:flex;gap:0.45em;align-items:center;border:1px dashed var(--border-strong);border-radius:4px;padding:0.3em 0.4em;min-width:0">
+                              <span style="flex:0 0 auto;width:2.2em;height:1.7em;border-radius:2px;background:{{ m.attThumb }};border:1px solid var(--border)"></span>
+                              <span style="min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                                <span style="font-size:0.66em;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.attFile }}</span>
+                                <span style="font-family:var(--mono);font-size:0.56em;color:{{ m.attTone }}">{{ m.attState }}</span>
+                              </span>
+                            </span>
+                          </sc-if>
+                          <sc-if value="{{ m.hasChips }}" hint-placeholder-val="{{ false }}">
+                            <span style="display:flex;gap:0.3em;flex-wrap:wrap">
+                              <sc-for list="{{ m.chips }}" as="rc" hint-placeholder-count="1">
+                                <span style="display:inline-flex;gap:0.25em;align-items:center;border:1px solid var(--border);border-radius:999px;padding:0.1em 0.4em;font-size:0.62em;background:var(--surface)">
+                                  <span>{{ rc.emoji }}</span><span style="font-family:var(--mono);color:var(--text-muted)">{{ rc.n }}</span>
+                                </span>
+                              </sc-for>
+                            </span>
+                          </sc-if>
+                          <sc-if value="{{ m.hasMeta }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-family:var(--mono);font-size:0.56em;color:var(--text-muted)">{{ m.meta }}</span>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ f.hasComposer }}" hint-placeholder-val="{{ false }}">
+                      <div style="border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-sunken);padding:0.5em 0.6em;font-size:0.74em;color:var(--text-muted);min-height:2.6em;display:flex;align-items:center">{{ f.composer }}</div>
+                    </sc-if>
+                    <sc-if value="{{ f.hasNoComposer }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:0.7em;line-height:1.5;color:var(--text-muted)">{{ f.noComposer }}</div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.4em;flex-wrap:wrap">
+                    <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="2">
+                      <span style="display:inline-flex;align-items:center;gap:0.35em;white-space:nowrap;border:1px solid {{ c.colour }};border-radius:999px;padding:0.2em 0.55em;font-size:0.68em;color:var(--text-primary)">
+                        <span style="width:1.05em;height:1.05em;border-radius:50%;background:{{ c.colour }};color:var(--text-on-accent);font-size:0.62em;display:inline-flex;align-items:center;justify-content:center">{{ c.initial }}</span>{{ c.name }}
+                        <sc-if value="{{ c.hasTail }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:var(--mono);font-size:0.82em;color:var(--text-muted)">{{ c.tail }}</span>
+                        </sc-if>
+                      </span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.blocks }}" as="b" hint-placeholder-count="0">
+                  <div data-block="{{ b.key }}" data-rows="{{ b.count }}" style="display:flex;flex-direction:column;gap:0.4em">
+                    <sc-if value="{{ b.hasHeading }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap">
+                        <span style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:{{ b.labelColour }}">{{ b.label }}</span>
+                        <sc-if value="{{ b.hasRule }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ b.rule }}</span>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="3">
+                      <div style="display:flex;gap:0.6em;align-items:flex-start;background:{{ r.bg }};border:1px solid {{ r.border }};border-left:{{ r.leftRule }};border-radius:var(--radius-card);padding:0.55em 0.65em;min-width:0">
+                        <span style="flex:0 0 auto;width:0.5em;height:0.5em;border-radius:50%;background:{{ r.dot }};margin-top:0.45em"></span>
+                        <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.15em">
+                          <span style="display:flex;gap:0.5em;align-items:baseline;min-width:0">
+                            <span style="font-size:0.85em;font-weight:500;line-height:1.35;min-width:0">{{ r.title }}</span>
+                            <sc-if value="{{ r.hasRight }}" hint-placeholder-val="{{ false }}">
+                              <span style="margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:0.72em;color:{{ r.rightColour }}">{{ r.right }}</span>
+                            </sc-if>
+                          </span>
+                          <sc-if value="{{ r.hasMeta }}" hint-placeholder-val="{{ true }}">
+                            <span style="font-size:0.72em;line-height:1.4;color:var(--text-muted)">{{ r.meta }}</span>
+                          </sc-if>
+                          <span style="display:flex;gap:0.4em;align-items:center;flex-wrap:wrap;margin-top:0.1em">
+                            <sc-if value="{{ r.hasChip }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;padding:0.15em 0.4em;border-radius:3px;border:1px solid {{ r.chipColour }};color:{{ r.chipColour }};white-space:nowrap">{{ r.chip }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-size:0.66em;line-height:1.4;color:var(--text-muted)">{{ r.note }}</span>
+                            </sc-if>
+                          </span>
+                        </span>
+                        <sc-if value="{{ r.hasAction }}" hint-placeholder-val="{{ false }}">
+                          <span style="flex:0 0 auto;display:flex;gap:0.3em;align-items:center">
+                            <span style="background:var(--surface-sunken);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;display:inline-flex;align-items:center;min-height:2.6em;white-space:nowrap">{{ r.actionLabel }}</span>
+                          </span>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.choices }}" as="ch" hint-placeholder-count="0">
+                  <div style="border:1px solid {{ ch.border }};border-radius:var(--radius-card);background:{{ ch.bg }};padding:0.6em 0.7em;display:flex;gap:0.6em;align-items:flex-start;min-width:0">
+                    <span style="flex:0 0 auto;width:1.05em;height:1.05em;border-radius:50%;border:1px solid {{ ch.ring }};background:{{ ch.fill }};margin-top:0.15em"></span>
+                    <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.2em">
+                      <span style="font-size:0.88em;font-weight:600;line-height:1.3">{{ ch.label }}</span>
+                      <span style="font-size:0.74em;line-height:1.5;color:var(--text-primary)">{{ ch.consequence }}</span>
+                      <span style="font-family:var(--mono);font-size:0.6em;line-height:1.5;color:var(--text-muted)">{{ ch.rows }}</span>
+                    </span>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasChecks }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.4em">
+                    <sc-if value="{{ f.hasChecksLabel }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ f.checksLabel }}</div>
+                    </sc-if>
+                    <sc-for list="{{ f.checks }}" as="c" hint-placeholder-count="4">
+                      <div style="display:flex;gap:0.55em;align-items:flex-start;min-width:0">
+                        <span style="flex:0 0 auto;width:1.1em;height:1.1em;border-radius:3px;border:1px solid {{ c.boxBorder }};background:{{ c.boxBg }};margin-top:0.1em"></span>
+                        <span style="min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                          <span style="font-size:0.78em;line-height:1.4;color:{{ c.colour }}">{{ c.text }}</span>
+                          <sc-if value="{{ c.hasNote }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ c.note }}</span>
+                          </sc-if>
+                        </span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em;align-items:flex-start;padding:0.8em 0.2em 0.4em">
+                    <div style="width:100%;height:3.2em;border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken)"></div>
+                    <div style="font-size:0.92em;font-weight:600;line-height:1.3">{{ f.emptyTitle }}</div>
+                    <div style="font-size:0.78em;line-height:1.55;color:var(--text-muted)">{{ f.emptyBody }}</div>
+                    <sc-if value="{{ f.hasEmptyAction }}" hint-placeholder-val="{{ true }}">
+                      <span style="background:var(--accent-family-things);color:var(--text-on-accent);border-radius:var(--radius-control);padding:0.5em 0.85em;font-size:0.78em">{{ f.emptyAction }}</span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasAbsent }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.35em;padding:1.2em 0.4em;align-items:center;text-align:center">
+                    <div style="font-size:0.85em;font-weight:600">{{ f.absentTitle }}</div>
+                    <div style="font-size:0.75em;line-height:1.55;color:var(--text-muted);max-width:26em">{{ f.absentBody }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasActions }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.45em;flex-wrap:wrap;margin-top:0.1em">
+                    <sc-for list="{{ f.actions }}" as="a" hint-placeholder-count="1">
+                      <span style="background:{{ a.bg }};color:{{ a.colour }};border:1px solid {{ a.border }};border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.8em;display:inline-flex;align-items:center">{{ a.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasFooter }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:auto;padding-top:0.55em;border-top:1px solid var(--divider);font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ f.footer }}</div>
+                </sc-if>
+
+              </div>
+            </div>
+
+            <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ f.caption }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-for list="{{ tables }}" as="t" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ t.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ t.meta }}</span>
+          </div>
+          <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">{{ t.note }}</p>
+          </sc-if>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow-x:auto">
+            <div style="display:grid;grid-template-columns:{{ t.cols }};gap:0 14px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken);min-width:{{ t.minWidth }}">
+              <sc-for list="{{ t.head }}" as="h" hint-placeholder-count="3">
+                <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ h.text }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:{{ t.cols }};gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--divider);align-items:baseline;min-width:{{ t.minWidth }}">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+                  <div style="font-family:{{ c.font }};font-size:{{ c.size }};line-height:1.5;color:{{ c.colour }};min-width:0;overflow-wrap:anywhere">{{ c.text }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-things)">{{ g.id }}</span>
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.name }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;align-items:start">
+            <sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="12">
+              <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:{{ c.bg }};padding:10px 11px;display:flex;flex-direction:column;gap:6px;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:6px;justify-content:space-between">
+                  <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:{{ c.wordColour }}">{{ c.word }}</span>
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ c.tag }}</span>
+                </div>
+                <div style="font-size:11.5px;line-height:1.5;color:var(--text-primary)">{{ c.body }}</div>
+                <div style="font-size:10.5px;line-height:1.5;color:var(--text-muted)">{{ c.rule }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ checks }}" as="c" hint-placeholder-count="0">
+        <div style="display:grid;grid-template-columns:16px 1fr;gap:0 12px;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+          <div style="width:10px;height:10px;border-radius:50%;background:{{ c.colour }};margin-top:5px"></div>
+          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <div style="font-size:14px;font-weight:600;line-height:1.35">{{ c.name }}</div>
+            <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;engine&quot;,&quot;property&quot;,&quot;vehicles&quot;,&quot;pets&quot;,&quot;chat&quot;,&quot;states&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;engine&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startVocab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;property&quot;,&quot;vehicles&quot;,&quot;pets&quot;],&quot;default&quot;:&quot;property&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startClient&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;mobile&quot;,&quot;web&quot;],&quot;default&quot;:&quot;mobile&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startMember&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;jana&quot;,&quot;petr&quot;,&quot;adam&quot;,&quot;klara&quot;,&quot;milos&quot;],&quot;default&quot;:&quot;jana&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100, member: null, client: null, vocab: null };
+
+  get A() { return window.HH_ASSETS; }
+  get C() { return window.HH_CHAT; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (this.A && this.C && window.HH_TOKENS && window.HH_FIXTURES && window.HH_NAV && window.HH_HOUSEHOLD) {
+        clearInterval(this._boot);
+        this.forceUpdate();
+      }
+    }, 60);
+  }
+  componentWillUnmount() { clearInterval(this._boot); }
+
+  get view() { return this.state.view || this.props.startView || "engine"; }
+  get who() { return this.state.member || this.props.startMember || "jana"; }
+  get client() { return this.state.client || this.props.startClient || "mobile"; }
+  get vocab() { return this.state.vocab || this.props.startVocab || "property"; }
+  get mob() { return this.client === "mobile"; }
+
+  pickers(list, current, set) {
+    return list.map((o) => ({
+      label: o[1], title: o[2] || "", on: current === o[0] ? "1" : "0",
+      pick: () => this.setState(set(o[0]))
+    }));
+  }
+  memberColour(m) {
+    const map = { jana: "chart-1", petr: "chart-2", adam: "chart-4", klara: "chart-3", milos: "chart-5" };
+    return "var(--" + (map[m] || "chart-1") + ")";
+  }
+
+  /* ── frame plumbing ─────────────────────────────────────────────────── */
+  F(o) {
+    const f = Object.assign({
+      id: "", name: "", stateLabel: "", caption: "", col: "auto",
+      frameMax: this.mob ? "360px" : "520px",
+      route: "", clientLabel: this.client, title: "", lede: "",
+      bannerTone: "var(--border)", bannerTitle: "", bannerBody: "",
+      blocks: [], chips: [], fields: [], checks: [], choices: [], actions: [],
+      bars: [], barsLabel: "", barsNote: "", bubbles: [], composer: "", noComposer: "",
+      checksLabel: "", emptyTitle: "", emptyBody: "", emptyAction: "",
+      absentTitle: "", absentBody: "", footer: "", barText: ""
+    }, o);
+    f.hasLede = !!f.lede;
+    f.hasBanner = !!f.bannerBody;
+    f.hasBannerTitle = !!f.bannerTitle;
+    f.hasChips = f.chips.length > 0;
+    f.hasBars = f.bars.length > 0;
+    f.hasBarsLabel = !!f.barsLabel;
+    f.hasBarsNote = !!f.barsNote;
+    f.hasBubbles = f.bubbles.length > 0;
+    f.hasComposer = !!f.composer;
+    f.hasNoComposer = !!f.noComposer;
+    f.hasChecks = f.checks.length > 0;
+    f.hasChecksLabel = !!f.checksLabel;
+    f.hasEmpty = !!f.emptyTitle;
+    f.hasEmptyAction = !!f.emptyAction;
+    f.hasAbsent = !!f.absentTitle;
+    f.hasActions = f.actions.length > 0;
+    f.hasFooter = !!f.footer;
+    f.hasBar = !!f.barText;
+    f.actions = f.actions.map((a, i) => (typeof a === "string"
+      ? { label: a, bg: i === 0 ? "var(--accent-family-things)" : "var(--surface)",
+          colour: i === 0 ? "var(--text-on-accent)" : "var(--text-muted)",
+          border: i === 0 ? "var(--accent-family-things)" : "var(--border)" }
+      : a));
+    f.bars = f.bars.map((b) => Object.assign({ tone: "var(--accent-family-things)", pct: "0%" }, b));
+    f.bubbles = f.bubbles.map((m) => this.bubble(m));
+    f.blocks = f.blocks.map((b, i) => Object.assign({
+      key: (f.id || "b") + "-" + i, label: "", rule: "", labelColour: "var(--text-muted)"
+    }, b, {
+      count: (b.rows || []).length, rows: (b.rows || []).map((r) => this.row(r)),
+      hasHeading: !!b.label, hasRule: !!b.rule
+    }));
+    f.checks = f.checks.map((c) => ({
+      text: c.text, note: c.note || "", hasNote: !!c.note,
+      colour: c.done ? "var(--text-muted)" : "var(--text-primary)",
+      boxBg: c.done ? "var(--accent-family-things)" : "var(--surface)",
+      boxBorder: c.done ? "var(--accent-family-things)" : "var(--border-strong)"
+    }));
+    f.fields = f.fields.map((x) => Object.assign({
+      label: "", value: "", hint: "", note: "", bg: "var(--surface-sunken)",
+      border: "var(--border-strong)", font: "var(--sans)", colour: "var(--text-primary)"
+    }, x, { hasHint: !!x.hint, hasNote: !!x.note }));
+    f.chips = f.chips.map((c) => Object.assign({ initial: "", name: "", tail: "", colour: "var(--border)" }, c,
+      { hasTail: !!c.tail }));
+    f.choices = f.choices.map((c) => Object.assign({
+      label: "", consequence: "", rows: "", border: "var(--border)", bg: "var(--surface)",
+      ring: "var(--border-strong)", fill: "transparent"
+    }, c));
+    return f;
+  }
+  row(r) {
+    const o = Object.assign({
+      title: "", meta: "", chip: "", chipColour: "var(--accent-family-things)", right: "",
+      rightColour: "var(--text-muted)", note: "", dot: "var(--accent-family-things)",
+      bg: "var(--surface)", border: "var(--border)", leftRule: "1px solid var(--border)",
+      actionLabel: ""
+    }, r);
+    o.hasMeta = !!o.meta; o.hasChip = !!o.chip; o.hasRight = !!o.right;
+    o.hasNote = !!o.note; o.hasAction = !!o.actionLabel;
+    return o;
+  }
+  bubble(m) {
+    const mine = !!m.mine;
+    const o = Object.assign({
+      who: "", text: "", meta: "", chips: [], attFile: "", attState: "", attThumb: "var(--surface-sunken)",
+      attTone: "var(--text-muted)", dividerText: "", tomb: false, pending: false
+    }, m);
+    o.align = mine ? "flex-end" : "flex-start";
+    o.bg = o.tomb ? "var(--surface-sunken)" : mine ? "color-mix(in oklab, var(--accent-family-household) 12%, var(--surface))" : "var(--surface-raised)";
+    o.border = o.pending ? "var(--status-pending)" : "var(--border)";
+    o.textTone = o.tomb ? "var(--text-muted)" : "var(--text-primary)";
+    o.whoTone = mine ? "var(--accent-family-household)" : "var(--text-muted)";
+    o.hasWho = !!o.who;
+    o.hasMeta = !!o.meta;
+    o.hasAtt = !!o.attFile;
+    o.hasChips = (o.chips || []).length > 0;
+    o.hasDivider = !!o.dividerText;
+    o.dividerTone = "var(--status-private)";
+    return o;
+  }
+  bar(label, value, pct, tone) {
+    return { label: label, value: value, pct: Math.max(1, Math.min(100, pct)) + "%",
+             tone: tone || "var(--accent-family-things)" };
+  }
+  cell(text, opt) {
+    const o = opt || {};
+    return { text: text, font: o.mono ? "var(--mono)" : "var(--sans)",
+             size: o.mono ? "11.5px" : "13px",
+             colour: o.muted ? "var(--text-muted)" : o.tone || "var(--text-primary)" };
+  }
+  tableMin(cols) {
+    const tracks = String(cols || "").split(/\s+(?![^(]*\))/).filter(Boolean);
+    let n = 0;
+    tracks.forEach((t) => {
+      const m = /minmax\((\d+)px/.exec(t) || /^(\d+)px$/.exec(t);
+      n += m ? Number(m[1]) : 90;
+    });
+    return (n + Math.max(0, tracks.length - 1) * 14 + 28) + "px";
+  }
+  statusTone(n) {
+    return n === 200 ? "var(--positive)" : n === 202 ? "var(--status-syncing)"
+         : n === 404 ? "var(--text-muted)" : "var(--warning)";
+  }
+  stateTone(s) {
+    const m = { error: "var(--danger)", rejected: "var(--status-rejected)",
+                conflicted: "var(--status-conflict)", pending: "var(--status-pending)",
+                syncing: "var(--status-syncing)", offline: "var(--status-offline)",
+                readonly: "var(--warning)", withdrawn: "var(--text-muted)", absent: "var(--text-muted)" };
+    return m[s] || "var(--accent-family-things)";
+  }
+
+  /* ── the twelve-state matrix, over both modules' rows ───────────────── */
+  allScreens() { return this.A.screens.concat(this.C.screens); }
+  stateGroups() {
+    const K = window.HH_COMPONENTS;
+    return this.allScreens().map((s) => {
+      const preset = s.preset === "F" ? ["loading", "populated", "error"]
+                   : s.preset === "S" ? ["populated"]
+                   : s.preset === "P" ? ["populated", "empty"] : this.A.allStates;
+      const imp = s.impossible || {};
+      const cells = preset.map((st) => {
+        const excluded = !!imp[st];
+        const t = K ? K.treatments[st] : null;
+        return {
+          word: st, tag: excluded ? "cannot occur" : (s.id + " \u00b7 " + s.client),
+          body: excluded ? imp[st] : this.stateBody(s, st),
+          rule: excluded ? "" : (t ? t.rule : ""),
+          bg: excluded ? "var(--surface-sunken)" : "var(--surface-raised)",
+          border: excluded ? "var(--border)" : "var(--border-strong)",
+          wordColour: excluded ? "var(--text-muted)" : this.stateTone(st)
+        };
+      });
+      const drawn = cells.filter((c) => c.tag !== "cannot occur").length;
+      return { id: s.id, name: s.name, cells: cells,
+               meta: drawn + " of " + preset.length + " states drawn \u00b7 " +
+                 Object.keys(imp).length + " cannot occur \u00b7 " + s.route };
+    });
+  }
+  stateBody(s, st) {
+    if (st === "loading") return "Skeleton at the height of " + this.bodyWord(s) + ", so nothing jumps when the numbers arrive.";
+    if (st === "empty") return s.empty ? s.empty.s + " " + s.empty.e + (s.empty.a ? " \u2014 " + s.empty.a : "") : "Nothing here yet.";
+    if (st === "error") return s.error;
+    if (st === "rejected") return s.rejected || s.error;
+    if (st === "withdrawn") return s.withdrawn || "Access changed, so this device dropped its copy.";
+    if (st === "readonly") return s.readonly;
+    if (st === "absent") return (s.states && s.states.absent) || "Gone, not disabled.";
+    if (st === "offline") return (s.states && s.states.offline) || "The same read with the bar above it \u2014 " + this.bodyWord(s) + " is on the device.";
+    if (st === "pending") return (s.states && s.states.pending) || "A queued write on " + this.bodyWord(s) + ", marked in a word and still editable.";
+    if (st === "syncing") return (s.states && s.states.syncing) || "Past the 800 ms threshold only.";
+    if (st === "conflicted") return (s.states && s.states.conflicted) || "A row flag that opens the comparison, never a modal at reconnect.";
+    return (s.states && s.states.populated) || this.bodyWord(s) + ", with no mark at all: synced is the absence of a mark.";
+  }
+  bodyWord(s) {
+    const m = { list: "the things in the list", detail: "the card and its history",
+                schedule: "the two intervals", history: "the dated rows", usage: "the series",
+                starter: "the five suggestions", contractors: "the names",
+                meters: "the four places", print: "the sheet", statutory: "the dates",
+                insurance: "the policy", fuel: "the entries", tco: "the six lines",
+                bike: "the fields", health: "the timeline", doses: "the twenty boxes",
+                routine: "the seven items", vet: "the card", feeding: "the amounts",
+                weight: "the chart", gone: "the two choices",
+                thread: "the messages", attach: "the files", floor: "what is visible",
+                storage: "the three totals", mute: "the switch", search: "the results" };
+    return m[s.kind] || "the content";
+  }
+
+  /* ── render ─────────────────────────────────────────────────────────── */
+  renderVals() {
+    const A = this.A, C = this.C;
+    if (!A || !C || !window.HH_TOKENS || !window.HH_FIXTURES || !window.HH_NAV || !window.HH_HOUSEHOLD) {
+      return { views: [], controls: [], frames: [], tables: [], groups: [], checks: [], notes: [],
+               pageTitle: "Property, Vehicles, Pets \u2014 and Chat", pageMeta: "loading",
+               stageLine: "stage 19", gateLine: "", gateColour: "var(--text-muted)",
+               viewIntro: "", theme: "light", density: "comfortable", fontPx: "16px" };
+    }
+    const view = this.view;
+    const all = A.checks().concat(C.checks());
+    const passed = all.filter((c) => c.pass).length;
+    const groups = this.stateGroups();
+    const cells = groups.reduce((n, g) => n + g.cells.filter((c) => c.tag !== "cannot occur").length, 0);
+    const dr = A.dueRun();
+
+    const VIEWS = [
+      ["engine", "one engine, three vocabularies", 5],
+      ["property", "property\u2019s own four", 4],
+      ["vehicles", "vehicles\u2019 own five", 5],
+      ["pets", "pets, which is not asset management", 7],
+      ["chat", "chat, and the floor", 7],
+      ["states", "every state", cells],
+      ["gate", "the gate", all.length]
+    ];
+
+    const out = {
+      theme: this.state.theme, density: this.state.density,
+      fontPx: Math.round(16 * this.state.scale / 100) + "px",
+      stageLine: "stage 19 \u00b7 28 rows \u00b7 " + cells + " cells",
+      views: VIEWS.map((v) => ({ label: v[1], count: v[2], on: view === v[0] ? "1" : "0",
+                                 pick: () => this.setState({ view: v[0] }) })),
+      controls: [
+        { label: "Vocabulary", options: this.pickers(
+            A.modules.map((m) => [m, A.vocab[m].cs, A.vocab[m].en]), this.vocab, (v) => ({ vocab: v })) },
+        { label: "Client", options: this.pickers([["mobile", "mobile"], ["web", "web"]], this.client, (v) => ({ client: v })) },
+        { label: "Member", options: this.pickers(
+            (window.HH_FIXTURES.members || []).map((m) => [m.id, m.name, m.note]), this.who,
+            (v) => ({ member: v })) },
+        { label: "Theme", options: this.pickers([["light", "light"], ["dark", "dark"]], this.state.theme, (v) => ({ theme: v })) },
+        { label: "Density", options: this.pickers([["comfortable", "comfortable"], ["compact", "compact"]], this.state.density, (v) => ({ density: v })) },
+        { label: "Text", options: this.pickers([[100, "100 %"], [200, "200 %"]], this.state.scale, (v) => ({ scale: v })) }
+      ],
+      gateLine: passed + " / " + all.length + " checks pass",
+      gateColour: passed === all.length ? "var(--positive)" : "var(--danger)",
+      frames: [], tables: [], groups: [], checks: [], notes: [],
+      pageTitle: "Property, Vehicles, Pets \u2014 and Chat",
+      pageMeta: dr.total + " schedules \u00b7 " + A.entities.length + " things \u00b7 " + C.messages.length + " messages",
+      viewIntro: ""
+    };
+
+    if (view === "engine") this.viewEngine(out);
+    if (view === "property") this.viewProperty(out);
+    if (view === "vehicles") this.viewVehicles(out);
+    if (view === "pets") this.viewPets(out);
+    if (view === "chat") this.viewChat(out);
+    if (view === "states") {
+      out.pageTitle = "Every state these twenty-eight rows can reach";
+      out.pageMeta = cells + " cells drawn \u00b7 " +
+        groups.reduce((n, g) => n + g.cells.filter((c) => c.tag === "cannot occur").length, 0) + " cannot occur";
+      out.viewIntro = "Twelve states are a treatment applied to one body, as Stage 4 established, and a row declares the states its own surface cannot reach with the reason drawn where the state would have been. Here the exclusions come from five facts. A thing and its fields are lww_field. A schedule is strict_version, so the editor will not queue one offline. A record, a reading, a health entry and a message envelope are additive \u2014 appended, never merged, and what they can produce is a rejection rather than a conflict. A dose is state_set keyed on the dose rather than on the person. And a read marker is state_set resolved as a maximum.";
+      out.groups = groups;
+    }
+    if (view === "gate") this.viewGate(out, all, groups, cells);
+
+    out.tables = out.tables.map((tb) => Object.assign({}, tb, {
+      hasNote: !!tb.note, note: tb.note || "", minWidth: this.tableMin(tb.cols)
+    }));
+    return out;
+  }
+
+  /* ── view: the engine ───────────────────────────────────────────────── */
+  viewEngine(out) {
+    const A = this.A, mod = this.vocab, V = A.vocab[mod];
+    const things = A.entitiesOf(mod, { archived: true });
+    const active = things.filter((e) => e.status === "active");
+    const g = A.grantRun(), v = A.vocabRun(), dr = A.dueRun();
+
+    const listRows = active.map((e) => {
+      const sch = A.schedulesOf(e.id).map((s) => A.due(s.id));
+      const next = sch.filter((s) => s.resolved).sort((a, b) => a.resolved < b.resolved ? -1 : 1)[0];
+      return {
+        title: e.cs, meta: e.meta,
+        right: next ? (next.overdue ? "po term\u00ednu" : A.fmt(next.resolved)) : "",
+        rightColour: next && next.overdue ? "var(--warning)" : "var(--text-muted)",
+        chip: next && next.estimate ? "odhad" : (next && next.noReading ? "bez z\u00e1pisu" : ""),
+        chipColour: "var(--status-syncing)",
+        dot: next && next.overdue ? "var(--warning)" : "var(--accent-family-things)",
+        leftRule: "3px solid " + (next && next.overdue ? "var(--warning)" : "var(--accent-family-things)")
+      };
+    });
+    const archived = things.filter((e) => e.status !== "active");
+
+    const listFrame = this.F({ id: "E-15", name: "Asset entity list", stateLabel: "populated \u00b7 " + this.client,
+      route: V.route, title: V.list,
+      lede: mod === "pets" ? "Kdo u n\u00e1s \u017eije, a co dnes je\u0161t\u011b nen\u00ed hotov\u00e9." : "Co m\u00e1me, a co u toho b\u011b\u017e\u00ed za term\u00edny.",
+      blocks: [{ label: V.things, rule: active.length + "\u00d7", rows: listRows }].concat(
+        archived.length ? [{ label: mod === "pets" ? "Bylo n\u00e1m spolu dobře" : "Vy\u0159azen\u00e9",
+                             rows: archived.map((e) => this.row({
+                               title: e.cs, meta: e.meta, dot: "var(--text-disabled)",
+                               bg: "var(--surface-sunken)", leftRule: "1px solid var(--border)",
+                               note: "Z\u00e1znam z\u016fst\u00e1v\u00e1 cel\u00fd." })) }] : []),
+      footer: "The same list body renders three times. What changes is every word on it \u2014 " +
+        V.things + ", " + V.thing + ", " + V.schedule + " \u2014 which is D-67 rather than a theme.",
+      caption: mod === "pets"
+        ? "People look for their car under \u201ccar\u201d, and their dog under her name. The list is ordered by what is open today rather than by what the engine calls a status."
+        : "One tap from here is the thing; two is its history. The chip says when a date is an estimate rather than a date." });
+
+    const e = mod === "property" ? A.entity("kotel-vaillant") : mod === "vehicles" ? A.entity("octavia") : A.entity("bela");
+    const sch = A.schedulesOf(e.id).map((s) => A.due(s.id));
+    const recs = A.recordsOf(e.id);
+    const detailFrame = this.F({ id: "E-16", name: "Asset entity detail", stateLabel: "populated \u00b7 " + this.client,
+      route: V.route + "/" + e.id, title: e.cs, lede: e.category + " \u00b7 " + e.meta,
+      fields: [
+        { label: mod === "pets" ? "\u010cip" : "V\u00fdrobn\u00ed \u010d\u00edslo",
+          value: mod === "pets" ? e.chip : (e.serial || e.vin || e.frame || "\u2014"),
+          font: "var(--mono)", hint: mod === "pets" ? "Petnet" : "" },
+        { label: mod === "pets" ? "Kde ji m\u00e1me od" : "Po\u0159\u00edzeno",
+          value: A.fmtCs(e.acquired) + (e.price ? " \u00b7 " + A.czk(e.price) : ""),
+          note: e.warranty ? "Z\u00e1ruka do " + A.fmtCs(e.warranty) + " \u2014 upozorn\u011bn\u00ed m\u011bs\u00edc p\u0159edem." : "" }
+      ],
+      blocks: [
+        { label: V.schedule, rows: sch.map((s) => this.row({
+            title: s.cs, meta: s.says,
+            right: s.resolved ? A.fmt(s.resolved) : "",
+            rightColour: s.overdue ? "var(--warning)" : "var(--text-muted)",
+            chip: s.estimate ? "odhad" : "", chipColour: "var(--status-syncing)",
+            dot: s.overdue ? "var(--warning)" : "var(--accent-family-things)" })) },
+        { label: V.history, rule: recs.length + "\u00d7", rows: recs.slice(0, 3).map((r) => this.row({
+            title: r.what, meta: A.fmtCs(r.date) + " \u00b7 " + r.by +
+              (r.value ? " \u00b7 " + A.num(r.value) + " " + r.unit : ""),
+            right: r.cost ? A.czk(r.cost) : "", dot: "var(--chart-2)" })) }
+      ],
+      footer: "N\u00e1klady celkem " + A.czk(A.costOf(e.id)) +
+        " \u00b7 " + e.docs + " dokument\u016f p\u0159es Dokumenty s pr\u00e1vem volaj\u00edc\u00edho",
+      caption: "Documents are typed references resolved through Documents with the caller's grant applied \u2014 not a second file store, and not a join this module can see through." });
+
+    const oct = A.due("sch-octavia"), kolo = A.due("sch-kolo"), filtr = A.due("sch-filtr");
+    const shown = mod === "vehicles" ? oct : mod === "property" ? filtr : A.due("sch-bela-vakcina");
+    const s = A.schedule(shown.id);
+    const schedFrame = this.F({ id: "E-17", name: "Service schedule editor", stateLabel: "populated \u00b7 " + this.client,
+      route: "/assets/" + V.entityType + "/" + shown.entity + "/schedules", title: shown.cs,
+      lede: shown.basis === "both" ? "Podle data, podle " + s.unit + ", nebo oboj\u00ed \u2014 plat\u00ed, co p\u0159ijde d\u0159\u00edv."
+                                   : "Podle data. U t\u00e9hle v\u011bci nic jin\u00e9ho nem\u011b\u0159\u00edme.",
+      fields: [
+        { label: "Ka\u017ed\u00fdch", value: s.months + " m\u011bs\u00edc\u016f", font: "var(--mono)",
+          hint: s.fromCategory ? "z kategorie" : s.fromSpecies ? "z druhu" : "" },
+        s.everyUnit ? { label: "Nebo po", value: A.num(s.everyUnit) + " " + s.unit, font: "var(--mono)",
+                        hint: shown.noReading ? "bez z\u00e1pisu" : "" }
+                    : { label: "Nebo po", value: "\u2014", colour: "var(--text-disabled)",
+                        note: "U t\u00e9hle kategorie se nem\u011b\u0159\u00ed nic, co by \u0161lo po\u010d\u00edtat." },
+        { label: "Naposledy", value: A.fmtCs(s.lastDone) +
+            (s.lastValue ? " \u00b7 " + A.num(s.lastValue) + " " + s.unit : ""), font: "var(--mono)" }
+      ],
+      bannerTone: shown.overdue ? "var(--warning)" : "var(--info)",
+      bannerTitle: shown.overdue ? "Po term\u00ednu" : "Vych\u00e1z\u00ed to na " + A.fmtCs(shown.resolved),
+      bannerBody: shown.says,
+      checksLabel: "Co z toho vyhr\u00e1lo",
+      checks: [
+        { text: "Podle data: " + (shown.intervalDue ? A.fmtCs(shown.intervalDue) : "\u2014"),
+          done: shown.reason === "interval" },
+        { text: shown.noReading
+            ? "Podle " + s.unit + ": bez jedin\u00e9ho z\u00e1pisu se nepo\u010d\u00edt\u00e1 \u2014 a nen\u00ed to \u201enikdy\u201c"
+            : shown.usageDueOn
+              ? "Podle " + s.unit + ": odhadem " + A.fmtCs(shown.usageDueOn) + ", ne term\u00edn"
+              : "Podle jednotky se tu nem\u011b\u0159\u00ed",
+          done: shown.reason === "usage",
+          note: shown.perDay ? Math.round(shown.perDay * 10) / 10 + " " + s.unit + " / den z posledn\u00edch z\u00e1pis\u016f" : "" }
+      ],
+      footer: "Interval, usage, or whichever comes first \u2014 one function, three shapes, and the estimate labelled everywhere it is drawn.",
+      caption: "The Octavia resolves on the date (" + A.fmtEn(oct.intervalDue) + " against an estimated " +
+        A.fmtEn(oct.usageDueOn) + ") and Adam's bike on the distance (" + A.num(kolo.usageDueAt) +
+        " km at " + Math.round(kolo.perDay * 10) / 10 + " km a day, so " + A.fmtEn(kolo.usageDueOn) +
+        "). Same function, opposite answers." });
+
+    const historyFrame = this.F({ id: "E-18", name: "Service history", stateLabel: "populated \u00b7 " + this.client,
+      route: "/assets/" + V.entityType + "/" + e.id + "/records", title: V.history,
+      lede: "Kdy, kdo, kolik \u2014 a faktura u toho.",
+      blocks: [{ rows: recs.map((r) => this.row({
+        title: r.what,
+        meta: A.fmtCs(r.date) + " \u00b7 " + V.didBy + ": " + r.by +
+          (r.value !== undefined && r.value !== null ? " \u00b7 " + A.num(r.value) + " " + r.unit : ""),
+        right: r.cost ? A.czk(r.cost) : "", dot: "var(--chart-2)",
+        note: r.docs ? r.docs + " dokument" + (r.docs > 1 ? "y" : "") : "" })) }],
+      footer: "additive \u00b7 zapsan\u00e9 offline, opraviteln\u00e9 jen online \u2014 ta sam\u00e1 v\u011bta, kterou nese ulo\u017een\u00fd n\u00e1kup v Seznamech.",
+      caption: "A record carries the reading at the time it was done, which is the only reason the next threshold is reproducible." });
+
+    const rs = A.readingsOf(mod === "pets" ? "bela" : mod === "vehicles" ? "octavia" : "kolo-adam");
+    const unit = rs.length ? rs[0].unit : "km";
+    const maxV = Math.max.apply(null, rs.map((r) => r.milli));
+    const usageFrame = this.F({ id: "E-19", name: "Usage log", stateLabel: "populated + rejected \u00b7 " + this.client,
+      route: "/assets/" + V.entityType + "/" + (mod === "pets" ? "bela" : mod === "vehicles" ? "octavia" : "kolo-adam") + "/readings",
+      title: V.usage, lede: "Jedna neklesaj\u00edc\u00ed \u0159ada, v tis\u00edcin\u00e1ch jednotky.",
+      bars: rs.slice(-6).map((r) => this.bar(A.fmtCs(r.date).replace(/ 20\d\d$/, ""),
+        A.num(r.milli / 1000, unit === "kg" ? 1 : 0) + " " + unit,
+        Math.round(r.milli / maxV * 100))),
+      barsLabel: "Posledn\u00ed z\u00e1pisy",
+      barsNote: "132 560 km je v \u0159\u00e1dku 132\u202f560\u202f000 \u2014 tis\u00edciny, jako u m\u011b\u0159i\u010d\u016f v Energiích, aby dv\u011b za\u0159\u00edzen\u00ed po\u010d\u00edtala stejn\u011b.",
+      blocks: mod === "vehicles" ? [{ label: "Odm\u00edtnut\u00fd z\u00e1pis", rows: [this.row({
+        title: A.num(A.rejectedReading.milli / 1000) + " km \u00b7 " + A.fmtCs(A.rejectedReading.date),
+        meta: A.rejectedReading.says, chip: A.rejectedReading.reason,
+        chipColour: "var(--status-rejected)", dot: "var(--status-rejected)",
+        bg: "var(--surface-sunken)", leftRule: "3px solid var(--status-rejected)",
+        actionLabel: "Opravit" })] }] : [],
+      footer: mod === "vehicles"
+        ? "\u0160est z osmi z\u00e1pis\u016f je tachometr z tankov\u00e1n\u00ed \u2014 jedna \u0159ada, ne dv\u011b, kter\u00e9 se mohou ne\u0161\u0165astn\u011b rozej\u00edt."
+        : "Ta sam\u00e1 \u0159ada jako tachometr, jen s jinou jednotkou.",
+      caption: mod === "vehicles"
+        ? "Non-decreasing is a cross-row invariant, so a reading made offline can come back rejected against a neighbour the replica never held. The value is kept, the row is marked, and the fix is one field."
+        : "The weight chart and the odometer are the same implementation, which is what makes \u201cexactly the shape Utilities uses\u201d a claim worth checking." });
+
+    out.pageTitle = "One engine, three vocabularies";
+    out.pageMeta = A.entities.length + " things \u00b7 " + dr.total + " schedules \u00b7 " +
+      A.records.length + " records \u00b7 " + A.readings.length + " readings";
+    out.viewIntro = "Property, Vehicles and Pets are one asset engine and three languages over it. The five screens below are the engine's, rendered in the vocabulary picked on the left \u2014 and the engine's own routes live under /assets/{entity_type}/, the one place in the API where a path is not under a single module, because the alternative is the same five endpoints written three times over one implementation. The grant is resolved from entity_type rather than from the prefix, in one place, so a member with none on Pets gets the same 404 here that they would get under /pets.";
+    out.notes = [
+      { text: v.says },
+      { text: A.toneAudit().says }
+    ];
+    out.frames = [listFrame, detailFrame, schedFrame, historyFrame, usageFrame];
+
+    out.tables = [
+      { title: "The same five screens, three times", meta: v.cells + " labels \u00b7 " + v.modules + " vocabularies",
+        note: "The engine is shared and the words are not. Nothing in the middle column is a translation of anything in the others.",
+        cols: "minmax(120px,0.8fr) minmax(150px,1fr) minmax(150px,1fr) minmax(150px,1fr)",
+        head: [{ text: "engine screen" }, { text: "Property" }, { text: "Vehicles" }, { text: "Pets" }],
+        rows: v.rows.map((r) => ({ cells: [this.cell(r.key, { mono: true, muted: true })]
+          .concat(r.words.map((w) => this.cell(w))) })) },
+
+      { title: "The grant is resolved from entity_type, not from the path", meta: g.cells + " answers",
+        note: g.says,
+        cols: "minmax(90px,0.6fr) minmax(110px,0.7fr) minmax(80px,0.5fr) minmax(240px,1.4fr)",
+        head: [{ text: "member" }, { text: "entity_type" }, { text: "grant" }, { text: "the five engine routes" }],
+        rows: g.rows.map((r) => ({ cells: [
+          this.cell(r.name), this.cell(r.entityType, { mono: true }),
+          this.cell(r.level, { mono: true, tone: r.level === "none" ? "var(--text-muted)" : "var(--text-primary)" }),
+          this.cell(r.statuses.join("  "), { mono: true,
+            tone: r.n404 === 5 ? "var(--text-muted)" : "var(--positive)" })
+        ] })) },
+
+      { title: "Nine schedules, and which trigger won", meta: dr.both + " dual-trigger \u00b7 " + dr.estimates + " estimates",
+        note: dr.says,
+        cols: "minmax(150px,1fr) minmax(70px,0.5fr) minmax(110px,0.7fr) minmax(110px,0.7fr) minmax(110px,0.7fr)",
+        head: [{ text: "schedule" }, { text: "basis" }, { text: "by date" }, { text: "by usage" }, { text: "the answer" }],
+        rows: dr.rows.map((r) => ({ cells: [
+          this.cell(A.entity(r.entity).cs + " \u2014 " + r.cs),
+          this.cell(r.basis, { mono: true, muted: true }),
+          this.cell(r.intervalDue ? A.fmt(r.intervalDue) : "\u2014", { mono: true }),
+          this.cell(r.noReading ? "bez z\u00e1pisu" : r.usageDueOn ? A.fmt(r.usageDueOn) + " (odhad)" : "\u2014",
+            { mono: true, muted: !r.usageDueOn }),
+          this.cell((r.resolved ? A.fmt(r.resolved) : "\u2014") + " \u00b7 " + r.reason,
+            { mono: true, tone: r.overdue ? "var(--warning)" : "var(--text-primary)" })
+        ] })) }
+    ];
+  }
+
+  /* ── view: Property ─────────────────────────────────────────────────── */
+  viewProperty(out) {
+    const A = this.A;
+    const sr = A.starterRun("CZ"), cr = A.contractorRun(), mr = A.meterRun(), inv = A.inventoryRun();
+
+    const starterFrame = this.F({ id: "E-20", name: "Property starter checklist by country",
+      stateLabel: "populated \u00b7 " + this.client, route: "/property/setup/checklist",
+      title: "Za\u010dneme t\u00edm, co m\u00e1 skoro ka\u017cd\u00fd d\u016fm",
+      lede: "P\u011bt v\u011bc\u00ed pro \u010cesko. Ka\u017cd\u00e1 se p\u0159id\u00e1 jedn\u00edm klepnut\u00edm \u2014 v\u010detn\u011b intervalu.",
+      blocks: [{ rows: sr.items.map((i) => this.row({
+        title: i.cs, meta: i.note,
+        right: "ka\u017ed\u00fdch " + i.months + " m\u011bs.", chip: "p\u0159idat",
+        dot: "var(--accent-family-things)" })) }],
+      footer: sr.withInterval + " z " + sr.items.length + " nese typick\u00fd interval. Bez n\u011bj je to jen \u0159\u00e1dek.",
+      caption: "D-69. The interval is what makes the module useful the same evening rather than after an hour of typing \u2014 and it is country reference data, so a profile that does not exist yet is addable without a release." });
+
+    const contractorFrame = this.F({ id: "E-21", name: "Contractors", stateLabel: "populated \u00b7 " + this.client,
+      route: "/property/contractors", title: "\u017divnostn\u00edci",
+      lede: "Jm\u00e9no, \u010d\u00edslo, a co u n\u00e1s d\u011blal.",
+      blocks: [{ rows: A.contractors.map((c) => this.row({
+        title: c.name, meta: c.trade + " \u00b7 " + c.phone,
+        right: c.did.length ? c.did.length + "\u00d7" : "",
+        note: c.note, dot: "var(--chart-2)",
+        actionLabel: "Volat" })) }],
+      footer: "P\u011bt pol\u00ed\u010dek a \u017e\u00e1dn\u00e9 \u0161est\u00e9: bez hodnocen\u00ed, bez nab\u00eddek, bez marketplace.",
+      caption: "Novotn\u00fd is the name Stage 18's calendar event carries as its place. Same appointment, two modules, one contact row \u2014 which is the argument for the address book existing at all." });
+
+    const meterFrame = this.F({ id: "E-22", name: "Meter locations", stateLabel: "populated \u00b7 " + this.client,
+      route: "/property/dum-brno/meters", title: "Kde jsou m\u011b\u0159i\u010de",
+      lede: "Kde to je a jak se k tomu dostat. Ne kolik na tom je.",
+      blocks: [{ rows: A.meters.map((m) => this.row({
+        title: m.cs, meta: m.where, note: m.note,
+        chip: m.link ? "Energie \u2192" : "", chipColour: "var(--accent-family-money)",
+        right: m.photo ? "foto" : "", dot: "var(--accent-family-things)" })) }],
+      footer: mr.readings + " hodnot na t\u00e9hle obrazovce. Co je na m\u011b\u0159i\u010di, pat\u0159\u00ed do Energií a je odtud jeden klik.",
+      caption: "\u201cWhere is the stopcock\u201d is a question a house-sitter asks at the worst possible moment, which is why this screen is offline-first and why the photo is not decoration." });
+
+    const printFrame = this.F({ id: "E-23", name: "Print \u2014 insurance inventory", stateLabel: "populated \u00b7 print",
+      route: "/property/print/inventory", clientLabel: "one deliverable",
+      frameMax: this.mob ? "360px" : "560px",
+      title: "Inventura pro poji\u0161t\u011bn\u00ed",
+      lede: "Fotky, v\u00fdrobn\u00ed \u010d\u00edsla, data po\u0159\u00edzen\u00ed, hodnoty.",
+      blocks: [{ rows: inv.items.map((e) => this.row({
+        title: e.cs, meta: (e.serial ? "v. \u010d. " + e.serial + " \u00b7 " : "") + A.fmtCs(e.acquired),
+        right: A.czk(e.value), dot: "var(--text-primary)",
+        bg: "var(--surface)", leftRule: "1px solid var(--border)",
+        note: e.docs + " dokument" + (e.docs > 1 ? "y" : "") })) }],
+      fields: [{ label: "Celkem", value: A.czk(inv.total), font: "var(--mono)",
+                 hint: inv.count + " polo\u017eek" }],
+      footer: "Stage 17's print stylesheet: light theme only, no accent colour, nothing over eight per cent ink.",
+      caption: "A small feature that becomes the most valuable thing in the app on exactly one very bad day \u2014 and the day it is needed it is being read on paper, by somebody else, in a room that may not have power." });
+
+    out.pageTitle = "Property \u2014 the four screens that are its own";
+    out.pageMeta = A.entitiesOf("property").length + " things \u00b7 " + A.contractors.length +
+      " contractors \u00b7 " + inv.count + " insured";
+    out.viewIntro = "Property is the house and everything fixed in it: the boiler, the washing machine, the alarms, the filter, the roof. It answers when was that serviced, what is still under warranty, where is the manual, and what has this cost us \u2014 and it adds four screens the engine does not have.";
+    out.notes = [{ text: inv.says }];
+    out.frames = [starterFrame, contractorFrame, meterFrame, printFrame];
+    out.tables = [
+      { title: "The starter checklist is reference data, per country", meta: sr.countries + " profiles",
+        note: "Two profiles in the fixture, and the second is not a translation of the first: the German list carries a Schornsteinfeger and an annual smoke-alarm check because that is what German law asks for. D-70's rule applied to Property.",
+        cols: "minmax(70px,0.4fr) minmax(150px,1fr) minmax(90px,0.5fr) minmax(240px,1.4fr)",
+        head: [{ text: "country" }, { text: "item" }, { text: "interval" }, { text: "why that number" }],
+        rows: ["CZ", "DE"].reduce((rows, c) => rows.concat(A.starter[c].map((i) => ({
+          cells: [this.cell(c, { mono: true, muted: true }), this.cell(i.cs),
+                  this.cell(i.months + " m", { mono: true }), this.cell(i.note || "\u2014", { muted: !i.note })]
+        }))), []) }
+    ];
+  }
+
+  /* ── view: Vehicles ─────────────────────────────────────────────────── */
+  viewVehicles(out) {
+    const A = this.A;
+    const st = A.statutoryRun(), nr = A.noticeRun("pol-octavia"), f = A.fuelRun();
+    const t = A.tco("octavia"), b = A.bikeAudit();
+    const oct = A.entity("octavia"), bike = A.entity("kolo-adam");
+
+    const statFrame = this.F({ id: "E-24", name: "Vehicle statutory dates", stateLabel: "populated \u00b7 " + this.client,
+      route: "/vehicles/octavia/statutory", title: "Z\u00e1konn\u00e9 term\u00edny",
+      lede: st.here.preset + " \u00b7 " + st.here.says,
+      fields: [
+        { label: "Prvn\u00ed registrace", value: A.fmtCs(oct.firstReg), font: "var(--mono)" },
+        { label: "Nejbl\u00ed\u017e", value: A.fmtCs(st.here.next), font: "var(--mono)",
+          hint: "za " + st.here.inDays + " dn\u00ed", colour: "var(--warning)",
+          note: "P\u0159ipom\u00ednka p\u0159ijde s dlouh\u00fdm p\u0159edstihem \u2014 na tohle se objedn\u00e1v\u00e1." }
+      ],
+      blocks: [{ label: "Historie a d\u00e1l", rows: st.here.dates.slice(0, 5).map((d) => this.row({
+        title: A.fmtCs(d), meta: d < A.today ? "hotovo" : "\u010dek\u00e1",
+        dot: d < A.today ? "var(--positive)" : "var(--accent-family-things)",
+        chip: d === st.here.next ? "nejbl\u00ed\u017e" : "" })) }],
+      bannerTone: "var(--info)", bannerTitle: "Silni\u010dn\u00ed da\u0148",
+      bannerBody: st.here.taxNote,
+      footer: "P\u0159ednastaven\u00ed je verzovan\u00e1 referen\u010dn\u00ed data. Datum i periodu jde p\u0159epsat.",
+      caption: "Every country has one, every country calls it something different, and missing it is a fine and an uninsured vehicle. That is the feature that sells the module in Europe." });
+
+    const insFrame = this.F({ id: "E-25", name: "Vehicle insurance with notice period",
+      stateLabel: "populated \u00b7 " + this.client, route: "/vehicles/octavia/insurance",
+      title: nr.policy.insurer, lede: nr.policy.type,
+      fields: [
+        { label: "Do", value: A.fmtCs(nr.policy.end), font: "var(--mono)" },
+        { label: "V\u00fdpov\u011b\u010fn\u00ed lh\u016fta", value: nr.policy.noticeDays + " dn\u00ed", font: "var(--mono)" },
+        { label: "Upozorn\u00edme", value: A.fmtCs(nr.fires), font: "var(--mono)",
+          colour: "var(--accent-family-things)",
+          note: "Ne v den obnovy. V ten den u\u017e se p\u0159ej\u00edt nikam ned\u00e1." },
+        { label: "Pojistn\u00e9", value: A.czk(nr.policy.premium) + " / " + nr.policy.cadence, font: "var(--mono)" }
+      ],
+      footer: "Ta sam\u00e1 v\u011bta jako u p\u0159edplatn\u00e9ho ve Finance a u smlouvy v Energiích \u2014 D-58, napsan\u00e9 jednou.",
+      caption: "Stage 12 already carries 42 days as this reminder kind's default lead, taken from this policy. The number is the household's, not a product default." });
+
+    const maxL = Math.max.apply(null, f.intervals.map((i) => i.per100).concat([f.naive]));
+    const fuelFrame = this.F({ id: "E-26", name: "Fuel and charging log", stateLabel: "populated \u00b7 " + this.client,
+      route: "/vehicles/octavia/fuel", title: "Tankov\u00e1n\u00ed",
+      lede: f.entries + " z\u00e1pis\u016f \u00b7 " + f.fulls + " pln\u00fdch, " + f.partials + " dolit\u00fdch",
+      blocks: [{ rows: A.fuel.slice().reverse().map((x) => this.row({
+        title: x.litres.toFixed(1) + " l \u00b7 " + A.czk(x.cost),
+        meta: A.fmtCs(x.date) + " \u00b7 " + A.num(x.odo) + " km \u00b7 " + x.station,
+        chip: x.full ? "pln\u00e1" : "dolito",
+        chipColour: x.full ? "var(--positive)" : "var(--text-muted)",
+        dot: x.full ? "var(--positive)" : "var(--text-disabled)",
+        leftRule: "3px solid " + (x.full ? "var(--positive)" : "var(--border)") })) }],
+      bars: f.intervals.map((i, n) => this.bar("mezi pln\u00fdmi " + (n + 1),
+        i.per100.toFixed(2) + " l", Math.round(i.per100 / maxL * 100), "var(--positive)"))
+        .concat([this.bar("v\u0161echno / v\u0161echno", f.naive.toFixed(2) + " l",
+          Math.round(f.naive / maxL * 100), "var(--danger)")]),
+      barsLabel: "Spot\u0159eba l/100 km",
+      barsNote: "Posledn\u00edch " + f.openKm + " km je\u0161t\u011b nespot\u0159ebovalo " + f.openLitres.toFixed(1) +
+        " l v n\u00e1dr\u017ei \u2014 proto se to nepo\u010d\u00edt\u00e1 do uzav\u0159en\u00e9ho intervalu.",
+      footer: "Interval se za\u010d\u00edn\u00e1 i kon\u010d\u00ed pln\u00fdm bakem. Dolit\u00ed mezi t\u00edm se se\u010dte.",
+      caption: f.says });
+
+    const maxC = Math.max.apply(null, t.lines.map((l) => l.value));
+    const tcoFrame = this.F({ id: "E-27", name: "Total cost of ownership", stateLabel: "populated \u00b7 " + this.client,
+      route: "/vehicles/octavia/costs", title: "Co n\u00e1s to stoj\u00ed",
+      lede: "\u0160est \u0159\u00e1dk\u016f, a u ka\u017ed\u00e9ho obdob\u00ed, za kter\u00e9 se m\u011b\u0159\u00ed.",
+      bars: t.lines.map((l) => this.bar(l.label, l.measured ? A.czk(l.value) : "nen\u00ed",
+        l.value ? Math.round(l.value / maxC * 100) : 1,
+        l.measured ? "var(--accent-family-things)" : "var(--text-disabled)")),
+      barsNote: t.lines.map((l) => l.label + " \u2014 " + l.window).join(" \u00b7 "),
+      fields: [
+        { label: "Celkem", value: A.czk(t.total), font: "var(--mono)" },
+        { label: "Palivo na kilometr", value: t.fuelPerKm.toFixed(2) + " K\u010d/km", font: "var(--mono)",
+          hint: A.num(t.kmWindow) + " km", note: "Za obdob\u00ed, kter\u00e9 kniha tankov\u00e1n\u00ed pokr\u00fdv\u00e1 \u2014 od 14. 6. 2026, ne za rok." }
+      ],
+      footer: "\u010c\u00edslo, kter\u00e9 nikdo nepo\u010d\u00edt\u00e1 a v\u0161ichni ho chtěj\u00ed.",
+      caption: "Silni\u010dn\u00ed da\u0148 is a line that says \u201cnot in CZ\u201d rather than a zero, because a zero looks like data. And the fuel line names its window instead of implying a year the log does not have." });
+
+    const bikeFrame = this.F({ id: "E-28", name: "Bike variant", stateLabel: "populated \u00b7 " + this.client,
+      route: "/vehicles/kolo-adam", title: bike.cs, lede: bike.category + " \u00b7 " + bike.meta,
+      fields: [
+        { label: "\u010c\u00edslo r\u00e1mu", value: bike.frame, font: "var(--mono)" },
+        { label: "Stav", value: A.num(A.latest("kolo-adam", "km").milli / 1000) + " km", font: "var(--mono)",
+          hint: "Adam zapisuje" }
+      ],
+      blocks: [{ label: "Servis", rows: [(() => { const k = A.due("sch-kolo"); return this.row({
+        title: "Brzdov\u00e9 desti\u010dky", meta: k.says,
+        right: A.fmt(k.resolved), chip: "odhad", chipColour: "var(--status-syncing)",
+        dot: "var(--warning)" }); })()] }],
+      checksLabel: "Co se u kola nept\u00e1me",
+      checks: b.carOnly.map((x) => ({ text: x, done: false, note: "u kola v\u016fbec nen\u00ed" })),
+      footer: b.bike + " pol\u00ed\u010dek z " + b.total + " \u00b7 " + b.bikeAsksPlate +
+        " z t\u0159\u00ed \u201eznačkov\u00fdch\u201c \u00b7 nav\u00edc " + b.bikeOnly.join(", "),
+      caption: "A household with three bikes and no car should find Vehicles useful, and it will not if every screen asks for a registration plate. The absent fields are absent, not greyed." });
+
+    out.pageTitle = "Vehicles \u2014 dates that are legally required, and numbers that must be right";
+    out.pageMeta = A.entitiesOf("vehicles").length + " vehicles \u00b7 " + st.countries +
+      " country presets \u00b7 " + f.entries + " fuel entries";
+    out.viewIntro = "Cars, motorbikes, bicycles, e-bikes, trailers and boats: what they cost, when they are due for something legally required, and what has been done to them. The feature that sells it in Europe is the statutory inspection \u2014 every country has one, every country calls it something different, and missing it is a fine and an uninsured vehicle.";
+    out.notes = [{ text: st.says }, { text: f.says }];
+    out.frames = [statFrame, insFrame, fuelFrame, tcoFrame, bikeFrame];
+    out.tables = [
+      { title: "Five country presets over one first registration", meta: st.countries + " profiles \u00b7 " + st.distinct + " cadences",
+        note: "Four of the five land on 5 October 2026 by three different rules and Germany lands a year later. Reference data, versioned, and overridable per vehicle.",
+        cols: "minmax(70px,0.4fr) minmax(140px,0.9fr) minmax(220px,1.3fr) minmax(110px,0.6fr) minmax(90px,0.5fr)",
+        head: [{ text: "country" }, { text: "inspection" }, { text: "cadence" }, { text: "next" }, { text: "road tax" }],
+        rows: st.rows.map((r) => ({ cells: [
+          this.cell(r.country, { mono: true }), this.cell(r.preset),
+          this.cell(r.cadence, { muted: true }), this.cell(A.fmt(r.next), { mono: true }),
+          this.cell(r.tax ? "ano" : "ne", { mono: true, muted: !r.tax })
+        ] })) },
+      { title: "Every fuel entry, and what each interval says", meta: f.entries + " entries",
+        note: "Consumption between consecutive full fills, partials accumulated. The last interval is still open, which is why its litres are not in any answer yet.",
+        cols: "minmax(90px,0.5fr) minmax(90px,0.5fr) minmax(70px,0.4fr) minmax(80px,0.5fr) minmax(80px,0.5fr) minmax(160px,1fr)",
+        head: [{ text: "date" }, { text: "odometer" }, { text: "litres" }, { text: "cost" }, { text: "fill" }, { text: "station" }],
+        rows: A.fuel.map((x) => ({ cells: [
+          this.cell(A.fmt(x.date), { mono: true }), this.cell(A.num(x.odo) + " km", { mono: true }),
+          this.cell(x.litres.toFixed(1), { mono: true }), this.cell(A.czk(x.cost), { mono: true }),
+          this.cell(x.full ? "pln\u00e1" : "dolito", { mono: true, muted: !x.full }),
+          this.cell(x.station, { muted: true })
+        ] })) }
+    ];
+  }
+
+  /* ── view: Pets ─────────────────────────────────────────────────────── */
+  viewPets(out) {
+    const A = this.A;
+    const hr = A.healthRun(), dr = A.doseRun(), rt = A.routineRun(), w = A.weightRun("bela");
+    const ge = A.gentleAudit(), pg = A.petsGrantRun();
+    const bela = A.entity("bela");
+
+    const healthFrame = this.F({ id: "E-29", name: "Pet health record", stateLabel: "populated \u00b7 " + this.client,
+      route: "/pets/bela/health", title: "Zdravotn\u00ed z\u00e1znam",
+      lede: bela.cs + " \u00b7 " + bela.category + " \u00b7 " + bela.meta,
+      blocks: [{ rows: A.healthOf("bela").map((h) => this.row({
+        title: h.cs, meta: A.fmtCs(h.date) + (h.vet ? " \u00b7 " + h.vet : "") + " \u00b7 " + h.meta,
+        right: h.cost ? A.czk(h.cost) : "", chip: h.type,
+        chipColour: "var(--accent-family-things)",
+        dot: h.type === "condition" ? "var(--warning)" : "var(--accent-family-things)",
+        note: h.docs ? h.docs + " dokument" : "" })) }],
+      footer: hr.types + " typ\u016f z\u00e1pisu, v\u0161ech " + hr.used + " v z\u00e1znamu \u00b7 " +
+        hr.withDocs + " z " + hr.entries + " nese dokument",
+      caption: "The thing you cannot find when the vet asks. Six entry types on one dated timeline \u2014 and not one row of it is worded as a service record." });
+
+    const today = dr.today;
+    const doseFrame = this.F({ id: "E-30", name: "Medication doses", stateLabel: "populated \u00b7 " + this.client,
+      route: "/pets/bela/medication", title: A.medication.cs,
+      lede: A.medication.dose + " \u00b7 " + A.medication.perDay + "\u00d7 denn\u011b \u00b7 " +
+        A.medication.days + " dn\u00ed \u00b7 " + A.medication.reason,
+      checksLabel: "Dnes",
+      checks: today.map((d) => ({
+        text: d.time + (d.given ? " \u2014 dal" + (d.by === "jana" || d.by === "klara" ? "a" : "") + " " + A.name(d.by) + " v " + d.at : " \u2014 je\u0161t\u011b nikdo"),
+        done: d.given,
+        note: d.given ? "" : d.due ? "dnes ve\u010der" : "" })),
+      bannerTone: "var(--info)", bannerTitle: "\u201eU\u017e jsi j\u00ed ji dal?\u201c",
+      bannerBody: dr.race.says,
+      blocks: [{ label: "Cel\u00fd kurz", rule: dr.given + " z " + dr.total,
+        rows: [this.row({
+          title: dr.given + " za\u0161krtnut\u00fdch, " + dr.left + " zb\u00fdv\u00e1",
+          meta: dr.byMember.map((m) => m.who + " " + m.n).join(" \u00b7 "),
+          chip: "sd\u00edlen\u00e9 dokon\u010den\u00ed", dot: "var(--positive)" })] }],
+      footer: "state_set \u00b7 kl\u00ed\u010d (d\u00e1vka), ne (d\u00e1vka, \u010dlen) \u00b7 " + dr.race.resolution,
+      caption: "The only per-occurrence tracking in the module, because a twice-daily antibiotic for ten days is exactly the situation where \u201cdid you already give it\u201d is a real question with a bad answer." });
+
+    const routineFrame = this.F({ id: "E-31", name: "Daily routine", stateLabel: "populated \u00b7 " + this.client,
+      route: "/pets/routine", title: "Denn\u00ed re\u017eim",
+      lede: rt.doneToday + " z " + rt.items + " hotovo \u00b7 resetuje se o p\u016flnoci",
+      blocks: [
+        { label: "Dnes", rule: A.fmtCs(A.today), rows: rt.today.map((r) => this.row({
+            title: r.cs, meta: r.who + (r.at ? " \u00b7 " + r.at : ""),
+            right: r.done ? r.by + " " + r.time : "", 
+            rightColour: r.done ? "var(--positive)" : "var(--text-muted)",
+            chip: r.done ? "hotovo" : "", chipColour: "var(--positive)",
+            dot: r.done ? "var(--positive)" : "var(--border-strong)",
+            bg: r.done ? "var(--surface-sunken)" : "var(--surface)" })) },
+        { label: "V\u010dera", rule: rt.doneYesterday + " z " + rt.items, rows: rt.yesterday
+            .filter((r) => r.done).slice(0, 3).map((r) => this.row({
+              title: r.cs, meta: "za\u0161krtl" + (r.byId === "jana" || r.byId === "klara" ? "a" : "") + " " + r.by + " v " + r.time,
+              dot: "var(--text-disabled)", bg: "var(--surface-sunken)",
+              leftRule: "1px solid var(--border)" })) }
+      ],
+      footer: "state_set \u00b7 kl\u00ed\u010d (polo\u017eka, den) \u00b7 kdo to udělal se zobrazuje a v kl\u00ed\u010di nen\u00ed",
+      caption: "Deliberately not Chores: no rotation, no points, no verification, no swap. A chore has a schedule and a rotation; a pet's routine is a shared checklist that resets, and modelling it as chores makes it heavier than it deserves." });
+
+    const vetFrame = this.F({ id: "E-32", name: "Vet card", stateLabel: "populated \u00b7 " + this.client,
+      route: "/pets/bela/vet", title: "Kartička k veterin\u00e1\u0159i",
+      lede: A.vet.practice + " \u00b7 " + A.vet.vet,
+      actions: [{ label: "Pohotovost " + A.vet.outOfHours, bg: "var(--danger)",
+                  colour: "var(--text-on-danger)", border: "var(--danger)" },
+                { label: "Ordinace " + A.vet.phone, bg: "var(--surface)",
+                  colour: "var(--text-primary)", border: "var(--border-strong)" }],
+      fields: [
+        { label: "Kdy maj\u00ed otev\u0159eno", value: A.vet.hours },
+        { label: "Kde", value: A.vet.address },
+        { label: "\u010cip", value: A.vet.chipRegistry, font: "var(--mono)" },
+        { label: "Poji\u0161t\u011bn\u00ed", value: A.vet.insurance, font: "var(--mono)",
+          note: "Obnova 14. 1. 2027 \u00b7 upozorn\u011bn\u00ed m\u011bs\u00edc p\u0159edem." }
+      ],
+      footer: "Pohotovost je " + A.vet.taps + " klepnut\u00ed od horn\u00ed hrany \u2014 proto\u017ee to je moment, kdy je pot\u0159eba.",
+      caption: A.vet.outOfHoursNote + ". The out-of-hours number is a button rather than a field, because in the moment it is needed nobody is reading a card." });
+
+    const feedFrame = this.F({ id: "E-33", name: "Feeding details and allergies", stateLabel: "populated \u00b7 " + this.client,
+      route: "/pets/bela/feeding", title: "Krmen\u00ed a alergie",
+      lede: A.feeding.food + " \u00b7 " + A.feeding.total,
+      fields: [
+        { label: "Kolik a kdy", value: A.feeding.amount + " \u00d7 " + A.feeding.meals + " (" + A.feeding.times.join(", ") + ")" },
+        { label: "Pamlsky", value: A.feeding.treats }
+      ],
+      blocks: [
+        { label: "Alergie", rows: A.feeding.allergies.map((a) => this.row({
+            title: a, dot: "var(--warning)", leftRule: "3px solid var(--warning)" })) },
+        { label: "Nesm\u00ed", rule: "v\u016fbec, nikdy", rows: A.feeding.never.map((n) => this.row({
+            title: n, dot: "var(--danger)", leftRule: "3px solid var(--danger)",
+            bg: "var(--surface-sunken)" })) }
+      ],
+      footer: A.feeding.note,
+      caption: "Together with the vet card this is the screen you hand to whoever is looking after them. \u201eNesm\u00ed\u201c is its own block rather than a note under the food, because that is the line that matters." });
+
+    const weightFrame = this.F({ id: "E-34", name: "Weight chart", stateLabel: "populated \u00b7 " + this.client,
+      route: "/pets/bela/weight", title: "V\u00e1ha",
+      lede: w.rows + " v\u00e1\u017een\u00ed \u00b7 c\u00edl " + w.target.min + "\u2013" + w.target.max + " kg",
+      bars: w.points.map((p) => this.bar(A.fmtCs(p.date).replace(/ 20\d\d$/, ""),
+        p.kg.toFixed(1) + " kg",
+        Math.round((p.kg - (w.target.min - 1)) / ((w.target.max + 1) - (w.target.min - 1)) * 100),
+        p.kg > w.target.max || p.kg < w.target.min ? "var(--warning)" : "var(--positive)")),
+      barsNote: "C\u00edl je z druhu a k\u0159\u00ed\u017een\u00ed, ne z \u010d\u00e1ry v grafu \u2014 " + w.target.from + ".",
+      blocks: [{ rows: w.points.slice().reverse().slice(0, 3).map((p) => this.row({
+        title: p.kg.toFixed(1) + " kg", meta: A.fmtCs(p.date) + " \u00b7 " + (p.src === "vet" ? "u veterin\u00e1\u0159ky" : "doma") + " \u00b7 " + p.by,
+        dot: "var(--positive)" })) }],
+      footer: "additive \u00b7 ta sam\u00e1 \u0159ada jako tachometr, jen v kilogramech",
+      caption: "Small feature, high engagement, genuinely useful \u2014 and it shares its implementation with the usage log, which is the shared engine paying for itself where it does not show." });
+
+    const goneFrame = this.F({ id: "E-35", name: "Deceased / rehomed flow", stateLabel: "populated \u00b7 " + this.client,
+      route: "/pets/bela/status", title: A.statusFlow[0].title,
+      lede: A.statusFlow[0].body,
+      choices: A.statusFlow[0].choices.map((c, i) => ({
+        label: c.cs, consequence: c.consequence, rows: c.rows,
+        border: i === 0 ? "var(--border-strong)" : "var(--border)",
+        ring: "var(--border-strong)" })),
+      bannerTone: "var(--info)", bannerTitle: A.statusFlow[1].title,
+      bannerBody: A.statusFlow[1].body,
+      footer: ge.hits.length + " sloves jako \u201esmazat\u201c nebo \u201earchivovat\u201c \u00b7 " +
+        ge.deletedRows + " smazan\u00fdch \u0159\u00e1dk\u016f",
+      caption: "D-72. The module shares its tables with an asset engine, and this is the screen where that must be invisible: Vehicles keeps " +
+        ge.vehicleWords.join(", ") + " because that is what happens to a car, and Pets keeps none of them." });
+
+    out.pageTitle = "Pets \u2014 which must not read like asset management";
+    out.pageMeta = A.entitiesOf("pets").length + " active \u00b7 " + dr.total + " doses \u00b7 " +
+      rt.items + " routine items";
+    out.viewIntro = "Two distinct jobs, and both matter: the record \u2014 vaccinations, treatments, weight, microchip, insurance, vet, the thing you cannot find when the vet asks \u2014 and the routine, the thing that gets missed when two people each assume the other did it. The tables underneath are the asset engine's. Every word above them is not.";
+    out.notes = [{ text: A.toneAudit().says }, { text: pg.says }];
+    out.frames = [healthFrame, doseFrame, routineFrame, vetFrame, feedFrame, weightFrame, goneFrame];
+    out.tables = [
+      { title: "Twenty doses, and who gave each one", meta: dr.given + " of " + dr.total + " ticked",
+        note: dr.race.says,
+        cols: "minmax(90px,0.5fr) minmax(60px,0.35fr) minmax(70px,0.4fr) minmax(140px,0.9fr) minmax(200px,1.2fr)",
+        head: [{ text: "date" }, { text: "time" }, { text: "nth" }, { text: "who" }, { text: "state" }],
+        rows: A.doses().map((d) => ({ cells: [
+          this.cell(A.fmt(d.date), { mono: true }), this.cell(d.time, { mono: true }),
+          this.cell(String(d.nth), { mono: true, muted: true }),
+          this.cell(d.given ? A.name(d.by) + " \u00b7 " + d.at : "\u2014", { muted: !d.given }),
+          this.cell(d.given ? "dan\u00e1" : d.due ? "dnes" : "\u010dek\u00e1",
+            { mono: true, tone: d.given ? "var(--positive)" : d.due ? "var(--warning)" : "var(--text-muted)" })
+        ] })) }
+    ];
+  }
+
+  /* ── view: Chat ─────────────────────────────────────────────────────── */
+  viewChat(out) {
+    const C = this.C;
+    const mem = C.membershipRun(), fl = C.floorRun(), un = C.unreadRun();
+    const at = C.attachRun(), stg = C.storageRun(), se = C.searchRun(), rd = C.readRun();
+    const mu = C.muteRun(), bar = C.barRun(), attr = C.attributionRun(), rx = C.reactRun();
+    const list = C.listFor(this.who);
+    const viewer = this.who;
+    const grant = C.grantOf(viewer);
+
+    const listFrame = grant === "none"
+      ? this.F({ id: "E-36", name: "Conversation list", stateLabel: "absent \u00b7 " + this.client,
+          route: "/chat", title: "Zpr\u00e1vy",
+          absentTitle: "Tady nic nen\u00ed \u2014 a nen\u00ed to chyba",
+          absentBody: C.name(viewer) + " nem\u00e1 na Zpr\u00e1vy pr\u00e1vo, tak\u017ee v aplikaci nen\u00ed z\u00e1lo\u017eka, widget ani \u0159\u00e1dek na Dnes. Konverzace, ve kter\u00e9 by byl jmenovan\u00fd, odpov\u00ed 404.",
+          footer: "absent, ne zak\u00e1zan\u00e9 \u00b7 \u010dty\u0159i z\u00e1lo\u017eky m\u00edsto p\u011bti",
+          caption: "The neutral not-available Stage 6 drew. Chat is also the destination that decides the bar: " + (bar.ready ? bar.says : "") })
+      : this.F({ id: "E-36", name: "Conversation list", stateLabel: "populated \u00b7 " + this.client,
+          route: "/chat", title: "Zpr\u00e1vy",
+          lede: un.rows.filter((r) => r.who === viewer)[0].total + " nep\u0159e\u010dten\u00fdch",
+          blocks: [{ rows: list.map((c) => this.row({
+            title: c.cs, 
+            meta: c.nullLast ? "" : c.last.by + ": " + c.last.text,
+            right: c.unread ? String(c.unread) : "",
+            rightColour: c.unread ? "var(--accent-family-household)" : "var(--text-muted)",
+            chip: c.muted ? "ztlumeno" : (c.kind === "general" ? "cel\u00e1 dom\u00e1cnost" : ""),
+            chipColour: "var(--text-muted)",
+            dot: c.unread ? "var(--accent-family-household)" : "var(--border-strong)",
+            note: c.nullLast ? "Zat\u00edm tu pro v\u00e1s nic nen\u00ed \u2014 p\u0159i\u0161li jste pozd\u011bji." : "",
+            leftRule: "3px solid " + (c.unread ? "var(--accent-family-household)" : "var(--border)") })) }],
+          bannerTone: "var(--info)", bannerTitle: "Kdo tu nen\u00ed",
+          bannerBody: mem.absentNames.join(" a ") + " nemaj\u00ed na Zpr\u00e1vy pr\u00e1vo, tak\u017ee v dom\u00e1cn\u00ed konverzaci nejsou. Milo\u0161 m\u00e1 chatu a v konverzaci o chat\u011b b\u00fdt nem\u016f\u017ee \u2014 sta\u010d\u00ed mu d\u00e1t pr\u00e1vo.",
+          footer: "Obecnou konverzaci nelze smazat, a je to napsan\u00e9 tam, kde by \u010dlov\u011bk hledal ovl\u00e1d\u00e1n\u00ed.",
+          caption: mem.says });
+
+    const msgs = C.visibleTo("c-chata", viewer === "petr" || viewer === "milos" ? "jana" : viewer);
+    const floorMs = C.membershipOf("c-chata", viewer);
+    const bubbles = msgs.map((m, i) => {
+      const r = C.reactionsOn(m.id);
+      const att = m.att ? C.attachments.filter((a) => a.id === m.att)[0] : null;
+      return {
+        mine: m.by === viewer, who: C.name(m.by) + " \u00b7 " + m.at.slice(11),
+        text: m.text, chips: r,
+        attFile: att ? att.file : "",
+        attState: att ? (att.bytes === "pending" ? "\u010dek\u00e1 na bajty \u00b7 n\u00e1hled 404"
+                        : att.thumb === "processing" ? "n\u00e1hled se d\u011bl\u00e1 \u00b7 202"
+                        : Math.round(att.mb) + " MB") : "",
+        attTone: att && att.bytes === "pending" ? "var(--status-pending)"
+               : att && att.thumb === "processing" ? "var(--status-syncing)" : "var(--text-muted)",
+        attThumb: att && att.thumb === "ready" ? "var(--chart-3)" : "var(--surface-sunken)",
+        dividerText: floorMs && floorMs.floor === m.id ? "odtud v\u00fd\u0161 nic nevid\u00edte" : ""
+      };
+    }).concat(C.queue.filter((q) => q.conv === "c-chata" && q.by === viewer).map((q) => ({
+      mine: true, who: C.name(q.by) + " \u00b7 " + q.at.slice(11), text: q.text,
+      pending: true, meta: "\u010dek\u00e1 na sign\u00e1l \u00b7 po\u0159ad\u00ed dr\u017e\u00ed" })));
+
+    const threadFrame = this.F({ id: "E-37", name: "Thread", stateLabel: (grant === "view" ? "read-only" : "populated") + " \u00b7 " + this.client,
+      route: "/chat/c-chata", title: "Chata \u2014 v\u00edkend",
+      lede: msgs.length + " zpr\u00e1v \u00b7 " + C.membersOf("c-chata").length + " lid\u00ed",
+      bubbles: bubbles,
+      composer: grant === "view" ? "" : "Napsat zpr\u00e1vu\u2026",
+      noComposer: grant === "view"
+        ? "Pr\u00e1vo \u201eč\u00edst\u201c = \u010dten\u00ed bez psan\u00ed. Psac\u00ed pole tu nen\u00ed v\u016fbec, ne zak\u00e1zan\u00e9 \u2014 co\u017e je u\u017eite\u010dn\u00e9 u d\u011btsk\u00e9ho profilu pod dohledem."
+        : "",
+      footer: "Reakce jsou pevn\u00e1 sada " + C.emoji.length + " \u00b7 API bere po\u017eadovan\u00fd stav, ne p\u0159ep\u00edn\u00e1n\u00ed",
+      caption: rx.says });
+
+    const attachFrame = this.F({ id: "E-38", name: "Attachments with async thumbnails",
+      stateLabel: "populated + pending \u00b7 " + this.client, route: "/chat/c-chata#files",
+      title: "P\u0159\u00edlohy", lede: at.total + " soubory ve t\u0159ech stavech",
+      blocks: [{ rows: at.rows.map((r) => this.row({
+        title: r.file, meta: r.by + " \u00b7 " + (r.mb >= 1024 ? (r.mb / 1024).toFixed(2) + " GB" : Math.round(r.mb) + " MB"),
+        right: "thumb " + r.thumbnail, rightColour: this.statusTone(r.thumbnail),
+        chip: r.state, chipColour: this.statusTone(r.thumbnail),
+        dot: this.statusTone(r.thumbnail),
+        note: r.note })) }],
+      footer: "Tot\u00e9\u017e sni\u017eov\u00e1n\u00ed, limity a kv\u00f3ta jako u Dokument\u016f \u00b7 stejn\u00e9 t\u0159i odpov\u011bdi na endpoint",
+      caption: at.says });
+
+    const floorFrame = this.F({ id: "E-39", name: "Unread and the floor", stateLabel: "populated \u00b7 " + this.client,
+      route: "/chat/c-dum#floor", title: "Kl\u00e1ra p\u0159i\u0161la v\u010dera",
+      lede: "\u010cty\u0159i z dvan\u00e1cti zpr\u00e1v \u2014 a stejn\u011b tak na obou cest\u00e1ch doru\u010den\u00ed.",
+      blocks: [{ label: "Co Kl\u00e1ra vid\u00ed v konverzaci D\u016fm",
+        rows: fl.klara.map((r) => this.row({
+          title: r.convName, meta: "p\u0159i\u0161la " + this.A.fmtCs(r.joined) + " \u00b7 floor " + r.floor + " \u00b7 floor_seq " + r.floorSeq,
+          right: r.api + " / " + r.total,
+          chip: r.agree ? "API = replika" : "ROZCH\u00c1Z\u00cd SE",
+          chipColour: r.agree ? "var(--positive)" : "var(--danger)",
+          dot: "var(--status-private)",
+          note: r.withheld + " zpr\u00e1v z\u016fst\u00e1v\u00e1 t\u011bm, kdo tu byli" })) }],
+      bannerTone: "var(--info)", bannerTitle: "Dv\u011b cesty, jedno pravidlo",
+      bannerBody: "FR-CT2 je id zpr\u00e1vy pro API. D-90 p\u0159id\u00e1v\u00e1 floor_seq, proto\u017ee synchronizace je druh\u00e1 cesta \u2014 a pravidlo, kter\u00e9 plat\u00ed jen na jedn\u00e9, neplat\u00ed na \u017e\u00e1dn\u00e9. Ob\u011b se zapisuj\u00ed v jedn\u00e9 transakci z jedn\u00e9 ud\u00e1losti.",
+      footer: "Nep\u0159e\u010dten\u00e9 se po\u010d\u00edt\u00e1 z toho, co \u010dlov\u011bk vid\u00ed \u2014 nikdy z konverzace.",
+      caption: fl.says });
+
+    const chatGb = stg.chat;
+    const storageFrame = this.F({ id: "E-40", name: "Chat storage clean-up", stateLabel: "populated \u00b7 " + this.client,
+      route: "/chat/storage", title: "Co Zpr\u00e1vy zab\u00edraj\u00ed",
+      lede: chatGb.toFixed(2) + " GB \u00b7 " + stg.perConv.reduce((n, c) => n + c.files, 0) + " soubor\u016f",
+      bars: stg.perConv.map((c) => this.bar(C.conversation(c.conv).cs, c.gb.toFixed(2) + " GB",
+        Math.round(c.gb / chatGb * 100),
+        c.gb >= 2 ? "var(--warning)" : "var(--accent-family-household)")),
+      barsLabel: "Podle konverzace",
+      barsNote: "Dv\u011b hranice: " + stg.thresholds.map((t) => t.gb + " GB (" + t.level + ")").join(", ") +
+        " \u2014 p\u0159ekro\u010deno " + stg.crossed.length + ".",
+      blocks: [{ label: "Vybr\u00e1no k p\u0159esunu", rows: stg.selection.map((s) => this.row({
+        title: s.file, meta: s.by + " \u00b7 " + (s.mb >= 1024 ? (s.mb / 1024).toFixed(2) + " GB" : Math.round(s.mb) + " MB"),
+        dot: "var(--accent-family-keeping)", chip: "do Dokument\u016f" })) }],
+      fields: [
+        { label: "Zpr\u00e1vy po p\u0159esunu", value: stg.chatAfter.toFixed(2) + " GB", font: "var(--mono)",
+          hint: "\u2212" + stg.moveGb.toFixed(2) },
+        { label: "Dokumenty po p\u0159esunu", value: stg.docsAfter.toFixed(2) + " GB", font: "var(--mono)",
+          hint: "+" + stg.moveGb.toFixed(2) },
+        { label: "Dom\u00e1cnost celkem", value: stg.totalAfter.toFixed(1) + " GB", font: "var(--mono)",
+          colour: "var(--positive)",
+          note: "Nezm\u011bn\u00ed se. Kopie by z toho udělala " + stg.copyWouldBe.toFixed(2) + " GB a platili byste st\u0159echu dvakr\u00e1t." }
+      ],
+      footer: "Custody transfer: bajty se p\u0159est\u011bhuj\u00ed, ve zpr\u00e1v\u011b z\u016fstane odkaz.",
+      caption: attr.says });
+
+    const muteFrame = this.F({ id: "E-41", name: "Mute per conversation", stateLabel: "populated \u00b7 " + this.client,
+      route: "/chat/c-chata#mute", title: "Ztlumit", lede: "Jeden p\u0159ep\u00edna\u010d na konverzaci.",
+      checks: mu.rows.filter((r) => r.who === "Adam").map((r) => ({
+        text: r.conv, done: r.muted,
+        note: r.muted ? "ztlumeno \u00b7 nep\u0159e\u010dten\u00e9 se po\u0159\u00e1d po\u010d\u00edt\u00e1" : "" })),
+      checksLabel: "Adam",
+      footer: "Push jde v kategorii direct, respektuje ti\u0161\u00ed hodiny i ztlumen\u00ed.",
+      caption: mu.says });
+
+    const searchFrame = this.F({ id: "E-42", name: "Search bounded by the floor",
+      stateLabel: "populated \u00b7 " + this.client, route: "/chat/search?q=kl\u00ed\u010de",
+      title: "\u201ekl\u00ed\u010de\u201c",
+      lede: (viewer === "klara" ? se.klara : viewer === "petr" || viewer === "milos" ? se.petr : se.jana) + " v\u00fdsledk\u016f",
+      blocks: [{ rows: (viewer === "klara" ? se.klaraRows : se.rows).map((r) => this.row({
+        title: r.text, meta: r.conv + " \u00b7 " + r.by + " \u00b7 " + r.at,
+        dot: "var(--accent-family-household)" })) }],
+      bannerTone: "var(--status-private)", bannerTitle: "Rozd\u00edl je floor",
+      bannerBody: se.says,
+      footer: "Jazykov\u011b citliv\u00e9 \u00b7 floor se aplikuje p\u0159ed \u0159azen\u00edm, ne po n\u011bm",
+      caption: "One result row shape, Stage 11's, with the conversation as the path. A member cannot search text they cannot read \u2014 and a member at none contributes no group to the results at all." });
+
+    out.pageTitle = "Chat \u2014 and the floor, which has to hold twice";
+    out.pageMeta = C.conversations.length + " conversations \u00b7 " + C.messages.length +
+      " messages \u00b7 " + stg.chat.toFixed(2) + " GB";
+    out.viewIntro = "One room everybody is in, plus any number of created groups, scoped to a single household always \u2014 no cross-household messaging, no discovery, no public rooms, and no route by which a stranger can contact a child profile. It survives WhatsApp because the message that says \u201cgot the milk\u201d should be next to the shopping list; per-item comments carry the contextual conversation and Chat carries everything else.";
+    out.notes = [{ text: rd.says }, { text: C.refuseRun().says }];
+    out.frames = [listFrame, threadFrame, attachFrame, floorFrame, storageFrame, muteFrame, searchFrame];
+    out.tables = [
+      { title: "The floor, on both delivery paths", meta: fl.pairs + " membership rows",
+        note: fl.says,
+        cols: "minmax(110px,0.7fr) minmax(90px,0.5fr) minmax(110px,0.7fr) minmax(90px,0.5fr) minmax(70px,0.4fr) minmax(80px,0.5fr) minmax(90px,0.5fr)",
+        head: [{ text: "conversation" }, { text: "member" }, { text: "floor" }, { text: "floor_seq" },
+               { text: "total" }, { text: "API" }, { text: "replica" }],
+        rows: fl.rows.map((r) => ({ cells: [
+          this.cell(r.convName), this.cell(r.name),
+          this.cell(r.floor || "\u2014", { mono: true, muted: !r.floor }),
+          this.cell(r.floorSeq ? String(r.floorSeq) : "\u2014", { mono: true, muted: !r.floorSeq }),
+          this.cell(String(r.total), { mono: true }),
+          this.cell(String(r.api), { mono: true }),
+          this.cell(String(r.replica), { mono: true, tone: r.agree ? "var(--positive)" : "var(--danger)" })
+        ] })) },
+      { title: "Every member's unread, and where the widget's seven comes from",
+        meta: un.rows.length + " members with the grant",
+        note: un.says,
+        cols: "minmax(90px,0.5fr) minmax(80px,0.5fr) minmax(70px,0.4fr) minmax(70px,0.4fr) minmax(240px,1.4fr)",
+        head: [{ text: "member" }, { text: "grant" }, { text: "unread" }, { text: "threads" }, { text: "per conversation" }],
+        rows: un.rows.map((r) => ({ cells: [
+          this.cell(r.name), this.cell(r.grant, { mono: true }),
+          this.cell(String(r.total), { mono: true }), this.cell(String(r.threads), { mono: true }),
+          this.cell(r.rows.map((c) => c.cs + " " + c.unread + (c.nullLast ? " (null last)" : "")).join(" \u00b7 "), { muted: true })
+        ] })) }
+    ];
+  }
+
+  /* ── view: the gate ─────────────────────────────────────────────────── */
+  viewGate(out, all, groups, cells) {
+    const A = this.A, C = this.C;
+    const passed = all.filter((c) => c.pass).length;
+    const rec = A.reconcile();
+    out.pageTitle = "The gate";
+    out.pageMeta = passed + " of " + all.length + " checks pass \u00b7 " + cells + " state cells";
+    out.viewIntro = "Stage 19's gate is one sentence: Pets is the screen you hand to whoever is looking after them. It is not a sentence a checklist can verify, so it is decomposed into the twenty-one things that would have to be true for it \u2014 the vocabulary audit, the shared dose key, the routine that resets, the out-of-hours number at one tap \u2014 plus the engine's own arithmetic and Chat's two floors. Every line below is computed on render from the same fixture the screens are drawn from.";
+    out.notes = [{ text: rec.says }];
+    out.checks = all.map((c) => ({
+      name: c.name, detail: c.detail,
+      colour: c.pass ? "var(--positive)" : "var(--danger)"
+    }));
+    out.tables = [
+      { title: "What earlier stages already drew, and where it landed", meta: rec.total + " rows \u00b7 " + rec.drifts + " disagree",
+        note: "A stage that quietly edits an earlier fixture to make its own numbers work is the failure this ledger exists to catch. These three are named and left alone for Stage 20.",
+        cols: "minmax(60px,0.35fr) minmax(280px,1.6fr) minmax(140px,0.8fr) minmax(220px,1.3fr)",
+        head: [{ text: "stage" }, { text: "what it drew" }, { text: "resolves to" }, { text: "drift" }],
+        rows: rec.rows.map((r) => ({ cells: [
+          this.cell("St. " + r.stage, { mono: true, muted: true }),
+          this.cell(r.text), this.cell(r.resolves, { mono: true, muted: true }),
+          this.cell(r.drift || "\u2014", { muted: !r.drift, tone: r.drift ? "var(--warning)" : "" })
+        ] })) },
+      { title: "Coverage", meta: A.screens.length + C.screens.length + " rows \u00b7 " + cells + " cells drawn",
+        cols: "minmax(60px,0.35fr) minmax(220px,1.4fr) minmax(70px,0.4fr) minmax(80px,0.5fr) minmax(90px,0.5fr) minmax(90px,0.5fr)",
+        head: [{ text: "id" }, { text: "row" }, { text: "preset" }, { text: "required" }, { text: "cannot occur" }, { text: "drawn" }],
+        rows: A.coverage().concat(C.coverage()).map((c) => ({ cells: [
+          this.cell(c.id, { mono: true }), this.cell(c.name),
+          this.cell(c.preset, { mono: true, muted: true }),
+          this.cell(String(c.required), { mono: true }),
+          this.cell(String(c.excluded), { mono: true, muted: true }),
+          this.cell(String(c.drawn), { mono: true, tone: c.complete ? "var(--positive)" : "var(--danger)" })
+        ] })) },
+      { title: "The merge policies these exclusions are argued from",
+        meta: A.policies.length + C.policies.length + " entities",
+        cols: "minmax(200px,1.2fr) minmax(110px,0.7fr) minmax(300px,1.8fr) minmax(80px,0.5fr)",
+        head: [{ text: "entity" }, { text: "policy" }, { text: "what that means here" }, { text: "asks?" }],
+        rows: A.policies.concat(C.policies).map((p) => ({ cells: [
+          this.cell(p[0], { mono: true }), this.cell(p[1], { mono: true }),
+          this.cell(p[2] || "\u2014", { muted: !p[2] }),
+          this.cell(p[3] ? "ano" : "ne", { mono: true, tone: p[3] ? "var(--warning)" : "var(--text-muted)" })
+        ] })) }
+    ];
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./icons.js"></script>
+<script src="./illustration.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  [data-grey="1"] { filter: grayscale(1) contrast(1.05); }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">Household · icons</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Icons &amp; illustration</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent)">stage 03 · drawn, not mapped</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="7">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">Two sets are drawn in-house because they carry meaning. Everything else is the licensed base set, bundled and never fetched.</div>
+      <a href="./Foundations.dc.html" style="font-family:var(--mono);font-size:11px">← stage 02 · foundations</a>
+      <a href="./Components and States.dc.html" style="font-family:var(--mono);font-size:11px">stage 04 · components →</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColor }}">{{ gateLine }}</div>
+    </div>
+
+    <sc-if value="{{ isStatus }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1180px">
+        <p style="margin:0;max-width:74ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Thirteen icons, twelve of them on rows. These are drawn first and reviewed in greyscale at 16 px before a single module icon starts, because N2 makes them load-bearing: every one appears next to text that says the same thing, and a member who cannot distinguish the colours must be able to distinguish these. Switch <span style="font-family:var(--mono)">ink</span> to greyscale in the rail — that is the review, not a fallback.</p>
+
+        <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+          <div style="display:grid;grid-template-columns:64px 56px 150px 1fr;gap:14px;padding:9px 16px;background:var(--table-header-bg);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">
+            <div>glyph</div><div>at 16</div><div>word · token</div><div>silhouette, and where it is drawn</div>
+          </div>
+          <sc-for list="{{ statusRows }}" as="s" hint-placeholder-count="13">
+            <div style="display:grid;grid-template-columns:64px 56px 150px 1fr;gap:14px;padding:13px 16px;background:var(--surface-raised);border-bottom:1px solid var(--divider);align-items:start">
+              <div data-grey="{{ grey }}" style="color:{{ s.colour }};display:flex;align-items:center;gap:8px">
+                <svg viewBox="0 0 24 24" width="{{ glyphSize }}" height="{{ glyphSize }}" role="img" aria-label="{{ s.word }}" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:{{ s.stroke }};stroke-linecap:round;stroke-linejoin:round">
+                  <sc-for list="{{ s.paths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                </svg>
+              </div>
+              <div data-grey="{{ grey }}" style="color:{{ s.colour }};display:flex;align-items:center;gap:6px;padding-top:2px">
+                <svg viewBox="0 0 24 24" width="16" height="16" role="img" aria-label="{{ s.word }}" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:{{ s.stroke }};stroke-linecap:round;stroke-linejoin:round">
+                  <sc-for list="{{ s.paths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                </svg>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font-size:13px">{{ s.word }}</div>
+                <div style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ s.token }}</div>
+                <div style="font-family:var(--mono);font-size:10px;color:var(--accent)">{{ s.nearest }}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                <div style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ s.silhouette }}</div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-primary)">{{ s.note }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The greyscale check, measured</h2>
+          <p style="margin:0;max-width:74ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Each glyph is rasterised at 16 px on a 2× grid, with colour discarded, and every pair is compared as ink: the share of marked pixels the two do not have in common. It is a floor, not a verdict — the gate is a human looking at the closest pairs, which is why they are named rather than counted.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            <sc-for list="{{ closest }}" as="p" hint-placeholder-count="5">
+              <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:12px 14px;display:flex;gap:12px;align-items:center">
+                <div data-grey="1" style="display:flex;gap:8px;color:var(--text-primary)">
+                  <svg viewBox="0 0 24 24" width="26" height="26" role="img" aria-label="{{ p.aWord }}" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ p.aPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                  <svg viewBox="0 0 24 24" width="26" height="26" role="img" aria-label="{{ p.bWord }}" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ p.bPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <div style="font-family:var(--mono);font-size:11px">{{ p.pair }}</div>
+                  <div style="font-family:var(--mono);font-size:11px;color:{{ p.colour }}">{{ p.score }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isModules }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1180px">
+        <p style="margin:0;max-width:74ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Seventeen module icons plus Today and Add, on the same grid and one weight lighter than the status set. Identity is hue <em>plus</em> icon <em>plus</em> name, so each one is shown in its family accent and then tested in the two places it actually renders: a 20 px sidebar row and a 28 px tab slot.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:12px">
+          <sc-for list="{{ moduleTiles }}" as="m" hint-placeholder-count="19">
+            <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:14px;display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;gap:11px;align-items:center">
+                <div data-grey="{{ grey }}" style="color:{{ m.colour }}">
+                  <svg viewBox="0 0 24 24" width="{{ glyphSize }}" height="{{ glyphSize }}" role="img" aria-label="{{ m.name }}" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:{{ m.stroke }};stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ m.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:1px;min-width:0">
+                  <div style="font-size:13.5px">{{ m.name }}</div>
+                  <div style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ m.family }}</div>
+                </div>
+              </div>
+              <div style="font-size:12px;line-height:1.5;color:var(--text-muted)">{{ m.note }}</div>
+              <div style="font-family:var(--mono);font-size:9.5px;color:var(--text-muted);margin-top:auto;padding-top:7px;border-top:1px solid var(--divider)">{{ m.labelKey }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+          <div style="flex:0 0 250px;display:flex;flex-direction:column;gap:8px">
+            <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">web sidebar · 20 px</div>
+            <div data-grey="{{ grey }}" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:8px;display:flex;flex-direction:column;gap:2px">
+              <sc-for list="{{ railItems }}" as="r" hint-placeholder-count="14">
+                <div style="display:flex;gap:11px;align-items:center;padding:0 10px;min-height:44px;border-radius:var(--radius-control)">
+                  <div style="color:{{ r.colour }};flex:0 0 20px">
+                    <svg viewBox="0 0 24 24" width="20" height="20" role="img" aria-label="{{ r.name }}" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                      <sc-for list="{{ r.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                    </svg>
+                  </div>
+                  <div style="font-size:13.5px;color:var(--text-primary)">{{ r.name }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:18px">
+            <sc-for list="{{ tabBars }}" as="t" hint-placeholder-count="2">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ t.label }}</div>
+                <div data-grey="{{ grey }}" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:6px 4px;display:grid;grid-template-columns:{{ t.cols }};max-width:420px">
+                  <sc-for list="{{ t.items }}" as="i" hint-placeholder-count="5">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 2px;min-height:56px;justify-content:center">
+                      <div style="color:{{ i.colour }}">
+                        <svg viewBox="0 0 24 24" width="28" height="28" role="img" aria-label="{{ i.name }}" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                          <sc-for list="{{ i.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                        </svg>
+                      </div>
+                      <div style="font-size:11px;color:{{ i.textColour }}">{{ i.name }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted);max-width:60ch">{{ t.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isGrid }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1080px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+          <sc-for list="{{ gridRules }}" as="r" hint-placeholder-count="6">
+            <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:16px;display:flex;flex-direction:column;gap:7px">
+              <div style="font-family:var(--mono);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent)">{{ r.name }}</div>
+              <div style="font-size:13px;line-height:1.55;color:var(--text-primary)">{{ r.detail }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">One glyph on the grid</h2>
+          <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+            <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:14px">
+              <svg viewBox="0 0 24 24" width="240" height="240" style="display:block">
+                <sc-for list="{{ gridLines }}" as="g" hint-placeholder-count="12"><path d="{{ g }}" style="fill:none;stroke:var(--chart-grid);stroke-width:0.09"></path></sc-for>
+                <path d="M3 3h18v18H3z" style="fill:none;stroke:var(--border-strong);stroke-width:0.14;stroke-dasharray:0.8 0.6"></path>
+                <sc-for list="{{ specimenPaths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}" style="fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"></path></sc-for>
+              </svg>
+            </div>
+            <div style="flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:10px">
+              <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ specimenName }} · the keyline box is 3 → 21</div>
+              <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                <sc-for list="{{ strokeTable }}" as="s" hint-placeholder-count="4">
+                  <div style="display:grid;grid-template-columns:1fr 90px 1fr;gap:12px;padding:9px 14px;background:var(--surface-raised);border-bottom:1px solid var(--divider);align-items:center">
+                    <div style="font-size:12.5px">{{ s.where }}</div>
+                    <div style="font-family:var(--mono);font-size:11.5px;color:var(--accent)">{{ s.px }}</div>
+                    <div style="font-size:12px;color:var(--text-muted)">{{ s.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">A 2-unit stroke lands on 1.33 device px at 16 px, which is the real reason the status set is drawn heavier than the module set rather than shared with it.</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The base set, and the line around it</h2>
+          <p style="margin:0;max-width:74ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ baseLicense }}</p>
+          <p style="margin:0;max-width:74ch;font-size:14px;line-height:1.6;color:var(--text-primary)">{{ baseRule }}</p>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+            <sc-for list="{{ baseGroups }}" as="g" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:150px 1fr;gap:16px;padding:12px 16px;background:var(--surface-raised);border-bottom:1px solid var(--divider)">
+                <div style="font-size:13px">{{ g.name }}</div>
+                <div style="font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--text-muted)">{{ g.glyphs }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isLabels }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:20px;max-width:1080px">
+        <p style="margin:0;max-width:74ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Every icon-only control has a label, with no exception for obvious ones. This is that register: the control, the glyph it uses, which set the glyph comes from, and the key. A label with a placeholder in it names the object — <span style="font-family:var(--mono)">Delete {name}</span>, not <span style="font-family:var(--mono)">Delete</span> — because a screen reader hears the button, not the row it sits in.</p>
+        <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+          <div style="display:grid;grid-template-columns:minmax(140px,1fr) 44px 70px minmax(150px,1.2fr) minmax(150px,1.4fr);gap:12px;padding:9px 16px;background:var(--table-header-bg);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">
+            <div>control</div><div>glyph</div><div>set</div><div>key</div><div>English</div>
+          </div>
+          <sc-for list="{{ labelRows }}" as="l" hint-placeholder-count="20">
+            <div style="display:grid;grid-template-columns:minmax(140px,1fr) 44px 70px minmax(150px,1.2fr) minmax(150px,1.4fr);gap:12px;padding:10px 16px;background:var(--surface-raised);border-bottom:1px solid var(--divider);align-items:center">
+              <div style="font-size:13px">{{ l.control }}</div>
+              <div style="color:var(--text-muted)">
+                <sc-if value="{{ l.hasGlyph }}" hint-placeholder-val="{{ true }}">
+                  <svg viewBox="0 0 24 24" width="20" height="20" role="img" aria-label="{{ l.english }}" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ l.paths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                </sc-if>
+                <sc-if value="{{ l.noGlyph }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-family:var(--mono);font-size:10.5px">{{ l.glyph }}</div>
+                </sc-if>
+              </div>
+              <div style="font-family:var(--mono);font-size:10px;color:{{ l.setColour }}">{{ l.set }}</div>
+              <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted);min-width:0">{{ l.key }}</div>
+              <div style="font-size:12.5px;min-width:0">{{ l.english }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isKit }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1120px">
+        <p style="margin:0;max-width:74ch;font-size:14px;line-height:1.6;color:var(--text-muted)">The unit of work is a part, not a picture. Seventeen empty states and the four Finance answers are composed from the eighteen parts below; none of them is drawn. That is what makes seventeen of them survive translation, dark theme and the schedule — and it is why the language is settled in Stage 3, two stages before its first real test.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px">
+          <sc-for list="{{ kitRules }}" as="r" hint-placeholder-count="8">
+            <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:15px;display:flex;flex-direction:column;gap:6px">
+              <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent)">{{ r.name }}</div>
+              <div style="font-size:12.5px;line-height:1.55;color:var(--text-primary)">{{ r.detail }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The kit of parts</h2>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px">
+            <sc-for list="{{ partTiles }}" as="p" hint-placeholder-count="18">
+              <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:12px;display:flex;flex-direction:column;gap:8px">
+                <div data-grey="{{ grey }}" style="background:var(--surface-sunken);border-radius:8px;padding:8px">
+                  <svg viewBox="0 0 48 48" width="100%" style="display:block">
+                    <sc-for list="{{ p.fills }}" as="d" hint-placeholder-count="1"><path d="{{ d }}" style="fill:{{ p.fill }};stroke:none"></path></sc-for>
+                    <sc-for list="{{ p.paths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}" style="fill:none;stroke:{{ p.stroke }};stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:{{ p.dash }}"></path></sc-for>
+                  </svg>
+                </div>
+                <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+                  <div style="font-size:13px">{{ p.name }}</div>
+                  <div style="font-family:var(--mono);font-size:9.5px;color:var(--text-muted)">{{ p.tone }}</div>
+                </div>
+                <div style="font-size:12px;line-height:1.5;color:var(--text-muted)">{{ p.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isComps }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:18px;max-width:1180px">
+        <p style="margin:0;max-width:74ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Eight compositions, four parts at most each, every part from the kit. The empty states carry the delivery contract as written — one sentence, one example, one action — and Finance's four answers carry the consequence of choosing them, because on that screen the illustration is load-bearing rather than decorative.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px">
+          <sc-for list="{{ compositions }}" as="c" hint-placeholder-count="8">
+            <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow:hidden;display:flex;flex-direction:column">
+              <div data-grey="{{ grey }}" style="background:var(--surface-sunken);border-bottom:1px solid var(--divider);padding:14px">
+                <svg viewBox="0 0 200 140" width="100%" style="display:block">
+                  <sc-for list="{{ c.instances }}" as="p" hint-placeholder-count="3">
+                    <g transform="{{ p.t }}">
+                      <sc-for list="{{ p.fills }}" as="d" hint-placeholder-count="1"><path d="{{ d }}" style="fill:{{ p.fill }};stroke:none"></path></sc-for>
+                      <sc-for list="{{ p.paths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}" style="fill:none;stroke:{{ p.stroke }};stroke-width:{{ p.w }};stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:{{ p.dash }}"></path></sc-for>
+                    </g>
+                  </sc-for>
+                </svg>
+              </div>
+              <div style="padding:15px;display:flex;flex-direction:column;gap:8px;flex:1 1 auto">
+                <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-muted)">{{ c.screen }}</div>
+                <div style="font-size:15px;line-height:1.45">{{ c.sentence }}</div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ c.example }}</div>
+                <div style="align-self:flex-start;font-size:12.5px;padding:7px 12px;min-height:36px;display:flex;align-items:center;border-radius:var(--radius-control);background:{{ c.accent }};color:var(--text-on-accent)">{{ c.action }}</div>
+                <div style="font-size:12px;line-height:1.5;color:var(--text-muted);margin-top:auto;padding-top:9px;border-top:1px solid var(--divider)">{{ c.note }}</div>
+                <div style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ c.partList }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isGate }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:22px;max-width:920px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+          <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+            <div style="background:var(--surface-raised);padding:16px">
+              <div style="font-family:var(--mono);font-size:26px;line-height:1;color:var(--accent)">{{ s.value }}</div>
+              <div style="font-size:12px;line-height:1.4;color:var(--text-muted);margin-top:7px">{{ s.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+          <sc-for list="{{ gateRows }}" as="g" hint-placeholder-count="5">
+            <div style="display:grid;grid-template-columns:26px 1fr;gap:12px;padding:15px 16px;background:var(--surface-raised);border-bottom:1px solid var(--divider);align-items:start">
+              <div style="font-family:var(--mono);font-size:15px;line-height:1.2;color:{{ g.colour }}">{{ g.mark }}</div>
+              <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                <div style="font-size:14px">{{ g.claim }}</div>
+                <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ g.evidence }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What Stage 3 hands to Stage 4</h2>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+            <sc-for list="{{ handoff }}" as="h" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:150px 1fr;gap:16px;padding:13px 16px;background:var(--surface-raised);border-bottom:1px solid var(--divider)">
+                <div style="font-family:var(--mono);font-size:11.5px;color:var(--accent)">{{ h.k }}</div>
+                <div style="font-size:13px;line-height:1.55;color:var(--text-primary)">{{ h.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Recorded, not hidden</h2>
+          <div style="display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+            <sc-for list="{{ openItems }}" as="o" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:5px;padding:15px 16px;background:var(--surface-raised);border-bottom:1px solid var(--divider)">
+                <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+                  <div style="font-size:13.5px;font-weight:600">{{ o.title }}</div>
+                  <div style="font-family:var(--mono);font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;color:var(--text-muted)">{{ o.tag }}</div>
+                </div>
+                <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted);max-width:84ch">{{ o.detail }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { view: "status", theme: "light", ink: "colour", size: 24, matrix: null };
+
+  componentDidMount() {
+    this.applyTheme();
+    this.measure();
+  }
+  componentDidUpdate(_, prev) {
+    if (prev.theme !== this.state.theme) this.applyTheme();
+  }
+  applyTheme() {
+    document.documentElement.setAttribute("data-theme", this.state.theme);
+    if (document.body) document.body.setAttribute("data-theme", this.state.theme);
+  }
+
+  /* rasterise each status glyph at 16 px on a 2× grid, discard colour, and
+     compare every pair as ink: the share of marked pixels not in common. */
+  measure() {
+    var I = window.HH_ICONS; if (!I || typeof Path2D === "undefined") return;
+    var N = 32, maps = I.status.map(function (s) {
+      var c = document.createElement("canvas"); c.width = N; c.height = N;
+      var x = c.getContext("2d");
+      x.scale(N / 24, N / 24);
+      x.lineWidth = 2; x.lineCap = "round"; x.lineJoin = "round"; x.strokeStyle = "#000";
+      s[6].forEach(function (d) { x.stroke(new Path2D(d)); });
+      var px = x.getImageData(0, 0, N, N).data, m = [], ink = 0;
+      for (var i = 0; i < N * N; i++) { var on = px[i * 4 + 3] > 40 ? 1 : 0; m.push(on); ink += on; }
+      return { id: s[0], word: s[1], paths: s[6], map: m, ink: ink };
+    });
+    var pairs = [];
+    for (var a = 0; a < maps.length; a++) for (var b = a + 1; b < maps.length; b++) {
+      var diff = 0, uni = 0;
+      for (var i = 0; i < N * N; i++) {
+        var p = maps[a].map[i], q = maps[b].map[i];
+        if (p || q) uni++;
+        if (p !== q) diff++;
+      }
+      pairs.push({ a: maps[a], b: maps[b], score: uni ? diff / uni : 0 });
+    }
+    pairs.sort(function (x, y) { return x.score - y.score; });
+    this.setState({ matrix: { pairs: pairs, min: pairs[0].score, floor: 0.4 } });
+  }
+
+  hex(name) {
+    var t = window.HH_TOKENS; if (!t) return "#888";
+    var v = t.byName[name]; return v ? v[this.state.theme] : "#888";
+  }
+  tint(name) { return this.hex(name) + "24"; }
+
+  nearestFor(id) {
+    var m = this.state.matrix; if (!m) return "measuring…";
+    for (var i = 0; i < m.pairs.length; i++) {
+      var p = m.pairs[i];
+      if (p.a.id === id) return "nearest " + p.b.id + " · " + p.score.toFixed(2);
+      if (p.b.id === id) return "nearest " + p.a.id + " · " + p.score.toFixed(2);
+    }
+    return "";
+  }
+
+  renderVals() {
+    var self = this, S = this.state, I = window.HH_ICONS || {}, L = window.HH_ILLUS || {}, TK = window.HH_TOKENS || {};
+    var status = I.status || [], modules = I.modules || [], parts = L.parts || [], comps = L.compositions || [];
+    var famToken = { household: "accent-family-household", time: "accent-family-time", money: "accent-family-money", things: "accent-family-things", keeping: "accent-family-keeping", garden: "accent-garden" };
+    var famName = { household: "Household", time: "Time & work", money: "Money", things: "Things we own", keeping: "Keeping", garden: "Garden — outside the five" };
+
+    var viewDefs = [
+      ["status", "status · 13", status.length],
+      ["modules", "modules · 19", modules.length],
+      ["grid", "grid & base set", (I.base ? I.base.count : 0)],
+      ["labels", "icon-only labels", (I.labels || []).length],
+      ["kit", "illustration kit", parts.length],
+      ["comps", "compositions", comps.length],
+      ["gate", "the stage gate", ""]
+    ];
+    var views = viewDefs.map(function (v) {
+      return { label: v[1], count: v[2], on: S.view === v[0] ? "1" : "0", pick: function () { self.setState({ view: v[0] }); } };
+    });
+
+    var controls = [
+      { label: "theme", options: ["light", "dark"].map(function (t) { return { label: t, title: "Both themes are first-class", on: S.theme === t ? "1" : "0", pick: function () { self.setState({ theme: t }); } }; }) },
+      { label: "ink", options: [["colour", "colour"], ["grey", "greyscale"]].map(function (t) { return { label: t[1], title: "Greyscale is the design case, not a fallback", on: S.ink === t[0] ? "1" : "0", pick: function () { self.setState({ ink: t[0] }); } }; }) },
+      { label: "glyph size", options: [16, 20, 24, 28].map(function (n) { return { label: n + " px", title: n === 20 ? "sidebar" : n === 28 ? "tab bar" : n === 16 ? "row mark" : "specimen", on: S.size === n ? "1" : "0", pick: function () { self.setState({ size: n }); } }; }) }
+    ];
+
+    var titles = {
+      status: ["The thirteen status icons", "load-bearing under N2 · drawn before anything else"],
+      modules: ["The nineteen navigation icons", "seventeen modules, plus Today and Add"],
+      grid: ["One grid, two weights", "and the line around the licensed base set"],
+      labels: ["The icon-only control register", "07-delivery §3 · no exception for obvious icons"],
+      kit: ["The illustration construction language", "DD-5 · a kit of parts, not artwork"],
+      comps: ["Compositions", "eight of the twenty-one this kit has to carry"],
+      gate: ["The Stage 3 gate", "computed from the two files, not asserted"]
+    };
+    var t = titles[S.view] || ["", ""];
+
+    /* ── the gate ─────────────────────────────────────────────────────── */
+    var m = S.matrix;
+    var greyPass = m ? m.min >= m.floor : false;
+    var labels = I.labels || [];
+    var labelled = labels.filter(function (r) { return !!r[3]; }).length;
+    var glyphKeys = status.filter(function (s) { return !!s[3]; }).length + modules.filter(function (x) { return !!x[3]; }).length;
+    var glyphTotal = status.length + modules.length;
+    var colourClean = (I.colourIssues || []).length === 0;
+    var audit = L.audit || { over: [], missing: [], illegalScales: [], unused: [] };
+    var kitClean = audit.over.length === 0 && audit.missing.length === 0 && audit.illegalScales.length === 0;
+    var allPass = greyPass && labelled === labels.length && glyphKeys === glyphTotal && colourClean && kitClean;
+
+    var gateRows = [
+      { mark: greyPass ? "✓" : "!", colour: greyPass ? this.hex("positive") : this.hex("warning"),
+        claim: "The status set is distinguishable in greyscale at 16 px",
+        evidence: m ? ("Closest pair " + m.pairs[0].a.id + " / " + m.pairs[0].b.id + " at " + m.pairs[0].score.toFixed(2) + " ink difference, against a " + m.floor.toFixed(2) + " floor. Seventy-eight pairs measured; the five closest are named on the status view for the human review that actually closes this.") : "Measuring." },
+      { mark: labelled === labels.length && glyphKeys === glyphTotal ? "✓" : "!", colour: labelled === labels.length ? this.hex("positive") : this.hex("danger"),
+        claim: "Every icon-only control has a label",
+        evidence: labelled + " of " + labels.length + " registered controls carry a key, and " + glyphKeys + " of " + glyphTotal + " in-house glyphs carry one. Labels that refer to a row name it with a placeholder rather than saying " + '"Delete"' + " alone." },
+      { mark: colourClean ? "✓" : "!", colour: colourClean ? this.hex("positive") : this.hex("danger"),
+        claim: "No glyph carries a colour, a fill or a letterform",
+        evidence: "Every glyph is one stroke in currentColor, so it inherits its module accent or status token from the surface it sits on — and greyscale is the design case rather than a degradation. Nothing in either set contains a letter or a digit." },
+      { mark: kitClean ? "✓" : "!", colour: kitClean ? this.hex("positive") : this.hex("warning"),
+        claim: "Every composition is four parts or fewer, from the kit, at a quarter-step scale",
+        evidence: comps.length + " compositions checked against " + parts.length + " parts. Unused so far: " + (audit.unused.length ? audit.unused.join(", ") : "none") + " — kept because Stages 12–19 have thirteen more empty states to compose." },
+      { mark: "→", colour: this.hex("text-muted"),
+        claim: "Order held: status thirteen first, module nineteen second, kit third",
+        evidence: "The status set is what Stage 5's sync vocabulary rests on, so it was drawn and greyscale-reviewed before a single module icon started. The kit is settled here rather than in Stage 9 because Finance setup step one in Stage 16 needs the language, not a house style invented late." }
+    ];
+
+    var vals = {
+      views: views, controls: controls, theme: S.theme, grey: S.ink === "grey" ? "1" : "0", glyphSize: S.size,
+      pageTitle: t[0], pageMeta: t[1],
+      gateLine: allPass ? "stage 3 gate · all checks pass" : (m ? "stage 3 gate · see the gate view" : "measuring the greyscale set…"),
+      gateColor: allPass ? this.hex("positive") : this.hex("warning"),
+      isStatus: S.view === "status", isModules: S.view === "modules", isGrid: S.view === "grid",
+      isLabels: S.view === "labels", isKit: S.view === "kit", isComps: S.view === "comps", isGate: S.view === "gate",
+      gateRows: gateRows
+    };
+
+    /* ── status ───────────────────────────────────────────────────────── */
+    vals.statusRows = status.map(function (s) {
+      return { word: s[1], token: s[2], silhouette: s[4], note: s[5], paths: s[6],
+        stroke: I.grid.strokeStatus, colour: self.hex(s[2]), nearest: self.nearestFor(s[0]) };
+    });
+    vals.closest = (m ? m.pairs.slice(0, 5) : []).map(function (p) {
+      return { pair: p.a.id + " / " + p.b.id, score: p.score.toFixed(2) + " ink difference",
+        colour: p.score >= m.floor ? self.hex("text-muted") : self.hex("warning"),
+        aPaths: p.a.paths, bPaths: p.b.paths, aWord: p.a.word, bWord: p.b.word };
+    });
+
+    /* ── modules ──────────────────────────────────────────────────────── */
+    vals.moduleTiles = modules.map(function (x) {
+      return { name: x[1], family: famName[x[2]], note: x[4], paths: x[5], labelKey: x[3],
+        stroke: I.grid.strokeModule, colour: self.hex(famToken[x[2]]) };
+    });
+    var byId = I.byId || {};
+    var railOrder = ["dashboard", "today", "shopping", "tasks", "calendar", "chores", "finance", "utilities", "garden", "documents", "notes", "chat", "activity", "admin"];
+    vals.railItems = railOrder.map(function (id) {
+      var g = byId[id] || {};
+      return { name: g.name, paths: g.paths || [], colour: self.hex(famToken[g.family] || "accent") };
+    });
+    var MORE = { name: "More", paths: ["M6.6 10.7a1.3 1.3 0 1 0 0 2.6a1.3 1.3 0 1 0 0-2.6", "M12 10.7a1.3 1.3 0 1 0 0 2.6a1.3 1.3 0 1 0 0-2.6", "M17.4 10.7a1.3 1.3 0 1 0 0 2.6a1.3 1.3 0 1 0 0-2.6"] };
+    function slot(id, active) {
+      var g = id === "more" ? MORE : (byId[id] || {});
+      return { name: g.name, paths: g.paths || [],
+        colour: active ? self.hex("accent") : self.hex("text-muted"),
+        textColour: active ? self.hex("accent") : self.hex("text-muted") };
+    }
+    vals.tabBars = [
+      { label: "mobile tab bar · five destinations · 28 px", cols: "repeat(5,1fr)",
+        items: [slot("dashboard", true), slot("today"), slot("add"), slot("chat"), slot("more")],
+        note: "Home · Today · Add · Chat · More, in a fixed order. Add holds the centre slot and opens a sheet rather than pushing a destination, so it occupies a slot like the rest." },
+      { label: "mobile tab bar · four destinations · 28 px", cols: "repeat(4,1fr)",
+        items: [slot("dashboard", true), slot("today"), slot("add"), slot("more")],
+        note: "Chat is the one that can be absent, and a bar without it is four finished slots — never a five-slot bar with a hole in it. Miloš's bar. More is the only top-level destination drawn from the base set." }
+    ];
+
+    /* ── grid & base ──────────────────────────────────────────────────── */
+    var g = I.grid || { rules: [] };
+    vals.gridRules = (g.rules || []).map(function (r) { return { name: r[0], detail: r[1] }; });
+    var lines = [];
+    for (var i = 3; i <= 21; i += 1.5) { lines.push("M" + i + " 0V24"); lines.push("M0 " + i + "H24"); }
+    vals.gridLines = lines;
+    vals.specimenPaths = (byId.conflict || {}).paths || [];
+    vals.specimenName = "status · conflict";
+    vals.strokeTable = [
+      { where: "Status glyph on a row", px: "16 px → 1.33", note: "The heaviest set, at its smallest size" },
+      { where: "Status glyph, stated in words", px: "20 px → 1.67", note: "Conflict inbox, sync health" },
+      { where: "Module glyph in the web sidebar", px: "20 px → 1.46", note: "Fourteen rows deep for Jana" },
+      { where: "Module glyph in the tab bar", px: "28 px → 2.04", note: "The size the module set is drawn for" }
+    ];
+    var base = I.base || { groups: [] };
+    vals.baseLicense = base.license;
+    vals.baseRule = base.rule;
+    vals.baseGroups = (base.groups || []).map(function (x) { return { name: x[0] + " · " + x[1].length, glyphs: x[1].join("  ·  ") }; });
+
+    /* ── labels ───────────────────────────────────────────────────────── */
+    vals.labelRows = labels.map(function (r) {
+      var g2 = byId[r[1]];
+      return { control: r[0], glyph: r[1], set: r[2], key: r[3], english: r[4],
+        hasGlyph: !!g2, noGlyph: !g2, paths: g2 ? g2.paths : [],
+        setColour: r[2] === "base" ? self.hex("text-muted") : self.hex("accent") };
+    });
+
+    /* ── illustration ─────────────────────────────────────────────────── */
+    vals.kitRules = (L.rules || []).map(function (r) { return { name: r[0], detail: r[1] }; });
+    vals.partTiles = parts.map(function (p) {
+      var accent = self.hex("accent-family-keeping");
+      return { name: p[1], tone: p[2], note: p[4], paths: p[5], fills: p[6],
+        stroke: p[2] === "accent" ? accent : self.hex("text-muted"),
+        fill: accent + "24", dash: p[3] ? "5 4" : "none" };
+    });
+    var byPart = L.byPart || {};
+    vals.compositions = comps.map(function (c) {
+      var accent = self.hex(c.accent);
+      return { screen: c.screen, sentence: c.sentence, example: c.example, action: c.action, note: c.note,
+        accent: accent,
+        partList: c.parts.map(function (p) { return p[0] + " ×" + p[3]; }).join("  ·  "),
+        instances: c.parts.map(function (p) {
+          var def = byPart[p[0]] || { paths: [], fills: [] };
+          return { t: "translate(" + p[1] + "," + p[2] + ") scale(" + p[3] + ")",
+            w: (2 / p[3]).toFixed(2),
+            stroke: def.tone === "accent" ? accent : self.hex("text-muted"),
+            fill: accent + "24", dash: def.dashed ? (5 / p[3]).toFixed(1) + " " + (4 / p[3]).toFixed(1) : "none",
+            paths: def.paths, fills: def.fills };
+        }) };
+    });
+
+    /* ── gate view extras ─────────────────────────────────────────────── */
+    vals.stats = [
+      { value: String(status.length + modules.length), label: "glyphs drawn in-house, on one grid" },
+      { value: String(base.count || 0), label: "base-set glyphs vendored and tree-shaken" },
+      { value: String(parts.length), label: "illustration parts, composing 21 pictures" },
+      { value: m ? m.min.toFixed(2) : "—", label: "closest greyscale pair, of 78 measured" }
+    ];
+    vals.handoff = [
+      { k: "@household/icons", v: "Two in-house sets as path data on one 24 grid, plus the base-set manifest and the license note. Stroke weight is a property of the set, not of the call site." },
+      { k: "@household/i18n", v: "Twenty icon-only control keys and thirty-two glyph label keys, in English, with the placeholder form for anything that names a row." },
+      { k: "@household/illustration", v: "Eighteen parts and eight compositions as data. Stage 9 writes Shopping's sentence against a composition that already exists; Stage 16 composes Finance's four answers from the same parts." },
+      { k: "Stage 5 depends on this", v: "The sync, conflict and honesty vocabulary needs synced, pending, syncing, conflict, rejected and offline drawn and reviewed before it can draw a row that uses them. That is why this stage is third and not ninth." }
+    ];
+    vals.openItems = [
+      { title: "Reminders keeps a conventional bell", tag: "deliberate", detail: "The one module glyph taken from convention rather than from the module. A reminder is a day and not an instant, so a clock would misstate it — and a bell is understood in five languages without a legend." },
+      { title: "More is the only base glyph in a top-level destination", tag: "watch", detail: "The fifth tab slot uses the base set's three dots. If More starts carrying meaning of its own rather than overflow, it moves in-house by the rule on the grid view." },
+      { title: "The two clocks are the closest pair in the set", tag: "measured", detail: "overdue and stale share a ring, which is deliberate — both are about time — so they are separated by three things instead of one: the ring is closed against open, the hands are long against short, and overdue carries a mark at twelve. They are the first pair to re-measure if the stroke weight ever changes." },
+      { title: "Thirteen empty states are unwritten", tag: "expected", detail: "Four compositions exist for the modules Stages 9 to 17 reach. The remaining thirteen are composed in their own module stage, alongside the screen they teach — which is the only stage at which the sentence can be checked against what the module does." }
+    ];
+
+    return vals;
+  }
+}
+</script>
+</body>
+</html>

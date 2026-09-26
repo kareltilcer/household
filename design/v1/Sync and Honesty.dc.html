@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./icons.js"></script>
+<script src="./sync.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">Household · sync</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Sync, conflict &amp; honesty</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent)">stage 05 · categories, not severities</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="7">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">Five merge policies, four visible shapes. Two of them show nothing at all, and that is the design rather than an omission.</div>
+      <a href="./Components and States.dc.html" style="font-family:var(--mono);font-size:11px">← stage 04 · components</a>
+      <a href="./Shells and Navigation.dc.html" style="font-family:var(--mono);font-size:11px">stage 06 · shells →</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <sc-if value="{{ isLadder }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1240px">
+        <p style="margin:0;max-width:78ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Seven presentations, drawn in order of how loud they are. Only two of them put anything on a row, and the first one puts nothing anywhere — the absence of a mark is the synced state, so there is no green tick to earn. The read under the offline bar is the same read as online, which is a requirement rather than an aspiration.</p>
+
+        <sc-for list="{{ ladder }}" as="l" hint-placeholder-count="7">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;align-items:start;padding-top:20px;border-top:1px solid var(--border)">
+
+            <div data-watch="1" data-name="{{ l.key }}" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow:hidden;box-shadow:var(--shadow-1)">
+              <div style="padding:7px 12px;border-bottom:1px solid var(--divider);display:flex;justify-content:space-between;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted)">
+                <span>Utilities · readings</span><span style="color:{{ l.markColour }}">{{ l.key }}</span>
+              </div>
+
+              <sc-if value="{{ l.hasBar }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface-sunken);border-bottom:1px solid var(--divider);color:var(--status-offline);font-size:12.5px">
+                  <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="display:block;flex:0 0 auto;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ offlinePaths }}" as="d" hint-placeholder-count="4"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                  <span>Offline — changes are saved and will sync</span>
+                </div>
+              </sc-if>
+
+              <div style="padding:12px;display:flex;flex-direction:column;gap:0.7em;font-size:{{ fontPx }}">
+                <div style="display:flex;gap:0.6em;align-items:flex-start">
+                  <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.25em">
+                    <div style="font-size:0.95em;font-weight:500;line-height:1.3">Electricity — cellar meter</div>
+                    <div style="font-size:0.8125em;line-height:1.4;color:var(--text-muted)">{{ l.secondary }}</div>
+                    <sc-if value="{{ l.hasMark }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;gap:0.35em;flex-wrap:wrap;font-size:0.8125em;color:{{ l.markColour }}">
+                        <svg viewBox="0 0 24 24" width="1.15em" height="1.15em" role="img" aria-label="{{ l.markWord }}" style="display:block;flex:0 0 auto;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                          <sc-for list="{{ l.markPaths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                        </svg>
+                        <span>{{ l.markWord }}</span>
+                        <span style="color:var(--text-muted)">{{ l.markNote }}</span>
+                      </div>
+                    </sc-if>
+                  </div>
+                  <sc-if value="{{ l.hasAffordance }}" hint-placeholder-val="{{ false }}">
+                    <button data-target="1" data-name="{{ l.key }} edit" style="flex:0 0 auto;min-height:44px;min-width:44px;padding:0 0.8em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface);color:var(--text-primary);font-size:0.8125em">{{ l.affordance }}</button>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ l.hasTap }}" hint-placeholder-val="{{ false }}">
+                  <button data-target="1" data-name="{{ l.key }} tap" onClick="{{ goConflict }}" style="text-align:left;min-height:44px;padding:0.5em 0.7em;border-radius:var(--radius-control);border:1px solid var(--status-conflict);background:var(--surface);color:var(--text-primary);font-size:0.8125em;display:flex;align-items:center;justify-content:space-between;gap:0.6em">
+                    <span>{{ l.tap }}</span><span style="color:var(--text-muted)">›</span>
+                  </button>
+                </sc-if>
+
+                <sc-if value="{{ l.hasSentence }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.6em;padding:0.6em 0.7em;border-radius:var(--radius-control);border:1px solid var(--danger);background:var(--surface)">
+                    <div style="font-size:0.8125em;line-height:1.45">{{ l.sentence }}</div>
+                    <div style="display:flex;gap:0.4em;flex-wrap:wrap">
+                      <sc-for list="{{ l.actions }}" as="a" hint-placeholder-count="3">
+                        <button data-target="1" data-name="rejected action" style="min-height:44px;padding:0 0.8em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface-raised);color:var(--text-primary);font-size:0.8125em">{{ a }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ l.hasThreshold }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:0.75em;line-height:1.45;color:var(--text-muted);font-family:var(--mono)">{{ l.thresholdNote }}</div>
+                </sc-if>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:9px;padding-top:2px">
+              <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                <h3 style="margin:0;font-size:17px;font-weight:600">{{ l.name }}</h3>
+                <span style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ l.ref }}</span>
+              </div>
+              <p style="margin:0;max-width:64ch;font-size:14px;line-height:1.55">{{ l.sees }}</p>
+              <sc-if value="{{ showRules }}" hint-placeholder-val="{{ true }}">
+                <p style="margin:0;max-width:64ch;font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ l.rule }}</p>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="border-top:1px solid var(--border);padding-top:22px;display:flex;flex-direction:column;gap:14px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The three offline write cases</h2>
+          <p style="margin:0;max-width:78ch;font-size:13.5px;line-height:1.6;color:var(--text-muted)">Named in the PRD with an expected experience each, which makes them tests rather than anecdotes. Every one of them is a member doing something ordinary in a place with no signal.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+            <sc-for list="{{ cases }}" as="c" hint-placeholder-count="3">
+              <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:14px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+                  <div style="font-size:14px;font-weight:600">{{ c.name }}</div>
+                  <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ c.ref }}</span>
+                </div>
+                <div style="font-family:var(--mono);font-size:10.5px;color:{{ c.colour }}">{{ c.policy }}</div>
+                <div style="font-size:12.5px;line-height:1.5">{{ c.story }}</div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted);padding-top:8px;border-top:1px solid var(--divider)">{{ c.expected }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-card);background:var(--surface-sunken);padding:14px;display:flex;flex-direction:column;gap:6px">
+            <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">Attachments · {{ attachRef }}</div>
+            <div style="font-size:13.5px;line-height:1.55">{{ attachLine }}</div>
+            <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ attachConsequence }}</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isPolicies }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:24px;max-width:1240px">
+        <p style="margin:0;max-width:78ch;font-size:14px;line-height:1.6;color:var(--text-muted)">The dividing line is whether a wrong answer costs anything. Five policies, and the gate for this stage is that they read as four different categories of event: nothing happened · it was appended and may yet be refused · one body replaced another and the loser is here · somebody has to answer a question. A drag that opened a conflict dialog would be absurd; a silently merged allocation rule would be a wrong number nobody ever finds.</p>
+
+        <sc-for list="{{ policies }}" as="p" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;align-items:start;padding-top:20px;border-top:1px solid var(--border)">
+
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                <span style="font-family:var(--mono);font-size:13px;color:{{ p.shapeColour }}">{{ p.id }}</span>
+                <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">{{ p.shapeLabel }}</span>
+              </div>
+              <h3 style="margin:0;font-size:17px;font-weight:600;line-height:1.35;max-width:44ch">{{ p.category }}</h3>
+              <p style="margin:0;max-width:66ch;font-size:14px;line-height:1.55"><strong style="font-weight:600">What the member sees.</strong> {{ p.sees }}</p>
+              <sc-if value="{{ showRules }}" hint-placeholder-val="{{ true }}">
+                <p style="margin:0;max-width:66ch;font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ p.why }}</p>
+              </sc-if>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;padding-top:2px">
+                <sc-for list="{{ p.entities }}" as="e" hint-placeholder-count="6">
+                  <span style="padding:3px 8px;border-radius:var(--radius-pill);border:1px solid var(--border-subtle);background:var(--surface);font-size:11px;color:var(--text-muted)">{{ e }}</span>
+                </sc-for>
+              </div>
+            </div>
+
+            <div data-watch="1" data-name="policy {{ p.id }}" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow:hidden">
+              <div style="padding:7px 12px;border-bottom:1px solid var(--divider);font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:{{ p.shapeColour }}">{{ p.shapeLabel }}</div>
+              <div style="padding:12px;display:flex;flex-direction:column;gap:0.7em;font-size:{{ fontPx }}">
+
+                <sc-if value="{{ p.isSilent }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.3em">
+                    <div style="font-size:0.95em;font-weight:500">{{ p.rowTitle }}</div>
+                    <div style="font-size:0.8125em;color:var(--text-muted);line-height:1.4">{{ p.rowSecondary }}</div>
+                  </div>
+                  <div style="font-size:0.75em;line-height:1.5;color:var(--text-muted);padding-top:0.5em;border-top:1px solid var(--divider)">{{ p.caption }}</div>
+                </sc-if>
+
+                <sc-if value="{{ p.isAdmission }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.3em">
+                    <div style="font-size:0.95em;font-weight:500">{{ p.rowTitle }}</div>
+                    <div style="font-size:0.8125em;color:var(--text-muted);line-height:1.4">{{ p.rowSecondary }}</div>
+                    <div style="display:flex;align-items:center;gap:0.35em;font-size:0.8125em;color:var(--status-pending)">
+                      <svg viewBox="0 0 24 24" width="1.15em" height="1.15em" role="img" aria-label="Not sent yet" style="display:block;flex:0 0 auto;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                        <sc-for list="{{ pendingPaths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                      </svg>
+                      <span>Not sent yet</span>
+                    </div>
+                  </div>
+                  <div style="font-size:0.8125em;line-height:1.5;color:var(--text-muted);padding-top:0.5em;border-top:1px solid var(--divider)">Correcting a reading that is already saved needs a connection. Nothing is greyed out here — the edit affordance is not drawn, and this line is why.</div>
+                  <div style="font-size:0.75em;line-height:1.5;color:var(--text-muted)">{{ p.caption }}</div>
+                </sc-if>
+
+                <sc-if value="{{ p.isLoser }}" hint-placeholder-val="{{ false }}">
+                  <sc-for list="{{ p.variants }}" as="v" hint-placeholder-count="2">
+                    <div style="display:flex;flex-direction:column;gap:0.5em;padding:0.6em 0.7em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface)">
+                      <div style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap;font-family:var(--mono);font-size:0.7em;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted)">
+                        <span>{{ v.who }}</span><span>·</span><span style="color:var(--accent)">{{ v.window }}</span><span>·</span><span>{{ v.offline }}</span>
+                      </div>
+                      <div style="font-size:0.8125em;line-height:1.45">{{ v.copy }}</div>
+                      <div style="display:flex;gap:0.4em;flex-wrap:wrap">
+                        <button data-target="1" data-name="loser action" style="min-height:44px;padding:0 0.8em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface-raised);color:var(--text-primary);font-size:0.8125em">{{ v.action }}</button>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <div style="font-size:0.75em;line-height:1.5;color:var(--text-muted)">{{ p.caption }}</div>
+                </sc-if>
+
+                <sc-if value="{{ p.isQuestion }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:0.95em;line-height:1.4;font-weight:500">{{ p.caption }}</div>
+                  <div style="display:flex;flex-direction:column;gap:0.4em">
+                    <button data-target="1" data-name="resolve mine" style="text-align:left;min-height:44px;padding:0.5em 0.7em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface);color:var(--text-primary);font-size:0.8125em">Keep 450 — yours, 18:12</button>
+                    <button data-target="1" data-name="resolve theirs" style="text-align:left;min-height:44px;padding:0.5em 0.7em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface);color:var(--text-primary);font-size:0.8125em">Keep 500 — Petr, 18:40</button>
+                    <button data-target="1" data-name="resolve third" onClick="{{ goConflict }}" style="text-align:left;min-height:44px;padding:0.5em 0.7em;border-radius:var(--radius-control);border:1px dashed var(--border-strong);background:var(--surface);color:var(--text-link);font-size:0.8125em">Enter a different amount</button>
+                  </div>
+                </sc-if>
+
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isConflict }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:24px;max-width:1240px">
+        <p style="margin:0;max-width:78ch;font-size:14px;line-height:1.6;color:var(--text-muted)">DD-4: an inbox plus row-level flags, not a modal at reconnect. Conflicts must always be asked, but not necessarily now — a member who reconnects after a week may have several, and a reconnect that opens six modals is a reconnect people learn to avoid. Pick an entry: the inbox routes to the row, and the question is answered there, next to what the amount is for.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:22px;align-items:start">
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The conflict inbox</h2>
+              <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--radius-pill);background:var(--status-conflict);color:var(--text-on-accent);font-size:11.5px;font-weight:500">
+                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                  <sc-for list="{{ conflictPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                </svg>
+                <span>{{ inboxCount }} to resolve</span>
+              </span>
+            </div>
+
+            <div data-watch="1" data-name="conflict inbox" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow:hidden">
+              <sc-for list="{{ inbox }}" as="e" hint-placeholder-count="3">
+                <button data-target="1" data-name="inbox {{ e.id }}" onClick="{{ e.pick }}" style="width:100%;text-align:left;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border:0;border-bottom:1px solid var(--divider);background:{{ e.bg }};color:var(--text-primary);min-height:44px">
+                  <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:var(--radius-pill);border:1px solid var(--border-subtle);font-size:11px;color:{{ e.chipColour }};flex:0 1 auto;min-width:0">
+                    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round">
+                      <sc-for list="{{ e.chipPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                    </svg>
+                    <span>{{ e.chipName }}</span>
+                  </span>
+                  <span style="flex:1 1 160px;min-width:120px;display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:13.5px;font-weight:500">{{ e.title }}</span>
+                    <span style="font-size:11.5px;color:var(--text-muted)">{{ e.where }} · {{ e.pair }}</span>
+                  </span>
+                  <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted);flex:0 1 auto;min-width:0">{{ e.route }} ›</span>
+                </button>
+              </sc-for>
+              <div style="padding:10px 14px;font-size:11.5px;color:var(--text-muted)">Nothing here ages out, and nothing resolves itself. The badge stays until a person answers.</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:0;padding-top:6px">
+              <sc-for list="{{ inboxRules }}" as="r" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:minmax(180px,300px) 1fr;gap:8px 18px;padding:12px 0;border-top:1px solid var(--divider);align-items:start">
+                  <div style="font-size:13.5px;font-weight:500;line-height:1.4">{{ r.name }}</div>
+                  <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ r.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">Routed to the row · {{ sel.chipName }}</div>
+
+            <div data-watch="1" data-name="resolver" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow:hidden;box-shadow:var(--shadow-1)">
+              <div style="padding:12px 14px;border-bottom:1px solid var(--divider);display:flex;flex-direction:column;gap:0.3em;font-size:{{ fontPx }}">
+                <div style="font-size:0.95em;font-weight:500;line-height:1.3">{{ sel.title }}</div>
+                <div style="font-size:0.8125em;color:var(--text-muted)">{{ sel.where }}</div>
+                <div style="display:flex;align-items:center;gap:0.35em;font-size:0.8125em;color:var(--status-conflict)">
+                  <svg viewBox="0 0 24 24" width="1.15em" height="1.15em" role="img" aria-label="Two versions" style="display:block;flex:0 0 auto;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ conflictPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                  <span>Two versions</span><span style="color:var(--text-muted)">· two authors</span>
+                </div>
+              </div>
+
+              <div style="padding:14px;display:flex;flex-direction:column;gap:0.8em;font-size:{{ fontPx }};background:var(--surface)">
+                <div style="font-size:1em;line-height:1.4;font-weight:500">{{ sel.question }}</div>
+
+                <button data-target="1" data-name="keep mine" style="text-align:left;min-height:44px;padding:0.6em 0.7em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface-raised);color:var(--text-primary);display:flex;flex-direction:column;gap:0.2em">
+                  <span style="font-family:var(--mono);font-size:0.95em">{{ sel.mineValue }}</span>
+                  <span style="font-size:0.75em;color:var(--text-muted)">{{ sel.mineWho }} · {{ sel.mineAt }}</span>
+                </button>
+                <button data-target="1" data-name="keep theirs" style="text-align:left;min-height:44px;padding:0.6em 0.7em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface-raised);color:var(--text-primary);display:flex;flex-direction:column;gap:0.2em">
+                  <span style="font-family:var(--mono);font-size:0.95em">{{ sel.theirsValue }}</span>
+                  <span style="font-size:0.75em;color:var(--text-muted)">{{ sel.theirsWho }} · {{ sel.theirsAt }}</span>
+                </button>
+
+                <div style="display:flex;flex-direction:column;gap:0.35em;padding-top:0.5em;border-top:1px solid var(--divider)">
+                  <label style="font-size:0.75em;color:var(--text-muted)">{{ sel.third }}</label>
+                  <input data-target="1" data-name="third value" placeholder="{{ sel.thirdPlaceholder }}" style="min-height:44px;padding:0 0.7em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--input-bg);color:var(--text-primary);font-family:var(--mono);font-size:0.875em;width:100%" />
+                </div>
+
+                <div style="font-size:0.75em;line-height:1.5;color:var(--text-muted)">No versions, no vectors, no “remote”. Two names, two numbers, two times, and a way in for the answer that is neither of them.</div>
+              </div>
+            </div>
+
+            <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-card);background:var(--surface-sunken);padding:12px 14px;display:flex;flex-direction:column;gap:6px">
+              <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">Where it opens</div>
+              <div style="font-size:12.5px;line-height:1.5">A sheet on mobile, a side panel on web. Both are focus-trapped, escapable and restore focus, and neither is a modal that arrives uninvited.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isRejected }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:20px;max-width:1240px">
+        <p style="margin:0;max-width:78ch;font-size:14px;line-height:1.6;color:var(--text-muted)">A rejected write is not a conflict: nobody disagreed with anybody, the server declined the write. So it is drawn as coming back rather than as a cross, and it carries the actual reason in a sentence with three actions. These are the four reasons that will really occur — there is no shared “something went wrong”, because a member cannot act on that.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+          <sc-for list="{{ rejections }}" as="r" hint-placeholder-count="4">
+            <div data-watch="1" data-name="rejection {{ r.code }}" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow:hidden;display:flex;flex-direction:column">
+              <div style="padding:9px 14px;border-bottom:1px solid var(--divider);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
+                <span style="font-family:var(--mono);font-size:12px;color:var(--status-rejected)">{{ r.code }}</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ r.ref }}</span>
+              </div>
+              <div style="padding:14px;display:flex;flex-direction:column;gap:0.7em;font-size:{{ fontPx }};flex:1 1 auto">
+                <div style="font-size:0.75em;font-family:var(--mono);color:var(--text-muted)">{{ r.where }}</div>
+                <div style="display:flex;align-items:flex-start;gap:0.5em">
+                  <svg viewBox="0 0 24 24" width="1.2em" height="1.2em" role="img" aria-label="Not accepted" style="display:block;flex:0 0 auto;margin-top:0.15em;overflow:visible;fill:none;stroke:var(--status-rejected);stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ rejectedPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                  <div style="font-size:0.875em;line-height:1.5">{{ r.copy }}</div>
+                </div>
+                <div style="display:flex;gap:0.4em;flex-wrap:wrap;margin-top:auto">
+                  <sc-for list="{{ r.actions }}" as="a" hint-placeholder-count="3">
+                    <button data-target="1" data-name="{{ r.code }} action" style="min-height:44px;padding:0 0.8em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface);color:var(--text-primary);font-size:0.8125em">{{ a }}</button>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ r.hasExtra }}" hint-placeholder-val="{{ false }}">
+                  <button data-target="1" data-name="{{ r.code }} extra" style="text-align:left;min-height:44px;padding:0.5em 0.7em;border-radius:var(--radius-control);border:1px dashed var(--border-strong);background:var(--surface);color:var(--text-link);font-size:0.8125em">{{ r.extra }}</button>
+                </sc-if>
+              </div>
+              <sc-if value="{{ showRules }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:10px 14px;border-top:1px solid var(--divider);font-size:11.5px;line-height:1.5;color:var(--text-muted)">{{ r.note }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isWithdrawn }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:24px;max-width:1240px">
+        <p style="margin:0;max-width:78ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Absence is the steady state; retraction is the transition into it, and it has its own design. When a member loses access to data they already hold, the server emits retract rows and the client deletes them on receipt — which can land while the member is looking at the row. Two sentences cover the five causes, and they say which of the two it was without naming what was withdrawn.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+          <sc-for list="{{ sentences }}" as="s" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div data-watch="1" data-name="withdrawn {{ s.cause }}" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow:hidden;box-shadow:var(--shadow-1)">
+                <div style="padding:7px 12px;border-bottom:1px solid var(--divider);display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted)">
+                  <span>{{ s.module }}</span><span>withdrawn</span>
+                </div>
+                <div style="padding:22px 16px;display:flex;flex-direction:column;gap:0.8em;align-items:flex-start;font-size:{{ fontPx }}">
+                  <div style="font-size:0.9em;line-height:1.5;max-width:34ch">{{ s.copy }}</div>
+                  <button data-target="1" data-name="withdrawn back" style="min-height:44px;padding:0 0.9em;border-radius:var(--radius-control);border:1px solid var(--border-strong);background:var(--surface);color:var(--text-primary);font-size:0.8125em">{{ s.action }}</button>
+                  <div style="font-size:0.75em;line-height:1.5;color:var(--text-muted)">No add button, no edit, no greyed control. The write affordances are not drawn at all.</div>
+                </div>
+              </div>
+              <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ s.note }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px;padding-top:20px;border-top:1px solid var(--border)">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The five ordinary events that cause it</h2>
+            <div style="display:flex;flex-direction:column;gap:0">
+              <sc-for list="{{ causes }}" as="c" hint-placeholder-count="5">
+                <div style="display:flex;flex-direction:column;gap:4px;padding:12px 0;border-top:1px solid var(--divider)">
+                  <div style="font-size:13.5px;font-weight:500;line-height:1.4">{{ c.name }}</div>
+                  <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ c.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What the state has to obey</h2>
+            <div style="display:flex;flex-direction:column;gap:0">
+              <sc-for list="{{ retractionRules }}" as="r" hint-placeholder-count="5">
+                <div style="display:flex;flex-direction:column;gap:4px;padding:12px 0;border-top:1px solid var(--divider)">
+                  <div style="font-size:13.5px;font-weight:500;line-height:1.4">{{ r.name }}</div>
+                  <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ r.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isHonesty }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:24px;max-width:1240px">
+        <p style="margin:0;max-width:78ch;font-size:14px;line-height:1.6;color:var(--text-muted)">The module never shows a number it has not earned. The hardest half of that is the pair below: a genuine zero is a measurement with a date, an author and a unit, and an absent figure is an absence that names what is missing and offers the action that supplies it. Drawing them the same way is how a household comes to believe a bill.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div data-watch="1" data-name="genuine zero" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:16px;display:flex;flex-direction:column;gap:0.5em;font-size:{{ fontPx }}">
+              <div style="font-size:0.75em;font-family:var(--mono);letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted)">{{ zeroLabel }}</div>
+              <div style="display:flex;align-items:baseline;gap:0.3em">
+                <span style="font-family:var(--mono);font-size:2.2em;line-height:1;font-weight:500">{{ zeroValue }}</span>
+                <span style="font-size:0.9em;color:var(--text-muted)">{{ zeroUnit }}</span>
+              </div>
+              <div style="font-size:0.8125em;line-height:1.45;color:var(--text-muted)">{{ zeroFoot }}</div>
+            </div>
+            <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ zeroNote }}</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div data-watch="1" data-name="not enough information" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:16px;display:flex;flex-direction:column;gap:0.6em;font-size:{{ fontPx }}">
+              <div style="font-size:0.75em;font-family:var(--mono);letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted)">{{ nothingLabel }}</div>
+              <div style="display:flex;align-items:center;gap:0.4em;color:var(--status-no-history)">
+                <svg viewBox="0 0 24 24" width="1.5em" height="1.5em" aria-hidden="true" style="display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                  <sc-for list="{{ noHistoryPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                </svg>
+                <span style="font-size:0.9em">Not enough information</span>
+              </div>
+              <div style="font-size:0.8125em;line-height:1.45">{{ nothingMissing }}</div>
+              <button data-target="1" data-name="supply the missing" style="align-self:flex-start;min-height:44px;padding:0 0.9em;border-radius:var(--radius-control);border:1px solid var(--button-primary-bg);background:var(--button-primary-bg);color:var(--button-primary-fg);font-size:0.8125em;font-weight:500">{{ nothingAction }}</button>
+            </div>
+            <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ nothingNote }}</div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;padding-top:20px;border-top:1px solid var(--border)">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Seven situations, seven presentations</h2>
+          <div style="display:flex;flex-direction:column;gap:0">
+            <sc-for list="{{ honesty }}" as="h" hint-placeholder-count="7">
+              <div style="display:grid;grid-template-columns:minmax(150px,210px) minmax(0,1.1fr) minmax(0,1fr);gap:10px 18px;padding:14px 0;border-top:1px solid var(--divider);align-items:start">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <sc-if value="{{ h.hasIcon }}" hint-placeholder-val="{{ false }}">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:block;flex:0 0 auto;overflow:visible;fill:none;stroke:{{ h.colour }};stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                      <sc-for list="{{ h.paths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                    </svg>
+                  </sc-if>
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <div style="font-size:13.5px;font-weight:500">{{ h.situation }}</div>
+                    <div style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ h.ref }}</div>
+                  </div>
+                </div>
+                <div style="font-size:12.5px;line-height:1.55">{{ h.shows }}</div>
+                <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted);font-style:italic">{{ h.example }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isGate }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:24px;max-width:1240px">
+        <p style="margin:0;max-width:78ch;font-size:14px;line-height:1.6;color:var(--text-muted)">The gate is one sentence — the five merge policies read as different categories of event, not five severities of one — and it is counted rather than felt. Four of the checks below are computed from the vocabulary itself; the last two are measured from the live page at the current theme, density and text size.</p>
+
+        <div style="display:flex;flex-direction:column;gap:0">
+          <sc-for list="{{ checks }}" as="k" hint-placeholder-count="7">
+            <div style="display:grid;grid-template-columns:64px minmax(200px,300px) 1fr;gap:10px 18px;padding:14px 0;border-top:1px solid var(--divider);align-items:start">
+              <div style="font-family:var(--mono);font-size:11px;color:{{ k.colour }}">{{ k.verdict }}</div>
+              <div style="font-size:13.5px;font-weight:500;line-height:1.4">{{ k.name }}</div>
+              <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ k.detail }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;padding-top:20px;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Measured, on this page</h2>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ measuredContext }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+            <sc-for list="{{ measurements }}" as="m" hint-placeholder-count="4">
+              <div style="background:var(--surface-raised);padding:16px">
+                <div style="font-family:var(--mono);font-size:26px;line-height:1;color:{{ m.colour }}">{{ m.value }}</div>
+                <div style="font-size:12.5px;margin-top:8px">{{ m.label }}</div>
+                <div style="font-size:11.5px;line-height:1.45;margin-top:4px;color:var(--text-muted)">{{ m.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <p style="margin:0;max-width:78ch;font-size:12.5px;line-height:1.55;color:var(--text-muted)">Switch the theme, the density and the text size in the rail: the measurement re-runs on every change, so a resolver that breaks its box at 200 % text is a number here rather than a discovery in Stage 15.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;padding-top:20px;border-top:1px solid var(--border)">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What Stage 5 deliberately does not finish</h2>
+          <p style="margin:0;max-width:78ch;font-size:13.5px;line-height:1.6;color:var(--text-muted)">The vocabulary is settled here and spent later. Each line below is a surface that renders these components but belongs to another stage's gate.</p>
+          <div style="display:flex;flex-direction:column;gap:0">
+            <sc-for list="{{ deferred }}" as="d" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:minmax(200px,340px) 64px 1fr;gap:10px 16px;padding:12px 0;border-top:1px solid var(--divider);align-items:start">
+                <div style="font-size:13.5px;line-height:1.45">{{ d.what }}</div>
+                <div style="font-family:var(--mono);font-size:11px;color:var(--accent)">{{ d.stage }}</div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ d.why }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ladder&quot;,&quot;policies&quot;,&quot;conflict&quot;,&quot;rejected&quot;,&quot;withdrawn&quot;,&quot;honesty&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;ladder&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Stage 5&quot;},&quot;showRules&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Stage 5&quot;},&quot;thresholdMs&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:800,&quot;min&quot;:200,&quot;max&quot;:3000,&quot;step&quot;:100,&quot;unit&quot;:&quot;ms&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Stage 5&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100, sel: "cf-1", measured: null };
+
+  get S() { return window.HH_SYNC; }
+  get I() { return window.HH_ICONS; }
+  get T() { return window.HH_TOKENS; }
+
+  view() { return this.state.view || this.props.startView || "ladder"; }
+  threshold() { return this.props.thresholdMs || 800; }
+
+  componentDidMount() { this._schedule(); window.addEventListener("resize", this._onResize = () => this._schedule()); }
+  componentWillUnmount() { window.removeEventListener("resize", this._onResize); }
+  componentDidUpdate() { this._schedule(); }
+
+  _schedule() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = requestAnimationFrame(() => this._measure());
+  }
+
+  _measure() {
+    var targets = [].slice.call(document.querySelectorAll('[data-target="1"]'));
+    var fails = [], min = 0;
+    targets.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      if (!r.height || !r.width) return;
+      var h = Math.round(r.height), w = Math.round(r.width);
+      if (!min || h < min) min = h;
+      if (h < 44) fails.push((el.getAttribute("data-name") || (el.textContent || "").trim().slice(0, 18)) + " " + w + "×" + h);
+    });
+    var watched = [].slice.call(document.querySelectorAll('[data-watch="1"]'));
+    var over = [];
+    watched.forEach(function (el) {
+      if (el.scrollWidth - el.clientWidth > 1) over.push(el.getAttribute("data-name") || "cell");
+    });
+    var m = { targets: targets.length, tFail: fails.length, tMin: min, tNames: fails.slice(0, 3),
+              watched: watched.length, oFail: over.length, oNames: over.slice(0, 3) };
+    if (JSON.stringify(m) !== JSON.stringify(this.state.measured)) this.setState({ measured: m });
+  }
+
+  _paths(id) { return ((this.I.byId || {})[id] || { paths: [] }).paths; }
+
+  _chip(moduleId) {
+    var icon = (this.I.byId || {})[moduleId] || { paths: [] };
+    var map = (this.T.accentMap || []).filter(function (m) { return m[0] === moduleId; })[0];
+    var fam = map ? map[2] : "household";
+    return { paths: icon.paths, name: icon.name || moduleId, colour: fam === "garden" ? "var(--accent-garden)" : "var(--accent-family-" + fam + ")" };
+  }
+
+  _ladder() {
+    var t = this.threshold(), self = this;
+    return this.S.ladder.map(function (l) {
+      var d = {
+        key: l.key, name: l.name, ref: l.ref, sees: l.sees, rule: l.rule,
+        hasBar: !!l.bar, hasMark: !!l.mark, hasTap: !!l.tap, tap: l.tap,
+        hasSentence: !!l.sentence, sentence: l.sentence || "", actions: l.actions || [],
+        hasAffordance: !!l.affordance, affordance: l.affordance || "",
+        secondary: "18 402,4 kWh · read 3 March by Petr",
+        markColour: "var(--text-muted)", markWord: "", markNote: "", markPaths: [],
+        hasThreshold: false, thresholdNote: ""
+      };
+      if (l.mark) {
+        d.markColour = "var(--" + l.mark.token + ")";
+        d.markWord = l.mark.word;
+        d.markNote = "· " + l.mark.note;
+        d.markPaths = l.mark.paths;
+      }
+      if (l.key === "synced") d.secondary = "18 402,4 kWh · read 3 March by Petr · in sync";
+      if (l.key === "offline") d.secondary = "18 402,4 kWh · read 3 March by Petr";
+      if (l.key === "pending") d.secondary = "18 402,4 kWh · entered just now, in the cellar";
+      if (l.threshold) { d.hasThreshold = true; d.thresholdNote = "shown only past " + t + " ms · below the threshold, nothing at all"; }
+      if (l.borrows) { d.hasThreshold = true; d.thresholdNote = "borrows " + l.borrows + " · no token, no icon, no word of its own"; }
+      if (l.key === "synced") { d.hasThreshold = true; d.thresholdNote = "no mark drawn · absence is the state"; }
+      self._noop = true;
+      return d;
+    });
+  }
+
+  _policies() {
+    var S = this.S, shapeColour = {
+      silent: "var(--text-muted)", admission: "var(--status-pending)",
+      loser: "var(--status-conflict)", question: "var(--danger)"
+    };
+    var rows = {
+      lww_field: ["Bed 4 — Brambory", "Zone: south · renamed by Jana, zone set by Petr"],
+      state_set: ["Milk, 1,5 l", "Checked · Klára, in the shop"],
+      additive: ["Electricity — cellar meter", "18 402,4 kWh · entered just now, in the cellar"],
+      lww_row: ["", ""], strict_version: ["", ""]
+    };
+    return S.policies.map(function (p) {
+      var r = rows[p.id] || ["", ""];
+      return {
+        id: p.id, category: p.category, sees: p.sees, why: p.why, entities: p.entities, caption: p.caption,
+        shapeLabel: (S.shapes[p.shape] || {}).label || p.shape,
+        shapeColour: shapeColour[p.shape] || "var(--text-muted)",
+        isSilent: p.shape === "silent", isAdmission: p.shape === "admission",
+        isLoser: p.shape === "loser", isQuestion: p.shape === "question",
+        rowTitle: r[0], rowSecondary: r[1],
+        variants: (p.variants || []).map(function (v) {
+          return { who: v.who, window: v.window, offline: v.offline, copy: v.copy,
+                   action: v.window === "30 days" ? "See the version you wrote" : "See it while you are online" };
+        })
+      };
+    });
+  }
+
+  renderVals() {
+    var S = this.S, self = this;
+    var v = this.view();
+    var m = this.state.measured;
+    var checks = S.checks();
+    var open = checks.filter(function (k) { return !k.pass; }).length;
+
+    var views = [
+      ["ladder", "the ladder", "7"], ["policies", "merge policies", "5"], ["conflict", "conflict", "3"],
+      ["rejected", "rejected", "4"], ["withdrawn", "withdrawn", "5"], ["honesty", "honesty", "7"], ["gate", "the gate", "7"]
+    ].map(function (x) {
+      return { label: x[1], count: x[2], on: v === x[0] ? "1" : "0", pick: function () { self.setState({ view: x[0] }); } };
+    });
+
+    function opt(group, val, label, title, cur) {
+      return { label: label, title: title, on: cur === val ? "1" : "0", pick: function () { var s = {}; s[group] = val; self.setState(s); } };
+    }
+    var controls = [
+      { label: "theme", options: [opt("theme", "light", "light", "Light theme", this.state.theme), opt("theme", "dark", "dark", "Dark theme", this.state.theme)] },
+      { label: "density", options: [opt("density", "comfortable", "comfortable", "Mobile's only mode", this.state.density), opt("density", "compact", "compact", "Web tables — the 44 pt floor still binds", this.state.density)] },
+      { label: "text", options: [opt("scale", 100, "100 %", "Base text size", this.state.scale), opt("scale", 200, "200 %", "The 07-delivery sweep", this.state.scale)] }
+    ];
+
+    var titles = {
+      ladder: ["The sync ladder", "03-patterns §1 · seven presentations, loudest last"],
+      policies: ["Which changes ask, and which merge", "03-patterns §1 · D-39 · five policies, four shapes"],
+      conflict: ["The conflict inbox and the resolver", "02-components §4.3 · DD-4"],
+      rejected: ["The rejected-mutation resolver", "02-components §4.4 · four reasons that occur"],
+      withdrawn: ["Retraction and the withdrawn state", "03-patterns §2 · FR-SY7, D-78"],
+      honesty: ["Honesty about computed numbers", "03-patterns §12 · FR-UT12"],
+      gate: ["The stage gate", "categories, not severities · measured live"]
+    };
+
+    var sel = S.inbox.filter(function (e) { return e.id === self.state.sel; })[0] || S.inbox[0];
+    var selChip = this._chip(sel.module);
+
+    var mv = [];
+    if (m) {
+      mv = [
+        { value: String(m.targets), label: "interactive targets measured", note: "live rectangles at this density and text size", colour: "var(--text-primary)" },
+        { value: m.tFail ? String(m.tFail) : "0", label: "under the 44 pt floor", note: m.tFail ? m.tNames.join(" · ") : "smallest measured target is " + m.tMin + " px high", colour: m.tFail ? "var(--danger)" : "var(--positive)" },
+        { value: String(m.watched), label: "cells watched for overflow", note: "each artifact's own box, at " + this.state.scale + " % text", colour: "var(--text-primary)" },
+        { value: m.oFail ? String(m.oFail) : "0", label: "cells overflowing", note: m.oFail ? m.oNames.join(" · ") : "no artifact is wider than the box it is given", colour: m.oFail ? "var(--danger)" : "var(--positive)" }
+      ];
+    }
+
+    var z = S.zeroVsNothing;
+
+    return {
+      theme: this.state.theme,
+      density: this.state.density,
+      fontPx: this.state.scale === 200 ? "32px" : "16px",
+      showRules: this.props.showRules !== false,
+      views: views, controls: controls,
+
+      isLadder: v === "ladder", isPolicies: v === "policies", isConflict: v === "conflict",
+      isRejected: v === "rejected", isWithdrawn: v === "withdrawn", isHonesty: v === "honesty", isGate: v === "gate",
+
+      pageTitle: titles[v][0], pageMeta: titles[v][1],
+      gateLine: open ? open + " check open" : (m && (m.tFail || m.oFail) ? "measured: " + (m.tFail + m.oFail) + " to fix" : "gate: 7 checks pass"),
+      gateColour: open || (m && (m.tFail || m.oFail)) ? "var(--danger)" : "var(--positive)",
+
+      ladder: this._ladder(),
+      policies: this._policies(),
+      goConflict: function () { self.setState({ view: "conflict" }); },
+
+      offlinePaths: this._paths("offline"),
+      pendingPaths: this._paths("pending"),
+      conflictPaths: this._paths("conflict"),
+      rejectedPaths: this._paths("rejected"),
+      noHistoryPaths: this._paths("no_history"),
+
+      inboxCount: String(S.inbox.length),
+      inbox: S.inbox.map(function (e) {
+        var chip = self._chip(e.module);
+        return {
+          id: e.id, title: e.title, where: e.where, route: e.route,
+          pair: e.mine.value + " / " + e.theirs.value,
+          chipName: chip.name, chipColour: chip.colour, chipPaths: chip.paths,
+          bg: e.id === self.state.sel ? "var(--surface-sunken)" : "var(--surface-raised)",
+          pick: function () { self.setState({ sel: e.id }); }
+        };
+      }),
+      inboxRules: S.inboxRules.map(function (r) { return { name: r[0], note: r[1] }; }),
+      sel: {
+        title: sel.title, where: sel.where, question: sel.question, third: sel.third,
+        thirdPlaceholder: sel.module === "calendar" ? "Thursday, 00:00" : "0,00",
+        mineWho: sel.mine.who, mineValue: sel.mine.value, mineAt: sel.mine.at,
+        theirsWho: sel.theirs.who, theirsValue: sel.theirs.value, theirsAt: sel.theirs.at,
+        chipName: selChip.name
+      },
+
+      rejections: S.rejections.map(function (r) {
+        return { code: r.code, ref: r.ref, where: r.where, copy: r.copy, actions: r.actions,
+                 hasExtra: !!r.extra, extra: r.extra || "", note: r.note };
+      }),
+
+      sentences: S.retraction.sentences.map(function (s) {
+        return { cause: s.cause, copy: s.copy, note: s.note,
+                 module: s.cause === "access" ? "Utilities · readings" : "Garden · beds",
+                 action: s.cause === "access" ? "Back to Today" : "Back to Today" };
+      }),
+      causes: S.retraction.causes.map(function (c) { return { name: c[0], note: c[1] }; }),
+      retractionRules: S.retraction.rules.map(function (r) { return { name: r[0], note: r[1] }; }),
+
+      honesty: S.honesty.map(function (h) {
+        var icon = h.icon ? (self.I.byId || {})[h.icon] : null;
+        return { situation: h.situation, ref: h.ref, shows: h.shows, example: h.example,
+                 hasIcon: !!icon, paths: icon ? icon.paths : [], colour: icon ? "var(--" + icon.token + ")" : "var(--text-muted)" };
+      }),
+      zeroLabel: z.zero.label, zeroValue: z.zero.value, zeroUnit: z.zero.unit, zeroFoot: z.zero.foot, zeroNote: z.zero.note,
+      nothingLabel: z.nothing.label, nothingMissing: z.nothing.missing, nothingAction: z.nothing.action, nothingNote: z.nothing.note,
+
+      cases: S.cases.map(function (c) {
+        var colour = { state_set: "var(--text-muted)", additive: "var(--status-pending)" };
+        return { name: c.name, ref: c.ref, policy: c.policy, story: c.story, expected: c.expected, colour: colour[c.policy] || "var(--text-muted)" };
+      }),
+      attachRef: S.attachments.ref, attachLine: S.attachments.line, attachConsequence: S.attachments.consequence,
+
+      checks: checks.map(function (k) {
+        return { name: k.name, detail: k.detail, verdict: k.pass ? "pass" : "open", colour: k.pass ? "var(--positive)" : "var(--danger)" };
+      }),
+      measurements: mv,
+      measuredContext: this.state.theme + " · " + this.state.density + " · " + this.state.scale + " % text",
+      deferred: S.deferred.map(function (d) { return { what: d[0], stage: d[1], why: d[2] }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

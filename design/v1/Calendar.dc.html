@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./components.js"></script>
+<script src="./sync.js"></script>
+<script src="./reminders.js"></script>
+<script src="./dashboard.js"></script>
+<script src="./spine.js"></script>
+<script src="./calendar.js"></script>
+<script src="./ledger.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent-family-time) !important; border-color: var(--accent-family-time) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .sc-interp { white-space: inherit; text-wrap: inherit; text-overflow: inherit; overflow: hidden; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">Four views, one occurrence</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Calendar</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-time)">{{ stageLine }}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="7">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">Fourteen rows over one occurrence model: an event, an exception per term, an answer per member, and a connection whose two settings are the household's privacy. Every date here is the week of 7 September 2026.</div>
+      <a href="./Garden.dc.html" style="font-family:var(--mono);font-size:11px">← stage 17 · garden</a>
+      <a href="./Reminders and Tasks.dc.html" style="font-family:var(--mono);font-size:11px">stage 12 · the recurrence engine</a>
+      <a href="./Today and Cross-cutting Screens.dc.html" style="font-family:var(--mono);font-size:11px">stage 11 · Today and the help model</a>
+      <a href="./Dashboard and Widgets.dc.html" style="font-family:var(--mono);font-size:11px">stage 10 · the two calendar widgets</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+
+      <p style="margin:0;max-width:82ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="0">
+        <div style="border-left:2px solid var(--accent-family-time);padding:2px 0 2px 12px;max-width:82ch;font-size:13.5px;line-height:1.6;color:var(--text-primary)">{{ n.text }}</div>
+      </sc-for>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+        <sc-for list="{{ frames }}" as="f" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0;grid-column:{{ f.col }}">
+
+            <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-time)">{{ f.id }}</span>
+              <h3 style="margin:0;font-size:15px;font-weight:600">{{ f.name }}</h3>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ f.stateLabel }}</span>
+            </div>
+
+            <div style="width:100%;max-width:{{ f.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+              <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.route }}</span>
+                <span style="flex:0 0 auto">{{ f.clientLabel }}</span>
+              </div>
+
+              <sc-if value="{{ f.hasBar }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.45em 0.75em;background:var(--surface-sunken);color:var(--status-offline);font-family:var(--mono);font-size:0.62em;border-bottom:1px solid var(--divider)">{{ f.barText }}</div>
+              </sc-if>
+
+              <div style="flex:1 1 auto;padding:1em 0.9em;display:flex;flex-direction:column;gap:0.8em;min-width:0">
+
+                <div style="display:flex;flex-direction:column;gap:0.2em">
+                  <div style="font-size:1.1em;font-weight:600;line-height:1.2">{{ f.title }}</div>
+                  <sc-if value="{{ f.hasLede }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ f.lede }}</div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ f.hasBanner }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid {{ f.bannerTone }};border-left:3px solid {{ f.bannerTone }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.3em">
+                    <sc-if value="{{ f.hasBannerTitle }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.78em;font-weight:600;color:{{ f.bannerTone }}">{{ f.bannerTitle }}</div>
+                    </sc-if>
+                    <div style="font-size:0.76em;line-height:1.5;color:var(--text-primary)">{{ f.bannerBody }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasGrid }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.3em">
+                    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0.15em">
+                      <sc-for list="{{ f.grid.days }}" as="dh" hint-placeholder-count="7">
+                        <div style="font-family:var(--mono);font-size:0.58em;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);text-align:center;padding:0.2em 0">{{ dh }}</div>
+                      </sc-for>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0.15em">
+                      <sc-for list="{{ f.grid.cells }}" as="gc" hint-placeholder-count="35">
+                        <div style="min-height:{{ f.grid.cellHeight }};border:1px solid {{ gc.border }};border-radius:4px;background:{{ gc.bg }};padding:0.25em 0.3em;display:flex;flex-direction:column;gap:0.15em;min-width:0;overflow:hidden">
+                          <span style="font-family:var(--mono);font-size:0.58em;color:{{ gc.dayColour }}">{{ gc.day }}</span>
+                          <sc-for list="{{ gc.items }}" as="gi" hint-placeholder-count="1">
+                            <span style="display:flex;align-items:center;gap:0.2em;min-width:0">
+                              <span style="flex:0 0 auto;width:0.28em;height:0.9em;border-radius:1px;background:{{ gi.colour }}"></span>
+                              <span style="font-size:0.52em;line-height:1.25;color:{{ gi.textColour }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{ gi.label }}</span>
+                            </span>
+                          </sc-for>
+                          <sc-if value="{{ gc.hasMore }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-family:var(--mono);font-size:0.5em;color:var(--text-muted)">{{ gc.more }}</span>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasCols }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.2em;min-width:0">
+                    <div style="flex:0 0 auto;width:2.1em;display:flex;flex-direction:column;justify-content:space-between;height:{{ f.colHeight }};font-family:var(--mono);font-size:0.52em;color:var(--text-muted)">
+                      <sc-for list="{{ f.hours }}" as="h" hint-placeholder-count="5">
+                        <span>{{ h }}</span>
+                      </sc-for>
+                    </div>
+                    <div style="flex:1 1 auto;display:grid;grid-template-columns:repeat({{ f.colCount }},minmax(0,1fr));gap:0.15em;min-width:0">
+                      <sc-for list="{{ f.cols }}" as="cl" hint-placeholder-count="7">
+                        <div style="display:flex;flex-direction:column;gap:0.2em;min-width:0">
+                          <div style="font-family:var(--mono);font-size:0.55em;text-align:center;color:{{ cl.labelColour }}">{{ cl.label }}</div>
+                          <sc-for list="{{ cl.allday }}" as="ad" hint-placeholder-count="0">
+                            <div style="border:1px solid {{ ad.colour }};border-radius:3px;background:var(--surface-sunken);padding:0.1em 0.2em;font-size:0.5em;line-height:1.3;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ad.label }}</div>
+                          </sc-for>
+                          <div style="position:relative;height:{{ f.colHeight }};border:1px solid var(--border);border-radius:3px;background:var(--surface-raised);min-width:0">
+                            <sc-for list="{{ cl.blocks }}" as="bk" hint-placeholder-count="1">
+                              <div title="{{ bk.title }}" style="position:absolute;left:1px;right:1px;top:{{ bk.top }};height:{{ bk.height }};border-radius:3px;border:1px solid {{ bk.border }};background:{{ bk.bg }};background-image:{{ bk.hatch }};padding:0.1em 0.2em;overflow:hidden;display:flex;flex-direction:column;gap:0.05em;min-width:0">
+                                <span style="display:block;max-width:100%;font-family:var(--mono);font-size:0.46em;line-height:1.2;color:{{ bk.metaColour }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ bk.time }}</span>
+                                <span style="display:block;max-width:100%;font-size:0.5em;line-height:1.2;font-weight:500;color:{{ bk.textColour }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ bk.label }}</span>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.fields }}" as="x" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.25em">
+                    <div style="font-family:var(--mono);font-size:0.6em;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">{{ x.label }}</div>
+                    <div style="border:1px solid {{ x.border }};border-radius:var(--radius-control);background:{{ x.bg }};padding:0.55em 0.65em;font-size:0.85em;min-height:2.5em;display:flex;align-items:center;justify-content:space-between;gap:0.5em">
+                      <span style="min-width:0;font-family:{{ x.font }};color:{{ x.colour }}">{{ x.value }}</span>
+                      <sc-if value="{{ x.hasHint }}" hint-placeholder-val="{{ false }}">
+                        <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--text-muted)">{{ x.hint }}</span>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ x.hasNote }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:0.7em;line-height:1.5;color:var(--text-muted)">{{ x.note }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.4em;flex-wrap:wrap">
+                    <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="2">
+                      <span style="display:inline-flex;align-items:center;gap:0.35em;white-space:nowrap;border:1px solid {{ c.colour }};border-radius:999px;padding:0.2em 0.55em;font-size:0.68em;color:var(--text-primary)">
+                        <span style="width:1.05em;height:1.05em;border-radius:50%;background:{{ c.colour }};color:var(--text-on-accent);font-size:0.62em;display:inline-flex;align-items:center;justify-content:center">{{ c.initial }}</span>{{ c.name }}
+                        <sc-if value="{{ c.hasTail }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:var(--mono);font-size:0.82em;color:var(--text-muted)">{{ c.tail }}</span>
+                        </sc-if>
+                      </span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.blocks }}" as="b" hint-placeholder-count="0">
+                  <div data-block="{{ b.key }}" data-rows="{{ b.count }}" style="display:flex;flex-direction:column;gap:0.4em">
+                    <sc-if value="{{ b.hasHeading }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap">
+                        <span style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:{{ b.labelColour }}">{{ b.label }}</span>
+                        <sc-if value="{{ b.hasRule }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ b.rule }}</span>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="3">
+                      <div style="display:flex;gap:0.6em;align-items:flex-start;background:{{ r.bg }};border:1px solid {{ r.border }};border-left:{{ r.leftRule }};border-radius:var(--radius-card);padding:0.55em 0.65em;min-width:0">
+                        <span style="flex:0 0 auto;width:0.5em;height:0.5em;border-radius:50%;background:{{ r.dot }};margin-top:0.45em"></span>
+                        <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.15em">
+                          <span style="display:flex;gap:0.5em;align-items:baseline;min-width:0">
+                            <span style="font-size:0.85em;font-weight:500;line-height:1.35;min-width:0">{{ r.title }}</span>
+                            <sc-if value="{{ r.hasRight }}" hint-placeholder-val="{{ false }}">
+                              <span style="margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:0.72em;color:{{ r.rightColour }}">{{ r.right }}</span>
+                            </sc-if>
+                          </span>
+                          <sc-if value="{{ r.hasMeta }}" hint-placeholder-val="{{ true }}">
+                            <span style="font-size:0.72em;line-height:1.4;color:var(--text-muted)">{{ r.meta }}</span>
+                          </sc-if>
+                          <span style="display:flex;gap:0.4em;align-items:center;flex-wrap:wrap;margin-top:0.1em">
+                            <sc-if value="{{ r.hasChip }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;padding:0.15em 0.4em;border-radius:3px;border:1px solid {{ r.chipColour }};color:{{ r.chipColour }};white-space:nowrap">{{ r.chip }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-size:0.66em;line-height:1.4;color:var(--text-muted)">{{ r.note }}</span>
+                            </sc-if>
+                          </span>
+                        </span>
+                        <sc-if value="{{ r.hasAction }}" hint-placeholder-val="{{ false }}">
+                          <span style="flex:0 0 auto;display:flex;gap:0.3em;align-items:center">
+                            <span style="background:var(--surface-sunken);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;display:inline-flex;align-items:center;min-height:2.6em;white-space:nowrap">{{ r.actionLabel }}</span>
+                          </span>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.choices }}" as="ch" hint-placeholder-count="0">
+                  <div style="border:1px solid {{ ch.border }};border-radius:var(--radius-card);background:{{ ch.bg }};padding:0.6em 0.7em;display:flex;gap:0.6em;align-items:flex-start;min-width:0">
+                    <span style="flex:0 0 auto;width:1.05em;height:1.05em;border-radius:50%;border:1px solid {{ ch.ring }};background:{{ ch.fill }};margin-top:0.15em"></span>
+                    <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.2em">
+                      <span style="font-size:0.88em;font-weight:600;line-height:1.3">{{ ch.label }}</span>
+                      <span style="font-size:0.74em;line-height:1.5;color:var(--text-primary)">{{ ch.consequence }}</span>
+                      <span style="font-family:var(--mono);font-size:0.6em;line-height:1.5;color:var(--text-muted)">{{ ch.rows }}</span>
+                    </span>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.checks }}" as="c" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.55em;align-items:center;min-width:0">
+                    <span style="flex:0 0 auto;width:1em;height:1em;border-radius:3px;border:1px solid {{ c.boxBorder }};background:{{ c.boxBg }}"></span>
+                    <span style="font-size:0.78em;line-height:1.4;color:{{ c.colour }}">{{ c.text }}</span>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em;align-items:flex-start;padding:0.8em 0.2em 0.4em">
+                    <div style="width:100%;height:3.2em;border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken)"></div>
+                    <div style="font-size:0.92em;font-weight:600;line-height:1.3">{{ f.emptyTitle }}</div>
+                    <div style="font-size:0.78em;line-height:1.55;color:var(--text-muted)">{{ f.emptyBody }}</div>
+                    <sc-if value="{{ f.hasEmptyAction }}" hint-placeholder-val="{{ true }}">
+                      <span style="background:var(--accent-family-time);color:var(--text-on-accent);border-radius:var(--radius-control);padding:0.5em 0.85em;font-size:0.78em">{{ f.emptyAction }}</span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasAbsent }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.35em;padding:1.2em 0.4em;align-items:center;text-align:center">
+                    <div style="font-size:0.85em;font-weight:600">{{ f.absentTitle }}</div>
+                    <div style="font-size:0.75em;line-height:1.55;color:var(--text-muted);max-width:26em">{{ f.absentBody }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasActions }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.45em;flex-wrap:wrap;margin-top:0.1em">
+                    <sc-for list="{{ f.actions }}" as="a" hint-placeholder-count="1">
+                      <span style="background:{{ a.bg }};color:{{ a.colour }};border:1px solid {{ a.border }};border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.8em;display:inline-flex;align-items:center">{{ a.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasFooter }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:auto;padding-top:0.55em;border-top:1px solid var(--divider);font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ f.footer }}</div>
+                </sc-if>
+
+              </div>
+            </div>
+
+            <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ f.caption }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-for list="{{ tables }}" as="t" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ t.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ t.meta }}</span>
+          </div>
+          <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">{{ t.note }}</p>
+          </sc-if>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow-x:auto">
+            <div style="display:grid;grid-template-columns:{{ t.cols }};gap:0 14px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken);min-width:{{ t.minWidth }}">
+              <sc-for list="{{ t.head }}" as="h" hint-placeholder-count="3">
+                <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ h.text }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:{{ t.cols }};gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--divider);align-items:baseline;min-width:{{ t.minWidth }}">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+                  <div style="font-family:{{ c.font }};font-size:{{ c.size }};line-height:1.5;color:{{ c.colour }};min-width:0;overflow-wrap:anywhere">{{ c.text }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-time)">{{ g.id }}</span>
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.name }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;align-items:start">
+            <sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="12">
+              <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:{{ c.bg }};padding:10px 11px;display:flex;flex-direction:column;gap:6px;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:6px;justify-content:space-between">
+                  <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:{{ c.wordColour }}">{{ c.word }}</span>
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ c.tag }}</span>
+                </div>
+                <div style="font-size:11.5px;line-height:1.5;color:var(--text-primary)">{{ c.body }}</div>
+                <div style="font-size:10.5px;line-height:1.5;color:var(--text-muted)">{{ c.rule }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ checks }}" as="c" hint-placeholder-count="0">
+        <div style="display:grid;grid-template-columns:16px 1fr;gap:0 12px;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+          <div style="width:10px;height:10px;border-radius:50%;background:{{ c.colour }};margin-top:5px"></div>
+          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <div style="font-size:14px;font-weight:600;line-height:1.35">{{ c.name }}</div>
+            <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;views&quot;,&quot;editor&quot;,&quot;people&quot;,&quot;connect&quot;,&quot;health&quot;,&quot;states&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;views&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startClient&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;mobile&quot;,&quot;web&quot;],&quot;default&quot;:&quot;mobile&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startMember&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;jana&quot;,&quot;petr&quot;,&quot;adam&quot;,&quot;klara&quot;,&quot;milos&quot;],&quot;default&quot;:&quot;jana&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100, member: null, client: null };
+
+  get M() { return window.HH_CALENDAR; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (this.M && window.HH_TOKENS && window.HH_FIXTURES && window.HH_REMINDERS) {
+        clearInterval(this._boot);
+        this.forceUpdate();
+      }
+    }, 60);
+  }
+  componentWillUnmount() { clearInterval(this._boot); }
+
+  get view() { return this.state.view || this.props.startView || "views"; }
+  get who() { return this.state.member || this.props.startMember || "jana"; }
+  get client() { return this.state.client || this.props.startClient || "mobile"; }
+
+  pickers(list, current, set) {
+    return list.map((o) => ({
+      label: o[1], title: o[2] || "", on: current === o[0] ? "1" : "0",
+      pick: () => this.setState(set(o[0]))
+    }));
+  }
+
+  colour(m) { return "var(--" + (this.M.memberColour[m] || "chart-1") + ")"; }
+
+  F(o) {
+    const f = Object.assign({
+      id: "", name: "", stateLabel: "", caption: "", col: "auto", frameMax: "460px",
+      route: "", clientLabel: this.client, title: "", lede: "",
+      bannerTone: "var(--border)", bannerTitle: "", bannerBody: "",
+      blocks: [], chips: [], fields: [], checks: [], choices: [], actions: [],
+      emptyTitle: "", emptyBody: "", emptyAction: "",
+      absentTitle: "", absentBody: "", footer: "", barText: "",
+      grid: null, cols: null, hours: [], colHeight: "9em", colCount: 7
+    }, o);
+    f.hasLede = !!f.lede;
+    f.hasBanner = !!f.bannerBody;
+    f.hasBannerTitle = !!f.bannerTitle;
+    f.hasChips = f.chips.length > 0;
+    f.hasEmpty = !!f.emptyTitle;
+    f.hasEmptyAction = !!f.emptyAction;
+    f.hasAbsent = !!f.absentTitle;
+    f.hasActions = f.actions.length > 0;
+    f.hasFooter = !!f.footer;
+    f.hasBar = !!f.barText;
+    f.hasGrid = !!f.grid;
+    f.hasCols = !!f.cols;
+    f.cols = f.cols || [];
+    f.grid = f.grid || { days: [], cells: [], cellHeight: "3.4em" };
+    f.actions = f.actions.map((a, i) => (typeof a === "string"
+      ? { label: a, bg: i === 0 ? "var(--accent-family-time)" : "var(--surface)",
+          colour: i === 0 ? "var(--text-on-accent)" : "var(--text-muted)",
+          border: i === 0 ? "var(--accent-family-time)" : "var(--border)" }
+      : a));
+    f.blocks = f.blocks.map((b, i) => Object.assign({
+      key: (f.id || "b") + "-" + i, label: "", rule: "", labelColour: "var(--text-muted)"
+    }, b, {
+      count: (b.rows || []).length, rows: (b.rows || []).map((r) => this.row(r)),
+      hasHeading: !!b.label, hasRule: !!b.rule
+    }));
+    f.checks = f.checks.map((c) => ({
+      text: c.text,
+      colour: c.done ? "var(--text-muted)" : "var(--text-primary)",
+      boxBg: c.done ? "var(--accent-family-time)" : "var(--surface)",
+      boxBorder: c.done ? "var(--accent-family-time)" : "var(--border-strong)"
+    }));
+    f.fields = f.fields.map((x) => Object.assign({
+      label: "", value: "", hint: "", note: "", bg: "var(--surface-sunken)",
+      border: "var(--border-strong)", font: "var(--sans)", colour: "var(--text-primary)"
+    }, x, { hasHint: !!x.hint, hasNote: !!x.note }));
+    f.chips = f.chips.map((c) => Object.assign({ initial: "", name: "", tail: "", colour: "var(--border)" }, c,
+      { hasTail: !!c.tail }));
+    f.choices = f.choices.map((c) => Object.assign({
+      label: "", consequence: "", rows: "", border: "var(--border)", bg: "var(--surface)",
+      ring: "var(--border-strong)", fill: "transparent"
+    }, c));
+    return f;
+  }
+  row(r) {
+    const o = Object.assign({
+      title: "", meta: "", chip: "", chipColour: "var(--accent-family-time)", right: "",
+      rightColour: "var(--text-muted)", note: "", dot: "var(--accent-family-time)",
+      bg: "var(--surface)", border: "var(--border)", leftRule: "1px solid var(--border)",
+      actionLabel: ""
+    }, r);
+    o.hasMeta = !!o.meta; o.hasChip = !!o.chip; o.hasRight = !!o.right;
+    o.hasNote = !!o.note; o.hasAction = !!o.actionLabel;
+    return o;
+  }
+  tableMin(cols) {
+    const tracks = String(cols || "").split(/\s+(?![^(]*\))/).filter(Boolean);
+    let n = 0;
+    tracks.forEach((t) => {
+      const m = /minmax\((\d+)px/.exec(t) || /^(\d+)px$/.exec(t);
+      n += m ? Number(m[1]) : 90;
+    });
+    return (n + Math.max(0, tracks.length - 1) * 14 + 28) + "px";
+  }
+  cell(text, opt) {
+    const o = opt || {};
+    return { text: text, font: o.mono ? "var(--mono)" : "var(--sans)",
+             size: o.mono ? "11.5px" : "13px",
+             colour: o.muted ? "var(--text-muted)" : o.tone || "var(--text-primary)" };
+  }
+  /* whose eyes: a private event is a busy block for everybody but its own participants */
+  busyFor(o) {
+    return o.visibility === "busy" ||
+      (o.visibility === "private" && o.who.indexOf(this.who) < 0);
+  }
+  /* an occurrence read as a row */
+  occRow(o, opt) {
+    const M = this.M, x = opt || {};
+    const busy = this.busyFor(o);
+    const mine = busy ? o.who[0] : (o.who[0] || "jana");
+    return this.row({
+      title: busy ? "Obsazeno" : o.cs + (o.visibility === "private" ? " \u00b7 soukrom\u00e9" : ""),
+      meta: (o.kind === "allday" ? "cel\u00fd den" : o.from + "\u2013" + o.to) +
+        (busy ? " \u00b7 " + M.name(mine) : (o.who.length ? " \u00b7 " + o.who.map((w) => M.name(w)).join(", ") : "")) +
+        (o.place && !busy ? " \u00b7 " + o.place : ""),
+      dot: busy ? "var(--status-private)" : this.colour(mine),
+      bg: busy ? "var(--surface-sunken)" : "var(--surface)",
+      leftRule: "3px solid " + (busy ? "var(--text-disabled)" : this.colour(mine)),
+      chip: busy ? "neotev\u0159eteln\u00e9" : (o.recurring ? "opakuje se" : ""),
+      chipColour: busy ? "var(--text-muted)" : "var(--accent-family-time)",
+      right: x.right || "",
+      note: x.note || (o.exception ? "v\u00fdjimka \u00b7 " + o.exception.type : "")
+    });
+  }
+  stateTone(s) {
+    const m = { error: "var(--danger)", rejected: "var(--status-rejected)",
+                conflicted: "var(--status-conflict)", pending: "var(--status-pending)",
+                syncing: "var(--status-syncing)", offline: "var(--status-offline)",
+                readonly: "var(--warning)", withdrawn: "var(--text-muted)", absent: "var(--text-muted)" };
+    return m[s] || "var(--accent-family-time)";
+  }
+  stateGroups() {
+    const C = window.HH_COMPONENTS, M = this.M;
+    return M.screens.map((s) => {
+      const preset = s.preset === "F" ? ["loading", "populated", "error"]
+                   : s.preset === "S" ? ["populated"] : M.allStates;
+      const imp = s.impossible || {};
+      const cells = preset.map((st) => {
+        const excluded = !!imp[st];
+        const t = C ? C.treatments[st] : null;
+        return {
+          word: st, tag: excluded ? "cannot occur" : (s.id + " \u00b7 " + s.client),
+          body: excluded ? imp[st] : this.stateBody(s, st),
+          rule: excluded ? "" : (t ? t.rule : ""),
+          bg: excluded ? "var(--surface-sunken)" : "var(--surface-raised)",
+          border: excluded ? "var(--border)" : "var(--border-strong)",
+          wordColour: excluded ? "var(--text-muted)" : this.stateTone(st)
+        };
+      });
+      const drawn = cells.filter((c) => c.tag !== "cannot occur").length;
+      return { id: s.id, name: s.name, cells: cells,
+               meta: drawn + " of " + preset.length + " states drawn \u00b7 " +
+                 Object.keys(imp).length + " cannot occur \u00b7 " + s.route };
+    });
+  }
+  stateBody(s, st) {
+    if (st === "loading") return "Skeleton at the height of " + this.bodyWord(s) + ", so nothing jumps when the times arrive.";
+    if (st === "empty") return s.empty ? s.empty.s + " " + s.empty.e : "Nothing here yet.";
+    if (st === "error") return s.error;
+    if (st === "rejected") return s.rejected || s.error;
+    if (st === "withdrawn") return s.withdrawn || "Access changed, so this device dropped its copy.";
+    if (st === "readonly") return s.readonly;
+    if (st === "absent") return (s.states && s.states.absent) || "Gone, not disabled.";
+    if (st === "offline") return (s.states && s.states.offline) || "The same read with the bar above it \u2014 " + this.bodyWord(s) + " is on the device.";
+    if (st === "pending") return (s.states && s.states.pending) || "A queued write on " + this.bodyWord(s) + ", marked in a word and still editable.";
+    if (st === "syncing") return (s.states && s.states.syncing) || "Past the 800 ms threshold only.";
+    if (st === "conflicted") return (s.states && s.states.conflicted) || "A row flag that opens the comparison, never a modal at reconnect.";
+    return (s.states && s.states.populated) || this.bodyWord(s) + ", with no mark at all: synced is the absence of a mark.";
+  }
+  bodyWord(s) {
+    const m = { month: "the five rows", week: "the seven columns", day: "the one column",
+                agenda: "the days with something in them", editor: "the six fields",
+                choice: "the three choices", rsvp: "the four answers", overlay: "the five names",
+                busy: "the interval", connect: "the four providers", scope: "the two settings",
+                health: "the four connections", external: "the two versions",
+                disconnect: "the question" };
+    return m[s.kind] || "the content";
+  }
+
+  renderVals() {
+    const M = this.M;
+    if (!M || !window.HH_TOKENS || !window.HH_FIXTURES || !window.HH_REMINDERS) {
+      return { views: [], controls: [], frames: [], tables: [], groups: [], checks: [], notes: [],
+               pageTitle: "Calendar", pageMeta: "loading", stageLine: "stage 18",
+               gateLine: "", gateColour: "var(--text-muted)", viewIntro: "",
+               theme: "light", density: "comfortable", fontPx: "16px" };
+    }
+    const view = this.view;
+    const all = M.checks();
+    const passed = all.filter((c) => c.pass).length;
+    const groups = this.stateGroups();
+    const cells = groups.reduce((n, g) => n + g.cells.filter((c) => c.tag !== "cannot occur").length, 0);
+    const week = M.occurrences(M.monday(M.today), M.addDays(M.monday(M.today), 6));
+
+    const VIEWS = [
+      ["views", "month, week, day, agenda", M.viewDefs.length],
+      ["editor", "the editor, and three choices", 3],
+      ["people", "who, and who is not saying", M.busyAudit().blocks],
+      ["connect", "connecting is a privacy screen", M.connections.length],
+      ["health", "health, conflict, disconnect", M.healthRun().stale + M.healthRun().error],
+      ["states", "every state", cells],
+      ["gate", "the gate", all.length]
+    ];
+
+    const out = {
+      theme: this.state.theme, density: this.state.density,
+      fontPx: Math.round(16 * this.state.scale / 100) + "px",
+      stageLine: "stage 18 \u00b7 14 rows \u00b7 " + cells + " cells",
+      views: VIEWS.map((v) => ({ label: v[1], count: v[2], on: view === v[0] ? "1" : "0",
+                                 pick: () => this.setState({ view: v[0] }) })),
+      controls: [
+        { label: "Client", options: this.pickers([["mobile", "mobile"], ["web", "web"]], this.client, (v) => ({ client: v })) },
+        { label: "Member", options: this.pickers(
+            (window.HH_FIXTURES.members || []).map((m) => [m.id, m.name, m.note]), this.who,
+            (v) => ({ member: v })) },
+        { label: "Theme", options: this.pickers([["light", "light"], ["dark", "dark"]], this.state.theme, (v) => ({ theme: v })) },
+        { label: "Density", options: this.pickers([["comfortable", "comfortable"], ["compact", "compact"]], this.state.density, (v) => ({ density: v })) },
+        { label: "Text", options: this.pickers([[100, "100 %"], [200, "200 %"]], this.state.scale, (v) => ({ scale: v })) }
+      ],
+      gateLine: passed + " / " + all.length + " checks pass",
+      gateColour: passed === all.length ? "var(--positive)" : "var(--danger)",
+      frames: [], tables: [], groups: [], checks: [], notes: [],
+      pageTitle: "Calendar", pageMeta: week.length + " occurrences this week", viewIntro: ""
+    };
+
+    if (view === "views") this.viewViews(out);
+    if (view === "editor") this.viewEditor(out);
+    if (view === "people") this.viewPeople(out);
+    if (view === "connect") this.viewConnect(out);
+    if (view === "health") this.viewHealth(out);
+    if (view === "states") {
+      out.pageTitle = "Every state these fourteen rows can reach";
+      out.pageMeta = cells + " cells drawn \u00b7 " +
+        groups.reduce((n, g) => n + g.cells.filter((c) => c.tag === "cannot occur").length, 0) + " cannot occur";
+      out.viewIntro = "Twelve states are a treatment applied to one body, as Stage 4 established, and a row declares the states its own surface cannot reach with the reason drawn where the state would have been. Here the exclusions come from four facts. An event is lww_field and an occurrence exception is a row of its own, so two members moving one thing merge rather than fork. An answer is state_set keyed by (occurrence, member). The who-overlay is view state on the device and never leaves it. And a connection is strict_version, server-held and shared with nobody, so it is resolved on the server and has no access to retract.";
+      out.groups = groups;
+    }
+    if (view === "gate") this.viewGate(out, all, groups, cells);
+
+    out.tables = out.tables.map((tb) => Object.assign({}, tb, {
+      hasNote: !!tb.note, note: tb.note || "", minWidth: this.tableMin(tb.cols)
+    }));
+    return out;
+  }
+
+  viewViews(out) {
+    const M = this.M, mob = this.client === "mobile";
+    const mon = M.monday(M.today);
+    const week = M.occurrences(mon, M.addDays(mon, 6));
+    const month = M.monthGrid("2026-09");
+    const monthOcc = M.occurrences("2026-08-31", "2026-10-04");
+    const def = M.defaultRun();
+
+    const gridCells = month.cells.map((c) => {
+      const here = monthOcc.filter((o) => o.date === c.date);
+      const shown = here.slice(0, mob ? 1 : 2);
+      return {
+        day: c.day, border: c.today ? "var(--accent-family-time)" : "var(--border)",
+        bg: c.inMonth ? (c.today ? "var(--surface-sunken)" : "var(--surface-raised)") : "var(--surface-sunken)",
+        dayColour: c.inMonth ? (c.today ? "var(--accent-family-time)" : "var(--text-primary)") : "var(--text-disabled)",
+        items: shown.map((o) => ({
+          colour: this.busyFor(o) ? "var(--text-disabled)" : this.colour(o.who[0]),
+          textColour: this.busyFor(o) ? "var(--text-muted)" : "var(--text-primary)",
+          label: this.busyFor(o)
+            ? "Obsazeno"
+            : (mob ? M.initial(o.who[0]) + " " + o.cs : (o.kind === "allday" ? o.cs : o.from + " " + o.cs))
+        })),
+        hasMore: here.length > shown.length, more: "+" + (here.length - shown.length)
+      };
+    });
+
+    const monthFrame = this.F({ id: "E-1", name: "Calendar month", stateLabel: "populated \u00b7 " + this.client,
+      route: "/calendar/month/2026-09", frameMax: mob ? "360px" : "660px", col: mob ? "auto" : "span 2",
+      title: "Z\u00e1\u0159\u00ed 2026", lede: "Five rows of seven, Monday first, and the colour is whose it is.",
+      grid: { days: month.days, cells: gridCells, cellHeight: mob ? "2.9em" : "3.6em" },
+      footer: mob
+        ? "On a phone the cell holds an initial and a word and hides the rest behind a count \u2014 " + def.phone.col + " px of column against a " + def.phone.timeWidth + " px time label."
+        : "On web the same cell holds a time and a title at " + def.web.col + " px of column.",
+      caption: mob
+        ? "Reachable on a phone and readable, and still not what opens: the month is the view that answers \u201cwhich week was that\u201d, and it cannot answer \u201cwhat time\u201d at 46 px a column."
+        : "The web default. Every chip carries an initial as well as a colour, because a four-pixel bar is not a name." });
+
+    const HOURS = ["8", "11", "14", "17", "20"];
+    const axisEm = mob ? 15 : 20;
+    const axisPx = axisEm * 16 * this.state.scale / 100;           /* colHeight in px */
+    const linePx = 16 * this.state.scale / 100 * 0.5 * 1.65;       /* one label line, with the taller diacritic line box */
+    const top = (t) => ((M.minutes(t) - 480) / 780 * 100) + "%";
+    const pxOf = (a, b) => Math.max(0.06, M.span(a, b) / 780) * axisPx;
+    const hgt = (a, b) => Math.max(6, (M.span(a, b) / 780 * 100)) + "%";
+    const cols = [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const d = M.addDays(mon, i);
+      const here = week.filter((o) => o.date === d);
+      const timed = here.filter((o) => o.kind === "timed");
+      return {
+        label: M.dayLabel(d),
+        labelColour: d === M.today ? "var(--accent-family-time)" : "var(--text-muted)",
+        allday: here.filter((o) => o.kind === "allday").map((o) => ({
+          label: o.cs, colour: this.colour(o.who[0])
+        })),
+        blocks: timed.map((o) => {
+          const busy = this.busyFor(o);
+          const h = pxOf(o.from, o.to);
+          const lines = Math.floor((h - 4) / linePx);            /* whole lines that fit */
+          return {
+            top: top(o.from), height: hgt(o.from, o.to),
+            time: lines >= 2 ? o.from : "",
+            label: lines >= 1 ? (busy ? "Obsazeno" : o.cs) : "",
+            title: busy ? "Obsazeno \u2014 nen\u00ed co otev\u0159\u00edt" : o.cs + " \u00b7 " + o.from + "\u2013" + o.to,
+            border: busy ? "var(--text-disabled)" : this.colour(o.who[0]),
+            bg: busy ? "var(--surface-sunken)" : "color-mix(in oklab, " + this.colour(o.who[0]) + " 16%, var(--surface-raised))",
+            hatch: busy
+              ? "repeating-linear-gradient(135deg, var(--border) 0 2px, transparent 2px 6px)"
+              : "none",
+            textColour: "var(--text-primary)", metaColour: busy ? "var(--text-muted)" : "var(--text-muted)"
+          };
+        })
+      };
+    });
+
+    const weekFrame = this.F({ id: "E-2", name: "Calendar week", stateLabel: "populated \u00b7 " + this.client,
+      route: "/calendar/week/2026-W37", frameMax: mob ? "360px" : "700px", col: mob ? "auto" : "span 2",
+      title: "7.\u201313. z\u00e1\u0159\u00ed", lede: "Seven columns against the clock. All-day rows sit above the axis.",
+      cols: cols, hours: HOURS, colHeight: axisEm + "em",
+      footer: "Petr's hatched blocks are mirrored busy-only from his work calendar. Two of them overlap something of Jana's, which is what the week view is for.",
+      caption: "The overlap case. A busy block is drawn as an area with something in it \u2014 hatched, labelled and not tappable \u2014 rather than as a gap somebody has to interpret." });
+
+    const dayOcc = week.filter((o) => o.date === M.today);
+    const dayFrame = this.F({ id: "E-3", name: "Calendar day", stateLabel: "populated \u00b7 " + this.client,
+      route: "/calendar/day/2026-09-09", frameMax: "340px",
+      title: "St\u0159eda 9. z\u00e1\u0159\u00ed", lede: "One column, full detail, everything at its real height.",
+      blocks: [{ label: "Cel\u00fd den", rows: dayOcc.filter((o) => o.kind === "allday").map((o) => this.occRow(o)) },
+               { label: "B\u011bhem dne", rule: "chronologicky", rows: dayOcc.filter((o) => o.kind === "timed").map((o) => this.occRow(o, {
+                 right: o.kind === "timed" ? Math.round(M.span(o.from, o.to) / 60 * 10) / 10 + " h" : ""
+               })) }],
+      footer: "The delivery window is four hours, and it says four hours rather than \u201c13:00\u201d.",
+      caption: "Also the accessible view: one column, chronological, every block a tab stop, and the only view where a long window is not a lie." });
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = M.addDays(mon, i);
+      const here = week.filter((o) => o.date === d);
+      if (here.length) days.push({ d: d, here: here });
+    }
+    const agendaFrame = this.F({ id: "E-4", name: "Agenda", stateLabel: "populated \u00b7 " + this.client,
+      route: "/calendar", frameMax: "360px",
+      title: "Agenda", lede: "Days with something in them. The empty ones are skipped, not drawn.",
+      blocks: days.map((g) => ({
+        label: M.dayLabel(g.d) + (g.d === M.today ? " \u00b7 dnes" : ""),
+        rule: g.here.length + "\u00d7",
+        labelColour: g.d === M.today ? "var(--accent-family-time)" : "var(--text-muted)",
+        rows: g.here.map((o) => this.occRow(o))
+      })),
+      footer: "The mobile default. " + days.length + " of 7 days have something in them, and the height of the screen says so.",
+      caption: "The expansion runs on the device, so this list is complete offline rather than a cached window \u2014 the same property Stage 12 gave the reminder strand." });
+
+    out.pageTitle = "Four views, and which one opens";
+    out.pageMeta = week.length + " occurrences \u00b7 " + M.series.length + " series \u00b7 " +
+      M.busyAudit().blocks + " busy rows in September";
+    out.viewIntro = "All four views exist on both clients; what differs is which one opens. That is not a preference \u2014 it is arithmetic, and it is in the table below. Everything drawn here comes from one occurrence model: a series, an exception row per changed term, and a projection for anything a member is not allowed to read.";
+    out.frames = mob ? [monthFrame, weekFrame, dayFrame, agendaFrame] : [monthFrame, weekFrame, dayFrame, agendaFrame];
+    out.notes = [{ text: def.says }];
+    out.tables = [
+      { title: "The four views, and the client each one opens on",
+        meta: "06-clients \u00a73 \u00b7 currently " + this.client,
+        note: "Neither client is missing a view. The default is chosen by what a column of that client can hold, which is measured rather than asserted.",
+        cols: "90px 110px minmax(300px,1fr)",
+        head: [{ text: "View" }, { text: "Default on" }, { text: "What it is for" }],
+        rows: M.viewDefs.map((v) => ({ cells: [
+          this.cell(v[1], { mono: true }),
+          this.cell(v[2] || "\u2014", { mono: true, tone: v[2] ? "var(--accent-family-time)" : "var(--text-muted)" }),
+          this.cell(v[3])
+        ] })) },
+      { title: "What fits in a month cell",
+        meta: "7 columns \u00b7 mono time label \u00b7 both text sizes",
+        cols: "110px 90px 110px 110px 110px",
+        head: [{ text: "Width" }, { text: "Column" }, { text: "Time" }, { text: "Time + title" }, { text: "Verdict" }],
+        rows: [[360, 100], [360, 200], [1156, 100], [1156, 200]].map((w) => {
+          const fit = M.viewFit(w[0], w[1]);
+          return { cells: [
+            this.cell(w[0] + " px \u00b7 " + w[1] + " %", { mono: true }),
+            this.cell(fit.col + " px", { mono: true }),
+            this.cell(fit.fitsTime ? "fits" : fit.timeWidth + " px", { mono: true, tone: fit.fitsTime ? "var(--positive)" : "var(--warning)" }),
+            this.cell(fit.fitsTitle ? "fits" : "no", { mono: true, tone: fit.fitsTitle ? "var(--positive)" : "var(--warning)" }),
+            this.cell(fit.fitsTitle ? "month reads" : (fit.fitsTime ? "month, no title" : "a mark and a count"), { muted: true })
+          ] };
+        }) }
+    ];
+  }
+  viewEditor(out) {
+    const M = this.M;
+    const ch = M.editChoices("s-pilates", "2026-09-23");
+    const run = M.choiceRun();
+    const swim = M.seriesOf("s-swim");
+    const rent = M.seriesOf("s-rent");
+    const clamp = window.HH_REMINDERS.expand(rent.rrule, "2026-08-01", "2027-03-01");
+
+    const editor = this.F({ id: "E-5", name: "Event editor with recurrence", stateLabel: "populated",
+      route: "/calendar/events/s-swim/edit", frameMax: "380px",
+      title: "Adam \u2014 plav\u00e1n\u00ed", lede: "Six fields in the order a person fills them, and repeat is a sentence.",
+      fields: [
+        { label: "N\u00e1zev", value: swim.cs },
+        { label: "Kdy", value: "16:30 \u2013 17:30", hint: "1 h", font: "var(--mono)" },
+        { label: "Kde", value: swim.place },
+        { label: "Kdo", value: "Adam", note: "\u00da\u010dastn\u00edci dostanou ot\u00e1zku, ne p\u0159\u00edkaz \u2014 odpov\u011b\u010f je jejich." },
+        { label: "Opakov\u00e1n\u00ed", value: "ka\u017cd\u00fd t\u00fdden ve st\u0159edu a ve \u010dtvrtek",
+          bg: "var(--surface)", note: "Napsan\u00e9 v\u011btou. \u017d\u00e1dn\u00fd editor pravidel \u2014 a p\u0159esn\u011b tohle je d\u016fvod, pro\u010d widget ze Stage 10 m\u011bl plav\u00e1n\u00ed ve dvou dnech a m\u011bl pravdu dvakr\u00e1t." },
+        { label: "P\u0159ipomenut\u00ed", value: "1 h p\u0159edem \u00b7 v aplikaci", hint: "reminders.js",
+          note: "Kind calendar.event ze Stage 12. Ud\u00e1lost m\u016f\u017ee m\u00edt vlastn\u00ed \u010dasy, jinak plat\u00ed v\u00fdchozn\u00ed \u2014 ne druh\u00fd syst\u00e9m p\u0159ipom\u00ednek." }
+      ],
+      actions: ["Ulo\u017cit", "Zru\u0161it"],
+      footer: "Adam has calendar.event switched off as a channel in Stage 12's own overrides. The event still exists; his phone stays quiet.",
+      caption: "The repeat field is one sentence and one sheet behind it. A household does not have an RRULE, it has \u201cevery week on Wednesday and Thursday\u201d." });
+
+    const choiceFrame = this.F({ id: "E-6", name: "Three-choice occurrence edit", stateLabel: "populated",
+      route: "/calendar/events/s-pilates/edit#scope", frameMax: "400px",
+      title: "Co m\u00e1me zm\u011bnit?", lede: "Pilates, 23. z\u00e1\u0159\u00ed \u2014 posunut\u00e9 z 17:30 na 19:00.",
+      choices: (ch ? ch.choices : []).map((c, i) => ({
+        label: c.label, consequence: c.consequence,
+        rows: c.rows.join(" \u00b7 "),
+        border: i === 0 ? "var(--accent-family-time)" : "var(--border)",
+        bg: i === 0 ? "var(--surface-sunken)" : "var(--surface)",
+        ring: i === 0 ? "var(--accent-family-time)" : "var(--border-strong)",
+        fill: i === 0 ? "var(--accent-family-time)" : "transparent"
+      })),
+      footer: "The counts come from the series, which is why the third choice can admit that it rewrites the past.",
+      caption: "Three answers to one drag, each stating what it costs. The first is pre-selected because it is the only one that cannot surprise anybody." });
+
+    const exceptions = this.F({ id: "E-5", name: "The exception row", stateLabel: "populated \u00b7 detail",
+      route: "/calendar/events/s-pilates", frameMax: "360px",
+      title: "Pilates \u00b7 v\u00fdjimky", lede: "One row per changed term, and the rule underneath is untouched.",
+      blocks: [{ label: "Pravidlo", rows: [this.row({
+          title: "Ka\u017cd\u00fd t\u00fdden ve st\u0159edu, 17:30\u201318:30",
+          meta: "od 7. 1. 2026 \u00b7 " + (ch ? ch.total : 0) + " term\u00edn\u016f do konce 2027",
+          chip: "opakuje se" })] },
+        { label: "V\u00fdjimky", rule: M.exceptions.length + " v cel\u00e9m fixture",
+          rows: M.exceptions.map((e) => this.row({
+            title: (e.type === "moved" ? "p\u0159esunuto" : "zru\u0161eno") + " \u00b7 " + M.fmt(e.date),
+            meta: (e.type === "moved" ? e.from + "\u2013" + e.to + " \u00b7 " : "") + e.why,
+            dot: e.remote ? "var(--text-disabled)" : this.colour(e.by),
+            leftRule: "3px solid " + (e.remote ? "var(--text-disabled)" : this.colour(e.by)),
+            note: (e.remote ? "p\u0159ineseno z p\u0159ipojen\u00e9ho kalend\u00e1\u0159e \u00b7 " : M.name(e.by) + " \u00b7 ") + e.at,
+            chip: e.series.replace("s-", "") })) }],
+      footer: "calendar.event_exception is lww_field: two members moving the same term merge field by field.",
+      caption: "This row is the whole difference between Calendar and Reminders. Stage 12 refused it on purpose \u2014 a reminder series has no per-occurrence exceptions \u2014 and Calendar pays for it here." });
+
+    out.pageTitle = "The editor, and the three choices";
+    out.pageMeta = (ch ? ch.total : 0) + " Pilates terms \u00b7 " + M.exceptions.length + " exception rows \u00b7 recurrence from reminders.js";
+    out.viewIntro = "Recurrence is the module's second-hardest thing after privacy, and this stage writes none of it: expand() is reminders.js's FR-RE2 subset, already tested against its own vector table. What Calendar adds is one row \u2014 an exception per changed occurrence \u2014 and that row is what makes the three-choice edit answerable in counts rather than in adjectives.";
+    out.frames = [editor, choiceFrame, exceptions];
+    out.notes = [{ text: run.says }];
+    out.tables = [
+      { title: "What each choice writes",
+        meta: "Pilates \u00b7 23 September \u00b7 " + (ch ? ch.total : 0) + " terms",
+        cols: "150px 80px 90px minmax(260px,1fr)",
+        head: [{ text: "Choice" }, { text: "Touches" }, { text: "Rows" }, { text: "Consequence, as drawn" }],
+        rows: (ch ? ch.choices : []).map((c) => ({ cells: [
+          this.cell(c.en, { mono: true }),
+          this.cell(String(c.touches), { mono: true, tone: "var(--accent-family-time)" }),
+          this.cell(String(c.writes), { mono: true, muted: true }),
+          this.cell(c.consequence)
+        ] })) },
+      { title: "One recurrence engine, not two",
+        meta: "reminders.js expand() \u00b7 the 31st, monthly",
+        note: "The cottage rent repeats on the 31st. September has thirty days, and the clamp that lands it there is the one Stage 12 wrote and tested \u2014 Calendar calls it rather than reimplementing it.",
+        cols: "120px minmax(240px,1fr)",
+        head: [{ text: "Month" }, { text: "Term" }],
+        rows: clamp.dates.slice(0, 7).map((d) => ({ cells: [
+          this.cell(d.slice(0, 7), { mono: true, muted: true }),
+          this.cell(M.fmtLong(d) + (d.slice(8) !== "31" ? " \u2014 clamped from the 31st" : ""),
+            { tone: d.slice(8) !== "31" ? "var(--accent-family-time)" : "var(--text-primary)" })
+        ] })) }
+    ];
+  }
+  viewPeople(out) {
+    const M = this.M;
+    const ov = M.whoOverlay(null);
+    const col = M.colourAudit();
+    const gate = M.busyGate();
+    const audit = M.busyAudit();
+    const film = M.occurrences("2026-09-11", "2026-09-11", { only: ["s-film"] })[0];
+    const answers = film ? Object.keys(film.rsvp || {}) : [];
+
+    const rsvp = this.F({ id: "E-7", name: "Participants and RSVP", stateLabel: "populated",
+      route: "/calendar/events/s-film#who", frameMax: "360px",
+      title: "Filmov\u00fd ve\u010der", lede: "P\u00e1tek 20:00 \u00b7 kdo p\u0159ijde",
+      blocks: [{ label: "\u00da\u010dastn\u00edci", rule: answers.length + " \u00b7 state_set",
+        rows: answers.map((k) => {
+          const v = film.rsvp[k];
+          return this.row({
+            title: M.name(k), meta: M.rsvpWord(v),
+            dot: this.colour(k), leftRule: "3px solid " + this.colour(k),
+            chip: v === "none" ? "" : M.rsvpWord(v),
+            chipColour: v === "yes" ? "var(--positive)" : (v === "maybe" ? "var(--warning)" : "var(--text-muted)"),
+            note: v === "none" ? "Bez odpov\u011bdi nen\u00ed ne \u2014 a nekresl\u00ed se jako ne." : "",
+            actionLabel: k === this.who ? "Odpov\u011bd\u011bt" : ""
+          });
+        }) }],
+      footer: "Odpov\u011bd\u011bt m\u016f\u017cete jen za sebe. Adam za sebe ano, za nikoho jin\u00e9ho ne.",
+      caption: "Keyed by (occurrence, member), so two people answering at once merge and answering twice is idempotent. There is no version of this screen that asks a question." });
+
+    const overlay = this.F({ id: "E-8", name: "The who overlay", stateLabel: "populated \u00b7 local",
+      route: "/calendar#who", frameMax: "320px",
+      title: "\u010c\u00ed to je", lede: "P\u011bt \u010dlen\u016f, p\u011bt barev, filtr ulo\u017cen\u00fd v tomhle za\u0159\u00edzen\u00ed.",
+      chips: ov.members.map((m) => ({
+        initial: m.initial, name: m.name, tail: String(m.count), colour: "var(--" + m.colour + ")"
+      })),
+      blocks: [{ label: "Tento t\u00fdden", rule: ov.shown + " z " + ov.total,
+        rows: ov.members.map((m) => this.row({
+          title: m.name, meta: m.count + " term\u00edn\u016f \u00b7 " + m.colour,
+          dot: "var(--" + m.colour + ")", leftRule: "3px solid var(--" + m.colour + ")",
+          right: m.on ? "zapnuto" : "vypnuto",
+          rightColour: m.on ? "var(--accent-family-time)" : "var(--text-muted)"
+        })) }],
+      footer: "The colours are the avatar's, assigned once per household in Stage 4 and re-used here rather than re-picked.",
+      caption: "A local filter over the same rows: turning everybody back on is not a sync, which is why five of the twelve states cannot happen on this surface." });
+
+    const busy = this.F({ id: "E-9", name: "Busy blocks", stateLabel: "populated \u00b7 the gate",
+      route: "/calendar/week/2026-W37#busy", frameMax: "380px",
+      title: "Obsazeno", lede: "\u010cas, ve kter\u00e9m n\u011bkdo n\u011bco m\u00e1. Nic dal\u0161\u00edho tady nen\u00ed.",
+      bannerTone: "var(--status-private)", bannerTitle: "Co Petrovi p\u0159i\u0161lo do telefonu",
+      bannerBody: gate.row ? JSON.stringify(gate.row) : "",
+      blocks: [
+        { label: "Jak to vznikne", rows: [
+          this.row({ title: "Jana ozna\u010d\u00ed ud\u00e1lost jako soukromou",
+            meta: "calendar.event \u00b7 visibility private \u00b7 lww_field",
+            dot: this.colour("jana"), leftRule: "3px solid " + this.colour("jana") }),
+          this.row({ title: "Server projekci ud\u011bl\u00e1 jednou, p\u0159i odesl\u00e1n\u00ed",
+            meta: audit.keyCount + " pol\u00ed \u00b7 " + audit.stripped + " zahozen\u00fdch",
+            dot: "var(--info)", leftRule: "3px solid var(--info)",
+            chip: "sync-out" }),
+          this.row({ title: "Petrovo za\u0159\u00edzen\u00ed dostane \u0159\u00e1dek a ulo\u017c\u00ed ho",
+            meta: "b\u011b\u017en\u00fd \u0159\u00e1dek ve feedu \u00b7 funguje bez sign\u00e1lu",
+            dot: "var(--text-disabled)", leftRule: "3px solid var(--text-disabled)",
+            bg: "var(--surface-sunken)", chip: "neotev\u0159eteln\u00e9", chipColour: "var(--text-muted)" })
+        ] },
+        { label: "Co v \u0159\u00e1dku nen\u00ed", rule: audit.stripped + " pol\u00ed",
+          rows: [this.row({ title: M.stripped.join(", "),
+            meta: "Nen\u00ed to skryt\u00e9 v UI. Na za\u0159\u00edzen\u00ed to nen\u00ed.",
+            dot: "var(--text-disabled)", bg: "var(--surface-sunken)",
+            leftRule: "3px solid var(--text-disabled)" })] }
+      ],
+      footer: "Hatched, labelled, not tappable \u2014 and there is nothing behind the tap to withhold.",
+      caption: "The stage gate. Unmistakable is a treatment; uninspectable is a property of the row. Both are checked, and neither depends on the screen behaving." });
+
+    out.pageTitle = "Whose it is, and what stays private";
+    out.pageMeta = audit.blocks + " busy rows in September \u00b7 " + audit.privateOwn +
+      " private, " + audit.mirrored + " mirrored \u00b7 " + audit.leaked + " fields leaked";
+    out.viewIntro = "Three surfaces over one question: whose is this, and how much of it am I allowed to know. The answer is drawn twice \u2014 as a colour with a name beside it, and as a hatched block with nothing behind it. The busy block is the stage's gate, so it is built as data rather than as a treatment: the projection happens once, on the way out of the server, and what a second device holds is five fields.";
+    out.frames = [rsvp, overlay, busy];
+    out.notes = [{ text: gate.says }, { text: col.says }];
+    out.tables = [
+      { title: "The busy row, field by field",
+        meta: audit.keyCount + " kept \u00b7 " + audit.stripped + " dropped \u00b7 " + audit.leaked + " leaked",
+        note: "Two sources, one row shape: this household's own private events and a remote calendar connected as busy-only. Neither can be inspected, and the reason is the same in both cases.",
+        cols: "130px 110px minmax(260px,1fr)",
+        head: [{ text: "Field" }, { text: "On the row" }, { text: "Why" }],
+        rows: ["id", "owner", "date", "from", "to"].map((k) => ({ cells: [
+          this.cell(k, { mono: true }),
+          this.cell("kept", { mono: true, tone: "var(--positive)" }),
+          this.cell(k === "id" ? "So the block is a real row that can be cached, deduplicated and drawn offline."
+                  : k === "owner" ? "So the week view can say whose hour it is \u2014 which is the whole point of showing it."
+                  : "The interval, which is the only thing the household is being told.")
+        ] })).concat(M.stripped.map((k) => ({ cells: [
+          this.cell(k, { mono: true, muted: true }),
+          this.cell("dropped", { mono: true, tone: "var(--text-muted)" }),
+          this.cell("Dropped at sync-out. A client cannot show what it never received, and cannot be talked into it by a bug.", { muted: true })
+        ] }))) },
+      { title: "The member colours",
+        meta: "Stage 4 \u00b7 re-used, not re-picked",
+        cols: "110px 110px 90px minmax(200px,1fr)",
+        head: [{ text: "Member" }, { text: "Token" }, { text: "This week" }, { text: "Also carried as" }],
+        rows: ov.members.map((m) => ({ cells: [
+          this.cell(m.name),
+          this.cell("--" + m.colour, { mono: true, tone: "var(--" + m.colour + ")" }),
+          this.cell(m.count + " term\u00edn\u016f", { mono: true, muted: true }),
+          this.cell("an initial in the chip and the name in the row \u2014 colour is never the only carrier")
+        ] })) }
+    ];
+  }
+  viewConnect(out) {
+    const M = this.M;
+    const audit = M.connectAudit();
+    const kids = M.childRun();
+    const me = kids.filter((k) => k.id === this.who)[0] || kids[0];
+    const jana = M.connection("c-jana-google");
+    const offer = M.connectOffer("google", this.who);
+
+    const providers = this.F({ id: "E-10", name: "Connection setup per provider", stateLabel: "populated",
+      route: "/calendar/connections/new", frameMax: "340px",
+      title: "P\u0159ipojit kalend\u00e1\u0159", lede: "\u010cty\u0159i mo\u017cnosti. Nic se nep\u0159enese, dokud to nepotvrd\u00edte.",
+      blocks: [{ label: "Odkud", rows: M.providers.map((p) => this.row({
+        title: p[1], meta: p[2],
+        dot: "var(--accent-family-time)",
+        chip: "jen \u010das", chipColour: "var(--text-muted)"
+      })) }],
+      footer: "Every one of the four opens the same two settings, pre-set the same way.",
+      caption: "Four providers and one screen behind them. The ICS option is read-only by construction, which the row says rather than discovering at save." });
+
+    const consent = me && me.role === "child"
+      ? this.F({ id: "E-11", name: "Direction and scope \u2014 a child profile", stateLabel: "absent \u00b7 " + me.name,
+          route: "/calendar/connections/new", frameMax: "340px",
+          title: "Nastaven\u00ed kalend\u00e1\u0159e", lede: "",
+          absentTitle: "Tady nic nen\u00ed",
+          absentBody: "Na d\u011btsk\u00e9m profilu \u017e\u00e1dn\u00e9 propojen\u00ed nen\u00ed \u2014 \u017e\u00e1dn\u00fd \u0159\u00e1dek, \u017e\u00e1dn\u00e9 vysv\u011btlen\u00ed, \u017e\u00e1dn\u00e9 zes\u011divl\u00e9 tla\u010d\u00edtko. Adam kalend\u00e1\u0159 pou\u017e\u00edv\u00e1 ka\u017cd\u00fd t\u00fdden; tuhle obrazovku nem\u00e1.",
+          footer: "The neutral not-available Stage 6 drew, applied to a settings route rather than a module.",
+          caption: "Absent, not disabled. A locked row with an explanation he cannot act on would be an invitation to ask somebody to unlock it." })
+      : this.F({ id: "E-10", name: "The consent sentence", stateLabel: "populated \u00b7 before connecting",
+          route: "/calendar/connections/new?provider=google", frameMax: "360px",
+          title: "Google Calendar", lede: offer.account,
+          bannerTone: "var(--accent-family-time)", bannerTitle: "Co se stane",
+          bannerBody: offer.sentence,
+          fields: [
+            { label: "Sm\u011br", value: "Z n\u011bj sem", hint: "v\u00fdchoz\u00ed", bg: "var(--surface)" },
+            { label: "Rozsah", value: "Jen \u010das (obsazeno)", hint: "v\u00fdchoz\u00ed", bg: "var(--surface)",
+              note: "N\u00e1zvy, m\u00edsta ani \u00fa\u010dastn\u00edci se nep\u0159en\u00e1\u0161ej\u00ed. To lze zm\u011bnit pozd\u011bji, po kalend\u00e11\u0159\u00edch." }
+          ],
+          actions: ["P\u0159ipojit " + offer.account, "Zru\u0161it"],
+          footer: "The account is in the sentence and on the button, not in a field label above them.",
+          caption: "The recipient is named at the moment of connecting, in the same sentence as what crosses. A member should not have to assemble that from two labels and a toggle." });
+
+    const scope = this.F({ id: "E-11", name: "Per-remote-calendar direction and scope", stateLabel: "populated",
+      route: "/calendar/connections/c-jana-google", frameMax: "400px",
+      title: jana.account, lede: "Dva kalend\u00e1\u0159e, dv\u011b r\u016fzn\u00e1 nastaven\u00ed. Nastavuje se to po kalend\u00e1\u0159\u00edch, ne po \u00fa\u010dtu.",
+      blocks: [{ label: "Kalend\u00e1\u0159e", rule: jana.calendars.length,
+        rows: jana.calendars.map((c) => this.row({
+          title: c.name,
+          meta: (c.direction === "import" ? "z n\u011bj sem" : c.direction === "export" ? "odsud tam" : "oboj\u00ed") +
+            " \u00b7 " + (c.scope === "busy" ? "jen \u010das" : "v\u0161echno"),
+          right: c.mirrored + " ud\u00e1lost\u00ed",
+          dot: c.scope === "busy" ? "var(--status-private)" : "var(--accent-family-time)",
+          leftRule: "3px solid " + (c.scope === "busy" ? "var(--text-disabled)" : "var(--accent-family-time)"),
+          chip: c.scope === "busy" ? "neotev\u0159eteln\u00e9" : "v\u0161echno",
+          chipColour: c.scope === "busy" ? "var(--text-muted)" : "var(--accent-family-time)",
+          note: c.scope === "busy" ? "Z tohoto kalend\u00e1\u0159e vznikaj\u00ed obsazen\u00e9 bloky, ne ud\u00e1losti." : ""
+        })) }],
+      footer: "Zu\u017een\u00ed rozsahu plat\u00ed od dal\u0161\u00ed synchronizace a odstran\u00ed i to, co u\u017e p\u0159e\u0161lo.",
+      caption: "Two axes, deliberately independent: \u201ceverything, one way\u201d and \u201conly times, both ways\u201d are both real households, and one control could not express either." });
+
+    out.pageTitle = "Connecting is a privacy screen";
+    out.pageMeta = M.connections.length + " connections \u00b7 " +
+      M.connections.reduce((n, c) => n + c.calendars.length, 0) + " remote calendars \u00b7 " +
+      audit.busyFirst + " of " + audit.providers + " offering busy-only first";
+    out.viewIntro = "These screens decide what leaves the household, so they are written as consent rather than as configuration: the account is named in the sentence, the narrow setting is the pre-selected one, and the two axes are separate because collapsing them would force a household to over-share to get the direction it wants. A child profile does not have any of it \u2014 absent, not disabled.";
+    out.frames = [providers, consent, scope];
+    out.notes = [{ text: audit.says }];
+    out.tables = [
+      { title: "Direction and scope",
+        meta: "two axes \u00b7 " + M.directions.length + " \u00d7 " + M.scopes.length,
+        cols: "110px 130px minmax(220px,1fr) minmax(180px,1fr)",
+        head: [{ text: "Axis" }, { text: "Value" }, { text: "What it means" }, { text: "And what it does not" }],
+        rows: M.directions.map((d) => ({ cells: [
+          this.cell("sm\u011br", { mono: true, muted: true }), this.cell(d[1]), this.cell(d[2]), this.cell(d[3], { muted: true })
+        ] })).concat(M.scopes.map((s) => ({ cells: [
+          this.cell("rozsah", { mono: true, muted: true }),
+          this.cell(s[1], { tone: s[3] ? "var(--accent-family-time)" : "var(--text-primary)" }),
+          this.cell(s[2]),
+          this.cell(s[3] ? "the offered default on all four providers" : "never pre-selected", { muted: true })
+        ] }))) },
+      { title: "Who has a connection surface at all",
+        meta: "FR-CA13 \u00b7 five members",
+        note: "A child cannot connect a remote calendar, and the way that is expressed is that the route does not exist for him. Three other members simply hold no grant on Calendar, so the module and its settings are absent together.",
+        cols: "100px 90px 110px 100px minmax(220px,1fr)",
+        head: [{ text: "Member" }, { text: "Role" }, { text: "Calendar" }, { text: "Controls" }, { text: "Treatment" }],
+        rows: kids.map((k) => ({ cells: [
+          this.cell(k.name), this.cell(k.role, { mono: true, muted: true }),
+          this.cell(k.grant, { mono: true }),
+          this.cell(String(k.controls), { mono: true, tone: k.controls === 0 ? "var(--text-muted)" : "var(--accent-family-time)" }),
+          this.cell(k.treatment === "available" ? "\u010dty\u0159i poskytovatel\u00e9, dv\u011b nastaven\u00ed" : k.why,
+            { tone: k.treatment === "available" ? "var(--text-primary)" : "var(--text-muted)" })
+        ] })) }
+    ];
+  }
+  viewHealth(out) {
+    const M = this.M;
+    const hl = M.healthRun();
+    const ext = M.externalRun();
+    const dis = M.disconnect("c-petr-work");
+    const rec = M.reconcile();
+
+    const health = this.F({ id: "E-12", name: "Connection health + staleness badge", stateLabel: "populated",
+      route: "/calendar/connections", frameMax: "400px",
+      title: "P\u0159ipojen\u00e9 kalend\u00e1\u0159e", lede: "Kdy to naposledy fungovalo \u2014 a jak star\u00e9 je to, co vid\u00edte.",
+      blocks: [{ label: "\u010cty\u0159i p\u0159ipojen\u00ed", rule: hl.ok + " ok \u00b7 " + hl.stale + " neaktu\u00e1ln\u00ed \u00b7 " + hl.error + " chyba",
+        rows: hl.all.map((h) => this.row({
+          title: h.account, meta: h.sentence,
+          right: h.word, rightColour: "var(" + h.token + ")",
+          dot: "var(" + h.token + ")", leftRule: "3px solid var(" + h.token + ")",
+          bg: h.state === "ok" ? "var(--surface)" : "var(--surface-sunken)",
+          chip: h.badge, chipColour: "var(" + h.token + ")",
+          note: h.state === "ok" ? "" : h.mirrored + " ud\u00e1lost\u00ed pod t\u00edm je z t\u00e9 doby.",
+          actionLabel: h.state === "ok" ? "" : "P\u0159ihl\u00e1sit znovu"
+        })) }],
+      footer: "status-stale exists in the token set for this screen and Stage 8's sync health. This is where it is spent.",
+      caption: "A badge points; a sentence answers. The row says how many days old the events under it are, because \u201cnot updated recently\u201d is not a number a household can act on." });
+
+    const conflict = this.F({ id: "E-13", name: "External conflict resolution", stateLabel: "populated",
+      route: "/calendar/conflicts/s-boiler", frameMax: "400px",
+      title: "Dv\u011b verze \u00b7 Servis kotle", lede: "Pond\u011bl\u00ed 14. z\u00e1\u0159\u00ed. Vy jste to posunuli, jejich kalend\u00e1\u0159 tak\u00e9.",
+      blocks: [{ label: "Oboje", rows: [
+        this.row({ title: "14:00\u201315:00 \u00b7 " + M.name(ext.e.local.by),
+          meta: ext.e.local.at + " \u00b7 " + ext.e.local.note,
+          dot: this.colour("jana"), leftRule: "3px solid " + this.colour("jana"),
+          chip: "bez sign\u00e1lu", chipColour: "var(--status-offline)",
+          right: "va\u0161e", rightColour: "var(--text-muted)" }),
+        this.row({ title: "08:00\u201312:00 \u00b7 " + ext.e.remote.by,
+          meta: ext.e.remote.at + " \u00b7 " + ext.e.remote.note,
+          dot: "var(--info)", leftRule: "3px solid var(--info)",
+          chip: "p\u0159ipojen\u00fd kalend\u00e1\u0159", chipColour: "var(--info)",
+          right: "jejich", rightColour: "var(--text-muted)" })
+      ] }],
+      bannerTone: "var(--status-conflict)", bannerTitle: "Co se stane s tou druhou",
+      bannerBody: "Z\u016fstane. Va\u0161e verze se ulo\u017c\u00ed jako ud\u00e1lost dom\u00e1cnosti a je\u0161t\u011b " + ext.keptDays +
+        " dn\u00ed ji najdete ve vyhled\u00e1v\u00e1n\u00ed \u2014 nic se nemaz\u00e1, aby obrazovka byla jednodu\u0161\u0161\u00ed.",
+      actions: ["Nechat jejich \u010das", "Nechat n\u00e1\u0161 \u010das"],
+      footer: ext.e.rule,
+      caption: "The one conflict in the module, and it is not a merge failure: two calendars both think they own an appointment. Stage 10 and Stage 11 each recorded one of these two times, which is how this fixture came to exist." });
+
+    const disconnect = this.F({ id: "E-14", name: "Disconnect", stateLabel: "populated",
+      route: "/calendar/connections/c-petr-work/disconnect", frameMax: "360px",
+      title: "Odpojit " + dis.connection.account, lede: "A co m\u00e1me ud\u011blat s t\u00edm, co odsud p\u0159i\u0161lo?",
+      choices: dis.answers.map((a, i) => ({
+        label: a.label, consequence: a.effect,
+        rows: (a.writes ? a.writes + " z\u00e1pis\u016f" : "0 z\u00e1pis\u016f") + " \u00b7 " +
+          (a.removes ? a.removes + " odebran\u00fdch \u0159\u00e1dk\u016f" : "0 odebran\u00fdch"),
+        border: i === 0 ? "var(--accent-family-time)" : "var(--border)",
+        bg: i === 0 ? "var(--surface-sunken)" : "var(--surface)",
+        ring: i === 0 ? "var(--accent-family-time)" : "var(--border-strong)",
+        fill: i === 0 ? "var(--accent-family-time)" : "transparent"
+      })),
+      footer: "Ani jedna z odpov\u011bd\u00ed se nedotkne " + dis.householdOwn + " ud\u00e1lost\u00ed, kter\u00e9 si dom\u00e1cnost napsala sama.",
+      caption: "Disconnecting without asking is how a household loses a year of appointments it thought were its own. Both answers are drawn with what they cost." });
+
+    out.pageTitle = "Health, conflict, and disconnecting";
+    out.pageMeta = hl.ok + " ok \u00b7 " + hl.stale + " stale \u00b7 " + hl.error + " error \u00b7 " +
+      ext.preserved + " preserved loser";
+    out.viewIntro = "A connection fails quietly, so its screen has to be loud in words rather than in colour: how old, since when, and why. The two screens after it are what happens when the remote calendar is not merely late but disagrees \u2014 and in both cases the module's rule is the same one Stage 13 wrote for notes: the value that loses is preserved, surfaced, and given a date.";
+    out.frames = [health, conflict, disconnect];
+    out.notes = [{ text: ext.says }, { text: dis.says }];
+    out.tables = [
+      { title: "Fifteen calendar rows earlier stages had already drawn",
+        meta: rec.resolved + " of " + rec.total + " resolve \u00b7 " + rec.drifts + " disagreed",
+        note: "This is the reconciliation the module owes the three stages that drew calendar content before Calendar existed. Three rows disagreed with the model, and none of the three turned out to be a mistake in the model: one prose fixture had the wrong time, one had the same recurring event on two days and was right twice, and one was never a calendar row at all.",
+        cols: "minmax(150px,1fr) minmax(200px,1.4fr) 100px minmax(240px,1.6fr)",
+        head: [{ text: "Drawn in" }, { text: "Row" }, { text: "Resolves to" }, { text: "Note" }],
+        rows: rec.rows.map((r) => ({ cells: [
+          this.cell(r.src, { mono: true, muted: true }),
+          this.cell(r.text),
+          this.cell(r.to || r.strand, { mono: true, tone: r.drift ? "var(--warning)" : "var(--positive)" }),
+          this.cell(r.drift || r.note || "", { muted: true })
+        ] })) },
+      { title: "The merge policies these fourteen rows rest on",
+        meta: "03-patterns \u00a71",
+        cols: "minmax(150px,1fr) 120px minmax(280px,2fr)",
+        head: [{ text: "Entity" }, { text: "Policy" }, { text: "What that buys" }],
+        rows: M.policies.map((p) => ({ cells: [
+          this.cell(p[0], { mono: true }),
+          this.cell(p[1], { mono: true, tone: p[3] ? "var(--status-conflict)" : "var(--text-muted)" }),
+          this.cell(p[2])
+        ] })) }
+    ];
+  }
+
+  viewGate(out, all, groups, cells) {
+    const M = this.M, L = window.HH_LEDGER;
+    const extra = [];
+    if (L) {
+      const mm = L.mismatches();
+      const st = L.stageStatus().filter((s) => s.num === 18)[0];
+      extra.push({
+        name: "The declared exclusions match the ledger's mirror, checked where they are drawn",
+        detail: mm.length === 0
+          ? "This page loads ledger.js beside calendar.js, so the comparison runs here rather than being asserted: the impossible maps in calendar.js are identical to EXCLUSIONS for all nine rows that carry the twelve-state preset. Stage 18 computes " +
+            (st ? st.built + " of " + st.rows + " client rows built and " + st.drawnStates + " of " +
+              st.reqStates + " states drawn \u2014 " + st.status : "no stage row") + "."
+          : "MISMATCH: " + mm.join(" \u00b7 "),
+        pass: mm.length === 0 && !!st && st.status === "closed"
+      });
+    }
+    const shown = all.concat(extra);
+    out.pageTitle = "The gate";
+    out.pageMeta = shown.filter((c) => c.pass).length + " of " + shown.length + " pass";
+    out.gateLine = shown.filter((c) => c.pass).length + " / " + shown.length + " checks pass";
+    out.gateColour = shown.every((c) => c.pass) ? "var(--positive)" : "var(--danger)";
+    out.viewIntro = "The stage's own line is privacy: a private event's busy block is a real synced row and works offline. That is the first check, and it is a property of the row rather than of the screen \u2014 the projection happens once, at sync-out, and the words are simply not on the device. Everything under it is the occurrence model and the connection screens, which is where the module's real risk was: four views that must all exist on both clients, and a settings screen that is quietly the most consequential privacy control in the product.";
+    out.checks = shown.map((c) => ({ name: c.name, detail: c.detail,
+      colour: c.pass ? "var(--positive)" : "var(--danger)" }));
+  }
+}
+</script>
+</body>
+</html>

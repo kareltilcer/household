@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./auth.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">Household · identity</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Auth, child sign-in, account</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent)">stage 07 · 21 rows · 36 client layouts</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="8">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">Every failure sentence on these screens is read from one register, with its enumeration verdict attached. The gate is computed from that file, not asserted about it.</div>
+      <a href="./Shells and Navigation.dc.html" style="font-family:var(--mono);font-size:11px">← stage 06 · shells</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <sc-if value="{{ isScreens }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1320px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:26px;align-items:start">
+          <sc-for list="{{ screens }}" as="s" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:11px;min-width:0">
+
+              <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+                <span style="font-family:var(--mono);font-size:11px;color:var(--accent)">{{ s.id }}</span>
+                <h3 style="margin:0;font-size:15px;font-weight:600">{{ s.name }}</h3>
+                <span style="font-family:var(--mono);font-size:10px;color:{{ s.drawnColour }}">{{ s.drawnLabel }}</span>
+              </div>
+
+              <div data-watch="1" data-name="{{ s.id }}" style="width:100%;max-width:{{ s.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:{{ s.radius }};background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+                <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.route }}</span>
+                  <span style="flex:0 0 auto">{{ s.clientLabel }}</span>
+                </div>
+
+                <div style="flex:1 1 auto;padding:1.15em 1em 1.1em;display:flex;flex-direction:column;gap:0.85em;min-width:0">
+
+                  <div style="display:flex;flex-direction:column;gap:0.3em">
+                    <div style="font-size:1.15em;font-weight:600;line-height:1.25">{{ s.title }}</div>
+                    <sc-if value="{{ s.hasLede }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.82em;line-height:1.5;color:var(--text-muted)">{{ s.lede }}</div>
+                    </sc-if>
+                  </div>
+
+                  <sc-for list="{{ s.notices }}" as="n" hint-placeholder-count="1">
+                    <div style="border:1px solid {{ n.colour }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.7em 0.8em;display:flex;flex-direction:column;gap:0.25em">
+                      <sc-if value="{{ n.hasTitle }}" hint-placeholder-val="{{ true }}">
+                        <div style="font-size:0.8em;font-weight:600;color:{{ n.colour }}">{{ n.title }}</div>
+                      </sc-if>
+                      <div style="font-size:0.78em;line-height:1.5;color:var(--text-primary)">{{ n.body }}</div>
+                    </div>
+                  </sc-for>
+
+                  <sc-if value="{{ s.isLoading }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.6em">
+                      <sc-for list="{{ s.skeleton }}" as="k" hint-placeholder-count="4">
+                        <div style="height:{{ k.h }};width:{{ k.w }};border-radius:var(--radius-control);background:var(--skeleton-bg)"></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isQR }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;gap:0.8em;align-items:center;flex-wrap:wrap">
+                      <div style="width:6.2em;height:6.2em;flex:0 0 auto;border:1px solid var(--border);border-radius:var(--radius-control);background:repeating-linear-gradient(45deg,var(--surface-sunken),var(--surface-sunken) 5px,var(--surface-raised) 5px,var(--surface-raised) 10px)"></div>
+                      <div style="flex:1 1 8em;min-width:0;display:flex;flex-direction:column;gap:0.25em">
+                        <div style="font-size:0.72em;color:var(--text-muted)">Can’t scan it? Type this key into the app.</div>
+                        <div style="font-family:var(--mono);font-size:0.8em;letter-spacing:0.04em;overflow-wrap:anywhere">JBSW Y3DP EHPK 3PXP</div>
+                      </div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isForm }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.7em">
+                      <sc-for list="{{ s.fields }}" as="f" hint-placeholder-count="2">
+                        <div style="display:flex;flex-direction:column;gap:0.25em;min-width:0">
+                          <div style="font-size:0.72em;font-weight:500;color:var(--text-muted)">{{ f.label }}</div>
+                          <div style="display:flex;align-items:center;gap:0.5em;min-height:44px;padding:0.4em 0.65em;border:1px solid {{ f.border }};border-radius:var(--radius-control);background:var(--input-bg);min-width:0">
+                            <span style="flex:1 1 auto;min-width:0;font-family:{{ f.font }};font-size:0.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)">{{ f.value }}</span>
+                            <sc-if value="{{ f.hasHint }}" hint-placeholder-val="{{ false }}">
+                              <button data-target="1" data-name="{{ s.id }} {{ f.label }} reveal" style="flex:0 0 auto;min-height:44px;min-width:44px;background:transparent;border:0;color:var(--text-link);font-size:0.74em">{{ f.hint }}</button>
+                            </sc-if>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isCodes }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.35em 0.7em;padding:0.75em;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-sunken)">
+                      <sc-for list="{{ s.codes }}" as="c" hint-placeholder-count="10">
+                        <div style="font-family:var(--mono);font-size:0.82em;letter-spacing:0.03em;color:var(--text-primary)">{{ c }}</div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isList }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                      <sc-for list="{{ s.rows }}" as="r" hint-placeholder-count="4">
+                        <div style="display:flex;align-items:center;gap:0.6em;min-height:44px;padding:0.55em 0.7em;border-bottom:1px solid var(--divider);background:var(--surface-raised);min-width:0">
+                          <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.12em">
+                            <div style="font-size:0.85em;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</div>
+                            <div style="font-size:0.7em;color:{{ r.metaColour }};line-height:1.4">{{ r.meta }}</div>
+                          </div>
+                          <button data-target="1" data-name="{{ s.id }} {{ r.name }} action" style="flex:0 0 auto;min-height:44px;padding:0 0.7em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:{{ r.actionColour }};font-size:0.72em">{{ r.action }}</button>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isPicker }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                      <sc-for list="{{ s.profiles }}" as="p" hint-placeholder-count="3">
+                        <button data-target="1" data-name="{{ s.id }} pick {{ p.name }}" style="display:flex;align-items:center;gap:0.7em;min-height:56px;padding:0.6em 0.7em;border:0;border-bottom:1px solid var(--divider);background:var(--surface-raised);text-align:left;color:var(--text-primary);min-width:0">
+                          <span style="flex:0 0 auto;width:2.1em;height:2.1em;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-full);background:{{ p.chipBg }};color:{{ p.chipFg }};font-size:0.85em;font-weight:600">{{ p.initials }}</span>
+                          <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                            <span style="font-size:0.9em;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.name }}</span>
+                            <span style="font-size:0.7em;color:var(--text-muted)">{{ p.meta }}</span>
+                          </span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isPin }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.9em;align-items:center">
+                      <div style="display:flex;gap:0.6em">
+                        <sc-for list="{{ s.dots }}" as="d" hint-placeholder-count="4">
+                          <span style="width:0.85em;height:0.85em;border-radius:var(--radius-full);border:1px solid var(--border-strong);background:{{ d }}"></span>
+                        </sc-for>
+                      </div>
+                      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.45em;width:100%;max-width:14em">
+                        <sc-for list="{{ s.keys }}" as="k" hint-placeholder-count="12">
+                          <button data-target="1" data-name="{{ s.id }} key {{ k.label }}" aria-label="{{ k.aria }}" style="min-height:52px;border:1px solid var(--border);border-radius:var(--radius-control);background:{{ k.bg }};color:var(--text-primary);font-size:1em;font-family:var(--mono)">{{ k.label }}</button>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isSettings }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.9em">
+                      <sc-for list="{{ s.groups }}" as="g" hint-placeholder-count="4">
+                        <div style="display:flex;flex-direction:column;gap:0.3em">
+                          <div style="font-family:var(--mono);font-size:0.62em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ g.name }}</div>
+                          <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                            <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
+                              <button data-target="1" data-name="{{ s.id }} {{ r.k }}" style="display:flex;align-items:center;justify-content:space-between;gap:0.6em;min-height:44px;padding:0.45em 0.7em;border:0;border-bottom:1px solid var(--divider);background:var(--surface-raised);text-align:left;color:var(--text-primary);min-width:0">
+                                <span style="flex:0 0 auto;font-size:0.82em">{{ r.k }}</span>
+                                <span style="flex:1 1 auto;min-width:0;text-align:right;font-size:0.75em;color:{{ r.colour }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.v }}</span>
+                              </button>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isDeletion }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.6em">
+                      <sc-for list="{{ s.situations }}" as="d" hint-placeholder-count="4">
+                        <div style="border:1px solid var(--border);border-left:3px solid {{ d.colour }};border-radius:var(--radius-card);background:var(--surface-raised);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.3em;min-width:0">
+                          <div style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap">
+                            <span style="font-size:0.82em;font-weight:600">{{ d.scope }}</span>
+                            <span style="font-family:var(--mono);font-size:0.62em;letter-spacing:0.08em;text-transform:uppercase;color:{{ d.colour }}">{{ d.verdict }}</span>
+                          </div>
+                          <div style="font-size:0.74em;color:var(--text-muted);line-height:1.45">{{ d.situation }}</div>
+                          <div style="font-size:0.78em;line-height:1.5">{{ d.body }}</div>
+                          <sc-if value="{{ d.hasAction }}" hint-placeholder-val="{{ false }}">
+                            <button data-target="1" data-name="{{ s.id }} {{ d.action }}" style="align-self:flex-start;min-height:44px;padding:0 0.8em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-primary);font-size:0.76em">{{ d.action }}</button>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isUpdate }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.6em;padding:0.5em 0">
+                      <div style="font-family:var(--mono);font-size:0.62em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ s.langLabel }}</div>
+                      <div style="font-size:1.05em;font-weight:600;line-height:1.25">{{ s.langTitle }}</div>
+                      <div style="font-size:0.82em;line-height:1.55;color:{{ s.langColour }}">{{ s.langBody }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.hasCheckbox }}" hint-placeholder-val="{{ false }}">
+                    <button data-target="1" data-name="{{ s.id }} checkbox" style="display:flex;align-items:center;gap:0.6em;min-height:44px;padding:0 0.1em;border:0;background:transparent;color:var(--text-primary);text-align:left">
+                      <span style="flex:0 0 auto;width:1.15em;height:1.15em;border:1px solid var(--border-strong);border-radius:4px;background:var(--input-bg)"></span>
+                      <span style="font-size:0.78em">{{ s.checkbox }}</span>
+                    </button>
+                  </sc-if>
+
+                  <div style="display:flex;flex-direction:column;gap:0.5em;margin-top:auto;padding-top:0.2em">
+                    <sc-if value="{{ s.hasPrimary }}" hint-placeholder-val="{{ true }}">
+                      <button data-target="1" data-name="{{ s.id }} primary" style="min-height:48px;padding:0.5em 0.9em;border:1px solid {{ s.primaryBg }};border-radius:var(--radius-control);background:{{ s.primaryBg }};color:{{ s.primaryFg }};font-size:0.85em;font-weight:500;line-height:1.3">{{ s.primary }}</button>
+                    </sc-if>
+                    <div style="display:flex;flex-wrap:wrap;gap:0.4em">
+                      <sc-for list="{{ s.secondaries }}" as="x" hint-placeholder-count="2">
+                        <button data-target="1" data-name="{{ s.id }} {{ x }}" style="min-height:44px;padding:0 0.6em;border:0;background:transparent;color:var(--text-link);font-size:0.76em;text-align:left">{{ x }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+
+                  <div style="font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted);border-top:1px solid var(--divider);padding-top:0.55em">{{ s.foot }}</div>
+                </div>
+              </div>
+
+              <p style="margin:0;font-size:12.5px;line-height:1.55;color:var(--text-muted);max-width:52ch">{{ s.note }}</p>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ showChildRules }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;flex-direction:column;gap:12px">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What the child path is not allowed to ask for</h2>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px">
+              <sc-for list="{{ childRules }}" as="r" hint-placeholder-count="4">
+                <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-card);background:var(--surface-sunken);padding:14px;display:flex;flex-direction:column;gap:6px">
+                  <div style="font-size:13.5px;font-weight:600;line-height:1.4">{{ r.name }}</div>
+                  <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ r.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showLanguages }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+              <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Please update, in five languages</h2>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--positive)">all five named and drawn</span>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+              <sc-for list="{{ languages }}" as="l" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:96px minmax(0,1fr);gap:16px;padding:12px 16px;background:var(--surface-raised);border-bottom:1px solid var(--divider)">
+                  <div style="font-family:var(--mono);font-size:11.5px;color:{{ l.colour }}">{{ l.tag }}</div>
+                  <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                    <div style="font-size:13.5px;font-weight:600">{{ l.title }}</div>
+                    <div style="font-size:13px;line-height:1.55;color:{{ l.bodyColour }}">{{ l.body }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isMessages }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:20px;max-width:1180px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Twelve failures, written once. A message is enumerable when the caller is not yet authenticated and the answer would tell them whether an account, an address or a household exists. Those resolve to one sentence with one response time; the rest are free to be precise, and are.</p>
+
+        <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+          <div style="display:grid;grid-template-columns:minmax(110px,1.1fr) minmax(140px,1.5fr) 80px minmax(150px,1.7fr);gap:16px;padding:10px 16px;background:var(--table-header-bg);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">
+            <div>situation</div><div>what it says</div><div>verdict</div><div>why</div>
+          </div>
+          <sc-for list="{{ messages }}" as="m" hint-placeholder-count="12">
+            <div style="display:grid;grid-template-columns:minmax(110px,1.1fr) minmax(140px,1.5fr) 80px minmax(150px,1.7fr);gap:16px;padding:var(--dens-pad-y) 16px;background:var(--surface-raised);border-bottom:1px solid var(--dens-rule);align-items:start">
+              <div style="font-size:12.5px;line-height:1.45">{{ m.situation }}</div>
+              <div style="font-size:12.5px;line-height:1.5;color:var(--text-primary)">{{ m.says }}</div>
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <span style="font-family:var(--mono);font-size:10.5px;color:{{ m.colour }}">{{ m.verdict }}</span>
+                <span style="font-family:var(--mono);font-size:9.5px;color:var(--text-muted)">{{ m.reach }}</span>
+              </div>
+              <div style="font-size:12px;line-height:1.5;color:var(--text-muted)">{{ m.rule }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isGate }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1180px">
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The stage gate</h2>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+            <sc-for list="{{ checks }}" as="c" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:16px;padding:14px 16px;background:var(--surface-raised);border-bottom:1px solid var(--divider);align-items:start">
+                <div style="font-family:var(--mono);font-size:11px;color:{{ c.colour }}">{{ c.verdict }}</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:13.5px;font-weight:600">{{ c.name }}</div>
+                  <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ c.detail }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Measured, on this page</h2>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ measuredContext }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+            <sc-for list="{{ measurements }}" as="m" hint-placeholder-count="4">
+              <div style="background:var(--surface-raised);padding:16px">
+                <div style="font-family:var(--mono);font-size:26px;line-height:1;color:{{ m.colour }}">{{ m.value }}</div>
+                <div style="font-size:12.5px;margin-top:8px">{{ m.label }}</div>
+                <div style="font-size:11.5px;line-height:1.45;color:var(--text-muted);margin-top:4px">{{ m.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <p style="margin:0;max-width:80ch;font-size:12.5px;line-height:1.55;color:var(--text-muted)">Only the screens on the view you are looking at are in the count — switch the rail to 200 % text and walk the six screen views to sweep the stage.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">States drawn, row by row</h2>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+            <div style="display:grid;grid-template-columns:60px minmax(0,1.6fr) 78px 68px 132px;gap:14px;padding:10px 16px;background:var(--table-header-bg);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">
+              <div>row</div><div>screen</div><div>clients</div><div>preset</div><div>states drawn</div>
+            </div>
+            <sc-for list="{{ coverage }}" as="r" hint-placeholder-count="21">
+              <div style="display:grid;grid-template-columns:60px minmax(0,1.6fr) 78px 68px 132px;gap:14px;padding:var(--dens-pad-y) 16px;background:var(--surface-raised);border-bottom:1px solid var(--dens-rule);align-items:baseline">
+                <div style="font-family:var(--mono);font-size:11.5px;color:var(--accent)">{{ r.id }}</div>
+                <div style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</div>
+                <div style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ r.clients }}</div>
+                <div style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ r.preset }}</div>
+                <div style="font-family:var(--mono);font-size:11px;color:{{ r.colour }}">{{ r.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What this stage leaves open</h2>
+          <sc-for list="{{ open }}" as="o" hint-placeholder-count="2">
+            <div style="border:1px solid var(--border);border-left:3px solid var(--warning);border-radius:var(--radius-card);background:var(--surface-raised);padding:16px;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                <div style="font-size:14px;font-weight:600">{{ o.title }}</div>
+                <div style="font-family:var(--mono);font-size:10.5px;color:var(--warning)">{{ o.tag }}</div>
+              </div>
+              <div style="font-size:13px;line-height:1.55;color:var(--text-muted);max-width:82ch">{{ o.detail }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;in&quot;,&quot;new&quot;,&quot;mfa&quot;,&quot;trouble&quot;,&quot;child&quot;,&quot;account&quot;,&quot;messages&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;in&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Stage 7&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100,
+            st: "populated", client: "m", lang: "en", measured: null };
+
+  get A() { return window.HH_AUTH; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => { if (window.HH_AUTH && window.HH_TOKENS) { clearInterval(this._boot); this.forceUpdate(); this._schedule(); } }, 60);
+    this._onResize = () => this._schedule();
+    window.addEventListener("resize", this._onResize);
+  }
+  componentWillUnmount() {
+    clearInterval(this._boot);
+    window.removeEventListener("resize", this._onResize);
+    if (this._raf) cancelAnimationFrame(this._raf);
+  }
+  componentDidUpdate() { this._schedule(); }
+
+  _schedule() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = requestAnimationFrame(() => this._measure());
+  }
+
+  _measure() {
+    var targets = [].slice.call(document.querySelectorAll('[data-target="1"]'));
+    var fails = [], min = 0;
+    targets.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      var h = Math.round(r.height), w = Math.round(r.width);
+      if (!h && !w) return;
+      if (!min || h < min) min = h;
+      if (h < 44) fails.push((el.getAttribute("data-name") || "").slice(0, 24) + " " + w + "\u00d7" + h);
+    });
+    var watched = [].slice.call(document.querySelectorAll('[data-watch="1"]'));
+    var over = [];
+    watched.forEach(function (el) {
+      if (el.scrollWidth - el.clientWidth > 2) over.push(el.getAttribute("data-name") || "?");
+    });
+    var m = { targets: targets.length, tFail: fails.length, tMin: min, tNames: fails.slice(0, 3),
+              watched: watched.length, oFail: over.length, oNames: over.slice(0, 3) };
+    if (JSON.stringify(m) !== JSON.stringify(this.state.measured)) this.setState({ measured: m });
+  }
+
+  view() { return this.state.view || this.props.startView || "in"; }
+
+  tone(t) {
+    return t === "danger" ? "var(--danger)" : t === "warning" ? "var(--warning)"
+      : t === "info" ? "var(--info)" : "var(--border-strong)";
+  }
+
+  screenVals(s) {
+    var st = this.state.st;
+    var wide = this.state.client === "w" && s.client === "mw";
+    var loading = st === "loading" && s.preset !== "S";
+    var erroring = st === "error" && s.preset !== "S" && !!s.error;
+    var notices = [];
+    if (erroring) notices.push(s.error);
+    else if (!loading && s.notice) notices.push(s.notice);
+    var self = this;
+
+    var out = {
+      id: s.id, name: s.name, route: s.route, title: s.title, lede: s.lede, hasLede: !!s.lede,
+      foot: s.foot, note: s.note,
+      clientLabel: s.client === "m" ? "mobile only" : wide ? "web" : "mobile",
+      frameMax: wide ? (this.state.scale === 200 ? "760px" : "620px") : (this.state.scale === 200 ? "560px" : "348px"),
+      radius: wide ? "var(--radius-card)" : "22px",
+      notices: notices.map(function (n) {
+        return { colour: self.tone(n.tone), title: n.title, hasTitle: !!n.title, body: n.body };
+      }),
+      isLoading: loading,
+      skeleton: [{ h: "0.9em", w: "45%" }, { h: "2.7em", w: "100%" }, { h: "2.7em", w: "100%" }, { h: "3em", w: "100%" }],
+      isQR: !loading && !!s.qr,
+      isForm: !loading && s.kind === "form" && (s.fields || []).length > 0,
+      isCodes: !loading && s.kind === "codes",
+      isList: !loading && s.kind === "list",
+      isPicker: !loading && s.kind === "picker",
+      isPin: !loading && s.kind === "pin",
+      isSettings: !loading && s.kind === "settings",
+      isDeletion: !loading && s.kind === "deletion",
+      isUpdate: !loading && s.kind === "update",
+      hasCheckbox: !loading && !!(s.checkbox || s.confirm),
+      checkbox: s.checkbox || s.confirm || "",
+      hasPrimary: !loading && !!s.primary,
+      primary: s.primary,
+      primaryBg: s.id === "A-13" ? "var(--button-danger-bg)" : "var(--button-primary-bg)",
+      primaryFg: s.id === "A-13" ? "var(--text-on-danger)" : "var(--button-primary-fg)",
+      secondaries: loading ? [] : (s.secondary || []),
+      drawnLabel: s.drawn.length + " of " + (s.preset === "D" ? 12 : s.preset === "F" ? 3 : 1) + " states",
+      drawnColour: s.preset === "D" && s.drawn.length < 12 ? "var(--warning)" : "var(--positive)",
+      fields: (s.fields || []).map(function (f) {
+        return {
+          label: f.label, value: f.value, hint: f.hint || "", hasHint: !!f.hint,
+          font: f.type === "code" || f.type === "password" ? "var(--mono)" : "var(--sans)",
+          border: erroring && (f.type === "password" || f.type === "code") ? "var(--danger)" : "var(--border-strong)"
+        };
+      }),
+      codes: s.codes || [],
+      rows: (s.rows || []).map(function (r) {
+        return {
+          name: r.name, meta: r.meta,
+          metaColour: r.pending ? "var(--warning)" : "var(--text-muted)",
+          action: r.current ? "This device" : "Sign out",
+          actionColour: r.current ? "var(--text-muted)" : "var(--danger)"
+        };
+      }),
+      profiles: (s.profiles || []).map(function (p) {
+        return {
+          name: p.name, meta: p.meta, initials: p.initials,
+          chipBg: p.current ? "var(--accent)" : "var(--surface-sunken)",
+          chipFg: p.current ? "var(--text-on-accent)" : "var(--text-primary)"
+        };
+      }),
+      dots: erroring ? ["var(--danger)", "var(--danger)", "var(--danger)", "var(--danger)"]
+                     : ["var(--text-primary)", "var(--text-primary)", "transparent", "transparent"],
+      keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "\u232b"].map(function (k) {
+        return { label: k, aria: k === "\u232b" ? "Delete the last digit" : k ? "Digit " + k : "",
+                 bg: k ? "var(--surface-raised)" : "transparent" };
+      }),
+      groups: (s.groups || []).map(function (g) {
+        return { name: g[0], rows: g[1].map(function (r) {
+          return { k: r[0], v: r[1], colour: r[0] === "Delete account" ? "var(--danger)" : "var(--text-muted)" };
+        }) };
+      }),
+      situations: (this.A.deletion || []).map(function (d) {
+        return {
+          scope: d[0], situation: d[1], verdict: d[2], body: d[3],
+          action: d[4], hasAction: !!d[4],
+          colour: d[2] === "blocked" ? "var(--danger)" : d[2] === "deleted" ? "var(--warning)" : "var(--positive)"
+        };
+      })
+    };
+
+    if (s.kind === "deletion") out.situations = out.situations;
+    if (s.kind === "update") {
+      var l = (this.A.update || []).filter(function (u) { return u[0] === self.state.lang || u[1] === self.state.lang; })[0] || this.A.update[0];
+      out.langLabel = l[1];
+      out.langTitle = l[5] ? l[2] : "Not drawn";
+      out.langBody = l[3];
+      out.langColour = l[5] ? "var(--text-primary)" : "var(--warning)";
+      out.hasPrimary = !loading && l[5];
+      out.primary = l[4];
+    }
+    return out;
+  }
+
+  renderVals() {
+    var A = this.A;
+    if (!A) return { theme: this.state.theme, density: this.state.density, fontPx: "15px" };
+    var self = this, v = this.view();
+    var opt = function (key, val, label, title, cur) {
+      return { label: label, title: title || label, on: cur === val ? 1 : 0,
+               pick: function () { var p = {}; p[key] = val; self.setState(p); } };
+    };
+
+    var VIEWS = [
+      ["in", "Getting in", "3"],
+      ["new", "A new account", "3"],
+      ["mfa", "The second step", "4"],
+      ["trouble", "When it goes wrong", "3"],
+      ["child", "A child signing in", "5"],
+      ["account", "The account", "3"],
+      ["messages", "Failure messages", "12"],
+      ["gate", "The gate", "5"]
+    ];
+    var TITLES = {
+      in: ["Getting in", "A-1 · A-9 · A-10 · 05-screens §A"],
+      new: ["A new account", "A-2 · A-3 · A-4 · 05-screens §A"],
+      mfa: ["The second step", "A-5 to A-8 · 02-identity §3"],
+      trouble: ["When it goes wrong", "A-11 · A-12 · A-13"],
+      child: ["A child signing in", "A-14 to A-18 · no email, no password"],
+      account: ["The account", "A-19 · A-20 · A-21"],
+      messages: ["Failure messages", "one register, twelve situations"],
+      gate: ["The gate", "computed from auth.js · measured live"]
+    };
+    var INTROS = {
+      in: "Three screens carry the whole unauthenticated surface. All three are drawn at every state their preset requires — switch the rail\u2019s state control rather than reading three copies of each.",
+      new: "Registration cannot say whether an address is already in use, so the branch happens in the mailbox and all three screens look the same either way. The breached-password refusal is the one sentence in the product that has to refuse a person without sounding like it judged them.",
+      mfa: "Enrol issues the recovery codes before it finishes, so nobody turns the second step on and then discovers the codes screen was optional. Every recovery-code use is also an email.",
+      trouble: "The takeover notice is written for the common case, in which nothing is wrong. Revoking a device is the product\u2019s destructive-copy exemplar: the object is named, the loss is counted, and both are in the button.",
+      child: "The five screens a member without an email address meets. Nothing here asks for anything a ten-year-old does not have, and the way out of every dead end is a person in the house.",
+      account: "Account is per person; household settings are elsewhere. Deletion states its four situations up front rather than revealing them one refusal at a time."
+    };
+
+    var screens = A.screens.filter(function (s) { return s.view === v; });
+    var counts = {};
+    A.screens.forEach(function (s) { counts[s.view] = (counts[s.view] || 0) + 1; });
+
+    var controls = [
+      { label: "state", options: [
+        opt("st", "loading", "loading", "Skeleton, shape-matched to the form it replaces", this.state.st),
+        opt("st", "populated", "populated", "The screen as it is normally met", this.state.st),
+        opt("st", "error", "error", "The registered failure for this screen", this.state.st)] },
+      { label: "client", options: [
+        opt("client", "m", "phone", "The mobile layout", this.state.client),
+        opt("client", "w", "web", "The web layout — mobile-only rows stay as phones", this.state.client)] },
+      { label: "theme", options: [
+        opt("theme", "light", "light", "Light theme", this.state.theme),
+        opt("theme", "dark", "dark", "Dark theme", this.state.theme)] },
+      { label: "text", options: [
+        opt("scale", 100, "100 %", "Base text size", this.state.scale),
+        opt("scale", 200, "200 %", "The 07-delivery sweep", this.state.scale)] },
+      { label: "density", options: [
+        opt("density", "comfortable", "comfortable", "Mobile\u2019s only mode", this.state.density),
+        opt("density", "compact", "compact", "Web only — the 44 pt floor still binds", this.state.density)] },
+      { label: "please update", options: A.update.map(function (u) {
+        return opt("lang", u[0] === "\u2014" ? u[1] : u[0], u[0] === "\u2014" ? u[1].replace("Language ", "L") : u[0], u[1], self.state.lang); }) }
+    ];
+
+    var checks = A.checks();
+    var open = checks.filter(function (c) { return !c.pass; }).length;
+    var m = this.state.measured;
+    var ledgerRows = 0, built = 0;
+    A.screens.forEach(function (s) {
+      var n = s.client === "mw" ? 2 : 1;
+      var req = s.preset === "D" ? 12 : s.preset === "F" ? 3 : 1;
+      ledgerRows += n;
+      if (s.drawn.length >= req) built += n;
+    });
+
+    return {
+      theme: this.state.theme,
+      density: this.state.density,
+      fontPx: this.state.scale === 200 ? "26px" : "15px",
+      views: VIEWS.map(function (x) {
+        return { label: x[1], count: x[2], on: v === x[0] ? 1 : 0,
+                 pick: function () { self.setState({ view: x[0] }); } };
+      }),
+      controls: controls,
+      pageTitle: TITLES[v][0], pageMeta: TITLES[v][1],
+      gateLine: open ? open + " gate check open" : "gate: 5 checks pass",
+      gateColour: open ? "var(--warning)" : "var(--positive)",
+
+      isScreens: !!INTROS[v], isMessages: v === "messages", isGate: v === "gate",
+      viewIntro: INTROS[v] || "",
+      screens: screens.map(function (s) { return self.screenVals(s); }),
+      showChildRules: v === "child",
+      childRules: A.childRules.map(function (r) { return { name: r[0], note: r[1] }; }),
+      showLanguages: v === "account",
+      languages: A.update.map(function (u) {
+        return { tag: u[0] === "\u2014" ? u[1] : u[0] + " · " + u[1], title: u[5] ? u[2] : "not drawn",
+                 body: u[3], colour: u[5] ? "var(--accent)" : "var(--warning)",
+                 bodyColour: u[5] ? "var(--text-primary)" : "var(--text-muted)" };
+      }),
+
+      messages: A.messages.map(function (x) {
+        return { situation: x[1], says: x[2], verdict: x[4],
+                 reach: x[3] ? "enumerable" : "authenticated",
+                 colour: x[4] === "generic" ? "var(--info)" : "var(--text-muted)", rule: x[5] };
+      }),
+
+      checks: checks.map(function (c) {
+        return { name: c.name, detail: c.detail, verdict: c.pass ? "pass" : "open",
+                 colour: c.pass ? "var(--positive)" : "var(--warning)" };
+      }),
+      measurements: m ? [
+        { value: String(m.targets), label: "interactive targets measured", colour: "var(--text-primary)",
+          note: "live rectangles on this view, at this text size and density" },
+        { value: m.tFail ? String(m.tFail) : "0", label: "under the 44 pt floor",
+          colour: m.tFail ? "var(--danger)" : "var(--positive)",
+          note: m.tFail ? m.tNames.join(" · ") : "smallest measured target is " + m.tMin + " px high" },
+        { value: String(m.watched), label: "screens watched for overflow", colour: "var(--text-primary)",
+          note: "each drawn screen in its own box" },
+        { value: m.oFail ? String(m.oFail) : "0", label: "screens overflowing",
+          colour: m.oFail ? "var(--danger)" : "var(--positive)",
+          note: m.oFail ? m.oNames.join(" · ") : "nothing is wider than the frame it is given" }
+      ] : [],
+      measuredContext: TITLES[v][0].toLowerCase() + " · " + this.state.theme + " · " + this.state.density + " · " + this.state.scale + " % text",
+
+      coverage: A.screens.map(function (s) {
+        var req = s.preset === "D" ? 12 : s.preset === "F" ? 3 : 1;
+        var full = s.drawn.length >= req;
+        return { id: s.id, name: s.name, clients: s.client === "mw" ? "mobile+web" : "mobile",
+                 preset: s.preset, label: s.drawn.length + " of " + req + (full ? " ✓" : " · part"),
+                 colour: full ? "var(--positive)" : "var(--warning)" };
+      }),
+      open: A.open.map(function (o) { return { title: o[0], detail: o[1], tag: o[2] }; }),
+      ledgerLine: built + " of " + ledgerRows + " ledger rows built"
+    };
+  }
+}
+
+</script>
+</body>
+</html>

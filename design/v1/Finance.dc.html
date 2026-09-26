@@ -1,0 +1,1444 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./components.js"></script>
+<script src="./illustration.js"></script>
+<script src="./sync.js"></script>
+<script src="./reminders.js"></script>
+<script src="./dashboard.js"></script>
+<script src="./shopping.js"></script>
+<script src="./finance.js"></script>
+<script src="./ledger.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">Household never moves money</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Finance</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-money)">{{ stageLine }}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="10">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">One ledger, four capabilities, and arithmetic that has to reconcile to the crown. Every figure on these screens is derived from the incomes, the plan version in effect and the transactions — nothing here is stored twice.</div>
+      <a href="./Utilities.dc.html" style="font-family:var(--mono);font-size:11px">← stage 15 · utilities</a>
+      <a href="./Shopping.dc.html" style="font-family:var(--mono);font-size:11px">stage 9 · the trip that is offered here</a>
+      <a href="./Sync and Honesty.dc.html" style="font-family:var(--mono);font-size:11px">stage 5 · the conflict this module owns</a>
+      <a href="./Icons and Illustration.dc.html" style="font-family:var(--mono);font-size:11px">stage 3 · the illustration kit</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+
+      <p style="margin:0;max-width:82ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="0">
+        <div style="border-left:2px solid var(--accent);padding:2px 0 2px 12px;max-width:82ch;font-size:13.5px;line-height:1.6;color:var(--text-primary)">{{ n.text }}</div>
+      </sc-for>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+        <sc-for list="{{ frames }}" as="f" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0;grid-column:{{ f.col }}">
+
+            <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-money)">{{ f.id }}</span>
+              <h3 style="margin:0;font-size:15px;font-weight:600">{{ f.name }}</h3>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ f.stateLabel }}</span>
+            </div>
+
+            <div style="width:100%;max-width:{{ f.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+              <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.route }}</span>
+                <span style="flex:0 0 auto">{{ f.clientLabel }}</span>
+              </div>
+
+              <sc-if value="{{ f.hasBar }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.45em 0.75em;background:var(--surface-sunken);color:var(--status-offline);font-family:var(--mono);font-size:0.62em;border-bottom:1px solid var(--divider)">{{ f.barText }}</div>
+              </sc-if>
+
+              <div style="flex:1 1 auto;padding:1em 0.9em;display:flex;flex-direction:column;gap:0.8em;min-width:0">
+
+                <div style="display:flex;flex-direction:column;gap:0.2em">
+                  <div style="font-size:1.1em;font-weight:600;line-height:1.2">{{ f.title }}</div>
+                  <sc-if value="{{ f.hasLede }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ f.lede }}</div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ f.hasIllus }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em">
+                    <sc-for list="{{ f.illus }}" as="ill" hint-placeholder-count="3">
+                      <div style="display:flex;gap:0.7em;align-items:center;border:1px solid {{ ill.border }};border-radius:var(--radius-card);background:{{ ill.bg }};padding:0.6em 0.7em;min-width:0">
+                        <sc-if value="{{ ill.on }}" hint-placeholder-val="{{ true }}">
+                          <svg viewBox="0 0 200 104" width="104" height="54" fill="none" aria-hidden="true" style="flex:0 0 auto">
+                            <sc-for list="{{ ill.parts }}" as="p" hint-placeholder-count="3">
+                              <g transform="{{ p.transform }}" stroke="{{ p.stroke }}" stroke-width="{{ p.width }}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="{{ p.dash }}">
+                                <sc-for list="{{ p.fills }}" as="d" hint-placeholder-count="0">
+                                  <path d="{{ d }}" fill="{{ p.fill }}" stroke="none"></path>
+                                </sc-for>
+                                <sc-for list="{{ p.paths }}" as="d" hint-placeholder-count="2">
+                                  <path d="{{ d }}"></path>
+                                </sc-for>
+                              </g>
+                            </sc-for>
+                          </svg>
+                        </sc-if>
+                        <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.2em">
+                          <span style="font-size:0.9em;font-weight:600;line-height:1.3">{{ ill.title }}</span>
+                          <span style="font-size:0.75em;line-height:1.45;color:var(--text-muted)">{{ ill.body }}</span>
+                          <span style="font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ ill.meta }}</span>
+                        </span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasBanner }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid {{ f.bannerTone }};border-left:3px solid {{ f.bannerTone }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.3em">
+                    <sc-if value="{{ f.hasBannerTitle }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.78em;font-weight:600;color:{{ f.bannerTone }}">{{ f.bannerTitle }}</div>
+                    </sc-if>
+                    <div style="font-size:0.76em;line-height:1.5;color:var(--text-primary)">{{ f.bannerBody }}</div>
+                    <div style="display:flex;gap:0.4em;flex-wrap:wrap;margin-top:0.15em">
+                      <sc-for list="{{ f.bannerActions }}" as="a" hint-placeholder-count="0">
+                        <span style="font-family:var(--mono);font-size:0.62em;border:1px solid var(--border-strong);border-radius:4px;padding:0.25em 0.5em;color:var(--text-primary)">{{ a.label }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.skeleton }}" as="k" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.6em;align-items:flex-start;border:1px solid var(--border);border-radius:var(--radius-card);padding:0.6em 0.7em;min-height:2.8em">
+                    <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.35em">
+                      <div style="height:0.85em;width:{{ k.w1 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                      <div style="height:0.7em;width:{{ k.w2 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                    </div>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.fields }}" as="x" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.25em">
+                    <div style="font-family:var(--mono);font-size:0.6em;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">{{ x.label }}</div>
+                    <div style="border:1px solid {{ x.border }};border-radius:var(--radius-control);background:{{ x.bg }};padding:0.55em 0.65em;font-size:0.85em;min-height:2.5em;display:flex;align-items:center;justify-content:space-between;gap:0.5em">
+                      <span style="min-width:0;font-family:{{ x.font }};color:{{ x.colour }}">{{ x.value }}</span>
+                      <sc-if value="{{ x.hasHint }}" hint-placeholder-val="{{ false }}">
+                        <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--text-muted)">{{ x.hint }}</span>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ x.hasNote }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:0.7em;line-height:1.5;color:var(--text-muted)">{{ x.note }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.4em;flex-wrap:wrap">
+                    <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="2">
+                      <span style="display:inline-flex;align-items:center;gap:0.35em;white-space:nowrap;border:1px solid var({{ c.colour }});border-radius:999px;padding:0.2em 0.55em;font-size:0.68em;color:var(--text-primary)">
+                        <span style="width:0.5em;height:0.5em;border-radius:50%;background:var({{ c.colour }})"></span>{{ c.name }}
+                      </span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.blocks }}" as="b" hint-placeholder-count="0">
+                  <div data-block="{{ b.key }}" data-rows="{{ b.count }}" style="display:flex;flex-direction:column;gap:0.4em">
+                    <sc-if value="{{ b.hasHeading }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap">
+                        <span style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:{{ b.labelColour }}">{{ b.label }}</span>
+                        <sc-if value="{{ b.hasRule }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ b.rule }}</span>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="3">
+                      <div style="display:flex;gap:0.6em;align-items:flex-start;background:{{ r.bg }};border:1px solid {{ r.border }};border-left:{{ r.leftRule }};border-radius:var(--radius-card);padding:0.55em 0.65em 0.55em {{ r.padLeft }};min-width:0">
+                        <span style="flex:0 0 auto;width:0.5em;height:0.5em;border-radius:50%;background:var({{ r.token }});margin-top:0.45em"></span>
+                        <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.15em">
+                          <span style="display:flex;gap:0.5em;align-items:baseline;min-width:0">
+                            <span style="font-size:0.85em;font-weight:500;line-height:1.35;min-width:0">{{ r.title }}</span>
+                            <sc-if value="{{ r.hasRight }}" hint-placeholder-val="{{ false }}">
+                              <span style="margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:0.72em;color:{{ r.rightColour }}">{{ r.right }}</span>
+                            </sc-if>
+                          </span>
+                          <sc-if value="{{ r.hasMeta }}" hint-placeholder-val="{{ true }}">
+                            <span style="font-size:0.72em;line-height:1.4;color:var(--text-muted)">{{ r.meta }}</span>
+                          </sc-if>
+                          <span style="display:flex;gap:0.4em;align-items:center;flex-wrap:wrap;margin-top:0.1em">
+                            <sc-if value="{{ r.hasChip }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;padding:0.15em 0.4em;border-radius:3px;border:1px solid var({{ r.token }});color:var({{ r.token }})">{{ r.chip }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasMark }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;color:{{ r.markColour }}">{{ r.markWord }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-size:0.66em;color:var(--text-muted)">{{ r.note }}</span>
+                            </sc-if>
+                          </span>
+                        </span>
+                        <sc-if value="{{ r.hasAction }}" hint-placeholder-val="{{ false }}">
+                          <span style="flex:0 0 auto;display:flex;gap:0.3em;align-items:center">
+                            <button onClick="{{ r.act }}" style="background:var(--surface-sunken);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;min-height:2.6em">{{ r.actionLabel }}</button>
+                          </span>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.checks }}" as="c" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.55em;align-items:center;min-width:0">
+                    <span style="flex:0 0 auto;width:1em;height:1em;border-radius:3px;border:1px solid {{ c.boxBorder }};background:{{ c.boxBg }}"></span>
+                    <span style="font-size:0.78em;line-height:1.4;color:{{ c.colour }}">{{ c.text }}</span>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasTotal }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;justify-content:space-between;gap:0.6em;align-items:baseline;border-top:1px solid var(--border-strong);padding-top:0.5em">
+                    <span style="font-size:0.82em;font-weight:600">{{ f.totalLabel }}</span>
+                    <span style="font-family:var(--mono);font-size:0.95em;font-weight:600;color:{{ f.totalColour }}">{{ f.totalValue }}</span>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em;align-items:flex-start;padding:0.8em 0.2em 0.4em">
+                    <div style="width:100%;height:3.2em;border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken)"></div>
+                    <div style="font-size:0.92em;font-weight:600;line-height:1.3">{{ f.emptyTitle }}</div>
+                    <div style="font-size:0.78em;line-height:1.55;color:var(--text-muted)">{{ f.emptyBody }}</div>
+                    <sc-if value="{{ f.hasEmptyAction }}" hint-placeholder-val="{{ true }}">
+                      <span style="background:var(--accent);color:var(--text-on-accent);border-radius:var(--radius-control);padding:0.5em 0.85em;font-size:0.78em">{{ f.emptyAction }}</span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasAbsent }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.35em;padding:1.2em 0.4em;align-items:center;text-align:center">
+                    <div style="font-size:0.85em;font-weight:600">{{ f.absentTitle }}</div>
+                    <div style="font-size:0.75em;line-height:1.55;color:var(--text-muted);max-width:26em">{{ f.absentBody }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasActions }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.45em;flex-wrap:wrap;margin-top:0.1em">
+                    <sc-for list="{{ f.actions }}" as="a" hint-placeholder-count="1">
+                      <span style="background:{{ a.bg }};color:{{ a.colour }};border:1px solid {{ a.border }};border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.8em;display:inline-flex;align-items:center">{{ a.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasFooter }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:auto;padding-top:0.55em;border-top:1px solid var(--divider);font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ f.footer }}</div>
+                </sc-if>
+
+              </div>
+            </div>
+
+            <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ f.caption }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-for list="{{ charts }}" as="ch" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ ch.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ ch.meta }}</span>
+          </div>
+          <div style="border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface-raised);padding:14px 14px 10px;overflow-x:auto;max-width:100%">
+            <div style="display:flex;align-items:flex-end;gap:6px;min-width:{{ ch.minWidth }}">
+              <sc-for list="{{ ch.bars }}" as="b" hint-placeholder-count="12">
+                <div style="flex:1 1 0;min-width:30px;display:flex;flex-direction:column;justify-content:flex-end;gap:4px;align-items:center">
+                  <span style="font-family:var(--mono);font-size:9px;color:{{ b.tone }};white-space:nowrap">{{ b.value }}</span>
+                  <div style="width:100%;height:{{ b.h }};background:{{ b.fill }};border-top:2px solid {{ b.tone }};border-right:1px {{ b.style }} {{ b.tone }};border-left:1px {{ b.style }} {{ b.tone }};border-radius:2px 2px 0 0"></div>
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted);white-space:nowrap">{{ b.label }}</span>
+                  <span style="font-family:var(--mono);font-size:8.5px;color:{{ b.tone }};white-space:nowrap;min-height:11px">{{ b.mark }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <p style="margin:0;max-width:82ch;font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ ch.note }}</p>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ tables }}" as="t" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ t.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ t.meta }}</span>
+          </div>
+          <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">{{ t.note }}</p>
+          </sc-if>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow-x:auto">
+            <div style="display:grid;grid-template-columns:{{ t.cols }};gap:0 14px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken);min-width:{{ t.minWidth }}">
+              <sc-for list="{{ t.head }}" as="h" hint-placeholder-count="3">
+                <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ h.text }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:{{ t.cols }};gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--divider);align-items:baseline;min-width:{{ t.minWidth }}">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+                  <div style="font-family:{{ c.font }};font-size:{{ c.size }};line-height:1.5;color:{{ c.colour }};min-width:0;overflow-wrap:anywhere">{{ c.text }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-money)">{{ g.id }}</span>
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.name }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;align-items:start">
+            <sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="12">
+              <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:{{ c.bg }};padding:10px 11px;display:flex;flex-direction:column;gap:6px;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:6px;justify-content:space-between">
+                  <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:{{ c.wordColour }}">{{ c.word }}</span>
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ c.tag }}</span>
+                </div>
+                <div style="font-size:11.5px;line-height:1.5;color:var(--text-primary)">{{ c.body }}</div>
+                <div style="font-size:10.5px;line-height:1.5;color:var(--text-muted)">{{ c.rule }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ checks }}" as="c" hint-placeholder-count="0">
+        <div style="display:grid;grid-template-columns:16px 1fr;gap:0 12px;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+          <div style="width:10px;height:10px;border-radius:50%;background:{{ c.colour }};margin-top:5px"></div>
+          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <div style="font-size:14px;font-weight:600;line-height:1.35">{{ c.name }}</div>
+            <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;setup&quot;,&quot;period&quot;,&quot;flow&quot;,&quot;allocation&quot;,&quot;ledger&quot;,&quot;expenses&quot;,&quot;balances&quot;,&quot;budgets&quot;,&quot;recurring&quot;,&quot;import&quot;,&quot;states&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;flow&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startMember&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;jana&quot;,&quot;petr&quot;,&quot;adam&quot;,&quot;klara&quot;,&quot;milos&quot;],&quot;default&quot;:&quot;jana&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100, member: null };
+
+  get M() { return window.HH_FINANCE; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (this.M && window.HH_TOKENS && window.HH_FIXTURES && window.HH_ILLUS) {
+        clearInterval(this._boot);
+        this.forceUpdate();
+      }
+    }, 60);
+  }
+  componentWillUnmount() { clearInterval(this._boot); }
+
+  get view() { return this.state.view || this.props.startView || "flow"; }
+  get who() { return this.state.member || this.props.startMember || "jana"; }
+
+  pickers(list, current, set) {
+    return list.map((o) => ({
+      label: o[1], title: o[2] || "", on: current === o[0] ? "1" : "0",
+      pick: () => this.setState(set(o[0]))
+    }));
+  }
+
+  /* ── shape helpers, as Stages 13 to 15 ──────────────────────────────── */
+  F(o) {
+    const f = Object.assign({
+      id: "", name: "", stateLabel: "", caption: "", col: "auto", frameMax: "460px",
+      route: "", clientLabel: "mobile", title: "", lede: "",
+      bannerTone: "var(--border)", bannerTitle: "", bannerBody: "", bannerActions: [],
+      skeleton: [], blocks: [], chips: [], fields: [], checks: [], illus: [],
+      actions: [], emptyTitle: "", emptyBody: "", emptyAction: "",
+      absentTitle: "", absentBody: "", footer: "", barText: "",
+      totalLabel: "", totalValue: "", totalColour: "var(--text-primary)"
+    }, o);
+    f.hasLede = !!f.lede;
+    f.hasBanner = !!f.bannerBody;
+    f.hasBannerTitle = !!f.bannerTitle;
+    f.hasChips = f.chips.length > 0;
+    f.hasIllus = f.illus.length > 0;
+    f.hasEmpty = !!f.emptyTitle;
+    f.hasEmptyAction = !!f.emptyAction;
+    f.hasAbsent = !!f.absentTitle;
+    f.hasActions = f.actions.length > 0;
+    f.hasFooter = !!f.footer;
+    f.hasBar = !!f.barText;
+    f.hasTotal = !!f.totalValue;
+    f.bannerActions = f.bannerActions.map((a) => (typeof a === "string" ? { label: a } : a));
+    f.actions = f.actions.map((a, i) => (typeof a === "string"
+      ? { label: a, bg: i === 0 ? "var(--accent)" : "var(--surface)",
+          colour: i === 0 ? "var(--text-on-accent)" : "var(--text-muted)",
+          border: i === 0 ? "var(--accent)" : "var(--border)" }
+      : a));
+    f.illus = f.illus.map((x) => Object.assign({
+      border: "var(--border)", bg: "var(--surface)", title: "", body: "", meta: "", on: true, parts: []
+    }, x));
+    f.blocks = f.blocks.map((b, i) => Object.assign({
+      key: (f.id || "b") + "-" + i, label: "", rule: "", labelColour: "var(--text-muted)"
+    }, b, {
+      count: (b.rows || []).length, rows: (b.rows || []).map((r) => this.row(r)),
+      hasHeading: !!b.label, hasRule: !!b.rule
+    }));
+    f.checks = f.checks.map((c) => ({
+      text: c.text,
+      colour: c.done ? "var(--text-muted)" : "var(--text-primary)",
+      boxBg: c.done ? "var(--accent)" : "var(--surface)",
+      boxBorder: c.done ? "var(--accent)" : "var(--border-strong)"
+    }));
+    f.fields = f.fields.map((x) => Object.assign({
+      label: "", value: "", hint: "", note: "", bg: "var(--surface-sunken)",
+      border: "var(--border-strong)", font: "var(--sans)", colour: "var(--text-primary)"
+    }, x, { hasHint: !!x.hint, hasNote: !!x.note }));
+    return f;
+  }
+  row(r) {
+    const o = Object.assign({
+      title: "", meta: "", chip: "", token: "--accent-family-money", right: "",
+      rightColour: "var(--text-muted)", markWord: "", markColour: "var(--text-muted)",
+      note: "", bg: "var(--surface)", border: "var(--border)", leftRule: "1px solid var(--border)",
+      padLeft: "0.65em", actionLabel: "", act: () => {}
+    }, r);
+    o.hasMeta = !!o.meta; o.hasChip = !!o.chip; o.hasRight = !!o.right;
+    o.hasMark = !!o.markWord; o.hasNote = !!o.note; o.hasAction = !!o.actionLabel;
+    return o;
+  }
+  tableMin(cols) {
+    const tracks = String(cols || "").split(/\s+(?![^(]*\))/).filter(Boolean);
+    let n = 0;
+    tracks.forEach((t) => {
+      const m = /minmax\((\d+)px/.exec(t) || /^(\d+)px$/.exec(t);
+      n += m ? Number(m[1]) : 90;
+    });
+    return (n + Math.max(0, tracks.length - 1) * 14 + 28) + "px";
+  }
+  cell(text, opt) {
+    const o = opt || {};
+    return { text: text, font: o.mono ? "var(--mono)" : "var(--sans)",
+             size: o.mono ? "11.5px" : "13px",
+             colour: o.muted ? "var(--text-muted)" : o.tone || "var(--text-primary)" };
+  }
+  illusFor(id, on) {
+    const I = window.HH_ILLUS;
+    const c = I.compositions.filter((x) => x.id === id)[0];
+    if (!c) return null;
+    return {
+      comp: c, on: on !== false,
+      parts: c.parts.map((p) => {
+        const part = I.byPart[p[0]];
+        return {
+          transform: "translate(" + p[1] + "," + p[2] + ") scale(" + p[3] + ")",
+          stroke: part.tone === "accent" ? "var(--accent-family-money)" : "var(--text-muted)",
+          width: (I.frame.stroke / p[3]).toFixed(2),
+          dash: part.dashed ? (5 / p[3]).toFixed(1) + " " + (4 / p[3]).toFixed(1) : "none",
+          paths: part.paths, fills: part.fills,
+          fill: "color-mix(in oklab, var(--accent-family-money) 12%, transparent)"
+        };
+      })
+    };
+  }
+
+  /* ── the twelve-state matrix ─────────────────────────────────────────── */
+  stateGroups() {
+    const C = window.HH_COMPONENTS, M = this.M;
+    return M.screens.map((s) => {
+      const preset = s.preset === "F" ? ["loading", "populated", "error"]
+                   : s.preset === "S" ? ["populated"] : M.allStates;
+      const imp = s.impossible || {};
+      const cells = preset.map((st) => {
+        const excluded = !!imp[st];
+        const t = C ? C.treatments[st] : null;
+        return {
+          word: st, tag: excluded ? "cannot occur" : (s.id + " \u00b7 " + s.client),
+          body: excluded ? imp[st] : this.stateBody(s, st),
+          rule: excluded ? "" : (t ? t.rule : ""),
+          bg: excluded ? "var(--surface-sunken)" : "var(--surface-raised)",
+          border: excluded ? "var(--border)" : "var(--border-strong)",
+          wordColour: excluded ? "var(--text-muted)" : this.stateColour(st)
+        };
+      });
+      const drawn = cells.filter((c) => c.tag !== "cannot occur").length;
+      return { id: s.id, name: s.name, cells: cells,
+               meta: drawn + " of " + preset.length + " states drawn \u00b7 " +
+                 Object.keys(imp).length + " cannot occur \u00b7 " + s.route };
+    });
+  }
+  stateColour(st) {
+    const m = { error: "var(--danger)", rejected: "var(--status-rejected)",
+                conflicted: "var(--status-conflict)", pending: "var(--status-pending)",
+                syncing: "var(--status-syncing)", offline: "var(--status-offline)",
+                readonly: "var(--warning)", withdrawn: "var(--text-muted)", absent: "var(--text-muted)" };
+    return m[st] || "var(--accent-family-money)";
+  }
+  stateBody(s, st) {
+    if (st === "loading") return "Skeleton at the height of " + this.bodyWord(s) + ", so no figure jumps when it arrives.";
+    if (st === "empty") return s.empty ? s.empty.s + " " + s.empty.e : "Nothing here yet.";
+    if (st === "error") return s.error;
+    if (st === "rejected") return s.rejected || s.error;
+    if (st === "withdrawn") return s.withdrawn || "Access changed, so this device dropped its copy.";
+    if (st === "readonly") return s.readonly;
+    if (st === "absent") return (s.states && s.states.absent) || "Gone, not disabled.";
+    if (st === "offline") return (s.states && s.states.offline) || "The same read with the bar above it \u2014 " + this.bodyWord(s) + " is on the device.";
+    if (st === "pending") return (s.states && s.states.pending) || "A queued write on " + this.bodyWord(s) + ", marked in a word and a glyph, still editable.";
+    if (st === "syncing") return (s.states && s.states.syncing) || "Past the 800 ms threshold only.";
+    if (st === "conflicted") return (s.states && s.states.conflicted) || "A row flag that opens the comparison, never a modal at reconnect.";
+    return (s.states && s.states.populated) || this.bodyWord(s) + ", with no mark at all: synced is the absence of a mark.";
+  }
+  bodyWord(s) {
+    const m = { answers: "the four answers", steps: "the five steps", headline: "the three figures",
+                missing: "the prompt", flow: "the three stages", post: "the two fields",
+                editor: "the rules and the worked example", accounts: "the accounts",
+                ledger: "the rows", expense: "the split preview", balances: "the balances",
+                budgets: "the bars", recurring: "the definitions", prices: "the steps",
+                notice: "the reminder", import: "the preview rows", duplicates: "the three rows",
+                conflict: "the two values" };
+    return m[s.kind] || "the content";
+  }
+
+  /* ── views ───────────────────────────────────────────────────────────── */
+  renderVals() {
+    const M = this.M;
+    if (!M || !window.HH_TOKENS || !window.HH_FIXTURES || !window.HH_ILLUS) {
+      return { views: [], controls: [], frames: [], tables: [], groups: [], checks: [],
+               notes: [], charts: [], pageTitle: "Finance", pageMeta: "loading",
+               stageLine: "stage 16", gateLine: "", gateColour: "var(--text-muted)",
+               viewIntro: "", theme: "light", density: "comfortable", fontPx: "16px" };
+    }
+    const view = this.view;
+    const all = M.checks();
+    const passed = all.filter((c) => c.pass).length;
+    const groups = this.stateGroups();
+    const cells = groups.reduce((n, g) => n + g.cells.filter((c) => c.tag !== "cannot occur").length, 0);
+    const flow = M.flow("2026-09");
+
+    const VIEWS = [
+      ["setup", "how does your household handle money", M.answers.length],
+      ["period", "the period, and the month nobody entered", M.income.length],
+      ["flow", "the flow view", flow.movements.length],
+      ["allocation", "the plan and the accounts", M.plans[1].rules.length],
+      ["ledger", "one ledger", M.transactions.length],
+      ["expenses", "five split methods", 5],
+      ["balances", "who owes whom", M.simplify().pairwise.length],
+      ["budgets", "budgets", M.budgets.length],
+      ["recurring", "recurring, prices, the window", M.recurring.length],
+      ["import", "import, duplicates, the conflict", M.importRows.length],
+      ["states", "every state", cells],
+      ["gate", "the gate", all.length]
+    ];
+
+    const out = {
+      theme: this.state.theme, density: this.state.density,
+      fontPx: Math.round(16 * this.state.scale / 100) + "px",
+      stageLine: "stage 16 \u00b7 18 rows \u00b7 " + cells + " cells",
+      views: VIEWS.map((v) => ({ label: v[1], count: v[2], on: view === v[0] ? "1" : "0",
+                                 pick: () => this.setState({ view: v[0] }) })),
+      controls: [
+        { label: "Member", options: this.pickers(
+            (window.HH_FIXTURES.members || []).map((m) => [m.id, m.name, m.note]), this.who,
+            (v) => ({ member: v })) },
+        { label: "Theme", options: this.pickers([["light", "light"], ["dark", "dark"]], this.state.theme, (v) => ({ theme: v })) },
+        { label: "Density", options: this.pickers([["comfortable", "comfortable"], ["compact", "compact"]], this.state.density, (v) => ({ density: v })) },
+        { label: "Text", options: this.pickers([[100, "100 %"], [200, "200 %"]], this.state.scale, (v) => ({ scale: v })) }
+      ],
+      gateLine: passed + " / " + all.length + " checks pass",
+      gateColour: passed === all.length ? "var(--accent-family-keeping)" : "var(--danger)",
+      frames: [], tables: [], groups: [], checks: [], notes: [], charts: []
+    };
+
+    if (view === "setup") this.viewSetup(out);
+    if (view === "period") this.viewPeriod(out);
+    if (view === "flow") this.viewFlow(out);
+    if (view === "allocation") this.viewAllocation(out);
+    if (view === "ledger") this.viewLedger(out);
+    if (view === "expenses") this.viewExpenses(out);
+    if (view === "balances") this.viewBalances(out);
+    if (view === "budgets") this.viewBudgets(out);
+    if (view === "recurring") this.viewRecurring(out);
+    if (view === "import") this.viewImport(out);
+    if (view === "states") {
+      out.pageTitle = "Every state these eighteen rows can reach";
+      out.pageMeta = cells + " cells drawn \u00b7 " +
+        groups.reduce((n, g) => n + g.cells.filter((c) => c.tag === "cannot occur").length, 0) + " cannot occur";
+      out.viewIntro = "Twelve states are a treatment applied to one body, as Stage 4 established. A row declares the states its own surface cannot reach with the reason, drawn where the state would have been. Here the exclusions come from three facts: a derived figure holds no row of its own, a settlement and a price history are append-only, and a budget, a category and a recurring definition are lww_field while everything money-bearing is strict_version \u2014 which is why this is the module where a conflict dialog is the right answer.";
+      out.groups = groups;
+    }
+    if (view === "gate") {
+      const L = window.HH_LEDGER;
+      const extra = [];
+      if (L) {
+        const mm = L.mismatches();
+        const st = L.stageStatus().filter((s) => s.num === 16)[0];
+        extra.push({
+          name: "The declared exclusions match the ledger's mirror, checked where they are drawn",
+          detail: mm.length === 0
+            ? "This page loads ledger.js beside finance.js, so the comparison runs here rather than being asserted: the impossible maps in finance.js are identical to EXCLUSIONS for all eighteen rows. Stage 16 computes " +
+              (st ? st.built + " of " + st.rows + " client rows built and " + st.drawnStates + " of " +
+                st.reqStates + " states drawn \u2014 " + st.status : "no stage row") + "."
+            : "MISMATCH: " + mm.join(" \u00b7 "),
+          pass: mm.length === 0 && !!st && st.status === "closed"
+        });
+      }
+      const shown = all.concat(extra);
+      out.pageTitle = "The gate";
+      out.pageMeta = shown.filter((c) => c.pass).length + " of " + shown.length + " pass";
+      out.gateLine = shown.filter((c) => c.pass).length + " / " + shown.length + " checks pass";
+      out.gateColour = shown.every((c) => c.pass) ? "var(--accent-family-keeping)" : "var(--danger)";
+      out.viewIntro = "The stage's own line has two halves and both are arithmetic: the flow view reconciles and fits a phone, and \u20ac10 three ways is 3,34 / 3,33 / 3,33 every time. The rest follows from three properties \u2014 allocation is derived on read, exactly one rule per source takes what is left, and the last minor unit is assigned in an order that does not depend on who is asking.";
+      out.checks = shown.map((c) => ({ name: c.name, detail: c.detail,
+        colour: c.pass ? "var(--accent-family-keeping)" : "var(--danger)" }));
+    }
+
+    out.tables = out.tables.map((tb) => Object.assign({}, tb, {
+      hasNote: !!tb.note, note: tb.note || "", minWidth: this.tableMin(tb.cols)
+    }));
+    return out;
+  }
+
+  /* ── setup (D-20, D-21) ──────────────────────────────────────────────── */
+  viewSetup(out) {
+    const M = this.M, big = this.state.scale === 200;
+    const audit = M.illustrationAudit();
+    const answers = M.answers.map((a) => {
+      const il = a.illus ? this.illusFor(a.illus, !big) : null;
+      return {
+        border: a.key === "mostly" ? "var(--accent)" : "var(--border)",
+        bg: a.key === "mostly" ? "var(--surface-sunken)" : "var(--surface)",
+        on: !!il && !big, parts: il ? il.parts : [],
+        title: a.title,
+        body: il ? il.comp.sentence + " " + il.comp.example : "The capability switches, one line each, for the households that would rather say it themselves.",
+        meta: a.caps.length ? "turns on " + a.caps.map((c) => "capability " + c).join(", ") + " \u00b7 " + a.preset
+                            : "no preset \u00b7 " + a.preset
+      };
+    });
+
+    const step1 = this.F({ id: "D-20", name: "Setup step 1", stateLabel: "populated",
+      route: "/finance/setup/1", frameMax: "440px", title: "Jak to u v\u00e1s s pen\u011bzi chod\u00ed?",
+      lede: "Four answers. Each turns on what you need and fills in a starting shape you can change.",
+      illus: answers,
+      footer: big
+        ? "At 200 % text the compositions are dropped entirely. The sentence, the example and the consequence are what teach, and all three are still here."
+        : "No capability names, no toggles and no jargon. The toggles live behind the fourth answer.",
+      caption: "The module's most important screen. Three answers carry a composition from the Stage 3 kit; the fourth is a control rather than an answer and carries none." });
+
+    const step4 = this.F({ id: "D-21", name: "Setup step 4 \u2014 the plan, with real numbers", stateLabel: "populated",
+      route: "/finance/setup/4", frameMax: "400px", title: "Rozd\u011blen\u00ed p\u0159\u00edjmu",
+      lede: "Pre-filled from the preset. The example under it uses the incomes you just typed.",
+      blocks: [{ label: "The preset's rules", rule: "editable", rows: M.plans[1].rules.map((r) => this.row({
+        title: r.label,
+        meta: r.mode === "percent" ? r.value + " % " + (r.basis === "own_income" ? "of your own income" : "of the household's income")
+            : r.mode === "amount" ? "a fixed amount" : "whatever is left",
+        right: r.mode === "amount" ? M.money(r.value) : r.mode === "percent" ? r.value + " %" : "the rest",
+        chip: r.from === "income" ? "from income" : "from " + M.acctName(r.from)
+      })) }, { label: "With 41 933,33 and 26 466,67", rule: "live", rows: M.flow("2026-09").movements.slice(0, 3).map((m) => this.row({
+        title: m.fromLabel + " \u2192 " + m.toLabel, right: M.money(m.planned), rightColour: "var(--accent-family-money)"
+      })) }],
+      footer: "Every step is skippable, and skipping leaves a working module.",
+      caption: "Steps 3 and 4 exist only for capability 1 and step 5 only for capability 3, so the four answers produce four different lengths of setup." });
+
+    out.pageTitle = "Setup, and the four answers";
+    out.pageMeta = M.setup.length + " steps \u00b7 " + M.answers.length + " answers \u00b7 " +
+      audit.illustrated + " illustrated";
+    out.viewIntro = "Step 1 asks the only question a member can actually answer about their own household, and turns it into capabilities and a preset. Everything else in the module is downstream of it \u2014 which is why the illustration language had to be settled thirteen stages before this screen existed.";
+    out.frames = [step1, step4];
+    out.notes = [{ text: audit.says }];
+    out.tables = [{
+      title: "What each answer turns on",
+      meta: "from 09-finance \u00a7 Setup",
+      cols: "minmax(170px,1.1fr) minmax(150px,1fr) minmax(170px,1.4fr) minmax(120px,0.8fr)",
+      head: [{ text: "Answer" }, { text: "In English" }, { text: "Preset" }, { text: "Illustration" }],
+      rows: M.answers.map((a) => ({ cells: [
+        this.cell(a.title),
+        this.cell(a.en, { muted: true }),
+        this.cell(a.preset, { muted: true }),
+        this.cell(a.illus || "none \u2014 a control, not an answer", { mono: true })
+      ] }))
+    }, {
+      title: "The five steps",
+      meta: "each one skippable",
+      cols: "60px minmax(160px,1fr) minmax(240px,2fr) 110px",
+      head: [{ text: "Step" }, { text: "Asks" }, { text: "Note" }, { text: "Only if" }],
+      rows: M.setup.map((s) => ({ cells: [
+        this.cell(String(s.n), { mono: true }),
+        this.cell(s.title + " \u2014 " + s.en),
+        this.cell(s.note, { muted: true }),
+        this.cell(s.cap ? "capability " + s.cap : "always", { mono: true, muted: true })
+      ] })),
+      note: "The four capabilities compose (D-54). A couple with a joint account who split a holiday and watch groceries is one household with three of them on, one ledger, and no contradiction."
+    }];
+  }
+
+  /* ── the period (D-22, D-23) ─────────────────────────────────────────── */
+  viewPeriod(out) {
+    const M = this.M, run = M.allocate("2026-09"), miss = M.missingPeriods("2026-01", "2026-09");
+    const w = M.widgetRun();
+
+    const head = this.F({ id: "D-22", name: "Period overview", stateLabel: "populated",
+      route: "/finance", frameMax: "420px", title: "Z\u00e1\u0159\u00ed 2026",
+      lede: "What came in, what the plan does with it, and what is left.",
+      blocks: [
+        { label: "P\u0159\u00edjem", rule: run.entries.length + " sources, " + run.earners.length + " earners",
+          rows: run.entries.map((e) => this.row({
+            title: e.source, meta: M.nameOf(e.member), right: M.money(e.amount),
+            rightColour: "var(--accent-family-money)" })) },
+        { label: "Rozd\u011bleno", rule: "derived on read",
+          rows: [
+            this.row({ title: "Allocated by the plan", meta: "personal, savings, standing orders",
+              right: M.money(run.allocated) }),
+            this.row({ title: "Z\u016fst\u00e1v\u00e1 na provozn\u00edm", meta: "what remains after every rule",
+              right: M.money(run.remainderShown), rightColour: "var(--accent-family-keeping)" })
+          ] }
+      ],
+      totalLabel: "P\u0159\u00edjem celkem", totalValue: M.money(run.total),
+      footer: "Nothing on this screen is stored. It is computed from the incomes and the plan version in effect (FR-FI5).",
+      caption: "Three figures, and they are the dashboard widget's three figures to the crown \u2014 because both read the same engine rather than two copies of the arithmetic." });
+
+    const missing = this.F({ id: "D-23", name: "Missing-period prompt", stateLabel: "populated",
+      route: "/finance/periods", frameMax: "360px", title: "Kv\u011bten 2026 nen\u00ed zaps\u00e1n",
+      lede: "The real failure mode is not a wrong number. It is a month nobody entered.",
+      bannerTone: "var(--warning)", bannerTitle: "Nothing recorded for May",
+      bannerBody: "A month with no income and a month nobody typed in look identical from here, so the module says so rather than drawing a zero.",
+      bannerActions: ["Fill it from April", "It really was zero"],
+      blocks: [{ label: "This year", rule: "9 months", rows: miss.map((m) => this.row({
+        title: M.monthLabel(m.period),
+        right: m.none ? "not entered" : M.money(m.total),
+        rightColour: m.none ? "var(--warning)" : "var(--text-primary)",
+        meta: m.partial ? "no entry for " + m.absent.map(M.nameOf).join(", ") : "",
+        border: m.none ? "var(--warning)" : "var(--border)"
+      })) }],
+      footer: "Named as a metric, a list and a widget, because it cannot be detected any other way.",
+      caption: "Two readings of \u201cmissing\u201d are drawn: a month with nothing at all, and a month where an earner who normally earns has nothing. Only the first is what FR-FI10 states." });
+
+    const absent = this.F({ id: "D-22", name: "Petr", stateLabel: "permission-absent",
+      route: "/finance", frameMax: "300px",
+      absentTitle: "Not available",
+      absentBody: "Finance is not shared with Petr. There is no tab, no widget, no card on Today and no mention of the module anywhere in his app \u2014 which is four screens and reads as finished. FR-FI25 makes that the default rather than a decision somebody had to make.",
+      caption: "Absence is computed from the grant: four of five members here hold none, and the module never tells them it exists." });
+
+    out.pageTitle = "The period, and the month nobody entered";
+    out.pageMeta = M.money(run.total) + " in \u00b7 " + M.money(run.allocated) + " allocated \u00b7 " +
+      M.money(run.remainderShown) + " left";
+    out.viewIntro = "This month's income is two earners and three sources, and none of the figures under it are stored. The screen's own risk is the month that is simply absent \u2014 which is why the prompt is a designed state rather than an empty row.";
+    out.frames = [head, missing, absent];
+    out.notes = [{ text: w.says }];
+    out.tables = [{
+      title: "Where every crown goes",
+      meta: "computed from the plan version in effect",
+      cols: "minmax(150px,1fr) minmax(140px,1fr) 110px 130px minmax(150px,1.2fr)",
+      head: [{ text: "From" }, { text: "To" }, { text: "Rule" }, { text: "Amount" }, { text: "Basis" }],
+      rows: run.edges.map((e) => ({ cells: [
+        this.cell(e.fromLabel),
+        this.cell(e.stays ? "stays where it is" : e.toLabel, { muted: e.stays }),
+        this.cell(e.label, { muted: true }),
+        this.cell(M.money(e.amount), { mono: true, tone: e.amount < 0 ? "var(--danger)" : "" }),
+        this.cell(e.mode === "remainder" ? "whatever is left" : (e.basis || "a fixed amount"), { muted: true })
+      ] })),
+      note: "\u03a3 of the rows sourced from income is " + M.money(run.fromIncome) + ", exactly the income. Totalling every inflow instead would give " + M.money(run.everyInflow) + " \u2014 the difference is transfers counted twice, which FR-FI7 excludes by name."
+    }];
+  }
+
+  /* ── the flow view (D-24, D-25) ──────────────────────────────────────── */
+  viewFlow(out) {
+    const M = this.M, f = M.flow("2026-09"), fit = M.phoneFit("2026-09");
+
+    const blocks = f.stages.map((s) => ({
+      label: s.label, rule: s.note,
+      rows: s.rows.map((r) => r.kind === "income"
+        ? this.row({ title: r.title, meta: r.who, right: M.money(r.amount),
+                     rightColour: "var(--accent-family-money)", token: "--accent-family-money" })
+        : this.row({
+            title: r.fromLabel + " \u2192 " + r.toLabel,
+            meta: r.label + (r.basis ? " \u00b7 " + r.basis : ""),
+            right: M.money(r.planned),
+            rightColour: "var(--text-primary)",
+            markWord: r.posted != null ? "posted " + M.fmt(r.on) + " by " + r.by : "not yet",
+            markColour: r.posted != null ? "var(--accent-family-keeping)" : "var(--status-pending)",
+            note: r.delta ? "posted as " + M.money(r.posted) + ", " + M.money(Math.abs(r.delta)) + " under the plan" : "",
+            border: r.posted == null ? "var(--status-pending)" : "var(--border)",
+            actionLabel: r.posted == null ? "Record it" : ""
+          }))
+    }));
+    blocks.push({ label: "Co z\u016fstane", rule: "the remainder rule",
+      rows: [this.row({ title: "Z\u016fst\u00e1v\u00e1 na provozn\u00edm \u00fa\u010dtu",
+        meta: "every rounded hal\u00e9\u0159 lands here, which is why the column adds up",
+        right: M.money(f.remaining), rightColour: "var(--accent-family-keeping)" })] });
+
+    const main = this.F({ id: "D-24", name: "The flow view", stateLabel: "populated",
+      route: "/finance/flow/2026-09", frameMax: "360px", clientLabel: "phone \u00b7 360 px",
+      title: "Kam jdou pen\u00edze \u2014 z\u00e1\u0159\u00ed",
+      lede: "Two earners, five accounts, and it reconciles to the crown.",
+      blocks: blocks,
+      totalLabel: "P\u0159i\u0161lo", totalValue: M.money(f.run.total),
+      footer: "Household never moves money. Posting records that you did.",
+      caption: "Stage-major rather than node-major: three stages down the page, each row a label that may wrap and an amount that may not. That decision is what makes an N-to-M diagram survive a phone at 200 % text." });
+
+    const post = this.F({ id: "D-25", name: "Post a movement", stateLabel: "populated",
+      route: "/finance/flow/2026-09/post", frameMax: "340px", title: "Zaznamenat p\u0159evod",
+      lede: "Dovolen\u00e1 2027 \u2014 the standing order runs on the 15th.",
+      fields: [
+        { label: "Amount", value: M.money(338000), hint: "planned", font: "var(--mono)" },
+        { label: "Date", value: "9 September 2026", hint: "today" },
+        { label: "From \u2192 to", value: "Provozn\u00ed \u00fa\u010det \u2192 Dovolen\u00e1 2027" }
+      ],
+      actions: ["Zaznamenat, \u017ee jsi to p\u0159evedla", "Not yet"],
+      footer: "This records that the transfer happened. Household does not move money and cannot make the transfer for you.",
+      caption: "One tap, with the amount editable because banks round and standing orders change. It writes an ordinary transaction the plan will never touch again." });
+
+    const conflictless = this.F({ id: "D-24", name: "With one movement queued", stateLabel: "pending",
+      route: "/finance/flow/2026-09", frameMax: "330px", title: "Kam jdou pen\u00edze \u2014 z\u00e1\u0159\u00ed",
+      barText: "No signal \u00b7 1 change waiting",
+      blocks: [{ label: "Co odch\u00e1z\u00ed z provozn\u00edho", rows: [
+        this.row({ title: "Provozn\u00ed \u2192 Rezerva", right: M.money(680000),
+          markWord: "posted 3 Sep by Jana", markColour: "var(--accent-family-keeping)",
+          note: "posted as 6 800,00 K\u010d, 40,00 K\u010d under the plan" }),
+        this.row({ title: "Provozn\u00ed \u2192 Dovolen\u00e1 2027", right: M.money(338000),
+          markWord: "queued at 18:12", markColour: "var(--status-pending)",
+          border: "var(--status-pending)", note: "posted on this phone; it will go up when there is signal" })
+      ] }],
+      footer: "Posted-and-pending is a different thing from planned, and the screen keeps them apart.",
+      caption: "Offline the whole picture recomputes on the device, because every input is a synced row and the arithmetic is local." });
+
+    out.pageTitle = "The flow view";
+    out.pageMeta = f.movements.length + " movements \u00b7 " + f.posted + " posted \u00b7 " +
+      f.outstanding.length + " outstanding";
+    out.viewIntro = "The design risk named in the handoff: a visualisation of N-to-M money movement that must stay readable on a phone, reconcile exactly, and show planned beside posted without implying that the app moved anybody's money.";
+    out.frames = [main, post, conflictless];
+    out.notes = [{ text: f.says }, { text: fit.says }];
+    out.tables = [{
+      title: "Planned beside posted",
+      meta: "the difference is named, not absorbed",
+      cols: "minmax(150px,1fr) minmax(140px,1fr) 120px 120px minmax(140px,1fr)",
+      head: [{ text: "Movement" }, { text: "Rule" }, { text: "Planned" }, { text: "Posted" }, { text: "By" }],
+      rows: f.movements.map((m) => ({ cells: [
+        this.cell(m.fromLabel + " \u2192 " + m.toLabel),
+        this.cell(m.label, { muted: true }),
+        this.cell(M.money(m.planned), { mono: true }),
+        this.cell(m.posted == null ? "\u2014" : M.money(m.posted), { mono: true,
+          tone: m.posted == null ? "var(--status-pending)" : m.delta ? "var(--warning)" : "" }),
+        this.cell(m.by ? m.by + " \u00b7 " + M.fmt(m.on) : "not yet", { muted: true })
+      ] })),
+      note: "A module that posted all six would be asserting a bank transfer it has no way to know about. This one shows five, names the sixth, and names the forty crowns of difference on the fifth."
+    }, {
+      title: "Why it is stage-major",
+      meta: "pixels, at both text sizes",
+      cols: "minmax(200px,1.4fr) 130px 130px 120px",
+      head: [{ text: "Layout" }, { text: "100 % text" }, { text: "200 % text" }, { text: "Fits 360 px" }],
+      rows: [
+        { cells: [this.cell("Stage-major \u2014 widest unbreakable token"),
+                  this.cell(fit.token100 + " px", { mono: true }),
+                  this.cell(fit.token200 + " px", { mono: true }),
+                  this.cell(fit.fits200 ? "yes" : "no", { mono: true, tone: "var(--accent-family-keeping)" })] },
+        { cells: [this.cell("Node-major \u2014 one column per source and account (" + fit.nodes + " nodes)"),
+                  this.cell(fit.columnar100 + " px", { mono: true }),
+                  this.cell(fit.columnar200 + " px", { mono: true }),
+                  this.cell(fit.columnarFits ? "yes" : "no", { mono: true, tone: "var(--danger)" })] }
+      ],
+      note: "The row is " + fit.avail + " px wide inside the frame. Nothing in the stage-major layout is fixed-width, so 200 % text makes rows taller rather than narrower \u2014 the failure mode a column diagram cannot avoid."
+    }];
+  }
+
+  /* ── the plan and the accounts (D-26, D-27) ──────────────────────────── */
+  viewAllocation(out) {
+    const M = this.M, run = M.allocate("2026-09"), home = M.homeRun();
+    const bad = M.validatePlan(M.plans[1].rules.concat([
+      { order: 7, from: "a-joint", mode: "remainder", to: "a-rezerva", label: "A second remainder" }]));
+
+    const editor = this.F({ id: "D-26", name: "Allocation plan editor", stateLabel: "populated",
+      route: "/finance/allocation", frameMax: "440px", title: "Rozd\u011blen\u00ed p\u0159\u00edjmu",
+      lede: "Rules in order, and this month's real numbers under them.",
+      blocks: [
+        { label: "Pravidla", rule: "in order", rows: M.plans[1].rules.map((r) => this.row({
+          title: r.label,
+          meta: (r.from === "income" ? "from income" : "from " + M.acctName(r.from)) +
+            (r.per_earner ? " \u00b7 once per earner, against their own" : "") + " \u2192 " +
+            (r.to === "owner_personal" ? "their own account" : M.acctName(r.to)),
+          right: r.mode === "percent" ? r.value + " %" : r.mode === "amount" ? M.money(r.value) : "the rest",
+          rightColour: r.mode === "remainder" ? "var(--accent-family-keeping)" : "var(--text-primary)",
+          chip: r.mode === "remainder" ? "takes what is left" : ""
+        })) },
+        { label: "Worked example", rule: "September, live", rows: run.perEarner.map((p) => this.row({
+          title: p.name, meta: "income " + M.money(p.income) + " \u2192 allocated " + M.money(p.allocated),
+          right: p.ok ? "reconciles" : "OFF BY " + M.money(p.income - p.allocated),
+          rightColour: p.ok ? "var(--accent-family-keeping)" : "var(--danger)"
+        })) }
+      ],
+      footer: "One rule per source takes what is left, and it absorbs every rounded hal\u00e9\u0159.",
+      caption: "The worked example is not a preview mode. It is the screen, on the household's own numbers, which is the only way a member can tell whether a rule says what they meant." });
+
+    const refused = this.F({ id: "D-26", name: "Two rules taking what is left", stateLabel: "rejected",
+      route: "/finance/allocation", frameMax: "340px", title: "Rozd\u011blen\u00ed p\u0159\u00edjmu",
+      bannerTone: "var(--status-rejected)", bannerTitle: "Not saved",
+      bannerBody: bad.errors[0].says,
+      bannerActions: ["Make the second one a fixed amount", "Undo"],
+      blocks: [{ label: "Provozn\u00ed \u00fa\u010det", rows: [
+        this.row({ title: "Z\u016fst\u00e1v\u00e1 na provozn\u00edm", right: "the rest", chip: "takes what is left" }),
+        this.row({ title: "A second remainder", right: "the rest", chip: "takes what is left",
+          border: "var(--status-rejected)", markWord: "this one would always be zero",
+          markColour: "var(--status-rejected)" })
+      ] }],
+      footer: "Refused at save, naming the source \u2014 a plan with six rules has more than one place to look.",
+      caption: "The mirror refusal is a plan with no remainder at all, which is the one that silently loses money rather than duplicating it." });
+
+    const accounts = this.F({ id: "D-27", name: "Accounts", stateLabel: "populated",
+      route: "/finance/accounts", frameMax: "380px", title: "\u00da\u010dty",
+      lede: "Any number, six types. A personal account has an owner; no other type may.",
+      blocks: [{ label: M.accounts.length + " \u00fa\u010dt\u016f", rows: M.accounts.map((a) => this.row({
+        title: a.name,
+        meta: (a.inst ? a.inst + " \u00b7\u00b7" + a.last4 + " \u00b7 " : "") + a.type +
+          (a.owner ? " \u00b7 " + M.nameOf(a.owner) : ""),
+        right: M.money(a.opening), chip: a.active ? "" : "inactive",
+        rightColour: a.active ? "var(--text-primary)" : "var(--text-muted)"
+      })) }],
+      footer: "An inactive account keeps its history and leaves every picker.",
+      caption: "The rule that only a personal account has an owner is a partial unique index and a sentence on this screen \u2014 the same rule twice, deliberately." });
+
+    out.pageTitle = "The plan, and the accounts under it";
+    out.pageMeta = M.plans.length + " versions \u00b7 " + M.plans[1].rules.length + " rules \u00b7 " +
+      M.accounts.length + " accounts";
+    out.viewIntro = "The allocation plan is the generalisation of one household's locked formula, and the formula is expressible in it exactly \u2014 which is the regression test that the rebuild did not change anybody's numbers.";
+    out.frames = [editor, refused, accounts];
+    out.notes = [{ text: home.says }];
+    out.tables = [{
+      title: "home's worked example, through the generalised engine",
+      meta: home.ok ? "six of six identical" : "MISMATCH",
+      cols: "minmax(200px,1.4fr) 140px 140px 100px",
+      head: [{ text: "Figure" }, { text: "home" }, { text: "This engine" }, { text: "" }],
+      rows: Object.keys(home.want).map((k) => ({ cells: [
+        this.cell(k.replace(/([A-Z])/g, " $1").toLowerCase()),
+        this.cell(M.money(home.want[k]), { mono: true, muted: true }),
+        this.cell(M.money(home.got[k]), { mono: true }),
+        this.cell(home.want[k] === home.got[k] ? "same" : "differs", { mono: true,
+          tone: home.want[k] === home.got[k] ? "var(--accent-family-keeping)" : "var(--danger)" })
+      ] })),
+      note: "Two incomes, five ordered rules, two remainder rules \u2014 one per source. The old module's four locked percentages are now rows in a table, and nobody's figures moved."
+    }, {
+      title: "Plan versions",
+      meta: "the end of a version is derived from the next one's start",
+      cols: "110px minmax(180px,1.2fr) 140px 140px",
+      head: [{ text: "Version" }, { text: "Label" }, { text: "From" }, { text: "Until" }],
+      rows: M.planSpans().map((p) => ({ cells: [
+        this.cell("v" + p.version, { mono: true }),
+        this.cell(p.label),
+        this.cell(M.monthLabel(p.from), { mono: true }),
+        this.cell(p.toKey ? M.monthLabel(p.toKey) : "open", { mono: true, muted: true })
+      ] })),
+      note: "Changing this year's percentages does not move last year's numbers, and the same versioning shape is what Utilities uses for tariffs \u2014 deliberately, so a member who has met one meets the other."
+    }];
+  }
+
+  /* ── the ledger (D-28) ───────────────────────────────────────────────── */
+  viewLedger(out) {
+    const M = this.M, page = M.ledgerPage(8), fx = M.fxDrift();
+    const tone = { manual: "--accent-family-money", import: "--accent-family-keeping",
+                   split: "--accent-family-things", allocation: "--accent-family-time",
+                   recurring: "--accent-family-household" };
+
+    const ledger = this.F({ id: "D-28", name: "Ledger", stateLabel: "populated",
+      route: "/finance/ledger", frameMax: "440px", clientLabel: "web \u00b7 compact", title: "Transakce",
+      lede: "One table under everything, with where each row came from.",
+      blocks: [{ label: "Z\u00e1\u0159\u00ed 2026", rule: page.rows.length + " of " + page.of + " rows",
+        rows: page.rows.map((t) => this.row({
+          title: t.desc,
+          meta: M.fmt(t.date) + " \u00b7 " + M.catName(t.category) + " \u00b7 " + M.acctName(t.account),
+          right: M.money(t.amount), rightColour: t.amount < 0 ? "var(--text-primary)" : "var(--accent-family-keeping)",
+          chip: t.source, token: tone[t.source] || "--accent-family-money",
+          markWord: t.conflict ? "two versions" : "",
+          markColour: "var(--status-conflict)",
+          border: t.conflict ? "var(--status-conflict)" : "var(--border)",
+          note: t.fx ? M.money(t.fx.amount, t.fx.currency) + " at " + String(t.fx.rate).replace(".", ",") + " \u00b7 " + t.fx.source : ""
+        })) }],
+      footer: "Keyset paging on (date, id): the next page is a cursor, not an offset, so a row added while you read does not shift the page.",
+      caption: "Mono numerics, compact density on web by default (DD-3), and the source discriminator visible on every row \u2014 which is what keeps an imported row and a hand-typed row distinguishable forever." });
+
+    const conflicted = this.F({ id: "D-28", name: "One row in conflict", stateLabel: "conflicted",
+      route: "/finance/ledger", frameMax: "330px", title: "Transakce",
+      blocks: [{ label: "B\u0159ezen 2026", rows: [this.row({
+        title: "Vy\u00fa\u010dtov\u00e1n\u00ed elekt\u0159iny \u2014 \u010cEZ",
+        meta: "3 March \u00b7 Energie \u00b7 Provozn\u00ed \u00fa\u010det",
+        right: "450,00 / 500,00 K\u010d", rightColour: "var(--status-conflict)",
+        border: "var(--status-conflict)", markWord: "two versions \u00b7 tap to compare",
+        markColour: "var(--status-conflict)", actionLabel: "Compare" })] }],
+      footer: "A row flag that opens the comparison, never a modal at reconnect (DD-4).",
+      caption: "The flag is on the row, in the list, where the member is already looking. The resolver itself is in the import view, beside the other two places money can disagree." });
+
+    out.pageTitle = "One ledger";
+    out.pageMeta = page.of + " rows this period \u00b7 " + M.sources.length + " sources \u00b7 " +
+      page.rows.length + " on this page";
+    out.viewIntro = "Expenses, imports, splits, posted movements and confirmed subscriptions are one table, which is what makes one ledger true rather than three. The source column is the only thing that distinguishes them, and it exists from day one so a bank feed can arrive later without a migration.";
+    out.frames = [ledger, conflicted];
+    out.tables = [{
+      title: "Where a row can come from",
+      meta: "D-81 \u00b7 all five present on this page",
+      cols: "120px minmax(200px,1.4fr) minmax(160px,1fr)",
+      head: [{ text: "source" }, { text: "Written by" }, { text: "On this page" }],
+      rows: [
+        ["manual", "A member typing an amount and a description", "Lidl Vyso\u010dany, Hotel Wien, the boiler service"],
+        ["import", "A statement mapped in the wizard", "Mzda, n\u00e1jem, MOL, the florbal club"],
+        ["split", "The expense editor, which writes here and into expense_shares", "Ve\u010de\u0159e, Albert, the Lipno flat"],
+        ["allocation", "A movement the member posted from the flow view", "Provozn\u00ed \u2192 Rezerva"],
+        ["recurring", "A due item the member confirmed", "Netflix"]
+      ].map((r) => ({ cells: [this.cell(r[0], { mono: true }), this.cell(r[1]), this.cell(r[2], { muted: true })] })),
+      note: "source marks where a row came from, never what it still is: a posted allocation is an ordinary row from the moment it exists, and editing the plan does not touch it."
+    }, {
+      title: "Two rows in another currency",
+      meta: "D-55 \u00b7 the rate is stored on the row",
+      cols: "minmax(160px,1.2fr) 130px 110px 130px 130px",
+      head: [{ text: "Row" }, { text: "Original" }, { text: "Rate" }, { text: "Stored" }, { text: "At today's rate" }],
+      rows: fx.map((r) => ({ cells: [
+        this.cell(r.desc),
+        this.cell(r.original, { mono: true }),
+        this.cell(String(r.rate).replace(".", ","), { mono: true, muted: true }),
+        this.cell(M.money(r.stored), { mono: true }),
+        this.cell(M.money(r.wouldBe) + " (" + M.money(r.delta) + ")", { mono: true, muted: true })
+      ] })),
+      note: "Re-converting history with live rates would mean last month's total changes every time it is looked at. The Icelandic row also has no decimals at all, because ISK's ISO exponent is 0 and the module reads it rather than assuming two."
+    }];
+  }
+
+  /* ── the expense editor (D-29) ───────────────────────────────────────── */
+  viewExpenses(out) {
+    const M = this.M, ten = M.tenEuroRun();
+    const ex = M.expenses.filter((e) => e.id === "ex-3")[0], sh = M.sharesOf(ex);
+    const methods = [
+      ["equal", M.split(600000, "equal", ["jana", "petr", "milos"]), "The default"],
+      ["shares", M.split(231000, "shares", ["jana", "petr", "milos"], { shares: { jana: 2, petr: 2, milos: 1 } }), "Two shares for us, one for the kid"],
+      ["percent", M.split(147000, "percent", ["jana", "petr", "milos"], { percent: { jana: 50, petr: 30, milos: 20 } }), "Percentages summing to 100"],
+      ["exact", M.split(231000, "exact", ["jana", "petr", "milos"], { exact: { jana: 66000, petr: 99000, milos: 66000 } }), "Amounts summing to the total"],
+      ["adjustment", M.split(231000, "adjustment", ["jana", "petr", "milos"], { adjust: { petr: 33000 } }), "And Petr also had the wine"]
+    ];
+
+    const editor = this.F({ id: "D-29", name: "Expense editor", stateLabel: "populated",
+      route: "/finance/expenses/ex-3", frameMax: "380px", title: "Ve\u010de\u0159e \u2014 U Kalicha",
+      lede: "Who paid, who it is for, and how it divides.",
+      fields: [
+        { label: "Amount", value: M.money(ex.amount), font: "var(--mono)" },
+        { label: "Paid by", value: M.nameOf(ex.paid[0][0]), hint: "one payer" },
+        { label: "How it divides", value: "Equally, plus an adjustment", hint: "5 methods" },
+        { label: "The wine", value: M.money(33000) + " \u2192 Petr", font: "var(--mono)" }
+      ],
+      blocks: [{ label: "N\u00e1hled \u2014 before it is saved", rule: "deterministic",
+        rows: sh.participants.map((id) => this.row({
+          title: M.nameOf(id), right: M.money(sh.shares[id]),
+          rightColour: "var(--accent-family-money)",
+          meta: id === "petr" ? "equal share plus the wine" : "equal share of what is left"
+        })) }],
+      totalLabel: "Sou\u010det pod\u00edl\u016f", totalValue: M.money(sh.sum),
+      totalColour: sh.ok ? "var(--accent-family-keeping)" : "var(--danger)",
+      footer: sh.why,
+      caption: "The preview is the feature: a split nobody can check before saving is a balance nobody trusts afterwards." });
+
+    const multi = this.F({ id: "D-29", name: "Two payers, unsaved", stateLabel: "populated",
+      route: "/finance/expenses/new", frameMax: "330px", title: "Nov\u00fd spole\u010dn\u00fd v\u00fddaj",
+      lede: "One expense, two people paying parts of it.",
+      fields: [
+        { label: "Amount", value: M.money(480000), font: "var(--mono)" },
+        { label: "Paid by", value: "Jana " + M.money(300000) + " \u00b7 Milo\u0161 " + M.money(180000), font: "var(--mono)" }
+      ],
+      blocks: [{ label: "N\u00e1hled", rows: ["jana", "petr", "milos"].map((id) => this.row({
+        title: M.nameOf(id), right: M.money(160000), meta: "equal, three ways" })) }],
+      footer: "paid_by is one or several members with amounts, so who owes whom follows the money rather than a single payer field.",
+      caption: "Drawn as a draft rather than saved, so the balances on the next screen stay the ones the household actually has." });
+
+    out.pageTitle = "Five ways to divide a bill";
+    out.pageMeta = "5 methods \u00b7 " + M.expenses.length + " expenses \u00b7 last minor unit assigned in the household's order";
+    out.viewIntro = "The split methods are ordinary. What is not ordinary is the last minor unit: three ways into ten euros leaves one cent, and if it lands on a different person each time the row is read, the balance changes when you refresh it.";
+    out.frames = [editor, multi];
+    out.notes = [{ text: "\u20ac10,00 three ways, read with the participants in three different orders: " +
+      ten.reads.join("  \u00b7  ") + ". " + ten.runs[0].why }];
+    out.tables = [{
+      title: "The five methods, on this household",
+      meta: "every one sums to its total",
+      cols: "120px 120px minmax(180px,1.2fr) minmax(160px,1fr) 110px",
+      head: [{ text: "Method" }, { text: "Total" }, { text: "Shares" }, { text: "Why" }, { text: "Sum" }],
+      rows: methods.map((m) => ({ cells: [
+        this.cell(m[0], { mono: true }),
+        this.cell(M.money(m[1].total), { mono: true }),
+        this.cell(m[1].participants.map((id) => M.nameOf(id) + " " + M.money(m[1].shares[id])).join(" \u00b7 "), { mono: true }),
+        this.cell(m[2], { muted: true }),
+        this.cell(m[1].ok ? "exact" : "OFF", { mono: true,
+          tone: m[1].ok ? "var(--accent-family-keeping)" : "var(--danger)" })
+      ] })),
+      note: "The exact method is the one that can be typed wrong, so it is the one the editor refuses at save \u2014 naming the difference rather than absorbing it into somebody's share."
+    }, {
+      title: "One household expense that creates no balance",
+      meta: "FR-FI15",
+      cols: "minmax(180px,1.2fr) 130px 130px minmax(200px,1.4fr)",
+      head: [{ text: "Expense" }, { text: "Amount" }, { text: "Shares" }, { text: "Effect" }],
+      rows: [{ cells: [
+        this.cell("N\u00e1jem \u2014 z\u00e1\u0159\u00ed, from the joint account"),
+        this.cell(M.money(2450000), { mono: true }),
+        this.cell("0", { mono: true }),
+        this.cell("Counted in the budget, owed by nobody", { muted: true })
+      ] }],
+      note: "A splitting model that cannot express household spending is the reason people keep a spreadsheet beside the app. Households running capability 1 use this constantly."
+    }];
+  }
+
+  /* ── balances and settle up (D-30) ───────────────────────────────────── */
+  viewBalances(out) {
+    const M = this.M, sim = M.simplify(), bal = sim.balances;
+
+    const nets = this.F({ id: "D-30", name: "Balances", stateLabel: "populated",
+      route: "/finance/balances", frameMax: "360px", title: "Kdo komu",
+      lede: "Net per person since the last settlement.",
+      blocks: [
+        { label: "\u010cist\u00e1 pozice", rows: bal.rows.map((r) => this.row({
+          title: r.name, right: (r.net > 0 ? "gets back " : "owes ") + M.money(Math.abs(r.net)),
+          rightColour: r.net > 0 ? "var(--accent-family-keeping)" : "var(--status-overdue)",
+          meta: r.net > 0 ? "paid for more than their share" : "their share was paid by somebody else"
+        })) },
+        { label: "Nejkrat\u0161\u00ed cesta", rule: sim.transfers.length + " payments",
+          rows: sim.transfers.map((t) => this.row({
+            title: M.nameOf(t.from) + " \u2192 " + M.nameOf(t.to), right: M.money(t.amount),
+            chip: "suggested", actionLabel: "Record it" })) },
+        { label: "Po dvojic\u00edch", rule: bal.pairs.length + " payments",
+          rows: bal.pairs.map((p) => this.row({
+            title: M.nameOf(p.from) + " \u2192 " + M.nameOf(p.to), right: M.money(p.amount),
+            rightColour: "var(--text-muted)" })) }
+      ],
+      footer: "Simplification is a suggestion. The recorded settlement is whatever actually happened.",
+      caption: "Both lists are here because a simplified set quietly asks Milo\u0161 to pay somebody he never ate with, and some households would rather settle one pair at a time." });
+
+    const settle = this.F({ id: "D-30", name: "Settle up", stateLabel: "populated",
+      route: "/finance/balances/settle", frameMax: "330px", title: "Vyrovn\u00e1n\u00ed",
+      lede: "A settlement is a record of a payment that happened, not a payment.",
+      fields: [
+        { label: "From \u2192 to", value: "Petr \u2192 Jana" },
+        { label: "Amount", value: M.money(124000), hint: "suggested", font: "var(--mono)" },
+        { label: "Date", value: "9 September 2026" }
+      ],
+      blocks: [{ label: "Ji\u017e zaznamenan\u00e9", rows: M.settlements.map((s) => this.row({
+        title: M.nameOf(s.from) + " \u2192 " + M.nameOf(s.to), right: M.money(s.amount),
+        meta: M.fmtLong(s.date) + (s.note ? " \u00b7 " + s.note : ""), chip: "additive" })) }],
+      footer: "Household never moves money. Settle up records that a transfer happened; it does not perform one.",
+      caption: "Neither recorded settlement is the amount the simplified set suggested at the time, and the balances still reconcile \u2014 which is what additive means in practice." });
+
+    out.pageTitle = "Who owes whom";
+    out.pageMeta = bal.rows.length + " people \u00b7 " + bal.pairs.length + " pairwise \u00b7 " +
+      sim.transfers.length + " simplified \u00b7 nets to " + M.money(bal.sum);
+    out.viewIntro = "Three shared expenses and two recorded settlements. Every figure below is computed from those five rows, which is why the net positions sum to zero rather than nearly zero.";
+    out.frames = [nets, settle];
+    out.tables = [{
+      title: "How each balance was arrived at",
+      meta: "three expenses, two settlements",
+      cols: "minmax(160px,1.2fr) 110px 120px minmax(200px,1.4fr)",
+      head: [{ text: "Row" }, { text: "Amount" }, { text: "Paid by" }, { text: "Shares" }],
+      rows: M.expenses.filter((e) => e.method !== "none").map((e) => {
+        const s = M.sharesOf(e);
+        return { cells: [
+          this.cell(e.desc + " \u00b7 " + M.fmt(e.date)),
+          this.cell(M.money(e.amount), { mono: true }),
+          this.cell(M.nameOf(e.paid[0][0]), { muted: true }),
+          this.cell(s.participants.map((id) => M.nameOf(id) + " " + M.money(s.shares[id])).join(" \u00b7 "), { mono: true })
+        ] };
+      }).concat(M.settlements.map((s) => ({ cells: [
+        this.cell("Vyrovn\u00e1n\u00ed \u00b7 " + M.fmt(s.date)),
+        this.cell(M.money(s.amount), { mono: true }),
+        this.cell(M.nameOf(s.from), { muted: true }),
+        this.cell("\u2192 " + M.nameOf(s.to), { mono: true, muted: true })
+      ] }))),
+      note: "The dashboard's who-owes-whom widget shows the simplified set: " +
+        sim.transfers.map((t) => M.nameOf(t.from) + " \u2192 " + M.nameOf(t.to) + " " + M.moneyRound(t.amount)).join(", ") +
+        ". Two of the three people named here cannot open Finance at all, which is a gap this stage records rather than solves."
+    }];
+  }
+
+  /* ── budgets (D-31) ──────────────────────────────────────────────────── */
+  viewBudgets(out) {
+    const M = this.M, b = M.budgetRun();
+    const frame = this.F({ id: "D-31", name: "Budgets", stateLabel: "populated",
+      route: "/finance/budgets", frameMax: "400px", title: "Rozpo\u010dty",
+      lede: b.period.label + " \u00b7 " + b.elapsed + " of " + b.total + " days gone.",
+      blocks: [{ label: "Kategorie", rule: "planned \u00b7 actual \u00b7 heading for",
+        rows: b.rows.map((r) => this.row({
+          title: r.category,
+          meta: M.money(r.actual) + " of " + M.money(r.budget) +
+            (r.carried ? " (including " + M.money(r.carried) + " carried) " : " ") +
+            "\u00b7 at this rate " + M.money(r.projected),
+          right: r.pct + " %",
+          rightColour: r.over ? "var(--status-overdue)" : r.willBeOver ? "var(--warning)" : "var(--accent-family-keeping)",
+          markWord: r.over ? "over by " + M.money(-r.remaining) : r.willBeOver ? "heading over" : "",
+          markColour: r.over ? "var(--status-overdue)" : "var(--warning)",
+          border: r.over ? "var(--status-overdue)" : "var(--border)",
+          chip: r.rollover ? "rollover" : ""
+        })) }],
+      footer: "The projection is elapsed days, stated as elapsed days. Household is not a financial adviser and will not present a projection as advice.",
+      caption: "The household's budget period starts on payday rather than the 1st, which is legal under FR-FI17 and quietly means \u201cthis period\u201d is two different periods on two screens." });
+
+    out.pageTitle = "Budgets";
+    out.pageMeta = b.rows.length + " categories \u00b7 " +
+      b.rows.filter((r) => r.over).length + " over \u00b7 " + b.elapsed + "/" + b.total + " days";
+    out.viewIntro = "Planned, actual, remaining, and a projection based on elapsed days. Rollover is a flag rather than a feature: unspent either carries or it does not, and the two produce different numbers for the same spending.";
+    out.frames = [frame];
+    out.charts = [{
+      title: "Against budget",
+      meta: b.elapsed + " of " + b.total + " days \u00b7 100 % is the whole budget",
+      minWidth: (b.rows.length * 74) + "px",
+      bars: b.rows.map((r) => ({
+        value: r.pct + " %", label: r.category,
+        mark: r.over ? "over" : r.willBeOver ? "heading over" : "",
+        h: Math.max(6, Math.min(120, r.pct * 1.1)) + "px",
+        fill: r.over ? "color-mix(in oklab, var(--status-overdue) 22%, transparent)"
+                     : "color-mix(in oklab, var(--accent-family-money) 18%, transparent)",
+        tone: r.over ? "var(--status-overdue)" : "var(--accent-family-money)",
+        style: "solid"
+      })),
+      note: "Four of these five are the dashboard's budget widget, at the same percentages. The fifth is the rollover category, which the widget leaves out because its budget and its planned figure are different numbers."
+    }];
+    out.tables = [{
+      title: "The arithmetic",
+      meta: "projection = actual \u00d7 days in period \u00f7 days elapsed",
+      cols: "minmax(140px,1fr) 110px 110px 110px 110px 120px",
+      head: [{ text: "Category" }, { text: "Planned" }, { text: "Carried" }, { text: "Actual" },
+             { text: "Remaining" }, { text: "At this rate" }],
+      rows: b.rows.map((r) => ({ cells: [
+        this.cell(r.category),
+        this.cell(M.money(r.planned), { mono: true }),
+        this.cell(r.carried ? M.money(r.carried) : "\u2014", { mono: true, muted: true }),
+        this.cell(M.money(r.actual), { mono: true }),
+        this.cell(M.money(r.remaining), { mono: true, tone: r.remaining < 0 ? "var(--status-overdue)" : "" }),
+        this.cell(M.money(r.projected), { mono: true, muted: true })
+      ] }))
+    }];
+  }
+
+  /* ── recurring, prices, the window (D-32, D-33, D-34) ────────────────── */
+  viewRecurring(out) {
+    const M = this.M, due = M.dueRun(), win = M.cancellationWindows(), prices = M.priceRuns("r-netflix", 2);
+    const rem = M.reminderRun();
+
+    const list = this.F({ id: "D-32", name: "Recurring and subscriptions", stateLabel: "populated",
+      route: "/finance/recurring", frameMax: "400px", title: "Pravideln\u00e9 platby",
+      lede: "What is coming, what it costs, and what is still cancellable.",
+      blocks: [
+        { label: "\u010cek\u00e1 na potvrzen\u00ed", rule: "never posted automatically",
+          rows: due.rows.filter((r) => r.state === "pending").map((r) => this.row({
+            title: r.name, right: M.money(r.typed),
+            rightColour: "var(--status-pending)", border: "var(--status-pending)",
+            meta: "due " + M.fmt(r.due) + " \u00b7 the definition says " + M.money(r.defined),
+            markWord: r.asks ? "one-off, or the new price?" : "",
+            markColour: "var(--status-pending)", actionLabel: "Confirm" })) },
+        { label: "Definice", rows: M.recurring.map((r) => this.row({
+          title: r.name, right: M.money(r.amount),
+          meta: r.cadence + (r.next ? " \u00b7 next " + M.fmt(r.next) : "") +
+            (r.notice ? " \u00b7 " + r.notice + " days' notice" : ""),
+          chip: r.status === "active" ? "" : r.status,
+          rightColour: r.status === "active" ? "var(--text-primary)" : "var(--text-muted)" })) }
+      ],
+      footer: "A due item is a pending transaction the member confirms or edits.",
+      caption: "A subscription that silently posts a wrong amount is a ledger nobody trusts, which is why the confirmation is the feature and not the friction." });
+
+    const history = this.F({ id: "D-33", name: "Price history", stateLabel: "populated",
+      route: "/finance/recurring/netflix/prices", frameMax: "330px", title: "Jak Netflix zdra\u017eoval",
+      lede: prices.says,
+      blocks: [{ label: "Zm\u011bny", rows: prices.rows.slice().reverse().map((p) => this.row({
+        title: M.money(p.amount), meta: M.fmtLong(p.from) + " \u00b7 " + p.why,
+        right: p.by ? "confirmed by " + M.nameOf(p.by) : "at sign-up",
+        rightColour: "var(--text-muted)" })) }],
+      footer: "Kept because a member said yes to a new price, never because an amount changed on its own.",
+      caption: "Worth exactly one screen, and the module can answer a question almost nothing else can." });
+
+    const notice = this.F({ id: "D-34", name: "Cancellation-window reminder", stateLabel: "populated",
+      route: "/reminders#finance.cancellation_window", frameMax: "320px",
+      title: "Netflix \u2014 posledn\u00ed den na v\u00fdpov\u011b\u010f",
+      lede: win[0].says,
+      bannerTone: "var(--warning)", bannerTitle: "20 September",
+      bannerBody: "Renews 4 October at " + M.money(27900) + " a month. Fourteen days' notice, so today is the last day cancelling still works.",
+      bannerActions: ["Open the contract", "Snooze"],
+      footer: "The date is the module's; the delivery is the strand's (FR-RM1). Neither keeps a copy of the other's rule.",
+      caption: "A renewal reminder that arrives on renewal day is a notification about something you can no longer do anything about." });
+
+    out.pageTitle = "Recurring, prices and the window";
+    out.pageMeta = M.recurring.length + " definitions \u00b7 " + due.pending + " waiting \u00b7 " +
+      due.autoPosted + " posted automatically";
+    out.viewIntro = "Four capabilities and this is the one everybody has: the annual renewal nobody remembered. Its value is entirely in two dates \u2014 when the money leaves, and the last day you could have stopped it.";
+    out.frames = [list, history, notice];
+    out.notes = [{ text: rem.says }];
+    out.charts = [{
+      title: "Netflix, two years",
+      meta: prices.rises.length + " rises \u00b7 " + prices.pctTotal + " % in total",
+      minWidth: (prices.rows.length * 80) + "px",
+      bars: prices.rows.map((p) => ({
+        value: M.moneyRound(p.amount), label: M.fmt(p.from),
+        mark: p.by ? "confirmed" : "sign-up",
+        h: Math.round(p.amount / 27900 * 110) + "px",
+        fill: "color-mix(in oklab, var(--accent-family-money) 18%, transparent)",
+        tone: "var(--accent-family-money)", style: "solid"
+      })),
+      note: "Every step is a member confirming that the new amount is the new price rather than a one-off, which is the only way this history can be trusted."
+    }];
+    out.tables = [{
+      title: "Every cancellation window in this household",
+      meta: "fires at the notice period, not at renewal",
+      cols: "minmax(160px,1.1fr) 130px 100px 140px 120px",
+      head: [{ text: "Subscription" }, { text: "Renews" }, { text: "Notice" }, { text: "Reminder" }, { text: "Amount" }],
+      rows: win.map((w) => ({ cells: [
+        this.cell(w.name),
+        this.cell(M.fmtLong(w.renews), { mono: true }),
+        this.cell(w.notice + " days", { mono: true, muted: true }),
+        this.cell(M.fmtLong(w.fires), { mono: true, tone: "var(--accent-family-money)" }),
+        this.cell(M.money(w.amount), { mono: true })
+      ] })),
+      note: "Two of the three land outside FR-RM2's preset lead times, which is the gap Stage 12 recorded from the other side: a notice kind resolves against the entity's own period rather than a lead the member picks."
+    }];
+  }
+
+  /* ── import, duplicates, the conflict (D-35, D-36, D-37) ─────────────── */
+  viewImport(out) {
+    const M = this.M, ded = M.dedupe(), map = M.mappings[0], conf = M.conflictRun();
+    const re = M.reapplyToHistory();
+
+    const wizard = this.F({ id: "D-35", name: "Import wizard", stateLabel: "populated",
+      route: "/finance/import", frameMax: "400px", title: "Na\u010d\u00edst v\u00fdpis",
+      lede: "Upload, look at the first rows, say which column is which.",
+      fields: [
+        { label: "File", value: "vypis_0826_0905.csv \u00b7 " + ded.rows + " rows", font: "var(--mono)" },
+        { label: "Separator and encoding", value: map.delimiter + "  \u00b7  " + map.encoding, font: "var(--mono)" },
+        { label: "Date format", value: map.date, font: "var(--mono)" },
+        { label: "Decimal separator", value: map.decimal, font: "var(--mono)",
+          note: "A Czech statement writes 1 234,50. Getting this wrong is a ledger out by a factor of a hundred." },
+        { label: "Sign convention", value: "Minus is money out", font: "var(--mono)" },
+        { label: "Save this mapping as", value: map.name }
+      ],
+      blocks: [{ label: "N\u00e1hled", rule: "first rows", rows: ded.applied.slice(0, 4).map((a) => this.row({
+        title: a.row.desc, meta: M.fmt(a.row.date) + " \u00b7 " + (a.category ? M.catName(a.category) + " (rule)" : "no category yet"),
+        right: M.money(a.row.amount), chip: a.rule ? a.rule.replace("ru-", "") : "" })) }],
+      actions: ["Import " + (ded.rows - ded.duplicates) + " rows", "Back"],
+      footer: "Mapping saved by name, so the next statement from the same bank is one click. camt.053 needs no mapping at all.",
+      caption: "The only write in this module big enough to earn a progress line, which is why 03-patterns asks for pending, syncing, conflicted and rejected on this screen specifically." });
+
+    const dupes = this.F({ id: "D-36", name: "Duplicate confirmation", stateLabel: "populated",
+      route: "/finance/import/duplicates", frameMax: "360px", title: "Nen\u00ed to dvakr\u00e1t?",
+      lede: ded.suspects.length + " rows look like something already here \u2014 " + ded.duplicates +
+        " because two statements overlap, and " + ded.confirmed + " that is two real payments ten minutes apart.",
+      blocks: [{ label: "Zkontrolujte", rows: ded.suspects.map((s) => this.row({
+        title: s.row.desc, right: M.money(s.row.amount),
+        meta: M.fmt(s.row.date) + " \u00b7 ref " + s.row.ref,
+        markWord: s.sameRef ? "same bank reference" : "different reference",
+        markColour: s.sameRef ? "var(--status-rejected)" : "var(--accent-family-keeping)",
+        note: s.says,
+        border: s.sameRef ? "var(--status-rejected)" : "var(--border)",
+        actionLabel: s.sameRef ? "Skip it" : "Import it" })) }],
+      footer: "Never silently dropped and never silently imported. The member decides, row by row.",
+      caption: "Two coffees ten minutes apart hash identically and are both real. That is why this is a screen and not a rule." });
+
+    const resolver = this.F({ id: "D-37", name: "Finance conflict resolver", stateLabel: "populated",
+      route: "/finance/ledger/tx-13?conflict=cf-1", frameMax: "340px", title: "Kter\u00e1 \u010d\u00e1stka plat\u00ed?",
+      lede: "Vy\u00fa\u010dtov\u00e1n\u00ed elekt\u0159iny \u2014 \u010cEZ \u00b7 3 March",
+      blocks: [{ label: "Dv\u011b hodnoty", rows: [
+        this.row({ title: "450,00 K\u010d", meta: "you, 18:12, offline", actionLabel: "Keep this" }),
+        this.row({ title: "500,00 K\u010d", meta: "Petr, 18:40", actionLabel: "Keep this" })
+      ] }],
+      fields: [{ label: "Or a third amount", value: "", hint: "K\u010d", font: "var(--mono)" }],
+      footer: "Finance is the module where a conflict dialog is the correct answer, and the specification says so rather than leaving it to a default.",
+      caption: "This is Stage 5's own inbox entry, read from sync.js rather than retyped \u2014 same values, same times, same question." });
+
+    out.pageTitle = "Import, duplicates, and the one dialog";
+    out.pageMeta = ded.rows + " rows \u00b7 " + ded.suspects.length + " flagged \u00b7 " +
+      ded.duplicates + " duplicate \u00b7 " + ded.categorised + " categorised by rules";
+    out.viewIntro = "Importing is where a ledger stops being typed by hand and starts being wrong in bulk, so the wizard's two jobs are the mapping and the duplicate check. Neither can be automatic: a saved mapping makes the next statement one click, and a suspected duplicate is always a question.";
+    out.frames = [wizard, dupes, resolver];
+    out.notes = [{ text: "Member-authored rules, deliberately not machine learning: " +
+      M.importRules.map((r) => "if it contains \u201c" + r.contains + "\u201d then " + M.catName(r.category)).join("; ") +
+      ". They categorise " + ded.categorised + " of " + ded.rows +
+      " rows at import, and re-applying them to history touches " + re.changed + " of " + re.rows + " rows." }];
+    out.tables = [{
+      title: "The batch",
+      meta: "hash = account + date + amount + normalised description",
+      cols: "60px 110px minmax(180px,1.3fr) 120px 130px minmax(150px,1fr)",
+      head: [{ text: "#" }, { text: "Date" }, { text: "Description" }, { text: "Amount" },
+             { text: "Bank ref" }, { text: "Verdict" }],
+      rows: ded.applied.map((a) => {
+        const s = ded.suspects.filter((x) => x.row.i === a.row.i)[0];
+        return { cells: [
+          this.cell(String(a.row.i), { mono: true }),
+          this.cell(M.fmt(a.row.date), { mono: true, muted: true }),
+          this.cell(a.row.desc),
+          this.cell(M.money(a.row.amount), { mono: true }),
+          this.cell(a.row.ref, { mono: true, muted: true }),
+          this.cell(s ? s.verdict : (a.category ? M.catName(a.category) + " by rule" : "import, no category"),
+            { muted: !s, tone: s ? (s.sameRef ? "var(--status-rejected)" : "var(--accent-family-keeping)") : "" })
+        ] };
+      }),
+      note: "The two coffees normalise identically \u2014 case, diacritics, punctuation and trailing space all removed \u2014 which is the point of normalising and also the reason nothing in the handoff defines what normalising means."
+    }, {
+      title: "Which entities ask, and which merge",
+      meta: "the sync table",
+      cols: "minmax(180px,1.2fr) 130px minmax(240px,1.6fr)",
+      head: [{ text: "Entity" }, { text: "Policy" }, { text: "Because" }],
+      rows: M.sync.map((r) => ({ cells: [
+        this.cell(r[0], { mono: true }),
+        this.cell(r[1], { mono: true, tone: r[1] === "strict_version" ? "var(--status-conflict)" : "var(--text-muted)" }),
+        this.cell(r[2], { muted: true })
+      ] })),
+      note: conf.says
+    }];
+  }
+}
+
+</script>
+</body>
+</html>

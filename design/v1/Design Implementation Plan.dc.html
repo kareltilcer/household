@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: oklch(0.975 0.006 275); color: oklch(0.24 0.018 275); -webkit-font-smoothing: antialiased; }
+  a { color: oklch(0.48 0.13 248); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { color: oklch(0.36 0.13 248); }
+  * { text-wrap: pretty; }
+</style>
+</helmet>
+<div style="font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:16px;line-height:1.6;padding:56px 28px 120px;display:flex;flex-direction:column;align-items:center">
+<div style="width:100%;max-width:900px;display:flex;flex-direction:column;gap:0">
+
+  <div style="display:flex;flex-direction:column;gap:18px;padding-bottom:36px;border-bottom:1px solid oklch(0.88 0.01 275)">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:oklch(0.52 0.02 275);display:flex;gap:14px;flex-wrap:wrap">
+      <span>Household</span><span style="color:oklch(0.72 0.01 275)">/</span><span>Design implementation</span><span style="color:oklch(0.72 0.01 275)">/</span><span>v1 plan</span>
+    </div>
+    <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:52px;line-height:1.08;letter-spacing:-0.015em;max-width:22ch">Twenty-three stages to a clickable Household.</h1>
+    <p style="margin:0;font-size:19px;line-height:1.55;max-width:62ch;color:oklch(0.36 0.018 275)">The product of this plan is one prototype that mocks the whole application — every screen in <span style="font-family:'IBM Plex Mono',monospace;font-size:0.9em">docs/design/05-screens.md</span>, on every client, in both themes, in every state the delivery checklist names. No representative samples, no “as above”. That prototype is <a href="./Household Prototype.dc.html">Household Prototype</a>: one shell, all seventeen modules, the twelve states on a rail.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;background:oklch(0.88 0.01 275);border-bottom:1px solid oklch(0.88 0.01 275)">
+    <div style="background:oklch(0.975 0.006 275);padding:22px 20px 20px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:32px;line-height:1;color:oklch(0.48 0.13 248)">435</div>
+      <div style="font-size:13.5px;color:oklch(0.46 0.02 275);margin-top:8px">client rows in the ledger: 411 mobile and web, plus the 24 the tablet added — all drawn</div>
+    </div>
+    <div style="background:oklch(0.975 0.006 275);padding:22px 20px 20px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:32px;line-height:1;color:oklch(0.48 0.13 248)">12</div>
+      <div style="font-size:13.5px;color:oklch(0.46 0.02 275);margin-top:8px">mandatory states per data-bearing screen (<span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">02-components §0</span>)</div>
+    </div>
+    <div style="background:oklch(0.975 0.006 275);padding:22px 20px 20px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:32px;line-height:1;color:oklch(0.48 0.13 248)">17</div>
+      <div style="font-size:13.5px;color:oklch(0.46 0.02 275);margin-top:8px">modules, six accent hues, one vocabulary</div>
+    </div>
+    <div style="background:oklch(0.975 0.006 275);padding:22px 20px 20px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:32px;line-height:1;color:oklch(0.48 0.13 248)">23</div>
+      <div style="font-size:13.5px;color:oklch(0.46 0.02 275);margin-top:8px">stages, each closed on its own gate</div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px;padding:44px 0 40px;border-bottom:1px solid oklch(0.88 0.01 275)">
+    <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:30px;line-height:1.2">How “nothing is missing” is enforced</h2>
+    <p style="margin:0;max-width:66ch;color:oklch(0.30 0.018 275)">A ledger of this size cannot be kept honest by memory, so Stage 1 produces the instrument that keeps it honest and every later stage is measured against it.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px">
+      <div style="background:#fff;border:1px solid oklch(0.89 0.01 275);border-radius:10px;padding:20px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:oklch(0.48 0.13 248)">The ledger</div>
+        <p style="margin:10px 0 0;font-size:15px;color:oklch(0.30 0.018 275)">Every screen gets a stable id (<span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">A-14-m</span> = inventory group A, row 14, mobile), the source line it came from, its client, its required states and its stage. It is generated from the inventory, not from my reading of it. Where the inventory names one screen twice — <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">C-55</span> settings §6 Billing and <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">A-28</span> Manage billing are one surface reached two ways — both ids stay and the duplicate carries an alias to the route it is reached on, so no id can read as a screen nobody built.</p>
+      </div>
+      <div style="background:#fff;border:1px solid oklch(0.89 0.01 275);border-radius:10px;padding:20px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:oklch(0.48 0.13 248)">The state switcher</div>
+        <p style="margin:10px 0 0;font-size:15px;color:oklch(0.30 0.018 275)">The prototype carries a developer rail with all eight switches: client, theme, density, text scale, locale, connectivity, entitlement state and screen state. Any screen’s twelve states are reachable by switching, not by building twelve copies, and the entitlement table and the three locales drive the same element tree.</p>
+      </div>
+      <div style="background:#fff;border:1px solid oklch(0.89 0.01 275);border-radius:10px;padding:20px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:oklch(0.48 0.13 248)">The stage gate</div>
+        <p style="margin:10px 0 0;font-size:15px;color:oklch(0.30 0.018 275)">A stage closes when every ledger row assigned to it passes the <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">07-delivery §3</span> checklist — both themes, 200 % text, colour + icon + word, 44 pt targets, absence not disabling, destructive copy that names the object. An unchecked row keeps the stage open.</p>
+      </div>
+    </div>
+    <p style="margin:0;max-width:66ch;color:oklch(0.30 0.018 275)">One consequence worth stating now: <strong style="font-weight:600">the twelve states are switched, not drawn twelve times.</strong> That is what makes a 435-row ledger tractable without any of them being skipped — the state matrix is real and exercised, but it lives in the prototype’s plumbing rather than in three thousand static frames.</p>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px;padding:44px 0 40px;border-bottom:1px solid oklch(0.88 0.01 275)">
+    <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:30px;line-height:1.2">What the prototype is made of</h2>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:start;padding-bottom:14px;border-bottom:1px solid oklch(0.92 0.008 275)">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:oklch(0.48 0.13 248)">Token layer</div>
+        <div style="font-size:15px;color:oklch(0.30 0.018 275)">One file emitting primitives → semantic → component tokens as CSS custom properties, both themes on the root, dark redefining only what changes. The declared contrast pairs live here as data so they can be tested, not asserted.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:start;padding-bottom:14px;border-bottom:1px solid oklch(0.92 0.008 275)">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:oklch(0.48 0.13 248)">Component set</div>
+        <div style="font-size:15px;color:oklch(0.30 0.018 275)">The 02-components inventory, built once and reused: list row, data table, money value, sync mark, grant matrix, hold-to-complete, widget shell, reading input, and the rest. Every module screen is assembled from these; a module that needs a new component gets it added to the set, never a local copy.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:start;padding-bottom:14px;border-bottom:1px solid oklch(0.92 0.008 275)">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:oklch(0.48 0.13 248)">Fixture household</div>
+        <div style="font-size:15px;color:oklch(0.30 0.018 275)">One household with real-shaped data: Jana (owner), Petr (two modules), Adam (child, locked dashboard), Klára (<span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">none</span> on fourteen), Miloš (tablet, Garden). Three seasons of garden history, two billing periods of readings, a ledger with a settle-up. The personas are the fixtures, so the absence pattern and the grant matrix demo themselves.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:start;padding-bottom:14px;border-bottom:1px solid oklch(0.92 0.008 275)">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:oklch(0.48 0.13 248)">Three shells</div>
+        <div style="font-size:15px;color:oklch(0.30 0.018 275)">A phone shell with the fixed five (and four) destinations and a push-and-back stack; a tablet shell with the same bar and two panes; and a web shell with the persistent sidebar. Clicking is real: routes, pushes, sheets, side panels, deep links and the wrong-household resolution all work. Not React Native Web on one side and a stretched phone on the other — three presentations of one vocabulary, as <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">00-brief §1</span> requires.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:oklch(0.48 0.13 248)">One application</div>
+        <div style="font-size:15px;color:oklch(0.30 0.018 275)">All of it assembled in <a href="./Household Prototype.dc.html">Household Prototype</a>. Every screen the module files declare — all 210 of them — is collected by <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">screens.js</span> and reachable by clicking, rendering its own title, lede, fields, notice, actions and per-state words. Every one of them draws its own body, not its module’s: 146 of the 210 have a body written against their own module file in <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">screenbodies.js</span>. Of the remaining 64, forty-seven are answered per route by the four route-aware modules — Shopping, the dashboard, the account path and the platform surfaces — seven by nav and sync through <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">surfaces.js</span>, and ten are a module’s own root list, which is the body that screen should have. All of it reads the same <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">HH_TASKS</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">HH_GARDEN</span> and <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">HH_ASSETS</span> the stage artifacts are measured with, so the flow view, the tariff composer and the weekly grid are in the application rather than only in their artifact. What stays in the artifacts is the measurement — the millimetres, the fit runs, the contrast arithmetic — and every screen links to the one that measured it.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:8px;padding:44px 0 24px">
+    <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:30px;line-height:1.2">The twenty-three stages</h2>
+    <p style="margin:6px 0 0;max-width:66ch;color:oklch(0.30 0.018 275)">Stages 1–6 build the vocabulary every later screen inherits and produce no demo, exactly as <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">DS-0</span> does not. Resisting the pull to draw a beautiful Garden screen in week two is the plan’s main discipline.</p>
+    <p style="margin:6px 0 0;max-width:66ch;color:oklch(0.30 0.018 275)">All twenty-three stages are built and closed; each links to its own artifact below. The mobile and web count is frozen at 411 client rows over 2 995 required states, with zero rows unbuilt and zero states undrawn — the eighteen cells that kept Stages 5 and 6 open were drawn in Stage 20 and are credited to that file rather than back-dated. Stage 21, the one the sweep opened, closes with all 24 tablet rows drawn.</p>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:0;border-top:1px solid oklch(0.88 0.01 275)">
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">01</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">The screen ledger and the prototype skeleton</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Enumerate the inventory into the ledger — id, source line, client, required states, stage, risk. Stand up the app skeleton: routing, the state-switcher rail, the fixture household, and a coverage view that reads the ledger and shows what is not built yet. Nothing is designed in this stage; the instrument is the deliverable.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:8px;flex-wrap:wrap"><span>Gate:</span><span style="color:oklch(0.32 0.018 275)">every row in 05-screens has an id and a stage; the count is agreed and frozen</span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Prototype Skeleton.dc.html">stage 01 built · the ledger, the fixture household, the dev rail and the coverage view</a><span style="color:oklch(0.36 0.10 150)">closed — the count is frozen at 411 client rows over 2 995 required states</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">02</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Foundations — tokens, type, space, motion, density</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">The three token layers in both themes. The thirteen status tokens (aliasing allowed, absence not). The seventeen-key accent map resolving to six hues — five families plus Garden. Eight-step type scale plus the parallel mono numeric scale on a shared baseline. Three surface steps, no level three. Two densities for web, with compact defined as a column-density change so the 44 pt floor is never traded away.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:8px;flex-wrap:wrap"><span>Gate:</span><span style="color:oklch(0.32 0.018 275)">every declared pair passes 4.5:1 / 3:1 in both themes; no colour defined only in the dark block</span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Foundations.dc.html">stage 02 built · the token file in both themes, with every declared pair computed live</a><span style="color:oklch(0.52 0.02 275)">closed</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">03</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Icons and the illustration system</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">A licensed open set as the base for the general icons, bundled and never fetched. The thirty that carry meaning are <strong style="font-weight:600">drawn here, not mapped</strong>: seventeen module icons plus Today and Add, on one grid with one stroke weight, legible at 20 px in a sidebar and 28 px in a tab bar; and the thirteen status icons, load-bearing under N2, which no general library contains — nothing out there has a <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">no_history</span>, an <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">estimated</span>, or a <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">rejected</span>-versus-<span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">conflict</span> distinction. The status thirteen are drawn first and reviewed in greyscale at 16 px before any module icon starts. Then the illustration construction language as a kit of parts — one drawing language, palette drawn from the family accents — because seventeen bespoke empty states plus four Finance illustrations do not survive translation or the schedule.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:8px;flex-wrap:wrap"><span>Gate:</span><span style="color:oklch(0.32 0.018 275)">status set distinguishable in greyscale; every icon-only control has a label</span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Icons and Illustration.dc.html">stage 03 built · thirteen status icons measured in greyscale at 16 px, nineteen module glyphs, the illustration kit</a><span style="color:oklch(0.52 0.02 275)">closed</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">04</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Primitives, layout components, and the twelve-state harness</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Buttons through toasts; list row, data table, key–value block, money value, metric tile, the three chart shapes, search result row with its no-snippet and no-path variants. Then the harness: any component rendered in all twelve states from one control, which is how an undocumented state stops being an untested one.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:8px;flex-wrap:wrap"><span>Gate:</span><span style="color:oklch(0.32 0.018 275)">every data-bearing component renders twelve states in two themes at 200 % text</span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Components and States.dc.html">stage 04 built · the primitives, the nine data bodies, and the harness as 108 cells</a><span style="color:oklch(0.52 0.02 275)">closed</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">05</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">The sync, conflict and honesty vocabulary</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Offline bar, sync-state mark (absence is the synced state), pending that stays fully editable, syncing only past a designed threshold. The conflict inbox plus row-level flags — never six modals at reconnect — the resolver in the register of “you set 450, Petr set 500 at 18:40”, and the rejected-mutation resolver with its four real reasons. The retraction and withdrawn treatment. The not-enough-information form, distinguishable from a genuine zero.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:8px;flex-wrap:wrap"><span>Gate:</span><span style="color:oklch(0.32 0.018 275)">the five merge policies read as different categories of event, not five severities of one</span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Sync and Honesty.dc.html">stage 05 built · the ladder, four visible shapes, the resolvers, retraction and the honesty situations</a><span style="color:oklch(0.36 0.10 150)">closed — the conflict inbox's last three cells, loading, error and read-only, were drawn in Stage 20, and the inbox, the conflict resolver and the rejected-mutation resolver now have routes in the application rather than living only here</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.88 0.01 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">06</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Both shells and all of navigation</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">The mobile bar at five destinations and at four, both finished layouts and neither a bar with a hole in it. The web sidebar as a per-member ordered module list with global search. App bar, household switcher, section list, two-pane. Per-member arrange, with <em>hidden by me</em> recoverable and <em>absent</em> leaving no trace. The four deep-link situations, including wrong-household resolution and the neutral not-available landing.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:8px;flex-wrap:wrap"><span>Gate:</span><span style="color:oklch(0.32 0.018 275)">Klára’s app is three screens and reads as complete, not as a crippled version of Jana’s</span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Shells and Navigation.dc.html">stage 06 built · both bars, the web shell, arrange, the switcher and the four deep links</a><span style="color:oklch(0.36 0.10 150)">closed — the fifteen cells the switcher, the sidebar and arrange were short of were drawn in Stage 20, and the switcher, per-member arrange, the four deep links and the neutral not-available screen are now routed in the application</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">07</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Auth, child sign-in, account</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Sign in, register with the breached-password refusal — the hardest sentence in the product — verify email and the unverified-but-working state that explains itself at the moment it blocks. MFA enrol, challenge, recovery codes. Password reset and the session invalidation stated in words. The account-takeover notice, written calmly. Sessions and devices, where revoking discards a replica. Household code → profile → PIN, and the lockout screen a child meets alone that must not read as punishment. Account settings and account deletion’s four resolved situations. Please update, in five languages.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>21 rows · 36 client layouts</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">every failure message is generic where enumeration is possible</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Auth and Account.dc.html">stage 07 built · the failure register, the twenty-one screens, the child path and the gate computed from the register</a><span style="color:oklch(0.36 0.10 150)">closed — sessions and account settings declare the four states a per-user surface cannot reach, and are drawn in all eight that remain</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">08</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Household, invitation, the grant matrix, billing, privacy</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Create household from confirmed device defaults. The invitation composer carrying a seventeen-row grant matrix before the person exists, and the acceptance screen that shows exactly what is being given — the highest-value screen in the whole phase and the one that gets the most iteration. Six banner states, <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">active</span> showing nothing, the suspended lockout that is not a banner and carries no export button. Subscribe and manage billing, take over billing. The Phase-0 half of household settings, storage against allowance with derived overhead, restrict sitting next to export rather than billing, sync health, the diagnostic bundle rendered before it is sent, the privacy centre and export.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈45 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">the grant matrix is comprehensible on a phone with no legend; lifting a restriction names the state it lands in</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Household and Billing.dc.html">stage 08 built · the eight states as one table, the seventeen-row matrix in plain words, and seven checks computed from both</a><span style="color:oklch(0.36 0.10 150)">closed — every row drawn in all of its reachable states; seven checks computed, and the two enumeration questions this stage raised are settled</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">09</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Shopping, end to end, as the proving ground</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Lists overview, the list with an always-focused quick-add that turns one line into three items, checked items collapsed at the bottom rather than gone, store-layout order, staples, item detail with every field optional. The trip summary with its optional Finance offer, and the first screen in the product to draw an edit affordance that is present online and unavailable offline, in words. The two-trolley case, with no conflict dialog shown to anyone. The teaching empty state that becomes the template for sixteen more.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈16 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">usable one-handed, in bad light, with no signal; check-off is one tap</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Shopping.dc.html">stage 09 built · the live list, the parser with its test table, the two-trolley merge and the empty-state template</a><span style="color:oklch(0.36 0.10 150)">closed — ten checks pass, computed from shopping.js or measured live; four rows declare conflicted unreachable and the list keeps it</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">10</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Dashboard, the widget shell, and all twenty-four widgets</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">The ordered list at 2 / 4 / 6 columns, <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">large</span> taking two rows on a phone so three sizes have three outcomes. Twenty-four interactive widgets — hold-to-complete works inside them and actions call the owning module. Catalog and arrange, offering only granted modules. Owner default with the dismissible adopt notice for a member who customised. Child layout suggested or locked, arrange affordances absent rather than disabled. The per-widget unavailable state that never blanks the screen.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>10 rows · 17 client layouts</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">reflow is deterministic from the ordered list alone at all three widths</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Dashboard and Widgets.dc.html">stage 10 built · the live dashboard, the reflow run at three widths, and all twenty-four widgets</a><span style="color:oklch(0.36 0.10 150)">closed — twelve checks pass, and the twenty-four keys the ledger called missing were in the seventeen module pages all along</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">11</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Today, the Add sheet, global search, and the help model</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Today as five groups with conditional alerts on top, a group with nothing in it not rendered at all, every row carrying its source module chip and opening the source entity — and complete offline. The Add sheet on a slow-moving window with a non-arbitrary cold-start set, never reordering while open. One search result row for every module, with grants applied before ranking. The in-app help content model, so the later modules author help as they are designed instead of retrofitting it in five languages at the end.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈12 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">a quiet day is a short screen, not five empty headings</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Today and Cross-cutting Screens.dc.html">stage 11 built · Today for four members, a live search field, the sheet's two rankings and the help model</a><span style="color:oklch(0.36 0.10 150)">closed — fifteen checks pass across 33 client layouts; every reachable state drawn, and the empty-heading count measured in the page's own DOM</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">12</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Reminders and Tasks</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">The unified list across every module, overdue first, grouped by week. The own-reminder editor where <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">due_on</span> is a day and not an instant. Twenty-one subscription kinds with lead times — designed defaults first, then the screen for the minority who change them. Personal snooze even when completion is shared. Tasks: board, card detail, four starter templates, labels, checklist, comments with mentions, cross-board move, and a column editor that surfaces <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">kind</span> without making it jargon.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈18 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">drag ordering never produces a conflict dialog; hold-to-complete has its keyboard path</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Reminders and Tasks.dc.html">stage 12 built · the twenty-one kinds collected, the unified list, the recurrence table and the drag merge</a><span style="color:oklch(0.36 0.10 150)">closed — twenty-one checks pass; 108 cells across twelve rows, and the two enumeration gaps this stage was blocked on are resolved</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">13</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Notes and Documents</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Tree browser with the root switcher as first-class navigation, not a filter. WYSIWYG with a raw Markdown toggle, two-scope pinning, and the banner offering the preserved overwritten body for thirty days. Documents: upload including from the camera, detail with preview, thumbnail, raw and download, the download-only state for active types, type and expiry, bulk move / archive / zip / delete, the storage split with derived overhead and what deleting would recover, and the reference warning that names what points at the file rather than blocking.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈24 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">a renamed slug lands on a 404 that explains itself; attachment rows exist before their bytes</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Notes and Documents.dc.html">stage 13 built · the two roots, the resolver, the serving matrix and the meter</a><span style="color:oklch(0.36 0.10 150)">closed — twenty-five checks pass; 101 cells across fourteen rows, and the two 404 bodies compared as strings rather than by eye</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">14</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Chores, the activity log, and the notification composer</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Today mine-first, the weekly grid that must survive twelve members at 200 % text and pivot on mobile, all chores, the editor with four schedule kinds and four assignment modes, the points ledger where every award has a reason and an actor, rewards and redemption, verification, swap. Skip and snooze, overdue shown once and then quiet, and the owner-facing stale-chore prune. No leaderboards. The activity log as a feature rather than a log file, with cross-module entity timelines, field diffs and its needs-connection state. Then the notification composer — the most business-software-shaped screen in a consumer product, biased hard toward picking household-meaningful events over composing predicates.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈24 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">Adam’s chores read as his product, not as assigned work</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Chores, Activity and Notifications.dc.html">stage 14 built · the rotation, the log and the composer</a><span style="color:oklch(0.36 0.10 150)">closed — 151 cells across sixteen rows; Adam’s screens counted rather than described</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">15</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Utilities</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Four-step setup ending in “enter what you know”. Services overview showing balance or headroom. Service detail in three modes, upgradeable with nothing lost. The cellar screen: per-register fields sized to the meter’s own digits and decimals, a date, an optional photo, a client-side pre-check that questions a low value at the meter, and a pending state that stays until the server takes it. The tariff composer designed as transcribing a bill, in the words printed on that country’s bill, never as a formula editor. Advances by month key, billing period and settlement in both money and units, the blocked state with the form pre-filled and no estimated value, and headroom, which is computable on day one with no consumption data at all.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈20 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">eleven component types expressible without a formula language; estimated readings never enter a money figure</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Utilities.dc.html">stage 15 built · the tariff engine, the cellar and three ways of refusing a number</a><span style="color:oklch(0.36 0.10 150)">closed — twenty-four checks pass; eleven types priced with zero expression fields, and 151 cells across nineteen rows</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">16</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Finance</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Setup step one — “how does your household handle money?” — as four illustrated answers, the module’s most important screen and the reason the illustration language is settled two stages earlier. The flow view: N sources to M accounts, reconciling exactly, readable on a phone, planned beside posted, and never implying the app moved anybody’s money. The allocation editor with a live worked example on real numbers and exactly one remainder per source, refused at save by name. Ledger, expense editor with five split methods and a deterministic last minor unit, balances with both the simplified and the pairwise set, budgets, recurring with price history and the cancellation-window reminder, the import wizard, and the one module where a conflict dialog is the right answer.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈28 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">the flow view reconciles and fits a phone; €10 three ways is 3.34 / 3.33 / 3.33 every time</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Finance.dc.html">stage 16 built · the allocation engine, the flow view and one ledger</a><span style="color:oklch(0.36 0.10 150)">closed — thirty checks pass; the flow view fits 360 px where a node diagram needs 1 694, and 131 cells across eighteen rows</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">17</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Garden, and the print stylesheet</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Three tiers over one data model, <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">beds</span> designed first because it is the median European garden. A <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">pots</span> household never sees a bed, a season or a rotation check, and moving up a tier reveals rather than migrates. Setup that asks for a place and snaps the pin to two decimals in front of the member. Catalog browser with per-field provenance, household overrides shown as overrides, planting editor, generated tasks with tombstones, drift that changes no planned window, the eleven-check panel with its dismissal and its explicit no-history state, season copy as a dry run shown before the season exists, season close, storage log edited in place, and the frost warning. Plus the print stylesheet and Garden’s two layouts as their own line of work.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈24 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">this month’s work prints with real checkboxes and reads from a garden pocket</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Garden.dc.html">stage 17 built · the tier model, the eleven checks and two sheets of paper</a><span style="color:oklch(0.36 0.10 150)">closed — thirty-nine checks pass; the tier walk changes zero rows, the eleven checks block zero saves, and the month sheet is 201,5 mm of 269</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">18</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Calendar</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Month, week, day and agenda — agenda the mobile default, month the web default. The event editor and the three-choice occurrence edit, each choice stating its own consequence. Participants and RSVP, the who-overlay by member colour, and busy blocks that are unmistakable and uninspectable. Then the connection screens, which are privacy screens: per-remote-calendar direction and scope with busy-only offered first, the recipient named at the moment of connecting, connection health with a staleness badge, external conflict resolution where the loser is preserved, and a disconnect that asks what to do with the mirrored events. Never available to a child profile.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈18 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">a private event’s busy block is a real synced row and works offline</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Calendar.dc.html">stage 18 built · four views, the occurrence model and the privacy screens</a><span style="color:oklch(0.36 0.10 150)">closed — twenty checks pass; the busy row is five fields with nine dropped, the month cell gives 46 px against a 50 px time label, and 99 cells across fourteen rows</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.92 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">19</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Property, Vehicles, Pets — and Chat</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">One asset engine, three vocabularies, rendered three times: entity list, detail, service schedule editor on interval or usage or whichever comes first, service history, usage log. People look for their car under “car”. Property adds the country starter checklist, contractors, meter locations, and the printable insurance inventory that becomes the most valuable thing in the app on exactly one very bad day. Vehicles adds statutory dates per country, notice-period insurance renewal, a fuel and charging log with correct partial fills, and a bike variant that never asks for a plate. Pets must not read like asset management: doses ticked and shared, a daily routine that resets, the vet card one tap from the top, and a gentle deceased flow. Chat: threads, the floor, attachments with async thumbnails, custody transfer into Documents, and the four-tab layout that looks designed rather than broken.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>≈39 screens</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">Pets is the screen you hand to whoever is looking after them</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Property, Vehicles, Pets and Chat.dc.html">stage 19 built · one engine, three vocabularies, and the floor</a><span style="color:oklch(0.36 0.10 150)">closed — thirty-nine checks pass; twenty-two asset words absent from every Pets string, two full-to-full fuel intervals agreeing to 0,00 l/100 km, and 1,11 GB moving out of the chat prefix with the household total unmoved</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.88 0.01 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.52 0.02 275);padding-top:2px">20</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Conformance sweep and the walkthroughs</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Reconcile the ledger to zero unbuilt rows. Then the sweeps the checklist demands rather than hopes for: both themes on every route, 200 % text, English and Czech side by side so the layout survives the longer one and the diacritics clear the cap height, contrast pairs re-run after every late colour, focus order and labels, 44 pt in compact too. Finally the five persona walkthroughs as guided clickable paths — Jana’s five-minute first run, Petr’s two modules, Adam’s locked dashboard, Klára’s three screens, Miloš on a tablet — because a prototype nobody can walk through is a screen archive.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>Gate: <span style="color:oklch(0.32 0.018 275)">zero ledger rows unbuilt, zero states undrawn, five walkthroughs clickable end to end</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Conformance and Walkthroughs.dc.html">stage 20 built · the last thirty-two cells, the sweeps and the five paths</a><span style="color:oklch(0.36 0.10 150)">closed — 411 mobile and web rows, 2 995 states, zero unbuilt; all fourteen checks pass, and the five paths are walked in <a href="./Household Prototype.dc.html">the application</a> from the rail, step by step, rather than read as a list</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.88 0.01 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">21</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">The tablet as a third client</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">The stage the sweep opened, and the stage that finally moved the screens into the application. All 210 screens the module files declare are routed to and reachable by clicking — the seven cross-cutting screens Stages 5 and 6 drew and never routed among them, each rendering its own declared chrome and its own per-state words; the twelve states are switched from the rail on every one of them. And the tablet becomes a client of its own rather than the wide reading of the mobile shell that Stage 20 had to assume: an 834 px shell with the tab bar of a phone and the two panes of a desktop, a four-column dashboard reflow that is neither the phone’s two nor the web’s six, and list-and-detail side by side wherever a module has both. It does not add a row to every screen — it adds a client row to the twenty-four whose tablet layout is not the wide mobile one, each with the reason in the ledger. Eighteen of them are the shell itself; the six that are layouts rather than measures — dashboard arrange on four columns, per-member arrange in two, the weekly grid without its pivot, month, week, and the flow view read node-major — are drawn in the application from the fixtures their stage artifacts measure, and each states what the tablet reading changes and what it costs at 200 % text. Print targets stay client-neutral, and the two client-neutral components the tablet touches are redrawn in place rather than counted twice.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>210 screens routed · 24 tablet rows · 243 states</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">every declared screen reachable by clicking, every declared tablet row drawn, and no row declared without a reason it differs</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Household Prototype.dc.html">stage 21 built · the application: 210 screens, three clients, twelve states on a rail</a><span style="color:oklch(0.36 0.10 150)">closed — 210 of 210 screens routed and 24 of 24 tablet rows drawn; the flow view's open question answered at 834 px rather than deferred</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.88 0.01 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">22</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">A body per route, not a body per module</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">The stage Stage 21 opened by closing. Routing all 210 screens exposed what routing alone does not fix: a module asked for a surface returned the same list on every one of its routes, so 146 screens carried their module’s body rather than their own. 172 routes are now written against their own module file — the tariff composer prices its stretch, the weekly grid draws its own week, the flow view reconciles — reading the same <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">HH_TASKS</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">HH_GARDEN</span> and <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">HH_ASSETS</span> the stage artifacts are measured with. The 38 that still read a module body are answered per route by that module, so no route in the product draws another’s body. It adds no ledger row: it redraws bodies for rows Stage 21 already counted, which is why its gate is a drawing rather than a count.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>172 bodies · 0 new rows</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">no module answers the same way on two of its routes</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Household Prototype.dc.html">stage 22 built · screenbodies.js, a body per declared route</a><span style="color:oklch(0.36 0.10 150)">closed — 172 written per route, the remaining 38 answered per route by their own module, and no two routes draw the same body</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:62px 1fr;gap:0 22px;padding:26px 0;border-bottom:1px solid oklch(0.88 0.01 275);background:oklch(0.955 0.008 275)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;line-height:1;color:oklch(0.48 0.13 248);padding-top:2px">23</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.005em">The words, the second language, and a sweep that reads the application</h3>
+        <p style="margin:0;font-size:15px;color:oklch(0.32 0.018 275)">Three things the earlier stages left, and the fourth is the reason the first three were findable. The copy deck: 64 screens could reach a state they had no sentence for, so 152 cells fell through to the shell's generic wording — the one thing <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">03-patterns §2</span> forbids. All 152 are authored against their own screen, in English and Czech. The second language: “Czech ships first” had been implemented for the chrome only, so every one of the 210 declared screens now carries a Czech and a German title and a Czech lede, and the rail's locale switch changes the screen rather than the frame around it. The fourteen requirement gaps: eleven were places where the prototype had already picked and the requirement needed a sentence, and the sentence is now written next to the screen that raised it; the two content catalogs are enumerated — fourteen shopping categories with their aisle word in two languages and a keyword list per language, and the document type table given a column per country, CZ and DE written; the one number is stated, nineteen search scopes across fifteen of seventeen modules, asserted by <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">scopeAudit()</span> rather than claimed. And the sweep itself: four new checks that read the application instead of the ledger's own flags, because <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">built</span> and <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">drawn</span> were data somebody authored, and a coverage check that reads them proves only that the file agrees with itself.</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:oklch(0.50 0.02 275);display:flex;gap:16px;flex-wrap:wrap"><span>152 sentences · 420 titles · 14 gaps closed</span><span>Gate: <span style="color:oklch(0.32 0.018 275)">every state a screen can reach carries that screen's own words, measured on the built output</span></span></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><a href="./Conformance and Walkthroughs.dc.html">stage 23 built · the copy deck, the second language, and the measured sweep</a><span style="color:oklch(0.36 0.10 150)">closed — 210 routes resolved from what the code returns rather than from a flag, 903 of 903 state cells in the screen's own words, no two routes drawing the same body, and all eighteen checks passing</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:18px;padding:48px 0 40px;border-bottom:1px solid oklch(0.88 0.01 275)">
+    <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:30px;line-height:1.2">The four long-lead threads</h2>
+    <p style="margin:0;max-width:66ch;color:oklch(0.30 0.018 275)">Four bodies of work are not screens and do not belong to a module, so they run as threads across the stages above rather than as a stage of their own. Each is opened at the stage where its first consumer appears and stays open until its last one is drawn.</p>
+    <div style="display:flex;flex-direction:column;gap:0">
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The thirty icons <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 3 → 19</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">Status thirteen drawn and greyscale-reviewed in Stage 3, before the sync vocabulary that rests on them. Module icons drawn in Stage 3 on the same grid and revisited once per module stage, since an icon is only really tested next to its own screen. Stage 20 closed the thread from the other side: four shells’ focus order run against the twenty-eight registered icon labels, with none missing.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The illustration kit <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 3 → 17</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">Construction language and parts kit in Stage 3. Its first real test is now behind it — Shopping’s teaching empty state is composed from three of its parts in Stage 9, and drops out entirely at 200 % text. Its hardest is now behind it too: Finance setup step one in Stage 16 composes three of its four answers from the kit, and the fourth answer turns out to be a control rather than an answer — so the kit’s <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">allowance</span> composition has no answer to attach to. Composed from the kit each time, never redrawn. Stage 17 added the three Garden tier answers to it and kept its own rule doing the work: <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">bars</span> appears in exactly one of the four Garden compositions, the plot tier — the only tier with history to check against.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">Empty-state copy <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 9 → 19</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">Seventeen states, each one sentence, one example, one action. Shopping’s is written, and the template it commits the rest to is four contract lines and four prohibitions; the other sixteen are written in their own module’s stage, alongside the screen they teach — which is the only stage at which the sentence can be checked against what the module actually does. Stage 10 added a second half nobody had counted: every widget that can be empty needs the same three lines inside a much smaller frame. Stage 18 found the reverse case: Calendar’s day view is empty often and legitimately, so its sentence teaches nothing and says the quiet day out loud instead — the one empty state in the set that is not an invitation.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275);border-bottom:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">In-app help <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 11 → 19</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">The content model and its three surfaces in Stage 11 — inline hint, expandable, panel. Every module stage after it authors its own help as part of the screen, so the five hard screens the handoff names arrive with theirs already written. Stage 18 added two of the five and the rule held without an argument: the connection scope explains a mechanism, so the content forces a panel, while “what is Obsazeno” fits one line and becomes an inline hint.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:18px;padding:48px 0 40px;border-bottom:1px solid oklch(0.88 0.01 275)">
+    <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:30px;line-height:1.2">The six screens that will take the longest</h2>
+    <p style="margin:0;max-width:66ch;color:oklch(0.30 0.018 275)">Named here so their cost is planned rather than discovered. Each one gets iteration budget inside its stage, and each is reviewed before the rest of its stage proceeds.</p>
+    <div style="display:flex;flex-direction:column;gap:0">
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">Invitation acceptance <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 8</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">The product’s first impression for four of five personas, rendering a seventeen-row grant matrix comprehensibly on a phone. Closed in Stage 8: seventeen rows of plain words with no legend, and seven checks computed from the same table the banners are derived from.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The tariff composer <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 15</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">Eleven component types, ordering and compounding tax, filled in by a person holding a paper bill. Closed in Stage 15: all eleven priced with zero expression fields on the screen.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The Finance flow view <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 16</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">The hardest single visual in the product: N-to-M money movement, exact reconciliation, phone-readable, planned beside posted. Closed in Stage 16: the stage-major row fits 360 px where the node-major reading of the same nodes needs 1 694.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The reading entry screen <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 15</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">Used standing in a cellar with no signal. The module’s most important layout, and the clearest test of the sync vocabulary. Closed in Stage 15: three ways of refusing a number, and no estimated reading reaches a money figure.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The tier model <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 17</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">Three Gardens over one data model, where moving up must reveal and never migrate. Closed in Stage 17: the tier is a read filter over sixteen surfaces, and walking plot → beds → pots → beds → plot leaves the same seven row counts each time.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275);border-bottom:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The notification composer <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.52 0.02 275)">St. 14</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">An owner-facing rule builder that must not become business software. Picking beats composing. Closed in Stage 14, drawn as a pick from household-meaningful events rather than a predicate editor.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:18px;padding:48px 0 0">
+    <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:30px;line-height:1.2">Scope, settled</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:oklch(0.88 0.01 275);border:1px solid oklch(0.88 0.01 275);border-radius:10px;overflow:hidden">
+      <div style="background:#fff;padding:20px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px">Three clients, in full</div>
+        <p style="margin:0;font-size:14.5px;color:oklch(0.36 0.018 275)">Two at first, three after the sweep. Every screen that exists on more than one client gets each presentation — native-feeling layouts of one vocabulary, never a phone stretched to 1440 px. The tablet is counted where it actually differs rather than on every row. Both themes on every screen, switchable, and the twelve states reached from a developer rail rather than drawn as static frames.</p>
+      </div>
+      <div style="background:#fff;padding:20px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px">English, with Czech spot-checks</div>
+        <p style="margin:0;font-size:14.5px;color:oklch(0.36 0.018 275)">Copy is written as if it were keys, and the second-language check is Czech — it tests both string length and the <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">Ď Ř Ě</span> ascenders at 200 %. Five full languages in the prototype is a different, larger piece of work.</p>
+      </div>
+      <div style="background:#fff;padding:20px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px">The thirty icons are drawn, not mapped</div>
+        <p style="margin:0;font-size:14.5px;color:oklch(0.36 0.018 275)">Confirmed. A bundled open set covers the general icons; the seventeen module and thirteen status icons are drawn on one grid in Stage 3. Status first, reviewed in greyscale, because N2 rests on them.</p>
+      </div>
+      <div style="background:#fff;padding:20px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px">Illustration as a kit, not artwork</div>
+        <p style="margin:0;font-size:14.5px;color:oklch(0.36 0.018 275)">The construction language and its parts kit are built in Stage 3; the four Finance answers and the seventeen empty-state compositions are assembled from it in their own stages. The kit is geometric — shapes, strokes, the family-accent palette — not rendered drawing, which is what makes seventeen of them survive translation and a schedule.</p>
+      </div>
+      <div style="background:#fff;padding:20px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px">One fixture household</div>
+        <p style="margin:0;font-size:14.5px;color:oklch(0.36 0.018 275)">Five personas in one dataset, plus a second household so the switcher and the wrong-household deep link are real. Not a second dataset per module.</p>
+      </div>
+      <div style="background:#fff;padding:20px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px">Nothing relitigated</div>
+        <p style="margin:0;font-size:14.5px;color:oklch(0.36 0.018 275)">The fifteen DD decisions and everything the PRD settled are inputs. The one open question — Chat in the UK — is handled by the four-tab layout, which is drawn either way.</p>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:18px;padding:48px 0 0;border-top:1px solid oklch(0.88 0.01 275);margin-top:48px">
+    <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:30px;line-height:1.2">What is left</h2>
+    <p style="margin:0;max-width:66ch;color:oklch(0.30 0.018 275)">On mobile and web, zero rows unbuilt and zero states undrawn, and all eighteen sweep checks pass. Every one of the 210 declared screens is reachable by clicking inside the application — the last seven to arrive were the cross-cutting screens Stages 5 and 6 had drawn but never routed — and all 24 tablet rows are drawn. Each of them now draws its own body rather than its module’s list: 172 routes are written out one by one in Stage 22 and the 38 that still read a module body are answered per route, so no two routes in the product draw the same body. The ledger’s own arithmetic is 219 ids against those 210 routes: 199 are screens, 198 of them routed and <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">C-55</span> aliased to <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">A-28</span>’s route rather than counted as unbuilt, and the other 20 are components, state sets, a widget set and the three print sheets — twelve of which carry a route of their own. The fourteen requirement gaps that stood here are closed in Stage 23, and the four checks that stage added measure the application rather than the ledger's own flags: 903 of 903 state cells resolve to the screen's own words, 210 of 210 routes resolve to a body, and no two of them return the same one.</p>
+
+    <div style="background:#fff;border:1px solid oklch(0.89 0.01 275);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:oklch(0.36 0.10 150)">Fixed in the token file</div>
+      <div style="font-size:15px;color:oklch(0.30 0.018 275)">Four post-Stage-2 colour spends were status tokens used under their own name rather than the token they alias, and were outside the declared pair list — CI was testing the alias and not the name. All thirteen status names are now declared on all three grounds.</div>
+      <div style="font-size:15px;color:oklch(0.30 0.018 275)"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">title-1</span> gave 35,4 px of line box against the 36,6 px <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">ď</span> and <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">ů</span> need, which collided the moment a Czech or German title wrapped. Its line-height is 1,22, and nothing in English moved. All eighteen checks now pass — the fourteenth being the one Stage 21 added, which counts the tablet rather than assuming it, and the last four the ones Stage 23 added, which read what the code returns rather than what the ledger says about it.</div>
+    </div>
+
+    <h3 style="margin:14px 0 0;font-size:19px;font-weight:600;letter-spacing:-0.005em">Twelve decisions, taken</h3>
+    <div style="display:flex;flex-direction:column;gap:0">
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">Czech ships first</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">The seventeen module names, the twelve state words and the whole of Help are written in Czech first: the module list, the state words on the rail and all nineteen help entries carry both languages, and the shell's own chrome carries three. Stage 23 finished the half the chrome had left: all 210 declared screens carry a Czech and a German title, and every screen whose module file wrote an English lede carries a Czech one, so the rail's locale switch changes the screen rather than the frame around it. German ledes are deliberately not authored — German is the length test, and the test runs on the titles and the chrome, which are the strings sitting in fixed-width slots. The measured sweep counts that rather than leaving it to be assumed.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">Polish and Slovak</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)"><em>Please update</em> is English, German, Czech, Polish and Slovak. All five are written and drawn; the placeholders are gone.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">Search needs a connection</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">The field says so plainly rather than searching a partial replica and looking broken. It is the one read in the product that is allowed to admit it is a server read, and the sentence is part of the honesty vocabulary rather than an error.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">Cadence is per service</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">Set next to the meter on service detail, not once for the household: 31 days for electricity and gas, 183 for water, 61 for the garden submeter, none for the three bills-only services. The fixture already carried the field; now a screen offers it.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">One reading date, whichever is sooner</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">The reminder and the widget read one field, and the row says which anchor produced it. A cadence date already gone makes the reading overdue; it does not move the next one into the past.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The lead-time set stays</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">0d to 3m plus custom, and the passport’s six months and the contract’s notice period show as custom values. The screen is designed so custom reads as an ordinary answer rather than an escape hatch.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">A done chore is done for everybody</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">chores.due</span> becomes household scope and the rotation decides whose row it is. Adam takes the bins out and the occurrence clears for every subscriber — the rotation says whose turn it is, not whose obligation it is.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The first-run dashboard is six</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">The six Stage 10 proposed, all from modules that need no setup of their own, so a household’s first screen has something true on it before anybody has configured anything.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">One price, in euro</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">There are no local anchors: the subscription is priced and billed in EUR in every market, so this Czech household sees €4.99 on subscribe, manage billing and take-over. Its own money is untouched — Finance and Utilities still count in CZK.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">Balances name only who can see them</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">A share may only name a member who holds Finance, so the split picker offers those members and refuses the rest by name the way Tasks refuses an assignee. One consequence: with one holder in this fixture, settle-up needs a second Finance grant to be exercised at all.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275)">
+        <div style="font-weight:600;font-size:15px">The tablet is a third client <span style="font-family:'IBM Plex Mono',monospace;font-weight:400;font-size:12px;color:oklch(0.48 0.13 248)">stage 21</span></div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">The one answer that opened work rather than closing it, and it is now a stage with a count. Twenty-four rows gain a tablet client row — the shell, the two-pane surfaces, the dashboard reflow, the board, the weekly grid, the calendar grids and the flow view — each with the reason its tablet layout is not the wide mobile reading. All twenty-four are drawn in the application, the last six as layouts of their own rather than measures of the phone's.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid oklch(0.92 0.008 275);border-bottom:1px solid oklch(0.88 0.01 275)">
+        <div style="font-weight:600;font-size:15px">No Add tab with nothing to add</div>
+        <div style="font-size:15px;color:oklch(0.32 0.018 275)">A member who holds contribute nowhere ranks nothing, so the tab is absent and the bar re-solves to four slots the way it does without Chat — absence rather than a surface whose whole content is a refusal. All five fixture members hold contribute somewhere, so the four-slot bar in this household is still the one without Chat.</div>
+      </div>
+    </div>
+    <p style="margin:0;max-width:66ch;color:oklch(0.30 0.018 275)">Nothing stays unresolved in the ledger: the fourteen that did are settled in Stage 23, counted from the same status lines that carried them open. The eleven where the prototype had already picked now carry the sentence — <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">FR-SH3</span> wins the comma split and <span style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">FR-SH2</span>'s illustration is the line that changes; dedup normalisation folds diacritics, lowercases, strips punctuation and collapses whitespace and does nothing further; the adjustments come out before the split so the odd unit falls on the equal part; a meter conversion blocks a stretch exactly as a tariff change does; a zip leaves the pending file out by name; only a member who can open the card can be mentioned; a child's private root stays navigable and never enters a query. The two content catalogs are enumerated — fourteen shopping categories with their aisle word in Czech and German and a keyword list per language, staple thresholds stated as four clears in nine weeks with five offered, and the eleven-type document table given a column per country with CZ and DE written. The one number is stated: nineteen search scopes across fifteen of seventeen modules, with the two silent ones owning no searchable text. Every line is recorded next to the screen that raised it in <a href="./Prototype Skeleton.dc.html">the coverage view</a>.</p>
+      </div>
+
+</div>
+</div>
+</x-dc>
+</body>
+</html>

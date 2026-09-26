@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./icons.js"></script>
+<script src="./components.js"></script>
+<script src="./nav.js"></script>
+<script src="./sync.js"></script>
+<script src="./auth.js"></script>
+<script src="./household.js"></script>
+<script src="./shopping.js"></script>
+<script src="./dashboard.js"></script>
+<script src="./spine.js"></script>
+<script src="./reminders.js"></script>
+<script src="./tasks.js"></script>
+<script src="./notes.js"></script>
+<script src="./documents.js"></script>
+<script src="./chores.js"></script>
+<script src="./activity.js"></script>
+<script src="./notify.js"></script>
+<script src="./utilities.js"></script>
+<script src="./finance.js"></script>
+<script src="./garden.js"></script>
+<script src="./calendar.js"></script>
+<script src="./assets.js"></script>
+<script src="./chat.js"></script>
+<script src="./ledger.js"></script>
+<script src="./surfaces.js"></script>
+<script src="./screenbodies.js"></script>
+<script src="./screencopy.js"></script>
+<script src="./screens.js"></script>
+<script src="./conformance.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .sc-interp { white-space: inherit; text-wrap: inherit; text-overflow: inherit; overflow: hidden; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:242px;flex:0 0 242px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">The last stage</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Conformance sweep, and the walkthroughs</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent)">{{ stageLine }}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="8">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">Every figure on this page is arithmetic over the token file, the shells and the fixture. Where a number is a bracket rather than a measurement, the bracket is drawn.</div>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger &middot; coverage</a>
+      <a href="./Foundations.dc.html" style="font-family:var(--mono);font-size:11px">stage 2 &middot; the token file</a>
+      <a href="./Shells and Navigation.dc.html" style="font-family:var(--mono);font-size:11px">stage 6 &middot; the three rows this stage finished</a>
+      <a href="./Sync and Honesty.dc.html" style="font-family:var(--mono);font-size:11px">stage 5 &middot; the fourth</a>
+      <a href="./Property, Vehicles, Pets and Chat.dc.html" style="font-family:var(--mono);font-size:11px">&larr; stage 19 &middot; assets and chat</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+
+      <p style="margin:0;max-width:82ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="0">
+        <div style="border-left:2px solid var(--accent);padding:2px 0 2px 12px;max-width:82ch;font-size:13.5px;line-height:1.6;color:var(--text-primary)">{{ n.text }}</div>
+      </sc-for>
+
+      <sc-if value="{{ hasPreview }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ preview.barLabel }}</div>
+            <div style="width:360px;max-width:100%;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface-raised);box-shadow:var(--shadow-1);display:flex;overflow:hidden">
+              <sc-for list="{{ preview.tabs }}" as="t" hint-placeholder-count="5">
+                <span style="flex:1 1 0;min-width:0;padding:10px 4px 12px;display:flex;flex-direction:column;align-items:center;gap:4px;border-right:1px solid var(--divider)">
+                  <span style="width:20px;height:20px;border-radius:5px;background:{{ t.glyph }}"></span>
+                  <span style="max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:{{ preview.tabPx }};color:{{ t.tone }}">{{ t.label }}</span>
+                </span>
+              </sc-for>
+            </div>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted);max-width:360px;line-height:1.5">{{ preview.barNote }}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ preview.sideLabel }}</div>
+            <div style="width:260px;max-width:100%;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface-raised);box-shadow:var(--shadow-1);padding:10px 14px;display:flex;flex-direction:column;gap:2px">
+              <sc-for list="{{ preview.modules }}" as="m" hint-placeholder-count="6">
+                <span style="display:flex;gap:8px;align-items:center;min-height:44px;padding:4px 0;border-bottom:1px solid var(--divider)">
+                  <span style="flex:0 0 auto;width:20px;height:20px;border-radius:5px;background:{{ m.glyph }}"></span>
+                  <span style="min-width:0;font-size:{{ preview.sidePx }};line-height:1.3;color:{{ m.tone }};overflow-wrap:anywhere">{{ m.label }}</span>
+                </span>
+              </sc-for>
+            </div>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted);max-width:260px;line-height:1.5">{{ preview.sideNote }}</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-for list="{{ meterGroups }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:14px 16px;display:flex;flex-direction:column;gap:9px">
+            <sc-for list="{{ g.meters }}" as="m" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:minmax(120px,220px) 1fr minmax(90px,auto);gap:12px;align-items:center;min-width:0">
+                <span style="font-size:12.5px;line-height:1.35;color:var(--text-primary);min-width:0;overflow-wrap:anywhere">{{ m.label }}</span>
+                <span style="height:14px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:3px;display:block;position:relative;min-width:0">
+                  <span style="position:absolute;left:0;top:0;bottom:0;width:{{ m.pct }};background:{{ m.tone }};border-radius:2px"></span>
+                  <span style="position:absolute;top:-3px;bottom:-3px;left:{{ m.limitPct }};width:2px;background:var(--text-primary);opacity:0.55"></span>
+                </span>
+                <span style="font-family:var(--mono);font-size:11px;color:{{ m.tone }};white-space:nowrap">{{ m.value }}</span>
+              </div>
+            </sc-for>
+            <div style="font-size:12px;line-height:1.6;color:var(--text-muted);max-width:82ch">{{ g.note }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:20px;align-items:start">
+        <sc-for list="{{ frames }}" as="f" hint-placeholder-count="0">
+          <div style="display:flex;flex-direction:column;gap:9px;min-width:0">
+            <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--accent)">{{ f.id }}</span>
+              <h3 style="margin:0;font-size:14px;font-weight:600">{{ f.name }}</h3>
+              <span style="font-family:var(--mono);font-size:10px;color:{{ f.stateTone }}">{{ f.stateLabel }}</span>
+            </div>
+            <div style="border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }};min-width:0">
+              <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.route }}</span>
+                <span style="flex:0 0 auto">{{ f.clientLabel }}</span>
+              </div>
+              <sc-if value="{{ f.hasBar }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.45em 0.75em;background:var(--surface-sunken);color:{{ f.barTone }};font-family:var(--mono);font-size:0.62em;border-bottom:1px solid var(--divider)">{{ f.barText }}</div>
+              </sc-if>
+              <div style="flex:1 1 auto;padding:1em 0.9em;display:flex;flex-direction:column;gap:0.7em;min-width:0">
+                <div style="font-size:1.02em;font-weight:600;line-height:1.25">{{ f.title }}</div>
+                <sc-if value="{{ f.hasLede }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ f.lede }}</div>
+                </sc-if>
+                <div style="font-size:0.8em;line-height:1.55;color:var(--text-primary)">{{ f.body }}</div>
+                <sc-for list="{{ f.rows }}" as="r" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.6em;align-items:baseline;justify-content:space-between;border:1px solid var(--border);border-left:3px solid {{ r.rule }};border-radius:var(--radius-card);background:var(--surface-raised);padding:0.5em 0.6em;min-width:0">
+                    <span style="font-size:0.8em;line-height:1.35;min-width:0">{{ r.label }}</span>
+                    <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.68em;color:var(--text-muted);text-align:right">{{ r.value }}</span>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ f.hasNote }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-family:var(--mono);font-size:0.62em;line-height:1.55;color:var(--text-muted);border-top:1px solid var(--divider);padding-top:0.55em">{{ f.note }}</div>
+                </sc-if>
+                <sc-if value="{{ f.hasFooter }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:auto;font-size:0.7em;line-height:1.5;color:var(--text-muted)">{{ f.footer }}</div>
+                </sc-if>
+              </div>
+            </div>
+            <sc-if value="{{ f.hasCaption }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ f.caption }}</div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ hasWalk }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ walk.people }}" as="p" hint-placeholder-count="5">
+              <button onClick="{{ p.pick }}" data-on="{{ p.on }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 12px;font-size:12.5px;font-family:var(--mono);min-height:40px;display:flex;gap:8px;align-items:center">
+                <span style="width:9px;height:9px;border-radius:50%;background:{{ p.colour }}"></span>{{ p.label }}
+              </button>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:15px;font-weight:600">{{ walk.title }}</div>
+            <div style="font-size:13.5px;line-height:1.6;color:var(--text-muted);max-width:82ch">{{ walk.claim }}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:stretch">
+            <sc-for list="{{ walk.rail }}" as="s" hint-placeholder-count="7">
+              <button onClick="{{ s.pick }}" data-on="{{ s.on }}" title="{{ s.title }}" style="flex:1 1 120px;min-width:0;text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-left:3px solid {{ s.rule }};border-radius:var(--radius-control);padding:8px 10px;min-height:52px;display:flex;flex-direction:column;gap:3px">
+                <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em">{{ s.n }} &middot; {{ s.row }}</span>
+                <span style="font-size:11.5px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;align-items:start">
+            <div style="display:flex;flex-direction:column;gap:9px;min-width:0">
+              <div style="width:100%;max-width:{{ walk.frameMax }};border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+                <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ walk.step.route }}</span>
+                  <span style="flex:0 0 auto">{{ walk.step.client }}</span>
+                </div>
+                <sc-if value="{{ walk.step.hasBar }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:0.45em 0.75em;background:var(--surface-sunken);color:{{ walk.step.barTone }};font-family:var(--mono);font-size:0.62em;border-bottom:1px solid var(--divider)">{{ walk.step.barText }}</div>
+                </sc-if>
+                <div style="flex:1 1 auto;padding:1em 0.9em;display:flex;flex-direction:column;gap:0.75em;min-width:0">
+                  <div style="font-size:1.1em;font-weight:600;line-height:1.2">{{ walk.step.shows }}</div>
+                  <sc-if value="{{ walk.step.hasLede }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ walk.step.lede }}</div>
+                  </sc-if>
+                  <sc-for list="{{ walk.step.rows }}" as="r" hint-placeholder-count="2">
+                    <div style="display:flex;gap:0.6em;align-items:baseline;justify-content:space-between;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:0.55em 0.65em;min-width:0">
+                      <span style="font-size:0.85em;line-height:1.35;min-width:0">{{ r.label }}</span>
+                      <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--text-muted);text-align:right">{{ r.value }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button onClick="{{ walk.prev }}" style="background:var(--surface);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:9px 14px;font-size:12.5px;font-family:var(--mono);min-height:44px">&larr; back</button>
+                <button onClick="{{ walk.next }}" style="background:var(--accent);color:var(--text-on-accent);border:1px solid var(--accent);border-radius:var(--radius-control);padding:9px 14px;font-size:12.5px;font-family:var(--mono);min-height:44px">{{ walk.nextLabel }}</button>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">Step {{ walk.step.n }} of {{ walk.count }} &middot; {{ walk.step.does }}</div>
+                <div style="font-size:14px;line-height:1.6;color:var(--text-primary);max-width:64ch">{{ walk.step.says }}</div>
+              </div>
+              <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:12px 14px;display:flex;flex-direction:column;gap:7px">
+                <sc-for list="{{ walk.step.facts }}" as="f" hint-placeholder-count="4">
+                  <div style="display:grid;grid-template-columns:minmax(90px,120px) 1fr;gap:10px;align-items:baseline">
+                    <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">{{ f.k }}</span>
+                    <span style="font-size:12.5px;line-height:1.5;color:{{ f.tone }};min-width:0;overflow-wrap:anywhere">{{ f.v }}</span>
+                  </div>
+                </sc-for>
+                <a href="{{ walk.step.href }}" style="font-family:var(--mono);font-size:11px">{{ walk.step.fileLabel }}</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-for list="{{ tables }}" as="t" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ t.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ t.meta }}</span>
+          </div>
+          <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">{{ t.note }}</p>
+          </sc-if>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow-x:auto">
+            <div style="display:grid;grid-template-columns:{{ t.cols }};gap:0 14px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken);min-width:{{ t.minWidth }}">
+              <sc-for list="{{ t.head }}" as="h" hint-placeholder-count="4">
+                <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ h.text }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:{{ t.cols }};gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--divider);align-items:baseline;min-width:{{ t.minWidth }}">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="4">
+                  <div style="font-family:{{ c.font }};font-size:{{ c.size }};line-height:1.5;color:{{ c.colour }};min-width:0;overflow-wrap:anywhere">{{ c.text }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.name }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;align-items:start">
+            <sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="6">
+              <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:{{ c.bg }};padding:11px 12px;display:flex;flex-direction:column;gap:6px;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:6px;justify-content:space-between">
+                  <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:{{ c.wordColour }}">{{ c.word }}</span>
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ c.tag }}</span>
+                </div>
+                <div style="font-size:12px;line-height:1.55;color:var(--text-primary)">{{ c.body }}</div>
+                <div style="font-size:10.5px;line-height:1.5;color:var(--text-muted)">{{ c.rule }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ checks }}" as="c" hint-placeholder-count="0">
+        <div style="display:grid;grid-template-columns:16px 1fr;gap:0 12px;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+          <div style="width:10px;height:10px;border-radius:50%;background:{{ c.colour }};margin-top:5px"></div>
+          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <div style="font-size:14px;font-weight:600;line-height:1.35">{{ c.name }}</div>
+            <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;remainder&quot;,&quot;themes&quot;,&quot;colour&quot;,&quot;language&quot;,&quot;access&quot;,&quot;walk&quot;,&quot;open&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;remainder&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startLang&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;en&quot;,&quot;cs&quot;,&quot;de&quot;],&quot;default&quot;:&quot;de&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startWalk&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;jana&quot;,&quot;petr&quot;,&quot;adam&quot;,&quot;klara&quot;,&quot;milos&quot;],&quot;default&quot;:&quot;jana&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100, lang: null, walk: null, step: 0 };
+
+  get C() { return window.HH_CONFORM; }
+  get L() { return window.HH_LEDGER; }
+  get T() { return window.HH_TOKENS; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (this.C && this.L && this.T && window.HH_FIXTURES && window.HH_NAV) {
+        clearInterval(this._boot);
+        this.forceUpdate();
+      }
+    }, 60);
+  }
+  componentWillUnmount() { clearInterval(this._boot); }
+
+  get view() { return this.state.view || this.props.startView || "remainder"; }
+  get lang() { return this.state.lang || this.props.startLang || "de"; }
+  get walkId() { return this.state.walk || this.props.startWalk || "jana"; }
+
+  pickers(list, current, set) {
+    return list.map((o) => ({
+      label: o[1], title: o[2] || "", on: current === o[0] ? "1" : "0",
+      pick: () => this.setState(set(o[0]))
+    }));
+  }
+  memberColour(m) {
+    const map = { jana: "chart-1", petr: "chart-2", adam: "chart-4", klara: "chart-3", milos: "chart-5" };
+    return "var(--" + (map[m] || "chart-1") + ")";
+  }
+  stateTone(s) {
+    const m = { error: "var(--danger)", rejected: "var(--status-rejected)", conflicted: "var(--status-conflict)",
+                pending: "var(--status-pending)", syncing: "var(--status-syncing)", offline: "var(--status-offline)",
+                readonly: "var(--warning)", withdrawn: "var(--text-muted)", absent: "var(--text-muted)",
+                loading: "var(--text-muted)", empty: "var(--text-muted)" };
+    return m[s] || "var(--accent)";
+  }
+  cell(text, opt) {
+    const o = opt || {};
+    return { text: text, font: o.mono ? "var(--mono)" : "var(--sans)",
+             size: o.mono ? "11.5px" : "13px",
+             colour: o.muted ? "var(--text-muted)" : o.tone || "var(--text-primary)" };
+  }
+  tableMin(cols) {
+    const tracks = String(cols || "").split(/\s+(?![^(]*\))/).filter(Boolean);
+    let n = 0;
+    tracks.forEach((t) => {
+      const m = /minmax\((\d+)px/.exec(t) || /^(\d+)px$/.exec(t);
+      n += m ? Number(m[1]) : 90;
+    });
+    return (n + Math.max(0, tracks.length - 1) * 14 + 28) + "px";
+  }
+  F(o) {
+    const f = Object.assign({
+      id: "", name: "", stateLabel: "", stateTone: "var(--text-muted)", route: "", clientLabel: "",
+      title: "", lede: "", body: "", rows: [], note: "", footer: "", caption: "",
+      barText: "", barTone: "var(--status-offline)"
+    }, o);
+    f.hasLede = !!f.lede;
+    f.hasNote = !!f.note;
+    f.hasFooter = !!f.footer;
+    f.hasCaption = !!f.caption;
+    f.hasBar = !!f.barText;
+    f.rows = (f.rows || []).map((r) => Object.assign({ rule: "var(--border)" }, r));
+    return f;
+  }
+  /* higherIsBetter: a contrast ratio wants to clear its mark; a width wants to stay
+     under it. Same bar, opposite verdicts, so the direction is stated per meter. */
+  meter(label, value, limit, unit, higherIsBetter) {
+    const max = Math.max(value, limit) * 1.15;
+    const ok = higherIsBetter ? value >= limit : value <= limit;
+    return {
+      label: label, value: Math.round(value) + " " + (unit || "px"),
+      pct: Math.round(value / max * 100) + "%",
+      limitPct: Math.round(limit / max * 100) + "%",
+      tone: ok ? "var(--positive)" : "var(--warning)"
+    };
+  }
+
+  renderVals() {
+    const C = this.C, L = this.L, T = this.T;
+    if (!C || !L || !T || !window.HH_FIXTURES) {
+      return { views: [], controls: [], notes: [], frames: [], tables: [], groups: [], checks: [],
+               meterGroups: [], hasPreview: false, preview: {}, hasWalk: false, walk: {},
+               pageTitle: "Conformance sweep and the walkthroughs", pageMeta: "loading",
+               stageLine: "stage 20", gateLine: "", gateColour: "var(--text-muted)",
+               viewIntro: "", theme: "light", density: "comfortable", fontPx: "16px" };
+    }
+    const view = this.view;
+    const all = C.checks();
+    const passed = all.filter((c) => c.pass).length;
+    const rr = C.remainderRun();
+    const rts = C.routes();
+
+    const VIEWS = [
+      ["remainder", "the last thirty-two cells", rr.clientCells],
+      ["themes", "both themes, every route", rts.length],
+      ["colour", "the contrast re-run", C.contrastRun().declared.length + C.late.length],
+      ["language", "the second language", C.strings.length],
+      ["access", "focus, labels, 44 pt", C.focusRun().registered],
+      ["walk", "the five walkthroughs", 34],
+      ["open", "what stays open", C.open.length],
+      ["gate", "the gate", all.length]
+    ];
+
+    const out = {
+      theme: this.state.theme, density: this.state.density,
+      fontPx: Math.round(16 * this.state.scale / 100) + "px",
+      stageLine: "stage 20 \u00b7 " + rr.total + " rows \u00b7 " + rr.unbuilt + " unbuilt",
+      views: VIEWS.map((v) => ({ label: v[1], count: v[2], on: view === v[0] ? "1" : "0",
+                                 pick: () => this.setState({ view: v[0] }) })),
+      controls: [
+        { label: "Language", options: this.pickers(
+            C.langs.map((l) => [l[0], l[1]]), this.lang, (v) => ({ lang: v })) },
+        { label: "Theme", options: this.pickers([["light", "light"], ["dark", "dark"]], this.state.theme, (v) => ({ theme: v })) },
+        { label: "Density", options: this.pickers([["comfortable", "comfortable"], ["compact", "compact"]], this.state.density, (v) => ({ density: v })) },
+        { label: "Text", options: this.pickers([[100, "100 %"], [200, "200 %"]], this.state.scale, (v) => ({ scale: v })) }
+      ],
+      gateLine: passed + " / " + all.length + " checks pass",
+      gateColour: passed === all.length ? "var(--positive)" : "var(--warning)",
+      notes: [], frames: [], tables: [], groups: [], checks: [], meterGroups: [],
+      hasPreview: false, preview: {}, hasWalk: false, walk: {},
+      pageTitle: "Conformance sweep, and the walkthroughs",
+      pageMeta: rr.total + " rows \u00b7 " + rr.drawn + " states \u00b7 " + rts.length + " routes",
+      viewIntro: ""
+    };
+
+    if (view === "remainder") this.viewRemainder(out, rr);
+    if (view === "themes") this.viewThemes(out, rts);
+    if (view === "colour") this.viewColour(out);
+    if (view === "language") this.viewLanguage(out);
+    if (view === "access") this.viewAccess(out);
+    if (view === "walk") this.viewWalk(out);
+    if (view === "open") this.viewOpen(out);
+    if (view === "gate") this.viewGate(out, all, rr, rts);
+
+    out.tables = out.tables.map((tb) => Object.assign({}, tb, {
+      hasNote: !!tb.note, note: tb.note || "", minWidth: this.tableMin(tb.cols)
+    }));
+    return out;
+  }
+
+  /* ── the remainder ──────────────────────────────────────────────────── */
+  viewRemainder(out, rr) {
+    const C = this.C;
+    out.pageTitle = "The thirty-two cells four rows still owed";
+    out.pageMeta = rr.cells + " bodies \u00b7 " + rr.clientCells + " client cells \u00b7 4 rows";
+    out.viewIntro = "Stage 19 closed with seven client rows unbuilt across four screens: the conflict inbox from Stage 5, and the household switcher, the web sidebar and the arrange screen from Stage 6. Between them they were short thirty-two cells. They are drawn here, and the ledger records them as drawn here \u2014 a late-delivery entry naming this file, state for state, rather than the four rows being back-dated into the stages that owed them. A stage that closes on somebody else\u2019s work is the one kind of drift a coverage ledger cannot survive.";
+    out.notes = C.remainder.map((r) => ({ text: r.row + " \u00b7 " + r.name + " \u2014 " + r.why }));
+
+    C.remainder.forEach((r) => {
+      r.cells.forEach((c) => {
+        out.frames.push(this.F({
+          id: r.row + " \u00b7 " + c.state, name: r.name,
+          stateLabel: c.state, stateTone: this.stateTone(c.state),
+          route: r.route, clientLabel: r.clients.join(" + "),
+          barText: c.state === "offline" ? "Offline \u2014 zm\u011bny se ulo\u017e\u00ed a ode\u0161lou pozd\u011bji" : "",
+          title: c.title, body: c.body, note: c.note, footer: c.client
+        }));
+      });
+    });
+
+    out.tables = [{
+      title: "What the ledger now records", meta: rr.total + " client rows \u00b7 " + rr.unbuilt + " unbuilt",
+      note: "The late column is what this file drew. Without it the coverage view would credit Stage 5 with three cells it never produced.",
+      cols: "minmax(70px,0.4fr) minmax(200px,1.2fr) minmax(70px,0.4fr) minmax(240px,1.6fr) minmax(150px,0.9fr)",
+      head: [{ text: "row" }, { text: "screen" }, { text: "stage" }, { text: "drawn here" }, { text: "credited to" }],
+      rows: rr.rows.map((r) => ({ cells: [
+        this.cell(r.row, { mono: true }), this.cell(r.name),
+        this.cell("st. " + r.stage, { mono: true, muted: true }),
+        this.cell(r.states.join(", "), { mono: true, tone: "var(--accent)" }),
+        this.cell(r.ok ? "stage 20 \u00b7 this file" : "MISMATCH", { mono: true, tone: r.ok ? "var(--positive)" : "var(--danger)" })
+      ] }))
+    }];
+  }
+
+  /* ── both themes ────────────────────────────────────────────────────── */
+  viewThemes(out, rts) {
+    const C = this.C, T = this.T, th = C.themeRun();
+    out.pageTitle = "Both themes, on every route";
+    out.pageMeta = rts.length + " routes \u00b7 " + (rts.length * 2) + " renderings \u00b7 " + th.checks + " resolutions";
+    out.viewIntro = "A theme sweep done by eye is a sweep of whichever screens somebody remembered. This one is arithmetic: every route the eighteen module files declare, every ink a screen body can spend on it, resolved in both themes and measured against the minimum that ink is held to. " + th.says + " The token file has no colour that exists in only one theme, which is the failure the sweep is really looking for \u2014 a dark-only definition renders as nothing in light and is invisible in review until somebody opens the other theme.";
+    out.notes = [{ text: "Use the theme control in the sidebar. Every surface on this page is drawn from the same tokens the sweep is measuring, so switching it is the sweep." }];
+
+    const byStage = {};
+    rts.forEach((r) => { (byStage[r.stage] = byStage[r.stage] || []).push(r); });
+    out.tables = [{
+      title: "The route inventory", meta: rts.length + " routes from " + Object.keys(byStage).length + " stages",
+      note: "Collected from the module files themselves rather than from a list kept by hand, so a route added to a module appears here without anybody remembering to add it.",
+      cols: "minmax(60px,0.3fr) minmax(190px,1.1fr) minmax(210px,1.3fr) minmax(90px,0.5fr) minmax(80px,0.4fr)",
+      head: [{ text: "stage" }, { text: "screen" }, { text: "route" }, { text: "module" }, { text: "clients" }],
+      rows: rts.slice(0, 60).map((r) => ({ cells: [
+        this.cell("st. " + r.stage, { mono: true, muted: true }),
+        this.cell(r.name), this.cell(r.route, { mono: true, tone: "var(--accent)" }),
+        this.cell(r.module, { muted: true }), this.cell(r.client, { mono: true, muted: true })
+      ] }))
+    }, {
+      title: "Ink that every route spends, in both themes",
+      meta: th.fails.length + " below minimum",
+      cols: "minmax(150px,0.9fr) minmax(110px,0.6fr) minmax(90px,0.5fr) minmax(90px,0.5fr) minmax(80px,0.4fr)",
+      head: [{ text: "ink" }, { text: "ground" }, { text: "light" }, { text: "dark" }, { text: "min" }],
+      rows: ["text-primary", "text-muted", "text-link", "danger", "warning", "positive", "info", "border-strong", "focus"]
+        .map((n) => {
+          const min = ["border-strong", "focus"].indexOf(n) >= 0 ? 3 : 4.5;
+          const l = T.ratio(T.resolve(n, "light"), T.resolve("surface-raised", "light"));
+          const d = T.ratio(T.resolve(n, "dark"), T.resolve("surface-raised", "dark"));
+          const ok = l >= min && d >= min;
+          return { cells: [
+            this.cell(n, { mono: true }), this.cell("surface-raised", { mono: true, muted: true }),
+            this.cell(Math.round(l * 10) / 10 + ":1", { mono: true, tone: ok ? "var(--positive)" : "var(--danger)" }),
+            this.cell(Math.round(d * 10) / 10 + ":1", { mono: true, tone: ok ? "var(--positive)" : "var(--danger)" }),
+            this.cell(min + ":1", { mono: true, muted: true })
+          ] };
+        })
+    }];
+  }
+
+  /* ── the contrast re-run ────────────────────────────────────────────── */
+  viewColour(out) {
+    const C = this.C, co = C.contrastRun();
+    out.pageTitle = "Every colour spent after Stage 2, re-run";
+    out.pageMeta = co.declared.length + " declared \u00b7 " + co.late.length + " late \u00b7 " + co.undeclared.length + " untested by CI";
+    out.viewIntro = "Stage 2 declared eighty-five contrast pairs and CI tests them. Seventeen stages then spent colour: a staleness badge, an asset accent, four member colours on the who-overlay, three more chart series, the ink on a destructive confirm. " + co.says + " All of them clear their minimum in both themes \u2014 which is luck rather than process, because nothing would have told anybody if they did not. The fix is a line each in the token file, not a colour change.";
+    out.notes = [{ text: "The tightest pair in the whole system is " + co.tightest[0].fg + " on " + co.tightest[0].bg + " at " + co.tightest[0].worst + ":1 against a " + co.tightest[0].min + ":1 minimum. Everything else has more room than that." }];
+
+    out.meterGroups = [{
+      title: "The six tightest pairs, at their worse theme",
+      meta: "the bar is the ratio; the mark is the minimum",
+      note: "A pair that clears by a tenth is a pair that a future hue nudge breaks. These six are where the token file should be edited most carefully.",
+      meters: co.tightest.map((p) => Object.assign(
+        this.meter(p.fg + " on " + p.bg, p.worst * 20, p.min * 20, "", true),
+        { value: p.worst + ":1 against " + p.min }))
+    }];
+
+    out.tables = [{
+      title: "Colour spends introduced after Stage 2", meta: co.late.length + " spends \u00b7 " + co.lateFails.length + " below minimum",
+      cols: "minmax(60px,0.3fr) minmax(160px,0.9fr) minmax(130px,0.7fr) minmax(70px,0.4fr) minmax(70px,0.4fr) minmax(60px,0.3fr) minmax(180px,1.1fr)",
+      head: [{ text: "stage" }, { text: "ink" }, { text: "ground" }, { text: "light" }, { text: "dark" }, { text: "min" }, { text: "where" }],
+      rows: co.late.map((p) => ({ cells: [
+        this.cell("st. " + p.stage, { mono: true, muted: true }),
+        this.cell(p.fg, { mono: true }), this.cell(p.bg, { mono: true, muted: true }),
+        this.cell(p.light + ":1", { mono: true, tone: p.light >= p.min ? "var(--positive)" : "var(--danger)" }),
+        this.cell(p.dark + ":1", { mono: true, tone: p.dark >= p.min ? "var(--positive)" : "var(--danger)" }),
+        this.cell(String(p.min), { mono: true, muted: true }),
+        this.cell(p.use, { muted: true })
+      ] }))
+    }, {
+      title: "The ones CI does not test", meta: co.undeclared.length + " of " + co.late.length,
+      note: "Not in foundations.js's declared pair list, so no test would have failed if a later hue change had broken them.",
+      cols: "minmax(150px,0.9fr) minmax(140px,0.8fr) minmax(80px,0.4fr) minmax(280px,1.6fr)",
+      head: [{ text: "ink" }, { text: "ground" }, { text: "worst" }, { text: "what it is for" }],
+      rows: co.undeclared.map((p) => ({ cells: [
+        this.cell(p.fg, { mono: true }), this.cell(p.bg, { mono: true, muted: true }),
+        this.cell(p.worst + ":1", { mono: true, tone: "var(--warning)" }), this.cell(p.use)
+      ] }))
+    }];
+  }
+
+  /* ── the second language ────────────────────────────────────────────── */
+  viewLanguage(out) {
+    const C = this.C, la = C.langRun(), di = C.diacriticRun(), tx = C.textRun();
+    const lang = this.lang, idx = { en: 2, cs: 3, de: 4 }[lang];
+    out.pageTitle = "English, \u010ce\u0161tina, Deutsch \u2014 side by side";
+    out.pageMeta = C.strings.length + " strings \u00b7 " + la.growth.de.vsEn + " % longer in German \u00b7 " + la.growth.cs.vsEn + " % in Czech";
+    out.viewIntro = "The handoff asks for English and German; the implementation plan proposed Czech, and the fixture household is Czech throughout. The copy decision is not the layout decision, and this is the layout decision. " + la.says;
+    out.notes = [{ text: "Switch the language and the text size in the sidebar: the bar and the sidebar below are real containers at their real widths, with real overflow. Nothing here is a screenshot." }];
+
+    const NAMES = { en: "English", cs: "\u010ce\u0161tina", de: "Deutsch" };
+    const tabs = C.strings.filter((s) => s[0] === "tab");
+    const mods = C.strings.filter((s) => s[0] === "module");
+    const scale = this.state.scale / 100;
+    out.hasPreview = true;
+    out.preview = {
+      barLabel: "Tab bar \u00b7 360 px \u00b7 " + NAMES[lang] + " \u00b7 " + this.state.scale + " %",
+      tabs: tabs.map((t) => ({ label: t[idx], glyph: "var(--surface-sunken)", tone: "var(--text-muted)" })),
+      tabPx: Math.round(13 * scale) + "px",
+      barNote: "Stage 6\u2019s rule: the label is never dropped to buy width. At 200 % the bar grows taller \u2014 what it must never do is truncate a destination to three letters.",
+      sideLabel: "Sidebar \u00b7 260 px \u00b7 " + NAMES[lang],
+      modules: mods.slice(0, 8).map((m) => ({ label: m[idx], glyph: "var(--surface-sunken)", tone: "var(--text-primary)" })),
+      sidePx: Math.round(16 * scale) + "px",
+      sideNote: "Module labels wrap rather than truncate. A truncated module name is a module you cannot find."
+    };
+
+    out.meterGroups = [{
+      title: "The longest label in each container, by language",
+      meta: "the mark is the container; the bar is the label at 100 % text",
+      note: "Widths use Stage 16\u2019s own character measure, so the flow view and this sweep cannot disagree about what fits. Two-across buttons are the one container the longest Czech and German labels do not fit at 100 %: the hold-to-complete control is full width on a phone in every language, and that is why.",
+      meters: la.containers.map((c) => {
+        const l = c.langs.filter((x) => x.lang === lang)[0];
+        return Object.assign(this.meter(c.label + " \u2014 \u201c" + l.worst + "\u201d", l.w100, c.width),
+          { value: l.w100 + " / " + c.width + " px" });
+      })
+    }];
+
+    out.tables = [{
+      title: "Forty strings, three languages", meta: la.deLonger + " longer in German \u00b7 " + la.csLonger + " in Czech",
+      cols: "minmax(70px,0.4fr) minmax(160px,0.9fr) minmax(160px,0.9fr) minmax(180px,1fr) minmax(90px,0.5fr)",
+      head: [{ text: "kind" }, { text: "English" }, { text: "\u010ce\u0161tina" }, { text: "Deutsch" }, { text: "longest" }],
+      rows: la.strings.map((s) => ({ cells: [
+        this.cell(s.kind, { mono: true, muted: true }), this.cell(s.en),
+        this.cell(s.cs, { tone: s.longest === "cs" ? "var(--accent)" : "var(--text-primary)" }),
+        this.cell(s.de, { tone: s.longest === "de" ? "var(--accent)" : "var(--text-primary)" }),
+        this.cell(s.longest === "de" ? s.dePx + " px \u00b7 de" : s.csPx + " px \u00b7 cs", { mono: true, muted: true })
+      ] }))
+    }, {
+      title: "Does the line box clear the accent stack",
+      meta: di.filter((d) => d.clears).length + " of " + di.length + " clear outright",
+      note: "\u010f and \u016f are the tallest lower-case stack in Czech; \u00c4 and \u00dc sit over the cap height on the uppercase overline. A short line box only collides where a line can wrap, so display is excused with its reason on the row.",
+      cols: "minmax(90px,0.5fr) minmax(70px,0.4fr) minmax(90px,0.5fr) minmax(90px,0.5fr) minmax(90px,0.5fr) minmax(200px,1.2fr)",
+      head: [{ text: "step" }, { text: "size" }, { text: "line box" }, { text: "needs" }, { text: "headroom" }, { text: "verdict" }],
+      rows: di.map((d) => ({ cells: [
+        this.cell(d.step, { mono: true }), this.cell(d.size + " px", { mono: true, muted: true }),
+        this.cell(d.lineHeight + " px", { mono: true }), this.cell(d.need + " px", { mono: true, muted: true }),
+        this.cell((d.headroom > 0 ? "+" : "") + d.headroom + " px", { mono: true, tone: d.clears ? "var(--positive)" : "var(--warning)" }),
+        this.cell(d.clears ? "clears" : (d.wraps ? "collides on a wrapped title \u2014 fix: " + d.fix : d.excuse),
+          { tone: d.pass ? "var(--text-primary)" : "var(--warning)" })
+      ] }))
+    }, {
+      title: "200 % text on the containers earlier stages measured",
+      meta: tx.rows.filter((r) => r.fits).length + " of " + tx.rows.length + " still fit",
+      cols: "minmax(150px,0.9fr) minmax(90px,0.5fr) minmax(90px,0.5fr) minmax(70px,0.4fr) minmax(300px,1.8fr)",
+      head: [{ text: "container" }, { text: "available" }, { text: "needs" }, { text: "fits" }, { text: "the answer, and whose it is" }],
+      rows: tx.rows.map((r) => ({ cells: [
+        this.cell(r.name), this.cell(r.avail + " px", { mono: true, muted: true }),
+        this.cell(r.need + " px", { mono: true }),
+        this.cell(r.fits ? "yes" : "no", { mono: true, tone: r.fits ? "var(--positive)" : "var(--warning)" }),
+        this.cell(r.answer, { muted: true })
+      ] }))
+    }];
+  }
+
+  /* ── focus, labels, targets ─────────────────────────────────────────── */
+  viewAccess(out) {
+    const C = this.C, fo = C.focusRun(), ta = C.targetRun(), I = window.HH_ICONS;
+    out.pageTitle = "Focus order, the label register, and the 44 pt floor";
+    out.pageMeta = fo.stops + " focus stops \u00b7 " + fo.registered + " labelled controls \u00b7 " + ta.rows.length + " measured heights";
+    out.viewIntro = fo.says + " The floor is the other half: compact density is allowed to buy horizontal space and vertical rhythm, and is never allowed to buy target size. " + ta.says;
+
+    out.groups = fo.shells.map((s) => ({
+      name: s.shell, meta: s.order.length + " stops, in DOM order",
+      cells: s.order.map((o, i) => ({
+        word: (i + 1) + " \u00b7 " + o[0], tag: o[1], body: o[2], rule: "",
+        bg: "var(--surface-raised)", border: "var(--border-strong)", wordColour: "var(--accent)"
+      }))
+    }));
+
+    out.meterGroups = [{
+      title: "Control height under compact, at both text sizes",
+      meta: "the mark is 44 px; the bar is the height the arithmetic gives",
+      note: "Where the bar is short of the mark the row is held at the floor by --dens-row-min. Six of eight control shapes are, which is the floor doing its job rather than a design that happens to be tall enough.",
+      meters: ta.rows.filter((r) => r.density === "compact" && r.scale === this.state.scale)
+        .map((r) => Object.assign(this.meter(r.control + " \u00b7 compact \u00b7 " + r.scale + " %", r.natural, 44),
+          { value: r.natural + " \u2192 " + r.height + " px", tone: r.floored ? "var(--status-syncing)" : "var(--positive)" }))
+    }];
+
+    out.tables = [{
+      title: "The label register", meta: fo.registered + " icon-only controls \u00b7 " + fo.missing.length + " missing a string",
+      note: "Every one carries a key as well as an English string, which is where the language question lands: the register is the list that has to exist in whichever languages ship, including the two that Please update names and nobody has.",
+      cols: "minmax(150px,0.9fr) minmax(110px,0.6fr) minmax(190px,1.1fr) minmax(220px,1.3fr)",
+      head: [{ text: "control" }, { text: "glyph" }, { text: "key" }, { text: "English" }],
+      rows: (I ? I.labels : []).map((l) => ({ cells: [
+        this.cell(l[0]), this.cell(l[1], { mono: true, muted: true }),
+        this.cell(l[3], { mono: true, tone: "var(--accent)" }), this.cell(l[4])
+      ] }))
+    }, {
+      title: "44 pt, four ways", meta: ta.fails.length + " below the floor",
+      cols: "minmax(150px,0.9fr) minmax(110px,0.6fr) minmax(70px,0.4fr) minmax(100px,0.5fr) minmax(100px,0.5fr) minmax(120px,0.7fr)",
+      head: [{ text: "control" }, { text: "density" }, { text: "text" }, { text: "arithmetic" }, { text: "rendered" }, { text: "" }],
+      rows: ta.rows.map((r) => ({ cells: [
+        this.cell(r.control), this.cell(r.density, { mono: true, muted: true }),
+        this.cell(r.scale + " %", { mono: true, muted: true }),
+        this.cell(r.natural + " px", { mono: true }),
+        this.cell(r.height + " px", { mono: true, tone: r.pass ? "var(--positive)" : "var(--danger)" }),
+        this.cell(r.floored ? "held at the floor" : "clears on its own", { muted: true })
+      ] }))
+    }];
+  }
+
+  /* ── the walkthroughs ───────────────────────────────────────────────── */
+  viewWalk(out) {
+    const C = this.C, w = C.walkRun(this.walkId);
+    const idx = Math.max(0, Math.min(this.state.step, w.steps.length - 1));
+    const s = w.steps[idx];
+    out.pageTitle = "Five walkthroughs, clickable end to end";
+    out.pageMeta = w.steps.length + " steps \u00b7 " + w.built + " on built rows \u00b7 " + (w.member ? w.member.role : "");
+    out.viewIntro = "A prototype nobody can walk through is a screen archive. Five paths, one per persona, each step naming the ledger row it lands on and the stage file that drew it \u2014 so a step pointing at a screen that does not exist fails on this page rather than in a review. The member\u2019s own grant is checked against every step: the two steps that show an absence are drawing the absence itself.";
+
+    out.hasWalk = true;
+    out.walk = {
+      title: w.title, claim: w.claim, count: w.steps.length,
+      frameMax: w.client === "tablet" ? "520px" : "360px",
+      people: C.walks.map((p) => ({
+        label: p.id, colour: this.memberColour(p.member),
+        on: p.id === this.walkId ? "1" : "0",
+        pick: () => this.setState({ walk: p.id, step: 0 })
+      })),
+      rail: w.steps.map((st, i) => ({
+        n: st.n, row: st.row, label: st.shows, title: st.does,
+        on: i === idx ? "1" : "0",
+        rule: i === idx ? "var(--accent)" : (st.built ? "var(--positive)" : "var(--danger)"),
+        pick: () => this.setState({ step: i })
+      })),
+      prev: () => this.setState({ step: Math.max(0, idx - 1) }),
+      next: () => this.setState({ step: (idx + 1) % w.steps.length }),
+      nextLabel: idx === w.steps.length - 1 ? "start again" : "next \u2192",
+      step: {
+        n: s.n, route: s.route, client: w.client, shows: s.shows, lede: s.lede,
+        hasLede: !!s.lede, does: s.does, says: s.says,
+        hasBar: s.state === "offline" || s.state === "pending" || s.state === "syncing",
+        barTone: this.stateTone(s.state),
+        barText: s.state === "offline" ? "Offline \u2014 zm\u011bny se ulo\u017e\u00ed a ode\u0161lou pozd\u011bji"
+               : s.state === "pending" ? "Neodesl\u00e1no \u2014 \u010dek\u00e1 na p\u0159ipojen\u00ed"
+               : s.state === "syncing" ? "Synchronizuje se" : "",
+        rows: (s.rows || []).map((r) => ({ label: r[0], value: r[1] })),
+        facts: [
+          { k: "ledger row", v: s.row + " \u00b7 " + s.rowName, tone: "var(--text-primary)" },
+          { k: "state", v: s.state, tone: this.stateTone(s.state) },
+          { k: "module", v: s.module + (s.grantable ? " \u00b7 grant: " + s.grant : " \u00b7 not grantable"),
+            tone: s.grantable ? "var(--text-primary)" : "var(--text-muted)" },
+          { k: "coverage", v: s.built ? "built \u00b7 stage " + s.stage : "NOT BUILT", tone: s.built ? "var(--positive)" : "var(--danger)" }
+        ],
+        href: "./" + s.file, fileLabel: s.file || "\u2014"
+      }
+    };
+
+    out.tables = [{
+      title: "All five paths", meta: C.walkAll().reduce((a, x) => a + x.steps.length, 0) + " steps \u00b7 0 unresolved",
+      cols: "minmax(90px,0.5fr) minmax(60px,0.3fr) minmax(230px,1.4fr) minmax(190px,1.1fr) minmax(140px,0.8fr)",
+      head: [{ text: "persona" }, { text: "steps" }, { text: "the claim" }, { text: "rows" }, { text: "client" }],
+      rows: C.walkAll().map((x) => ({ cells: [
+        this.cell(x.member ? x.member.name : x.id),
+        this.cell(String(x.steps.length), { mono: true }),
+        this.cell(x.claim, { muted: true }),
+        this.cell(x.steps.map((st) => st.row).join(" "), { mono: true, tone: "var(--accent)" }),
+        this.cell(x.client, { mono: true, muted: true })
+      ] }))
+    }];
+  }
+
+  /* ── what stays open ────────────────────────────────────────────────── */
+  viewOpen(out) {
+    const C = this.C;
+    out.pageTitle = "What the sweep could not settle";
+    out.pageMeta = C.open.length + " open \u00b7 2 of them copy decisions";
+    out.viewIntro = "A measurement can answer whether a layout survives the longer language. It cannot answer which language ships. These four are what is left when the arithmetic runs out, written down here rather than absorbed into a design decision nobody would be able to find later.";
+    out.groups = [{
+      name: "Open at the end of Stage 20", meta: "each one names who has to answer it",
+      cells: C.open.map((o) => ({
+        word: o[2], tag: "", body: o[0], rule: o[1],
+        bg: "var(--surface-raised)", border: "var(--border-strong)", wordColour: "var(--warning)"
+      }))
+    }];
+  }
+
+  /* ── the gate ───────────────────────────────────────────────────────── */
+  viewGate(out, all, rr, rts) {
+    const L = this.L, passed = all.filter((c) => c.pass).length;
+    out.pageTitle = "The gate";
+    out.pageMeta = passed + " of " + all.length + " pass \u00b7 " + rr.unbuilt + " rows unbuilt \u00b7 " + rr.drawn + " of " + rr.states + " states drawn";
+    const co = this.C.contrastRun();
+    const dt = this.C.diacriticRun().filter((d) => !d.pass)[0];
+    out.viewIntro = "Zero ledger rows unbuilt, zero states undrawn, five walkthroughs clickable end to end. " +
+      (all.length - passed) + " checks fail on purpose and both are findings rather than defects: " +
+      co.undeclared.length + " of the " + co.late.length + " colour spends made after Stage 2 sit outside the list CI tests" +
+      (dt ? ", and " + dt.step + "\u2019s line box is " + Math.abs(dt.headroom) +
+        " px short of the Czech accent stack on a title that wraps" : "") +
+      ". Each has a one-line fix in the token file, and neither is a colour change or a layout change.";
+    out.checks = all.map((c) => ({
+      name: c.name, detail: c.detail,
+      colour: c.pass ? "var(--positive)" : "var(--warning)"
+    }));
+    out.tables = [{
+      title: "Twenty stages, at the end", meta: L.version + " \u00b7 " + rr.total + " rows \u00b7 " + rr.states + " states",
+      cols: "minmax(50px,0.25fr) minmax(240px,1.5fr) minmax(80px,0.4fr) minmax(90px,0.5fr) minmax(110px,0.6fr) minmax(150px,0.9fr)",
+      head: [{ text: "st." }, { text: "stage" }, { text: "rows" }, { text: "states" }, { text: "status" }, { text: "late cells" }],
+      rows: L.stageStatus().map((s) => ({ cells: [
+        this.cell(String(s.num), { mono: true, muted: true }),
+        this.cell(s.name),
+        this.cell(s.built + " / " + s.rows, { mono: true }),
+        this.cell(s.drawnStates + " / " + s.reqStates, { mono: true, muted: true }),
+        this.cell(s.status, { mono: true, tone: s.status === "open" ? "var(--warning)" : "var(--positive)" }),
+        this.cell(s.lateCells ? s.lateCells + " \u00b7 stage 20" : "\u2014", { mono: true, tone: s.lateCells ? "var(--accent)" : "var(--text-muted)" })
+      ] }))
+    }];
+  }
+}
+</script>
+</body>
+</html>

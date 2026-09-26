@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./components.js"></script>
+<script src="./household.js"></script>
+<script src="./reminders.js"></script>
+<script src="./notes.js"></script>
+<script src="./documents.js"></script>
+<script src="./ledger.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">A tree, and a filing cabinet</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Notes and Documents</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-time)">{{ stageLine }}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="12">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">One tree, two roots, one resolver and one 404 — over notes, and over 38 files that feed the meter. Every count, refusal and byte on these screens is computed from the fixture.</div>
+      <a href="./Reminders and Tasks.dc.html" style="font-family:var(--mono);font-size:11px">← stage 12 · Reminders and Tasks</a>
+      <a href="./Today and Cross-cutting Screens.dc.html" style="font-family:var(--mono);font-size:11px">stage 11 · search and Today</a>
+      <a href="./Household and Billing.dc.html" style="font-family:var(--mono);font-size:11px">stage 8 · the storage screen</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+
+      <p style="margin:0;max-width:82ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+      <sc-if value="{{ hasField }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input value="{{ queryValue }}" onInput="{{ onQuery }}" placeholder="Type a query" style="width:220px;background:var(--surface-raised);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:9px 11px;font-size:13.5px;min-height:40px" />
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <sc-for list="{{ queryChips }}" as="q" hint-placeholder-count="4">
+              <button onClick="{{ q.pick }}" data-on="{{ q.on }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:6px 11px;font-size:11.5px;font-family:var(--mono);min-height:32px">{{ q.label }}</button>
+            </sc-for>
+          </div>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ queryMeta }}</span>
+        </div>
+      </sc-if>
+
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="0">
+        <div style="border-left:2px solid var(--accent);padding:2px 0 2px 12px;max-width:82ch;font-size:13.5px;line-height:1.6;color:var(--text-primary)">{{ n.text }}</div>
+      </sc-for>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+        <sc-for list="{{ frames }}" as="f" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0;grid-column:{{ f.col }}">
+
+            <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-time)">{{ f.id }}</span>
+              <h3 style="margin:0;font-size:15px;font-weight:600">{{ f.name }}</h3>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ f.stateLabel }}</span>
+            </div>
+
+            <div style="width:100%;max-width:{{ f.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+              <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.route }}</span>
+                <span style="flex:0 0 auto">{{ f.clientLabel }}</span>
+              </div>
+
+              <sc-if value="{{ f.hasBar }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.45em 0.75em;background:var(--surface-sunken);color:var(--status-offline);font-family:var(--mono);font-size:0.62em;border-bottom:1px solid var(--divider)">{{ f.barText }}</div>
+              </sc-if>
+
+              <div style="flex:1 1 auto;padding:1em 0.9em;display:flex;flex-direction:column;gap:0.8em;min-width:0">
+
+                <div style="display:flex;flex-direction:column;gap:0.2em">
+                  <div style="font-size:1.1em;font-weight:600;line-height:1.2">{{ f.title }}</div>
+                  <sc-if value="{{ f.hasLede }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ f.lede }}</div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ f.hasBanner }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid {{ f.bannerTone }};border-left:3px solid {{ f.bannerTone }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.3em">
+                    <sc-if value="{{ f.hasBannerTitle }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.78em;font-weight:600;color:{{ f.bannerTone }}">{{ f.bannerTitle }}</div>
+                    </sc-if>
+                    <div style="font-size:0.76em;line-height:1.5;color:var(--text-primary)">{{ f.bannerBody }}</div>
+                    <div style="display:flex;gap:0.4em;flex-wrap:wrap;margin-top:0.15em">
+                      <sc-for list="{{ f.bannerActions }}" as="a" hint-placeholder-count="0">
+                        <span style="font-family:var(--mono);font-size:0.62em;border:1px solid var(--border-strong);border-radius:4px;padding:0.25em 0.5em;color:var(--text-primary)">{{ a.label }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.skeleton }}" as="k" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.6em;align-items:flex-start;border:1px solid var(--border);border-radius:var(--radius-card);padding:0.6em 0.7em;min-height:2.8em">
+                    <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.35em">
+                      <div style="height:0.85em;width:{{ k.w1 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                      <div style="height:0.7em;width:{{ k.w2 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                    </div>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.fields }}" as="x" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.25em">
+                    <div style="font-family:var(--mono);font-size:0.6em;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">{{ x.label }}</div>
+                    <div style="border:1px solid var(--border-strong);border-radius:var(--radius-control);background:{{ x.bg }};padding:0.55em 0.65em;font-size:0.85em;min-height:2.5em;display:flex;align-items:center;justify-content:space-between;gap:0.5em">
+                      <span style="min-width:0">{{ x.value }}</span>
+                      <sc-if value="{{ x.hasHint }}" hint-placeholder-val="{{ false }}">
+                        <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--text-muted)">{{ x.hint }}</span>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ x.hasNote }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:0.7em;line-height:1.5;color:var(--text-muted)">{{ x.note }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.4em;flex-wrap:wrap">
+                    <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="2">
+                      <span style="display:inline-flex;align-items:center;gap:0.35em;white-space:nowrap;border:1px solid var({{ c.colour }});border-radius:999px;padding:0.2em 0.55em;font-size:0.68em;color:var(--text-primary)">
+                        <span style="width:0.5em;height:0.5em;border-radius:50%;background:var({{ c.colour }})"></span>{{ c.name }}
+                      </span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.cols }}" as="col" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.4em;min-width:0">
+                    <div style="display:flex;align-items:baseline;gap:0.5em;justify-content:space-between">
+                      <span style="font-size:0.8em;font-weight:600">{{ col.name }}</span>
+                      <span style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ col.kindLabel }}</span>
+                    </div>
+                    <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="2">
+                      <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:var(--surface-raised);padding:0.55em 0.65em;display:flex;flex-direction:column;gap:0.3em;min-width:0">
+                        <div style="font-size:0.82em;font-weight:500;line-height:1.35;text-decoration:{{ c.strike }}">{{ c.title }}</div>
+                        <sc-if value="{{ c.hasMeta }}" hint-placeholder-val="{{ false }}">
+                          <div style="font-size:0.68em;color:var(--text-muted);line-height:1.4">{{ c.meta }}</div>
+                        </sc-if>
+                        <div style="display:flex;gap:0.35em;flex-wrap:wrap;align-items:center">
+                          <sc-for list="{{ c.chips }}" as="p" hint-placeholder-count="0">
+                            <span style="display:inline-flex;align-items:center;gap:0.3em;white-space:nowrap;border:1px solid var({{ p.colour }});border-radius:999px;padding:0.1em 0.45em;font-size:0.6em">
+                              <span style="width:0.4em;height:0.4em;border-radius:50%;background:var({{ p.colour }})"></span>{{ p.name }}
+                            </span>
+                          </sc-for>
+                          <sc-if value="{{ c.hasMark }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-family:var(--mono);font-size:0.6em;color:{{ c.markColour }}">{{ c.markWord }}</span>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.blocks }}" as="b" hint-placeholder-count="0">
+                  <div data-block="{{ b.key }}" data-rows="{{ b.count }}" style="display:flex;flex-direction:column;gap:0.4em">
+                    <sc-if value="{{ b.hasHeading }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap">
+                        <span style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:{{ b.labelColour }}">{{ b.label }}</span>
+                        <sc-if value="{{ b.hasRule }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ b.rule }}</span>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="3">
+                      <div style="display:flex;gap:0.6em;align-items:flex-start;background:{{ r.bg }};border:1px solid {{ r.border }};border-left:{{ r.leftRule }};border-radius:var(--radius-card);padding:0.55em 0.65em 0.55em {{ r.padLeft }};min-width:0">
+                        <span style="flex:0 0 auto;width:0.5em;height:0.5em;border-radius:50%;background:var({{ r.token }});margin-top:0.45em"></span>
+                        <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.15em">
+                          <span style="display:flex;gap:0.5em;align-items:baseline;min-width:0">
+                            <span style="font-size:0.85em;font-weight:500;line-height:1.35;min-width:0;text-decoration:{{ r.strike }}">{{ r.title }}</span>
+                            <sc-if value="{{ r.hasRight }}" hint-placeholder-val="{{ false }}">
+                              <span style="margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:0.64em;color:{{ r.rightColour }}">{{ r.right }}</span>
+                            </sc-if>
+                          </span>
+                          <sc-if value="{{ r.hasMeta }}" hint-placeholder-val="{{ true }}">
+                            <span style="font-size:0.72em;line-height:1.4;color:var(--text-muted)">{{ r.meta }}</span>
+                          </sc-if>
+                          <span style="display:flex;gap:0.4em;align-items:center;flex-wrap:wrap;margin-top:0.1em">
+                            <sc-if value="{{ r.hasChip }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;padding:0.15em 0.4em;border-radius:3px;border:1px solid var({{ r.token }});color:var({{ r.token }})">{{ r.chip }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasMark }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;color:{{ r.markColour }}">{{ r.markWord }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-size:0.66em;color:var(--text-muted)">{{ r.note }}</span>
+                            </sc-if>
+                          </span>
+                        </span>
+                        <sc-if value="{{ r.hasAction }}" hint-placeholder-val="{{ false }}">
+                          <span style="flex:0 0 auto;display:flex;gap:0.3em;align-items:center">
+                            <button onClick="{{ r.act }}" style="background:var(--surface-sunken);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;min-height:2.6em">{{ r.actionLabel }}</button>
+                            <sc-if value="{{ r.hasAction2 }}" hint-placeholder-val="{{ false }}">
+                              <button onClick="{{ r.act2 }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;min-height:2.6em">{{ r.action2Label }}</button>
+                            </sc-if>
+                          </span>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.checks }}" as="c" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.55em;align-items:center;min-width:0">
+                    <span style="flex:0 0 auto;width:1em;height:1em;border-radius:3px;border:1px solid {{ c.boxBorder }};background:{{ c.boxBg }}"></span>
+                    <span style="font-size:0.78em;line-height:1.4;color:{{ c.colour }};text-decoration:{{ c.strike }}">{{ c.text }}</span>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.comments }}" as="c" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.2em;border-top:1px solid var(--divider);padding-top:0.5em">
+                    <div style="display:flex;gap:0.5em;align-items:baseline">
+                      <span style="font-size:0.75em;font-weight:600">{{ c.who }}</span>
+                      <span style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ c.at }}</span>
+                    </div>
+                    <div style="font-size:0.76em;line-height:1.5">{{ c.text }}</div>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasHold }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.4em;border:1px solid var(--border);border-radius:var(--radius-card);padding:0.6em 0.7em">
+                    <div style="font-size:0.78em;font-weight:500">{{ f.holdTitle }}</div>
+                    <div style="height:0.5em;border-radius:999px;background:var(--surface-sunken);overflow:hidden">
+                      <div style="height:100%;width:{{ holdPct }};background:var(--accent)"></div>
+                    </div>
+                    <div style="display:flex;gap:0.4em;flex-wrap:wrap;align-items:center">
+                      <button onPointerDown="{{ holdStart }}" onPointerUp="{{ holdStop }}" onPointerLeave="{{ holdStop }}" onKeyDown="{{ holdKey }}" style="background:var(--accent);color:var(--text-on-accent);border:1px solid var(--accent);border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.9em">{{ holdLabel }}</button>
+                      <span style="font-family:var(--mono);font-size:0.62em;color:var(--text-muted)">{{ f.holdNote }}</span>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em;align-items:flex-start;padding:0.8em 0.2em 0.4em">
+                    <div style="width:100%;height:3.2em;border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken)"></div>
+                    <div style="font-size:0.92em;font-weight:600;line-height:1.3">{{ f.emptyTitle }}</div>
+                    <div style="font-size:0.78em;line-height:1.55;color:var(--text-muted)">{{ f.emptyBody }}</div>
+                    <sc-if value="{{ f.hasEmptyAction }}" hint-placeholder-val="{{ true }}">
+                      <span style="background:var(--accent);color:var(--text-on-accent);border-radius:var(--radius-control);padding:0.5em 0.85em;font-size:0.78em">{{ f.emptyAction }}</span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasAbsent }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.35em;padding:1.2em 0.4em;align-items:center;text-align:center">
+                    <div style="font-size:0.85em;font-weight:600">{{ f.absentTitle }}</div>
+                    <div style="font-size:0.75em;line-height:1.55;color:var(--text-muted);max-width:26em">{{ f.absentBody }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasActions }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.45em;flex-wrap:wrap;margin-top:0.1em">
+                    <sc-for list="{{ f.actions }}" as="a" hint-placeholder-count="1">
+                      <span style="background:{{ a.bg }};color:{{ a.colour }};border:1px solid {{ a.border }};border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.8em;display:inline-flex;align-items:center">{{ a.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasFooter }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:auto;padding-top:0.55em;border-top:1px solid var(--divider);font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ f.footer }}</div>
+                </sc-if>
+
+              </div>
+            </div>
+
+            <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ f.caption }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-for list="{{ tables }}" as="t" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ t.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ t.meta }}</span>
+          </div>
+          <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">{{ t.note }}</p>
+          </sc-if>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow-x:auto">
+            <div style="display:grid;grid-template-columns:{{ t.cols }};gap:0 14px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken);min-width:{{ t.minWidth }}">
+              <sc-for list="{{ t.head }}" as="h" hint-placeholder-count="3">
+                <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ h.text }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:{{ t.cols }};gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--divider);align-items:baseline;min-width:{{ t.minWidth }}">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+                  <div style="font-family:{{ c.font }};font-size:{{ c.size }};line-height:1.5;color:{{ c.colour }};min-width:0;overflow-wrap:anywhere">{{ c.text }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-time)">{{ g.id }}</span>
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.name }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;align-items:start">
+            <sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="12">
+              <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:{{ c.bg }};padding:10px 11px;display:flex;flex-direction:column;gap:6px;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:6px;justify-content:space-between">
+                  <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:{{ c.wordColour }}">{{ c.word }}</span>
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ c.tag }}</span>
+                </div>
+                <div style="font-size:11.5px;line-height:1.5;color:var(--text-primary)">{{ c.body }}</div>
+                <div style="font-size:10.5px;line-height:1.5;color:var(--text-muted)">{{ c.rule }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ checks }}" as="c" hint-placeholder-count="0">
+        <div style="display:grid;grid-template-columns:16px 1fr;gap:0 12px;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+          <div style="width:10px;height:10px;border-radius:50%;background:{{ c.colour }};margin-top:5px"></div>
+          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <div style="font-size:14px;font-weight:600;line-height:1.35">{{ c.name }}</div>
+            <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+        <div style="position:sticky;bottom:14px;align-self:flex-start;background:var(--text-primary);color:var(--surface);border-radius:var(--radius-control);padding:10px 14px;font-family:var(--mono);font-size:11.5px;box-shadow:var(--shadow-2)">{{ toast }}</div>
+      </sc-if>
+
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;roots&quot;,&quot;tree&quot;,&quot;editor&quot;,&quot;search&quot;,&quot;pins&quot;,&quot;notfound&quot;,&quot;docs&quot;,&quot;detail&quot;,&quot;expiry&quot;,&quot;bulk&quot;,&quot;storage&quot;,&quot;states&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;roots&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startMember&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;jana&quot;,&quot;petr&quot;,&quot;adam&quot;,&quot;klara&quot;,&quot;milos&quot;],&quot;default&quot;:&quot;jana&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100,
+            member: null, toast: null, root: null, raw: false, query: null, tick: 0 };
+
+  get N() { return window.HH_NOTES; }
+  get G() { return window.HH_DOCS; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (window.HH_NOTES && window.HH_DOCS && window.HH_TOKENS && window.HH_FIXTURES) {
+        clearInterval(this._boot);
+        this.forceUpdate();
+      }
+    }, 60);
+  }
+  componentWillUnmount() { clearInterval(this._boot); clearTimeout(this._t); }
+
+  get view() { return this.state.view || this.props.startView || "roots"; }
+  get who() { return this.state.member || this.props.startMember || "jana"; }
+  get query() { return this.state.query === null ? "porek" : this.state.query; }
+
+  say(text) {
+    clearTimeout(this._t);
+    this.setState({ toast: text });
+    this._t = setTimeout(() => this.setState({ toast: null }), 7000);
+  }
+
+  pickers(list, current, set) {
+    return list.map((o) => ({
+      label: o[1], title: o[2] || "", on: current === o[0] ? "1" : "0",
+      pick: () => this.setState(set(o[0]))
+    }));
+  }
+
+  /* ── shape helpers, as Stage 12 ─────────────────────────────────────── */
+
+  F(o) {
+    const f = Object.assign({
+      id: "", name: "", stateLabel: "", caption: "", col: "auto", frameMax: "460px",
+      route: "", clientLabel: "mobile", title: "", lede: "",
+      bannerTone: "var(--border)", bannerTitle: "", bannerBody: "", bannerActions: [],
+      skeleton: [], blocks: [], cols: [], chips: [], fields: [], checks: [], comments: [],
+      actions: [], emptyTitle: "", emptyBody: "", emptyAction: "",
+      absentTitle: "", absentBody: "", footer: "", barText: "",
+      holdTitle: "", holdNote: ""
+    }, o);
+    f.hasLede = !!f.lede;
+    f.hasBanner = !!f.bannerBody;
+    f.hasBannerTitle = !!f.bannerTitle;
+    f.hasChips = f.chips.length > 0;
+    f.hasEmpty = !!f.emptyTitle;
+    f.hasEmptyAction = !!f.emptyAction;
+    f.hasAbsent = !!f.absentTitle;
+    f.hasActions = f.actions.length > 0;
+    f.hasFooter = !!f.footer;
+    f.hasBar = !!f.barText;
+    f.hasHold = !!f.holdTitle;
+    f.bannerActions = f.bannerActions.map((a) => (typeof a === "string" ? { label: a } : a));
+    f.actions = f.actions.map((a, i) => (typeof a === "string"
+      ? { label: a, bg: i === 0 ? "var(--accent)" : "var(--surface)", colour: i === 0 ? "var(--text-on-accent)" : "var(--text-muted)", border: i === 0 ? "var(--accent)" : "var(--border)" }
+      : a));
+    f.blocks = f.blocks.map((b, i) => Object.assign({
+      key: (f.id || "b") + "-" + i, label: "", rule: "", labelColour: "var(--text-muted)"
+    }, b, {
+      count: (b.rows || []).length, rows: (b.rows || []).map((r) => this.row(r)),
+      hasHeading: !!b.label, hasRule: !!b.rule
+    }));
+    f.cols = f.cols.map((c) => Object.assign({ name: "", kindLabel: "", cards: [] }, c, {
+      cards: (c.cards || []).map((k) => Object.assign({
+        title: "", meta: "", chips: [], markWord: "", markColour: "var(--text-muted)",
+        border: "var(--border)", strike: "none"
+      }, k, { hasMeta: !!k.meta, hasMark: !!k.markWord }))
+    }));
+    f.checks = f.checks.map((c) => ({
+      text: c.text, strike: c.done ? "line-through" : "none",
+      colour: c.done ? "var(--text-muted)" : "var(--text-primary)",
+      boxBg: c.done ? "var(--accent)" : "var(--surface)",
+      boxBorder: c.done ? "var(--accent)" : "var(--border-strong)"
+    }));
+    f.fields = f.fields.map((x) => Object.assign({ label: "", value: "", hint: "", note: "", bg: "var(--surface-sunken)" }, x,
+      { hasHint: !!x.hint, hasNote: !!x.note }));
+    return f;
+  }
+
+  row(r) {
+    const o = Object.assign({
+      title: "", meta: "", chip: "", token: "--accent-family-household", right: "",
+      rightColour: "var(--text-muted)", markWord: "", markColour: "var(--text-muted)",
+      note: "", bg: "var(--surface)", border: "var(--border)", leftRule: "1px solid var(--border)",
+      padLeft: "0.65em", actionLabel: "", action2Label: "", strike: "none",
+      act: () => {}, act2: () => {}
+    }, r);
+    o.hasMeta = !!o.meta; o.hasChip = !!o.chip; o.hasRight = !!o.right;
+    o.hasMark = !!o.markWord; o.hasNote = !!o.note;
+    o.hasAction = !!o.actionLabel; o.hasAction2 = !!o.action2Label;
+    return o;
+  }
+
+  plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+
+  tableMin(cols) {
+    const tracks = String(cols || "").split(/\s+(?![^(]*\))/).filter(Boolean);
+    let n = 0;
+    tracks.forEach((t) => {
+      const m = /minmax\((\d+)px/.exec(t) || /^(\d+)px$/.exec(t);
+      n += m ? Number(m[1]) : 90;
+    });
+    return (n + Math.max(0, tracks.length - 1) * 14 + 28) + "px";
+  }
+
+  cell(text, opt) {
+    const o = opt || {};
+    return { text: text, font: o.mono ? "var(--mono)" : "var(--sans)",
+             size: o.mono ? "11.5px" : "13px",
+             colour: o.muted ? "var(--text-muted)" : o.tone || "var(--text-primary)" };
+  }
+
+  firstName(id) {
+    const F = window.HH_FIXTURES;
+    const m = F && F.members.filter((x) => x.id === id)[0];
+    return m ? m.name : id;
+  }
+  tokenOf(id) {
+    const T = window.HH_TOKENS;
+    const hit = T && T.accentMap.filter((m) => m[0] === id)[0];
+    const fam = hit ? hit[2] : "household";
+    return fam === "garden" ? "--accent-garden" : "--accent-family-" + fam;
+  }
+  statusColour(code) {
+    return code === 200 ? "var(--accent-family-keeping)"
+         : code === 409 ? "var(--status-pending)" : "var(--text-muted)";
+  }
+
+  /* ── the tree, drawn as indented rows ───────────────────────────────── */
+
+  treeRows(rootId, opts) {
+    const N = this.N, o = opts || {};
+    return N.treeOf(rootId).map((n) => {
+      const folder = n.type === "folder";
+      return {
+        title: n.name,
+        meta: folder ? "" : "/" + n.path,
+        padLeft: (0.65 + n.depth * 1.1) + "em",
+        token: folder ? "--border" : this.tokenOf("notes"),
+        chip: folder ? this.plural(n.count, "note") : n.lang,
+        right: folder ? "" : N.fmt(n.updated),
+        note: !folder && n.images ? this.plural(n.images, "image") + " on the meter" : "",
+        markWord: o.marks && o.marks[n.id] ? o.marks[n.id] : "",
+        markColour: "var(--status-pending)",
+        border: o.marks && o.marks[n.id] ? "var(--status-pending)" : "var(--border)",
+        bg: folder ? "var(--surface-sunken)" : "var(--surface)"
+      };
+    });
+  }
+
+  docRows(rootId, opts) {
+    const G = this.G, o = opts || {};
+    const byFolder = {};
+    G.docs.filter((d) => d.root === rootId).forEach((d) => {
+      (byFolder[d.folder] = byFolder[d.folder] || []).push(d);
+    });
+    return Object.keys(byFolder).filter((k) => !o.only || o.only.indexOf(k) >= 0).map((k) => ({
+      label: G.folderOf(k).name,
+      rule: this.plural(byFolder[k].length, "file") + " · " + G.mb(byFolder[k].reduce((a, d) => a + d.bytes, 0)),
+      rows: byFolder[k].slice(0, o.cap || 4).map((d) => ({
+        title: d.title,
+        meta: G.typeOf(d.type).en + (d.expires ? " · expires " + G.fmt(d.expires) : ""),
+        token: this.tokenOf("documents"),
+        right: G.mb(d.bytes),
+        chip: d.previewKind === "active" ? "download only" : "",
+        markWord: d.attachment === "pending" ? "waiting to upload"
+                : d.previewStatus === "failed" ? "no preview" : "",
+        markColour: d.attachment === "pending" ? "var(--status-pending)" : "var(--text-muted)",
+        border: d.attachment === "pending" ? "var(--status-pending)" : "var(--border)"
+      }))
+    }));
+  }
+
+  /* ── the twelve-state matrix, over both files' rows ─────────────────── */
+
+  stateGroups() {
+    const N = this.N, G = this.G;
+    const C = window.HH_COMPONENTS;
+    const rows = N.screens.concat(G.screens);
+    const order = N.allStates;
+    return rows.map((s) => {
+      const preset = s.preset === "F" ? ["loading", "populated", "error"]
+                   : s.preset === "S" ? ["populated"] : order;
+      const imp = s.impossible || {};
+      const cells = preset.map((st) => {
+        const excluded = !!imp[st];
+        const t = C ? C.treatments[st] : null;
+        const rule = s.states && s.states[st] ? s.states[st] : (t ? t.rule : "");
+        return {
+          word: st, tag: excluded ? "cannot occur" : (s.id + " · " + s.client),
+          body: excluded ? imp[st] : this.stateBody(s, st),
+          rule: excluded ? "" : rule,
+          bg: excluded ? "var(--surface-sunken)" : "var(--surface-raised)",
+          border: excluded ? "var(--border)" : "var(--border-strong)",
+          wordColour: excluded ? "var(--text-muted)" : this.stateColour(st)
+        };
+      });
+      const drawn = cells.filter((c) => c.tag !== "cannot occur").length;
+      return { id: s.id, name: s.name, cells: cells,
+               meta: drawn + " of " + preset.length + " states drawn · " + Object.keys(imp).length + " cannot occur · " + s.route };
+    });
+  }
+
+  stateColour(st) {
+    const m = { error: "var(--danger)", rejected: "var(--status-rejected)", conflicted: "var(--status-conflict)",
+                pending: "var(--status-pending)", syncing: "var(--status-syncing)", offline: "var(--status-offline)",
+                readonly: "var(--warning)", withdrawn: "var(--text-muted)", absent: "var(--text-muted)" };
+    return m[st] || "var(--accent-family-keeping)";
+  }
+
+  stateBody(s, st) {
+    if (st === "loading") return "Skeleton at the height of " + this.bodyWord(s) + ", so nothing jumps when it arrives.";
+    if (st === "empty") return s.empty && s.empty.s ? s.empty.s + " " + s.empty.e : "Nothing here yet.";
+    if (st === "error") return s.error;
+    if (st === "rejected") return s.rejected || s.error;
+    if (st === "withdrawn") return s.withdrawn || "Access changed, so this device dropped its copy.";
+    if (st === "readonly") return s.readonly;
+    if (st === "absent") return "Gone, not disabled: no label, no tooltip, no greyed control.";
+    if (st === "offline") return (s.states && s.states.offline) || "The same read, with the bar above it. " + this.bodyWord(s) + " is on the device.";
+    if (st === "pending") return (s.states && s.states.pending) || "A queued write on " + this.bodyWord(s) + ", marked in a word and a glyph, still editable.";
+    if (st === "syncing") return "Past the 800 ms threshold only.";
+    if (st === "conflicted") return (s.states && s.states.conflicted) || "A row flag that opens the comparison, never a modal at reconnect.";
+    return (s.states && s.states.populated) || this.bodyWord(s) + ", with no mark at all: synced is the absence of a mark.";
+  }
+  bodyWord(s) {
+    const m = { tree: "the tree", editor: "the note", pins: "the pinned rows", search: "the result rows",
+                banner: "the banner", notfound: "the page", upload: "the picker", detail: "the file",
+                active: "the notice", expiry: "the two fields", bulk: "the selection",
+                storage: "the figures", warn: "the warning" };
+    return m[s.kind] || "the content";
+  }
+
+  /* ── views ─────────────────────────────────────────────────────────── */
+
+  renderVals() {
+    const N = this.N, G = this.G;
+    if (!N || !G || !window.HH_TOKENS) {
+      return { views: [], controls: [], frames: [], tables: [], groups: [], checks: [], notes: [],
+               pageTitle: "Notes and Documents", pageMeta: "loading", stageLine: "stage 13",
+               gateLine: "", gateColour: "var(--text-muted)", viewIntro: "", hasToast: false,
+               hasField: false, queryChips: [], queryValue: "", queryMeta: "",
+               theme: "light", density: "comfortable", fontPx: "16px", holdPct: "0%", holdLabel: "" };
+    }
+
+    const view = this.view, who = this.who;
+    const nChecks = N.checks(), gChecks = G.checks();
+    const all = nChecks.concat(gChecks);
+    const passed = all.filter((c) => c.pass).length;
+    const groups = this.stateGroups();
+    const cells = groups.reduce((n, g) => n + g.cells.filter((c) => c.tag !== "cannot occur").length, 0);
+    const t = G.totals();
+
+    const VIEWS = [
+      ["roots", "1 + N roots", N.rootScopes().length],
+      ["tree", "the note tree", N.notes.length],
+      ["editor", "the editor", 2],
+      ["search", "search", N.queries.length],
+      ["pins", "two pin scopes", N.pins.length],
+      ["notfound", "the 404", N.renames.length],
+      ["docs", "the file tree", G.docs.length],
+      ["detail", "serving a file", G.endpoints.length],
+      ["expiry", "type and expiry", G.types.length],
+      ["bulk", "bulk and references", G.references.length],
+      ["storage", "the meter", Math.round(t.originalsGB * 10) / 10],
+      ["states", "every state", cells],
+      ["gate", "the gate", all.length]
+    ];
+
+    const out = {
+      theme: this.state.theme, density: this.state.density,
+      fontPx: Math.round(16 * this.state.scale / 100) + "px",
+      stageLine: "stage 13 · 14 rows · " + cells + " cells",
+      views: VIEWS.map((v) => ({ label: v[1], count: v[2], on: view === v[0] ? "1" : "0",
+                                 pick: () => this.setState({ view: v[0] }) })),
+      controls: [
+        { label: "Member", options: this.pickers(
+            (window.HH_FIXTURES.members || []).map((m) => [m.id, m.name, m.note]), who, (v) => ({ member: v })) },
+        { label: "Theme", options: this.pickers([["light", "light"], ["dark", "dark"]], this.state.theme, (v) => ({ theme: v })) },
+        { label: "Density", options: this.pickers([["comfortable", "comfortable"], ["compact", "compact"]], this.state.density, (v) => ({ density: v })) },
+        { label: "Text", options: this.pickers([[100, "100 %"], [200, "200 %"]], this.state.scale, (v) => ({ scale: v })) }
+      ],
+      gateLine: passed + " / " + all.length + " checks pass",
+      gateColour: passed === all.length ? "var(--accent-family-keeping)" : "var(--danger)",
+      hasToast: !!this.state.toast, toast: this.state.toast || "",
+      holdPct: "0%", holdLabel: "",
+      hasField: false, queryChips: [], queryValue: this.query, queryMeta: "",
+      frames: [], tables: [], groups: [], checks: [], notes: []
+    };
+
+    if (view === "roots") this.viewRoots(out);
+    if (view === "tree") this.viewTree(out);
+    if (view === "editor") this.viewEditor(out);
+    if (view === "search") this.viewSearch(out);
+    if (view === "pins") this.viewPins(out);
+    if (view === "notfound") this.viewNotFound(out);
+    if (view === "docs") this.viewDocs(out);
+    if (view === "detail") this.viewDetail(out);
+    if (view === "expiry") this.viewExpiry(out);
+    if (view === "bulk") this.viewBulk(out);
+    if (view === "storage") this.viewStorage(out);
+    if (view === "states") {
+      out.pageTitle = "Every state these fourteen rows can reach";
+      out.pageMeta = cells + " cells drawn · " + groups.reduce((n, g) => n + g.cells.filter((c) => c.tag === "cannot occur").length, 0) + " cannot occur";
+      out.viewIntro = "Twelve states are a treatment applied to one body, as Stage 4 established. A row declares the states its own surface cannot reach, each with the reason, and the reason is drawn where the state would have been. Twelve of the exclusions here come from three facts: bytes are write-once, a query is a read, and a measurement taken on the server cannot be queued on a phone.";
+      out.groups = groups;
+    }
+    if (view === "gate") {
+      out.pageTitle = "The gate";
+      out.pageMeta = passed + " of " + all.length + " pass · " + nChecks.length + " notes · " + gChecks.length + " documents";
+      out.viewIntro = "The stage's own line is two sentences: a renamed slug lands on a 404 that explains itself, and attachment rows exist before their bytes. Both are computed — the first by resolving the old path and comparing the hidden-row body against the never-existed body character by character, the second by running the offline upload across two devices and asking each endpoint what it answers at every step.";
+      out.checks = all.map((c) => ({ name: c.name, detail: c.detail,
+        colour: c.pass ? "var(--accent-family-keeping)" : "var(--danger)" }));
+    }
+
+    out.tables = out.tables.map((tb) => Object.assign({}, tb, {
+      hasNote: !!tb.note, note: tb.note || "", minWidth: this.tableMin(tb.cols)
+    }));
+    return out;
+  }
+
+  /* ── 1 + N roots ───────────────────────────────────────────────────── */
+
+  viewRoots(out) {
+    const N = this.N;
+    const idx = N.indexProof();
+    const F = window.HH_FIXTURES;
+
+    const switcher = (id, opts) => {
+      const roots = N.rootsFor(id);
+      const o = opts || {};
+      if (!roots.length) {
+        return this.F({ id: "C-23", name: this.firstName(id) + " — absent", stateLabel: "permission-absent",
+          route: "/notes", title: "Notes",
+          absentTitle: "There is no Notes here",
+          absentBody: this.firstName(id) + " holds none on Notes. The module is not in the sidebar, not in the More list, not in search and not on this screen — gone, not disabled, and nothing tells them a tree exists.",
+          footer: "The absent state is the one that has to be drawn to be believed.",
+          caption: "Three of five members are here. A root scope still exists for each of them on the server; what a scope is worth is decided by the grant, not by the schema." });
+      }
+      return this.F({ id: "C-23", name: this.firstName(id) + " — " + this.plural(roots.length, "root"),
+        stateLabel: "populated", route: "/notes/" + roots[0].id, frameMax: o.max || "430px",
+        title: "Notes", lede: "Which tree am I in?",
+        blocks: [{ label: "Roots", rule: "the switcher", rows: roots.map((r, i) => ({
+          title: r.label,
+          meta: r.why,
+          token: r.visibility === "shared" ? this.tokenOf("notes") : "--accent-family-time",
+          right: i === 0 ? "open" : "",
+          rightColour: "var(--accent)",
+          chip: r.exception ? "child profile" : "",
+          border: i === 0 ? "var(--accent)" : "var(--border)"
+        })) }],
+        footer: "1 + " + F.members.length + " scopes exist. This member may open " + roots.length + ".",
+        caption: o.caption || "" });
+    };
+
+    const jana = switcher("jana", { caption: "An owner may read a child's private root, and Adam was told that when the profile was made — the sentence is on his screen too, not only in a policy. It is the one exception in FR-NO4 and it is drawn where it applies rather than mentioned in a settings page." });
+    const adam = switcher("adam", { caption: "Adam sees two roots and the line about the first one. A child profile that discovers the arrangement later is a product that lied by omission; saying it twice costs nothing." });
+    const petr = switcher("petr");
+
+    out.pageTitle = "The two roots, and the index underneath them";
+    out.pageMeta = N.rootScopes().length + " scopes · " + idx.total + " folders and notes · " + idx.scoped.refused.length + " refusals";
+    out.viewIntro = "Every note and folder carries a visibility and an owner, so a household of five has six trees rather than one tree with a filter on it. The switcher is the navigation for that, and the index underneath it is the line FR-NO3 writes out in full because it is the one most likely to be copied wrong.";
+    out.frames = [jana, adam, petr];
+    out.tables = [
+      { title: "The same three names, in three roots", meta: "which is what the sentinel has to survive",
+        note: "Sibling uniqueness is per parent, and a note at the root of a tree has no parent — so the index needs a sentinel. If the sentinel is the string 'root', every root in the household shares one namespace and the second person to keep a private note called Recepty is refused against a note they cannot see, have never seen, and cannot rename.",
+        cols: "minmax(150px,1.2fr) minmax(160px,1.4fr) minmax(190px,2fr)",
+        head: [{ text: "Slug" }, { text: "Where it lives" }, { text: "What it is" }],
+        rows: idx.recepty.map((r) => ({ cells: [this.cell("recepty", { mono: true }), this.cell(r), this.cell("admitted by the scoped index", { muted: true }) ] }))
+          .concat(idx.denik.map((r) => ({ cells: [this.cell("denik", { mono: true }), this.cell(r), this.cell("admitted by the scoped index", { muted: true })] }))) },
+      { title: "Both indexes, run on the same tree", meta: idx.scoped.refused.length + " refusals scoped · " + idx.naive.refused.length + " naive",
+        cols: "minmax(160px,1.2fr) 90px 90px minmax(240px,2.4fr)",
+        head: [{ text: "Index" }, { text: "Admitted" }, { text: "Refused" }, { text: "What the member is told" }],
+        rows: [
+          { cells: [this.cell("root scope in the sentinel", { mono: true }), this.cell(String(idx.scoped.admitted), { mono: true }),
+                    this.cell(String(idx.scoped.refused.length), { mono: true, tone: "var(--accent-family-keeping)" }),
+                    this.cell("Nothing. Three people may each keep a Recepty at their own root.", { muted: true })] },
+          { cells: [this.cell("'root' as a bare sentinel", { mono: true }), this.cell(String(idx.naive.admitted), { mono: true }),
+                    this.cell(String(idx.naive.refused.length), { mono: true, tone: "var(--danger)" }),
+                    this.cell(idx.naive.refused.map((r) => r.truth).join(" "), { muted: true })] }
+        ] }
+    ];
+    out.notes = [{ text: "Four indexes of this shape exist across Notes and Documents. The same sentinel, written four times, is exactly the kind of line that is right in the first migration and wrong in the fourth — which is why the requirement writes the SQL out and this page runs both versions." }];
+  }
+
+  /* ── the note tree ─────────────────────────────────────────────────── */
+
+  viewTree(out) {
+    const N = this.N;
+    const shared = this.F({ id: "C-23", name: "Shared — web", stateLabel: "populated", route: "/notes/shared",
+      clientLabel: "web · 1440", frameMax: "760px", col: "span 2",
+      title: "Notes", lede: "Shared · " + this.plural(N.treeOf("shared").filter((n) => n.type === "note").length, "note"),
+      blocks: [{ rows: this.treeRows("shared") }],
+      footer: "Folders are single-parent and arbitrarily deep. Archived is excluded unless asked for.",
+      caption: "The tree is one query set per root (FR-NO6), so the depth costs nothing on the client. Every note row is a slug path, and the path is the URL — which is what makes the rename in the next view a navigation problem rather than a database one." });
+
+    const priv = this.F({ id: "C-23", name: "Just mine", stateLabel: "populated", route: "/notes/private:jana",
+      frameMax: "400px", title: "Notes", lede: "Just mine · three notes",
+      blocks: [{ rows: this.treeRows("private:jana") }],
+      footer: "Same tree, same code, different root scope.",
+      caption: "Jana's private root holds a note called Recepty, and the shared root holds a folder called Recepty. Same slug, two entities, no collision — the index and the resolver both carry the root." });
+
+    const pending = this.F({ id: "C-23", name: "A folder made offline", stateLabel: "pending", route: "/notes/shared",
+      frameMax: "400px", barText: "Offline — one change waiting",
+      title: "Notes", lede: "",
+      blocks: [{ rows: this.treeRows("shared", { marks: { "f-chata": "waiting to sync" } }) }],
+      footer: "notes.folder is strict_version, so the rename that loses does not vanish — it opens the comparison.",
+      caption: "The mark belongs to the row and the rest of the tree is untouched. The folder can still be renamed while it waits: a queued write is fully editable, which is the whole difference between pending and locked." });
+
+    const empty = this.F({ id: "C-23", name: "A root with nothing in it", stateLabel: "empty",
+      route: "/notes/private:adam", frameMax: "400px", title: "Notes", lede: "",
+      emptyTitle: "Nothing in this root yet",
+      emptyBody: "A private note is only ever yours — the one exception is that an owner can read a child's private root, which is why that line is on the switcher above and not in a policy page.",
+      emptyAction: "Write a note",
+      footer: "The teaching empty state Stage 9 wrote the template for.",
+      caption: "One sentence, one example, one action, and an illustration that is dropped entirely at 200 % text. Seventeen modules inherit this shape; this is the second of them to use it." });
+
+    out.pageTitle = "The tree browser";
+    out.pageMeta = N.notes.length + " notes · " + N.folders.length + " folders · " + N.rootScopes().length + " roots";
+    out.viewIntro = "Tree on the left, note on the right on the web; tree, then note, on a phone. Nothing here is authored per root: the same function draws all six trees, and what changes is the scope it is asked for.";
+    out.frames = [shared, priv, pending, empty];
+  }
+
+  /* ── the editor and the preserved loser ────────────────────────────── */
+
+  viewEditor(out) {
+    const N = this.N;
+    const loser = N.loserState();
+    const note = N.notes.filter((n) => n.id === N.conflict.note)[0];
+    const raw = this.state.raw;
+
+    const editor = this.F({ id: "C-24", name: raw ? "Raw Markdown" : "WYSIWYG", stateLabel: "conflicted",
+      route: "/notes/shared/dum/kde-je-hlavni-uzaver-vody", frameMax: "560px", col: "span 2",
+      title: note.title, lede: "Shared · Dům · updated " + N.fmt(note.updated),
+      bannerTone: "var(--status-conflict)",
+      bannerTitle: loser.banner.title,
+      bannerBody: loser.banner.body,
+      bannerActions: loser.banner.actions,
+      fields: [
+        { label: raw ? "body_md — what is stored" : "The note",
+          value: raw ? "## Kde je hlavní uzávěr vody ¶ " + note.body : note.body,
+          hint: raw ? "markdown" : "rich text",
+          note: raw ? "The raw toggle shows the stored form, not a re-derivation of it. A WYSIWYG that keeps its own tree is how the two drift apart." : "" }
+      ],
+      blocks: [
+        { label: "Editor", rows: [{
+            title: raw ? "Markdown (raw)" : "Rich text",
+            meta: "One stored form, two ways of looking at it.",
+            token: this.tokenOf("notes"),
+            actionLabel: raw ? "Show rich text" : "Show the Markdown",
+            act: () => { this.setState({ raw: !raw }); this.say(raw ? "Rich text. Markdown is still what is stored." : "This is the stored form, character for character."); }
+          }] },
+        { label: "The version that was replaced", rule: this.plural(loser.left, "day") + " left",
+          rows: [{
+            title: N.conflict.loser.chars + " characters, " + N.conflict.loser.device.toLowerCase() + ", " + N.conflict.loser.at.slice(11),
+            meta: N.conflict.loser.body,
+            token: "--status-conflict",
+            note: "kept until " + N.fmt(loser.until) + ", then the nightly job prunes it",
+            actionLabel: "Put it back",
+            act: () => this.say("The preserved body is restored as a new save. The version it replaces is preserved in its turn — the mechanism is symmetric, which is why it can be offered without a warning.")
+          }] }
+      ],
+      actions: ["Save", "Delete"],
+      footer: "notes.note_body is lww_row. The loser is a row in note_body_versions and syncs like any other, so this works offline.",
+      caption: "The banner is a statement with a verb, not a question with two buttons. It can be, because nothing has to be decided: the current body is already the current body, and the other one is here." });
+
+    const twoCases = this.F({ id: "C-27", name: "Why this is not the chat banner", stateLabel: "populated",
+      route: "/notes/shared/dum/kde-je-hlavni-uzaver-vody", frameMax: "400px",
+      title: "Two lww_row cases", lede: "One policy, two promises.",
+      blocks: [{ rows: N.lwwCases.map((c) => ({
+        title: c.entity, meta: c.why, token: c.entity.indexOf("notes") === 0 ? this.tokenOf("notes") : this.tokenOf("chat"),
+        right: c.window, note: c.offline })) }],
+      footer: "Neither module inherits the other's promise.",
+      caption: "A note body's loser is kept thirty days and recovered in a cellar with no signal. A chat message's is preserved with no stated window and only online, because the edit itself is online-only. Writing them as one pattern would have given chat a promise it cannot keep." });
+
+    out.pageTitle = "The editor, and the paragraph that was replaced";
+    out.pageMeta = loser.authors.length + " member can write to Notes here · " + loser.lostChars + " characters preserved · " + this.plural(loser.left, "day") + " left";
+    out.viewIntro = "Markdown is the single stored form and the editor is WYSIWYG with a raw toggle — press it, the field below changes and nothing else does. The banner above it is the one place in Notes where sync becomes visible, and this household makes it sharper than expected: exactly one member holds contribute on Notes, computed from the fixture, so the copy cannot name somebody else. It says 'your laptop', because that is what happened.";
+    out.frames = [editor, twoCases];
+    out.notes = [{ text: "Question marks in the banner: " + loser.questions + ". The test is not rhetorical — 'which version did you want?' is the shape this banner takes when nobody decides whether the product has an opinion." }];
+  }
+
+  /* ── search ────────────────────────────────────────────────────────── */
+
+  viewSearch(out) {
+    const N = this.N;
+    const q = this.query;
+    const jana = N.search(q, "jana"), adam = N.search(q, "adam");
+    const runs = N.queryRuns();
+
+    out.hasField = true;
+    out.queryValue = q;
+    out.onQuery = (e) => this.setState({ query: e.target.value });
+    out.queryChips = N.queries.map((v) => ({
+      label: v.q, on: v.q === q ? "1" : "0",
+      pick: () => this.setState({ query: v.q })
+    }));
+    out.queryMeta = jana.hits.length + " for Jana · " + adam.hits.length + " for Adam · " + jana.searched + " of " + jana.roots + " roots searched";
+
+    const frame = (id) => {
+      const s = N.search(q, id);
+      const rows = s.hits.map((h) => ({
+        title: h.title, meta: h.snippet, token: this.tokenOf("notes"),
+        right: h.lang, chip: h.folder || (h.root === "shared" ? "shared" : "just mine"),
+        note: "/" + h.path
+      }));
+      return this.F({ id: "C-26", name: this.firstName(id) + " — " + this.plural(s.hits.length, "hit"),
+        stateLabel: s.hits.length ? "populated" : "empty",
+        route: "/notes/search?q=" + encodeURIComponent(q), frameMax: "430px",
+        title: "Search notes", lede: "“" + q + "” · " + s.searched + " roots searched",
+        blocks: rows.length ? [{ rows: rows }] : [],
+        emptyTitle: rows.length ? "" : "No notes match “" + q + "”",
+        emptyBody: rows.length ? "" : "Try one word rather than three — the index folds accents and stems in each note's own language, so pórek and porek are the same search.",
+        emptyAction: rows.length ? "" : "Clear the query",
+        footer: s.hidden + " notes are out of this scope and are not counted anywhere on the screen.",
+        caption: "" });
+    };
+    const jf = frame("jana"), af = frame("adam");
+    jf.caption = "Jana may open three roots and this query searches two of them. Adam's private root is reachable by navigating to it — deliberately, visibly — and is never folded into her results, because a query that mixes a child's diary into a recipe search is surveillance with a search box on it.";
+    af.caption = "Adam's own search covers the shared root and his own. The same query, the same code, a different scope — and the number of notes he cannot see appears in no count, no total and no 'and 9 more'.";
+
+    const offline = this.F({ id: "C-26", name: "Offline", stateLabel: "offline", route: "/notes/search",
+      frameMax: "400px", barText: "Offline — searching this device",
+      title: "Search notes", lede: "“" + q + "” · titles only",
+      blocks: [{ rows: N.notes.filter((n) => n.root === "shared" && N.fold(n.title).indexOf(N.fold(q)) >= 0)
+        .map((n) => ({ title: n.title, meta: "matched on the title", token: this.tokenOf("notes"), right: n.lang })) }],
+      emptyTitle: "",
+      footer: "FR-NO7's index is PostgreSQL full-text and lives on the server.",
+      caption: "This is the honest answer to the gap Stage 11 recorded: reads are meant to be indistinguishable offline, and a server-side index is not on the device. So the field says what it is doing rather than returning fewer results and letting the member conclude a note is gone." });
+
+    out.pageTitle = "Language-aware search";
+    out.pageMeta = N.notes.length + " notes · " + runs.filter((r) => r.langSensitive > 0).length + " of " + runs.length + " queries depend on the language tag";
+    out.viewIntro = "The text-search configuration is chosen per note from its own language, and unaccent is applied. Type in the field: the two screens below recompute, and so does the table. Both properties are worth having for a household that keeps recipes in Czech and instructions for the house sitter in English — and both are invisible until the query is one the accent or the stemmer decides.";
+    out.frames = [jf, af, offline];
+    out.tables = [{
+      title: "Four queries, run on this page", meta: "hits for Jana / Adam",
+      note: "The last column is the interesting one: it counts the notes whose answer changes if you tag them with the other language. That is what per-note configuration buys, and it is the reason language is a column on the note rather than a household setting.",
+      cols: "110px 70px 70px 90px minmax(240px,2.6fr)",
+      head: [{ text: "Query" }, { text: "Jana" }, { text: "Adam" }, { text: "Lang-sensitive" }, { text: "Why this query" }],
+      rows: runs.map((r) => ({ cells: [
+        this.cell(r.q, { mono: true, tone: r.q === q ? "var(--accent)" : "var(--text-primary)" }),
+        this.cell(String(r.jana), { mono: true }),
+        this.cell(String(r.adam), { mono: true }),
+        this.cell(r.langSensitive ? r.langSensitive + " notes" : "—", { mono: true, muted: !r.langSensitive }),
+        this.cell(r.why, { muted: true })
+      ] }))
+    }];
+  }
+
+  /* ── pins ──────────────────────────────────────────────────────────── */
+
+  viewPins(out) {
+    const N = this.N;
+    const jana = N.pinsFor("jana"), adam = N.pinsFor("adam");
+
+    const frame = (id, p) => this.F({ id: "C-25", name: this.firstName(id) + " — " + this.plural(p.rows.length, "row"),
+      stateLabel: "populated", route: "/dashboard", frameMax: "400px",
+      title: "Pinned notes", lede: "The notes.pinned widget, de-duplicated",
+      blocks: [{ rows: p.rows.map((r) => ({
+        title: r.title, token: this.tokenOf("notes"),
+        right: r.label, rightColour: r.scope === "household" ? "var(--accent)" : "var(--text-muted)",
+        note: r.alsoPersonal ? "you also pinned this just for yourself — shown once, as the household pin" : "",
+        meta: r.audited ? "audited · needs contribute" : "a view preference · not audited"
+      })) }],
+      blocksExtra: null,
+      footer: p.canPinForEveryone ? "Both controls are offered." : "Pinning for everyone is absent here — it needs contribute.",
+      caption: "" });
+
+    const jf = frame("jana", jana), af = frame("adam", adam);
+    jf.caption = "One note is pinned both ways. The widget shows it once and household wins, because the alternative is a member unpinning their personal copy and being surprised it is still there.";
+    af.caption = "Adam holds view. He can pin for himself — a personal pin is a view preference and needs nothing more — and the 'for everyone' control is absent rather than greyed. A disabled button is a promise the grant will not keep.";
+
+    out.pageTitle = "Two pin scopes";
+    out.pageMeta = N.pins.length + " pins · " + jana.deduplicated + " de-duplicated";
+    out.viewIntro = "Household pinning is a shared, audited mutation that needs contribute. Personal pinning is a per-member view preference that needs view and is not audited. They are two different features that share a verb, and the screen has to make that legible without the words 'scope' or 'mutation'.";
+    out.frames = [jf, af];
+    out.tables = [{
+      title: "What the two scopes actually differ on", meta: "FR-NO8",
+      cols: "minmax(130px,1fr) minmax(120px,1fr) 100px 110px minmax(180px,1.6fr)",
+      head: [{ text: "On the screen" }, { text: "In the API" }, { text: "Needs" }, { text: "Audited" }, { text: "Who sees it" }],
+      rows: [
+        { cells: [this.cell("For everyone"), this.cell("household", { mono: true, muted: true }), this.cell("contribute", { mono: true }),
+                  this.cell("yes", { mono: true }), this.cell("Every member with a Notes grant", { muted: true })] },
+        { cells: [this.cell("Just for me"), this.cell("personal", { mono: true, muted: true }), this.cell("view", { mono: true }),
+                  this.cell("no", { mono: true, muted: true }), this.cell("You, on every device", { muted: true })] }
+      ]
+    }];
+    out.notes = [{ text: "Re-pinning is idempotent, which matters more than it sounds: a pin control is exactly the sort of thing that gets double-tapped on a slow connection, and the second tap has to be the same state rather than an unpin." }];
+  }
+
+  /* ── the 404 ───────────────────────────────────────────────────────── */
+
+  viewNotFound(out) {
+    const N = this.N;
+    const o = N.oracleProof();
+
+    const page = (res, name, caption, id) => this.F({ id: id || "F-18", name: name,
+      stateLabel: res.status === 200 ? "populated" : res.kind, route: "/notes/…", frameMax: "430px",
+      title: res.copy ? res.copy.title : res.title,
+      lede: "",
+      blocks: res.copy ? [{ rows: [{ title: res.copy.body, token: res.kind === "renamed" ? "--accent-family-time" : "--border" }] }] : [],
+      actions: res.copy ? res.copy.actions : [],
+      footer: res.why,
+      caption: caption });
+
+    out.pageTitle = "A renamed slug lands on a 404 that explains itself";
+    out.pageMeta = N.renames.length + " renames in the fixture · " + (o.identical ? "the two silent bodies are identical" : "MISMATCH");
+    out.viewIntro = "The client route is the slug path, and renaming or moving changes it with no redirect — carried from home D32, and the reason every mutating endpoint addresses by stable id instead. That decision puts the whole weight on one screen: the 404. It has two jobs that pull against each other, and the way out is that which body you get is decided before the lookup result is known.";
+    out.frames = [
+      page(o.renamed, "Renamed — Jana", "The note was renamed three weeks ago. The page names the new address, the member who changed it and the day, and offers to open it — but the old URL is not redirected and will keep landing here, which the copy says out loud so that a link in a group chat gets fixed rather than re-clicked."),
+      page(o.moved, "Moved into a folder — Jana", "Moving is the same event as renaming, because the path is built from the folder chain. One resolver, one page, one sentence pattern — the alternative is two 404s that drift apart."),
+      page(o.hidden, "A private note, to somebody else", "This path exists. FR-NO4 refuses with 404 rather than 403, because a 403 confirms the id and turns the permalink route into an existence oracle over the private tree."),
+      page(o.never, "A path that never existed", "And this is the same page, to the character. If these two bodies differed by a comma, the 404 would be an oracle again — which is why the comparison below is a string comparison and not a design review.")
+    ];
+    out.tables = [{
+      title: "The two silent bodies, compared", meta: o.chars + " characters",
+      note: "The explaining 404 is only safe because every link in this product is household-internal and session-authorised: whoever reads it is already inside the household that owns the note. The moment a path could be opened by a stranger, the explaining body would be the leak.",
+      cols: "minmax(150px,1.1fr) 90px minmax(260px,3fr)",
+      head: [{ text: "Situation" }, { text: "Status" }, { text: "What it says" }],
+      rows: [
+        { cells: [this.cell("Renamed, and you may see it"), this.cell("404", { mono: true, tone: "var(--accent-family-time)" }),
+                  this.cell(o.renamed.copy.title + " — " + o.renamed.copy.body.slice(0, 110) + "…", { muted: true })] },
+        { cells: [this.cell("Exists, and you may not"), this.cell("404", { mono: true }),
+                  this.cell(o.hidden.copy.title + " — " + o.hidden.copy.body.slice(0, 110) + "…", { muted: true })] },
+        { cells: [this.cell("Never existed"), this.cell("404", { mono: true }),
+                  this.cell(o.never.copy.title + " — " + o.never.copy.body.slice(0, 110) + "…", { muted: true })] },
+        { cells: [this.cell("Identical?"), this.cell(o.identical ? "yes" : "no", { mono: true, tone: o.identical ? "var(--accent-family-keeping)" : "var(--danger)" }),
+                  this.cell("Title, body and actions compared as strings on render, not by eye.", { muted: true })] }
+      ]
+    }];
+    out.notes = [{ text: "Jana is an owner and Adam is a child, so /notes/private:adam/denik resolves for her with a 200 — the one stated exception, and the reason the hidden case above is drawn between two members rather than between a member and an owner." }];
+  }
+
+  /* ── documents: the tree and the upload ────────────────────────────── */
+
+  viewDocs(out) {
+    const G = this.G;
+    const tl = G.uploadTimeline();
+
+    const tree = this.F({ id: "C-28", name: "Shared — web", stateLabel: "populated", route: "/documents/shared",
+      clientLabel: "web · 1440", frameMax: "760px", col: "span 2",
+      title: "Documents", lede: G.docs.length + " files · " + G.mb(G.totals().originals),
+      blocks: this.docRows("shared", { cap: 4 }),
+      footer: "Bytes are not synced. The device holds metadata and thumbnails; originals are fetched on demand against a cache budget the member sets.",
+      caption: "The same tree as Notes, over a different payload — which is the argument for building both in one stage. What differs is the row: a file carries a type, a size and, if it has one, an expiry, because those three are what a household scans for." });
+
+    const upload = this.F({ id: "C-29", name: "Add a file — phone", stateLabel: "populated", route: "/documents/upload",
+      frameMax: "380px", title: "Add a file", lede: "Most of what a household files is paper.",
+      blocks: [{ rows: [
+        { title: "Take a photo", meta: "The camera is first, because the receipt is in your hand", token: this.tokenOf("documents") },
+        { title: "Choose a file", meta: "From this device or a cloud picker", token: "--border" },
+        { title: "Scan several pages", meta: "One document, many photographs", token: "--border" }
+      ] }],
+      fields: [
+        { label: "Folder", value: "Faktury", hint: "optional" },
+        { label: "Type", value: "Faktura", hint: "invoice", note: "The type sets what notice you get if it also has an expiry. An invoice has none." }
+      ],
+      footer: "402 over the ceiling · 413 over the size cap · 415 a blocked type · 422 an empty file · 502 with nothing committed.",
+      caption: "Every field except the file itself is optional, and the type is one tap from a translated list. The screen asks for four things and accepts one." });
+
+    const pendingRow = this.F({ id: "C-29", name: "Miloš's tablet, four minutes later", stateLabel: "pending",
+      route: "/documents/shared/faktury", frameMax: "400px", barText: "The uploader is offline — one file waiting",
+      title: "Faktury", lede: "",
+      blocks: this.docRows("shared", { only: ["faktury"], cap: 4 }),
+      footer: "attachment_status: pending. The row is in the sync feed; the bytes are in an app sandbox in a car park.",
+      caption: "This is the gate: the row exists before its bytes, on a device that is not the one that made it. Title, folder, type and uploader all read; preview and download answer 409 in a sentence rather than showing a broken thumbnail." });
+
+    out.pageTitle = "The file tree, and the row before the bytes";
+    out.pageMeta = G.docs.length + " documents · " + G.mb(G.totals().originals) + " · one pending";
+    out.viewIntro = "Documents is the household's file store: Property, Vehicles, Pets, Finance, Utilities and Garden all reference it rather than holding their own files, so there is one meter, one privacy model and one place to look. That makes the upload path the most-used write in the product, and it has to work in a car park.";
+    out.frames = [tree, upload, pendingRow];
+    out.tables = [{
+      title: "The offline upload, step by step", meta: "two devices, one file",
+      note: "03-patterns §1 states it in one line — the row exists before the bytes. Run across two devices it is four states, and the one that matters is the third: a member opening a row whose bytes have not moved gets four readable fields and one honest refusal, not a spinner and not an error.",
+      cols: "minmax(140px,1.1fr) 80px minmax(200px,2fr) minmax(200px,2fr) 90px",
+      head: [{ text: "Step" }, { text: "Row" }, { text: "Jana's phone" }, { text: "Miloš's tablet" }, { text: "preview" }],
+      rows: tl.map((s) => ({ cells: [
+        this.cell(s.step),
+        this.cell(s.rowExists ? (s.bytesExist ? "row + bytes" : "row only") : "local only",
+          { mono: true, tone: s.bytesExist ? "var(--accent-family-keeping)" : s.rowExists ? "var(--status-pending)" : "var(--text-muted)" }),
+        this.cell(s.phone, { muted: true }),
+        this.cell(s.tablet, { muted: true }),
+        this.cell(s.serves === null ? "—" : String(s.serves), { mono: true, tone: this.statusColour(s.serves) })
+      ] }))
+    }];
+  }
+
+  /* ── serving a file ────────────────────────────────────────────────── */
+
+  viewDetail(out) {
+    const G = this.G;
+    const mx = G.serveMatrix();
+    const inv = G.docOf("d-inventura");
+    const svg = G.docOf("d-pudorys-svg");
+    const xls = G.docOf("d-rozpocet");
+
+    const detail = this.F({ id: "C-30", name: "A PDF that previews", stateLabel: "populated",
+      route: "/documents/shared/byt/pojistna-inventura", frameMax: "440px",
+      title: inv.title, lede: G.mb(inv.bytes) + " · PDF · uploaded by " + this.firstName(inv.by),
+      fields: [
+        { label: "Type", value: "Ostatní", hint: "no expiry" },
+        { label: "Checksum", value: inv.checksum, hint: "ETag" , note: "Bytes are write-once, so the checksum is the version. A changed file is a new document, optionally linked as a successor." },
+        { label: "Link", value: "/documents/" + inv.id + "/raw", hint: "permanent",
+          note: "Id-based and stable for the life of the file. The slug path above it is a convenience and is not permanent." }
+      ],
+      blocks: [{ label: "What this file can do", rows: G.endpoints.map((e) => {
+        const r = G.serve(inv, e);
+        return { title: e, meta: r.says, token: r.status === 200 ? this.tokenOf("documents") : "--border",
+                 right: String(r.status), rightColour: this.statusColour(r.status) };
+      }) }],
+      actions: ["Download", "Move", "Delete"],
+      footer: "Session-authorised, every time. There is no public path and no share token.",
+      caption: "A preview, a thumbnail, the original bytes and a forced download are four different questions, and the detail screen is where a member finds out which of them this file can answer." });
+
+    const active = this.F({ id: "C-31", name: "An active type", stateLabel: "populated",
+      route: "/documents/shared/byt/pudorys", frameMax: "400px",
+      title: svg.title, lede: G.mb(svg.bytes) + " · SVG",
+      bannerTone: "var(--warning)",
+      bannerTitle: "This one opens outside the app",
+      bannerBody: "An SVG is a drawing that can contain script, so it is never rendered inside Household. Download it and it opens in whatever you normally use for drawings.",
+      bannerActions: ["Download"],
+      fields: [
+        { label: "Uploaded as", value: svg.declared, hint: "the client said" },
+        { label: "Actually", value: svg.ct, hint: "sniffed", note: "The content type comes from the leading bytes, never from the client's header — this file is the reason that sentence is in FR-DO1." }
+      ],
+      blocks: [{ label: "Endpoints", rows: G.endpoints.map((e) => {
+        const r = G.serve(svg, e);
+        return { title: e, meta: r.note || r.says, token: "--border", right: String(r.status), rightColour: this.statusColour(r.status) };
+      }) }],
+      footer: "Carried from home D48: active types are download-only and never rendered in the app's origin.",
+      caption: "The empty preview pane is the wrong answer here. The state is a sentence explaining why there is nothing to show, and a download that works — which is the whole of what the member wanted anyway." });
+
+    const failed = this.F({ id: "C-30", name: "A conversion that failed", stateLabel: "error",
+      route: "/documents/shared/byt/rozpocet", frameMax: "400px",
+      title: xls.title, lede: G.mb(xls.bytes) + " · spreadsheet",
+      bannerTone: "var(--danger)",
+      bannerTitle: "No preview for this one",
+      bannerBody: G.previewFailed["d-rozpocet"],
+      bannerActions: ["Download", "Try again"],
+      blocks: [{ label: "Endpoints", rows: G.endpoints.map((e) => {
+        const r = G.serve(xls, e);
+        return { title: e, meta: r.says, token: "--border", right: String(r.status), rightColour: this.statusColour(r.status) };
+      }) }],
+      footer: "Derived variants are generated once after commit. A failure leaves the document download-only and never loses the upload.",
+      caption: "The failure mode that matters is the one where a member concludes their file is gone. It is not gone: the original bytes are the thing we promised to keep, and the preview was always a convenience we generated." });
+
+    out.pageTitle = "Four endpoints, and what they refuse";
+    out.pageMeta = mx.length + " content types × " + G.endpoints.length + " endpoints";
+    out.viewIntro = "Each read endpoint authorises the caller and then either streams through or issues a short-lived pre-signed URL. Designing them is mostly designing the refusals: a 409 while a conversion is pending, a 404 where a type has no preview, and the active types, which are download-only because rendering one in our origin would hand it the session.";
+    out.frames = [detail, active, failed];
+    out.tables = [
+      { title: "The matrix, computed on render", meta: "status per endpoint",
+        cols: "minmax(190px,1.6fr) minmax(120px,1fr) 70px 90px 80px 90px",
+        head: [{ text: "File" }, { text: "Sniffed type" }, { text: "raw" }, { text: "download" }, { text: "preview" }, { text: "thumbnail" }],
+        rows: mx.map((r) => ({ cells: [this.cell(r.title), this.cell(r.ct.replace("application/vnd.openxmlformats-officedocument.", "…"), { mono: true, muted: true })]
+          .concat(r.cells.map((c) => this.cell(String(c.status), { mono: true, tone: this.statusColour(c.status) }))) })) },
+      { title: "Isolation", meta: "five rules, one origin",
+        note: "None of these is a preference. A household's documents are exactly the files most worth attacking, and the preview pane is the only place in the product where the household's own bytes are rendered.",
+        cols: "minmax(180px,1.3fr) minmax(140px,1fr) minmax(240px,2.4fr)",
+        head: [{ text: "Rule" }, { text: "Where" }, { text: "Why" }],
+        rows: G.isolation().map((r) => ({ cells: [this.cell(r.rule, { mono: true }), this.cell(r.where, { muted: true }), this.cell(r.why, { muted: true })] })) }
+    ];
+  }
+
+  /* ── type and expiry ───────────────────────────────────────────────── */
+
+  viewExpiry(out) {
+    const G = this.G;
+    const rows = G.expiryRows();
+    const hand = G.strandHandshake();
+    const pas = G.docOf("d-pas-jana");
+    const t = G.typeOf("passport");
+
+    const detail = this.F({ id: "C-32", name: "A type and a date", stateLabel: "populated",
+      route: "/documents/shared/doklady/pas-jana", frameMax: "430px",
+      title: pas.title, lede: "Cestovní pas · expires " + G.fmt(pas.expires),
+      fields: [
+        { label: "Type", value: t.cs + " · " + t.en, hint: "country-aware",
+          note: "The vocabulary follows the household's country profile, because the word on the screen should be the word printed on the thing." },
+        { label: "Expires", value: G.fmt(pas.expires), hint: G.diff(pas.expires, G.today) + " days" },
+        { label: "You will be told", value: "From " + G.fmt(G.addDays(pas.expires, -t.lead)) + " — six months' notice", hint: t.lead + " d",
+          note: "The lead is the type's, not this document's: replacing a passport is an appointment, a queue and a photograph, and one month of warning would be one month of being unable to act." },
+        { label: "Completing it", value: "Personal", hint: t.scope,
+          note: "A passport belongs to a member, so ticking it clears it for that member. A lease belongs to the household and clears for everybody — the type carries which (D-53)." }
+      ],
+      footer: "Registers with the strand as documents.expiry. Notice, snooze and channel are Reminders' (FR-RM1); nothing about them is configured here.",
+      caption: "Two fields do the whole of what turns a filing cabinet into something that tells you. Neither of them is a reminder — the document declares a date and a type, and the strand does the rest, which is why there is no notification control anywhere on this screen." });
+
+    const list = this.F({ id: "C-32", name: "What is expiring", stateLabel: "populated", route: "/documents/expiring",
+      frameMax: "400px", title: "Expiring", lede: "Inside your lead windows",
+      blocks: [{ rows: G.expiringFor("jana").map((r) => ({
+        title: r.title.replace(/\.pdf$/, ""), meta: r.type + " · " + r.lead + "-day notice",
+        token: this.tokenOf("documents"), right: r.days + " days",
+        rightColour: r.days < 30 ? "var(--status-overdue)" : "var(--text-muted)",
+        note: r.scope === "personal" ? "completes for you" : "completes for the household"
+      })) }],
+      footer: "The documents.expiring widget and the Today alert read this same list.",
+      caption: "Two of the eight documents with an expiry are inside their window today, and they are not the two nearest dates — the passport is further away than three others and warns first, because the notice is a property of how long the thing takes to replace." });
+
+    out.pageTitle = "Document type and expiry";
+    out.pageMeta = G.types.length + " types · " + hand.leads + " register a reminder · " + rows.filter((r) => r.inWindow).length + " inside their window";
+    out.viewIntro = "This is the feature that turns a filing cabinet into something that tells you your passport runs out in six months, and the whole of it is two fields plus a table of defaults. The defaults are the work: eleven numbers derived from one question — how long does it take to replace this? — rather than eleven decisions to make again next year.";
+    out.frames = [detail, list];
+    out.tables = [
+      { title: "The eleven types", meta: hand.presets + " of " + hand.leads + " leads land on a preset from the strand's set",
+        note: "FR-DO7 states two of these — a passport at six months, an insurance policy at one — and leaves the rest. Deriving them from one question is what keeps them defensible; the passport's 180 days is also the case Stage 12 recorded as a gap, because the strand's offered set stops at three months and this is longer.",
+        cols: "minmax(140px,1.1fr) minmax(130px,1fr) 80px 90px minmax(220px,2.4fr)",
+        head: [{ text: "Type" }, { text: "On a CZ screen" }, { text: "Notice" }, { text: "Completes" }, { text: "Why that number" }],
+        rows: G.types.map((x) => ({ cells: [
+          this.cell(x.en + (x.stated ? " ·" : "")),
+          this.cell(x.cs, { muted: true }),
+          this.cell(x.lead === null ? "never" : x.lead + " d", { mono: true, tone: x.lead === 180 ? "var(--warning)" : "var(--text-primary)" }),
+          this.cell(x.scope, { mono: true, muted: true }),
+          this.cell(x.why, { muted: true })
+        ] }))
+      },
+      { title: "Every expiry in the fixture", meta: "windows computed against " + G.fmt(G.today),
+        cols: "minmax(200px,1.8fr) minmax(110px,1fr) 90px 80px 100px 90px",
+        head: [{ text: "Document" }, { text: "Type" }, { text: "Expires" }, { text: "In" }, { text: "Warns from" }, { text: "" }],
+        rows: rows.map((r) => ({ cells: [
+          this.cell(r.title.replace(/\.pdf$/, "")),
+          this.cell(r.type, { muted: true }),
+          this.cell(r.expires, { mono: true }),
+          this.cell(r.days + " d", { mono: true, muted: true }),
+          this.cell(r.opens || "—", { mono: true, muted: true }),
+          this.cell(r.inWindow ? "now" : "later", { mono: true, tone: r.inWindow ? "var(--status-overdue)" : "var(--text-muted)" })
+        ] }))
+      }
+    ];
+    out.notes = [{ text: "reminders.js resolves documents.expiry to " + hand.strandDays + " days and this table says " + hand.tableDays + ". They agree because the strand reads the table rather than keeping its own — checked on render, so the two cannot drift into two answers." }];
+  }
+
+  /* ── bulk, and the reference warning ───────────────────────────────── */
+
+  viewBulk(out) {
+    const G = this.G;
+    const sel = G.selection(G.bulkSelection);
+    const warn = G.deleteWarning(G.bulkSelection);
+
+    const selection = this.F({ id: "C-33", name: sel.count + " selected", stateLabel: "populated",
+      route: "/documents/shared/faktury", frameMax: "440px",
+      title: sel.count + " selected", lede: G.mb(sel.bytes) + " · " + G.mb(sel.derived) + " derived",
+      blocks: [{ rows: sel.docs.map((d) => ({
+        title: d.title, meta: G.typeOf(d.type).en, token: this.tokenOf("documents"),
+        right: G.mb(d.bytes),
+        markWord: d.attachment === "pending" ? "not uploaded yet" : "",
+        markColour: "var(--status-pending)",
+        note: G.referencesTo(d.id).length ? "used by " + G.referencesTo(d.id).map((r) => r.entity).join(", ") : ""
+      })) }],
+      actions: ["Move", "Archive", "Download as zip", "Delete"],
+      footer: sel.zip.says,
+      caption: "A household migrating from a folder on a laptop uploads two hundred files and immediately needs to organise them, which is why this is a requirement rather than a nicety. Four verbs, one selection, and every row keeps its own marks inside it." });
+
+    const warning = this.F({ id: "C-35", name: "Before deleting", stateLabel: "populated",
+      route: "/documents/shared/auto/servisni-faktura", frameMax: "430px",
+      title: warn.title, lede: "",
+      bannerTone: "var(--warning)",
+      bannerTitle: "",
+      bannerBody: warn.body.join(" "),
+      bannerActions: [warn.confirm, "Keep them"],
+      blocks: [{ label: "What points at it", rows: G.references.filter((r) => sel.docs.some((d) => d.id === r.doc)).map((r) => ({
+        title: r.entity, meta: r.what, token: this.tokenOf(r.module), chip: r.module
+      })) }],
+      footer: warn.after,
+      caption: "Naming the reference is the feature. A count — 'this file is used in 1 place' — would be a warning about nothing, and blocking would mean asking us for their own files back. So it names the Škoda, and then it lets them delete it." });
+
+    const zip = this.F({ id: "C-33", name: "The zip", stateLabel: "populated", route: "/documents/zip",
+      frameMax: "380px", title: "Download as zip", lede: sel.zip.included + " of " + sel.count + " files",
+      blocks: [{ rows: [
+        { title: sel.zip.included + " files, " + G.mb(sel.bytes - sel.pending.reduce((a, d) => a + d.bytes, 0)), meta: "packed on the server and streamed", token: this.tokenOf("documents") },
+        { title: sel.pending.length ? sel.pending[0].title : "—", meta: "left out: the bytes have not arrived yet", token: "--status-pending",
+          markWord: "waiting", markColour: "var(--status-pending)", note: "wait for it, or zip the rest now" }
+      ] }],
+      actions: ["Zip the " + sel.zip.included, "Wait for the last one"],
+      footer: "Nothing is silently omitted from an archive.",
+      caption: "An archive that quietly contains one fewer file than the member selected is the kind of thing discovered a year later. The skipped row is named, and the wait is offered." });
+
+    out.pageTitle = "Bulk operations, and what points at a file";
+    out.pageMeta = sel.count + " selected · " + G.references.length + " references across the household";
+    out.viewIntro = "Because every other module references documents rather than holding its own files, deleting one is the only destructive action in the product whose consequence is somewhere else entirely. The reverse index exists for that one sentence.";
+    out.frames = [selection, warning, zip];
+    out.tables = [{
+      title: "The reverse index", meta: G.references.length + " references · no module reads the documents tables",
+      note: "A referring module stores an id. The platform resolves it, applies the caller's Documents grant and the document's privacy, and returns what that caller may see — or a placeholder saying a document exists and is not visible to them. That is why the component has a state the referring module cannot predict (D-40).",
+      cols: "minmax(190px,1.6fr) 110px minmax(150px,1.2fr) minmax(200px,2fr)",
+      head: [{ text: "Document" }, { text: "Module" }, { text: "Entity" }, { text: "What the delete warning says" }],
+      rows: G.references.map((r) => ({ cells: [
+        this.cell(G.docOf(r.doc).title),
+        this.cell(r.module, { mono: true, muted: true }),
+        this.cell(r.entity),
+        this.cell(r.says, { muted: true })
+      ] }))
+    }, {
+      title: "The same reference, three members", meta: "resolved by the platform, not the module",
+      cols: "minmax(120px,1fr) 110px minmax(120px,1fr) minmax(260px,2.6fr)",
+      head: [{ text: "Member" }, { text: "Documents" }, { text: "State" }, { text: "What the vehicle screen draws" }],
+      rows: ["jana", "milos", "petr"].map((m) => {
+        const r = G.referenceFor("d-servis-skoda", m);
+        return { cells: [
+          this.cell(this.firstName(m)),
+          this.cell((window.HH_FIXTURES.members.filter((x) => x.id === m)[0] || {}).grants.documents, { mono: true, muted: true }),
+          this.cell(r.state, { mono: true, tone: r.state === "resolved" ? "var(--accent-family-keeping)" : "var(--text-muted)" }),
+          this.cell(r.says, { muted: true })
+        ] };
+      })
+    }];
+  }
+
+  /* ── the meter ─────────────────────────────────────────────────────── */
+
+  viewStorage(out) {
+    const G = this.G, N = this.N;
+    const t = G.totals();
+    const rec = G.reconcile();
+    const sel = G.selection(["d-bourka", "d-prohlidka"]);
+
+    const screen = this.F({ id: "C-34", name: "What Documents is using", stateLabel: "populated",
+      route: "/documents/storage", frameMax: "440px",
+      title: "What Documents is using", lede: t.count + " files · " + G.mb(t.total) + " in total",
+      blocks: [
+        { label: "The split", rows: [
+          { title: "Originals", meta: "the files you uploaded", token: this.tokenOf("documents"), right: G.mb(t.originals) },
+          { title: "Derived variants", meta: "thumbnails and web-sized previews, generated once", token: "--accent-family-time",
+            right: G.mb(t.derived), note: t.overheadPct.toFixed(0) + " % on top — this is why a 2 MB file can be using 3 MB" },
+          { title: "Notes images", meta: "counted under Notes, not here", token: this.tokenOf("notes"),
+            right: N.imageLines().gb.toFixed(2) + " GB", note: "inline images inherit their note's visibility and its root" }
+        ] },
+        { label: "Largest files", rows: G.largest(4).map((l) => ({
+          title: l.title, meta: l.folder + " · " + this.firstName(l.by), token: "--border",
+          right: G.mb(l.bytes), note: l.share.toFixed(1) + " % of Documents"
+        })) }
+      ],
+      actions: ["Select the largest", "See what deleting would recover"],
+      footer: "Measured on the server from daily samples. Blocks are computed from the month's daily average, so a big upload deleted the same day costs nothing.",
+      caption: "A metered charge has to be verifiable by the person paying it, which means every number on this screen is arithmetic a member could redo — total, split, overhead and the recovery figure, all from the same rows." });
+
+    const recover = this.F({ id: "C-34", name: "What deleting these two recovers", stateLabel: "populated",
+      route: "/documents/storage", frameMax: "400px",
+      title: "Two files selected", lede: G.mb(sel.recovers) + " would come back",
+      blocks: [{ rows: sel.docs.map((d) => ({
+        title: d.title, meta: G.mb(d.bytes) + " original" + (d.derived ? " · " + G.mb(d.derived) + " derived" : " · no derived variant"),
+        token: this.tokenOf("documents"), right: G.mb(d.bytes + d.derived)
+      })) }],
+      actions: ["Delete both", "Cancel"],
+      footer: "The figure includes derived variants, because they are what the meter counts too.",
+      caption: "'What deleting would recover' is the only number on a storage screen that a member actually acts on, and it is the one most likely to be quietly wrong — a total that leaves out the derived bytes is a promise of space that does not arrive." });
+
+    out.pageTitle = "The meter, itemised";
+    out.pageMeta = t.count + " files · " + t.originalsGB.toFixed(2) + " GB + " + t.derivedGB.toFixed(2) + " GB derived";
+    out.viewIntro = "Documents is the largest contributor to the storage bill, which is why FR-DO10 asks for this screen rather than leaving the figure in settings. Everything here is computed from the same thirty-eight rows the household storage screen counts, so the two cannot disagree — and that reconciliation is itself one of the gate's checks.";
+    out.frames = [screen, recover];
+    out.tables = [
+      { title: "Three splits", meta: "folder, member, type",
+        cols: "minmax(130px,1fr) 70px 90px 90px minmax(120px,1fr) 70px 90px",
+        head: [{ text: "Folder" }, { text: "Files" }, { text: "Originals" }, { text: "Derived" }, { text: "Type" }, { text: "Files" }, { text: "Originals" }],
+        rows: G.splitBy("folder").map((f, i) => {
+          const ty = G.splitBy("type")[i];
+          return { cells: [
+            this.cell(f.name), this.cell(String(f.n), { mono: true, muted: true }), this.cell(G.mb(f.bytes), { mono: true }),
+            this.cell(G.mb(f.derived), { mono: true, muted: true }),
+            this.cell(ty ? ty.name : "", { muted: true }), this.cell(ty ? String(ty.n) : "", { mono: true, muted: true }),
+            this.cell(ty ? G.mb(ty.bytes) : "", { mono: true })
+          ] };
+        }) },
+      { title: "Reconciled with Settings §5", meta: rec.agree ? "agrees to " + rec.delta.toFixed(3) + " GB" : "DISAGREES",
+        note: "Stage 8 built the household storage screen with a Documents line on it. This stage builds the module's own clean-up view. Two screens showing one number is how they end up showing two — so the check is a computation, not a convention.",
+        cols: "minmax(190px,1.6fr) 110px 110px minmax(200px,2fr)",
+        head: [{ text: "Figure" }, { text: "Settings" }, { text: "Here" }, { text: "" }],
+        rows: [
+          { cells: [this.cell("Documents, originals"), this.cell(rec.settings + " GB", { mono: true }),
+                    this.cell(rec.here.toFixed(2) + " GB", { mono: true, tone: rec.agree ? "var(--accent-family-keeping)" : "var(--danger)" }),
+                    this.cell("Recomputed from the 38 rows on render.", { muted: true })] },
+          { cells: [this.cell("Derived variants"), this.cell(rec.derivedHousehold + " GB household-wide", { mono: true }),
+                    this.cell(rec.derivedHere.toFixed(2) + " GB", { mono: true, tone: rec.withinDerived ? "var(--accent-family-keeping)" : "var(--danger)" }),
+                    this.cell("Documents' share of the household's derived overhead.", { muted: true })] },
+          { cells: [this.cell("Largest single file"), this.cell(rec.largestSettings ? rec.largestSettings[0] : "—", { muted: true }),
+                    this.cell(rec.largestHere.title, { }),
+                    this.cell("The top row of both screens is the same file.", { muted: true })] }
+        ] }
+    ];
+  }
+}
+
+</script>
+</body>
+</html>

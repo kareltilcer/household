@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./illustration.js"></script>
+<script src="./shopping.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">Shopping · the proving ground</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Shopping, end to end</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-keeping)">stage 09 · 8 rows · 16 client layouts</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="8">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="6">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">The quick-add parser and the two-trolley merge are functions in shopping.js. This page runs them; the gate reads the results rather than a claim about them.</div>
+      <a href="./Household and Billing.dc.html" style="font-family:var(--mono);font-size:11px">← stage 08 · household and billing</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <sc-if value="{{ isScreens }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1400px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:26px;align-items:start">
+          <sc-for list="{{ screens }}" as="s" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:11px;min-width:0">
+
+              <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+                <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-keeping)">{{ s.id }}</span>
+                <h3 style="margin:0;font-size:15px;font-weight:600">{{ s.name }}</h3>
+                <span style="font-family:var(--mono);font-size:10px;color:{{ s.drawnColour }}">{{ s.drawnLabel }}</span>
+              </div>
+
+              <div data-watch="1" data-name="{{ s.id }}" style="width:100%;max-width:{{ s.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:{{ s.radius }};background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+                <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.route }}</span>
+                  <span style="flex:0 0 auto">{{ s.clientLabel }}</span>
+                </div>
+
+                <div style="flex:1 1 auto;padding:1.15em 1em 1.1em;display:flex;flex-direction:column;gap:0.85em;min-width:0">
+
+                  <div style="display:flex;flex-direction:column;gap:0.3em">
+                    <div style="font-size:1.15em;font-weight:600;line-height:1.25">{{ s.title }}</div>
+                    <sc-if value="{{ s.hasLede }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.82em;line-height:1.5;color:var(--text-muted)">{{ s.lede }}</div>
+                    </sc-if>
+                  </div>
+
+                  <sc-for list="{{ s.notices }}" as="n" hint-placeholder-count="1">
+                    <div style="border:1px solid {{ n.colour }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.7em 0.8em;display:flex;flex-direction:column;gap:0.25em">
+                      <sc-if value="{{ n.hasTitle }}" hint-placeholder-val="{{ true }}">
+                        <div style="font-size:0.8em;font-weight:600;color:{{ n.colour }}">{{ n.title }}</div>
+                      </sc-if>
+                      <div style="font-size:0.78em;line-height:1.5;color:var(--text-primary)">{{ n.body }}</div>
+                    </div>
+                  </sc-for>
+
+                  <sc-if value="{{ s.isImpossible }}" hint-placeholder-val="{{ false }}">
+                    <div style="border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.8em;display:flex;flex-direction:column;gap:0.35em">
+                      <div style="font-family:var(--mono);font-size:0.62em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ s.impossibleTag }}</div>
+                      <div style="font-size:0.78em;line-height:1.55;color:var(--text-primary)">{{ s.impossibleWhy }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isLoading }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.6em">
+                      <sc-for list="{{ s.skeleton }}" as="k" hint-placeholder-count="5">
+                        <div style="height:{{ k.h }};width:{{ k.w }};border-radius:var(--radius-control);background:var(--skeleton-bg)"></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isLists }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                      <sc-for list="{{ s.lists }}" as="l" hint-placeholder-count="4">
+                        <button data-target="1" data-name="{{ s.id }} {{ l.name }}" style="display:flex;align-items:center;gap:0.6em;min-height:52px;padding:0.5em 0.7em;border:0;border-bottom:1px solid var(--divider);background:var(--surface-raised);text-align:left;color:var(--text-primary);min-width:0">
+                          <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.12em">
+                            <span style="font-size:0.88em;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.name }}</span>
+                            <span style="font-size:0.68em;color:var(--text-muted)">{{ l.meta }}</span>
+                          </span>
+                          <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.86em;color:{{ l.countColour }}">{{ l.count }}</span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isList }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-direction:column;gap:0.7em">
+
+                      <sc-if value="{{ s.canWrite }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;flex-direction:column;gap:0.35em">
+                          <div style="display:flex;gap:0.4em;min-width:0">
+                            <input value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}" placeholder="milk, bread, 2 kg potatoes" aria-label="Add to Shopping" style="flex:1 1 auto;min-width:0;min-height:48px;padding:0.4em 0.7em;border:2px solid var(--accent-family-keeping);border-radius:var(--radius-control);background:var(--input-bg);color:var(--text-primary);font-size:0.9em" />
+                            <button onClick="{{ onAdd }}" data-target="1" data-name="B-2 add" style="flex:0 0 auto;min-height:48px;min-width:48px;padding:0 0.8em;border:1px solid var(--accent-family-keeping);border-radius:var(--radius-control);background:var(--accent-family-keeping);color:var(--text-on-accent);font-size:0.85em;font-weight:500">Add</button>
+                          </div>
+                          <div style="font-family:var(--mono);font-size:0.62em;line-height:1.5;color:{{ s.parseColour }}">{{ s.parseLine }}</div>
+                        </div>
+                      </sc-if>
+
+                      <sc-for list="{{ s.groups }}" as="g" hint-placeholder-count="4">
+                        <div style="display:flex;flex-direction:column;gap:0.3em">
+                          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5em;padding-top:0.15em">
+                            <span style="font-family:var(--mono);font-size:0.62em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ g.name }}</span>
+                            <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ g.pos }}</span>
+                          </div>
+                          <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                            <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="3">
+                              <button onClick="{{ i.toggle }}" data-target="1" data-name="B-2 tick {{ i.text }}" style="display:flex;align-items:center;gap:0.7em;min-height:48px;padding:0.45em 0.7em;border:0;border-bottom:1px solid var(--divider);background:var(--surface-raised);text-align:left;color:var(--text-primary);min-width:0;width:100%">
+                                <span style="flex:0 0 auto;width:1.5em;height:1.5em;border-radius:0.35em;border:2px solid {{ i.boxBorder }};background:{{ i.boxBg }};display:flex;align-items:center;justify-content:center;color:var(--text-on-accent);font-size:0.8em">{{ i.tick }}</span>
+                                <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                                  <span style="font-size:0.92em;line-height:1.3">{{ i.line }}</span>
+                                  <sc-if value="{{ i.hasMeta }}" hint-placeholder-val="{{ false }}">
+                                    <span style="font-size:0.66em;color:var(--text-muted)">{{ i.meta }}</span>
+                                  </sc-if>
+                                </span>
+                                <sc-if value="{{ i.hasMark }}" hint-placeholder-val="{{ false }}">
+                                  <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.6em;color:{{ i.markColour }}">{{ i.mark }}</span>
+                                </sc-if>
+                              </button>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-for>
+
+                      <div style="display:flex;flex-direction:column;gap:0.3em;border-top:1px solid var(--divider);padding-top:0.6em">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5em;min-width:0">
+                          <button onClick="{{ s.toggleChecked }}" data-target="1" data-name="B-2 checked section" style="flex:1 1 auto;min-height:44px;padding:0.3em 0;border:0;background:transparent;text-align:left;color:var(--text-muted);font-size:0.76em">{{ s.checkedLabel }}</button>
+                          <sc-if value="{{ s.canClear }}" hint-placeholder-val="{{ true }}">
+                            <button onClick="{{ s.clear }}" data-target="1" data-name="B-2 clear checked" style="flex:0 0 auto;min-height:44px;padding:0 0.7em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-primary);font-size:0.72em">Clear ticked</button>
+                          </sc-if>
+                        </div>
+                        <sc-if value="{{ s.showChecked }}" hint-placeholder-val="{{ true }}">
+                          <div style="display:flex;flex-direction:column;border:1px solid var(--border-subtle);border-radius:var(--radius-card);overflow:hidden">
+                            <sc-for list="{{ s.checkedItems }}" as="i" hint-placeholder-count="3">
+                              <button onClick="{{ i.toggle }}" data-target="1" data-name="B-2 untick {{ i.text }}" style="display:flex;align-items:center;gap:0.7em;min-height:44px;padding:0.4em 0.7em;border:0;border-bottom:1px solid var(--divider);background:var(--surface-sunken);text-align:left;color:var(--text-muted);min-width:0;width:100%">
+                                <span style="flex:0 0 auto;width:1.5em;height:1.5em;border-radius:0.35em;border:2px solid {{ i.boxBorder }};background:{{ i.boxBg }};display:flex;align-items:center;justify-content:center;color:var(--text-on-accent);font-size:0.8em">{{ i.tick }}</span>
+                                <span style="flex:1 1 auto;min-width:0;font-size:0.86em;text-decoration:line-through;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ i.line }}</span>
+                                <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.6em">{{ i.meta }}</span>
+                              </button>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                      </div>
+
+                      <sc-if value="{{ s.hasTotal }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5em;font-size:0.78em">
+                          <span style="color:var(--text-muted)">{{ s.totalLabel }}</span>
+                          <span style="font-family:var(--mono);color:var(--text-primary)">{{ s.totalValue }}</span>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ s.hasToast }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;align-items:center;gap:0.6em;padding:0.6em 0.75em;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface-inverse, var(--surface-sunken));min-width:0">
+                          <span style="flex:1 1 auto;min-width:0;font-size:0.76em">{{ s.toastBody }}</span>
+                          <button onClick="{{ s.undo }}" data-target="1" data-name="B-2 undo" style="flex:0 0 auto;min-height:44px;padding:0 0.7em;border:0;background:transparent;color:var(--text-link);font-size:0.76em;font-weight:500">Undo</button>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isDetail }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                      <sc-for list="{{ s.fields }}" as="f" hint-placeholder-count="9">
+                        <div style="display:flex;align-items:center;gap:0.6em;min-height:48px;padding:0.45em 0.7em;border-bottom:1px solid var(--divider);background:var(--surface-raised);min-width:0">
+                          <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                            <span style="font-size:0.78em;font-weight:500">{{ f.label }}</span>
+                            <span style="font-size:0.66em;line-height:1.45;color:var(--text-muted)">{{ f.note }}</span>
+                          </span>
+                          <span style="flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:0.1em">
+                            <span style="font-family:var(--mono);font-size:0.76em;color:{{ f.valueColour }}">{{ f.value }}</span>
+                            <span style="font-family:var(--mono);font-size:0.58em;letter-spacing:0.08em;text-transform:uppercase;color:{{ f.reqColour }}">{{ f.req }}</span>
+                          </span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isStaples }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.7em">
+                      <div style="font-family:var(--mono);font-size:0.62em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">you usually buy</div>
+                      <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                        <sc-for list="{{ s.staples }}" as="p" hint-placeholder-count="5">
+                          <button data-target="1" data-name="{{ s.id }} {{ p.text }}" style="display:flex;align-items:center;gap:0.6em;min-height:48px;padding:0.45em 0.7em;border:0;border-bottom:1px solid var(--divider);background:var(--surface-raised);text-align:left;color:var(--text-primary);min-width:0">
+                            <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--accent-family-keeping)">+</span>
+                            <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                              <span style="font-size:0.88em">{{ p.text }}</span>
+                              <span style="font-family:var(--mono);font-size:0.62em;color:var(--text-muted)">{{ p.line }}</span>
+                            </span>
+                            <sc-if value="{{ p.hasTag }}" hint-placeholder-val="{{ false }}">
+                              <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.58em;letter-spacing:0.08em;text-transform:uppercase;color:{{ p.tagColour }}">{{ p.tag }}</span>
+                            </sc-if>
+                          </button>
+                        </sc-for>
+                      </div>
+                      <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.2em">
+                        <div style="font-size:0.76em;font-weight:600">{{ s.recurringTitle }}</div>
+                        <div style="font-size:0.74em;line-height:1.5;color:var(--text-muted)">{{ s.recurringBody }}</div>
+                      </div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isLayout }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.5em">
+                      <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                        <sc-for list="{{ s.order }}" as="c" hint-placeholder-count="8">
+                          <div style="display:flex;align-items:center;gap:0.5em;min-height:48px;padding:0.4em 0.6em;border-bottom:1px solid var(--divider);background:var(--surface-raised);min-width:0">
+                            <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--text-muted);width:1.4em">{{ c.n }}</span>
+                            <span style="flex:1 1 auto;min-width:0;font-size:0.84em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.name }}</span>
+                            <sc-if value="{{ c.moved }}" hint-placeholder-val="{{ false }}">
+                              <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.58em;color:var(--accent-family-keeping)">moved</span>
+                            </sc-if>
+                            <button onClick="{{ c.up }}" data-target="1" data-name="{{ s.id }} up {{ c.name }}" aria-label="Move {{ c.name }} earlier" style="flex:0 0 auto;min-height:44px;min-width:44px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-primary);font-family:var(--mono);font-size:0.8em">↑</button>
+                            <button onClick="{{ c.down }}" data-target="1" data-name="{{ s.id }} down {{ c.name }}" aria-label="Move {{ c.name }} later" style="flex:0 0 auto;min-height:44px;min-width:44px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface);color:var(--text-primary);font-family:var(--mono);font-size:0.8em">↓</button>
+                          </div>
+                        </sc-for>
+                      </div>
+                      <div style="font-size:0.72em;line-height:1.5;color:var(--text-muted)">{{ s.orderNote }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isTrip }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.7em">
+                      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.6em;padding:0.7em 0.8em;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-sunken)">
+                        <span style="font-size:0.78em;color:var(--text-muted)">{{ s.tripWhen }}</span>
+                        <span style="font-family:var(--mono);font-size:1.1em;color:var(--text-primary)">{{ s.tripTotal }}</span>
+                      </div>
+                      <sc-for list="{{ s.tripLines }}" as="l" hint-placeholder-count="3">
+                        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.6em;min-height:36px;border-bottom:1px solid var(--divider);min-width:0">
+                          <span style="flex:1 1 auto;min-width:0;font-size:0.78em">{{ l.k }}</span>
+                          <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.76em;color:var(--text-muted)">{{ l.v }}</span>
+                        </div>
+                      </sc-for>
+                      <div style="font-size:0.72em;line-height:1.5;color:var(--text-muted)">{{ s.tripHonesty }}</div>
+
+                      <div style="display:flex;align-items:center;gap:0.6em;padding:0.6em 0.75em;border:1px solid {{ s.editColour }};border-radius:var(--radius-card);background:var(--surface-raised);min-width:0">
+                        <span style="flex:1 1 auto;min-width:0;font-size:0.76em;line-height:1.45;color:{{ s.editColour }}">{{ s.editLine }}</span>
+                      </div>
+
+                      <sc-if value="{{ s.hasOffer }}" hint-placeholder-val="{{ true }}">
+                        <div style="border:1px solid var(--accent-family-money);border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.7em 0.8em;display:flex;flex-direction:column;gap:0.3em">
+                          <div style="font-size:0.8em;font-weight:600;color:var(--accent-family-money)">{{ s.offerTitle }}</div>
+                          <div style="font-size:0.76em;line-height:1.5">{{ s.offerBody }}</div>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ s.offerAbsent }}" hint-placeholder-val="{{ false }}">
+                        <div style="border:1px dashed var(--border-strong);border-radius:var(--radius-card);padding:0.7em 0.8em;display:flex;flex-direction:column;gap:0.25em">
+                          <div style="font-family:var(--mono);font-size:0.6em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">drawn as absence, for review only</div>
+                          <div style="font-size:0.74em;line-height:1.5;color:var(--text-muted)">{{ s.offerAbsentWhy }}</div>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isEmpty }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.85em;align-items:flex-start;padding:0.4em 0 0.2em">
+                      <sc-if value="{{ s.illusOn }}" hint-placeholder-val="{{ true }}">
+                        <svg viewBox="0 0 200 140" width="200" height="140" fill="none" aria-hidden="true" style="max-width:100%;height:auto">
+                          <sc-for list="{{ s.illus }}" as="p" hint-placeholder-count="3">
+                            <g transform="{{ p.transform }}" stroke="{{ p.stroke }}" stroke-width="{{ p.width }}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="{{ p.dash }}">
+                              <sc-for list="{{ p.fills }}" as="d" hint-placeholder-count="1">
+                                <path d="{{ d }}" fill="{{ p.fill }}" stroke="none"></path>
+                              </sc-for>
+                              <sc-for list="{{ p.paths }}" as="d" hint-placeholder-count="2">
+                                <path d="{{ d }}"></path>
+                              </sc-for>
+                            </g>
+                          </sc-for>
+                        </svg>
+                      </sc-if>
+                      <div style="font-size:1em;line-height:1.4;font-weight:500;max-width:24em">{{ s.emptySentence }}</div>
+                      <div style="font-family:var(--mono);font-size:0.74em;line-height:1.5;color:var(--text-muted)">{{ s.emptyExample }}</div>
+                      <sc-if value="{{ s.illusOff }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--warning)">{{ s.illusOffLine }}</div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.isTrolley }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.7em">
+                      <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+                        <sc-for list="{{ s.merged }}" as="i" hint-placeholder-count="4">
+                          <div style="display:flex;align-items:center;gap:0.7em;min-height:48px;padding:0.45em 0.7em;border-bottom:1px solid var(--divider);background:var(--surface-raised);min-width:0">
+                            <span style="flex:0 0 auto;width:1.5em;height:1.5em;border-radius:0.35em;border:2px solid {{ i.boxBorder }};background:{{ i.boxBg }};display:flex;align-items:center;justify-content:center;color:var(--text-on-accent);font-size:0.8em">{{ i.tick }}</span>
+                            <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                              <span style="font-size:0.9em">{{ i.text }}</span>
+                              <span style="font-size:0.66em;color:var(--text-muted)">{{ i.meta }}</span>
+                            </span>
+                          </div>
+                        </sc-for>
+                      </div>
+                      <div style="border:1px solid var(--positive);border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.2em">
+                        <div style="font-size:0.78em;font-weight:600;color:var(--positive)">{{ s.verdictTitle }}</div>
+                        <div style="font-size:0.76em;line-height:1.5">{{ s.verdictBody }}</div>
+                      </div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ s.writesAbsent }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-family:var(--mono);font-size:0.64em;line-height:1.5;color:var(--warning)">{{ s.writesAbsentLine }}</div>
+                  </sc-if>
+
+                  <div style="display:flex;flex-direction:column;gap:0.5em;margin-top:auto;padding-top:0.2em">
+                    <sc-if value="{{ s.hasPrimary }}" hint-placeholder-val="{{ false }}">
+                      <button data-target="1" data-name="{{ s.id }} primary" style="min-height:48px;padding:0.5em 0.9em;border:1px solid var(--accent-family-keeping);border-radius:var(--radius-control);background:var(--accent-family-keeping);color:var(--text-on-accent);font-size:0.85em;font-weight:500;line-height:1.3">{{ s.primary }}</button>
+                    </sc-if>
+                    <div style="display:flex;flex-wrap:wrap;gap:0.4em">
+                      <sc-for list="{{ s.secondaries }}" as="x" hint-placeholder-count="2">
+                        <button data-target="1" data-name="{{ s.id }} {{ x }}" style="min-height:44px;padding:0 0.6em;border:0;background:transparent;color:var(--text-link);font-size:0.76em;text-align:left">{{ x }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+
+                  <div style="font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted);border-top:1px solid var(--divider);padding-top:0.55em">{{ s.foot }}</div>
+                </div>
+              </div>
+
+              <p style="margin:0;font-size:12.5px;line-height:1.55;color:var(--text-muted);max-width:52ch">{{ s.note }}</p>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ showParser }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+              <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">One field, and what it does with what you type</h2>
+              <span style="font-family:var(--mono);font-size:11px;color:{{ parseColour }}">{{ parseVerdict }}</span>
+            </div>
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">FR-SH3 is written as a requirement rather than left to the interface, so the splitter and the quantity parser are one function in <span style="font-family:var(--mono);font-size:0.92em">shopping.js</span>. Both guards below exist because of an example in the module spec itself: a comma directly followed by a digit is a decimal comma, and a number followed by a percent sign is part of a name.</p>
+            <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+              <div style="display:grid;grid-template-columns:minmax(140px,1fr) 70px minmax(170px,1.2fr) minmax(170px,1.4fr);gap:14px;padding:10px 16px;background:var(--table-header-bg);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">
+                <div>typed</div><div>items</div><div>expected</div><div>why the case exists</div>
+              </div>
+              <sc-for list="{{ parseRows }}" as="r" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:minmax(140px,1fr) 70px minmax(170px,1.2fr) minmax(170px,1.4fr);gap:14px;padding:var(--dens-pad-y) 16px;background:var(--surface-raised);border-bottom:1px solid var(--dens-rule);align-items:start">
+                  <div style="font-family:var(--mono);font-size:11.5px;line-height:1.5;color:var(--text-primary);white-space:pre-wrap">{{ r.input }}</div>
+                  <div style="font-family:var(--mono);font-size:11.5px;color:{{ r.colour }}">{{ r.count }}</div>
+                  <div style="font-size:12.5px;line-height:1.5">{{ r.expect }}</div>
+                  <div style="font-size:12px;line-height:1.5;color:var(--text-muted)">{{ r.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showTemplate }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;flex-direction:column;gap:18px">
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The template, and the sixteen it commits</h2>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+                <sc-for list="{{ contract }}" as="c" hint-placeholder-count="4">
+                  <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-card);background:var(--surface-sunken);padding:14px;display:flex;flex-direction:column;gap:6px">
+                    <div style="font-size:14px;font-weight:600">{{ c.name }}</div>
+                    <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ c.body }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0">
+              <sc-for list="{{ templateRules }}" as="r" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:minmax(160px,240px) 1fr;gap:8px 20px;padding:12px 0;border-top:1px solid var(--divider)">
+                  <div style="font-size:13.5px;font-weight:600">{{ r.name }}</div>
+                  <div style="font-size:13px;line-height:1.55;color:var(--text-muted)">{{ r.body }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ inheritLine }}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <sc-for list="{{ inherits }}" as="m" hint-placeholder-count="16">
+                  <span style="font-family:var(--mono);font-size:11px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--radius-full);color:var(--text-muted)">{{ m }}</span>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showTrolley }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+              <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Six operations, two phones, no dialog</h2>
+              <span style="font-family:var(--mono);font-size:11px;color:{{ trolleyColour }}">{{ trolleyVerdict }}</span>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+              <div style="display:grid;grid-template-columns:120px 90px minmax(170px,1fr) 110px;gap:14px;padding:10px 16px;background:var(--table-header-bg);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">
+                <div>phone</div><div>client time</div><div>what they did</div><div>policy</div>
+              </div>
+              <sc-for list="{{ ops }}" as="o" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:120px 90px minmax(170px,1fr) 110px;gap:14px;padding:var(--dens-pad-y) 16px;background:var(--surface-raised);border-bottom:1px solid var(--dens-rule);align-items:start">
+                  <div style="font-size:12.5px">{{ o.device }}</div>
+                  <div style="font-family:var(--mono);font-size:11.5px;color:var(--text-muted)">{{ o.at }}</div>
+                  <div style="font-size:12.5px;line-height:1.5">{{ o.says }}</div>
+                  <div style="font-family:var(--mono);font-size:11px;color:{{ o.policyColour }}">{{ o.policy }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+              <sc-for list="{{ outcomes }}" as="o" hint-placeholder-count="4">
+                <div style="border:1px solid var(--border-subtle);border-left:3px solid {{ o.colour }};border-radius:var(--radius-card);background:var(--surface-raised);padding:13px 14px;display:flex;flex-direction:column;gap:5px">
+                  <div style="font-size:13.5px;font-weight:600">{{ o.name }}</div>
+                  <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ o.body }}</div>
+                  <div style="font-family:var(--mono);font-size:10.5px;color:{{ o.colour }}">{{ o.policy }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+              <sc-for list="{{ orders }}" as="o" hint-placeholder-count="2">
+                <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-sunken);padding:14px;display:flex;flex-direction:column;gap:6px">
+                  <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ o.name }}</div>
+                  <div style="font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--text-primary)">{{ o.shape }}</div>
+                  <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ o.body }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isGate }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1400px">
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Ten checks, computed from shopping.js</h2>
+          <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">The stage gate is one sentence — usable one-handed, in bad light, with no signal, and check-off is one tap. It is not directly measurable on a page, so it is decomposed into the ten things that would have to be true for it to hold, and each of those is read from the data or measured live in this browser.</p>
+          <div style="display:flex;flex-direction:column;gap:0">
+            <sc-for list="{{ checks }}" as="c" hint-placeholder-count="10">
+              <div style="display:grid;grid-template-columns:minmax(180px,300px) 1fr 70px;gap:10px 20px;padding:13px 0;border-top:1px solid var(--divider);align-items:baseline">
+                <div style="font-size:13.5px;font-weight:600">{{ c.name }}</div>
+                <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ c.detail }}</div>
+                <div style="font-family:var(--mono);font-size:11px;color:{{ c.colour }};text-align:right">{{ c.verdict }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border);padding-top:20px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Measured in this browser, right now</h2>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ measuredContext }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+            <sc-for list="{{ measurements }}" as="m" hint-placeholder-count="4">
+              <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-card);background:var(--surface-sunken);padding:14px;display:flex;flex-direction:column;gap:4px">
+                <div style="font-family:var(--mono);font-size:22px;line-height:1;color:{{ m.colour }}">{{ m.value }}</div>
+                <div style="font-size:12.5px">{{ m.label }}</div>
+                <div style="font-family:var(--mono);font-size:10.5px;line-height:1.5;color:var(--text-muted)">{{ m.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border);padding-top:20px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Which of the twelve states each row can reach</h2>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ occurrenceLine }}</span>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+            <sc-for list="{{ occurrence }}" as="o" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:60px minmax(140px,1fr) 90px 70px minmax(200px,1.6fr);gap:14px;padding:var(--dens-pad-y) 16px;background:var(--surface-raised);border-bottom:1px solid var(--dens-rule);align-items:baseline">
+                <div style="font-family:var(--mono);font-size:11px;color:var(--accent-family-keeping)">{{ o.id }}</div>
+                <div style="font-size:12.5px">{{ o.name }}</div>
+                <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ o.possible }}</div>
+                <div style="font-family:var(--mono);font-size:11px;color:{{ o.colour }}">{{ o.drawn }}</div>
+                <div style="font-size:12px;line-height:1.5;color:var(--text-muted)">{{ o.impossible }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border);padding-top:20px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What Stage 9 raised</h2>
+          <div style="display:flex;flex-direction:column;gap:0">
+            <sc-for list="{{ open }}" as="o" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:minmax(180px,300px) 1fr;gap:8px 20px;padding:14px 0;border-top:1px solid var(--divider)">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:13.5px;font-weight:600">{{ o.title }}</div>
+                  <div style="font-family:var(--mono);font-size:10.5px;color:var(--warning)">{{ o.tag }}</div>
+                </div>
+                <div style="font-size:12.5px;line-height:1.6;color:var(--text-muted)">{{ o.detail }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;list&quot;,&quot;lists&quot;,&quot;detail&quot;,&quot;order&quot;,&quot;trip&quot;,&quot;empty&quot;,&quot;trolley&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;list&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Stage 9&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100,
+            st: "populated", client: "m", member: "jana",
+            items: null, draft: "", toast: null, order: null, showChecked: true, measured: null };
+
+  get S() { return window.HH_SHOPPING; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (window.HH_SHOPPING && window.HH_TOKENS && window.HH_FIXTURES && window.HH_ILLUS) {
+        clearInterval(this._boot);
+        this.setState({ items: this._seed(), order: window.HH_SHOPPING.storeOrder.slice() });
+        this._schedule();
+      }
+    }, 60);
+    this._onResize = () => this._schedule();
+    window.addEventListener("resize", this._onResize);
+  }
+  componentWillUnmount() {
+    clearInterval(this._boot);
+    window.removeEventListener("resize", this._onResize);
+    if (this._raf) cancelAnimationFrame(this._raf);
+  }
+  componentDidUpdate() { this._schedule(); }
+
+  _seed() {
+    return this.S.items.map(function (i) {
+      return { id: i.id, text: i.text, quantity: i.quantity, unit: i.unit, category: i.category,
+               note: i.note || "", assigned: i.assigned || "", price: i.price || null,
+               checked: !!i.checked, by: i.by || null, at: i.at || null, local: false };
+    });
+  }
+
+  _schedule() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = requestAnimationFrame(() => this._measure());
+  }
+
+  _measure() {
+    var targets = [].slice.call(document.querySelectorAll('[data-target="1"]'));
+    var fails = [], min = 0;
+    targets.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      var h = Math.round(r.height), w = Math.round(r.width);
+      if (!h && !w) return;
+      if (!min || h < min) min = h;
+      if (h < 44) fails.push((el.getAttribute("data-name") || "").slice(0, 26) + " " + w + "\u00d7" + h);
+    });
+    var watched = [].slice.call(document.querySelectorAll('[data-watch="1"]'));
+    var over = [];
+    watched.forEach(function (el) {
+      if (el.scrollWidth - el.clientWidth > 2) over.push(el.getAttribute("data-name") || "?");
+    });
+    var m = { targets: targets.length, tFail: fails.length, tMin: min, tNames: fails.slice(0, 3),
+              watched: watched.length, oFail: over.length, oNames: over.slice(0, 3) };
+    if (JSON.stringify(m) !== JSON.stringify(this.state.measured)) this.setState({ measured: m });
+  }
+
+  view() { return this.state.view || this.props.startView || "list"; }
+
+  tone(t) {
+    return t === "danger" ? "var(--danger)" : t === "warning" ? "var(--warning)"
+      : t === "info" ? "var(--info)" : "var(--border-strong)";
+  }
+
+  money(n) { return n.toFixed(2).replace(".", ",") + " K\u010d"; }
+
+  qtyLine(i) {
+    var q = i.quantity === null || i.quantity === undefined ? "" :
+      (String(i.quantity).replace(".", ",") + (i.unit ? " " + i.unit : " \u00d7"));
+    return q ? q + " " + i.text : i.text;
+  }
+
+  /* ── the live list ─────────────────────────────────────────────────────── */
+
+  items() { return this.state.items || []; }
+
+  setItems(next, toast) {
+    var p = { items: next };
+    if (toast !== undefined) p.toast = toast;
+    this.setState(p);
+  }
+
+  toggle(id) {
+    var self = this;
+    this.setItems(this.items().map(function (i) {
+      if (i.id !== id) return i;
+      var on = !i.checked;
+      return Object.assign({}, i, { checked: on, by: on ? "you" : null, at: on ? "now" : null });
+    }), null);
+  }
+
+  add() {
+    var draft = this.state.draft;
+    var parsed = this.S.parse(draft);
+    if (!parsed.length) { this.setState({ draft: "" }); return; }
+    var n = this.items().length;
+    var added = parsed.map(function (p, k) {
+      return { id: "n" + Date.now() + k, text: p.text, quantity: p.quantity, unit: p.unit,
+               category: p.category || "ambient", note: "", assigned: "", price: null,
+               checked: false, by: null, at: null, local: true };
+    });
+    this.setState({
+      items: this.items().concat(added), draft: "",
+      toast: added.length > 1
+        ? { body: added.length + " items added from one line", undo: "split", removed: added }
+        : { body: "Added \u201c" + added[0].text + "\u201d", undo: "add", removed: added }
+    });
+  }
+
+  undo() {
+    var t = this.state.toast;
+    if (!t) return;
+    if (t.undo === "clear") { this.setState({ items: t.before, toast: null }); return; }
+    var ids = {};
+    (t.removed || []).forEach(function (i) { ids[i.id] = 1; });
+    if (t.undo === "split") {
+      /* keep as one item: the whole line, unsplit — the correction FR-SH2 needs */
+      var whole = (t.removed || []).map(function (i) {
+        return (i.quantity !== null && i.quantity !== undefined ? i.quantity + (i.unit ? " " + i.unit + " " : " ") : "") + i.text;
+      }).join(", ");
+      var kept = { id: "k" + Date.now(), text: whole, quantity: null, unit: null,
+                   category: null, note: "", assigned: "", price: null, checked: false, by: null, at: null, local: true };
+      this.setState({ items: this.items().filter(function (i) { return !ids[i.id]; }).concat([kept]), toast: null });
+      return;
+    }
+    this.setState({ items: this.items().filter(function (i) { return !ids[i.id]; }), toast: null });
+  }
+
+  clearChecked() {
+    var before = this.items();
+    var n = before.filter(function (i) { return i.checked; }).length;
+    this.setState({
+      items: before.filter(function (i) { return !i.checked; }),
+      toast: { body: n + " ticked items cleared \u00b7 a trip was recorded", undo: "clear", before: before }
+    });
+  }
+
+  move(cat, dir) {
+    var order = (this.state.order || []).slice();
+    var i = order.indexOf(cat), j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    order[i] = order[j]; order[j] = cat;
+    this.setState({ order: order });
+  }
+
+  groups(canWrite) {
+    var S = this.S, self = this;
+    var order = this.state.order || S.storeOrder;
+    var open = this.items().filter(function (i) { return !i.checked; });
+    return order.map(function (cat, n) {
+      var mine = open.filter(function (i) { return i.category === cat; });
+      if (!mine.length) return null;
+      return {
+        name: S.catName[cat] || cat,
+        pos: "aisle " + (n + 1),
+        items: mine.map(function (i) { return self.itemVals(i, canWrite); })
+      };
+    }).filter(function (g) { return !!g; });
+  }
+
+  itemVals(i, canWrite) {
+    var self = this, st = this.state.st;
+    var bits = [];
+    if (i.note) bits.push(i.note);
+    if (i.assigned) bits.push(i.assigned + " picks this up");
+    if (i.price) bits.push(this.money(i.price));
+    if (i.checked && i.by) bits.push(i.by === "you" ? "you, just now" : i.by + ", " + i.at);
+    var mark = i.local && (st === "pending" || st === "offline") ? "not sent" : "";
+    return {
+      id: i.id, text: i.text, line: this.qtyLine(i),
+      meta: bits.join(" \u00b7 "), hasMeta: bits.length > 0,
+      tick: i.checked ? "\u2713" : "",
+      boxBg: i.checked ? "var(--accent-family-keeping)" : "transparent",
+      boxBorder: i.checked ? "var(--accent-family-keeping)" : "var(--border-strong)",
+      hasMark: !!mark, mark: mark, markColour: "var(--info)",
+      toggle: canWrite ? function () { self.toggle(i.id); } : function () {}
+    };
+  }
+
+  /* ── one screen ────────────────────────────────────────────────────────── */
+
+  screenVals(s) {
+    var S = this.S, self = this, st = this.state.st;
+    var allowed = s.preset === "D" ? S.allStates : s.preset === "F" ? ["loading", "populated", "error"] : ["populated"];
+    if (allowed.indexOf(st) < 0) st = "populated";
+    var imp = (s.impossible || {})[st];
+    var wide = this.state.client === "w" && s.client === "mw";
+    var loading = st === "loading" && !imp;
+    var erroring = st === "error" && !!s.error && !imp;
+    var isEmptyState = st === "empty";
+    var treatment = !imp && ["offline", "pending", "syncing", "conflicted", "rejected",
+                             "absent", "withdrawn", "readonly"].indexOf(st) >= 0
+      ? ((s.states || {})[st] || S.treatments[st]) : null;
+    var bodyGone = !!imp || st === "absent" || st === "withdrawn";
+    var canWrite = !bodyGone && st !== "readonly" && !loading;
+    var notices = [];
+    if (erroring) notices.push(s.error);
+    else if (treatment) notices.push(treatment);
+    var showBody = !loading && !bodyGone;
+    var impCount = Object.keys(s.impossible || {}).length;
+
+    var open = this.items().filter(function (i) { return !i.checked; });
+    var checked = this.items().filter(function (i) { return i.checked; });
+    var priced = this.items().filter(function (i) { return !!i.price; });
+    var total = priced.reduce(function (a, i) { return a + i.price; }, 0);
+    var parsedDraft = this.state.draft ? S.parse(this.state.draft) : [];
+
+    var out = {
+      id: s.id, name: s.name, route: s.route, title: s.title,
+      lede: s.lede, hasLede: !!s.lede && !bodyGone,
+      foot: s.foot, note: s.note,
+      clientLabel: s.client === "b" ? "both clients" : wide ? "web" : "mobile",
+      frameMax: wide ? (this.state.scale === 200 ? "820px" : "660px")
+                     : (this.state.scale === 200 ? "560px" : "360px"),
+      radius: wide ? "var(--radius-card)" : "22px",
+      notices: notices.map(function (n) {
+        return { colour: self.tone(n.tone), title: n.title, hasTitle: !!n.title, body: n.body };
+      }),
+      isImpossible: !!imp,
+      impossibleTag: st + " cannot occur here",
+      impossibleWhy: imp || "",
+      isLoading: loading,
+      skeleton: [{ h: "3em", w: "100%" }, { h: "0.8em", w: "35%" }, { h: "3em", w: "100%" },
+                 { h: "3em", w: "100%" }, { h: "0.8em", w: "28%" }, { h: "3em", w: "100%" }],
+      isLists: showBody && s.kind === "lists",
+      isList: showBody && s.kind === "list",
+      isDetail: showBody && s.kind === "detail",
+      isStaples: showBody && s.kind === "staples",
+      isLayout: showBody && s.kind === "layout",
+      isTrip: showBody && s.kind === "trip",
+      isEmpty: showBody && s.kind === "empty",
+      isTrolley: showBody && s.kind === "trolley",
+      canWrite: canWrite,
+      writesAbsent: !bodyGone && !loading && st === "readonly",
+      writesAbsentLine: "Ticking, adding and clearing are absent, not disabled. The banner above is the whole explanation.",
+      hasPrimary: !loading && !bodyGone && st !== "readonly" && !!s.primary,
+      primary: s.primary,
+      secondaries: loading || bodyGone || st === "readonly" ? [] : (s.secondary || []),
+      drawnLabel: (allowed.length - impCount) + " of " + allowed.length + " states",
+      drawnColour: "var(--positive)"
+    };
+
+    if (s.kind === "lists") {
+      var lists = isEmptyState ? [] : S.lists;
+      out.lists = lists.map(function (l) {
+        var count = l.id === "l-shop" ? open.length : l.open;
+        return {
+          name: l.name,
+          meta: [l.isDefault ? "quick-add goes here" : "", l.store || "", l.ticked ? l.ticked + " ticked" : ""]
+            .filter(function (x) { return !!x; }).join(" \u00b7 "),
+          count: count ? String(count) : "\u2014",
+          countColour: count ? "var(--text-primary)" : "var(--text-muted)"
+        };
+      });
+      if (isEmptyState) {
+        out.notices = [{ colour: "var(--info)", title: "", hasTitle: false,
+          body: "A household starts with one list called Shopping and nothing else to set up, so this state is only reachable if somebody deletes it. The sentence offers it back." }];
+        out.primary = "Start a list called Shopping";
+      }
+    }
+
+    if (s.kind === "list") {
+      out.groups = isEmptyState ? [] : this.groups(canWrite);
+      out.parseLine = this.state.draft
+        ? (parsedDraft.length === 1 ? "one item: " + this.qtyLine(parsedDraft[0])
+            : parsedDraft.length + " items: " + parsedDraft.map(function (p) { return self.qtyLine(p); }).join(" \u00b7 "))
+        : "One field, always focused. Commas and newlines split; a comma before a digit does not.";
+      out.parseColour = this.state.draft ? "var(--accent-family-keeping)" : "var(--text-muted)";
+      out.checkedLabel = (isEmptyState ? 0 : checked.length) + " ticked \u00b7 " +
+        (this.state.showChecked ? "hide" : "show") + " \u2014 they drop here, they are not gone";
+      out.showChecked = this.state.showChecked && !isEmptyState && checked.length > 0;
+      out.checkedItems = checked.map(function (i) { return self.itemVals(i, canWrite); });
+      out.canClear = canWrite && checked.length > 0;
+      out.toggleChecked = function () { self.setState({ showChecked: !self.state.showChecked }); };
+      out.clear = function () { self.clearChecked(); };
+      out.undo = function () { self.undo(); };
+      out.hasToast = !!this.state.toast && canWrite;
+      out.toastBody = this.state.toast ? this.state.toast.body : "";
+      out.hasTotal = priced.length > 0 && !isEmptyState;
+      out.totalLabel = priced.length + " of " + this.items().length + " priced \u2014 the total is what has been entered, not an estimate";
+      out.totalValue = this.money(total);
+      if (isEmptyState) {
+        var I = window.HH_ILLUS;
+        var comp = I.compositions.filter(function (c) { return c.id === "shopping.empty"; })[0];
+        out.notices = [{ colour: "var(--info)", title: "", hasTitle: false, body: comp.sentence + " \u2014 " + comp.example }];
+        out.primary = comp.action;
+      }
+    }
+
+    if (s.kind === "detail") {
+      var vals = { text: "milk", quantity: "2", unit: "l", category: "Dairy and eggs",
+                   note: "\u2014", assigned_to: "\u2014", price_minor: "39,80 K\u010d",
+                   checked: "\u2014", source_ref: "\u2014" };
+      out.fields = S.itemFields.map(function (f) {
+        return { label: f[1], note: f[3],
+                 value: isEmptyState ? "\u2014" : (vals[f[0]] || f[4]),
+                 valueColour: f[2] ? "var(--text-primary)" : "var(--text-muted)",
+                 req: f[2] ? "required" : "optional",
+                 reqColour: f[2] ? "var(--accent-family-keeping)" : "var(--text-muted)" };
+      });
+      if (isEmptyState) {
+        out.notices = [{ colour: "var(--info)", title: "", hasTitle: false,
+          body: "An item with nothing but its line of text is the normal case, not an unfinished one. Eight rows sit empty and none of them asks to be filled in." }];
+      }
+    }
+
+    if (s.kind === "staples") {
+      var sug = isEmptyState ? [] : S.suggested(6);
+      out.staples = sug.map(function (p) {
+        var explicit = S.explicit.indexOf(p.text) >= 0;
+        var rec = S.recurring.filter(function (r) { return r.text === p.text; })[0];
+        return { text: p.text, line: p.line,
+                 hasTag: explicit || !!rec,
+                 tag: rec ? "recurring" : "staple",
+                 tagColour: rec ? "var(--accent-family-keeping)" : "var(--text-muted)" };
+      });
+      out.recurringTitle = S.recurring[0].text + " \u00b7 " + S.recurring[0].cadence;
+      out.recurringBody = S.recurring[0].next + ". A recurring staple reappears on the list and sends nothing \u2014 a push notification about coffee is how notifications get turned off.";
+      if (isEmptyState) {
+        out.notices = [{ colour: "var(--info)", title: "", hasTitle: false,
+          body: "Nothing has been bought and cleared often enough yet. Suggestions arrive from this household\u2019s own shopping, so the honest state is to say that rather than to seed a starter list." }];
+        out.primary = "Mark something as a staple";
+      }
+    }
+
+    if (s.kind === "layout") {
+      var order = this.state.order || S.storeOrder;
+      out.order = order.map(function (cat, n) {
+        return { n: String(n + 1), name: S.catName[cat] || cat,
+                 moved: S.catalogOrder.indexOf(cat) !== n,
+                 up: function () { self.move(cat, -1); },
+                 down: function () { self.move(cat, 1); } };
+      });
+      out.orderNote = "Frozen sits by the tills in this shop, so it walks second to last. The list above reads in this order the moment it is saved.";
+      if (isEmptyState) {
+        out.notices = [{ colour: "var(--info)", title: "", hasTitle: false,
+          body: "No walking order has been set for this list, so it reads in the catalog order. That is a working default, and the screen says so instead of showing eight empty rows." }];
+      }
+    }
+
+    if (s.kind === "trip") {
+      var T = S.trip;
+      var offer = S.financeOffer(this.state.member);
+      out.tripWhen = T.date + " \u00b7 " + T.store + " \u00b7 " + T.items + " items";
+      out.tripTotal = this.money(T.total);
+      out.tripLines = T.priceLines.map(function (l) { return { k: l[0], v: self.money(l[1]) }; });
+      out.tripHonesty = T.priced + " of " + T.items + " items had a price entered. The total is the sum of those three and nothing is estimated into the other eight.";
+      var offlineish = st === "offline" || st === "pending" || st === "syncing";
+      out.editColour = offlineish ? "var(--warning)" : "var(--text-muted)";
+      out.editLine = offlineish
+        ? "Correcting the total needs signal. A recorded trip is appended, not edited, so this is unavailable offline rather than queued \u2014 and it says so."
+        : "Edit the total \u00b7 available while you have signal.";
+      out.hasOffer = offer.offered && st !== "readonly" && !isEmptyState;
+      out.offerTitle = "Record 742,30 K\u010d in Finance?";
+      out.offerBody = "It would be one expense on today\u2019s date, referencing this trip. Nothing is recorded unless you say so, and the trip stays here either way.";
+      out.offerAbsent = !offer.offered && !isEmptyState;
+      out.offerAbsentWhy = offer.name + " holds no Finance, so the offer is not drawn at all: no greyed control, no explanation, no hint that the module exists. This dashed box is review scaffolding and is not part of the screen.";
+      out.secondaries = st === "readonly" ? [] : (offer.offered ? s.secondary : ["Edit the total"]);
+      out.hasPrimary = out.hasOffer;
+      if (isEmptyState) {
+        out.notices = [{ colour: "var(--info)", title: "", hasTitle: false,
+          body: "No trip has been recorded yet. A trip appears when ticked items are cleared, so the way to make one is to go shopping \u2014 which is what the sentence says." }];
+        out.tripLines = [];
+      }
+    }
+
+    if (s.kind === "empty") {
+      var I2 = window.HH_ILLUS;
+      var c2 = I2.compositions.filter(function (c) { return c.id === "shopping.empty"; })[0];
+      var box = I2.frame.partBox;
+      out.illusOn = this.state.scale !== 200;
+      out.illusOff = this.state.scale === 200;
+      out.illusOffLine = "At 200 % text the illustration is dropped entirely. The sentence, the example and the action are what teach, and all three are still here.";
+      out.illus = c2.parts.map(function (p) {
+        var part = I2.byPart[p[0]];
+        return {
+          transform: "translate(" + p[1] + "," + p[2] + ") scale(" + p[3] + ")",
+          stroke: part.tone === "accent" ? "var(--accent-family-keeping)" : "var(--text-muted)",
+          width: (I2.frame.stroke / p[3]).toFixed(2),
+          dash: part.dashed ? (5 / p[3]).toFixed(1) + " " + (4 / p[3]).toFixed(1) : "none",
+          paths: part.paths, fills: part.fills,
+          fill: "color-mix(in oklab, var(--accent-family-keeping) 12%, transparent)"
+        };
+      });
+      out.emptySentence = c2.sentence;
+      out.emptyExample = c2.example;
+      out.primary = c2.action;
+      out.hasPrimary = true;
+    }
+
+    if (s.kind === "trolley") {
+      var t = S.trolley();
+      out.merged = t.janaFirst.visible.map(function (i) {
+        return { text: i.text, tick: i.checked ? "\u2713" : "",
+                 boxBg: i.checked ? "var(--accent-family-keeping)" : "transparent",
+                 boxBorder: i.checked ? "var(--accent-family-keeping)" : "var(--border-strong)",
+                 meta: i.checked ? "ticked by " + i.by + " at " + i.at : "not ticked" };
+      });
+      out.verdictTitle = "Nothing was asked of either of them";
+      out.verdictBody = "Both phones show these " + t.janaFirst.visible.length +
+        " items within two seconds of the second one reconnecting. Yoghurt is gone from both, cheese is present and unticked on both, and milk is ticked once.";
+    }
+
+    return out;
+  }
+
+  renderVals() {
+    var S = this.S;
+    if (!S || !window.HH_FIXTURES || !window.HH_ILLUS) {
+      return { theme: this.state.theme, density: this.state.density, fontPx: "15px", draft: "" };
+    }
+    var self = this, v = this.view();
+    var opt = function (key, val, label, title, cur) {
+      return { label: label, title: title || label, on: cur === val ? 1 : 0,
+               pick: function () { var p = {}; p[key] = val; self.setState(p); } };
+    };
+
+    var VIEWS = [
+      ["list", "The list", "1"],
+      ["lists", "Lists overview", "1"],
+      ["detail", "Item and staples", "2"],
+      ["order", "Walking order", "1"],
+      ["trip", "The trip", "1"],
+      ["empty", "The empty state", "1"],
+      ["trolley", "Two trolleys", "1"],
+      ["gate", "The gate", "10"]
+    ];
+    var TITLES = {
+      list: ["The list", "B-2 \u00b7 FR-SH2 to FR-SH5 \u00b7 the gate screen"],
+      lists: ["Lists overview", "B-1 \u00b7 FR-SH1"],
+      detail: ["Item detail and staples", "B-3 \u00b7 B-5 \u00b7 FR-SH2 \u00b7 FR-SH7"],
+      order: ["Walking order", "B-4 \u00b7 FR-SH6"],
+      trip: ["The trip, and the offer", "B-6 \u00b7 FR-SH8 \u00b7 D-24 \u00b7 D-40"],
+      empty: ["The teaching empty state", "B-7 \u00b7 07-delivery \u00a73 \u00b7 the template for sixteen"],
+      trolley: ["Two trolleys, one shop", "B-8 \u00b7 05-shopping acceptance A and B"],
+      gate: ["The gate", "computed from shopping.js \u00b7 measured live"]
+    };
+    var INTROS = {
+      list: "The screen everything else in the handoff is secondary to. It is used one-handed, in bad light, sometimes with no signal, and it is live here: type into the field, submit, tick things off. The quick-add runs the same parser the gate reads, so what happens on this card is what FR-SH3 specifies.",
+      lists: "Four lists, one of them the default that quick-add targets. The count is unticked items, and it is the only number on the screen.",
+      detail: "Structure is allowed to exist here and nowhere on the way in. Nine fields, one required; and the staples screen next to it, whose ranking is nine weeks of this household\u2019s own history and no model at all.",
+      order: "Eight aisles in the order this household actually walks them, per list. Arrows rather than drag alone, because it is edited once, possibly in a car park, and a keyboard has to reach it.",
+      trip: "A cleared list becomes a recorded trip, and a recorded trip is additive \u2014 created offline all day, corrected only online. Switch the rail to another member and the Finance offer disappears without leaving a trace, because it follows the grant.",
+      empty: "One sentence, one example, one action, and a composition from the illustration kit that is dropped entirely at 200 % text. Sixteen more empty states inherit this shape.",
+      trolley: "The acceptance criterion, computed. Six operations from two phones with no signal, merged in both receive orders \u2014 the answer to \u201cwhat did the member see\u201d is nothing, twice."
+    };
+
+    var screens = S.screens.filter(function (s) { return s.view === v; });
+
+    var stateOpts = [["loading", "loading"], ["empty", "empty"], ["populated", "populated"],
+      ["error", "error"], ["offline", "offline"], ["pending", "pending"], ["syncing", "syncing"],
+      ["conflicted", "conflict"], ["rejected", "rejected"], ["absent", "absent"],
+      ["withdrawn", "withdrawn"], ["readonly", "read-only"]];
+
+    var F = window.HH_FIXTURES;
+    var controls = [
+      { label: "state", options: stateOpts.map(function (x) {
+          return opt("st", x[0], x[1], x[0] + " \u2014 drawn where it can occur, explained where it cannot", self.state.st); }) },
+      { label: "client", options: [
+        opt("client", "m", "phone", "The mobile layout \u2014 the one the gate is about", this.state.client),
+        opt("client", "w", "web", "The web layout", this.state.client)] },
+      { label: "trip seen by", options: F.members.map(function (m) {
+          return opt("member", m.id, m.name.toLowerCase(), m.name + " \u2014 Finance is " + m.grants.finance, self.state.member); }) },
+      { label: "theme", options: [
+        opt("theme", "light", "light", "Light theme", this.state.theme),
+        opt("theme", "dark", "dark", "Dark theme", this.state.theme)] },
+      { label: "text", options: [
+        opt("scale", 100, "100 %", "Base text size", this.state.scale),
+        opt("scale", 200, "200 %", "The 07-delivery sweep \u2014 the illustration drops out", this.state.scale)] },
+      { label: "density", options: [
+        opt("density", "comfortable", "comfortable", "Mobile\u2019s only mode", this.state.density),
+        opt("density", "compact", "compact", "Web only \u2014 the 44 pt floor still binds", this.state.density)] }
+    ];
+
+    var checks = S.checks();
+    var openChecks = checks.filter(function (c) { return !c.pass; }).length;
+    var m = this.state.measured;
+    var occ = S.occurrence();
+    var possibleTotal = occ.reduce(function (a, o) { return a + o.possible; }, 0);
+    var drawnTotal = occ.reduce(function (a, o) { return a + o.drawn; }, 0);
+    var p = S.parseChecks();
+    var pPass = p.filter(function (x) { return x.pass; }).length;
+    var t = S.trolley();
+    var T = S.template;
+
+    return {
+      theme: this.state.theme,
+      density: this.state.density,
+      fontPx: this.state.scale === 200 ? "26px" : "15px",
+      draft: this.state.draft,
+      onDraft: function (e) { self.setState({ draft: e.target.value }); },
+      onDraftKey: function (e) { if (e.key === "Enter") { e.preventDefault(); self.add(); } },
+      onAdd: function () { self.add(); },
+
+      views: VIEWS.map(function (x) {
+        return { label: x[1], count: x[2], on: v === x[0] ? 1 : 0,
+                 pick: function () { self.setState({ view: x[0] }); } };
+      }),
+      controls: controls,
+      pageTitle: TITLES[v][0], pageMeta: TITLES[v][1],
+      gateLine: openChecks ? openChecks + " of " + checks.length + " gate checks open" : "gate: " + checks.length + " checks pass",
+      gateColour: openChecks ? "var(--warning)" : "var(--positive)",
+
+      isScreens: !!INTROS[v], isGate: v === "gate",
+      viewIntro: INTROS[v] || "",
+      screens: screens.map(function (s) { return self.screenVals(s); }),
+
+      showParser: v === "list",
+      parseVerdict: pPass + " of " + p.length + " cases pass, run in this browser",
+      parseColour: pPass === p.length ? "var(--positive)" : "var(--danger)",
+      parseRows: p.map(function (r) {
+        return { input: r.input, count: String(r.count), expect: r.expect, note: r.note,
+                 colour: r.pass ? "var(--positive)" : "var(--danger)" };
+      }),
+
+      showTemplate: v === "empty",
+      contract: T.contract.map(function (c) { return { name: c[0], body: c[1] }; }),
+      templateRules: T.rules.map(function (r) { return { name: r[0], body: r[1] }; }),
+      inherits: T.inherits,
+      inheritLine: T.inherits.length + " empty states inherit this shape, each written next to the screen it teaches",
+
+      showTrolley: v === "trolley",
+      trolleyVerdict: t.dialogs + " dialogs, both orders converge",
+      trolleyColour: t.dialogs === 0 && t.sameShape ? "var(--positive)" : "var(--danger)",
+      ops: S.ops.map(function (o) {
+        return { device: o.device, at: o.at, says: o.says, policy: o.policy,
+                 policyColour: o.policy === "state_set" ? "var(--accent-family-keeping)" : "var(--info)" };
+      }),
+      outcomes: t.rows.map(function (r) {
+        return { name: r[0], body: r[1], policy: r[2],
+                 colour: r[2] === "state_set" ? "var(--accent-family-keeping)" : "var(--info)" };
+      }),
+      orders: [
+        { name: "Jana\u2019s phone reconnects first", shape: t.shape.split("|").join("   "),
+          body: "Milk is credited to " + t.credit.janaFirst + ", because hers is the tick the server took first." },
+        { name: "Petr\u2019s phone reconnects first", shape: t.shape.split("|").join("   "),
+          body: "Identical list, and milk is credited to " + t.credit.petrFirst + ". Attribution is the only thing the order changes, which is what the criterion asks for." }
+      ],
+
+      checks: checks.map(function (c) {
+        return { name: c.name, detail: c.detail, verdict: c.pass ? "pass" : "open",
+                 colour: c.pass ? "var(--positive)" : "var(--warning)" };
+      }),
+      measurements: m ? [
+        { value: String(m.targets), label: "interactive targets measured", colour: "var(--text-primary)",
+          note: "live rectangles on this view, at this text size and density" },
+        { value: m.tFail ? String(m.tFail) : "0", label: "under the 44 pt floor",
+          colour: m.targets === 0 ? "var(--text-muted)" : m.tFail ? "var(--danger)" : "var(--positive)",
+          note: m.targets === 0 ? "nothing measured here \u2014 this view draws tables, not controls"
+            : m.tFail ? m.tNames.join(" \u00b7 ") : "smallest measured target is " + m.tMin + " px high" },
+        { value: String(m.watched), label: "frames watched for overflow", colour: "var(--text-primary)",
+          note: m.watched === 0 ? "no screen frames on this view" : "each drawn screen in its own box" },
+        { value: m.oFail ? String(m.oFail) : "0", label: "frames overflowing",
+          colour: m.watched === 0 ? "var(--text-muted)" : m.oFail ? "var(--danger)" : "var(--positive)",
+          note: m.watched === 0 ? "nothing measured here"
+            : m.oFail ? m.oNames.join(" \u00b7 ") : "nothing is wider than the frame it is given" }
+      ] : [],
+      measuredContext: TITLES[v][0].toLowerCase() + " \u00b7 " + this.state.theme + " \u00b7 " +
+        this.state.density + " \u00b7 " + this.state.scale + " % text \u00b7 state: " + this.state.st,
+
+      occurrenceLine: drawnTotal + " of " + possibleTotal + " reachable states drawn across " + occ.length + " twelve-state rows",
+      occurrence: occ.map(function (o) {
+        return { id: o.id, name: o.name, possible: o.possible + " of 12", drawn: String(o.drawn),
+                 colour: o.drawn >= o.possible ? "var(--positive)" : "var(--warning)",
+                 impossible: o.impossible.length
+                   ? o.impossible.join(", ") + " \u2014 " + o.reasons[o.impossible[0]]
+                   : "all twelve occur" };
+      }),
+      open: S.open.map(function (o) { return { title: o[0], detail: o[1], tag: o[2] }; })
+    };
+  }
+}
+
+</script>
+</body>
+</html>

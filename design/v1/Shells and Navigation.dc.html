@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./icons.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./nav.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">Household · navigation</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Both shells, all of navigation</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent)">stage 06 · computed from grants</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="7">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">Nothing on this page is authored per persona. Every bar, list and count is derived from the fixture's grants, so an absent module cannot be drawn by accident.</div>
+      <a href="./Sync and Honesty.dc.html" style="font-family:var(--mono);font-size:11px">← stage 05 · sync</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ whoLine }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <sc-if value="{{ notMember }}" hint-placeholder-val="{{ false }}">
+      <div style="margin:26px;border:1px solid var(--status-blocked);border-radius:var(--radius-card);background:var(--surface-raised);padding:18px;display:flex;flex-direction:column;gap:8px;max-width:70ch">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--status-blocked)">not a member</div>
+        <div style="font-size:15px;line-height:1.5">{{ notMemberLine }}</div>
+        <div style="font-size:13px;line-height:1.55;color:var(--text-muted)">A household a member does not belong to is not offered in their switcher and does not appear in their URL space. This panel stands in for the whole app: there is nothing to draw, which is the correct amount.</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isShells }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:28px;max-width:1280px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Seventeen modules cannot be seventeen tabs, so the mobile set is settled at five and design owns what is inside them. Below are both drawings of the bar — five destinations and four — and the web sidebar, which is the module list rather than a nav tree. The content region of each artifact is deliberately a placeholder naming its owning stage: this stage builds the shells, not the screens they hold.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:22px;align-items:start">
+          <sc-for list="{{ phones }}" as="p" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                <h3 style="margin:0;font-size:16px;font-weight:600">{{ p.title }}</h3>
+                <span style="font-family:var(--mono);font-size:10.5px;color:{{ p.tagColour }}">{{ p.tag }}</span>
+              </div>
+              <p style="margin:0;font-size:13px;line-height:1.55;color:var(--text-muted);max-width:52ch">{{ p.why }}</p>
+
+              <div data-watch="1" data-name="{{ p.watch }}" style="width:100%;max-width:{{ phoneMax }};min-width:0;border:1px solid var(--border-strong);border-radius:24px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow-2);display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+                <div style="display:flex;align-items:center;gap:0.4em;padding:0.55em 0.6em;border-bottom:1px solid var(--divider);background:var(--surface-raised);min-width:0">
+                  <button data-target="1" data-name="{{ p.watch }} switcher" onClick="{{ goSwitcher }}" aria-label="Switch household. Currently {{ p.household }}" style="flex:1 1 auto;min-width:0;min-height:44px;display:flex;align-items:center;gap:0.35em;background:transparent;border:0;border-radius:var(--radius-control);padding:0 0.3em;color:var(--text-primary);text-align:left">
+                    <span style="font-size:0.85em;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{ p.household }}</span>
+                    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:var(--text-muted);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                      <sc-for list="{{ switcherPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                    </svg>
+                  </button>
+                  <button data-target="1" data-name="{{ p.watch }} search" aria-label="Search this household" style="flex:0 0 auto;min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;border-radius:var(--radius-control);color:var(--text-muted)">
+                    <svg viewBox="0 0 24 24" width="1.15em" height="1.15em" aria-hidden="true" style="display:block;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                      <sc-for list="{{ searchPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                    </svg>
+                  </button>
+                </div>
+
+                <sc-if value="{{ p.hasBanner }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:0.5em 0.7em;background:var(--surface-sunken);border-bottom:1px solid var(--divider);font-size:0.72em;line-height:1.45;color:var(--text-primary)">{{ p.banner }}</div>
+                </sc-if>
+
+                <div style="flex:1 1 auto;min-height:9em;display:flex;align-items:center;justify-content:center;padding:1.2em 0.8em;background:repeating-linear-gradient(135deg,var(--surface-sunken),var(--surface-sunken) 7px,var(--surface) 7px,var(--surface) 14px)">
+                  <div style="background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-card);padding:0.7em 0.8em;display:flex;flex-direction:column;gap:0.3em;text-align:center;max-width:100%">
+                    <div style="font-family:var(--mono);font-size:0.72em;color:var(--text-primary)">{{ p.route }}</div>
+                    <div style="font-size:0.68em;line-height:1.45;color:var(--text-muted)">{{ p.routeNote }}</div>
+                  </div>
+                </div>
+
+                <div role="tablist" style="display:flex;align-items:stretch;gap:0;border-top:1px solid var(--border);background:var(--surface-raised);padding:0.3em 0.2em 0.45em">
+                  <sc-for list="{{ p.tabs }}" as="t" hint-placeholder-count="5">
+                    <button data-target="1" data-name="{{ t.watch }}" aria-current="{{ t.current }}" style="flex:1 1 0;min-width:0;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.2em;background:transparent;border:0;padding:0.25em 0.1em;color:{{ t.colour }}">
+                      <span style="display:flex;align-items:center;justify-content:center;width:1.85em;height:1.85em;border-radius:var(--radius-full);background:{{ t.chipBg }};color:{{ t.chipFg }}">
+                        <svg viewBox="0 0 24 24" width="1.15em" height="1.15em" role="img" aria-label="{{ t.label }}" style="display:block;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                          <sc-for list="{{ t.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                        </svg>
+                      </span>
+                      <span style="font-size:0.44em;line-height:1.2;overflow-wrap:anywhere">{{ t.label }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="font-family:var(--mono);font-size:10.5px;line-height:1.5;color:var(--text-muted);max-width:52ch">{{ p.slots }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Why four is drawn rather than derived</h2>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">DD-11 · N6</span>
+          </div>
+          <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6">{{ barDecision }}</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px">
+            <sc-for list="{{ barRejected }}" as="r" hint-placeholder-count="3">
+              <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-card);background:var(--surface-sunken);padding:14px;display:flex;flex-direction:column;gap:7px">
+                <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--danger)">rejected</div>
+                <div style="font-size:13.5px;font-weight:600;line-height:1.4">{{ r.name }}</div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ r.why }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ showRules }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:0">
+              <sc-for list="{{ barRules }}" as="r" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:6px 18px;padding:11px 0;border-top:1px solid var(--divider)">
+                  <div style="font-size:13.5px;font-weight:500">{{ r.name }}</div>
+                  <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ r.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The web shell</h2>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">04-navigation §4 · {{ webMeta }}</span>
+          </div>
+
+          <div data-watch="1" data-name="web shell" style="border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);overflow:hidden;box-shadow:var(--shadow-2);display:flex;min-height:420px;min-width:0;font-size:{{ webFontPx }}">
+
+            <div style="flex:0 0 auto;width:16em;min-width:0;border-right:1px solid var(--border);background:var(--surface-raised);display:flex;flex-direction:column">
+              <button data-target="1" data-name="web switcher" onClick="{{ goSwitcher }}" aria-label="Switch household. Currently {{ householdName }}" style="display:flex;align-items:center;gap:0.4em;min-height:var(--dens-row-min);padding:var(--dens-pad-y) var(--dens-pad-x);background:transparent;border:0;border-bottom:1px solid var(--divider);text-align:left;color:var(--text-primary);min-width:0">
+                <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.1em">
+                  <span style="font-size:0.85em;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ householdName }}</span>
+                  <span style="font-size:0.7em;color:var(--text-muted)">{{ roleLine }}</span>
+                </span>
+                <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:var(--text-muted);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                  <sc-for list="{{ switcherPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                </svg>
+              </button>
+
+              <div style="padding:0.6em 0.7em;border-bottom:1px solid var(--divider)">
+                <div style="display:flex;align-items:center;gap:0.4em;min-height:44px;padding:0 0.6em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--input-bg)">
+                  <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:var(--text-muted);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ searchPaths }}" as="d" hint-placeholder-count="2"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                  <span style="font-size:0.78em;color:var(--text-muted)">Search this household</span>
+                </div>
+              </div>
+
+              <sc-if value="{{ hasPinned }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.5em 0.9em 0.2em;font-family:var(--mono);font-size:0.62em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">Pinned</div>
+              </sc-if>
+              <sc-for list="{{ pinnedList }}" as="m" hint-placeholder-count="0">
+                <div style="display:flex;align-items:center;gap:0.5em;min-height:var(--dens-row-min);padding:var(--dens-pad-y) var(--dens-pad-x);border-bottom:1px solid var(--dens-rule);min-width:0">
+                  <svg viewBox="0 0 24 24" width="1.1em" height="1.1em" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:{{ m.colour }};stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ m.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                  <span style="font-size:0.82em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{ m.name }}</span>
+                </div>
+              </sc-for>
+
+              <div style="padding:0.5em 0.9em 0.2em;font-family:var(--mono);font-size:0.62em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ listHeading }}</div>
+              <div style="flex:1 1 auto;overflow:auto;min-height:0">
+                <sc-for list="{{ orderedList }}" as="m" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:0.5em;min-height:var(--dens-row-min);padding:var(--dens-pad-y) var(--dens-pad-x);border-bottom:1px solid var(--dens-rule);min-width:0;background:{{ m.bg }}">
+                    <svg viewBox="0 0 24 24" width="1.1em" height="1.1em" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:{{ m.colour }};stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                      <sc-for list="{{ m.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                    </svg>
+                    <span style="font-size:0.82em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{ m.name }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <button data-target="1" data-name="web arrange" onClick="{{ goArrange }}" style="min-height:44px;padding:0.5em 0.9em;border:0;border-top:1px solid var(--border);background:var(--surface-raised);color:var(--text-link);font-size:0.75em;text-align:left">Arrange my modules</button>
+            </div>
+
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:0.6em;padding:var(--dens-pad-y) var(--dens-pad-x);border-bottom:1px solid var(--border);background:var(--surface-raised);min-height:var(--dens-row-min);min-width:0">
+                <div style="font-size:0.85em;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ webPaneTitle }}</div>
+                <div style="margin-left:auto;font-family:var(--mono);font-size:0.68em;color:var(--text-muted);white-space:nowrap">{{ webPaneMeta }}</div>
+              </div>
+              <sc-if value="{{ hasBanner }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.55em 0.9em;border-bottom:1px solid var(--divider);background:var(--surface-sunken);font-size:0.75em;line-height:1.5">{{ bannerLine }}</div>
+              </sc-if>
+              <div style="flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);min-height:0">
+                <div style="border-right:1px solid var(--border);min-width:0;display:flex;flex-direction:column">
+                  <sc-for list="{{ twoPaneRows }}" as="r" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:center;gap:0.5em;min-height:var(--dens-row-min);padding:var(--dens-pad-y) var(--dens-pad-x);border-bottom:1px solid var(--dens-rule);background:{{ r.bg }};min-width:0">
+                      <span style="flex:1 1 auto;min-width:0;font-size:0.8em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span>
+                      <span style="font-family:var(--mono);font-size:0.7em;color:var(--text-muted);white-space:nowrap">{{ r.value }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:center;padding:1.2em;background:repeating-linear-gradient(135deg,var(--surface-sunken),var(--surface-sunken) 7px,var(--surface) 7px,var(--surface) 14px)">
+                  <div style="background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-card);padding:0.8em 0.9em;display:flex;flex-direction:column;gap:0.3em;text-align:center;max-width:100%">
+                    <div style="font-family:var(--mono);font-size:0.72em">{{ detailRoute }}</div>
+                    <div style="font-size:0.7em;line-height:1.45;color:var(--text-muted)">{{ detailNote }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{ showRules }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:0">
+              <sc-for list="{{ sidebarRules }}" as="r" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:6px 18px;padding:11px 0;border-top:1px solid var(--divider)">
+                  <div style="font-size:13.5px;font-weight:500">{{ r.name }}</div>
+                  <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ r.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <p style="margin:0;max-width:80ch;font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ scaleNote }}</p>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isPersonas }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:24px;max-width:1280px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Five members, one household, one derivation. Each bar below is produced by the same function from the same grants — nothing here is drawn per persona, which is the only way the fifteen absences stay absent. The count that matters is the last column: a module a member has <span style="font-family:var(--mono);font-size:0.92em">none</span> on contributes to no list, no badge and no total.</p>
+
+        <div style="display:flex;flex-direction:column;gap:0;border-top:1px solid var(--border)">
+          <sc-for list="{{ personas }}" as="p" hint-placeholder-count="5">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px 20px;padding:18px 0;border-bottom:1px solid var(--divider);align-items:start;background:{{ p.bg }}">
+              <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+                  <div style="font-size:16px;font-weight:600">{{ p.name }}</div>
+                  <span style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ p.role }} · {{ p.device }}</span>
+                </div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted);max-width:38ch">{{ p.note }}</div>
+                <button data-target="1" data-name="pick {{ p.id }}" onClick="{{ p.pick }}" style="align-self:flex-start;min-height:44px;padding:0 0.8em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-raised);color:var(--text-primary);font-size:12px">{{ p.action }}</button>
+              </div>
+
+              <div data-watch="1" data-name="mini bar {{ p.id }}" style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow:hidden;min-width:0">
+                <div style="display:flex;align-items:stretch;padding:4px 3px 6px">
+                  <sc-for list="{{ p.tabs }}" as="t" hint-placeholder-count="5">
+                    <div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 2px;color:{{ t.colour }}">
+                      <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:var(--radius-full);background:{{ t.chipBg }};color:{{ t.chipFg }}">
+                        <svg viewBox="0 0 24 24" width="16" height="16" role="img" aria-label="{{ t.label }}" style="display:block;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                          <sc-for list="{{ t.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                        </svg>
+                      </span>
+                      <span style="font-size:9px;line-height:1.2;overflow-wrap:anywhere;text-align:center">{{ t.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="padding:6px 10px 8px;border-top:1px solid var(--divider);font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ p.barLine }}</div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+                <div style="display:flex;flex-wrap:wrap;gap:5px">
+                  <sc-for list="{{ p.chips }}" as="c" hint-placeholder-count="4">
+                    <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid var(--border);border-radius:var(--radius-pill);font-size:11.5px;color:var(--text-primary)">
+                      <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" style="display:block;fill:none;stroke:{{ c.colour }};stroke-width:2;stroke-linecap:round;stroke-linejoin:round">
+                        <sc-for list="{{ c.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                      </svg>
+                      <span>{{ c.name }}</span>
+                    </span>
+                  </sc-for>
+                </div>
+                <div style="font-size:12px;line-height:1.5;color:var(--text-muted)">{{ p.absentLine }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border:1px solid var(--accent);border-radius:var(--radius-card);background:var(--surface-raised);padding:18px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The gate: Klára’s app</h2>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--accent)">{{ klaraCount }}</span>
+          </div>
+          <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6">Three screens, and it has to read as a small product rather than a large one with fourteen things taken out. That is achieved by absence being total: her More list is one row long because there is one module in it, not because thirteen are hidden behind a permission she cannot see.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+            <sc-for list="{{ klaraScreens }}" as="s" hint-placeholder-count="3">
+              <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:7px">
+                <div style="display:flex;align-items:center;gap:7px">
+                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:block;fill:none;stroke:{{ s.colour }};stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ s.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                  <div style="font-size:14px;font-weight:600">{{ s.name }}</div>
+                </div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ s.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted);padding-top:12px;border-top:1px solid var(--divider)">Plus Today, which is a platform screen and therefore hers: it shows her shopping list's due items and nothing else, and a quiet day is a short screen rather than five empty headings. And plus Add, whose cold-start six are drawn from the modules she can contribute to — for her, one.</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isArrange }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:24px;max-width:1280px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Pin, reorder and hide, for myself, in this household. It needs only <span style="font-family:var(--mono);font-size:0.92em">view</span>, because arranging is a preference and not an administrative act. The screen below works: hide something and watch it leave the sidebar in the shells view and come back from the hidden section here.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+          <div data-watch="1" data-name="arrange screen" style="border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);overflow:hidden;box-shadow:var(--shadow-1);display:flex;flex-direction:column;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--surface-raised)">
+              <div style="font-size:15px;font-weight:600">Arrange my modules</div>
+              <div style="margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ arrangeWho }}</div>
+            </div>
+
+            <sc-if value="{{ hasPinned }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:10px 14px 4px;font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">Pinned</div>
+            </sc-if>
+            <sc-for list="{{ pinnedRows }}" as="m" hint-placeholder-count="0">
+              <div style="display:flex;align-items:center;gap:10px;min-height:var(--dens-row-min);padding:var(--dens-pad-y) var(--dens-pad-x);border-bottom:1px solid var(--dens-rule);min-width:0">
+                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:{{ m.colour }};stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                  <sc-for list="{{ m.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                </svg>
+                <span style="flex:1 1 auto;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.name }}</span>
+                <button data-target="1" data-name="unpin {{ m.id }}" onClick="{{ m.unpin }}" aria-label="Unpin {{ m.name }}" style="min-height:44px;min-width:44px;border:0;background:transparent;color:var(--accent);font-size:12px">Unpin</button>
+              </div>
+            </sc-for>
+
+            <div style="padding:10px 14px 4px;font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">In order</div>
+            <sc-for list="{{ orderRows }}" as="m" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:8px;min-height:var(--dens-row-min);padding:var(--dens-pad-y) var(--dens-pad-x);border-bottom:1px solid var(--dens-rule);min-width:0">
+                <button data-target="1" data-name="reorder {{ m.id }}" onClick="{{ m.up }}" aria-label="Reorder {{ m.name }}. Use arrow keys to move it" style="flex:0 0 auto;min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--text-muted)">
+                  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="display:block;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ gripPaths }}" as="d" hint-placeholder-count="6"><path d="{{ d }}"></path></sc-for>
+                  </svg>
+                </button>
+                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:{{ m.colour }};stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                  <sc-for list="{{ m.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                </svg>
+                <span style="flex:1 1 auto;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.name }}</span>
+                <button data-target="1" data-name="pin {{ m.id }}" onClick="{{ m.pin }}" aria-label="Pin {{ m.name }} to the top of your list" style="min-height:44px;min-width:44px;border:0;background:transparent;color:var(--text-muted);font-size:12px">Pin</button>
+                <button data-target="1" data-name="hide {{ m.id }}" onClick="{{ m.hide }}" aria-label="Hide {{ m.name }} from my list" style="min-height:44px;min-width:44px;border:0;background:transparent;color:var(--text-muted);font-size:12px">Hide</button>
+              </div>
+            </sc-for>
+
+            <sc-if value="{{ hasHidden }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:10px 14px 4px;font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">Hidden by me</div>
+            </sc-if>
+            <sc-for list="{{ hiddenRows }}" as="m" hint-placeholder-count="0">
+              <div style="display:flex;align-items:center;gap:10px;min-height:var(--dens-row-min);padding:var(--dens-pad-y) var(--dens-pad-x);border-bottom:1px solid var(--dens-rule);background:var(--surface-sunken);min-width:0">
+                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:var(--text-muted);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                  <sc-for list="{{ m.paths }}" as="d" hint-placeholder-count="3"><path d="{{ d }}"></path></sc-for>
+                </svg>
+                <span style="flex:1 1 auto;min-width:0;font-size:14px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.name }}</span>
+                <button data-target="1" data-name="show {{ m.id }}" onClick="{{ m.show }}" aria-label="Show {{ m.name }} in your list again" style="min-height:44px;padding:0 0.8em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-raised);color:var(--text-primary);font-size:12px">Show again</button>
+              </div>
+            </sc-for>
+
+            <div style="padding:14px;border-top:1px solid var(--border);font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ absentLine }}</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Hidden by me, against absent</h2>
+              <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.6">The distinction is the whole of §5, and it is enforced by counting surfaces rather than by intent.</p>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+                <sc-for list="{{ surfaces }}" as="s" hint-placeholder-count="2">
+                  <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:14px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;align-items:baseline;gap:8px">
+                      <div style="font-family:var(--mono);font-size:12.5px;color:{{ s.colour }}">{{ s.name }}</div>
+                      <div style="margin-left:auto;font-family:var(--mono);font-size:22px;line-height:1;color:{{ s.colour }}">{{ s.count }}</div>
+                    </div>
+                    <div style="font-size:11px;letter-spacing:0.06em;text-transform:uppercase;font-family:var(--mono);color:var(--text-muted)">{{ s.label }}</div>
+                    <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ s.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <sc-if value="{{ showRules }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:0">
+                <sc-for list="{{ arrangeRules }}" as="r" hint-placeholder-count="4">
+                  <div style="display:grid;grid-template-columns:minmax(140px,200px) 1fr;gap:6px 18px;padding:11px 0;border-top:1px solid var(--divider)">
+                    <div style="font-size:13.5px;font-weight:500">{{ r.name }}</div>
+                    <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ r.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSwitcher }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:24px;max-width:1280px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">There is no current household on the session — it is in the URL — so the interface is the only place ambiguity can be introduced, and the switcher is the one control that has to be unmistakable. Switching is a single event: six things change together, and there is no intermediate state where the sidebar has switched and the banner has not.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+          <div data-watch="1" data-name="switcher sheet" style="border:1px solid var(--border-strong);border-radius:var(--radius-sheet);background:var(--surface-raised);overflow:hidden;box-shadow:var(--shadow-2);display:flex;flex-direction:column;min-width:0">
+            <div style="padding:14px 16px 10px;display:flex;flex-direction:column;gap:3px">
+              <div style="font-size:15px;font-weight:600">Switch household</div>
+              <div style="font-size:12.5px;color:var(--text-muted)">{{ memberName }} · {{ membershipLine }}</div>
+            </div>
+            <sc-for list="{{ memberships }}" as="h" hint-placeholder-count="2">
+              <button data-target="1" data-name="switch {{ h.id }}" onClick="{{ h.pick }}" aria-current="{{ h.current }}" style="display:flex;align-items:center;gap:10px;min-height:56px;padding:12px 16px;border:0;border-top:1px solid var(--divider);background:{{ h.bg }};color:var(--text-primary);text-align:left;min-width:0">
+                <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ h.name }}</span>
+                  <span style="font-size:12px;color:var(--text-muted)">{{ h.meta }}</span>
+                </span>
+                <span style="flex:0 0 auto;font-family:var(--mono);font-size:10.5px;color:{{ h.chipColour }}">{{ h.chip }}</span>
+              </button>
+            </sc-for>
+            <div style="padding:12px 16px;border-top:1px solid var(--border);font-size:12px;line-height:1.55;color:var(--text-muted)">{{ switcherFoot }}</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What changes, all at once</h2>
+            <div style="display:flex;flex-direction:column;gap:0;border-top:1px solid var(--border)">
+              <sc-for list="{{ changes }}" as="c" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 16px;padding:12px 0;border-bottom:1px solid var(--divider);align-items:baseline">
+                  <div style="font-size:13.5px;font-weight:500">{{ c.name }}</div>
+                  <div style="font-family:var(--mono);font-size:12px;color:var(--accent)">{{ c.now }}</div>
+                  <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ c.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ showRules }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:0">
+                <sc-for list="{{ switcherRules }}" as="r" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:minmax(140px,210px) 1fr;gap:6px 18px;padding:11px 0;border-top:1px solid var(--divider)">
+                    <div style="font-size:13.5px;font-weight:500">{{ r.name }}</div>
+                    <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ r.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-card);background:var(--surface-sunken);padding:14px;font-size:12.5px;line-height:1.6;color:var(--text-muted)">{{ chataNote }}</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDeeplinks }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1280px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Four situations, four drawn screens. The interesting pair is the last two: wrong household states what it did, because everything on screen changed; no access states nothing at all, because a message that distinguished a deleted row from a withdrawn grant would answer a question the member is not entitled to ask.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;align-items:start">
+          <sc-for list="{{ deeplinks }}" as="d" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                <h3 style="margin:0;font-size:16px;font-weight:600">{{ d.name }}</h3>
+                <span style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ d.ref }}</span>
+              </div>
+              <p style="margin:0;font-size:13px;line-height:1.55;color:var(--text-muted);max-width:54ch">{{ d.story }}</p>
+
+              <div data-watch="1" data-name="deeplink {{ d.id }}" style="border:1px solid var(--border-strong);border-radius:20px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow-1);display:flex;flex-direction:column;min-width:0;max-width:340px">
+                <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--divider);background:var(--surface-raised);min-width:0">
+                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:var(--text-muted);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ backPaths }}" as="p" hint-placeholder-count="2"><path d="{{ p }}"></path></sc-for>
+                  </svg>
+                  <span style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{ d.chrome }}</span>
+                  <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:{{ d.tagColour }};white-space:nowrap">{{ d.tag }}</span>
+                </div>
+                <sc-if value="{{ d.hasSwitchLine }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:8px 12px;background:var(--surface-sunken);border-bottom:1px solid var(--divider);font-size:12px;line-height:1.45;color:var(--text-primary)">{{ d.body }}</div>
+                </sc-if>
+                <div style="padding:16px 12px;display:flex;flex-direction:column;gap:10px;min-height:150px">
+                  <div style="font-size:15px;font-weight:600;line-height:1.35">{{ d.title }}</div>
+                  <sc-if value="{{ d.hasBody }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:13px;line-height:1.55;color:var(--text-muted)">{{ d.body2 }}</div>
+                  </sc-if>
+                  <div style="display:flex;flex-direction:column;gap:8px;margin-top:auto">
+                    <sc-for list="{{ d.actions }}" as="a" hint-placeholder-count="1">
+                      <div style="display:flex;align-items:center;min-height:44px;padding:0 0.8em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-raised);font-size:13px">{{ a }}</div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+
+              <sc-for list="{{ d.lines }}" as="l" hint-placeholder-count="1">
+                <p style="margin:0;font-size:12.5px;line-height:1.55;max-width:54ch">{{ l }}</p>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+              <h3 style="margin:0;font-size:16px;font-weight:600">The renamed slug</h3>
+              <span style="font-family:var(--mono);font-size:10.5px;color:var(--text-muted)">{{ slugRef }}</span>
+            </div>
+            <div data-watch="1" data-name="slug 404" style="border:1px solid var(--border-strong);border-radius:20px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow-1);display:flex;flex-direction:column;max-width:340px;min-width:0">
+              <div style="padding:10px 12px;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:10.5px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">/notes/kuchyne/recepty/svickova</div>
+              <div style="padding:16px 12px;display:flex;flex-direction:column;gap:10px">
+                <div style="font-size:15px;font-weight:600;line-height:1.35">{{ slugTitle }}</div>
+                <div style="font-size:13px;line-height:1.55;color:var(--text-muted)">{{ slugBody }}</div>
+                <div style="display:flex;flex-direction:column;gap:8px;padding-top:4px">
+                  <sc-for list="{{ slugActions }}" as="a" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;min-height:44px;padding:0 0.8em;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-raised);font-size:13px">{{ a }}</div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+            <h3 style="margin:0;font-size:16px;font-weight:600">Why this one may explain itself</h3>
+            <p style="margin:0;font-size:13.5px;line-height:1.6;max-width:60ch">{{ slugNote }}</p>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isShapes }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1280px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Three shapes recur inside modules; a fourth would be a new thing to learn for no new capability. What each shape owes the mobile client is the part worth stating: the list-first alternative to a grid is a designed view that has to answer the same question the grid answers, not a fallback.</p>
+
+        <sc-for list="{{ shapes }}" as="s" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:minmax(260px,1fr) minmax(260px,1.4fr);gap:22px;align-items:start;padding-top:20px;border-top:1px solid var(--border)">
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <h3 style="margin:0;font-size:17px;font-weight:600">{{ s.shape }}</h3>
+              <div style="display:flex;flex-wrap:wrap;gap:5px">
+                <sc-for list="{{ s.modules }}" as="m" hint-placeholder-count="4">
+                  <span style="padding:3px 8px;border:1px solid var(--border);border-radius:var(--radius-pill);font-size:11.5px;color:var(--text-muted)">{{ m }}</span>
+                </sc-for>
+              </div>
+              <p style="margin:0;font-size:13px;line-height:1.55;color:var(--text-muted);max-width:54ch">{{ s.note }}</p>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;min-width:0">
+              <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:14px;display:flex;flex-direction:column;gap:10px">
+                <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">mobile</div>
+                <div style="display:flex;gap:6px;height:64px">
+                  <sc-for list="{{ s.mobileBoxes }}" as="b" hint-placeholder-count="2">
+                    <div style="flex:{{ b.flex }};border:1px solid var(--border-subtle);border-radius:6px;background:{{ b.bg }};display:flex;align-items:flex-end;padding:4px;font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ b.label }}</div>
+                  </sc-for>
+                </div>
+                <div style="font-size:12.5px;line-height:1.5">{{ s.mobile }}</div>
+              </div>
+              <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);padding:14px;display:flex;flex-direction:column;gap:10px">
+                <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">web</div>
+                <div style="display:flex;gap:6px;height:64px">
+                  <sc-for list="{{ s.webBoxes }}" as="b" hint-placeholder-count="2">
+                    <div style="flex:{{ b.flex }};border:1px solid var(--border-subtle);border-radius:6px;background:{{ b.bg }};display:flex;align-items:flex-end;padding:4px;font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ b.label }}</div>
+                  </sc-for>
+                </div>
+                <div style="font-size:12.5px;line-height:1.5">{{ s.web }}</div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">The five destinations, and what each owns</h2>
+          <div style="display:flex;flex-direction:column;gap:0">
+            <sc-for list="{{ destinations }}" as="d" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:minmax(110px,140px) minmax(200px,1fr) 1.1fr;gap:8px 18px;padding:14px 0;border-top:1px solid var(--divider);align-items:start">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="display:block;flex:0 0 auto;fill:none;stroke:{{ d.colour }};stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+                    <sc-for list="{{ d.paths }}" as="p" hint-placeholder-count="3"><path d="{{ p }}"></path></sc-for>
+                  </svg>
+                  <span style="font-size:14px;font-weight:600">{{ d.label }}</span>
+                </div>
+                <div style="font-size:13px;line-height:1.5">{{ d.contents }}</div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ d.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isGate }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px;display:flex;flex-direction:column;gap:26px;max-width:1240px">
+        <p style="margin:0;max-width:80ch;font-size:14px;line-height:1.6;color:var(--text-muted)">Eight checks, computed from the fixture's grants and this file's own data rather than asserted. The one to read first is the third: it walks every member against every feature module and fails if any list on this page contains something its member has <span style="font-family:var(--mono);font-size:0.92em">none</span> on.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+          <sc-for list="{{ checks }}" as="k" hint-placeholder-count="8">
+            <div style="border:1px solid var(--border);border-left:3px solid {{ k.colour }};border-radius:var(--radius-card);background:var(--surface-raised);padding:14px;display:flex;flex-direction:column;gap:7px">
+              <div style="font-family:var(--mono);font-size:11px;color:{{ k.colour }}">{{ k.verdict }}</div>
+              <div style="font-size:13.5px;font-weight:500;line-height:1.4">{{ k.name }}</div>
+              <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ k.detail }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;padding-top:20px;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">Measured, on this page</h2>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ measuredContext }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden">
+            <sc-for list="{{ measurements }}" as="m" hint-placeholder-count="4">
+              <div style="background:var(--surface-raised);padding:16px">
+                <div style="font-family:var(--mono);font-size:26px;line-height:1;color:{{ m.colour }}">{{ m.value }}</div>
+                <div style="font-size:12.5px;margin-top:8px">{{ m.label }}</div>
+                <div style="font-size:11.5px;line-height:1.45;margin-top:4px;color:var(--text-muted)">{{ m.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <p style="margin:0;max-width:80ch;font-size:12.5px;line-height:1.55;color:var(--text-muted)">The tab bar is the hardest thing on the page to keep above the floor, because five slots share one phone's width. Switch the member, the theme, the density and the text size in the rail: the measurement re-runs on every change.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;padding-top:20px;border-top:1px solid var(--border)">
+          <h2 style="margin:0;font-family:var(--serif);font-weight:400;font-size:21px">What Stage 6 deliberately does not finish</h2>
+          <p style="margin:0;max-width:80ch;font-size:13.5px;line-height:1.6;color:var(--text-muted)">The shells are finished; the screens inside them are not, and are not meant to be. Each line below is a surface this stage reserves a place for.</p>
+          <div style="display:flex;flex-direction:column;gap:0">
+            <sc-for list="{{ deferred }}" as="d" hint-placeholder-count="7">
+              <div style="display:grid;grid-template-columns:minmax(200px,340px) 64px 1fr;gap:10px 16px;padding:12px 0;border-top:1px solid var(--divider);align-items:start">
+                <div style="font-size:13.5px;line-height:1.45">{{ d.what }}</div>
+                <div style="font-family:var(--mono);font-size:11px;color:var(--accent)">{{ d.stage }}</div>
+                <div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">{{ d.why }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;shells&quot;,&quot;personas&quot;,&quot;arrange&quot;,&quot;switcher&quot;,&quot;deeplinks&quot;,&quot;shapes&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;shells&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Stage 6&quot;},&quot;chatEnabled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Stage 6&quot;},&quot;showRules&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Stage 6&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100,
+            member: "jana", household: "hh-tilcer", arrange: {}, measured: null };
+
+  get N() { return window.HH_NAV; }
+  get F() { return window.HH_FIXTURES; }
+  get I() { return window.HH_ICONS; }
+  get T() { return window.HH_TOKENS; }
+
+  view() { return this.state.view || this.props.startView || "shells"; }
+  chatEnabled() { return this.props.chatEnabled !== false; }
+  key() { return this.state.member + "@" + this.state.household; }
+  arr() { return this.state.arrange[this.key()] || { pinned: [], hidden: [], order: null }; }
+
+  setArr(patch) {
+    var a = this.arr(), next = { pinned: a.pinned.slice(), hidden: a.hidden.slice(), order: a.order ? a.order.slice() : null };
+    Object.keys(patch).forEach(function (k) { next[k] = patch[k]; });
+    var all = {}, key = this.key();
+    Object.keys(this.state.arrange).forEach(function (k) { all[k] = this.state.arrange[k]; }, this);
+    all[key] = next;
+    this.setState({ arrange: all });
+  }
+
+  componentDidMount() { this._schedule(); window.addEventListener("resize", this._onResize = () => this._schedule()); }
+  componentWillUnmount() { window.removeEventListener("resize", this._onResize); }
+  componentDidUpdate() { this._schedule(); }
+
+  _schedule() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = requestAnimationFrame(() => this._measure());
+  }
+
+  _measure() {
+    var targets = [].slice.call(document.querySelectorAll('[data-target="1"]'));
+    var fails = [], min = 0;
+    targets.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      if (!r.height || !r.width) return;
+      var h = Math.round(r.height), w = Math.round(r.width);
+      if (!min || h < min) min = h;
+      if (h < 44) fails.push((el.getAttribute("data-name") || (el.textContent || "").trim().slice(0, 18)) + " " + w + "×" + h);
+    });
+    var watched = [].slice.call(document.querySelectorAll('[data-watch="1"]'));
+    var over = [];
+    watched.forEach(function (el) {
+      if (el.scrollWidth - el.clientWidth > 1) over.push(el.getAttribute("data-name") || "cell");
+    });
+    var m = { targets: targets.length, tFail: fails.length, tMin: min, tNames: fails.slice(0, 3),
+              watched: watched.length, oFail: over.length, oNames: over.slice(0, 3) };
+    if (JSON.stringify(m) !== JSON.stringify(this.state.measured)) this.setState({ measured: m });
+  }
+
+  _icon(id) { return (this.I.byId || {})[id] || { paths: [], name: id }; }
+  _paths(id) { return this._icon(id).paths; }
+
+  _colour(moduleId) {
+    var map = (this.T.accentMap || []).filter(function (m) { return m[0] === moduleId; })[0];
+    var fam = map ? map[2] : "household";
+    if (fam === "garden") return "var(--accent-garden)";
+    if (fam === "household") return "var(--accent)";
+    return "var(--accent-family-" + fam + ")";
+  }
+
+  _glyphFor(id) {
+    var g = this.N.glyphs;
+    if (id === "more") return g.more;
+    return this._paths(id);
+  }
+
+  /* the member's navigation: derived, then the member's own arrangement applied */
+  nav(memberId, householdId) {
+    var n = this.N.navFor(memberId || this.state.member, householdId || this.state.household);
+    if (!n.belongs) return n;
+    if (!this.chatEnabled()) {
+      n.hasChat = false;
+      n.tabs = n.tabs.filter(function (t) { return t.id !== "chat"; });
+      n.granted = n.granted.filter(function (m) { return m[0] !== "chat"; });
+      n.more = n.more.filter(function (m) { return m[0] !== "chat"; });
+      n.screens = 1 + n.granted.length;
+    }
+    return n;
+  }
+
+  arranged() {
+    var n = this.nav(), a = this.arr();
+    if (!n.belongs) return { pinned: [], ordered: [], hidden: [], absent: [] };
+    var byId = {};
+    n.more.forEach(function (m) { byId[m[0]] = m; });
+    var pinned = a.pinned.filter(function (id) { return byId[id]; }).map(function (id) { return byId[id]; });
+    var hidden = a.hidden.filter(function (id) { return byId[id]; }).map(function (id) { return byId[id]; });
+    var ordered = n.more.filter(function (m) { return a.pinned.indexOf(m[0]) < 0 && a.hidden.indexOf(m[0]) < 0; });
+    return { pinned: pinned, ordered: ordered, hidden: hidden, absent: n.absent };
+  }
+
+  _tabs(n, sizePx) {
+    var self = this;
+    return n.tabs.map(function (t, i) {
+      var isAdd = t.id === "add", current = i === 0;
+      return {
+        label: t.label, paths: self._glyphFor(t.icon),
+        watch: t.id + " tab",
+        current: current ? "page" : "false",
+        colour: isAdd ? "var(--accent)" : (current ? "var(--text-primary)" : "var(--text-muted)"),
+        chipBg: isAdd ? "var(--accent)" : "transparent",
+        chipFg: isAdd ? "var(--text-on-accent)" : "currentColor"
+      };
+    });
+  }
+
+  _phone(memberId, wantChat) {
+    var n = this.nav(memberId, "hh-tilcer");
+    var selected = memberId === this.state.member;
+    var count = n.tabs.length;
+    return {
+      title: count + " destinations",
+      tag: n.member.name + (selected ? " · selected" : ""),
+      tagColour: selected ? "var(--accent)" : "var(--text-muted)",
+      why: wantChat
+        ? "Home · Today · Add · Chat · More. The set is settled: design owns what is inside each destination, not which five they are."
+        : "Chat is absent — the module is off for this member, so the bar is drawn at four and Add stays the third slot. Order is preserved; only the spacing is re-solved.",
+      watch: "phone " + n.member.id,
+      household: n.household.name,
+      hasBanner: n.household.entitlement === "trialing",
+      banner: "Trial · " + n.household.name + " — 11 days left. Nothing is restricted yet.",
+      route: n.tabs[0].label + " · widget list",
+      routeNote: "Drawn in Stage 10. This stage builds the shell around it.",
+      tabs: this._tabs(n),
+      slots: count + " slots · Add at index " + (n.addIndex + 1) + " · " + n.granted.length + " modules granted, " + n.absent.length + " absent"
+    };
+  }
+
+  renderVals() {
+    var self = this, N = this.N, F = this.F, v = this.view();
+    var n = this.nav();
+    var m = this.state.measured;
+    var checks = N.checks();
+    var open = checks.filter(function (k) { return !k.pass; }).length;
+    var a = this.arranged();
+
+    var views = [
+      ["shells", "the two shells", "3"], ["personas", "five members", "5"], ["arrange", "arrange", "2"],
+      ["switcher", "switcher", "6"], ["deeplinks", "deep links", "4"], ["shapes", "within-module", "3"], ["gate", "the gate", "8"]
+    ].map(function (x) {
+      return { label: x[1], count: x[2], on: v === x[0] ? "1" : "0", pick: function () { self.setState({ view: x[0] }); } };
+    });
+
+    function opt(group, val, label, title, cur) {
+      return { label: label, title: title, on: cur === val ? "1" : "0", pick: function () { var s = {}; s[group] = val; self.setState(s); } };
+    }
+    var controls = [
+      { label: "member", options: F.members.map(function (mm) { return opt("member", mm.id, mm.name, mm.note, self.state.member); }) },
+      { label: "household", options: F.households.map(function (h) { return opt("household", h.id, h.name, h.note || "The fixture household", self.state.household); }) },
+      { label: "theme", options: [opt("theme", "light", "light", "Light theme", this.state.theme), opt("theme", "dark", "dark", "Dark theme", this.state.theme)] },
+      { label: "density", options: [opt("density", "comfortable", "comfortable", "Mobile's only mode", this.state.density), opt("density", "compact", "compact", "Web only — the 44 pt floor still binds", this.state.density)] },
+      { label: "text", options: [opt("scale", 100, "100 %", "Base text size", this.state.scale), opt("scale", 200, "200 %", "The 07-delivery sweep", this.state.scale)] }
+    ];
+
+    var titles = {
+      shells: ["Both shells", "04-navigation §1 and §4 · DD-11"],
+      personas: ["One derivation, five members", "§5 · the stage gate"],
+      arrange: ["Arrange: pinned, ordered, hidden", "§5 · D-38"],
+      switcher: ["The household switcher", "§6 · D-4"],
+      deeplinks: ["Four deep-link situations", "§8 · 06-clients §6"],
+      shapes: ["Three shapes, and the five destinations", "§7 · §1"],
+      gate: ["The stage gate", "computed from grants · measured live"]
+    };
+
+    var mv = [];
+    if (m) {
+      mv = [
+        { value: String(m.targets), label: "interactive targets measured", note: "live rectangles at this member, density and text size", colour: "var(--text-primary)" },
+        { value: m.tFail ? String(m.tFail) : "0", label: "under the 44 pt floor", note: m.tFail ? m.tNames.join(" · ") : "smallest measured target is " + m.tMin + " px high", colour: m.tFail ? "var(--danger)" : "var(--positive)" },
+        { value: String(m.watched), label: "artifacts watched for overflow", note: "each shell and screen in its own box", colour: "var(--text-primary)" },
+        { value: m.oFail ? String(m.oFail) : "0", label: "artifacts overflowing", note: m.oFail ? m.oNames.join(" · ") : "nothing is wider than the box it is given", colour: m.oFail ? "var(--danger)" : "var(--positive)" }
+      ];
+    }
+
+    var wantChat = this.nav(this.state.member, "hh-tilcer");
+    var fivePersona = (wantChat.belongs && wantChat.hasChat) ? this.state.member : "jana";
+    var fourPersona = (wantChat.belongs && !wantChat.hasChat) ? this.state.member : "milos";
+    if (!this.chatEnabled()) { fivePersona = null; }
+
+    var phones = [];
+    if (fivePersona) phones.push(this._phone(fivePersona, true));
+    phones.push(this._phone(fourPersona, false));
+    if (!fivePersona) phones.unshift({
+      title: "4 destinations, household-wide",
+      tag: "Chat disabled", tagColour: "var(--status-blocked)",
+      why: "With Chat disabled for the household, every member is on the four-slot drawing — the case DD-11 says is already ordinary on day one, before any question about the Online Safety Act is answered.",
+      watch: "phone disabled", household: n.belongs ? n.household.name : "Household",
+      hasBanner: false, banner: "",
+      route: "Home · widget list", routeNote: "Drawn in Stage 10. This stage builds the shell around it.",
+      tabs: this._tabs(this.nav("jana", "hh-tilcer")),
+      slots: "4 slots · Add at index 3 · no slot stretched, no slot empty"
+    });
+
+    var deeplinks = N.deeplinks.map(function (d) {
+      return {
+        id: d.id, name: d.name, ref: d.ref, story: d.story, chrome: d.chrome,
+        title: d.title, body: d.body, body2: d.kind === "switch" ? "Garden · beds · zone south. Everything else on screen changed with the household." : d.body,
+        hasBody: true, hasSwitchLine: d.kind === "switch",
+        actions: d.actions, lines: d.lines,
+        tag: d.kind === "neutral" ? "names nothing" : d.kind,
+        tagColour: d.kind === "neutral" ? "var(--danger)" : "var(--text-muted)"
+      };
+    });
+
+    var shapeBox = function (label, flex, tone) {
+      return { label: label, flex: String(flex), bg: tone };
+    };
+    var shapes = N.shapes.map(function (s) {
+      var mob = [shapeBox("list", 1, "var(--surface-sunken)")];
+      var web = [shapeBox("list", 1, "var(--surface-sunken)"), shapeBox("detail", 1.4, "var(--surface)")];
+      if (s.shape.indexOf("Tree") === 0) {
+        mob = [shapeBox("one level + path", 1, "var(--surface-sunken)")];
+        web = [shapeBox("tree", 0.8, "var(--surface-sunken)"), shapeBox("document", 2, "var(--surface)")];
+      }
+      if (s.shape.indexOf("Board") === 0) {
+        mob = [shapeBox("list-first", 1, "var(--surface-sunken)")];
+        web = [shapeBox("col", 1, "var(--surface-sunken)"), shapeBox("col", 1, "var(--surface-sunken)"), shapeBox("col", 1, "var(--surface-sunken)")];
+      }
+      return { shape: s.shape, modules: s.modules, mobile: s.mobile, web: s.web, note: s.note, mobileBoxes: mob, webBoxes: web };
+    });
+
+    var memberships = F.households.filter(function (h) { return h.members.indexOf(self.state.member) >= 0; }).map(function (h) {
+      var role = h.id === "hh-chata" ? (N.switcher.chata.roles[self.state.member] || "member")
+        : (F.members.filter(function (mm) { return mm.id === self.state.member; })[0] || {}).role;
+      var nn = self.nav(self.state.member, h.id);
+      var cur = h.id === self.state.household;
+      return {
+        id: h.id, name: h.name, current: cur ? "true" : "false",
+        meta: role + " · " + (nn.belongs ? nn.granted.length + " modules" : "no grants") + " · " + h.tz,
+        chip: h.entitlement, chipColour: h.entitlement === "active" ? "var(--text-muted)" : "var(--warning)",
+        bg: cur ? "var(--surface-sunken)" : "var(--surface-raised)",
+        pick: function () { self.setState({ household: h.id }); }
+      };
+    });
+
+    var changesNow = {
+      "Module list": n.belongs ? n.granted.length + " granted" : "—",
+      "Grants": n.belongs ? n.role : "—",
+      "Entitlement banner": n.belongs ? n.household.entitlement : "—",
+      "Timezone": n.belongs ? n.household.tz : "—",
+      "Base currency": n.belongs ? n.household.currency : "—",
+      "Dashboard layout": n.belongs ? "per member, per household" : "—"
+    };
+
+    var pinRow = function (mm) {
+      return {
+        id: mm[0], name: mm[1], paths: self._paths(mm[0]), colour: self._colour(mm[0]),
+        pin: function () { var ar = self.arr(); self.setArr({ pinned: ar.pinned.concat([mm[0]]) }); },
+        unpin: function () { var ar = self.arr(); self.setArr({ pinned: ar.pinned.filter(function (x) { return x !== mm[0]; }) }); },
+        hide: function () { var ar = self.arr(); self.setArr({ hidden: ar.hidden.concat([mm[0]]), pinned: ar.pinned.filter(function (x) { return x !== mm[0]; }) }); },
+        show: function () { var ar = self.arr(); self.setArr({ hidden: ar.hidden.filter(function (x) { return x !== mm[0]; }) }); },
+        up: function () { var ar = self.arr(); self.setArr({ pinned: ar.pinned.indexOf(mm[0]) < 0 ? ar.pinned.concat([mm[0]]) : ar.pinned }); }
+      };
+    };
+
+    var klara = this.nav("klara", "hh-tilcer");
+    var klaraScreens = klara.belongs ? [["dashboard", "Home", "Her widgets: the shopping list and Today's own summary. Short, and complete."]]
+      .concat(klara.granted.map(function (mm) {
+        return [mm[0], mm[1], mm[0] === "chat" ? "A tab of her own, because she is granted it. Threads, the floor, attachments." : "Contribute: she adds items and checks them off in the aisle."];
+      })) : [];
+
+    return {
+      theme: this.state.theme,
+      density: this.state.density,
+      fontPx: this.state.scale === 200 ? "30px" : "15px",
+      webFontPx: this.state.scale === 200 ? "26px" : "14px",
+      phoneMax: this.state.scale === 200 ? "560px" : "340px",
+      showRules: this.props.showRules !== false,
+      views: views, controls: controls,
+
+      isShells: v === "shells", isPersonas: v === "personas", isArrange: v === "arrange",
+      isSwitcher: v === "switcher", isDeeplinks: v === "deeplinks", isShapes: v === "shapes", isGate: v === "gate",
+
+      pageTitle: titles[v][0], pageMeta: titles[v][1],
+      whoLine: n.belongs ? n.member.name + " · " + n.role + " · " + n.household.name : "—",
+      gateLine: open ? open + " check open" : (m && (m.tFail || m.oFail) ? "measured: " + (m.tFail + m.oFail) + " to fix" : "gate: 8 checks pass"),
+      gateColour: open || (m && (m.tFail || m.oFail)) ? "var(--danger)" : "var(--positive)",
+
+      notMember: !n.belongs && v !== "gate",
+      notMemberLine: (n.member ? n.member.name : "This member") + " is not a member of " + (n.household ? n.household.name : "this household") + ", so there is no shell to draw and no switcher entry to offer.",
+
+      switcherPaths: N.glyphs.switcher,
+      searchPaths: N.glyphs.search,
+      gripPaths: N.glyphs.grip,
+      backPaths: N.glyphs.back,
+
+      phones: phones,
+      barDecision: N.bar.decision,
+      barRejected: N.bar.rejected.map(function (r) { return { name: r[0], why: r[1] }; }),
+      barRules: N.bar.rules.map(function (r) { return { name: r[0], note: r[1] }; }),
+      sidebarRules: N.sidebar.rules.map(function (r) { return { name: r[0], note: r[1] }; }),
+      scaleNote: "The artifacts are drawn wider at 200 % rather than the text drawn smaller: a phone is 390 pt at any text size, so what has to be inspected here is that five labelled slots still clear 44 pt and that no destination name is truncated or dropped. Density applies to the web shell only, and compact buys horizontal padding, never row height.",
+
+      householdName: n.belongs ? n.household.name : "—",
+      roleLine: n.belongs ? n.role + " · " + n.household.currency + " · " + n.household.tz : "",
+      webMeta: n.belongs ? n.granted.length + " modules in the list · " + this.state.density : "",
+      hasPinned: a.pinned.length > 0,
+      listHeading: a.pinned.length ? "My modules" : "My modules · in order",
+      pinnedList: a.pinned.map(function (mm) { return { name: mm[1], paths: self._paths(mm[0]), colour: self._colour(mm[0]) }; }),
+      orderedList: a.ordered.map(function (mm, i) {
+        return { name: mm[1], paths: self._paths(mm[0]), colour: self._colour(mm[0]), bg: i === 0 ? "var(--surface-sunken)" : "transparent" };
+      }),
+      hasBanner: n.belongs && n.household.entitlement === "trialing",
+      bannerLine: n.belongs ? "Trial · " + n.household.name + ". Subscribe from household settings — nothing is restricted yet, and no data is at risk if you do not." : "",
+      webPaneTitle: a.ordered.length ? a.ordered[0][1] : (a.pinned.length ? a.pinned[0][1] : "Home"),
+      webPaneMeta: "list → detail",
+      twoPaneRows: [
+        { name: "Electricity — cellar meter", value: "18 402,4 kWh", bg: "var(--surface-sunken)" },
+        { name: "Gas — hallway meter", value: "3 118,6 m³", bg: "transparent" },
+        { name: "Water — main", value: "412,0 m³", bg: "transparent" },
+        { name: "Internet — fixed line", value: "—", bg: "transparent" },
+        { name: "Waste collection", value: "—", bg: "transparent" }
+      ],
+      detailRoute: "Service detail",
+      detailNote: "Drawn in Stage 15. The two-pane is the shell's contribution: which pane holds the list, and what Back means.",
+
+      personas: F.members.map(function (mm) {
+        var nn = self.nav(mm.id, self.state.household);
+        if (!nn.belongs) {
+          return {
+            id: mm.id, name: mm.name, role: "not a member", device: mm.device, note: mm.note,
+            action: "Show " + mm.name, pick: function () { self.setState({ member: mm.id }); },
+            bg: mm.id === self.state.member ? "var(--surface-sunken)" : "transparent",
+            tabs: [], barLine: "no shell in this household", chips: [],
+            absentLine: mm.name + " does not belong to this household, so nothing is drawn and nothing is counted."
+          };
+        }
+        return {
+          id: mm.id, name: mm.name, role: nn.role, device: mm.device, note: mm.note,
+          action: "Show " + mm.name + "’s shell", pick: function () { self.setState({ member: mm.id, view: "shells" }); },
+          bg: mm.id === self.state.member ? "var(--surface-sunken)" : "transparent",
+          tabs: self._tabs(nn),
+          barLine: nn.tabs.length + " slots · " + (nn.hasChat ? "Chat granted" : "Chat absent") + (nn.locked ? " · locked layout" : ""),
+          chips: nn.granted.map(function (g) { return { name: g[1], paths: self._paths(g[0]), colour: self._colour(g[0]) }; }),
+          absentLine: nn.absent.length + " of " + N.modulesOf().length + " feature modules are absent for " + mm.name + " — not greyed, not counted, not searchable, not mentioned."
+        };
+      }),
+      klaraCount: klara.belongs ? klara.screens + " screens · " + klara.tabs.length + " tab slots · " + klara.absent.length + " absent" : "",
+      klaraScreens: klaraScreens.map(function (s) {
+        return { name: s[1], note: s[2], paths: self._paths(s[0]), colour: self._colour(s[0]) };
+      }),
+
+      arrangeWho: n.belongs ? n.member.name + " · " + n.household.name : "—",
+      pinnedRows: a.pinned.map(pinRow),
+      orderRows: a.ordered.map(pinRow),
+      hiddenRows: a.hidden.map(pinRow),
+      hasHidden: a.hidden.length > 0,
+      absentLine: a.absent.length + " " + N.arrange.absentLine,
+      surfaces: N.arrange.surfaces.map(function (s) {
+        return { name: s[0], count: String(s[1]), label: s[1] === 1 ? "surface, and it is reversible" : "surfaces, anywhere",
+                 note: s[2], colour: s[1] === 1 ? "var(--status-pending)" : "var(--positive)" };
+      }),
+      arrangeRules: N.arrange.rules.map(function (r) { return { name: r[0], note: r[1] }; }),
+
+      memberName: n.belongs ? n.member.name : (F.members.filter(function (mm) { return mm.id === self.state.member; })[0] || {}).name,
+      membershipLine: memberships.length > 1 ? memberships.length + " memberships, different roles" : "one membership",
+      memberships: memberships,
+      switcherFoot: memberships.length > 1
+        ? "Switching is one event, and the household name stays in the app bar afterwards because it is in the URL rather than on the session."
+        : "One membership: the switcher is not drawn at all, and the household name in the app bar is a label rather than a control.",
+      changes: N.switcher.changes.map(function (c) { return { name: c[0], note: c[1], now: changesNow[c[0]] || "—" }; }),
+      switcherRules: N.switcher.rules.map(function (r) { return { name: r[0], note: r[1] }; }),
+      chataNote: N.switcher.chata.note,
+
+      deeplinks: deeplinks,
+      slugRef: N.slug404.ref, slugTitle: N.slug404.title, slugBody: N.slug404.body,
+      slugActions: N.slug404.actions, slugNote: N.slug404.note,
+
+      shapes: shapes,
+      destinations: N.destinations.map(function (d) {
+        return { label: d.label, contents: d.contents, note: d.note, paths: self._glyphFor(d.icon),
+                 colour: d.conditional ? "var(--status-pending)" : self._colour(d.icon) };
+      }),
+
+      goSwitcher: function () { self.setState({ view: "switcher" }); },
+      goArrange: function () { self.setState({ view: "arrange" }); },
+
+      checks: checks.map(function (k) {
+        return { name: k.name, detail: k.detail, verdict: k.pass ? "pass" : "open", colour: k.pass ? "var(--positive)" : "var(--danger)" };
+      }),
+      measurements: mv,
+      measuredContext: (n.belongs ? n.member.name : "—") + " · " + this.state.theme + " · " + this.state.density + " · " + this.state.scale + " % text",
+      deferred: N.deferred.map(function (d) { return { what: d[0], stage: d[1], why: d[2] }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

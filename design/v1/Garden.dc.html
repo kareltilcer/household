@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./components.js"></script>
+<script src="./illustration.js"></script>
+<script src="./sync.js"></script>
+<script src="./reminders.js"></script>
+<script src="./dashboard.js"></script>
+<script src="./spine.js"></script>
+<script src="./garden.js"></script>
+<script src="./ledger.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent-garden) !important; border-color: var(--accent-garden) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">One model, three tiers</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Garden</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-garden)">{{ stageLine }}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="12">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">Fourteen beds, three zones, three seasons and eleven advisory checks — over one data model a balcony household sees a third of. Every date on these screens is the crop's own offset resolved against this household's frost dates.</div>
+      <a href="./Finance.dc.html" style="font-family:var(--mono);font-size:11px">← stage 16 · finance</a>
+      <a href="./Today and Cross-cutting Screens.dc.html" style="font-family:var(--mono);font-size:11px">stage 11 · the frost row on Today</a>
+      <a href="./Dashboard and Widgets.dc.html" style="font-family:var(--mono);font-size:11px">stage 10 · the two garden widgets</a>
+      <a href="./Icons and Illustration.dc.html" style="font-family:var(--mono);font-size:11px">stage 3 · the illustration kit</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+
+      <p style="margin:0;max-width:82ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="0">
+        <div style="border-left:2px solid var(--accent-garden);padding:2px 0 2px 12px;max-width:82ch;font-size:13.5px;line-height:1.6;color:var(--text-primary)">{{ n.text }}</div>
+      </sc-for>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+        <sc-for list="{{ frames }}" as="f" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0;grid-column:{{ f.col }}">
+
+            <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--accent-garden)">{{ f.id }}</span>
+              <h3 style="margin:0;font-size:15px;font-weight:600">{{ f.name }}</h3>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ f.stateLabel }}</span>
+            </div>
+
+            <div style="width:100%;max-width:{{ f.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+              <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.route }}</span>
+                <span style="flex:0 0 auto">{{ f.clientLabel }}</span>
+              </div>
+
+              <sc-if value="{{ f.hasBar }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0.45em 0.75em;background:var(--surface-sunken);color:var(--status-offline);font-family:var(--mono);font-size:0.62em;border-bottom:1px solid var(--divider)">{{ f.barText }}</div>
+              </sc-if>
+
+              <div style="flex:1 1 auto;padding:1em 0.9em;display:flex;flex-direction:column;gap:0.8em;min-width:0">
+
+                <div style="display:flex;flex-direction:column;gap:0.2em">
+                  <div style="font-size:1.1em;font-weight:600;line-height:1.2">{{ f.title }}</div>
+                  <sc-if value="{{ f.hasLede }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ f.lede }}</div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ f.hasIllus }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em">
+                    <sc-for list="{{ f.illus }}" as="ill" hint-placeholder-count="3">
+                      <div style="display:flex;gap:0.7em;align-items:center;border:1px solid {{ ill.border }};border-radius:var(--radius-card);background:{{ ill.bg }};padding:0.6em 0.7em;min-width:0">
+                        <sc-if value="{{ ill.on }}" hint-placeholder-val="{{ true }}">
+                          <svg viewBox="0 0 200 140" width="104" height="73" fill="none" aria-hidden="true" style="flex:0 0 auto">
+                            <sc-for list="{{ ill.parts }}" as="p" hint-placeholder-count="3">
+                              <g transform="{{ p.transform }}" stroke="{{ p.stroke }}" stroke-width="{{ p.width }}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="{{ p.dash }}">
+                                <sc-for list="{{ p.fills }}" as="d" hint-placeholder-count="0">
+                                  <path d="{{ d }}" fill="{{ p.fill }}" stroke="none"></path>
+                                </sc-for>
+                                <sc-for list="{{ p.paths }}" as="d" hint-placeholder-count="2">
+                                  <path d="{{ d }}"></path>
+                                </sc-for>
+                              </g>
+                            </sc-for>
+                          </svg>
+                        </sc-if>
+                        <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.2em">
+                          <span style="font-size:0.9em;font-weight:600;line-height:1.3">{{ ill.title }}</span>
+                          <span style="font-size:0.75em;line-height:1.45;color:var(--text-muted)">{{ ill.body }}</span>
+                          <span style="font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ ill.meta }}</span>
+                        </span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasBanner }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid {{ f.bannerTone }};border-left:3px solid {{ f.bannerTone }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.3em">
+                    <sc-if value="{{ f.hasBannerTitle }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.78em;font-weight:600;color:{{ f.bannerTone }}">{{ f.bannerTitle }}</div>
+                    </sc-if>
+                    <div style="font-size:0.76em;line-height:1.5;color:var(--text-primary)">{{ f.bannerBody }}</div>
+                    <div style="display:flex;gap:0.4em;flex-wrap:wrap;margin-top:0.15em">
+                      <sc-for list="{{ f.bannerActions }}" as="a" hint-placeholder-count="0">
+                        <span style="font-family:var(--mono);font-size:0.62em;border:1px solid var(--border-strong);border-radius:4px;padding:0.25em 0.5em;color:var(--text-primary)">{{ a.label }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.skeleton }}" as="k" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.6em;align-items:flex-start;border:1px solid var(--border);border-radius:var(--radius-card);padding:0.6em 0.7em;min-height:2.8em">
+                    <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.35em">
+                      <div style="height:0.85em;width:{{ k.w1 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                      <div style="height:0.7em;width:{{ k.w2 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                    </div>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.fields }}" as="x" hint-placeholder-count="0">
+                  <div style="display:flex;flex-direction:column;gap:0.25em">
+                    <div style="font-family:var(--mono);font-size:0.6em;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">{{ x.label }}</div>
+                    <div style="border:1px solid {{ x.border }};border-radius:var(--radius-control);background:{{ x.bg }};padding:0.55em 0.65em;font-size:0.85em;min-height:2.5em;display:flex;align-items:center;justify-content:space-between;gap:0.5em">
+                      <span style="min-width:0;font-family:{{ x.font }};color:{{ x.colour }}">{{ x.value }}</span>
+                      <sc-if value="{{ x.hasHint }}" hint-placeholder-val="{{ false }}">
+                        <span style="flex:0 0 auto;font-family:var(--mono);font-size:0.7em;color:var(--text-muted)">{{ x.hint }}</span>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ x.hasNote }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:0.7em;line-height:1.5;color:var(--text-muted)">{{ x.note }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.4em;flex-wrap:wrap">
+                    <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="2">
+                      <span style="display:inline-flex;align-items:center;gap:0.35em;white-space:nowrap;border:1px solid var({{ c.colour }});border-radius:999px;padding:0.2em 0.55em;font-size:0.68em;color:var(--text-primary)">
+                        <span style="width:0.5em;height:0.5em;border-radius:50%;background:var({{ c.colour }})"></span>{{ c.name }}
+                      </span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ f.blocks }}" as="b" hint-placeholder-count="0">
+                  <div data-block="{{ b.key }}" data-rows="{{ b.count }}" style="display:flex;flex-direction:column;gap:0.4em">
+                    <sc-if value="{{ b.hasHeading }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap">
+                        <span style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:{{ b.labelColour }}">{{ b.label }}</span>
+                        <sc-if value="{{ b.hasRule }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ b.rule }}</span>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="3">
+                      <div style="display:flex;gap:0.6em;align-items:flex-start;background:{{ r.bg }};border:1px solid {{ r.border }};border-left:{{ r.leftRule }};border-radius:var(--radius-card);padding:0.55em 0.65em 0.55em {{ r.padLeft }};min-width:0">
+                        <span style="flex:0 0 auto;width:0.5em;height:0.5em;border-radius:50%;background:var({{ r.token }});margin-top:0.45em"></span>
+                        <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.15em">
+                          <span style="display:flex;gap:0.5em;align-items:baseline;min-width:0">
+                            <span style="font-size:0.85em;font-weight:500;line-height:1.35;min-width:0">{{ r.title }}</span>
+                            <sc-if value="{{ r.hasRight }}" hint-placeholder-val="{{ false }}">
+                              <span style="margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:0.72em;color:{{ r.rightColour }}">{{ r.right }}</span>
+                            </sc-if>
+                          </span>
+                          <sc-if value="{{ r.hasMeta }}" hint-placeholder-val="{{ true }}">
+                            <span style="font-size:0.72em;line-height:1.4;color:var(--text-muted)">{{ r.meta }}</span>
+                          </sc-if>
+                          <span style="display:flex;gap:0.4em;align-items:center;flex-wrap:wrap;margin-top:0.1em">
+                            <sc-if value="{{ r.hasChip }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;padding:0.15em 0.4em;border-radius:3px;border:1px solid var({{ r.token }});color:var({{ r.token }})">{{ r.chip }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasMark }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-family:var(--mono);font-size:0.6em;color:{{ r.markColour }}">{{ r.markWord }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-size:0.66em;color:var(--text-muted)">{{ r.note }}</span>
+                            </sc-if>
+                          </span>
+                        </span>
+                        <sc-if value="{{ r.hasAction }}" hint-placeholder-val="{{ false }}">
+                          <span style="flex:0 0 auto;display:flex;gap:0.3em;align-items:center">
+                            <button onClick="{{ r.act }}" style="background:var(--surface-sunken);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:0.3em 0.55em;font-size:0.68em;min-height:2.6em">{{ r.actionLabel }}</button>
+                          </span>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-for list="{{ f.checks }}" as="c" hint-placeholder-count="0">
+                  <div style="display:flex;gap:0.55em;align-items:center;min-width:0">
+                    <span style="flex:0 0 auto;width:1em;height:1em;border-radius:3px;border:1px solid {{ c.boxBorder }};background:{{ c.boxBg }}"></span>
+                    <span style="font-size:0.78em;line-height:1.4;color:{{ c.colour }}">{{ c.text }}</span>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ f.hasTotal }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;justify-content:space-between;gap:0.6em;align-items:baseline;border-top:1px solid var(--border-strong);padding-top:0.5em">
+                    <span style="font-size:0.82em;font-weight:600">{{ f.totalLabel }}</span>
+                    <span style="font-family:var(--mono);font-size:0.95em;font-weight:600;color:{{ f.totalColour }}">{{ f.totalValue }}</span>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em;align-items:flex-start;padding:0.8em 0.2em 0.4em">
+                    <div style="width:100%;height:3.2em;border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken)"></div>
+                    <div style="font-size:0.92em;font-weight:600;line-height:1.3">{{ f.emptyTitle }}</div>
+                    <div style="font-size:0.78em;line-height:1.55;color:var(--text-muted)">{{ f.emptyBody }}</div>
+                    <sc-if value="{{ f.hasEmptyAction }}" hint-placeholder-val="{{ true }}">
+                      <span style="background:var(--accent-garden);color:var(--text-on-accent);border-radius:var(--radius-control);padding:0.5em 0.85em;font-size:0.78em">{{ f.emptyAction }}</span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasAbsent }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.35em;padding:1.2em 0.4em;align-items:center;text-align:center">
+                    <div style="font-size:0.85em;font-weight:600">{{ f.absentTitle }}</div>
+                    <div style="font-size:0.75em;line-height:1.55;color:var(--text-muted);max-width:26em">{{ f.absentBody }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasActions }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.45em;flex-wrap:wrap;margin-top:0.1em">
+                    <sc-for list="{{ f.actions }}" as="a" hint-placeholder-count="1">
+                      <span style="background:{{ a.bg }};color:{{ a.colour }};border:1px solid {{ a.border }};border-radius:var(--radius-control);padding:0.45em 0.8em;font-size:0.78em;min-height:2.8em;display:inline-flex;align-items:center">{{ a.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ f.hasFooter }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:auto;padding-top:0.55em;border-top:1px solid var(--divider);font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ f.footer }}</div>
+                </sc-if>
+
+              </div>
+            </div>
+
+            <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ f.caption }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-for list="{{ papers }}" as="pp" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--accent-garden)">{{ pp.id }}</span>
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ pp.name }}</h3>
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ pp.meta }}</span>
+          </div>
+          <div style="overflow-x:auto;max-width:100%;padding:2px">
+            <div style="width:794px;height:1123px;background:#FFFFFF;color:#000000;border:1px solid var(--border-strong);box-shadow:var(--shadow-2);padding:53px;display:flex;flex-direction:column;gap:16px;font-family:var(--sans)">
+              <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-bottom:1.3px solid #000000;padding-bottom:8px">
+                <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+                  <div style="font-size:21px;font-weight:600;line-height:1.1">{{ pp.paperTitle }}</div>
+                  <div style="font-size:12px;color:#444444">{{ pp.paperSub }}</div>
+                </div>
+                <div style="text-align:right;font-size:9pt;color:#444444;line-height:1.4;flex:0 0 auto">
+                  <div>{{ pp.household }}</div>
+                  <div>{{ pp.printedOn }}</div>
+                </div>
+              </div>
+
+              <sc-for list="{{ pp.sections }}" as="s" hint-placeholder-count="0">
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <div style="display:flex;align-items:baseline;gap:8px;border-bottom:0.4px solid #8A8A8A;padding-bottom:3px">
+                    <span style="font-size:13px;font-weight:600">{{ s.label }}</span>
+                    <span style="font-size:9pt;color:#444444">{{ s.en }}</span>
+                    <span style="margin-left:auto;font-size:9pt;color:#8A8A8A">{{ s.count }}</span>
+                  </div>
+                  <sc-for list="{{ s.items }}" as="i" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:flex-start;gap:11px;min-height:30px">
+                      <span style="flex:0 0 auto;width:17px;height:17px;border:1.3px solid #000000;margin-top:1px"></span>
+                      <span style="flex:1 1 auto;min-width:0;font-size:11pt;line-height:1.35">{{ i.text }}</span>
+                      <span style="flex:0 0 auto;font-size:9pt;color:#444444;text-align:right">{{ i.meta }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+
+              <sc-if value="{{ pp.hasGrid }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column">
+                  <div style="display:grid;grid-template-columns:{{ pp.gridCols }};border-bottom:1.3px solid #000000">
+                    <div style="font-size:9pt;color:#444444;padding:4px 4px 4px 0">{{ pp.gridLabel }}</div>
+                    <sc-for list="{{ pp.months }}" as="m" hint-placeholder-count="12">
+                      <div style="font-size:9pt;color:#444444;padding:4px 2px;text-align:center">{{ m }}</div>
+                    </sc-for>
+                  </div>
+                  <sc-for list="{{ pp.gridRows }}" as="gr" hint-placeholder-count="14">
+                    <div style="display:grid;grid-template-columns:{{ pp.gridCols }};border-bottom:0.4px solid #8A8A8A;align-items:center">
+                      <div style="padding:5px 4px 5px 0;min-width:0">
+                        <span style="font-size:10pt">{{ gr.label }}</span>
+                        <span style="font-size:8pt;color:#8A8A8A"> {{ gr.zone }}</span>
+                      </div>
+                      <sc-for list="{{ gr.cells }}" as="cc" hint-placeholder-count="12">
+                        <div style="padding:5px 2px;text-align:center;font-size:8pt;line-height:1.2;border-left:0.4px solid #C9C9C9;min-width:0;overflow:hidden">{{ cc.text }}</div>
+                      </sc-for>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <div style="margin-top:auto;display:flex;justify-content:space-between;gap:16px;border-top:0.4px solid #8A8A8A;padding-top:6px;font-size:9pt;color:#444444">
+                <span>{{ pp.footLeft }}</span>
+                <span>{{ pp.footRight }}</span>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted);max-width:82ch">{{ pp.caption }}</div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ tables }}" as="t" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ t.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ t.meta }}</span>
+          </div>
+          <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">{{ t.note }}</p>
+          </sc-if>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow-x:auto">
+            <div style="display:grid;grid-template-columns:{{ t.cols }};gap:0 14px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken);min-width:{{ t.minWidth }}">
+              <sc-for list="{{ t.head }}" as="h" hint-placeholder-count="3">
+                <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ h.text }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:{{ t.cols }};gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--divider);align-items:baseline;min-width:{{ t.minWidth }}">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+                  <div style="font-family:{{ c.font }};font-size:{{ c.size }};line-height:1.5;color:{{ c.colour }};min-width:0;overflow-wrap:anywhere">{{ c.text }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--accent-garden)">{{ g.id }}</span>
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ g.name }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ g.meta }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;align-items:start">
+            <sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="12">
+              <div style="border:1px solid {{ c.border }};border-radius:var(--radius-card);background:{{ c.bg }};padding:10px 11px;display:flex;flex-direction:column;gap:6px;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:6px;justify-content:space-between">
+                  <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:{{ c.wordColour }}">{{ c.word }}</span>
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted)">{{ c.tag }}</span>
+                </div>
+                <div style="font-size:11.5px;line-height:1.5;color:var(--text-primary)">{{ c.body }}</div>
+                <div style="font-size:10.5px;line-height:1.5;color:var(--text-muted)">{{ c.rule }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ checks }}" as="c" hint-placeholder-count="0">
+        <div style="display:grid;grid-template-columns:16px 1fr;gap:0 12px;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+          <div style="width:10px;height:10px;border-radius:50%;background:{{ c.colour }};margin-top:5px"></div>
+          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <div style="font-size:14px;font-weight:600;line-height:1.35">{{ c.name }}</div>
+            <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;tiers&quot;,&quot;setup&quot;,&quot;catalog&quot;,&quot;beds&quot;,&quot;tasks&quot;,&quot;check&quot;,&quot;season&quot;,&quot;storage&quot;,&quot;frost&quot;,&quot;print&quot;,&quot;states&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;tiers&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startTier&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;pots&quot;,&quot;beds&quot;,&quot;plot&quot;],&quot;default&quot;:&quot;plot&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startMember&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;jana&quot;,&quot;petr&quot;,&quot;adam&quot;,&quot;klara&quot;,&quot;milos&quot;],&quot;default&quot;:&quot;milos&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100, member: null, tier: null };
+
+  get M() { return window.HH_GARDEN; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (this.M && window.HH_TOKENS && window.HH_FIXTURES && window.HH_ILLUS) {
+        clearInterval(this._boot);
+        this.forceUpdate();
+      }
+    }, 60);
+  }
+  componentWillUnmount() { clearInterval(this._boot); }
+
+  get view() { return this.state.view || this.props.startView || "tiers"; }
+  get who() { return this.state.member || this.props.startMember || "milos"; }
+  get tier() { return this.state.tier || this.props.startTier || "plot"; }
+
+  pickers(list, current, set) {
+    return list.map((o) => ({
+      label: o[1], title: o[2] || "", on: current === o[0] ? "1" : "0",
+      pick: () => this.setState(set(o[0]))
+    }));
+  }
+
+  /* ── shape helpers, as Stages 13 to 16 ──────────────────────────────── */
+  F(o) {
+    const f = Object.assign({
+      id: "", name: "", stateLabel: "", caption: "", col: "auto", frameMax: "460px",
+      route: "", clientLabel: "mobile", title: "", lede: "",
+      bannerTone: "var(--border)", bannerTitle: "", bannerBody: "", bannerActions: [],
+      skeleton: [], blocks: [], chips: [], fields: [], checks: [], illus: [],
+      actions: [], emptyTitle: "", emptyBody: "", emptyAction: "",
+      absentTitle: "", absentBody: "", footer: "", barText: "",
+      totalLabel: "", totalValue: "", totalColour: "var(--text-primary)"
+    }, o);
+    f.hasLede = !!f.lede;
+    f.hasBanner = !!f.bannerBody;
+    f.hasBannerTitle = !!f.bannerTitle;
+    f.hasChips = f.chips.length > 0;
+    f.hasIllus = f.illus.length > 0;
+    f.hasEmpty = !!f.emptyTitle;
+    f.hasEmptyAction = !!f.emptyAction;
+    f.hasAbsent = !!f.absentTitle;
+    f.hasActions = f.actions.length > 0;
+    f.hasFooter = !!f.footer;
+    f.hasBar = !!f.barText;
+    f.hasTotal = !!f.totalValue;
+    f.bannerActions = f.bannerActions.map((a) => (typeof a === "string" ? { label: a } : a));
+    f.actions = f.actions.map((a, i) => (typeof a === "string"
+      ? { label: a, bg: i === 0 ? "var(--accent-garden)" : "var(--surface)",
+          colour: i === 0 ? "var(--text-on-accent)" : "var(--text-muted)",
+          border: i === 0 ? "var(--accent-garden)" : "var(--border)" }
+      : a));
+    f.illus = f.illus.map((x) => Object.assign({
+      border: "var(--border)", bg: "var(--surface)", title: "", body: "", meta: "", on: true, parts: []
+    }, x));
+    f.blocks = f.blocks.map((b, i) => Object.assign({
+      key: (f.id || "b") + "-" + i, label: "", rule: "", labelColour: "var(--text-muted)"
+    }, b, {
+      count: (b.rows || []).length, rows: (b.rows || []).map((r) => this.row(r)),
+      hasHeading: !!b.label, hasRule: !!b.rule
+    }));
+    f.checks = f.checks.map((c) => ({
+      text: c.text,
+      colour: c.done ? "var(--text-muted)" : "var(--text-primary)",
+      boxBg: c.done ? "var(--accent-garden)" : "var(--surface)",
+      boxBorder: c.done ? "var(--accent-garden)" : "var(--border-strong)"
+    }));
+    f.fields = f.fields.map((x) => Object.assign({
+      label: "", value: "", hint: "", note: "", bg: "var(--surface-sunken)",
+      border: "var(--border-strong)", font: "var(--sans)", colour: "var(--text-primary)"
+    }, x, { hasHint: !!x.hint, hasNote: !!x.note }));
+    return f;
+  }
+  row(r) {
+    const o = Object.assign({
+      title: "", meta: "", chip: "", token: "--accent-garden", right: "",
+      rightColour: "var(--text-muted)", markWord: "", markColour: "var(--text-muted)",
+      note: "", bg: "var(--surface)", border: "var(--border)", leftRule: "1px solid var(--border)",
+      padLeft: "0.65em", actionLabel: "", act: () => {}
+    }, r);
+    o.hasMeta = !!o.meta; o.hasChip = !!o.chip; o.hasRight = !!o.right;
+    o.hasMark = !!o.markWord; o.hasNote = !!o.note; o.hasAction = !!o.actionLabel;
+    return o;
+  }
+  tableMin(cols) {
+    const tracks = String(cols || "").split(/\s+(?![^(]*\))/).filter(Boolean);
+    let n = 0;
+    tracks.forEach((t) => {
+      const m = /minmax\((\d+)px/.exec(t) || /^(\d+)px$/.exec(t);
+      n += m ? Number(m[1]) : 90;
+    });
+    return (n + Math.max(0, tracks.length - 1) * 14 + 28) + "px";
+  }
+  cell(text, opt) {
+    const o = opt || {};
+    return { text: text, font: o.mono ? "var(--mono)" : "var(--sans)",
+             size: o.mono ? "11.5px" : "13px",
+             colour: o.muted ? "var(--text-muted)" : o.tone || "var(--text-primary)" };
+  }
+  illusFor(id, on) {
+    const I = window.HH_ILLUS;
+    const c = I.compositions.filter((x) => x.id === id)[0];
+    if (!c) return null;
+    return {
+      comp: c, on: on !== false,
+      parts: c.parts.map((p) => {
+        const part = I.byPart[p[0]];
+        return {
+          transform: "translate(" + p[1] + "," + p[2] + ") scale(" + p[3] + ")",
+          stroke: part.tone === "accent" ? "var(--accent-garden)" : "var(--text-muted)",
+          width: (I.frame.stroke / p[3]).toFixed(2),
+          dash: part.dashed ? (5 / p[3]).toFixed(1) + " " + (4 / p[3]).toFixed(1) : "none",
+          paths: part.paths, fills: part.fills,
+          fill: "color-mix(in oklab, var(--accent-garden) 12%, transparent)"
+        };
+      })
+    };
+  }
+  severityTone(s) {
+    return s === "warning" ? "var(--warning)" : "var(--text-muted)";
+  }
+  stateTone(s) {
+    const m = { warning: "var(--warning)", pass: "var(--accent-family-keeping)",
+                no_history: "var(--status-no-history)", disabled: "var(--text-muted)",
+                dismissed: "var(--text-muted)", not_at_this_tier: "var(--text-muted)" };
+    return m[s] || "var(--text-muted)";
+  }
+  stateWord(s) {
+    const m = { warning: "warning", pass: "clean", no_history: "no history yet",
+                disabled: "off", dismissed: "dismissed", not_at_this_tier: "not at this tier" };
+    return m[s] || s;
+  }
+
+  /* ── the state matrix ────────────────────────────────────────────────── */
+  stateGroups() {
+    const C = window.HH_COMPONENTS, M = this.M;
+    return M.screens.map((s) => {
+      const preset = s.preset === "F" ? ["loading", "populated", "error"]
+                   : s.preset === "S" ? ["populated"]
+                   : s.preset === "P" ? ["populated", "empty"] : M.allStates;
+      const imp = s.impossible || {};
+      const cells = preset.map((st) => {
+        const excluded = !!imp[st];
+        const t = C ? C.treatments[st] : null;
+        return {
+          word: st, tag: excluded ? "cannot occur" : (s.id + " \u00b7 " + s.client),
+          body: excluded ? imp[st] : this.stateBody(s, st),
+          rule: excluded ? "" : (t ? t.rule : ""),
+          bg: excluded ? "var(--surface-sunken)" : "var(--surface-raised)",
+          border: excluded ? "var(--border)" : "var(--border-strong)",
+          wordColour: excluded ? "var(--text-muted)" : this.stateColour(st)
+        };
+      });
+      const drawn = cells.filter((c) => c.tag !== "cannot occur").length;
+      return { id: s.id, name: s.name, cells: cells,
+               meta: drawn + " of " + preset.length + " states drawn \u00b7 " +
+                 Object.keys(imp).length + " cannot occur \u00b7 " + s.route };
+    });
+  }
+  stateColour(st) {
+    const m = { error: "var(--danger)", rejected: "var(--status-rejected)",
+                conflicted: "var(--status-conflict)", pending: "var(--status-pending)",
+                syncing: "var(--status-syncing)", offline: "var(--status-offline)",
+                readonly: "var(--warning)", withdrawn: "var(--text-muted)", absent: "var(--text-muted)" };
+    return m[st] || "var(--accent-garden)";
+  }
+  stateBody(s, st) {
+    if (st === "loading") return "Skeleton at the height of " + this.bodyWord(s) + ", so nothing jumps when the dates arrive.";
+    if (st === "empty") return s.empty ? s.empty.s + " " + s.empty.e : "Nothing here yet.";
+    if (st === "error") return s.error;
+    if (st === "rejected") return s.rejected || s.error;
+    if (st === "withdrawn") return s.withdrawn || "Access changed, so this device dropped its copy.";
+    if (st === "readonly") return s.readonly;
+    if (st === "absent") return (s.states && s.states.absent) || s.absent || "Gone, not disabled.";
+    if (st === "offline") return (s.states && s.states.offline) || "The same read with the bar above it \u2014 " + this.bodyWord(s) + " is on the device.";
+    if (st === "pending") return (s.states && s.states.pending) || "A queued write on " + this.bodyWord(s) + ", marked in a word and a glyph, still editable.";
+    if (st === "syncing") return (s.states && s.states.syncing) || "Past the 800 ms threshold only.";
+    if (st === "conflicted") return (s.states && s.states.conflicted) || "A row flag that opens the comparison, never a modal at reconnect.";
+    return (s.states && s.states.populated) || this.bodyWord(s) + ", with no mark at all: synced is the absence of a mark.";
+  }
+  bodyWord(s) {
+    const m = { answers: "the three answers", pots: "the containers", beds: "the fourteen beds",
+                plot: "the season", catalog: "the crop's fields", overrides: "the overridden fields",
+                planting: "the nine dates", tasks: "the weeks", drift: "the two dates",
+                check: "the eleven rows", dryrun: "the prospective season", close: "the final yields",
+                storage: "the eight rows", frost: "the warning", print_work: "the sheet",
+                print_plan: "the grid", stylesheet: "the rules" };
+    return m[s.kind] || "the content";
+  }
+
+  /* ── views ───────────────────────────────────────────────────────────── */
+  renderVals() {
+    const M = this.M;
+    if (!M || !window.HH_TOKENS || !window.HH_FIXTURES || !window.HH_ILLUS) {
+      return { views: [], controls: [], frames: [], tables: [], groups: [], checks: [],
+               notes: [], papers: [], pageTitle: "Garden", pageMeta: "loading",
+               stageLine: "stage 17", gateLine: "", gateColour: "var(--text-muted)",
+               viewIntro: "", theme: "light", density: "comfortable", fontPx: "16px" };
+    }
+    const view = this.view;
+    const all = M.checks();
+    const passed = all.filter((c) => c.pass).length;
+    const groups = this.stateGroups();
+    const cells = groups.reduce((n, g) => n + g.cells.filter((c) => c.tag !== "cannot occur").length, 0);
+    const panel = M.planCheck(2026);
+    const sum = M.checkSummary(panel);
+
+    const VIEWS = [
+      ["tiers", "one model, three tiers", M.surfaces.length],
+      ["setup", "four questions, and a pin", 4],
+      ["catalog", "the catalog, and your changes to it", M.crops.length],
+      ["beds", "beds, plantings and drift", M.beds.length],
+      ["tasks", "what the plan implies", M.tasks({ withManual: true }).length],
+      ["check", "the eleven checks", sum.total],
+      ["season", "copy as a dry run, and close", 3],
+      ["storage", "what is left in the cellar", M.storage.length],
+      ["frost", "frost tonight", M.frostWarning().plants.length],
+      ["print", "paper", 3],
+      ["states", "every state", cells],
+      ["gate", "the gate", all.length]
+    ];
+
+    const out = {
+      theme: this.state.theme, density: this.state.density,
+      fontPx: Math.round(16 * this.state.scale / 100) + "px",
+      stageLine: "stage 17 \u00b7 17 rows \u00b7 " + cells + " cells",
+      views: VIEWS.map((v) => ({ label: v[1], count: v[2], on: view === v[0] ? "1" : "0",
+                                 pick: () => this.setState({ view: v[0] }) })),
+      controls: [
+        { label: "Tier", options: this.pickers(
+            M.tiers.map((t) => [t.id, t.name, t.note]), this.tier, (v) => ({ tier: v })) },
+        { label: "Member", options: this.pickers(
+            (window.HH_FIXTURES.members || []).map((m) => [m.id, m.name, m.note]), this.who,
+            (v) => ({ member: v })) },
+        { label: "Theme", options: this.pickers([["light", "light"], ["dark", "dark"]], this.state.theme, (v) => ({ theme: v })) },
+        { label: "Density", options: this.pickers([["comfortable", "comfortable"], ["compact", "compact"]], this.state.density, (v) => ({ density: v })) },
+        { label: "Text", options: this.pickers([[100, "100 %"], [200, "200 %"]], this.state.scale, (v) => ({ scale: v })) }
+      ],
+      gateLine: passed + " / " + all.length + " checks pass",
+      gateColour: passed === all.length ? "var(--accent-family-keeping)" : "var(--danger)",
+      frames: [], tables: [], groups: [], checks: [], notes: [], papers: []
+    };
+
+    if (view === "tiers") this.viewTiers(out);
+    if (view === "setup") this.viewSetup(out);
+    if (view === "catalog") this.viewCatalog(out);
+    if (view === "beds") this.viewBeds(out);
+    if (view === "tasks") this.viewTasks(out);
+    if (view === "check") this.viewCheck(out);
+    if (view === "season") this.viewSeason(out);
+    if (view === "storage") this.viewStorage(out);
+    if (view === "frost") this.viewFrost(out);
+    if (view === "print") this.viewPrint(out);
+    if (view === "states") {
+      out.pageTitle = "Every state these seventeen rows can reach";
+      out.pageMeta = cells + " cells drawn \u00b7 " +
+        groups.reduce((n, g) => n + g.cells.filter((c) => c.tag === "cannot occur").length, 0) + " cannot occur";
+      out.viewIntro = "Twelve states are a treatment applied to one body, as Stage 4 established, and a row declares the states its own surface cannot reach with the reason, drawn where the state would have been. Here the exclusions come from two facts. The crop catalog is not household data \u2014 it is a versioned bundle the client caches \u2014 so five of the twelve cannot happen on the browser. And everything a member touches standing in the garden is lww_field, state_set or additive: a planting, a task, a completion, a harvest, an override and a jar all merge or accumulate, so the question a conflict dialog asks has no subject. What is left strict_version is structural \u2014 beds, containers, seasons, rules, settings \u2014 and those rows do ask.";
+      out.groups = groups;
+    }
+    if (view === "gate") {
+      const L = window.HH_LEDGER;
+      const extra = [];
+      if (L) {
+        const mm = L.mismatches();
+        const st = L.stageStatus().filter((s) => s.num === 17)[0];
+        extra.push({
+          name: "The declared exclusions match the ledger's mirror, checked where they are drawn",
+          detail: mm.length === 0
+            ? "This page loads ledger.js beside garden.js, so the comparison runs here rather than being asserted: the impossible maps in garden.js are identical to EXCLUSIONS for all seventeen rows. Stage 17 computes " +
+              (st ? st.built + " of " + st.rows + " client rows built and " + st.drawnStates + " of " +
+                st.reqStates + " states drawn \u2014 " + st.status : "no stage row") + "."
+            : "MISMATCH: " + mm.join(" \u00b7 "),
+          pass: mm.length === 0 && !!st && st.status === "closed"
+        });
+      }
+      const shown = all.concat(extra);
+      out.pageTitle = "The gate";
+      out.pageMeta = shown.filter((c) => c.pass).length + " of " + shown.length + " pass";
+      out.gateLine = shown.filter((c) => c.pass).length + " / " + shown.length + " checks pass";
+      out.gateColour = shown.every((c) => c.pass) ? "var(--accent-family-keeping)" : "var(--danger)";
+      out.viewIntro = "The stage's own line is paper: this month's work prints with real checkboxes and reads from a garden pocket. That is arithmetic in millimetres, and it is at the bottom of this list. Everything above it is the tier model and the eleven checks, which is where the module's real risk was \u2014 three products over one data model, and a panel that has to stay worth reading in April.";
+      out.checks = shown.map((c) => ({ name: c.name, detail: c.detail,
+        colour: c.pass ? "var(--accent-family-keeping)" : "var(--danger)" }));
+    }
+
+    out.tables = out.tables.map((tb) => Object.assign({}, tb, {
+      hasNote: !!tb.note, note: tb.note || "", minWidth: this.tableMin(tb.cols)
+    }));
+    return out;
+  }
+
+  /* ── tiers (D-39, D-40, D-41) ────────────────────────────────────────── */
+  viewTiers(out) {
+    const M = this.M, tier = this.tier;
+    const view = M.tierView(tier);
+    const move = M.tierMoveRun();
+    const care = M.careDue();
+    const beds26 = M.plantingsOf(2026);
+    const panel = M.planCheck(2026);
+    const sum = M.checkSummary(panel);
+
+    const pots = this.F({ id: "D-39", name: "pots home", stateLabel: "populated \u00b7 pots",
+      route: "/garden", frameMax: "360px", title: "Kv\u011btn\u00e1\u010de",
+      lede: "Containers, what is in them, and when they were last watered.",
+      blocks: [{ label: "Four containers", rule: "ordered by hand", rows: M.containers.map((k) => {
+        const plants = M.containerPlants.filter((p) => p.container === k.id);
+        const due = care.filter((c) => c.target === k.id)[0];
+        return this.row({
+          title: k.name,
+          meta: plants.map((p) => M.cropName(p.crop) + (M.varName(p.variety) ? " \u2018" + M.varName(p.variety) + "\u2019" : "")).join(", ") || "empty",
+          right: due ? (due.overdue ? "water \u00b7 overdue" : "water in " + Math.max(0, 1) + "\u00a0d") : "",
+          rightColour: due && due.overdue ? "var(--warning)" : "var(--text-muted)",
+          note: k.where + " \u00b7 " + k.size + (plants[0] && plants[0].photos ? " \u00b7 " + plants[0].photos + " photos" : "")
+        });
+      }) }],
+      footer: "No bed, no season, no rotation check, and nothing greyed out to suggest there could be.",
+      caption: "The eleven surfaces this tier does not have are absent rather than locked. A pots household is not running a stripped-down version of somebody else's garden." });
+
+    const beds = this.F({ id: "D-40", name: "beds home", stateLabel: "populated \u00b7 beds",
+      route: "/garden", frameMax: "360px", title: "Z\u00e1hony",
+      lede: "Fourteen beds in three zones, in the order they stand in.",
+      blocks: M.zones.map((z) => ({
+        label: z.name, rule: z.covered ? "covered" : "outside",
+        rows: M.bedsOfZone(z.id).map((bd) => {
+          const here = beds26.filter((p) => p.bed === bd.num);
+          return this.row({
+            title: bd.label + " \u00b7 " + bd.area + " m\u00b2",
+            meta: here.map((p) => p.label).join(", ") || "nothing planned",
+            right: here.length ? here.reduce((n, p) => n + p.area, 0).toFixed(1) + " m\u00b2" : "",
+            rightColour: here.reduce((n, p) => n + p.area, 0) > bd.area ? "var(--warning)" : "var(--text-muted)",
+            note: "neighbours " + M.neighbours(bd.num).map((n) => n.label.replace("bed ", "")).join(" and ")
+          });
+        })
+      })),
+      footer: "The order within a zone is the adjacency model. Dragging beds into the order they stand in is the whole of the data entry.",
+      caption: "Designed first, because raised beds and a patch is the median European garden. This tier adds the generated task chain, planned-against-actual dates, the harvest log and five of the eleven checks." });
+
+    const plot = this.F({ id: "D-41", name: "plot home", stateLabel: "populated \u00b7 plot",
+      route: "/garden", frameMax: "360px", title: "Zahrada 2026",
+      lede: "The season, its check, what followed what, and the cellar.",
+      blocks: [
+        { label: "Sez\u00f3na 2026", rule: "active", rows: [
+          this.row({ title: "Posledn\u00ed mrz\u00edk " + M.fmt(M.climate.lastFrost) + " \u00b7 prvn\u00ed " + M.fmt(M.climate.firstFrost),
+            meta: M.climate.seasonDays + " days of growing season, zone " + M.climate.zone,
+            right: beds26.length + " v\u00fdsadeb" }),
+          this.row({ title: "Kontrola pl\u00e1nu", meta: sum.warning + " warnings, " + sum.dismissed + " dismissed, " + sum.disabled + " off",
+            right: sum.findings + " findings", rightColour: "var(--warning)",
+            chip: "advisory" }),
+          this.row({ title: "Rotace", meta: M.closedSeasons().length + " closed seasons behind it \u2014 2024 and 2025",
+            right: "3 seasons" })
+        ] },
+        { label: "Z\u00e1soby", rule: "plot tier only", rows: M.storage.slice(0, 3).map((s) => this.row({
+          title: s.product, meta: s.method + " \u00b7 " + s.where,
+          right: s.initial ? s.remaining + " / " + s.initial + " " + s.unit : "waiting",
+          rightColour: s.initial && s.remaining / s.initial <= 0.25 ? "var(--warning)" : "var(--text-muted)"
+        })) }
+      ],
+      footer: "Moving up a tier revealed this screen. It migrated nothing.",
+      caption: "Seasons, rotation over closed seasons, succession, the full eleven checks, the storage log and season close. Dropping back to beds hides all six and deletes none of them." });
+
+    out.pageTitle = "One data model, three tiers";
+    out.pageMeta = M.surfaces.length + " surfaces \u00b7 " + view.shown.length + " revealed at " + tier +
+      " \u00b7 " + view.hidden.length + " hidden";
+    out.viewIntro = "D-65 is the module's central decision and its central risk: three tiers over one data model, not three modes with different data and not two products. A household picks a tier at setup, changes it whenever, and never migrates or re-enters anything \u2014 so the tier has to be a read filter and nothing else. The three homes below are the same rows read three ways, and the tier control in the sidebar moves this household between them.";
+    out.frames = [pots, beds, plot];
+    out.notes = [{ text: move.says }];
+    out.tables = [
+      { title: "The sixteen surfaces, and the tier each appears at",
+        meta: "read filter \u00b7 currently at " + tier,
+        note: "A surface is revealed when the household's tier reaches it. Nothing is deleted on the way down and nothing is created on the way up, which is what makes the change reversible in both directions.",
+        cols: "minmax(150px,1fr) minmax(300px,2fr) 90px 110px",
+        head: [{ text: "Key" }, { text: "Surface" }, { text: "From tier" }, { text: "At " + tier }],
+        rows: M.surfaces.map((s) => {
+          const shown = view.shown.some((x) => x[0] === s[0]);
+          return { cells: [
+            this.cell(s[0], { mono: true }),
+            this.cell(s[1]),
+            this.cell(s[2], { mono: true, muted: true }),
+            this.cell(shown ? "revealed" : "hidden", { mono: true, tone: shown ? "var(--accent-garden)" : "var(--text-muted)" })
+          ] };
+        }) },
+      { title: "Walking the tier up and down",
+        meta: "beds / containers / plantings / tasks / harvests / storage / seasons",
+        note: "The seven row counts after each move. A tier change is a setting, and this is the whole of what it touches.",
+        cols: "80px minmax(240px,1fr) 110px 110px",
+        head: [{ text: "Tier" }, { text: "Rows" }, { text: "Revealed" }, { text: "Hidden" }],
+        rows: move.walk.map((w) => ({ cells: [
+          this.cell(w.tier, { mono: true }),
+          this.cell(w.rows, { mono: true }),
+          this.cell(w.shown + " of " + M.surfaces.length, { mono: true, muted: true }),
+          this.cell(String(w.hidden), { mono: true, muted: true })
+        ] })) }
+    ];
+  }
+
+  /* ── setup (D-38) ────────────────────────────────────────────────────── */
+  viewSetup(out) {
+    const M = this.M, big = this.state.scale === 200;
+    const pin = M.pinRun();
+    const shift = M.climateShift();
+    const answers = M.tiers.map((t) => {
+      const il = this.illusFor(t.illus, !big);
+      const v = M.tierView(t.id);
+      return {
+        border: t.id === this.tier ? "var(--accent-garden)" : "var(--border)",
+        bg: t.id === this.tier ? "var(--surface-sunken)" : "var(--surface)",
+        on: !!il && !big, parts: il ? il.parts : [],
+        title: t.cs,
+        body: il ? il.comp.sentence + " " + il.comp.example : t.has,
+        meta: v.shown.length + " of " + M.surfaces.length + " surfaces \u00b7 tier " + t.name
+      };
+    });
+
+    const step1 = this.F({ id: "D-38", name: "Setup step 1", stateLabel: "populated",
+      route: "/garden/setup/1", frameMax: "420px", title: "V \u010dem p\u011bstujete?",
+      lede: "Three answers. The one you pick sets how much of the module you see, and you can change it whenever.",
+      illus: answers,
+      footer: big
+        ? "At 200 % text the compositions are dropped entirely. The sentence and the example are what teach, and both are still here."
+        : "No tier names, no feature matrix, no upgrade language. The answer is a description of a garden.",
+      caption: "The module's first screen and the one that decides its shape. Three answers, three compositions from the Stage 3 kit \u2014 which is where this stage found that the kit had drawn Garden's empty state and none of its answers." });
+
+    const step2 = this.F({ id: "D-38", name: "Setup step 2 \u2014 where", stateLabel: "populated",
+      route: "/garden/setup/2", frameMax: "400px", title: "Kde zahradu m\u00e1te?",
+      lede: "A town or a dropped pin. We store it roughly, and you can see how roughly.",
+      fields: [
+        { label: "Place", value: M.place.town + " \u00b7 " + M.place.country, hint: M.place.source },
+        { label: "Dropped", value: pin.raw[0].toFixed(6) + ", " + pin.raw[1].toFixed(6),
+          font: "var(--mono)", colour: "var(--text-muted)",
+          note: "What the member's finger produced." },
+        { label: "Stored", value: pin.snapped[0].toFixed(2) + ", " + pin.snapped[1].toFixed(2),
+          font: "var(--mono)", border: "var(--accent-garden)",
+          hint: "\u2248 " + pin.grid + " m grid",
+          note: "The marker moves " + pin.moved + " m on screen as they let go. Device location is read " + pin.deviceReads + " times, here or anywhere else in the module." }
+      ],
+      blocks: [{ label: "Resolved from that, and editable", rule: M.climate.source, rows: [
+        this.row({ title: "Posledn\u00ed mrz\u00edk na ja\u0159e", meta: "last spring frost", right: M.fmt(M.climate.lastFrost) }),
+        this.row({ title: "Prvn\u00ed mrz\u00edk na podzim", meta: "first autumn frost", right: M.fmt(M.climate.firstFrost) }),
+        this.row({ title: "Zóna " + M.climate.zone, meta: M.climate.seasonDays + " days of growing season", right: "6b" })
+      ] }],
+      footer: "All three are shown and all three are editable, because a member knows their own frost pocket better than a dataset does.",
+      caption: "Two decimals is about a kilometre, which is the right resolution for a frost date and the wrong one for finding a house. Snapping it in front of the member is how that becomes legible without a policy page." });
+
+    out.pageTitle = "Setup: four questions, and the pin";
+    out.pageMeta = "4 steps \u00b7 steps 3 and 4 skippable \u00b7 the module works empty";
+    out.viewIntro = "Substantial but short: what are you growing in, where, what do you grow, and your growing space. The first answer sets the tier and the second resolves the climate profile every date in the module is computed from. Steps three and four are skippable, and skipping them leaves a working module rather than a broken half-state.";
+    out.frames = [step1, step2];
+    out.notes = [{ text: pin.says }, { text: shift.says }];
+    out.tables = [{
+      title: "The same crop, two climates",
+      meta: "one catalog row, two frost dates",
+      note: "This is why the catalog stores offsets rather than calendar weeks: a Czech sowing table is wrong in Bavaria and absurd in Andalusia, and the household that notices is the one that moved.",
+      cols: "minmax(140px,1fr) minmax(120px,1fr) minmax(120px,1fr) 90px",
+      head: [{ text: "Window" }, { text: M.climate.label }, { text: M.climateAlt.label }, { text: "Apart" }],
+      rows: ["sow_indoor", "transplant", "harvest"].map((k) => {
+        const a = M.resolveWindow("rajce", "v-krim", k, M.climate, { by: "page" });
+        const b = M.resolveWindow("rajce", "v-krim", k, M.climateAlt, { by: "page" });
+        if (!a || !b) return { cells: [this.cell(k, { mono: true }), this.cell("\u2014"), this.cell("\u2014"), this.cell("\u2014")] };
+        const apart = Math.round((new Date(a.from) - new Date(b.from)) / 86400000);
+        return { cells: [
+          this.cell(k + " \u00b7 " + a.anchor + (a.offset[0] < 0 ? " " : " +") + a.offset[0], { mono: true }),
+          this.cell(M.fmt(a.from) + " \u2013 " + M.fmt(a.to), { mono: true }),
+          this.cell(M.fmt(b.from) + " \u2013 " + M.fmt(b.to), { mono: true, muted: true }),
+          this.cell(apart + " d", { mono: true, tone: "var(--accent-garden)" })
+        ] };
+      }) }];
+  }
+
+  /* ── catalog (D-42, D-43) ────────────────────────────────────────────── */
+  viewCatalog(out) {
+    const M = this.M;
+    const prov = M.provenanceAudit();
+    const ovr = M.overrideRun();
+    const prec = M.precedenceRun();
+    const crop = M.byCrop.rajce;
+    const rows = [
+      ["family", "Rodina", crop.family, "drives rotation"],
+      ["hardiness", "Mrazuvzdornost", crop.hardiness, "drives the frost logic"],
+      ["feeder", "N\u00e1ro\u010dnost", crop.feeder, "drives succession"],
+      ["breakYears", "Odstup", M.pick("rajce", null, "breakYears", { by: "page" }).value + " years", "rotation break"],
+      ["spacing", "Spon", crop.spacing + " cm", "\u00b7"],
+      ["dtm", "Do sklizn\u011b", M.pick("rajce", "v-krim", "dtm", { by: "page" }).value + " days", "variety"],
+      ["yieldM2", "V\u00fdnos", M.pick("rajce", "v-krim", "yieldM2", { by: "page" }).value + " kg/m\u00b2", "variety"],
+      ["storage", "Uchov\u00e1n\u00ed", crop.storage.join(", "), "\u00b7"]
+    ];
+
+    const browser = this.F({ id: "D-42", name: "Crop catalog browser", stateLabel: "populated",
+      route: "/garden/catalog/rajce", frameMax: "400px",
+      title: "Raj\u010de \u2018Black Krim\u2019",
+      lede: crop.latin + " \u00b7 " + crop.en + " \u00b7 catalog v" + M.catalog.version,
+      blocks: [
+        { label: "Timings, against your frost dates", rule: "resolved", rows: ["sow_indoor", "transplant", "harvest"].map((k) => {
+          const w = M.resolveWindow("rajce", "v-krim", k, M.climate, { by: "page" });
+          return this.row({
+            title: M.kindLabel[k] || k,
+            meta: w.anchor === "LF" ? "last frost " + (w.offset[0] < 0 ? "\u2212" : "+") + Math.abs(w.offset[0]) + " to " + (w.offset[1] < 0 ? "\u2212" : "+") + Math.abs(w.offset[1]) + " days" : "first frost " + w.offset.join(" to "),
+            right: M.fmt(w.from) + " \u2013 " + M.fmt(w.to),
+            markWord: w.source === "override" ? "your override" : (w.source === "variety" ? "variety" : ""),
+            markColour: w.source === "override" ? "var(--accent-garden)" : "var(--text-muted)"
+          });
+        }) },
+        { label: "Fields, each with where it came from", rule: prov.perCrop + " per crop", rows: rows.map((r) => this.row({
+          title: r[1] + " \u00b7 " + r[2],
+          meta: M.sources[M.fieldSrc[r[0]]].label,
+          chip: M.sources[M.fieldSrc[r[0]]].cls,
+          right: r[3] === "\u00b7" ? "" : r[3]
+        })) },
+        { label: "Companions", rule: "folklore, and drawn as folklore", rows: M.rules.filter((r) => r.scope === "crop" && (r.a === "rajce" || r.b === "rajce")).map((r) => this.row({
+          title: M.cropName(r.a) + " \u00d7 " + M.cropName(r.b) + " \u2014 " + r.verdict,
+          meta: r.why,
+          bg: M.sources[r.src].cls === "folklore" ? "var(--surface-sunken)" : "var(--surface)",
+          leftRule: M.sources[r.src].cls === "folklore" ? "1px dashed var(--border-strong)" : "1px solid var(--border)",
+          markWord: M.sources[r.src].cls, markColour: "var(--text-muted)"
+        })) }
+      ],
+      footer: "Shipped as a cached, versioned bundle rather than a lookup \u2014 which is the only reason this screen answers at the bottom of the garden.",
+      caption: "The design decision that matters here is that a traditional companion claim does not look like a spacing table. Dashed rule, muted ground, the source named in the row: distinguishable by looking rather than badged, because a badge is read once." });
+
+    const over = this.F({ id: "D-43", name: "Household overrides", stateLabel: "populated",
+      route: "/garden/catalog/overrides", frameMax: "400px", title: "Va\u0161e \u00fapravy katalogu",
+      lede: "Three fields changed, one variety of your own, and the catalog value still visible under each.",
+      blocks: [
+        { label: "Overridden fields", rule: "resolution: variety \u2192 override \u2192 catalog", rows: ovr.map((r) => this.row({
+          title: M.cropName(r.o.crop) + " \u00b7 " + r.o.field,
+          meta: r.o.why,
+          right: JSON.stringify(r.o.value).replace(/[\[\]"]/g, ""),
+          rightColour: "var(--accent-garden)",
+          note: "catalog says " + String(r.catalogNow).replace(/[\[\]"]/g, "") + (r.changed ? " \u2192 " + String(r.catalogNext).replace(/[\[\]"]/g, "") + " in v" + M.catalog.next.version : ""),
+          markWord: r.held ? "held through the update" : "LOST",
+          markColour: r.held ? "var(--accent-family-keeping)" : "var(--danger)"
+        })) },
+        { label: "Your own varieties", rule: "private to this household", rows: M.varieties.filter((v) => v.own).map((v) => this.row({
+          title: M.cropName(v.crop) + " \u2018" + v.name + "\u2019", meta: v.note,
+          right: v.dtm + " days"
+        })) }
+      ],
+      footer: "An override is shown as an override rather than merged, which is the difference between a correction and a fork.",
+      caption: "Catalog v" + M.catalog.next.version + " changes two of the three fields this household has overridden. Both overrides hold and the value underneath them updates \u2014 the behaviour that makes a curated, versioned catalog safe to ship at all." });
+
+    out.pageTitle = "The catalog, and this household's changes to it";
+    out.pageMeta = M.catalog.launchScope + " crops at launch \u00b7 " + M.crops.length + " here \u00b7 v" +
+      M.catalog.version + " \u00b7 " + M.catalog.languages + " languages";
+    out.viewIntro = "D-66 replaces home's per-install LLM import with a curated product asset: around three hundred crops, every supported language, timings expressed relative to the local frost dates and a hardiness zone, and a source on every field. Then FR-GA1 hands the household a way to disagree with it \u2014 per field, per crop, visibly, and surviving the next catalog version.";
+    out.frames = [browser, over];
+    out.notes = [{ text: prec.says }];
+    out.tables = [
+      { title: "Compatibility, in three scopes",
+        meta: M.rules.length + " rules \u00b7 canonical order, matched both ways",
+        note: "Pairs are stored in canonical order so symmetry is structural rather than a discipline. An explicit crop pair beats a family pair, which is the reason both scopes exist \u2014 and a catalog rule can be disabled by a household but not deleted, while a household's own rule can be deleted outright.",
+        cols: "70px minmax(160px,1fr) 100px minmax(200px,2fr) 100px",
+        head: [{ text: "Scope" }, { text: "Pair" }, { text: "Verdict" }, { text: "Why" }, { text: "Source" }],
+        rows: M.rules.map((r) => ({ cells: [
+          this.cell(r.scope, { mono: true }),
+          this.cell((M.byCrop[r.a] ? M.cropName(r.a) : r.a) + " \u00d7 " + (M.byCrop[r.b] ? M.cropName(r.b) : r.b)),
+          this.cell(r.verdict || ("min " + r.gap + " y"), { mono: true,
+            tone: r.verdict === "antagonist" ? "var(--warning)" : "var(--accent-garden)" }),
+          this.cell(r.why, { muted: true }),
+          this.cell(M.sources[r.src].cls + (r.origin === "household" ? " \u00b7 yours" : ""), { mono: true, muted: true })
+        ] })) },
+      { title: "One resolution function, four consumers",
+        meta: "variety \u2192 override \u2192 catalog",
+        note: "Carried from home's D103, whose reasoning holds exactly: four independent re-implementations of \u201cwhen do we sow Black Krim\u201d is a bug nobody would ever find.",
+        cols: "minmax(140px,1fr) 90px minmax(140px,1fr) minmax(140px,1fr) 90px",
+        head: [{ text: "Field" }, { text: "Answer from" }, { text: "Variety" }, { text: "Catalog" }, { text: "Override" }],
+        rows: ["win.sow_indoor", "win.transplant", "dtm", "yieldM2", "family", "breakYears"].map((f) => {
+          const p = M.pick("rajce", "v-krim", f, { by: "page" });
+          const strip = (v) => (v == null ? "\u2014" : JSON.stringify(v).replace(/[\[\]"]/g, ""));
+          return { cells: [
+            this.cell(f, { mono: true }),
+            this.cell(p.from, { mono: true, tone: "var(--accent-garden)" }),
+            this.cell(strip(p.varietyValue), { mono: true, muted: p.from !== "variety" }),
+            this.cell(strip(p.catalog), { mono: true, muted: p.from !== "catalog" }),
+            this.cell(strip(p.override), { mono: true, muted: p.from !== "override" })
+          ] };
+        }) }
+    ];
+  }
+
+  /* ── beds, plantings, drift (D-44, D-46) ─────────────────────────────── */
+  viewBeds(out) {
+    const M = this.M;
+    const p = M.planting("p26-04");
+    const drift = M.driftRun();
+    const q = [M.quantityCheck({ area: 2, count: 8 }), M.quantityCheck({})];
+
+    const editor = this.F({ id: "D-44", name: "Planting editor", stateLabel: "populated \u00b7 pending on two dates",
+      route: "/garden/plantings/p26-04", frameMax: "400px",
+      title: p.label + " \u00b7 " + p.where,
+      lede: "Nine dates: five planned, four actual, and a flag on each planned one saying who chose it.",
+      fields: [
+        { label: "Bed", value: p.where + " \u00b7 " + M.zones.filter((z) => z.id === M.bed(p.bed).zone)[0].name,
+          hint: M.bed(p.bed).area + " m\u00b2" },
+        { label: "Quantity", value: p.plants + " plants", font: "var(--mono)",
+          hint: p.area + " m\u00b2",
+          note: "An area or a plant count, exactly one. Both resolve to m\u00b2 through the crop's plants-per-m\u00b2, so the bed arithmetic does not care which was typed." }
+      ],
+      blocks: [
+        { label: "Planned", rule: "from the resolved windows", rows: ["sow_indoor", "prick_out", "harden_off", "transplant", "harvest"].filter((k) => p.planned[k]).map((k) => this.row({
+          title: M.kindLabel[k], right: M.fmt(p.planned[k]),
+          meta: p.manual[k] ? "set by hand \u2014 a frost-date correction will not move it"
+                            : "window " + M.fmt(p.windows[k].from) + " \u2013 " + M.fmt(p.windows[k].to),
+          markWord: p.manual[k] ? "is_manual" : "",
+          markColour: "var(--status-pending)",
+          border: p.manual[k] ? "var(--status-pending)" : "var(--border)"
+        })) },
+        { label: "Actual", rule: "an observation, not a correction", rows: Object.keys(p.actual).map((k) => this.row({
+          title: M.kindLabel[k] || k, right: M.fmt(p.actual[k]),
+          meta: "planned " + M.fmt(p.planned[k] || "") + " \u00b7 " + drift.days + " days later",
+          markWord: "pending", markColour: "var(--status-pending)"
+        })) }
+      ],
+      footer: "Occupancy " + M.fmt(p.occupancy.from) + " \u2013 " + M.fmt(p.occupancy.to) + " (" + p.occupancy.days + " days), which is what \u201cshares a bed\u201d means everywhere in the module.",
+      caption: p.note });
+
+    const driftFrame = this.F({ id: "D-46", name: "Drift detail", stateLabel: "populated",
+      route: "/garden/plantings/p26-04#drift", frameMax: "380px",
+      title: "Skute\u010dnost proti pl\u00e1nu",
+      lede: "You transplanted " + drift.days + " days after the plan. The plan has not moved.",
+      bannerTone: "var(--status-pending)",
+      bannerTitle: "+" + drift.days + " days",
+      bannerBody: "Planned " + M.fmtLong(drift.planned) + ", done " + M.fmtLong(drift.actual) + ". Every planned date in this season is unchanged.",
+      bannerActions: ["Shift the remaining tasks by " + drift.days + " days", "Leave them"],
+      blocks: [{ label: "What the shift would move", rule: "offered on the day", rows: drift.shiftable.map((t) => this.row({
+        title: t.title, meta: M.fmt(t.from) + " \u2192 " + M.fmt(t.to), right: "+" + drift.days + " d"
+      })) }],
+      footer: "An actual date is an observation. Letting it rewrite the plan would destroy the only comparison the module can make next year.",
+      caption: "The offer is one action and it is declinable. What it never does is edit a planned window \u2014 " + drift.dates + " planned dates were snapshotted as one string before and after, and the two are identical." });
+
+    out.pageTitle = "Beds, plantings, and what actually happened";
+    out.pageMeta = M.beds.length + " beds \u00b7 " + M.zones.length + " zones \u00b7 " +
+      M.plantingsOf(2026).length + " plantings this season \u00b7 " + M.plantings.length + " across three";
+    out.viewIntro = "Beds are ordered by lexorank within a zone, and that order is the adjacency model: two beds are neighbours if and only if they are consecutive in the same zone. It makes every adjacency check possible without a coordinate system, a drawing surface or a neighbour table \u2014 and the bed numbers carry none of it, which is why the greenhouse holds beds 1, 2 and 6.";
+    out.frames = [editor, driftFrame];
+    out.notes = [{ text: drift.says }];
+    out.tables = [
+      { title: "The fourteen beds, in the order they stand in",
+        meta: "zone order is the adjacency model",
+        cols: "70px minmax(120px,1fr) 60px 70px minmax(200px,2fr) 90px 110px",
+        head: [{ text: "Bed" }, { text: "Zone" }, { text: "Pos" }, { text: "Area" }, { text: "2026" }, { text: "Planted" }, { text: "Neighbours" }],
+        rows: M.beds.map((bd) => {
+          const here = M.plantingsOf(2026).filter((x) => x.bed === bd.num);
+          const used = Math.round(here.reduce((n, x) => n + x.area, 0) * 100) / 100;
+          return { cells: [
+            this.cell(bd.label, { mono: true }),
+            this.cell(M.zones.filter((z) => z.id === bd.zone)[0].name, { muted: true }),
+            this.cell(String(bd.pos), { mono: true, muted: true }),
+            this.cell(bd.area + " m\u00b2", { mono: true }),
+            this.cell(here.map((x) => x.label).join(", ") || "nothing planned",
+              { muted: !here.length }),
+            this.cell(used + " m\u00b2", { mono: true, tone: used > bd.area ? "var(--warning)" : "var(--text-muted)" }),
+            this.cell(M.neighbours(bd.num).map((n) => n.label.replace("bed ", "")).join(", "), { mono: true, muted: true })
+          ] };
+        }) },
+      { title: "Quantity is an area or a plant count",
+        meta: "422 otherwise",
+        note: "FR-GA11 states it as a constraint, and it is a constraint because the bed arithmetic behind C4 has to have one number to add up.",
+        cols: "minmax(180px,1fr) 70px minmax(280px,2fr)",
+        head: [{ text: "Input" }, { text: "Status" }, { text: "Says" }],
+        rows: [
+          { cells: [this.cell("{ area: 2, count: 8 }", { mono: true }), this.cell("422", { mono: true, tone: "var(--danger)" }), this.cell(q[0].says)] },
+          { cells: [this.cell("{ }", { mono: true }), this.cell("422", { mono: true, tone: "var(--danger)" }), this.cell(q[1].says)] },
+          { cells: [this.cell("{ count: 8 } \u00b7 rajce", { mono: true }), this.cell("200", { mono: true, tone: "var(--accent-garden)" }), this.cell("8 plants at 3 per m\u00b2 is " + M.planting("p26-04").area + " m\u00b2 of bed 3's 4,2 m\u00b2.")] }
+        ] }
+    ];
+  }
+
+  /* ── tasks (D-45) ────────────────────────────────────────────────────── */
+  viewTasks(out) {
+    const M = this.M;
+    const all = M.tasks({ withManual: true });
+    const gen = M.generatorAudit();
+    const regen = M.regenerate({ lastFrost: "2026-05-16", firstFrost: M.climate.firstFrost });
+    const stones = M.tombstones();
+    const soon = all.filter((t) => t.status === "open").slice(0, 6);
+    const weeks = {};
+    soon.forEach((t) => { (weeks[t.week] = weeks[t.week] || []).push(t); });
+
+    const list = this.F({ id: "D-45", name: "Generated task list", stateLabel: "populated \u00b7 one overdue",
+      route: "/garden/tasks", frameMax: "400px", title: "Pr\u00e1ce na zahrad\u011b",
+      lede: "Overdue first, then by week. Generated tasks and your own, in one list.",
+      blocks: Object.keys(weeks).sort().map((k, i) => ({
+        label: i === 0 ? "Overdue and this week" : k.replace("2026-W", "week "),
+        rule: weeks[k].length + " tasks",
+        rows: weeks[k].map((t) => this.row({
+          title: t.title,
+          meta: (t.due < M.today ? "overdue by " + Math.round((new Date(M.today) - new Date(t.due)) / 86400000) + " days" : M.fmtLong(t.due)) +
+            (t.edited ? " \u00b7 you moved this" : "") + (t.is_generated ? "" : " \u00b7 your own"),
+          right: t.is_generated ? "generated" : "manual",
+          rightColour: t.is_generated ? "var(--text-muted)" : "var(--accent-garden)",
+          token: t.due < M.today ? "--warning" : "--accent-garden",
+          border: t.due < M.today ? "var(--warning)" : "var(--border)",
+          actionLabel: "hold", act: () => {}
+        }))
+      })),
+      footer: "Hold to complete, 2000 ms, with the keyboard path beside it. Watering and weeding are never here \u2014 they are a rhythm, not a plan.",
+      caption: "Three of these rows are what the dashboard's garden.work widget draws, by title: the widget calls this module's endpoint and this module generated the row." });
+
+    const stone = this.F({ id: "D-45", name: "Regeneration, and the tombstone", stateLabel: "populated",
+      route: "/garden/tasks?regenerated=1", frameMax: "380px",
+      title: "Posledn\u00ed mrz\u00edk opraven na 16. 5.",
+      lede: "The generator re-ran. Here is exactly what it touched.",
+      blocks: [
+        { label: "Moved", rule: regen.moved.length + " open, unedited, generated", rows: regen.moved.slice(0, 4).map((m) => this.row({
+          title: m.title, meta: M.fmt(m.from) + " \u2192 " + M.fmt(m.to), right: "+" + regen.delta + " d",
+          rightColour: "var(--accent-garden)"
+        })) },
+        { label: "Held back", rule: "four rules, not one", rows: [
+          this.row({ title: regen.held.done + " done", meta: "A completed task is a fact." }),
+          this.row({ title: regen.held.skipped + " skipped", meta: "Skipping is a decision, and the generator does not overrule it." }),
+          this.row({ title: regen.held.edited + " edited", meta: "\u201cMilo\u0161 moved the lift to the week he is at home.\u201d" }),
+          this.row({ title: regen.held.manual + " manual or manually dated", meta: "A member's own sentence and a member's own date." })
+        ] },
+        { label: "Tombstoned", rule: stones.length + " deleted, " + regen.resurrected + " resurrected", rows: stones.map((s) => this.row({
+          title: s.generation_key, meta: s.why + " \u2014 deleted " + M.fmt(s.on) + " by " + s.by,
+          markWord: "will not come back", markColour: "var(--text-muted)",
+          bg: "var(--surface-sunken)", leftRule: "1px dashed var(--border-strong)"
+        })) }
+      ],
+      footer: "A generated task the member deleted leaves a tombstone, so regeneration cannot resurrect it.",
+      caption: "Without the four hold-backs, a corrected frost date would quietly rewrite the history of the season. With them, it moves the " + regen.moved.length + " dates that are still only a plan." });
+
+    out.pageTitle = "What the plantings imply";
+    out.pageMeta = gen.total + " tasks \u00b7 " + gen.generated + " generated across " + gen.kinds +
+      " kinds \u00b7 " + gen.manual + " a member's own \u00b7 " + stones.length + " tombstone";
+    out.viewIntro = "Tasks derive from the planting and the resolved crop record: sow indoors, prick out, harden off, transplant, direct sow, support, mulch, pest check, harvest. Two things are deliberately not in that list. Watering and weeding are decided by looking at the garden rather than at a list, so they exist only as manual tasks and, at the pots tier, as care reminders \u2014 a cadence of chores nobody ticks off is how a task list loses its credibility.";
+    out.frames = [list, stone];
+    out.tables = [{
+      title: "What the generator may move, and what it may not",
+      meta: "regeneration on a corrected frost date",
+      cols: "minmax(160px,1fr) 90px 90px minmax(240px,2fr)",
+      head: [{ text: "Case" }, { text: "Count" }, { text: "Moved" }, { text: "Why" }],
+      rows: [
+        { cells: [this.cell("Open, unedited, generated"), this.cell(String(regen.moved.length), { mono: true }), this.cell("yes", { mono: true, tone: "var(--accent-garden)" }), this.cell("Still only a plan, so re-anchoring it is the whole point of the generator.")] },
+        { cells: [this.cell("Done"), this.cell(String(regen.held.done), { mono: true }), this.cell("no", { mono: true }), this.cell("A completed task is a record of something that happened on a day.")] },
+        { cells: [this.cell("Skipped"), this.cell(String(regen.held.skipped), { mono: true }), this.cell("no", { mono: true }), this.cell("Skipping is a decision. Moving it would ask the member to make it twice.")] },
+        { cells: [this.cell("Edited"), this.cell(String(regen.held.edited), { mono: true }), this.cell("no", { mono: true }), this.cell("Editing a generated task is how a member takes it over, and it stops being regenerated.")] },
+        { cells: [this.cell("Manual, or on a manual date"), this.cell(String(regen.held.manual), { mono: true }), this.cell("no", { mono: true }), this.cell("Neither the sentence nor the date came from the plan.")] },
+        { cells: [this.cell("Deleted \u2014 tombstoned"), this.cell(String(stones.length), { mono: true }), this.cell("gone", { mono: true, tone: "var(--text-muted)" }), this.cell("Recreated " + regen.resurrected + " times. A task that comes back after you delete it is a task you stop trusting.")] }
+      ] }];
+  }
+
+  /* ── the plan check (D-47) ───────────────────────────────────────────── */
+  viewCheck(out) {
+    const M = this.M;
+    const panel = M.planCheck(2026);
+    const sum = M.checkSummary(panel);
+    const nohist = M.noHistoryRun();
+    const reduced = M.planCheck(2026, { reduced: true });
+    const c1 = panel.filter((c) => c.key === "C1")[0];
+    const big = this.state.scale === 200;
+    const il = this.illusFor("garden.no_history", !big);
+
+    const live = this.F({ id: "D-47", name: "Plan-check panel", stateLabel: "populated \u00b7 plot tier",
+      route: "/garden/season/2026/checks", frameMax: "440px", title: "Kontrola pl\u00e1nu 2026",
+      lede: sum.warning + " of eleven checks have something to say. None of them blocks anything.",
+      blocks: [
+        { label: "Warnings", rule: sum.findings + " findings \u00b7 " + sum.entities + " entities", rows: panel.filter((c) => c.state === "warning").map((c) => this.row({
+          title: c.key + " \u00b7 " + c.title,
+          meta: c.findings.map((f) => f.says).join("; "),
+          right: c.severity, rightColour: this.severityTone(c.severity),
+          token: c.severity === "warning" ? "--warning" : "--text-muted",
+          border: c.severity === "warning" ? "var(--warning)" : "var(--border)",
+          actionLabel: "Dismiss", act: () => {}
+        })) },
+        { label: "Dismissed for this season", rule: "reversible, with a note", rows: panel.filter((c) => c.state === "dismissed").map((c) => this.row({
+          title: c.key + " \u00b7 " + c.title,
+          meta: c.dismissed.map((f) => f.says).join("; "),
+          note: "\u201c" + c.dismissals[0].note + "\u201d \u2014 " + c.dismissals[0].by + ", " + M.fmt(c.dismissals[0].on),
+          right: "dismissed", bg: "var(--surface-sunken)",
+          leftRule: "1px dashed var(--border-strong)",
+          actionLabel: "Undo", act: () => {}
+        })) },
+        { label: "Off, and clean", rule: sum.disabled + " disabled \u00b7 " + sum.pass + " clean", rows: panel.filter((c) => c.state === "disabled" || c.state === "pass").map((c) => this.row({
+          title: c.key + " \u00b7 " + c.title,
+          meta: c.state === "disabled"
+            ? "Turned off by " + c.config.by + " on " + M.fmt(c.config.on) + " \u2014 \u201c" + c.config.why + "\u201d"
+            : "Nothing to report.",
+          right: this.stateWord(c.state), rightColour: this.stateTone(c.state)
+        })) }
+      ],
+      footer: "Advisory, always. A warning never blocks a save \u2014 " + sum.blocking + " of the eleven can.",
+      caption: "C1 has two silences worth as much as its warning: an antagonist pair that never shares the bed in time, and a pair an explicit crop rule declares a companion over its family rule. Both are shown with the reason rather than left out." });
+
+    const empty = this.F({ id: "D-47", name: "Plan-check panel \u2014 no history", stateLabel: "no_history",
+      route: "/garden/season/2026/checks", frameMax: "380px", title: "Kontrola pl\u00e1nu",
+      lede: "A household in its first season, with the same eleven checks.",
+      illus: [{ on: !!il && !big, parts: il ? il.parts : [], title: "Rotaci zat\u00edm nelze zkontrolovat",
+        body: il ? il.comp.sentence : "",
+        meta: nohist.states.join(" and ") + " \u00b7 status-no-history" }],
+      blocks: [{ label: "The eleven, first season", rule: nohist.summary.noHistory + " without history", rows: nohist.list.filter((c) => c.historyDependent || c.state === "warning").slice(0, 5).map((c) => this.row({
+        title: c.key + " \u00b7 " + c.title,
+        meta: c.state === "no_history" ? "Rotation can't be checked yet \u2014 no history." : c.findings.map((f) => f.says).join("; ").slice(0, 120),
+        right: this.stateWord(c.state), rightColour: this.stateTone(c.state),
+        token: c.state === "no_history" ? "--status-no-history" : "--warning"
+      })) }],
+      footer: "There is no historical back-fill importer, so rotation checks are structurally silent in the first season and only sharp from the third. Stated, rather than hidden.",
+      caption: "no_history is neither a pass nor a warning and must not look like either \u2014 which is what the Stage 2 status-no-history token and Stage 3's own Garden composition exist for." });
+
+    out.pageTitle = "Eleven checks, advisory always";
+    out.pageMeta = sum.total + " computed \u00b7 " + sum.warning + " warning \u00b7 " + sum.dismissed +
+      " dismissed \u00b7 " + sum.disabled + " off \u00b7 " + sum.blocking + " blocking";
+    out.viewIntro = "The panel is the plot tier's feature, and the thing most likely to kill it is members deciding in April that it cries wolf. Three mechanisms carry that: dismissal of one warning for one season with a note and an undo, disabling a check outright, and the explicit no-history state for the two checks that read closed seasons. Everything here is computed on read from the beds, the plantings and the closed seasons \u2014 there is no stored warning to go stale.";
+    out.frames = [live, empty];
+    out.notes = c1.extra && c1.extra.suppressed ? c1.extra.suppressed.map((s) => ({ text: s.says })) : [];
+    out.tables = [
+      { title: "The eleven, on this season",
+        meta: "computed on read \u00b7 severities configurable \u00b7 any check disableable",
+        cols: "50px minmax(200px,1fr) 90px 110px 60px minmax(240px,2fr)",
+        head: [{ text: "Key" }, { text: "Check" }, { text: "Severity" }, { text: "State" }, { text: "Points at" }, { text: "Findings" }],
+        rows: panel.map((c) => ({ cells: [
+          this.cell(c.key, { mono: true }),
+          this.cell(c.title),
+          this.cell(c.severity, { mono: true, tone: this.severityTone(c.severity) }),
+          this.cell(this.stateWord(c.state), { mono: true, tone: this.stateTone(c.state) }),
+          this.cell(String(c.entities), { mono: true, muted: true }),
+          this.cell(c.findings.concat(c.dismissed).map((f) => f.says).join("; ") || c.detail, { muted: !c.findings.length })
+        ] })) },
+      { title: "The same eleven at the beds tier, and in a first season",
+        meta: "one implementation, three answers",
+        note: "At beds the panel runs in a reduced form \u2014 only the checks that need no history \u2014 and the six that read closed seasons are not at that tier at all. In a first season at plot, the two history-dependent ones return no_history instead of a pass.",
+        cols: "50px 130px 130px 130px",
+        head: [{ text: "Key" }, { text: "plot, 2 seasons" }, { text: "plot, first season" }, { text: "beds tier" }],
+        rows: panel.map((c, i) => ({ cells: [
+          this.cell(c.key, { mono: true }),
+          this.cell(this.stateWord(c.state), { mono: true, tone: this.stateTone(c.state) }),
+          this.cell(this.stateWord(nohist.list[i].state), { mono: true, tone: this.stateTone(nohist.list[i].state) }),
+          this.cell(this.stateWord(reduced[i].state), { mono: true, tone: this.stateTone(reduced[i].state) })
+        ] })) }
+    ];
+  }
+
+  /* ── season copy and close (D-48, D-49) ──────────────────────────────── */
+  viewSeason(out) {
+    const M = this.M;
+    const cmp = M.dryRunCompare();
+    const close = M.closeEffect();
+    const cl = M.seasonClose(2025);
+    const shifted = cmp.shifted;
+
+    const dry = this.F({ id: "D-48", name: "Season copy \u2014 dry run", stateLabel: "populated",
+      route: "/garden/season/new?copy=2026", frameMax: "420px",
+      title: "Sez\u00f3na 2027 \u00b7 n\u00e1hled",
+      lede: "Copied from 2026 with a one-bed rotation shift, re-anchored on 2027's frost dates. Nothing has been created.",
+      fields: [
+        { label: "Rotation shift", value: "+1 bed, over the " + M.orderedActive().length + " active beds in zone order",
+          hint: "per planting" },
+        { label: "Frost dates", value: M.fmt(M.season(2027).lastFrost) + " \u2013 " + M.fmt(M.season(2027).firstFrost),
+          font: "var(--mono)", hint: "expected", note: "Every planned date is re-anchored on these, and the manual dates and the actuals from 2026 are dropped rather than copied." }
+      ],
+      blocks: [
+        { label: "What the shift fixed", rule: cmp.fixed.length + " findings gone", rows: cmp.fixed.slice(0, 4).map((s) => this.row({
+          title: s.split(" ")[0], meta: s.replace(/^\S+\s/, ""), token: "--accent-family-keeping",
+          border: "var(--accent-family-keeping)"
+        })) },
+        { label: "What it broke", rule: cmp.broke.length + " new findings", rows: cmp.broke.slice(0, 4).map((s) => this.row({
+          title: s.split(" ")[0], meta: s.replace(/^\S+\s/, ""), token: "--warning", border: "var(--warning)"
+        })) }
+      ],
+      actions: ["Create the 2027 season", "Try a different shift"],
+      footer: "Rows written by this preview: " + cmp.persisted + ". The season is written from the confirmation, not from here.",
+      caption: "A copy that silently reproduces last year's rotation error is worse than typing the year in by hand \u2014 so the whole prospective season and its check are drawn before it exists, side by side." });
+
+    const closeFrame = this.F({ id: "D-49", name: "Season close", stateLabel: "populated",
+      route: "/garden/season/2025/close", frameMax: "400px", title: "Uzav\u0159\u00edt sez\u00f3nu 2025",
+      lede: "Final yields, what failed, and the frost dates you actually saw.",
+      blocks: [
+        { label: "Yields", rule: cl.yields.logged + " plantings with a harvest", rows: cl.yields.rows.filter((r) => r.rows > 0).slice(0, 4).map((r) => this.row({
+          title: r.planting.label + " \u00b7 " + r.planting.where,
+          meta: r.rows + " harvests \u00b7 expected " + r.expected + " " + r.unit,
+          right: r.actual + " " + r.unit,
+          rightColour: r.ratio >= 100 ? "var(--accent-family-keeping)" : "var(--text-muted)",
+          markWord: r.ratio + " %", markColour: "var(--text-muted)"
+        })) },
+        { label: "Failures", rule: "named, not zeroed", rows: cl.failures.map((f) => this.row({
+          title: f.planting.label + " \u00b7 " + f.planting.where, meta: f.why,
+          right: "0 kg", bg: "var(--surface-sunken)"
+        })) },
+        { label: "Frost, observed", rule: "what next year is anchored on", rows: [
+          this.row({ title: "Posledn\u00ed mrz\u00edk", meta: "expected " + M.fmt(cl.observed.expectedLast),
+            right: M.fmt(cl.observed.last), markWord: "+" + cl.observed.lastDelta + " days", markColour: "var(--warning)" }),
+          this.row({ title: "Prvn\u00ed mrz\u00edk", meta: "expected " + M.fmt(cl.observed.expectedFirst),
+            right: M.fmt(cl.observed.first), markWord: cl.observed.firstDelta + " days", markColour: "var(--text-muted)" })
+        ] }
+      ],
+      actions: ["Close the season", "Not yet"],
+      footer: "Closing it makes it rotation history. Reopening needs manage and is audited, because it rewrites the record C3 and C8 read.",
+      caption: "The observed frost dates are the point of this screen: ten days later than the dataset in 2025, and that is the number next season's plan should be anchored on." });
+
+    out.pageTitle = "Copying a season, and closing one";
+    out.pageMeta = M.seasons.filter((s) => s.status !== "not created").length + " seasons \u00b7 " +
+      M.closedSeasons().length + " closed \u00b7 dry run wrote " + cmp.persisted + " rows";
+    out.viewIntro = "A season is a year with expected frost dates and a status. It can be created by copying a previous one with an optional rotation shift \u2014 bed assignments rotated by an offset over the ordered active beds, then re-anchored against the new year's frost dates. Because a rotation by offset is exactly the kind of change that fixes three things and breaks one, the copy runs as a dry run first.";
+    out.frames = [dry, closeFrame];
+    out.notes = [{ text: close.says }];
+    out.tables = [
+      { title: "The shift, bed by bed",
+        meta: "+1 over " + M.orderedActive().length + " active beds in zone order",
+        note: "Adjacency and rotation both fall out of the same ordered list, which is why a shift by one is expressible at all.",
+        cols: "70px 70px minmax(220px,1fr) minmax(220px,1fr)",
+        head: [{ text: "2026" }, { text: "2027" }, { text: "Moves" }, { text: "Into a bed that last held" }],
+        rows: M.orderedActive().map((num, i) => {
+          const order = M.orderedActive();
+          const to = order[(i + 1) % order.length];
+          const from26 = M.plantingsOf(2026).filter((p) => p.bed === num);
+          const prev = M.plantings.filter((p) => p.bed === to && p.season === 2025);
+          return { cells: [
+            this.cell(M.bed(num).label, { mono: true }),
+            this.cell(M.bed(to).label, { mono: true, tone: "var(--accent-garden)" }),
+            this.cell(from26.map((p) => p.label).join(", ") || "nothing", { muted: !from26.length }),
+            this.cell(prev.map((p) => p.label + " (2025)").join(", ") || "\u2014", { muted: true })
+          ] };
+        }) },
+      { title: "Closing 2026 changes what the 2027 check can see",
+        meta: "the same dry run, run twice",
+        note: "This is the whole of what season close does, and the reason reopening one is audited: it rewrites the record two of the eleven checks depend on.",
+        cols: "minmax(200px,1fr) 110px 110px",
+        head: [{ text: "In the 2027 dry run" }, { text: "2026 open" }, { text: "2026 closed" }],
+        rows: [
+          { cells: [this.cell("C3 \u00b7 rotation break against closed seasons"), this.cell(String(close.c3[0]), { mono: true }), this.cell(String(close.c3[1]), { mono: true, tone: "var(--warning)" })] },
+          { cells: [this.cell("C8 \u00b7 heavy feeder after heavy feeder"), this.cell(String(close.c8[0]), { mono: true }), this.cell(String(close.c8[1]), { mono: true, tone: "var(--warning)" })] },
+          { cells: [this.cell("All eleven, total findings"), this.cell(String(close.without.summary.findings), { mono: true }), this.cell(String(close.with.summary.findings), { mono: true })] }
+        ] }
+    ];
+  }
+
+  /* ── storage (D-50) ──────────────────────────────────────────────────── */
+  viewStorage(out) {
+    const M = this.M;
+    const st = M.storageRun();
+    const log = this.F({ id: "D-50", name: "Storage log", stateLabel: "populated \u00b7 one pending",
+      route: "/garden/storage", frameMax: "420px", title: "Z\u00e1soby",
+      lede: "What was preserved, how, and how much is left. Change the number when you open a jar.",
+      blocks: [{ label: "Eight rows", rule: st.movements + " movement rows", rows: M.storage.map((s) => this.row({
+        title: s.product,
+        meta: s.method + " \u00b7 " + s.where + (s.on ? " \u00b7 " + M.fmt(s.on) : "") + (s.best ? " \u00b7 best before " + M.fmt(s.best) : ""),
+        right: s.initial ? s.remaining + " / " + s.initial + " " + s.unit : "\u2014",
+        rightColour: s.initial && s.remaining === 0 ? "var(--text-muted)"
+          : (s.initial && s.remaining / s.initial <= 0.25 ? "var(--warning)" : "var(--text-primary)"),
+        markWord: s.status || (s.pending ? "pending" : ""),
+        markColour: s.status === "past best-before" ? "var(--warning)" : "var(--text-muted)",
+        note: s.pending || "",
+        bg: s.initial && s.remaining === 0 ? "var(--surface-sunken)" : "var(--surface)"
+      })) }],
+      footer: "Consumption is an edit in place. There is no movements table, because the audit spine's field diffs already answer when the last jar went.",
+      caption: st.says });
+
+    out.pageTitle = "The cellar";
+    out.pageMeta = st.items + " rows \u00b7 " + st.edits + " in-place edits \u00b7 " + st.movements +
+      " movement rows \u00b7 " + st.low + " nearly out";
+    out.viewIntro = "FR-GA20 is a small screen with one interesting decision in it: consumption is recorded by editing the remaining quantity, and the module ships no second ledger to explain the difference. The audit spine is already storing field diffs on every row, so \u201cwhen did we eat the last jar\u201d is answerable without a movements table \u2014 and a household counting jars in a cellar is not going to record a withdrawal.";
+    out.frames = [log];
+    out.tables = [{
+      title: "One row's whole history, from the audit spine",
+      meta: st.lastJar ? st.lastJar.item.product : "\u2014",
+      note: "Three edits and a date each. The last one is the answer to the question a movements table would have been built for.",
+      cols: "110px 90px minmax(240px,2fr)",
+      head: [{ text: "Edited" }, { text: "Remaining" }, { text: "What it means" }],
+      rows: (st.lastJar ? st.lastJar.item.edits : []).map((e, i, arr) => ({ cells: [
+        this.cell(M.fmtLong(e[0]), { mono: true }),
+        this.cell(e[1] + " " + st.lastJar.item.unit, { mono: true, tone: e[1] === 0 ? "var(--text-muted)" : "var(--text-primary)" }),
+        this.cell(i === 0 ? "Put up after the harvest." : (e[1] === 0 ? "The last of it. This row is the field diff that answers the question." : "Somebody opened the crock."))
+      ] })) }];
+  }
+
+  /* ── frost (D-51) ────────────────────────────────────────────────────── */
+  viewFrost(out) {
+    const M = this.M;
+    const w = M.frostWarning();
+    const quiet = M.frostQuiet();
+    const fail = M.weatherFailure();
+    const spine = M.spineRun();
+
+    const warn = this.F({ id: "D-51", name: "Frost warning", stateLabel: "populated",
+      route: "/garden?warning=frost", frameMax: "380px", title: w.title,
+      lede: w.body + ".",
+      bannerTone: "var(--warning)", bannerTitle: "Tonight, " + w.min + " \u00b0C",
+      bannerBody: "Measured at " + w.measuredAt.slice(11, 16) + ". Tender plants warn at or below " +
+        M.frostThreshold.tender + " \u00b0C, half-hardy at " + M.frostThreshold.half + " \u00b0C.",
+      bannerActions: ["Show the six", "Not tonight"],
+      blocks: [{ label: "Not hardy, and outside", rule: w.beds.length + " beds", rows: w.plants.map((p) => this.row({
+        title: p.label, meta: p.where + " \u00b7 " + M.zones.filter((z) => z.id === M.bed(p.bed).zone)[0].name +
+          " \u00b7 standing until " + M.fmt(p.occupancy.to),
+        right: p.hardiness, rightColour: "var(--warning)", token: "--warning"
+      })) }],
+      footer: "The greenhouse beds are covered and bed 4's potatoes had their haulm cut on " + M.fmt(M.planting("p26-06").topsDown) + ", so neither is here.",
+      caption: "The single most valuable thing the module does for a balcony gardener, and the reason FR-GA8 applies at every tier rather than only where there are beds." });
+
+    const none = this.F({ id: "D-51", name: "Frost warning \u2014 at six degrees", stateLabel: "populated \u00b7 condition false",
+      route: "/garden", frameMax: "340px", title: "Zahrada",
+      lede: "The same code, the same plants, a milder night.",
+      blocks: [{ label: "Today", rule: "nothing conditional", rows: [
+        this.row({ title: "Pest check \u00b7 Zel\u00ed \u00b7 bed 12", meta: "overdue by 5 days", token: "--warning" }),
+        this.row({ title: "K sklizni", meta: M.harvestReady().length + " plantings inside their harvest window" })
+      ] }],
+      footer: "Warnings published: " + quiet.plants.length + ". Not an empty card, not a green tick \u2014 the alert is not drawn.",
+      caption: "garden.frost_risk_tonight exists to be a condition rather than decoration. At six degrees there is no row, no heading and no reassurance, which is what keeps the warning worth reading at minus two." });
+
+    out.pageTitle = "Frost tonight";
+    out.pageMeta = w.plants.length + " plantings \u00b7 beds " + w.beds.join(", ") + " \u00b7 " + w.min +
+      " \u00b0C \u00b7 measured " + w.measuredAt.slice(11, 16);
+    out.viewIntro = "Twice-daily forecast, cached about ninety days, and one published warning when tonight's minimum reaches the threshold for something tender that is outside. The word doing the work is outside: three of this household's tender plantings are under glass and one has had its haulm cut, so the warning names three beds rather than five and stays specific enough to act on.";
+    out.frames = [warn, none];
+    out.notes = [{ text: spine.says }, { text: fail.says }];
+    out.tables = [{
+      title: "The cached forecast, and what each night would publish",
+      meta: M.weatherState.cacheDays + " days cached \u00b7 " + M.weatherState.failures + " failed fetches \u00b7 " +
+        M.weatherState.errorsShown + " errors shown",
+      cols: "110px 80px 80px 110px minmax(200px,1fr)",
+      head: [{ text: "Night" }, { text: "Min" }, { text: "Max" }, { text: "Measured" }, { text: "Published" }],
+      rows: M.weather.map((d) => {
+        const r = M.frostWarning(d.date, { forecast: d });
+        return { cells: [
+          this.cell(M.fmtLong(d.date), { mono: true }),
+          this.cell(d.min + " \u00b0C", { mono: true, tone: d.min <= 2 ? "var(--warning)" : "var(--text-primary)" }),
+          this.cell(d.max + " \u00b0C", { mono: true, muted: true }),
+          this.cell(d.fetchedAt.slice(5, 16).replace("T", " "), { mono: true, muted: true }),
+          this.cell(r.published ? r.plants.length + " plantings in beds " + r.beds.join(", ") : "nothing at all",
+            { muted: !r.published })
+        ] };
+      }) }];
+  }
+
+  /* ── print (D-52, D-53, D-54) ────────────────────────────────────────── */
+  viewPrint(out) {
+    const M = this.M;
+    const work = M.workPaper("2026-09");
+    const plan = M.planPaper(2026);
+    const audit = M.printAudit();
+
+    out.papers = [
+      { id: "D-52", name: "Print \u2014 this month's work",
+        meta: work.mm + " mm of " + work.capacity + " mm \u00b7 " + work.boxes + " boxes \u00b7 " +
+          work.pages + " page \u00b7 A4 and US Letter",
+        paperTitle: work.title, paperSub: "Pr\u00e1ce na zahrad\u011b \u00b7 " + M.beds.length + " z\u00e1hon\u016f, 3 z\u00f3ny",
+        household: "Tilcerovi \u00b7 " + M.place.town,
+        printedOn: "Vyti\u0161t\u011bno " + M.fmtCs(M.today) + " 2026",
+        sections: work.sections.map((s) => ({ label: s.label, en: s.en, count: s.items.length + " \u00d7",
+          items: s.items })),
+        hasGrid: false, months: [], gridRows: [], gridCols: "1fr", gridLabel: "",
+        footLeft: "Za\u0161krtejte a p\u0159ineste zp\u00e1tky dovnit\u0159.",
+        footRight: "1 / 1 \u00b7 garden.print.work",
+        caption: "Eleven point on fifteen point leading, a 4,5 mm box at 0,35 mm rule with 3 mm of clearance, and nothing on the sheet that could be tapped. The carried-over block is first because the reason a member prints this is that they are not going to open the app in the garden." },
+      { id: "D-53", name: "Print \u2014 the season plan",
+        meta: plan.mm + " mm of " + plan.capacity + " mm \u00b7 " + plan.rows.length + " rows \u00d7 12 months \u00b7 " +
+          plan.colMm + " mm columns \u00b7 " + plan.pages + " page",
+        paperTitle: "Pl\u00e1n 2026", paperSub: "Sez\u00f3na \u00b7 posledn\u00ed mrz\u00edk " + M.fmtCs(M.climate.lastFrost) +
+          " prvn\u00ed " + M.fmtCs(M.climate.firstFrost),
+        household: "Tilcerovi \u00b7 " + M.place.town,
+        printedOn: "Vyti\u0161t\u011bno " + M.fmtCs(M.today) + " 2026",
+        sections: [], hasGrid: true, months: plan.months,
+        gridCols: plan.labelMm + "mm repeat(12, 1fr)",
+        gridLabel: "Z\u00e1hon",
+        gridRows: plan.rows.map((r) => ({ label: r.bed.label, zone: r.zone, cells: r.cells })),
+        footLeft: "\u0158\u00e1dky z\u00e1hon\u016f se nikdy nel\u00e1mou p\u0159es str\u00e1nku.",
+        footRight: "1 / 1 \u00b7 garden.print.season",
+        caption: "Fourteen beds down, twelve months across, in zone order \u2014 so the grid is also the adjacency diagram. This is the one place a whole season is visible at once, and it exists on paper before it exists on a screen." }
+    ];
+    out.papers = out.papers.map((p) => Object.assign({}, p, {
+      gridCols: p.hasGrid ? plan.labelMm + "mm repeat(12, 1fr)" : "1fr"
+    }));
+
+    out.pageTitle = "Paper";
+    out.pageMeta = "DD-14 \u00b7 " + audit.rules + " rules \u00b7 " + audit.accentTokens +
+      " accent tokens \u00b7 " + audit.nonGrey + " non-grey colours \u00b7 " + audit.coverage + " % ink";
+    out.viewIntro = "DD-14 ships the print stylesheet in 1.0 as its own line rather than absorbing it, and Garden's two layouts land with it in DS-3. Paper is a different medium: no theme, no accent, no fills, every status mark spelled out because colour and glyphs do not survive a monochrome printer, and a type size chosen to be read at arm's length in the rain. The two sheets below are drawn at A4 and measured in millimetres, which is the only way to know they fit.";
+    out.tables = [
+      { title: "The print stylesheet",
+        meta: "D-54 \u00b7 @media print \u00b7 " + audit.rules + " rules",
+        note: "Each of these is a decision about paper rather than an override of a screen rule, which is the difference DD-14 rejects a browser-default-plus-overrides layer for.",
+        cols: "110px minmax(220px,1fr) minmax(260px,2fr)",
+        head: [{ text: "Aspect" }, { text: "Rule" }, { text: "Why" }],
+        rows: M.printRules.map((r) => ({ cells: [
+          this.cell(r[0], { mono: true }),
+          this.cell(r[1]),
+          this.cell(r[2], { muted: true })
+        ] })) },
+      { title: "Does it fit?",
+        meta: "A4 " + M.paper.content.w + " \u00d7 " + M.paper.content.h + " mm printable \u00b7 US Letter " +
+          Math.round(M.paper.contentAlt.h) + " mm",
+        note: "Both sheets are laid out from the same metrics table, so \u201clegible from a garden pocket\u201d is a type size and a box size rather than a wish.",
+        cols: "minmax(180px,1fr) 90px 90px 90px 90px minmax(160px,1fr)",
+        head: [{ text: "Sheet" }, { text: "Height" }, { text: "A4" }, { text: "Letter" }, { text: "Pages" }, { text: "Made of" }],
+        rows: [
+          { cells: [this.cell("This month's work \u00b7 " + work.title), this.cell(work.mm + " mm", { mono: true }),
+            this.cell(work.fits ? "fits" : "over", { mono: true, tone: work.fits ? "var(--accent-family-keeping)" : "var(--danger)" }),
+            this.cell(work.fitsLetter ? "fits" : "over", { mono: true, tone: work.fitsLetter ? "var(--accent-family-keeping)" : "var(--danger)" }),
+            this.cell(String(work.pages), { mono: true }),
+            this.cell(work.sections.length + " blocks, " + work.boxes + " ticked lines")] },
+          { cells: [this.cell("The season plan \u00b7 2026"), this.cell(plan.mm + " mm", { mono: true }),
+            this.cell(plan.fits ? "fits" : "over", { mono: true, tone: plan.fits ? "var(--accent-family-keeping)" : "var(--danger)" }),
+            this.cell(plan.fitsLetter ? "fits" : "over", { mono: true, tone: plan.fitsLetter ? "var(--accent-family-keeping)" : "var(--danger)" }),
+            this.cell(String(plan.pages), { mono: true }),
+            this.cell(plan.rows.length + " bed rows \u00d7 12 months at " + plan.colMm + " mm")] },
+          { cells: [this.cell("CSV export"), this.cell("\u2014", { mono: true, muted: true }),
+            this.cell("\u2014", { mono: true, muted: true }), this.cell("\u2014", { mono: true, muted: true }),
+            this.cell("\u2014", { mono: true, muted: true }),
+            this.cell(M.exports.map((e) => e[0]).join(" and ") + " \u2014 the other half of FR-GA23")] }
+        ] }
+    ];
+  }
+}
+</script>
+</body>
+</html>

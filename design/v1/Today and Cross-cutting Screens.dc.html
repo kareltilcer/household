@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./foundations.js"></script>
+<script src="./fixtures.js"></script>
+<script src="./spine.js"></script>
+<script src="./ledger.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+<style>
+  html { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --serif: Newsreader, Georgia, serif; }
+  body { margin: 0; background: var(--surface, #F9FAFD); color: var(--text-primary, #2C2E38); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; text-wrap: pretty; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+  a { color: var(--text-link, #476CBA); text-underline-offset: 2px; }
+  a:hover { color: var(--text-primary, #2C2E38); }
+  [data-on="1"] { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--text-on-accent) !important; }
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" data-density="{{ density }}" style="display:flex;align-items:stretch;min-height:100vh;background:var(--surface);color:var(--text-primary)">
+
+  <aside style="width:236px;flex:0 0 236px;border-right:1px solid var(--border);background:var(--surface-raised);padding:16px 14px 32px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow:auto">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-muted)">The screens that own no data</div>
+      <div style="font-family:var(--serif);font-size:19px;line-height:1.15">Today, Add, search and help</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--accent-family-household)">stage 11 · 5 rows · 33 client layouts</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="6">
+        <button onClick="{{ v.pick }}" data-on="{{ v.on }}" style="text-align:left;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-control);padding:8px 10px;font-size:12.5px;font-family:var(--mono);display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center">
+          <span>{{ v.label }}</span><span style="opacity:0.65">{{ v.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="height:1px;background:var(--divider)"></div>
+
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--text-muted)">{{ c.label }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" data-on="{{ o.on }}" title="{{ o.title }}" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:10.5px;font-family:var(--mono);min-height:30px">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--divider);display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;line-height:1.5;color:var(--text-muted)">Today is assembled in spine.js from the fixture's grants. Four members, one Wednesday, four different screens — and the gate counts the headings on this page rather than trusting the claim.</div>
+      <a href="./Dashboard and Widgets.dc.html" style="font-family:var(--mono);font-size:11px">← stage 10 · dashboard</a>
+      <a href="./Shells and Navigation.dc.html" style="font-family:var(--mono);font-size:11px">stage 06 · the shells</a>
+      <a href="./Prototype Skeleton.dc.html" style="font-family:var(--mono);font-size:11px">the ledger · coverage</a>
+      <a href="./Design Implementation Plan.dc.html" style="font-family:var(--mono);font-size:11px">the twenty stages</a>
+    </div>
+  </aside>
+
+  <main style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column">
+
+    <div style="border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--surface-raised)">
+      <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ pageTitle }}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ pageMeta }}</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:{{ gateColour }}">{{ gateLine }}</div>
+    </div>
+
+    <div style="padding:26px;display:flex;flex-direction:column;gap:26px">
+
+      <p style="margin:0;max-width:82ch;font-size:14px;line-height:1.6;color:var(--text-muted)">{{ viewIntro }}</p>
+
+      <sc-if value="{{ hasSearchField }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+          <input value="{{ q }}" onInput="{{ onQuery }}" placeholder="Search this household" aria-label="Search this household" style="flex:1 1 260px;min-width:0;background:var(--surface);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:9px 11px;font-size:14px;min-height:44px" />
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ searchMeta }}</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isFrames }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;align-items:start">
+          <sc-for list="{{ frames }}" as="f" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;gap:10px;min-width:0;grid-column:{{ f.col }}">
+
+              <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+                <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-household)">{{ f.id }}</span>
+                <h3 style="margin:0;font-size:15px;font-weight:600">{{ f.name }}</h3>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted)">{{ f.stateLabel }}</span>
+              </div>
+
+              <div data-frame="{{ f.id }}" style="width:100%;max-width:{{ f.frameMax }};min-width:0;border:1px solid var(--border-strong);border-radius:{{ f.radius }};background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden;display:flex;flex-direction:column;font-size:{{ fontPx }}">
+
+                <div style="display:flex;justify-content:space-between;gap:0.6em;padding:0.5em 0.75em;border-bottom:1px solid var(--divider);background:var(--surface-raised);font-family:var(--mono);font-size:0.62em;color:var(--text-muted);min-width:0">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.route }}</span>
+                  <span style="flex:0 0 auto">{{ f.clientLabel }}</span>
+                </div>
+
+                <div style="flex:1 1 auto;padding:1em 0.9em 1em;display:flex;flex-direction:column;gap:0.85em;min-width:0">
+
+                  <div style="display:flex;flex-direction:column;gap:0.2em">
+                    <div style="font-size:1.15em;font-weight:600;line-height:1.2">{{ f.title }}</div>
+                    <sc-if value="{{ f.hasLede }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:0.78em;line-height:1.5;color:var(--text-muted)">{{ f.lede }}</div>
+                    </sc-if>
+                  </div>
+
+                  <sc-if value="{{ f.hasField }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.35em">
+                      <div style="border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-sunken);padding:0.6em 0.7em;font-size:0.85em;color:var(--text-primary);min-height:2.6em;display:flex;align-items:center">{{ f.fieldValue }}</div>
+                      <div style="font-family:var(--mono);font-size:0.62em;color:var(--text-muted)">{{ f.fieldNote }}</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-for list="{{ f.notices }}" as="n" hint-placeholder-count="1">
+                    <div style="border:1px solid {{ n.colour }};border-radius:var(--radius-card);background:var(--surface-sunken);padding:0.65em 0.75em;display:flex;flex-direction:column;gap:0.22em">
+                      <sc-if value="{{ n.hasTitle }}" hint-placeholder-val="{{ true }}">
+                        <div style="font-size:0.78em;font-weight:600;color:{{ n.colour }}">{{ n.title }}</div>
+                      </sc-if>
+                      <div style="font-size:0.76em;line-height:1.5;color:var(--text-primary)">{{ n.body }}</div>
+                    </div>
+                  </sc-for>
+
+                  <sc-for list="{{ f.skeleton }}" as="k" hint-placeholder-count="0">
+                    <div style="display:flex;gap:0.6em;align-items:flex-start;border:1px solid var(--border);border-radius:var(--radius-card);padding:0.6em 0.7em;min-height:2.9em">
+                      <div style="flex:0 0 auto;width:0.5em;height:0.5em;border-radius:50%;background:var(--surface-sunken);margin-top:0.45em"></div>
+                      <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.35em">
+                        <div style="height:0.85em;width:{{ k.w1 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                        <div style="height:0.7em;width:{{ k.w2 }};border-radius:3px;background:var(--surface-sunken)"></div>
+                        <div style="height:0.7em;width:3.6em;border-radius:3px;background:var(--surface-sunken)"></div>
+                      </div>
+                    </div>
+                  </sc-for>
+
+                  <sc-for list="{{ f.blocks }}" as="b" hint-placeholder-count="3">
+                    <div data-block="{{ b.key }}" data-rows="{{ b.count }}" style="display:flex;flex-direction:column;gap:0.4em">
+                      <sc-if value="{{ b.hasHeading }}" hint-placeholder-val="{{ true }}">
+                        <div data-heading="1" style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap">
+                          <span style="font-family:var(--mono);font-size:0.64em;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ b.label }}</span>
+                          <sc-if value="{{ b.showRule }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-family:var(--mono);font-size:0.58em;color:var(--text-muted)">{{ b.rule }}</span>
+                          </sc-if>
+                        </div>
+                      </sc-if>
+
+                      <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="3">
+                        <button onClick="{{ r.open }}" style="text-align:left;display:flex;gap:0.6em;align-items:flex-start;background:{{ r.bg }};border:1px solid {{ r.border }};border-left:{{ r.leftRule }};border-radius:var(--radius-card);padding:0.6em 0.7em;min-height:2.9em;color:var(--text-primary);width:100%;min-width:0">
+                          <span style="flex:0 0 auto;width:0.5em;height:0.5em;border-radius:50%;background:var({{ r.token }});margin-top:0.45em"></span>
+                          <span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.15em">
+                            <span style="display:flex;gap:0.5em;align-items:baseline;min-width:0">
+                              <span style="font-size:0.88em;font-weight:500;line-height:1.35;min-width:0">{{ r.title }}</span>
+                              <sc-if value="{{ r.hasRight }}" hint-placeholder-val="{{ false }}">
+                                <span style="margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:0.64em;color:{{ r.rightColour }}">{{ r.right }}</span>
+                              </sc-if>
+                            </span>
+                            <sc-if value="{{ r.hasSnippet }}" hint-placeholder-val="{{ false }}">
+                              <span style="font-size:0.74em;line-height:1.45;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis">{{ r.snippet }}</span>
+                            </sc-if>
+                            <sc-if value="{{ r.hasMeta }}" hint-placeholder-val="{{ true }}">
+                              <span style="font-size:0.72em;line-height:1.4;color:var(--text-muted)">{{ r.meta }}</span>
+                            </sc-if>
+                            <span style="display:flex;gap:0.4em;align-items:center;flex-wrap:wrap;margin-top:0.1em">
+                              <span style="font-family:var(--mono);font-size:0.6em;letter-spacing:0.04em;padding:0.15em 0.4em;border-radius:3px;border:1px solid var({{ r.token }});color:var({{ r.token }})">{{ r.chip }}</span>
+                              <sc-if value="{{ r.hasPath }}" hint-placeholder-val="{{ false }}">
+                                <span style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{ r.path }}</span>
+                              </sc-if>
+                              <sc-if value="{{ r.hasMark }}" hint-placeholder-val="{{ false }}">
+                                <span style="font-family:var(--mono);font-size:0.6em;color:{{ r.markColour }}">{{ r.markWord }}</span>
+                              </sc-if>
+                            </span>
+                          </span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-for>
+
+                  <sc-if value="{{ f.hasEmpty }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:0.5em;align-items:flex-start;padding:1.1em 0.2em 0.6em">
+                      <div style="width:100%;height:3.4em;border:1px dashed var(--border-strong);border-radius:var(--radius-card);background:var(--surface-sunken)"></div>
+                      <div style="font-size:0.95em;font-weight:600;line-height:1.3">{{ f.emptyTitle }}</div>
+                      <div style="font-size:0.78em;line-height:1.55;color:var(--text-muted)">{{ f.emptyBody }}</div>
+                      <sc-if value="{{ f.hasEmptyAction }}" hint-placeholder-val="{{ true }}">
+                        <button onClick="{{ f.emptyAct }}" style="background:var(--accent);color:var(--text-on-accent);border:1px solid var(--accent);border-radius:var(--radius-control);padding:0.5em 0.85em;font-size:0.8em;min-height:2.75em">{{ f.emptyAction }}</button>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ f.hasFooter }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:auto;padding-top:0.6em;border-top:1px solid var(--divider);font-family:var(--mono);font-size:0.62em;line-height:1.5;color:var(--text-muted)">{{ f.footer }}</div>
+                  </sc-if>
+
+                </div>
+              </div>
+
+              <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ f.caption }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isHelp }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+          <sc-for list="{{ helpSurfaces }}" as="h" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+              <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+                <span style="font-family:var(--mono);font-size:11px;color:var(--accent-family-household)">{{ h.tag }}</span>
+                <h3 style="margin:0;font-size:15px;font-weight:600">{{ h.label }}</h3>
+              </div>
+              <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted)">{{ h.rule }}</div>
+
+              <div style="border:1px solid var(--border-strong);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-1);padding:14px;display:flex;flex-direction:column;gap:10px;font-size:{{ fontPx }}">
+                <div style="font-family:var(--mono);font-size:0.62em;color:var(--text-muted)">{{ h.screen }}</div>
+
+                <sc-if value="{{ h.isInline }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.4em">
+                    <div style="font-size:0.8em;font-weight:500">Household code</div>
+                    <div style="border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-sunken);padding:0.6em 0.7em;font-family:var(--mono);font-size:0.9em;letter-spacing:0.08em">TLC-4827</div>
+                    <div style="font-size:0.74em;line-height:1.5;color:var(--text-muted)">{{ h.body }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ h.isExpandable }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em">
+                    <div style="font-size:0.8em;font-weight:500">{{ h.title }}</div>
+                    <button onClick="{{ h.toggle }}" style="align-self:flex-start;background:var(--surface-sunken);color:var(--text-link);border:1px solid var(--border);border-radius:var(--radius-control);padding:0.45em 0.7em;font-size:0.74em;min-height:2.6em">{{ h.toggleLabel }}</button>
+                    <sc-if value="{{ h.open }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;flex-direction:column;gap:0.4em;border-left:2px solid var(--accent);padding-left:0.7em">
+                        <div style="font-size:0.76em;line-height:1.55">{{ h.body }}</div>
+                        <div style="font-family:var(--mono);font-size:0.68em;line-height:1.5;color:var(--text-muted)">{{ h.example }}</div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ h.isBare }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:0.5em">
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5em">
+                      <div style="font-size:0.8em;font-weight:500">{{ h.title }}</div>
+                      <div style="font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ h.corner }}</div>
+                    </div>
+                    <div style="height:1.1em;width:82%;border-radius:3px;background:var(--surface-sunken)"></div>
+                    <div style="height:1.1em;width:64%;border-radius:3px;background:var(--surface-sunken)"></div>
+                    <div style="font-size:0.74em;line-height:1.55;color:var(--text-muted)">{{ h.body }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ h.isPanel }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:0.7em;align-items:stretch;min-width:0">
+                    <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.4em">
+                      <div style="height:1.1em;width:70%;border-radius:3px;background:var(--surface-sunken)"></div>
+                      <div style="height:1.1em;width:90%;border-radius:3px;background:var(--surface-sunken)"></div>
+                      <div style="height:1.1em;width:55%;border-radius:3px;background:var(--surface-sunken)"></div>
+                      <div style="height:1.1em;width:80%;border-radius:3px;background:var(--surface-sunken)"></div>
+                    </div>
+                    <div style="flex:0 0 58%;border-left:1px solid var(--divider);padding-left:0.7em;display:flex;flex-direction:column;gap:0.45em;min-width:0">
+                      <div style="font-size:0.8em;font-weight:600;line-height:1.3">{{ h.title }}</div>
+                      <div style="font-size:0.74em;line-height:1.55;color:var(--text-primary)">{{ h.body }}</div>
+                      <sc-for list="{{ h.steps }}" as="s" hint-placeholder-count="4">
+                        <div style="display:flex;gap:0.45em;align-items:baseline">
+                          <span style="font-family:var(--mono);font-size:0.64em;color:var(--accent)">{{ s.n }}</span>
+                          <span style="font-size:0.72em;line-height:1.45;color:var(--text-muted)">{{ s.text }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <div style="padding-top:0.5em;border-top:1px solid var(--divider);font-family:var(--mono);font-size:0.6em;color:var(--text-muted)">{{ h.footer }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-for list="{{ tables }}" as="t" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:600">{{ t.title }}</h3>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">{{ t.meta }}</span>
+          </div>
+          <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ true }}">
+            <p style="margin:0;max-width:82ch;font-size:13px;line-height:1.6;color:var(--text-muted)">{{ t.note }}</p>
+          </sc-if>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised);overflow:hidden">
+            <div style="display:grid;grid-template-columns:{{ t.cols }};gap:0 14px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken)">
+              <sc-for list="{{ t.head }}" as="h" hint-placeholder-count="3">
+                <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">{{ h.text }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:{{ t.cols }};gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--divider);align-items:baseline">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+                  <div style="font-family:{{ c.font }};font-size:{{ c.size }};line-height:1.5;color:{{ c.colour }};min-width:0">{{ c.text }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ isGate }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <sc-for list="{{ checks }}" as="c" hint-placeholder-count="13">
+            <div style="display:grid;grid-template-columns:16px 1fr;gap:0 12px;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface-raised)">
+              <div style="width:10px;height:10px;border-radius:50%;background:{{ c.colour }};margin-top:5px"></div>
+              <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                <div style="font-size:14px;font-weight:600;line-height:1.35">{{ c.name }}</div>
+                <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">{{ c.detail }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+        <div style="position:sticky;bottom:14px;align-self:flex-start;background:var(--text-primary);color:var(--surface);border-radius:var(--radius-control);padding:10px 14px;font-family:var(--mono);font-size:11.5px;box-shadow:var(--shadow-2)">{{ toast }}</div>
+      </sc-if>
+
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:940},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;today&quot;,&quot;search&quot;,&quot;row&quot;,&quot;add&quot;,&quot;help&quot;,&quot;model&quot;,&quot;gate&quot;],&quot;default&quot;:&quot;today&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;startMember&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;jana&quot;,&quot;petr&quot;,&quot;adam&quot;,&quot;klara&quot;,&quot;milos&quot;],&quot;default&quot;:&quot;jana&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;showRules&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;View&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: "light", density: "comfortable", scale: 100,
+            member: null, q: "kotel", mode: "slow", unusual: false,
+            openHelp: true, toast: null, measured: null, today: null };
+
+  get S() { return window.HH_SPINE; }
+
+  componentDidMount() {
+    this._boot = setInterval(() => {
+      if (window.HH_SPINE && window.HH_TOKENS && window.HH_FIXTURES) {
+        clearInterval(this._boot); this.forceUpdate(); this.measure();
+      }
+    }, 60);
+  }
+  componentDidUpdate() { this.measure(); }
+  componentWillUnmount() { clearInterval(this._boot); clearTimeout(this._t); clearTimeout(this._m); }
+
+  /* The measurement carries the view it was taken on. A count from one view must never
+     be reprinted on another as though it had been measured there — which is the same
+     honesty the screens themselves are arguing for. */
+  measure() {
+    clearTimeout(this._m);
+    this._m = setTimeout(() => {
+      var blocks = Array.prototype.slice.call(document.querySelectorAll("[data-block]"));
+      if (!blocks.length) return;
+      var val = {
+        view: this.view,
+        empty: blocks.filter((b) => Number(b.getAttribute("data-rows")) === 0).length,
+        headings: blocks.filter((b) => !!b.querySelector("[data-heading]")).length,
+        total: blocks.length
+      };
+      var m = this.state.measured;
+      if (!m || m.view !== val.view || m.empty !== val.empty || m.total !== val.total) {
+        this.setState({ measured: val, today: val.view === "today" ? val : this.state.today });
+      }
+    }, 120);
+  }
+
+  get view() { return this.state.view || this.props.startView || "today"; }
+  get who() { return this.state.member || this.props.startMember || "jana"; }
+  get showRules() { return this.props.showRules !== false; }
+  /* Only the Today measurement answers the gate's question, so only it is passed in. */
+  get emptyHeadings() {
+    var t = this.state.today;
+    return t ? t.empty : null;
+  }
+  get measuredOn() {
+    var t = this.state.today;
+    return t ? t.total : null;
+  }
+
+  say(text) {
+    clearTimeout(this._t);
+    this.setState({ toast: text });
+    this._t = setTimeout(() => this.setState({ toast: null }), 2600);
+  }
+
+  pickers(list, current, set) {
+    return list.map((o) => ({
+      label: o[1], title: o[2] || "", on: current === o[0] ? "1" : "0",
+      pick: () => { this.setState(set(o[0])); }
+    }));
+  }
+
+  /* ── row builders ───────────────────────────────────────────────────── */
+
+  todayRow(r, blockId) {
+    var alert = blockId === "alerts";
+    var markWords = { pending: "waiting to sync", syncing: "syncing", stale: "measured 18:40" };
+    var colour = r.severity === "warning" ? "var(--warning)" : r.severity === "info" ? "var(--info)" : "var(--border)";
+    return {
+      token: r.token, chip: r.moduleName, title: r.title,
+      meta: r.meta, hasMeta: !!r.meta,
+      snippet: "", hasSnippet: false,
+      path: "", hasPath: false,
+      right: r.overdue ? r.overdue + " d" : "", hasRight: !!r.overdue,
+      rightColour: r.overdue ? "var(--status-overdue)" : "var(--text-muted)",
+      mark: r.mark, hasMark: !!r.mark,
+      markWord: r.mark ? markWords[r.mark] : "",
+      markColour: r.mark === "stale" ? "var(--status-stale)"
+                : r.mark === "syncing" ? "var(--status-syncing)" : "var(--status-pending)",
+      bg: alert ? "var(--surface-sunken)" : "var(--surface)",
+      border: alert ? colour : "var(--border)",
+      leftRule: alert ? "3px solid " + colour : "1px solid var(--border)",
+      open: () => this.say("opens " + r.endpoint + " — Today owns no data, so every row is a link into its module")
+    };
+  }
+
+  resultRow(r, variant) {
+    var snippet = variant === "no-snippet" || variant === "neither" ? null : r.snippet;
+    var path = variant === "no-path" || variant === "neither" ? null : r.path;
+    return {
+      token: r.token, chip: r.moduleName, title: r.title,
+      meta: r.actor ? r.actor + " · " + r.date : r.date, hasMeta: true,
+      snippet: snippet || "", hasSnippet: !!snippet,
+      path: path || "", hasPath: !!path,
+      right: "", hasRight: false, rightColour: "var(--text-muted)",
+      hasMark: !!r.mark, markWord: r.mark === "conflicted" ? "two versions" : r.mark === "pending" ? "waiting to sync" : "",
+      markColour: r.mark === "conflicted" ? "var(--status-conflict)" : "var(--status-pending)",
+      bg: "var(--surface)", border: "var(--border)", leftRule: "1px solid var(--border)",
+      open: () => this.say(r.path
+        ? "opens " + r.path
+        : "opens the " + r.moduleName + " entity — no slug path, so the row draws no breadcrumb")
+    };
+  }
+
+  addRow(e) {
+    return {
+      token: e.token, chip: e.moduleName, title: e.label,
+      meta: e.capture, hasMeta: true,
+      snippet: "", hasSnippet: false, path: "", hasPath: false,
+      right: "", hasRight: false, rightColour: "var(--text-muted)",
+      hasMark: false, markWord: "", markColour: "",
+      bg: "var(--surface)", border: "var(--border)", leftRule: "1px solid var(--border)",
+      open: () => this.say(e.label + " → " + e.capture)
+    };
+  }
+
+  block(key, label, rule, rows, heading) {
+    return { key: key, label: label, rule: rule, showRule: this.showRules && !!rule && heading !== false,
+             hasHeading: heading !== false, count: rows.length, rows: rows };
+  }
+
+  /* ── frames per view ────────────────────────────────────────────────── */
+
+  skeleton(n, wide) {
+    var out = [];
+    for (var i = 0; i < n; i++) out.push({ w1: (wide ? [78, 62, 88, 70] : [72, 86, 58])[i % (wide ? 4 : 3)] + "%", w2: (wide ? [52, 66, 44, 58] : [48, 62, 40])[i % (wide ? 4 : 3)] + "%" });
+    return out;
+  }
+
+  todayFrames() {
+    var S = this.S;
+    return S.artifacts.filter((a) => a.view === "today").map((a) => {
+      var t = S.today(a.member, { state: a.state });
+      var loading = a.state === "loading";
+      var web = a.client === "w";
+      var notices = [];
+      if (a.state === "offline") notices.push({ hasTitle: true, colour: "var(--status-offline)",
+        title: "No connection", body: "Everything here was expanded on this device from rules that are already synced. One row could not be: the frost forecast is not local, so it says when it was measured." });
+      if (a.state === "readonly") notices.push({ hasTitle: true, colour: "var(--warning)",
+        title: "The subscription has lapsed", body: "You can read everything. Completing something is paused until billing is sorted — so the tick on each row is gone rather than greyed." });
+      if (a.state === "error") notices.push({ hasTitle: true, colour: "var(--danger)",
+        title: "Chores did not answer", body: "Two chores are missing from All day. Nothing else on the screen is affected. Retry." });
+      if (a.state === "pending") notices.push({ hasTitle: false, colour: "var(--border)",
+        body: "You ticked the hoovering while the connection was out. The mark is on the row it belongs to, and the row is still fully editable." });
+      var blocks = loading ? [] : t.blocks.map((b) => this.block(b.id, b.label, b.rule,
+        b.rows.map((r) => this.todayRow(r, b.id)), b.heading));
+      return {
+        id: a.id, name: a.name, caption: a.caption, stateLabel: a.state + " · " + t.name,
+        route: "/today", clientLabel: web ? "web" : "mobile",
+        frameMax: web ? "620px" : "380px", radius: web ? "var(--radius-card)" : "22px",
+        title: "Today", lede: "Wednesday 9 September", hasLede: true,
+        hasField: false, fieldValue: "", fieldNote: "",
+        notices: loading ? [] : notices, blocks: blocks,
+        skeleton: loading ? this.skeleton(3, web) : [],
+        hasEmpty: !loading && t.rowCount === 0,
+        emptyTitle: "Nothing today.",
+        emptyBody: "Nothing in your modules has a date today, and nothing is overdue. This screen fills itself — there is nothing to set up.",
+        hasEmptyAction: true, emptyAction: "See this week",
+        emptyAct: () => this.say("opens /reminders — the unified list, grouped by week"),
+        hasFooter: !loading,
+        footer: t.blockCount + " of 5 groups drawn · " + t.rowCount + " rows · " +
+          (t.dropped.length ? t.dropped.length + " items belong to modules " + t.name + " does not have" : "every item in the fixture is hers to see"),
+        col: web ? "span 2" : "auto"
+      };
+    });
+  }
+
+  searchFrames() {
+    var S = this.S;
+    var q = this.state.q;
+    return S.artifacts.filter((a) => a.view === "search").map((a) => {
+      var res = S.search(a.state === "empty" ? "vysava" : q, a.member);
+      var web = a.client === "w";
+      var loading = a.state === "loading", erroring = a.state === "error";
+      var rows = (loading || erroring) ? [] : res.results.map((r) => this.resultRow(r, "full"));
+      if (a.state === "offline") rows = rows.filter((r) => r.hasPath);
+      var blocks = rows.length ? [this.block("results", "Results", "Ranked on the title first", rows, false)] : [];
+      var notices = [];
+      if (erroring) notices.push({ hasTitle: true, colour: "var(--danger)",
+        title: "Search did not answer", body: "Your query is still in the field. Nothing else on the app is affected — this is one endpoint failing, not the household. Retry." });
+      if (a.state === "offline") notices.push({ hasTitle: true, colour: "var(--status-offline)",
+        title: "Searching what is on this device", body: "The full index is on the server. Offline, this searches the notes and documents already synced here — " + rows.length + " of " + res.results.length + " — and says so rather than reporting a smaller number as if it were all of them." });
+      if (a.state === "readonly") notices.push({ hasTitle: true, colour: "var(--warning)",
+        title: "The subscription has lapsed", body: "Every result is still here and still opens. What is gone is the action that turns a query into a new item." });
+      if (!loading && !erroring && res.droppedGrant.length) notices.push({ hasTitle: false, colour: "var(--border)",
+        body: res.scopesSearched + " of " + res.scopesTotal + " scopes were searched. The rest belong to modules " +
+          (a.member === "klara" ? "Klára" : "this member") + " is not part of, and they are removed from the list before anything is ranked — so this count is only ever over what she may see." });
+      return {
+        id: a.id, name: a.name, caption: a.caption,
+        stateLabel: a.state + " · " + res.count + " hits",
+        route: "/search?q=" + (res.q || ""), clientLabel: web ? "web · sidebar field" : "mobile",
+        frameMax: web ? "620px" : "380px", radius: web ? "var(--radius-card)" : "22px",
+        title: "Search",
+        /* Everything the frame states about the result set is counted from the rows it
+           actually draws. A loading or failed drawing knows no count, and the offline one
+           states what it reached against what it could not. */
+        lede: loading ? "Searching this household…"
+            : erroring ? ""
+            : a.state === "offline" ? rows.length + " of " + res.count + " results are on this device · " + res.scopesSearched + " of " + res.scopesTotal + " scopes"
+            : rows.length + (rows.length === 1 ? " result · " : " results · ") + res.scopesSearched + " of " + res.scopesTotal + " scopes · " + res.modulesSearched + " modules",
+        hasLede: !erroring,
+        hasField: true, fieldValue: res.q || "vysava", fieldNote: "unaccent applied · language taken from each entity (FR-SE2)",
+        notices: notices, blocks: blocks,
+        skeleton: loading ? this.skeleton(4, web) : [],
+        hasEmpty: !loading && !erroring && res.count === 0,
+        emptyTitle: "Nothing matched.",
+        emptyBody: "Searched " + res.scopesSearched + " scopes across " + res.modulesSearched + " modules. Try a shorter word — search matches whole words, and accents do not matter.",
+        hasEmptyAction: false, emptyAction: "", emptyAct: () => {},
+        hasFooter: !loading && !erroring && rows.length > 0,
+        footer: (() => {
+          var ns = rows.filter((r) => !r.hasSnippet).length, np = rows.filter((r) => !r.hasPath).length;
+          return ns + (ns === 1 ? " row with no snippet · " : " rows with no snippet · ") +
+                 np + (np === 1 ? " with no path · " : " with no path · ") +
+                 "one component draws all " + rows.length;
+        })(),
+        col: web ? "span 2" : "auto"
+      };
+    });
+  }
+
+  rowFrames() {
+    var S = this.S;
+    var all = S.search("kotel", "jana").results;
+    var hit = all.filter((r) => r.path)[0] || all[0];
+    var doc = all.filter((r) => r.snippet === null)[0] || hit;
+    var tx = all.filter((r) => r.path === null && r.snippet)[0] || hit;
+
+    var base = (id, state, name, caption, blocks, notices, skeleton, footer) => ({
+      id: id, name: name, caption: caption, stateLabel: "component · " + state,
+      route: "components/search-result-row", clientLabel: "client-neutral",
+      frameMax: "560px", radius: "var(--radius-card)",
+      title: "Search result row", lede: "Seven fields. Four are nullable; module, title and date never are.",
+      hasLede: true, hasField: false, fieldValue: "", fieldNote: "",
+      notices: notices || [], blocks: blocks || [], skeleton: skeleton || [],
+      hasEmpty: false, emptyTitle: "", emptyBody: "", hasEmptyAction: false, emptyAction: "", emptyAct: () => {},
+      hasFooter: !!footer, footer: footer || "", col: "span 2"
+    });
+
+    var variants = [
+      ["Everything present", this.resultRow(hit, "full"), "A note: title, snippet, slug path, actor, date."],
+      ["No snippet", this.resultRow(doc, "no-snippet"), "A document has a filename and no extracted text. The row closes up."],
+      ["No path", this.resultRow(tx, "no-path"), "A transaction is not slug-addressed, so no breadcrumb is invented."],
+      ["Neither", this.resultRow(doc, "neither"), "Both fields away, and the row is still a row rather than a title on its own."]
+    ];
+
+    var gone = this.resultRow(doc, "neither");
+    gone.title = doc.title;
+    gone.meta = "No longer in Documents · indexed 2 November 2025";
+    gone.border = "var(--danger)";
+    gone.leftRule = "3px solid var(--danger)";
+    gone.hasMark = true; gone.markWord = "not there any more"; gone.markColour = "var(--danger)";
+    gone.open = () => this.say("nothing to open — the row offers no target, and the query is re-run rather than the hit repaired");
+
+    var plain = this.resultRow(hit, "full");
+
+    return [
+      base("F-2a", "4 fillings", "The result row — one shape, four fillings",
+        "Four of the seven fields are nullable — snippet, path, actor, and the sync mark carried from the source row. Nothing else varies across nineteen scopes.",
+        variants.map((v, i) => this.block("v" + i, v[0], v[2], [v[1]], true)), [], [],
+        "Drawn from the live corpus, not from mock rows: each variant is a real hit with a field taken away."),
+      base("F-2b", "loading", "The row — loading",
+        "Two lines and a chip-width block: the skeleton is the row with its text removed, not a grey rectangle.",
+        [], [], this.skeleton(3, true), ""),
+      base("F-2c", "error", "The row — the entity is gone",
+        "The one error a result row can have: it resolved to something deleted since it was indexed. It says so and offers nothing to open.",
+        [this.block("gone", "Resolved to nothing", "The index is rebuilt nightly; a row can outlive its entity by a day", [gone], true)],
+        [{ hasTitle: false, colour: "var(--danger)", body: "Tapping it does nothing on purpose. Repairing the row would mean writing from a result list; re-running the query is the honest fix." }],
+        [], "One error, one treatment. Everything else a search can get wrong belongs to the screen, not the row."),
+      base("F-2d", "offline", "The row — offline",
+        "Identical. A row is a read, and reads are indistinguishable offline — the honesty is on the screen around it, not on the row.",
+        [this.block("off", "Offline", "Unchanged from online, deliberately", [plain], true)],
+        [{ hasTitle: false, colour: "var(--status-offline)", body: "03-patterns §1: a read looks the same offline. What the offline drawing of F-1 adds is a sentence about how much of the household it could reach — never a different row." }],
+        [], ""),
+      base("F-2e", "read-only", "The row — read-only",
+        "Also identical. Nothing on a result row is a write, so an entitlement that pauses writes takes nothing away from it.",
+        [this.block("ro", "Read-only", "No control on this row is a mutation", [plain], true)],
+        [{ hasTitle: false, colour: "var(--warning)", body: "The banner belongs to the screen. A row that dimmed itself in read-only would be telling the member something untrue about what she can read." }],
+        [], "")
+    ];
+  }
+
+  addFrames() {
+    var S = this.S;
+    var mode = this.state.mode;
+    return S.artifacts.filter((a) => a.view === "add").map((a) => {
+      var absent = a.state === "absent";
+      var loading = a.state === "loading";
+      var frozen = a.state === "readonly";
+      var useMode = a.state === "error" ? "cold" : mode;
+      var sheet = absent ? null : S.addSheet(a.member, { mode: useMode, unusualWeek: this.state.unusual });
+      var rows = (absent || loading || frozen) ? [] : sheet.entries.map((e) => this.addRow(e));
+      if (a.state === "offline") rows = rows.map((r, i) => {
+        if (i !== 5) return r;
+        r.hasMark = true; r.markWord = "needs a connection"; r.markColour = "var(--status-offline)";
+        return r;
+      });
+      var notices = [];
+      if (a.state === "error") notices.push({ hasTitle: true, colour: "var(--danger)",
+        title: "Showing the starting set", body: "Your ranking did not load, so this is the same six a new household gets. It is not empty and it is not random — and it says which one you are looking at." });
+      if (a.state === "offline") notices.push({ hasTitle: true, colour: "var(--status-offline)",
+        title: "No connection", body: "The ranking is on this device and every capture surface queues its write. Adding a document needs the upload, so that entry says so instead of failing after you have typed." });
+      if (frozen) notices.push({ hasTitle: true, colour: "var(--warning)",
+        title: "Adding is paused", body: "Every entry in this sheet is a create, so in read-only there is nothing to offer. This is the one place absence needs a sentence: the tab is a settled destination and cannot simply vanish." });
+      if (absent) notices.push({ hasTitle: true, colour: "var(--border-strong)",
+        title: "Nothing here is yours to add", body: "This member may read four modules and contribute to none. The sheet has nothing to rank, and the tab cannot be absent because the five destinations are settled. Recorded as an open question rather than invented copy." });
+      if (sheet && sheet.short && !absent && !loading && !frozen) notices.push({ hasTitle: false, colour: "var(--border)",
+        body: sheet.entries.length + " of six slots. The sheet offers what this member holds contribute on and nothing else — no greyed rows, no explanation of what she is missing." });
+      return {
+        id: a.id, name: a.name, caption: a.caption,
+        stateLabel: a.state === "populated" ? mode + (this.state.unusual ? " · unusual week" : "") : a.state,
+        route: "/add (sheet over the current destination)", clientLabel: "mobile",
+        frameMax: "380px", radius: "22px",
+        title: "Add", lede: (absent || loading || frozen) ? "" : (useMode === "cold" ? "A household with no history yet" : "Ranked on the last twelve weeks"),
+        hasLede: !(absent || loading || frozen),
+        hasField: false, fieldValue: "", fieldNote: "",
+        notices: notices,
+        skeleton: loading ? this.skeleton(6, false) : [],
+        blocks: rows.length ? [this.block("sheet", "", "", rows, false)] : [],
+        hasEmpty: false, emptyTitle: "", emptyBody: "", hasEmptyAction: false, emptyAction: "", emptyAct: () => {},
+        hasFooter: !absent && !loading && !frozen,
+        footer: sheet ? "The order is held while the sheet is open; a new ranking applies the next time it is opened." : "",
+        col: "auto"
+      };
+    });
+  }
+
+  helpSurfaces() {
+    var S = this.S;
+    var byId = {};
+    S.help.forEach((h) => { byId[h.id] = h; });
+    var pick = { inline: byId["admin.code.what"], expandable: byId["finance.allocation.remainder"], panel: byId["utilities.tariff.transcribe"] };
+    var out = S.surfaces.map((s) => {
+      var h = pick[s[0]];
+      return {
+        tag: "F-19a · " + s[0], label: s[1], rule: s[3], screen: h.screen,
+        isInline: s[0] === "inline", isExpandable: s[0] === "expandable", isPanel: s[0] === "panel", isBare: false,
+        title: h.title, body: h.body, example: h.example || "", corner: "",
+        steps: h.steps.map((t, i) => ({ n: (i + 1) + ".", text: t })),
+        open: this.state.openHelp, toggleLabel: this.state.openHelp ? "What does this mean? ▾" : "What does this mean? ▸",
+        toggle: () => this.setState({ openHelp: !this.state.openHelp }),
+        footer: h.id + " · authored in stage " + h.authoredIn + " · 5 languages · internal links only"
+      };
+    });
+
+    out.push({
+      tag: "F-19b · empty", label: "Nothing authored yet", screen: "/pets/{id}/routine",
+      rule: "No entry for this screen means no affordance at all — no question mark, no panel with a placeholder in it.",
+      isInline: false, isExpandable: false, isPanel: false, isBare: true,
+      title: "Daily routine", corner: "no help control",
+      body: "Pets' routine screen has no entry yet, so the screen carries none. The gap is visible in the authoring table rather than to the member, which is the point of settling the model in this stage instead of Phase 5.",
+      example: "", steps: [], open: false, toggleLabel: "", toggle: () => {},
+      footer: "pets.routine.* · unauthored · owed by stage 18"
+    });
+
+    out.push({
+      tag: "F-19c · error", label: "A link into a module this household does not have", screen: "/settings/storage",
+      rule: "Help is bundled with the release, so an entry can outlive a household's module list. The body stands; the link is dropped.",
+      isInline: false, isExpandable: false, isPanel: false, isBare: true,
+      title: "Why is this bigger than my files?",
+      corner: "1 link dropped",
+      body: "Every image also stores the smaller versions the app shows in lists, and those count too. The sentence that pointed at Documents' clean-up view is not drawn: this household has Documents switched off, and a help panel is the wrong place to learn that a module exists.",
+      example: "", steps: [], open: false, toggleLabel: "", toggle: () => {},
+      footer: "admin.storage.derived · 1 of 1 internal links unresolvable · body unaffected"
+    });
+
+    return out;
+  }
+
+  /* ── tables ─────────────────────────────────────────────────────────── */
+
+  cell(text, kind) {
+    return {
+      text: text,
+      font: kind === "mono" ? "var(--mono)" : "var(--sans)",
+      size: kind === "mono" ? "11.5px" : "13px",
+      colour: kind === "muted" ? "var(--text-muted)" : kind === "mono" ? "var(--text-muted)" : "var(--text-primary)"
+    };
+  }
+  table(title, meta, note, cols, head, rows) {
+    return { title: title, meta: meta, note: note, hasNote: !!note, cols: cols,
+             head: head.map((h) => ({ text: h })), rows: rows.map((r) => ({ cells: r })) };
+  }
+
+  tablesFor(view) {
+    var S = this.S;
+    if (view === "today") {
+      return [
+        this.table("The five groups", "DD-7", "The group is a property of the item, not a decision made per screen, which is what makes an empty group impossible to render.",
+          "minmax(120px,150px) minmax(120px,170px) 1fr", ["Group", "Order within it", "Why it is its own group"],
+          S.groups.map((g) => [this.cell(g.label || "Conditional alerts"), this.cell(g.rule, "mono"), this.cell(g.note, "muted")])),
+        this.table("Where the rows come from, and whether the device can make them", "FR-RE2 · the metric catalog",
+          "Today must be complete offline. Seven of eight sources are expansions over synced rules; the eighth is a forecast, and it is the only row that has to admit an age.",
+          "minmax(110px,150px) minmax(90px,120px) 90px 1fr", ["Source", "Catalog", "Offline", "Note"],
+          S.sources.map((s) => [this.cell(s[0], "mono"), this.cell(s[1]), this.cell(s[2] === "client" ? "complete" : "server", "mono"), this.cell(s[3], "muted")])),
+        this.table("What was rejected", "DD-7", "",
+          "minmax(200px,280px) 1fr", ["Alternative", "Why not"],
+          S.rejectedToday.map((r) => [this.cell(r[0]), this.cell(r[1], "muted")]))
+      ];
+    }
+    if (view === "search") {
+      var audit = S.scopeAudit();
+      return [
+        this.table("The scope catalog, collected", audit.keys + " keys · " + audit.declaring + " of " + audit.modules + " modules",
+          "FR-SE1 asks for one endpoint across every module the caller may see. The catalog itself is not written down anywhere: it is nineteen keys spread across fifteen module pages, so here it is with the line each came from. Two modules declare none — Dashboard hosts other modules' widgets and Household settings owns no searchable text — which is the third enumeration gap this stage records.",
+          "minmax(140px,180px) minmax(90px,120px) 1fr minmax(140px,190px)", ["Scope key", "Module", "Fields", "Declared at"],
+          S.scopes.map((s) => [this.cell(s.key, "mono"), this.cell(s.moduleName), this.cell(s.fields, "muted"), this.cell(s.line, "mono")])),
+        this.table("The hit shape", "one row, seven fields", "Two fields are nullable and one is borrowed from the source row. A row that reserved space for a snippet it does not have would be the only thing needed to make nineteen scopes look like nineteen designs.",
+          "minmax(90px,120px) minmax(90px,110px) 1fr", ["Field", "Presence", "Note"],
+          S.hitShape.map((f) => [this.cell(f[0], "mono"), this.cell(f[1]), this.cell(f[2], "muted")]))
+      ];
+    }
+    if (view === "add") {
+      var st = S.stability("jana");
+      var slow = st.slow.join(" · "), rec = st.recency.join(" · ");
+      return [
+        this.table("The ranking, both ways", "DD-8", "Stability matters more than accuracy, so the window is twelve weeks. The rejected alternative is computed beside it rather than described: a week with fourteen utility readings in it reorders " + st.recencyMoved + " of the six and swaps one out.",
+          "minmax(120px,160px) 1fr", ["Ranking", "The six"],
+          [[this.cell("slow window", "mono"), this.cell(slow, "mono")],
+           [this.cell("slow · unusual week", "mono"), this.cell(st.slowUnusual.join(" · "), "mono")],
+           [this.cell("recency-weighted", "mono"), this.cell(rec, "mono")]]),
+        this.table("The candidate creates", S.add.length + " candidates · " + S.slots + " slots", "Every entry names the capture surface it opens (§7) — never a configure surface, and never a module's home screen.",
+          "minmax(130px,170px) 1fr 70px 60px 60px", ["Create", "Capture surface", "12 wk", "This wk", "Cold"],
+          S.add.map((e) => [this.cell(e.label), this.cell(e.excluded ? e.excluded : e.capture, e.excluded ? "muted" : "muted"),
+                            this.cell(String(e.slow), "mono"), this.cell(String(e.week), "mono"),
+                            this.cell(e.cold ? String(e.cold) : "—", "mono")])),
+        this.table("Per member", "computed from the fixture's grants", "The sheet is six entries for one of five members. DD-8 settles the ranking and says nothing about a member whose contribute grants cannot fill six slots — recorded below rather than papered over.",
+          "minmax(90px,120px) 80px 80px 1fr", ["Member", "Learned", "Cold", "The six, in order"],
+          S.sheetTable().map((r) => [this.cell(r.name), this.cell(String(r.slots), "mono"), this.cell(String(r.cold), "mono"), this.cell(r.keys.join(" · ") || "nothing to add", "mono")]))
+      ];
+    }
+    if (view === "help") {
+      var hm = S.helpModel();
+      return [
+        this.table("The content model", hm.entries + " entries · " + hm.strings + " strings at five languages",
+          "DD-13 puts the model here so that every module after this stage authors its help while it is being designed. The fields are the whole model; the surface is derived from them.",
+          "minmax(100px,130px) minmax(90px,110px) 1fr", ["Field", "Presence", "Rule"],
+          S.helpFields.map((f) => [this.cell(f[0], "mono"), this.cell(f[1]), this.cell(f[2], "muted")])),
+        this.table("Every entry, and the stage that owes it", hm.hard + " of them the §F hard set", "",
+          "minmax(150px,200px) minmax(80px,100px) 60px 1fr", ["Entry", "Surface", "Stage", "Title"],
+          S.help.map((h) => [this.cell(h.id, "mono"), this.cell(h.surface), this.cell("St. " + h.authoredIn, "mono"), this.cell(h.title, "muted")]))
+      ];
+    }
+    if (view === "model") {
+      var t = S.today("jana");
+      return [
+        this.table("The five rows this stage closes", "F-1 · F-2 · F-3 · F-4 · F-19",
+          "Each row declares the states its own surface cannot reach, with the reason, and ledger.js mirrors the declaration so the two cannot drift. Four of these five surfaces own no data, which is why so many of the twelve are unreachable on them.",
+          "minmax(50px,60px) minmax(120px,180px) 70px 1fr", ["Row", "Name", "Drawn", "States it cannot reach"],
+          S.coverage().map((c) => [this.cell(c.id, "mono"), this.cell(c.name),
+            this.cell(c.drawn.length + " of " + c.required.length, "mono"),
+            this.cell(Object.keys(S.rows.filter((r) => r.id === c.id)[0].impossible).join(", "), "mono")]),
+          ),
+        this.table("What Today is assembled from, per member", "one Wednesday, five people",
+          "Nothing here is authored per persona: todayFor() reads the grants and the day.",
+          "minmax(90px,120px) 80px 80px 1fr", ["Member", "Blocks", "Rows", "Modules whose items she never sees"],
+          (window.HH_FIXTURES ? window.HH_FIXTURES.members : []).map((m) => {
+            var d = S.today(m.id);
+            return [this.cell(m.name), this.cell(d.blockCount + " of 5", "mono"), this.cell(String(d.rowCount), "mono"),
+                    this.cell(d.droppedModules.length ? d.droppedModules.join(", ") : "none", "mono")];
+          })),
+        this.table("Enumeration questions this stage adds", "three", "Recorded in ledger.js with the others, and each one blocks something specific rather than being a general worry.",
+          "minmax(200px,300px) 1fr",
+          ["Question", "What it blocks"],
+          [[this.cell("Nothing says whether global search works offline"),
+            this.cell("FR-SE2 is a PostgreSQL tsvector, so search is a server read — but reads are supposed to be indistinguishable offline (03-patterns §1). Either the client searches its replica, with its own honesty line, or the field states that search needs a connection. The offline drawing of F-1 is guessing until this is answered.", "muted")],
+           [this.cell("The module model says every module contributes a search scope; fifteen pages do"),
+            this.cell("Dashboard and Household settings declare none. Neither owns searchable text, so the likely answer is that the claim is loose — but the catalog registry is asserted against these counts, so it has to be settled somewhere.", "muted")],
+           [this.cell("What the Add sheet shows a member with no contribute grant anywhere"),
+            this.cell("DD-8's cold start comes from enablement and contribute grants, so a view-everywhere member ranks nothing. The five destinations are settled, so the tab cannot be absent. F-4's absent drawing on this page is design's proposal, not the handoff's answer.", "muted")]])
+      ];
+    }
+    return [];
+  }
+
+  /* ── render ─────────────────────────────────────────────────────────── */
+
+  renderVals() {
+    var S = this.S;
+    if (!S || !window.HH_FIXTURES || !window.HH_TOKENS) {
+      return { pageTitle: "Today, the Add sheet, search and help", pageMeta: "loading the fixture…",
+               gateLine: "", gateColour: "var(--text-muted)", viewIntro: "",
+               isFrames: false, isHelp: false, isGate: false, hasSearchField: false,
+               frames: [], helpSurfaces: [], tables: [], checks: [], views: [], controls: [],
+               hasToast: false, toast: "", fontPx: "15px", theme: "light", density: "comfortable", q: "" };
+    }
+
+    var view = this.view;
+    var checks = S.checks({ emptyHeadings: this.emptyHeadings, measuredBlocks: this.measuredOn });
+    if (window.HH_LEDGER) {
+      var mm = window.HH_LEDGER.mismatches();
+      checks.push({
+        name: "The declared exclusions match the ledger's mirror",
+        detail: mm.length === 0
+          ? "This page loads both files, so the comparison runs here: the five rows' impossible maps in spine.js are identical to EXCLUSIONS in ledger.js. " +
+            S.rows.reduce((n, r) => n + Object.keys(r.impossible).length, 0) +
+            " declared exclusions across five rows, each with its reason, and coverage is computed from them rather than from a claim."
+          : mm.join(" · "),
+        pass: mm.length === 0
+      });
+    }
+    var passed = checks.filter((c) => c.pass).length;
+
+    var VIEWS = [
+      ["today", "Today", String(S.artifacts.filter((a) => a.view === "today").length)],
+      ["search", "Global search", String(S.artifacts.filter((a) => a.view === "search").length)],
+      ["row", "The result row", String(S.artifacts.filter((a) => a.view === "row").length)],
+      ["add", "The Add sheet", String(S.artifacts.filter((a) => a.view === "add").length)],
+      ["help", "Help — three surfaces", String(S.artifacts.filter((a) => a.view === "help").length + 3)],
+      ["model", "Rows, states, questions", "5"],
+      ["gate", "The gate", passed + "/" + checks.length]
+    ];
+
+    var frames = view === "today" ? this.todayFrames()
+               : view === "search" ? this.searchFrames()
+               : view === "row" ? this.rowFrames()
+               : view === "add" ? this.addFrames() : [];
+
+    var blockCounts = window.HH_FIXTURES.members
+      .map((m) => S.today(m.id).blockCount)
+      .filter((n, i, all) => all.indexOf(n) === i)
+      .sort((a, b) => b - a);
+    var nullableFields = S.hitShape.filter((f) => f[1] === "nullable");
+    var words = ["none", "one", "two", "three", "four", "five", "six", "seven"];
+
+    var intros = {
+      today: "Today is the spine: the screen that makes seventeen modules feel like one app rather than a launcher. It owns no data, it is deliberately not customisable (FR-DB7), and its whole argument is that a quiet day comes out as a short screen. Five members are drawn from one Wednesday — " +
+        blockCounts.map((n) => words[n] || String(n)).join(", ") +
+        " blocks — and every row carries the module it came from and opens the entity there.",
+      search: "One endpoint, one row shape, nineteen scopes. Type in the field: results are computed live from the corpus with grants applied to the scope list before anything is ranked, so the count on Klára's screen is only ever over what she may see. Accents fold — porek matches pórek — and the private note in the corpus is excluded from everyone but its owner, including owners.",
+      row: "The one component that draws every hit. " +
+        (words[nullableFields.length] || String(nullableFields.length)).replace(/^./, (ch) => ch.toUpperCase()) +
+        " of its " + words[S.hitShape.length] + " fields are nullable — " +
+        nullableFields.map((f) => f[0]).join(", ") +
+        " — and the four fillings below are the same real hits with a field removed rather than four mock rows.",
+      add: "Six creates, ranked on twelve weeks rather than on this week, because the sheet's value is muscle memory. Switch the ranking and the unusual week on: the slow window does not move, the recency-weighted one does. Every entry lands on a capture surface, and the sheet is short — never padded — for a member whose grants cannot fill it.",
+      help: "The content model, and the three surfaces it can be rendered on. Which surface an entry gets is derived from the entry: a line under a control, a disclosure in place, or a panel with steps. Nothing links out of the app, and every entry names the stage that authors it — which is the whole of DD-13.",
+      model: "What this stage delivered against the ledger, and the three questions it could not answer from the handoff.",
+      gate: "The stage's gate is one sentence — a quiet day is a short screen, not five empty headings — and it is counted on this page rather than asserted: the frames carry the row count per block, and the check reads how many blocks rendered a heading with nothing under it."
+    };
+
+    var titles = {
+      today: "Today — five groups, conditional alerts first",
+      search: "Global search — one row across nineteen scopes",
+      row: "The search result row",
+      add: "The Add sheet",
+      help: "In-app help — the model and its three surfaces",
+      model: "Rows, states and open questions",
+      gate: "The gate"
+    };
+
+    var members = window.HH_FIXTURES.members.map((m) => [m.id, m.name, m.note]);
+    var controls = [
+      { label: "Theme", options: this.pickers([["light", "light"], ["dark", "dark"]], this.state.theme, (v) => ({ theme: v })) },
+      { label: "Density", options: this.pickers([["comfortable", "comfortable"], ["compact", "compact"]], this.state.density, (v) => ({ density: v })) },
+      { label: "Text", options: this.pickers([[100, "100 %"], [150, "150 %"], [200, "200 %"]], this.state.scale, (v) => ({ scale: v })) },
+      { label: "Member (search)", options: this.pickers(members, this.who, (v) => ({ member: v })) }
+    ];
+    if (view === "add") {
+      controls.push({ label: "Ranking", options: this.pickers([["slow", "slow window"], ["recency", "recency"], ["cold", "cold start"]], this.state.mode, (v) => ({ mode: v })) });
+      controls.push({ label: "This week", options: [
+        { label: this.state.unusual ? "unusual week on" : "unusual week off", title: "Fourteen utility readings in one week", on: this.state.unusual ? "1" : "0",
+          pick: () => this.setState({ unusual: !this.state.unusual }) }] });
+    }
+
+    var measured = this.state.measured;
+    return {
+      theme: this.state.theme, density: this.state.density,
+      fontPx: Math.round(15 * this.state.scale / 100) + "px",
+      views: VIEWS.map((v) => ({ label: v[1], count: v[2], on: view === v[0] ? "1" : "0",
+                                 pick: () => this.setState({ view: v[0] }) })),
+      controls: controls,
+      pageTitle: titles[view],
+      pageMeta: view === "gate"
+        ? (this.state.today
+            ? "measured on the Today view: " + this.state.today.empty + " empty blocks of " + this.state.today.total
+            : "open the Today view to take the measurement")
+        : (measured && measured.view === view
+            ? "stage 11 · " + measured.total + " blocks drawn here, " + measured.empty + " of them empty"
+            : "stage 11 · " + S.version),
+      gateLine: passed + " of " + checks.length + " checks pass",
+      gateColour: passed === checks.length ? "var(--positive)" : "var(--warning)",
+      viewIntro: intros[view],
+      isFrames: frames.length > 0, frames: frames,
+      isHelp: view === "help", helpSurfaces: view === "help" ? this.helpSurfaces() : [],
+      isGate: view === "gate",
+      checks: view === "gate" ? checks.map((c) => ({ name: c.name, detail: c.detail,
+        colour: c.pass ? "var(--positive)" : "var(--warning)" })) : [],
+      tables: this.tablesFor(view),
+      hasSearchField: view === "search",
+      q: this.state.q,
+      searchMeta: (() => {
+        var r = S.search(this.state.q, this.who);
+        var m = window.HH_FIXTURES.members.filter((x) => x.id === this.who)[0];
+        return r.count + " hits for " + ((m && m.name) || this.who) + " · " + r.scopesSearched + " of " + r.scopesTotal + " scopes searched · " +
+          r.droppedGrant.length + " scopes dropped before ranking";
+      })(),
+      onQuery: (e) => this.setState({ q: e.target.value }),
+      hasToast: !!this.state.toast, toast: this.state.toast || ""
+    };
+  }
+}
+
+</script>
+</body>
+</html>
