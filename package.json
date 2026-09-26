@@ -1,0 +1,40 @@
+{
+  "name": "household",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24",
+      "onFail": "download"
+    }
+  },
+  "scripts": {
+    "up": "docker compose up --detach --wait",
+    "down": "docker compose down",
+    "gen": "turbo run gen && pnpm run gen:go",
+    "gen:go": "cd server && go generate ./...",
+    "typecheck": "turbo run typecheck",
+    "lint": "pnpm run lint:ts && pnpm run lint:go && pnpm run lint:api && pnpm run format:check",
+    "lint:ts": "turbo run lint",
+    "lint:go": "cd server && go tool -modfile=tools/golangci-lint.mod golangci-lint run",
+    "lint:api": "redocly lint docs/api/openapi.yaml",
+    "test": "turbo run test && pnpm run test:go",
+    "test:go": "cd server && go test ./...",
+    "audit:go": "cd server && go tool -modfile=tools/govulncheck.mod govulncheck ./...",
+    "audit:ts": "pnpm audit --audit-level=high",
+    "secrets": "cd server && go tool -modfile=tools/gitleaks.mod gitleaks git --redact --no-banner ..",
+    "format": "prettier --write . && cd server && go tool -modfile=tools/golangci-lint.mod golangci-lint fmt",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "catalog:",
+    "@redocly/cli": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "turbo": "2.11.4",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:"
+  }
+}

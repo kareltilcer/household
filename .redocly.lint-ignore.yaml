@@ -1,0 +1,31 @@
+# Redocly findings in openapi.yaml that were reviewed and are kept on purpose. Each entry
+# silences one location only, so the same rule still fails on anything new.
+# Regenerate with `pnpm exec redocly lint docs/api/openapi.yaml --generate-ignore-file`,
+# then restore these comments.
+docs/api/openapi.yaml:
+  # No public licence yet; the legal pages arrive with plan item 94.
+  info-license-strict:
+    - '#/info/license'
+  # The local-development server, http://localhost:8080.
+  no-server-example.com:
+    - '#/servers/2/url'
+  # Each pair puts a `{…_id}` segment where its sibling has a literal (`folders`,
+  # `health`, `fuel`, `medications`, `doses`). chi matches the literal first, and every id
+  # is a UUIDv7, so no real request is ambiguous.
+  no-ambiguous-paths:
+    - '#/paths/~1households~1{household_id}~1notes~1folders~1{folder_id}'
+    - '#/paths/~1households~1{household_id}~1documents~1folders~1{folder_id}'
+    - '#/paths/~1households~1{household_id}~1vehicles~1fuel~1{entry_id}'
+    - '#/paths/~1households~1{household_id}~1pets~1health~1{entry_id}'
+    - '#/paths/~1households~1{household_id}~1pets~1{pet_id}~1medications'
+    - '#/paths/~1households~1{household_id}~1pets~1medications~1{medication_id}'
+    - '#/paths/~1households~1{household_id}~1pets~1doses~1{dose_id}'
+    - '#/paths/~1households~1{household_id}~1pets~1{pet_id}~1routine'
+    - '#/paths/~1households~1{household_id}~1pets~1{pet_id}~1vet'
+  # Liveness and readiness probes answer 200 or 503 and nothing else.
+  operation-4xx-response:
+    - '#/paths/~1healthz/get/responses'
+    - '#/paths/~1readyz/get/responses'
+  # The realtime stream upgrades to a WebSocket: its success is 101, not a 2XX.
+  operation-2xx-response:
+    - '#/paths/~1households~1{household_id}~1stream/get/responses'

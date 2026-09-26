@@ -1,0 +1,36 @@
+# golangci-lint v2, pinned in tools/golangci-lint.mod. Run through `pnpm run lint:go`
+# (check) and `pnpm run format` (rewrite).
+version: '2'
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck and unused.
+  default: standard
+  enable:
+    # Correctness around the database and HTTP layers this server is made of.
+    - bodyclose
+    - errorlint
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    # A switch over an enum must name every member: the ProblemCode switch the API
+    # README promises is exhaustive only if something checks it.
+    - exhaustive
+    - gosec
+    # A //nolint must name the linter it silences and say why.
+    - nolintlint
+    - unconvert
+    - usestdlibvars
+    - usetesting
+  settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/kareltilcer/household

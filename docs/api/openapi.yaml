@@ -8946,7 +8946,7 @@ components:
             required: [entity_type, hash, count]
             properties:
               entity_type: { type: string, description: 'Module-qualified, e.g. `garden.planting`.' }
-              hash: { type: string, pattern: '^[0-9a-f]{16}$', description: Order-independent rolling hash over the `(entity_id, version)` pairs held for this entity type. }
+              hash: { type: string, pattern: '^[0-9a-f]{16}$', description: 'Order-independent rolling hash over the `(entity_id, version)` pairs held for this entity type.' }
               count: { type: integer, description: How many rows that hash covers. Carried because a count mismatch localises the fault faster than a hash mismatch alone. }
 
     ReplicaDigestVerdict:

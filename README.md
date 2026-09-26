@@ -26,10 +26,27 @@ commercially:
 | [`docs/prd/README.md`](docs/prd/README.md) | PRD index and reading order |
 | [`docs/api/openapi.yaml`](docs/api/openapi.yaml) | The complete HTTP contract (OpenAPI 3.1) |
 | [`docs/design/README.md`](docs/design/README.md) | Design handoff — the brief, foundations, components, patterns and screen inventory derived from the PRD |
+| [`docs/implementation-plan.md`](docs/implementation-plan.md) | The build plan — every pull request from an empty repository to general availability |
 
 Start with [`docs/prd/00-overview.md`](docs/prd/00-overview.md).
 
+## Development
+
+Needs [Docker](https://docs.docker.com/get-docker/), [pnpm](https://pnpm.io/installation) and
+[Go](https://go.dev/dl/). Everything else is pinned in the repository, Node included: pnpm
+downloads the version `devEngines.runtime` names and runs every script on it.
+
+```bash
+pnpm install
+pnpm run up      # Postgres 17, RustFS (S3) and Mailpit on 127.0.0.1
+pnpm test
+pnpm run lint
+```
+
+[`CLAUDE.md`](CLAUDE.md) lists the rest of the commands and the conventions every change follows.
+
 ## Status
 
-**Specification stage.** No code has been written. The PRD and the OpenAPI document are
-the deliverables of this stage and the inputs to the build.
+**Building, Phase 0.** The specification above is complete, and the build follows
+[`docs/implementation-plan.md`](docs/implementation-plan.md): 96 numbered items, one pull
+request each. Progress is the item statuses there.

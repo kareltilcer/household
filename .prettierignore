@@ -1,0 +1,15 @@
+# Generated or vendored.
+pnpm-lock.yaml
+**/dist/
+**/coverage/
+**/.turbo/
+
+# Hand-formatted documents. The PRD, the design handoff and this repository's other
+# Markdown keep unpadded tables, and openapi.yaml must keep every flow mapping on one
+# line (docs/api/README.md, authoring hazard 3), which Prettier would rewrap.
+*.md
+docs/
+design/
+
+# Go is formatted by gofmt through golangci-lint.
+server/

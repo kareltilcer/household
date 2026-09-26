@@ -296,7 +296,7 @@ for a single object, expire in minutes, and are never handed out for a prefix. *
 
 | Environment | Purpose | Data |
 |---|---|---|
-| `dev` | Local. `docker compose`: Postgres + MinIO + the binary. Seeded fixtures | Synthetic |
+| `dev` | Local. `docker compose`: Postgres + an S3-compatible store (RustFS) + the binary. Seeded fixtures | Synthetic |
 | `staging` | Pre-production, same topology as production at one instance | Synthetic only — never a copy of production (**D-10**) |
 | `production` | EU region, multi-AZ Postgres with a read replica, ≥2 API instances behind a load balancer | Real |
 

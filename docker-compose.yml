@@ -1,0 +1,59 @@
+# Local development services (PL-8). `pnpm run up` starts them and waits until each is
+# healthy; `pnpm run down` stops them and keeps their volumes.
+#
+# Every credential here is a public, well-known development default, so every port is
+# published on 127.0.0.1 only. Override the ports in a `.env` beside this file
+# (`.env.example` lists them).
+name: household
+
+services:
+  postgres:
+    # The CI service container in .github/workflows/ci.yml runs this same image, and
+    # tooling/src/workspace.test.ts fails when the two disagree.
+    image: postgres:17.11-trixie
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: household
+    ports:
+      - 127.0.0.1:${HOUSEHOLD_PG_PORT:-5432}:5432
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready --username=postgres --dbname=household]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # S3-compatible object storage. PL-8 named MinIO, whose repository is archived and
+  # whose images are no longer published; RustFS speaks the same S3 API.
+  objectstore:
+    image: rustfs/rustfs:1.0.0
+    environment:
+      RUSTFS_ACCESS_KEY: household
+      RUSTFS_SECRET_KEY: household-local-only
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: 'true'
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+    ports:
+      - 127.0.0.1:${HOUSEHOLD_S3_PORT:-9000}:9000
+      - 127.0.0.1:${HOUSEHOLD_S3_CONSOLE_PORT:-9001}:9001
+    volumes:
+      - objectstore:/data
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --show-error, http://127.0.0.1:9000/health]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # Catches every email the server sends; nothing leaves the machine.
+  mail:
+    image: axllent/mailpit:v1.31.2
+    ports:
+      - 127.0.0.1:${HOUSEHOLD_SMTP_PORT:-1025}:1025
+      - 127.0.0.1:${HOUSEHOLD_MAIL_UI_PORT:-8025}:8025
+
+volumes:
+  postgres:
+  objectstore:

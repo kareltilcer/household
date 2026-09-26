@@ -1,0 +1,10 @@
+# Redocly lint for docs/api/openapi.yaml, run by `pnpm run lint:api` and in CI beside
+# openapi-spec-validator. `recommended-strict` makes every recommended warning an error,
+# so a new ambiguous path or missing error response fails the build instead of scrolling
+# past. The occurrences already reviewed and kept on purpose are listed, one by one, in
+# .redocly.lint-ignore.yaml; anything not listed there is new and has to be dealt with.
+extends:
+  - recommended-strict
+
+# The CLI otherwise reports every run, with its arguments, to Redocly.
+telemetry: 'off'

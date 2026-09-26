@@ -13,16 +13,23 @@ clients. It is not a description of the implementation — the implementation is
 
 ## Validate
 
+CI runs both validators on every pull request. Locally:
+
 ```bash
-python -m pip install openapi-spec-validator pyyaml
+python -m pip install -r docs/api/requirements.txt
 python -c "import yaml;from openapi_spec_validator import validate;validate(yaml.safe_load(open('docs/api/openapi.yaml',encoding='utf-8')));print('valid')"
 ```
 
-Or with Redocly:
+And Redocly, pinned in the workspace:
 
 ```bash
-npx @redocly/cli lint docs/api/openapi.yaml
+pnpm run lint:api
 ```
+
+Redocly runs its `recommended-strict` ruleset ([`redocly.yaml`](../../redocly.yaml)), so every
+finding is an error. The findings reviewed and kept on purpose are listed one location at a
+time, each with its reason, in [`.redocly.lint-ignore.yaml`](../../.redocly.lint-ignore.yaml);
+the same rule still fails anywhere else.
 
 ## Generate clients
 

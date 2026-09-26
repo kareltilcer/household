@@ -71,14 +71,14 @@ An item may overturn one by recording why in the Change log.
 
 | # | Decision | Why |
 |---|---|---|
-| **PL-1** | **One monorepo**: `server/` (Go module), `apps/web`, `apps/mobile`, `packages/{api,i18n,tokens,icons,domain,sync,test-vectors}`, `reference-data/`, `fixtures/`, `docs/adr/`, `docs/runbooks/`. pnpm workspaces + Turborepo for TypeScript | The contract, the tokens, the strings and the vectors are shared ([06-clients](prd/06-clients.md) §1). One repository makes a contract break a build break |
+| **PL-1** | **One monorepo**: `server/` (Go module), `apps/web`, `apps/mobile`, `packages/{api,i18n,tokens,icons,domain,sync,test-vectors}`, `tooling/` (guards over the workspace itself), `reference-data/`, `fixtures/`, `docs/adr/`, `docs/runbooks/`. pnpm workspaces + Turborepo for TypeScript | The contract, the tokens, the strings and the vectors are shared ([06-clients](prd/06-clients.md) §1). One repository makes a contract break a build break |
 | **PL-2** | **Server libraries follow `home` where it had one**: chi v5, goose v3, coder/websocket, aws-sdk-go-v2 (S3), golang-jwt (EdDSA), webpush-go. New for Household: pgx v5 + sqlc on PostgreSQL 17, kin-openapi (edge validation), x/crypto argon2id, pquerna/otp, coreos/go-oidc, stripe-go | Proven in `home`. The new ones are the standard choice for each job |
 | **PL-3** | **Tests hit real PostgreSQL**: compose locally and a service container in CI. No database mocks. TS unit tests use Vitest; web E2E uses Playwright + axe; mobile uses Jest + React Native Testing Library, with Maestro for E2E | RLS, the change feed and `SET LOCAL` cannot be tested against a mock |
 | **PL-4** | **Web**: React 19, Vite, React Router 7, TanStack Query persisted to IndexedDB, Radix primitives for behaviour, CSS Modules over token custom properties, dnd-kit, Milkdown for Notes, Stripe Payment Element | Carries `home`'s proven stack. CSS variables make "semantic tokens only" a lint rule |
 | **PL-5** | **Mobile**: Expo managed workflow (current SDK), expo-router, expo-sqlite (replica), expo-secure-store, expo-notifications, react-native-svg, native Apple and Google sign-in. **Tablet is a layout of the mobile app**, not a third codebase (design/v1 draws 24 tablet rows) | [06-clients](prd/06-clients.md) and [D-36](prd/09-decisions.md). The prototype's tablet rows are two-pane layouts of the same app |
 | **PL-6** | **Sync is built to [03 §2](prd/03-platform-strands.md)**, unless item 5's verdict says adopt. The conformance simulator is written in Go against the real engine. The TS client is validated by replaying golden traces the simulator exports | [10-sync-risk](prd/10-sync-risk.md). One harness, two implementations kept honest |
 | **PL-7** | **Contract tooling**: the TS client is generated with openapi-typescript + openapi-fetch; Go validates request bodies against the same document at the edge. A `contract_pending` list names operations not yet built. It only ever shrinks and is empty at GA | [G12](prd/00-overview.md), architecture test 6 |
-| **PL-8** | **Environments**: dev is docker compose (Postgres 17, MinIO, Mailpit). **Staging is DigitalOcean + Coolify from Phase 0**, synthetic data only ([D-10](prd/09-decisions.md)). **Dogfooding runs on a separate environment from item 30**: it holds the team's real data, so it is on an EU-established provider ([D-5](prd/09-decisions.md)) and under production's data rules. **Production is an EU provider chosen in item 88** | Phones need a reachable server for gate G-C. Real dogfood data may not sit on staging. Production's multi-AZ requirements are a Phase 5 decision |
+| **PL-8** | **Environments**: dev is docker compose (Postgres 17, RustFS for S3, Mailpit). **Staging is DigitalOcean + Coolify from Phase 0**, synthetic data only ([D-10](prd/09-decisions.md)). **Dogfooding runs on a separate environment from item 30**: it holds the team's real data, so it is on an EU-established provider ([D-5](prd/09-decisions.md)) and under production's data rules. **Production is an EU provider chosen in item 88** | Phones need a reachable server for gate G-C. Real dogfood data may not sit on staging. Production's multi-AZ requirements are a Phase 5 decision |
 | **PL-9** | **Translations**: every UI PR ships English plus Claude-drafted `cs`, `sk`, `de` and `pl`. Drafted keys are listed in `packages/i18n/review/`. Native review clears them before GA (item 95) | A missing catalog is a build break ([03 §9](prd/03-platform-strands.md)). Drafting inline costs less than a translation phase |
 | **PL-10** | **Reference content is drafted by Claude with a source for every field**, in `reference-data/`, schema-validated in CI and flagged for expert review. This covers crops, climate, tariff presets, statutory vehicle rules, document types, categories and templates | Your decision (2026-09-26). The crop catalog is the longest-lead item ([08-roadmap](prd/08-roadmap.md)) |
 | **PL-11** | **design/v1 is used three ways**: tokens, icons and illustration are ported mechanically (item 23); `fixtures.js` becomes the canonical seed (item 30), and each module PR adds its own data; each engine file's `checks()` becomes that module's shared test vectors. Screens are cited by **ledger id** (`ledger.js`: A-1…F-20; client suffix `-m`/`-w`) | The prototype's numbers are already cross-checked across files. Re-deriving them is how they drift |
@@ -180,7 +180,7 @@ you**, not from the implementing session.
 No user-visible product. It is the riskiest phase, and it has no demo. The conformance simulator
 (item 12) replaces the feedback loop that a UI would otherwise give.
 
-### 1 · Monorepo, toolchain and CI · `planned`
+### 1 · Monorepo, toolchain and CI · `done`
 
 Phase 0 · after — · size M
 
@@ -189,7 +189,7 @@ Phase 0 · after — · size M
   - **TypeScript strictness**: `tsconfig.base.json` with the strict flags from [06-clients](prd/06-clients.md). ESLint with `no-explicit-any` and `no-non-null-assertion` as errors.
   - **Go and formatting**: golangci-lint; Prettier and gofmt.
   - **Pinned toolchain**: Node LTS and Go 1.26.
-  - **Local environment**: `docker-compose.yml` (Postgres 17, MinIO, Mailpit), `.env.example`, and a task runner with `up`, `gen`, `test` and `lint`.
+  - **Local environment**: `docker-compose.yml` (Postgres 17, RustFS, Mailpit), `.env.example`, and a task runner with `up`, `gen`, `test` and `lint`.
   - **CI (GitHub Actions)**:
     - Go build, vet and test against a Postgres service;
     - turbo typecheck, lint and test;
@@ -589,7 +589,7 @@ Phase 0 · after 14, 6 · size L
 Phase 0 · after 4, 10 · size L
 
 - **Scope**
-  - **S3 client**, with MinIO in dev.
+  - **S3 client**, with RustFS in dev.
   - **Upload pipeline** (FR-FL1):
     - a 100 MB cap and sniffing from the bytes;
     - blocked and active types;
@@ -2371,3 +2371,4 @@ Tracked here so they are not forgotten. None of them takes a numbered slot.
 |---|---|---|
 | 2026-09-26 | all | Plan created: 96 items across Phases 0–5, with 4 reserve slots |
 | 2026-09-26 | 7, 14, 18, 19, 25, 28–32, 34, 36, 37, 39, 40, 44–46, 53, 55, 57, 63, 67–69, 78, 79, 88, 93, 95, 96 | Review fixes: added missing dependencies (G-B, the client items, the reminder strand, the conflict UI, Google, GA). Added a dogfood environment and a month gate on removing `proof`. Moved the reference resolver to item 36 and F-18 to the Notes clients. Assigned the offline `strict_version` writes. Recorded contract gaps (Q11, Q17). Corrected vectors that differed from design/v1. Removed hand-kept progress |
+| 2026-09-26 | PL-1, PL-8, 1, 16 | Item 1: MinIO replaced by RustFS as the dev S3 store, because MinIO's repository is archived and its images are no longer published. PL-1 gains `tooling/`, a workspace package for guards over the workspace itself (strict flags, catalog pins, local/CI parity) |
