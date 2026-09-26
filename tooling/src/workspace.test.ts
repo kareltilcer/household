@@ -97,7 +97,7 @@ describe.each(packages)('%s', (dir) => {
     expect(field(scripts, 'lint')).toMatch(/\beslint\b.*--max-warnings=0/)
   })
 
-  it('compiles under the strict configuration of 06-clients', () => {
+  it('is configured with the strict flags of 06-clients', () => {
     const parsed = ts.getParsedCommandLineOfConfigFile(
       join(root, dir, 'tsconfig.json'),
       {},
@@ -144,18 +144,30 @@ describe.each(packages)('%s', (dir) => {
     expect(family.filter((flag) => options[flag] === false)).toEqual([])
   })
 
-  it.each(['ts', 'tsx'])('lints `any` and non-null assertions in .%s as errors', async (ext) => {
-    const config: unknown = await eslint.calculateConfigForFile(
-      join(root, dir, 'src', `probe.${ext}`),
-    )
-    const severity = (rule: string): unknown => {
-      const setting = field(config, 'rules', rule)
-      return Array.isArray(setting) ? setting[0] : setting
-    }
-    expect(severity('@typescript-eslint/no-explicit-any')).toBe(2)
-    expect(severity('@typescript-eslint/no-non-null-assertion')).toBe(2)
-    expect(field(config, 'linterOptions', 'reportUnusedDisableDirectives')).toBe(2)
-  })
+  it.each(['ts', 'tsx'])(
+    'lints `any`, non-null assertions and unlinked suppressions in .%s as errors',
+    async (ext) => {
+      const config: unknown = await eslint.calculateConfigForFile(
+        join(root, dir, 'src', `probe.${ext}`),
+      )
+      const severity = (rule: string): unknown => {
+        const setting = field(config, 'rules', rule)
+        return Array.isArray(setting) ? setting[0] : setting
+      }
+      const options = (rule: string): unknown => {
+        const setting = field(config, 'rules', rule)
+        return Array.isArray(setting) ? setting[1] : undefined
+      }
+      expect(severity('@typescript-eslint/no-explicit-any')).toBe(2)
+      expect(severity('@typescript-eslint/no-non-null-assertion')).toBe(2)
+      expect(field(config, 'linterOptions', 'reportUnusedDisableDirectives')).toBe(2)
+      // 06-clients §8: a type-check suppression links the issue that removes it.
+      expect(severity('@typescript-eslint/ban-ts-comment')).toBe(2)
+      expect(
+        field(options('@typescript-eslint/ban-ts-comment'), 'ts-expect-error', 'descriptionFormat'),
+      ).toEqual(expect.any(String))
+    },
+  )
 })
 
 describe('a developer machine and CI', () => {

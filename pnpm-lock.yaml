@@ -209,7 +209,7 @@ importers:
         specifier: 'catalog:'
         version: 10.11.0
       node:
-        specifier: runtime:24
+        specifier: runtime:24.21.0
         version: runtime:24.21.0
       prettier:
         specifier: 'catalog:'

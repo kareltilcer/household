@@ -31,8 +31,9 @@ jobs:
           POSTGRES_DB: household
         ports:
           - 5432:5432
+        # Over TCP, as docker-compose.yml does: see the note on its healthcheck.
         options: >-
-          --health-cmd "pg_isready --username=postgres --dbname=household"
+          --health-cmd "pg_isready --host=127.0.0.1 --username=postgres --dbname=household"
           --health-interval 2s
           --health-timeout 5s
           --health-retries 30
@@ -48,9 +49,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: server/go.mod
+          # The cache key hashes these files. Each Go job names only the tools it builds,
+          # so the two jobs' caches get different keys instead of one overwriting the other.
           cache-dependency-path: |
             server/go.sum
-            server/tools/*.sum
+            server/tools/golangci-lint.sum
       - name: Modules are tidy and verified
         run: |
           go mod tidy -diff
@@ -62,7 +65,9 @@ jobs:
       - name: Lint and format (golangci-lint)
         run: go tool -modfile=tools/golangci-lint.mod golangci-lint run
       - name: Test
-        run: go test ./...
+        # -count=1: setup-go restores the build cache, and a cached result would pass a
+        # database test without running it against this job's PostgreSQL.
+        run: go test -count=1 ./...
 
   typescript:
     name: TypeScript — typecheck, lint, test
@@ -120,16 +125,17 @@ jobs:
           go-version-file: server/go.mod
           cache-dependency-path: |
             server/go.sum
-            server/tools/*.sum
+            server/tools/govulncheck.sum
+            server/tools/gitleaks.sum
       - name: govulncheck
         working-directory: server
         run: go tool -modfile=tools/govulncheck.mod govulncheck ./...
       - name: gitleaks
         working-directory: server
         run: go tool -modfile=tools/gitleaks.mod gitleaks git --redact --no-banner --verbose ..
+      # pnpm audit reads only the lockfile, and fails when there is none.
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
-          cache: true
-          require-lockfile: true
+          install: false
       - name: pnpm audit
         run: pnpm run audit:ts

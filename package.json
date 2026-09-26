@@ -6,7 +6,7 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "24",
+      "version": "24.21.0",
       "onFail": "download"
     }
   },
@@ -21,7 +21,7 @@
     "lint:go": "cd server && go tool -modfile=tools/golangci-lint.mod golangci-lint run",
     "lint:api": "redocly lint docs/api/openapi.yaml",
     "test": "turbo run test && pnpm run test:go",
-    "test:go": "cd server && go test ./...",
+    "test:go": "cd server && go test -count=1 ./...",
     "audit:go": "cd server && go tool -modfile=tools/govulncheck.mod govulncheck ./...",
     "audit:ts": "pnpm audit --audit-level=high",
     "secrets": "cd server && go tool -modfile=tools/gitleaks.mod gitleaks git --redact --no-banner ..",

@@ -29,6 +29,16 @@ export default defineConfig(
       // change to the preset cannot quietly relax them.
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
+      // 06-clients §8: "zero suppressions without a linked issue". `@ts-ignore` and
+      // `@ts-nocheck` stay banned outright, and `@ts-expect-error` must cite the issue
+      // that removes it, as `#123` or an `…/issues/123` link.
+      '@typescript-eslint/ban-ts-comment': [
+        'error',
+        {
+          minimumDescriptionLength: 10,
+          'ts-expect-error': { descriptionFormat: String.raw`(#|/issues/)\d+` },
+        },
+      ],
     },
   },
   {

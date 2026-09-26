@@ -13,6 +13,13 @@
     },
     "test": {
       "dependsOn": ["gen", "^gen"]
+    },
+    // The workspace guards read files outside tooling/ (docker-compose.yml, the CI
+    // workflow, every package's manifest and tsconfig), none of which are in this task's
+    // hash. A cached result would pass a guard over files it never re-read.
+    "@household/tooling#test": {
+      "dependsOn": ["gen", "^gen"],
+      "cache": false
     }
   }
 }

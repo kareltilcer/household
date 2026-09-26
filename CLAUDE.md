@@ -30,7 +30,7 @@ pnpm run up           # Postgres 17, RustFS (S3) and Mailpit, waiting until heal
 pnpm test             # Vitest through turbo, then go test against the compose Postgres
 pnpm run lint         # ESLint, golangci-lint, Redocly and Prettier
 pnpm typecheck        # tsc in every package
-pnpm run gen          # code generation (turbo gen + go generate)
+pnpm run gen          # code generation (turbo run gen + go generate)
 pnpm run format       # Prettier and gofmt/goimports, rewriting files
 pnpm run down         # stop the services; volumes are kept
 ```
@@ -41,9 +41,11 @@ pnpm run down         # stop the services; volumes are kept
   -modfile=…`: `lint:go` (golangci-lint), `audit:go` (govulncheck) and `secrets`
   (gitleaks). Each has its own modfile, so no tool's dependencies can move another's.
 - **Go tests need the database.** They fail, rather than skip, when PostgreSQL is not
-  reachable. Set `HOUSEHOLD_TEST_DATABASE_URL` to point them elsewhere.
-- CI ([`.github/workflows/`](.github/workflows/)) runs all of the above, plus
-  openapi-spec-validator, pnpm audit and CodeQL.
+  reachable, and run with `-count=1` so that no cached result stands in for a run. Set
+  `HOUSEHOLD_TEST_DATABASE_URL` to point them elsewhere.
+- CI ([`.github/workflows/`](.github/workflows/)) runs the checks above (typecheck, lint,
+  format check and test), plus openapi-spec-validator, govulncheck, pnpm audit, gitleaks
+  and CodeQL. It does not run `gen`.
 
 ## Layout
 
