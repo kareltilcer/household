@@ -1,0 +1,2373 @@
+# Household — Implementation plan
+
+**Living document · created 2026-09-26 · derived from [PRD v1.0](prd/README.md), [`openapi.yaml`](api/openapi.yaml)
+(320 paths, 486 operations) and [`design/v1`](../design/v1/) (synced 2026-09-26)**
+
+This is the build plan for the whole of Household, from an empty repository to general availability.
+Each numbered item below is **one pull request**, sized so that one `/implement` session can take it
+from reading its inputs to an open PR. The plan changes as the build teaches us things, and the rules
+for changing it are part of the plan.
+
+**96 items** (cap: 100 PRs, so 4 are held in reserve). Progress is counted from the item headings, not kept here.
+
+---
+
+## How to use this plan
+
+### Status
+
+Every item carries exactly one status in its heading, and nowhere else:
+
+| Status | Meaning | Set when |
+|---|---|---|
+| `planned` | Not merged | Default |
+| `done` | Merged to `main` | By the item's own PR, so it becomes true on `main` when that PR merges. The same PR fills in its **PR** line once it is open |
+
+Work in progress is not recorded here: an open PR titled `[NN] …` is the record.
+
+### Rules for changing the plan
+
+1. **`done` items are history.** Their text is not rewritten. Only the **PR** line may be corrected.
+2. **`planned` items may be rewritten, split, merged, reordered or renumbered** when implementation shows
+   they are wrong. Put the rewrite in the PR that discovered the need. Fix every **after #n**
+   reference the change touches, in the same edit.
+3. **The cap is 100 items.** Splitting an item uses a reserve slot, or merges something else. The
+   reserve is for work that turned out bigger than planned, not for new scope.
+4. **Every rewrite adds one line to the [Change log](#change-log)** with the reason.
+5. **Gates are not rewritten to pass.** If a gate's condition is wrong, change it in the PRD with a
+   decision entry first ([09-decisions.md](prd/09-decisions.md)), then here.
+
+### Starting an item
+
+1. Check that every item in its **after** list is `done`. Items with no dependency on each other may run
+   in parallel, and after gate G-C most of Phases 2–4 can.
+2. Read, in this order: the item, the [conventions](#conventions-every-pr-follows) below, the item's
+   **Inputs**, and any open question from [Decisions to settle](#decisions-to-settle-during-implementation)
+   that names the item.
+3. Run `/implement` with the item number and title. The PR title is `[NN] <item title>` and the branch is
+   `feat/NN-<slug>`.
+
+### Precedence of sources
+
+**PRD > `openapi.yaml` > `docs/design` > `design/v1`.** The PRD is authoritative
+([docs/design/README.md](design/README.md) says the same). `design/v1` is a clickable ES5 prototype.
+It is the behavioural reference for screens, copy intent, states and worked numbers. It is not code to
+ship.
+
+Where two sources disagree:
+- Follow the higher one.
+- Record the disagreement in the PR description.
+- Amend the lower one only if it is a document in this repository. `design/v1` is left as is.
+
+`home` means the predecessor repository at `../ws-tilcer-home`. It is a reference for porting logic and
+tests, never a dependency.
+
+---
+
+## Plan decisions
+
+These are the choices the PRD leaves open. They are **plan decisions (PL-n)**, not product decisions.
+An item may overturn one by recording why in the Change log.
+
+| # | Decision | Why |
+|---|---|---|
+| **PL-1** | **One monorepo**: `server/` (Go module), `apps/web`, `apps/mobile`, `packages/{api,i18n,tokens,icons,domain,sync,test-vectors}`, `reference-data/`, `fixtures/`, `docs/adr/`, `docs/runbooks/`. pnpm workspaces + Turborepo for TypeScript | The contract, the tokens, the strings and the vectors are shared ([06-clients](prd/06-clients.md) §1). One repository makes a contract break a build break |
+| **PL-2** | **Server libraries follow `home` where it had one**: chi v5, goose v3, coder/websocket, aws-sdk-go-v2 (S3), golang-jwt (EdDSA), webpush-go. New for Household: pgx v5 + sqlc on PostgreSQL 17, kin-openapi (edge validation), x/crypto argon2id, pquerna/otp, coreos/go-oidc, stripe-go | Proven in `home`. The new ones are the standard choice for each job |
+| **PL-3** | **Tests hit real PostgreSQL**: compose locally and a service container in CI. No database mocks. TS unit tests use Vitest; web E2E uses Playwright + axe; mobile uses Jest + React Native Testing Library, with Maestro for E2E | RLS, the change feed and `SET LOCAL` cannot be tested against a mock |
+| **PL-4** | **Web**: React 19, Vite, React Router 7, TanStack Query persisted to IndexedDB, Radix primitives for behaviour, CSS Modules over token custom properties, dnd-kit, Milkdown for Notes, Stripe Payment Element | Carries `home`'s proven stack. CSS variables make "semantic tokens only" a lint rule |
+| **PL-5** | **Mobile**: Expo managed workflow (current SDK), expo-router, expo-sqlite (replica), expo-secure-store, expo-notifications, react-native-svg, native Apple and Google sign-in. **Tablet is a layout of the mobile app**, not a third codebase (design/v1 draws 24 tablet rows) | [06-clients](prd/06-clients.md) and [D-36](prd/09-decisions.md). The prototype's tablet rows are two-pane layouts of the same app |
+| **PL-6** | **Sync is built to [03 §2](prd/03-platform-strands.md)**, unless item 5's verdict says adopt. The conformance simulator is written in Go against the real engine. The TS client is validated by replaying golden traces the simulator exports | [10-sync-risk](prd/10-sync-risk.md). One harness, two implementations kept honest |
+| **PL-7** | **Contract tooling**: the TS client is generated with openapi-typescript + openapi-fetch; Go validates request bodies against the same document at the edge. A `contract_pending` list names operations not yet built. It only ever shrinks and is empty at GA | [G12](prd/00-overview.md), architecture test 6 |
+| **PL-8** | **Environments**: dev is docker compose (Postgres 17, MinIO, Mailpit). **Staging is DigitalOcean + Coolify from Phase 0**, synthetic data only ([D-10](prd/09-decisions.md)). **Dogfooding runs on a separate environment from item 30**: it holds the team's real data, so it is on an EU-established provider ([D-5](prd/09-decisions.md)) and under production's data rules. **Production is an EU provider chosen in item 88** | Phones need a reachable server for gate G-C. Real dogfood data may not sit on staging. Production's multi-AZ requirements are a Phase 5 decision |
+| **PL-9** | **Translations**: every UI PR ships English plus Claude-drafted `cs`, `sk`, `de` and `pl`. Drafted keys are listed in `packages/i18n/review/`. Native review clears them before GA (item 95) | A missing catalog is a build break ([03 §9](prd/03-platform-strands.md)). Drafting inline costs less than a translation phase |
+| **PL-10** | **Reference content is drafted by Claude with a source for every field**, in `reference-data/`, schema-validated in CI and flagged for expert review. This covers crops, climate, tariff presets, statutory vehicle rules, document types, categories and templates | Your decision (2026-09-26). The crop catalog is the longest-lead item ([08-roadmap](prd/08-roadmap.md)) |
+| **PL-11** | **design/v1 is used three ways**: tokens, icons and illustration are ported mechanically (item 23); `fixtures.js` becomes the canonical seed (item 30), and each module PR adds its own data; each engine file's `checks()` becomes that module's shared test vectors. Screens are cited by **ledger id** (`ledger.js`: A-1…F-20; client suffix `-m`/`-w`) | The prototype's numbers are already cross-checked across files. Re-deriving them is how they drift |
+| **PL-12** | **Porting from `home` ports logic and tests, not schema.** `home` is single-tenant SQLite. Every ported query gains `household_id`, RLS and the mutation spine | [00-overview](prd/00-overview.md) §6: *"the assumption — load-bearing in about forty call sites — that every row belongs to the one household"* |
+| **PL-13** | **Type**: IBM Plex Sans and IBM Plex Mono (SIL OFL), self-hosted with Latin Extended-A and B subsets and tabular figures. Newsreader, which appears only in the design artifacts' chrome, is not used. **Icons**: Lucide (ISC), vendored and tree-shaken, for general glyphs; module and status icons are drawn in-house | [01-foundations](design/01-foundations.md) N8, [DD-10](design/08-decisions.md) |
+
+---
+
+## Conventions every PR follows
+
+### Definition of done
+
+- [ ] CI is green, including every check that exists at this point:
+  - the architecture tests;
+  - the contract diff and the tenant-isolation test;
+  - the conformance suite;
+  - unit, component and vector tests;
+  - the strict type check and lint;
+  - axe and the pseudolocalisation pass on touched routes;
+  - bundle budgets.
+- [ ] Operations this PR implements are removed from `contract_pending`. Any change to `openapi.yaml` is deliberate, and its reason is in the PR.
+- [ ] Every client screen covers its ledger row's required states (the preset minus its declared exclusions) and passes [07-delivery §3](design/07-delivery.md):
+  - both themes;
+  - 200 % text;
+  - colour, icon **and** word;
+  - 44 pt targets;
+  - absence, not disabling;
+  - destructive copy that names the object.
+- [ ] New strings are present in all five catalogs, with drafts flagged (PL-9). No user-visible string is a literal.
+- [ ] If a decision was taken or behaviour changed, the PRD is updated in the same PR ([07 §6](prd/07-nonfunctional.md)).
+- [ ] This plan is updated: the item's status set to `done`, its **PR** line, and any rewrites, each rewrite with a Change log line.
+
+### Every module's server PR also
+
+Follow the [module model](prd/modules/00-module-model.md):
+- [ ] **Identity and structure.** A stable module id; its own goose migration block; routes under the tenant and grant middleware.
+- [ ] **Audit actions** with summary keys.
+- [ ] **Sync entities**, each with:
+  - a merge policy;
+  - the `state_set` key and resolution, where the policy is `state_set`;
+  - any `additive` cross-row invariant;
+  - a redacted projection where one is needed.
+- [ ] **Offline-write flags** set for the D-84 phase. A `strict_version` entity whose server item merges after item 67 ships with offline writes on; item 67 turns them on for every module merged before it.
+- [ ] **Export and erase** implemented.
+- [ ] **Catalog contributions**: widgets with their D-42 client projection, metrics, lists, reminder kinds, search scopes and storage.
+- [ ] **Absence.** `404`, not `403`. The nine absence surfaces are tested for a member with `none`.
+- [ ] **Ported data.** The module's `design/v1` fixture is added to the seed with any drift fixed. Its `checks()` are added to `packages/test-vectors`.
+- [ ] **After item 53:** help entries authored ([DD-13](design/08-decisions.md)), and the setup re-entry point registered if the module has a setup.
+- [ ] Any sync policy or key the PRD leaves unstated is decided, written into the module's PRD page, and listed in the PR.
+
+---
+
+## Phases and gates
+
+| Phase | Items | Exit |
+|---|---|---|
+| **0 — Platform** | 1–30 | **G-A** after 4 and 5: the sync-ready schema is enforced and the buy-vs-build verdict is written. **G-B** after 14: 18 scenarios plus fuzz are green. Item 30 closes [08-roadmap](prd/08-roadmap.md)'s Phase 0 deliverable |
+| **1 — Shopping** | 31–34 | **G-C** at 34: the Shopping acceptance test passes on two physical phones in aeroplane mode. **If it fails, adopt a vendor** ([10 §7](prd/10-sync-risk.md)) |
+| **2 — Daily core** | 35–54 | A real family can use it daily. **At least a month of internal dogfooding** before Phase 3 ships (not before it starts) |
+| **3 — Differentiators** | 55–74 | Utilities, Finance and Garden reproduce their worked examples; `strict_version` offline writes are enabled |
+| **4 — Breadth** | 75–87 | Feature-complete: all 17 modules on both clients |
+| **5 — General availability** | 88–96 | `contract_pending` is empty, and the [non-code checklist](#outside-the-pr-list-ga-prerequisites-that-are-not-code) is ticked |
+
+Two content items, 22 and 54 (the crop catalog), run in parallel with everything from item 7 onward. The
+roadmap is explicit that this content must start during Phase 0.
+
+---
+
+## Decisions to settle during implementation
+
+These are open points the reading surfaced: gaps in the PRD, disagreements between the prototype and the
+PRD, and gaps in the contract. Each is settled in the item named. **Rows marked ★ need an answer from
+you**, not from the implementing session.
+
+| # | Question | Source | Settle in |
+|---|---|---|---|
+| Q1 ★ | **CZK and PLN prices.** [04 §1](prd/04-billing-and-entitlements.md) says local prices are set "on the same basis" but names no figures. The prototype assumed EUR everywhere, which contradicts the PRD | 04 §1; design/v1 `household.js` | 19 |
+| Q2 | **Sync engine: build or adopt.** A verdict of *adopt* rewrites items 12–15 | 10-sync-risk §2 | 5 |
+| Q3 | **FR-CT1 against grants.** The general conversation should contain every member, but two of the five fixture members (Petr and Miloš) hold `none` on Chat. The prototype lets the grant win | 15-chat; design/v1 `chat.js` | 85 |
+| Q4 | **Finance shares.** The prototype settled that a share may only name a member who holds Finance. Confirm it and write it into FR-FI11. **The Finance fixture breaks this rule**: only Jana holds Finance, yet its shares and balances name Petr and Miloš. If the rule is confirmed, either the seed grants them Finance (which moves other personas' vectors) or the Finance fixture is re-cut. Record the choice under Q16 | 09-finance, D-59; design/v1 `finance.js`, `fixtures.js` | 63 |
+| Q5 | **Search while offline.** The prototype says *"search needs a connection"*; [03-patterns](design/03-patterns.md) says offline reads are indistinguishable from online ones | design/v1 `spine.js` | 36, 38 |
+| Q6 | **A member who can create nothing.** Do they get an Add tab, or a four-slot bar? The prototype drops the tab; [08-decisions](design/08-decisions.md) treats the five destinations as fixed | design/v1 `nav.js` | 28 |
+| Q7 | **A child's private root.** Readable by an owner (FR-NO4), but is it searchable by them (FR-NO7)? | 07-notes | 43 |
+| Q8 | **`chores.due` completion scope.** Personal or household? The prototype is internally inconsistent. Also: can points exist with no child profile, and what happens when a rotation member loses the grant mid-cycle? | 06-chores; design/v1 `ledger.js` GAPS | 49 |
+| Q9 | **PIN lockout.** The PRD says 10 attempts, then owner unlock. The prototype pauses after 5. **The PRD wins**; the fixture is corrected | 02 FR-CH5 | 11 |
+| Q10 | **Unstated sync policies**: Finance import/rules/price history; Utilities conversions/advance schedules; Garden overrides/varieties/dismissals/photos and the `task_completion` key; `vehicle_drivers`; pet `routine_items` | module pages | 62–64, 56, 69, 81, 82 |
+| Q11 | **Contract gaps**: no route serves the Calendar ICS feed; no receiver for Google push notifications; Chores rewards and Shopping categories/staples have no PATCH or DELETE; no path for the reference-data reads or the Garden region bundle; `POST …/notifications/broadcast` has no PRD requirement (implement it with a PRD entry, or remove it with a decision entry) | `openapi.yaml` vs PRD | 76, 77, 49, 31, 7, 68, 53 |
+| Q12 | **Reading anchors** (FR-UT9): a conversion change also blocks, and each service has its own reading cadence | design/v1 `utilities.js` | 57 |
+| Q13 | **Tokens**: emit resolved values or add primitives? Many semantic tokens in the prototype sit off the primitive ramp | design/v1 `foundations.js` | 23 |
+| Q14 | **Vendors not named in the PRD**, each EU-established: weather provider, email provider, analytics store, error aggregation. The office-to-PDF converter (LibreOffice headless is assumed) | 05 §10, 07 §5 | 71, 30/88, 92, 30, 16 |
+| Q15 ★ | **UK Online Safety Act** (OQ-1). Counsel's answer decides whether Chat ships disabled in the UK. Item 85 ships a per-country switch either way | 05 §11, DD-11 | counsel → 85 |
+| Q16 | **Fixture drifts** to fix when porting the seed: Stage 8 has Property and Pets toggled off; the vehicles widget date; the washing-machine warranty date; `garden.task_due` names the wrong bed and crop; Petr's persona note is stale | design/v1 `github.md` | 30 and each module |
+| Q17 | **Subscribe flow.** The PRD says Stripe Elements / PaymentSheet; the contract's `billing/checkout-session` and `billing/portal-session` describe a hosted checkout and a hosted portal. The PRD wins, so those operations are amended in `openapi.yaml` before the client is generated | 04 §6; `openapi.yaml` tag `billing` | 19 |
+
+---
+
+## Phase 0 — Platform
+
+No user-visible product. It is the riskiest phase, and it has no demo. The conformance simulator
+(item 12) replaces the feedback loop that a UI would otherwise give.
+
+### 1 · Monorepo, toolchain and CI · `planned`
+
+Phase 0 · after — · size M
+
+- **Scope**
+  - **Layout** per PL-1: pnpm workspaces and Turborepo; a Go module in `server/`; package stubs.
+  - **TypeScript strictness**: `tsconfig.base.json` with the strict flags from [06-clients](prd/06-clients.md). ESLint with `no-explicit-any` and `no-non-null-assertion` as errors.
+  - **Go and formatting**: golangci-lint; Prettier and gofmt.
+  - **Pinned toolchain**: Node LTS and Go 1.26.
+  - **Local environment**: `docker-compose.yml` (Postgres 17, MinIO, Mailpit), `.env.example`, and a task runner with `up`, `gen`, `test` and `lint`.
+  - **CI (GitHub Actions)**:
+    - Go build, vet and test against a Postgres service;
+    - turbo typecheck, lint and test;
+    - OpenAPI validation (openapi-spec-validator and Redocly);
+    - govulncheck, pnpm audit, gitleaks and CodeQL.
+  - **Repository docs**:
+    - a `CLAUDE.md` distilling the PRD conventions (money, UUIDv7, timestamps, English source, 404-not-403, the mutation spine) and this plan's workflow;
+    - a PR template carrying the Definition of done;
+    - a `docs/adr/` template.
+- **Inputs**
+  - PRD: [README](prd/README.md) conventions, [01 §9](prd/01-architecture.md), [06 §8](prd/06-clients.md), [07 §6](prd/07-nonfunctional.md)
+  - API: [api/README](api/README.md) (the validation commands)
+  - home: `CLAUDE.md`; the `frontend/package.json` tooling
+- **Done when**
+  - A fresh clone reaches a green `test` with only docker, pnpm and Go installed.
+  - CI is green, and the committed `openapi.yaml` validates under both validators.
+- **PR:** —
+
+### 2 · Server skeleton and contract enforcement · `planned`
+
+Phase 0 · after 1 · size M
+
+- **Scope**
+  - **Process basics**: `cmd/household-api`; config from the environment; graceful shutdown; `/healthz` and `/readyz`.
+  - **Logging**:
+    - A redacting JSON logger with a **field allowlist** ([FR-NF5](prd/07-nonfunctional.md)).
+    - `request_id` and `household_id` on every line.
+    - Panic recovery.
+  - **Errors**: RFC 9457 problem documents, with the Go `ProblemCode` enum generated from the OpenAPI schema.
+  - **Routing and validation**: chi mounted at `/api/v1`; request-body validation at the edge against `openapi.yaml` (kin-openapi); response validation in tests.
+  - **Pagination**: the opaque keyset cursor helper, where a malformed cursor returns `422`.
+  - **Database**: pgxpool, plus goose with a platform block and per-module blocks assembled by the registry.
+  - **Roles and fixtures**:
+    - A bootstrap that creates `household_migrate`, `household_app` and `household_meter`.
+    - UUIDv7 generation.
+    - A `testsupport` package that clones a template database per test package.
+  - **Architecture test 6**: routes ⇄ `openapi.yaml`, with `contract_pending` seeded with all 486 operation ids. It fails on:
+    - an undeclared route;
+    - a route implemented while still pending;
+    - a stale pending entry.
+  - **Architecture test 8**: no `float` or `numeric` money, checked across Go types and migrations.
+- **Inputs**
+  - PRD: [01 §6, §9, §10](prd/01-architecture.md); [07 §4–5](prd/07-nonfunctional.md)
+  - API: [api/README](api/README.md)
+  - home: `backend/internal/platform/{httpx,config,db,reqctx,idgen,cursor}`, `backend/internal/arch`
+- **Done when**
+  - An invalid body returns `422` with a problem `code`.
+  - A test proves that a field not on the allowlist is dropped from the logs.
+  - Both architecture tests fail on deliberate violations kept in `testdata`.
+- **PR:** —
+
+### 3 · Module registry, tenancy and row-level security · `planned`
+
+Phase 0 · after 2 · size L
+
+- **Scope**
+  - **Module contract**: the `Module` interface and all optional catalog interfaces, including Sync, Reminder, Search, Export and Erase ([01 §4](prd/01-architecture.md)); the compile-time registry.
+  - **Minimal tenancy schema**: `users`, `households`, `memberships`, `module_enablement`, `module_grants`. Their flows come in items 8–10.
+  - **Tenant middleware**:
+    - Resolves `{household_id}` from the path and checks membership, returning `404` if there is none.
+    - Computes the effective level as min(enablement, grant) and carries it in the request context.
+    - Has an entitlement hook, filled in by item 18.
+    - Opens the transaction with `SET LOCAL app.household_id`, `app.user_id` and `ROLE household_app`.
+  - **Grant check**: `grant.Require(ctx, module, level)`. `404` for `none` or disabled; `403` only for *"can see, may not do"*.
+  - **Policies**: an RLS policy template, plus the membership policy keyed on `user_id`.
+  - **Architecture tests 1, 2 and 3**:
+    - 1: cross-module imports;
+    - 2: tenant tables have `household_id`, RLS and `FORCE`;
+    - 3: every module implements Export and Erase.
+  - **[FR-NF4](prd/07-nonfunctional.md) isolation test**: reads another household's rows by primary key and expects zero, on every commit.
+- **Inputs**
+  - PRD: [01 §2, §4, §5, §10](prd/01-architecture.md); [02 §5, §7](prd/02-identity-and-access.md); D-1–D-4, D-16
+  - home: `platform/registry`, `arch/arch_test.go`, `bootstrap`
+- **Done when** a test module in `testdata` proves each of the following:
+  - `404` for `none` and for a disabled module.
+  - A handler missing its `WHERE` returns an empty set.
+  - A cross-tenant insert errors.
+  - Each architecture test fails on its violation.
+- **PR:** —
+
+### 4 · Sync-ready schema, entity registry and the mutation spine · `planned`
+
+Phase 0 · after 3 · size L · **gate G-A (schema half)**
+
+- **Scope**
+  - **Base columns** as migration helpers and Go types:
+    - UUIDv7 `id`, supplied by the client;
+    - `household_id`;
+    - `version`;
+    - `created_by/at` and `updated_by/at`;
+    - `deleted_at`.
+  - **Sync-entity registry.** Each entity declares:
+    - its merge policy (one of five);
+    - its `state_set` key and resolution;
+    - any `additive` cross-row invariant;
+    - its redacted projection ([D-88](prd/09-decisions.md));
+    - its access fields;
+    - its offline-write flag ([D-84](prd/09-decisions.md)).
+  - **`sync_changes`**, partitioned monthly, with the [03 §2.2](prd/03-platform-strands.md) indexes.
+  - **Audit spine**: `audit_events` and `audit_changes` with `summary_key`/`summary_args` and field diffs (FR-AU1–3). `actor_type` is left extensible for the AI-assistant hook.
+  - **Mutation spine**: one service-layer entry point that writes the row, the audit event and the change row(s) in one transaction, with `meta.via`.
+  - **Concurrency and retries**: ETag/`If-Match` helpers; `Idempotency-Key` storage for unsafe REST methods.
+  - **Architecture tests**:
+    - 4: a mutating route that writes no audit event or no change;
+    - 5: an entity with no policy or predicate, or a `state_set` with no key or resolution;
+    - 9: an OpenAPI create schema for a sync entity that does not require `id`.
+- **Inputs**
+  - PRD: [01 §3, §10](prd/01-architecture.md); [03 §1, §2.2, §2.5](prd/03-platform-strands.md); [10-sync-risk §1, §3](prd/10-sync-risk.md); D-22–D-26, D-82, D-84, D-88, D-91; [future/ai-assistant.md](prd/future/ai-assistant.md) (hooks)
+  - home: `platform/audit`
+- **Done when**
+  - Each of architecture tests 4, 5 and 9 fails on its violation.
+  - A spine test proves the row, the audit event and the change commit and roll back together.
+- **PR:** —
+
+### 5 · Sync engine spike and written verdict · `planned`
+
+Phase 0 · after 4 · size M (timeboxed) · **gate G-A**
+
+- **Scope**
+  - **Candidates**: PowerSync and ElectricSQL, self-hosted in docker. Replicache/Zero are checked on paper for licence, maturity and React Native support. **Verify each project's current state; do not trust summaries.**
+  - **Hardest cases**: run scenario 3 (two offline checks of one shopping item) and scenario 7 (a grant revoked offline) against each, on item 4's schema.
+  - **What to judge**:
+    - Can it express all four access axes?
+    - Does access loss propagate as deletion?
+    - Do writes go through our own API?
+    - How good is the React Native story?
+    - Can it be self-hosted in the EU?
+  - **Isolation**: spike code lives in `spikes/` and is deleted before merge.
+- **Inputs**
+  - PRD: [10-sync-risk §2](prd/10-sync-risk.md); [03 §2](prd/03-platform-strands.md); D-83; [05 §1](prd/05-privacy-and-compliance.md) (residency)
+- **Done when**
+  - `docs/adr/0001-sync-engine.md` records the verdict and the requirement that forced it.
+  - If the verdict is *adopt*, items 12–15 are rewritten in the same PR (Q2).
+- **PR:** —
+
+### 6 · Shared packages: API client, i18n, vectors and money · `planned`
+
+Phase 0 · after 2 · size L
+
+- **Scope**
+  - **`@household/api`**:
+    - Generated on build with openapi-typescript and openapi-fetch.
+    - Exhaustive `ProblemCode` handling, and typed `402`/`404`/`409`/`410`.
+    - `If-Match` and `Idempotency-Key` middleware.
+    - UUIDv7 generation.
+  - **`@household/i18n`**:
+    - ICU MessageFormat catalogs for `en`, `cs`, `sk`, `de` and `pl`.
+    - Typed keys, so a missing key fails compilation.
+    - A pseudo-locale build target.
+    - Slavic plural test cases.
+    - The `review/` ledger.
+    - A Go renderer (`internal/platform/i18n`) that reads the same catalogs for email, push and audit summaries.
+  - **Architecture test 7**: an ESLint rule forbidding user-visible string literals in `apps/*`.
+  - **`@household/test-vectors`**: a JSON vector format with runners in Go and in Vitest.
+  - **`@household/domain` v0**: money as minor units, with ISO 4217 exponents and rounding half-up exactly once. Deterministic minor-unit splitting follows the household's member order ([D-57](prd/09-decisions.md)).
+- **Inputs**
+  - PRD: [06 §1](prd/06-clients.md); [03 §9](prd/03-platform-strands.md); D-29, D-37, D-57
+  - Design: `fixtures.js` (module names), `screencopy.js` (cs/de titles as catalog seeds), `finance.js` `tenEuroRun`
+- **Done when**
+  - A missing key breaks the type check.
+  - The €10 three-way split (3,34 / 3,33 / 3,33, in every participant order) passes in Go and TS from one JSON file.
+- **PR:** —
+
+### 7 · Reference-data pipeline and country profiles · `planned`
+
+Phase 0 · after 3, 6 · size M
+
+- **Scope**
+  - **Source files**: YAML/JSON under `reference-data/` with JSON Schemas enforced in CI. Every field carries a `source` and a per-language value.
+  - **Loader**: versioned and idempotent, writing into global reference tables. It is the path by which data changes ship without a code change ([D-61](prd/09-decisions.md), [D-70](prd/09-decisions.md)); admin editing arrives in item 21.
+  - **Country profiles** for CZ, SK, DE, PL and UK:
+    - base currency and default VAT;
+    - public-holiday source;
+    - default units;
+    - first day of week;
+    - inspection naming (STK/TK/HU/przegląd/MOT);
+    - the pointer to each country's document-type set.
+  - **Units and conversions** for metric and imperial.
+  - **Read endpoints** for authenticated users, added to `openapi.yaml` (Q11).
+  - **Module sets come later**: each module's own reference sets (categories, templates, presets) land with that module.
+- **Inputs**
+  - PRD: [03 §9](prd/03-platform-strands.md) (the localisation table); [01 §2.4](prd/01-architecture.md); D-61, D-70
+- **Done when**
+  - CI rejects a record missing a language or a source.
+  - The loader is idempotent.
+- **PR:** —
+
+### 8 · Identity I — accounts, web sessions, email, rate limits · `planned`
+
+Phase 0 · after 3, 6 · size L
+
+- **Scope**
+  - **Registration** (FR-ID1):
+    - Passwords hashed with Argon2id and at least 12 characters.
+    - Breached-password screening against a **local** k-anonymity dataset, including the dataset build script ([D-12](prd/09-decisions.md)).
+    - An enumeration-resistant `202` whose email differs by case.
+  - **Email verification**: a 24-hour single-use token. An unverified account works but cannot extend outbound trust.
+  - **Web sign-in** (FR-ID3, `client_type=web`): the `__Host-hh_session` cookie; double-submit CSRF plus an Origin allowlist; sliding expiry; logout.
+  - **Password reset** (FR-ID6): a 1-hour token that invalidates everything and confirms by email to the old address.
+  - **Rate limiter**: per IP, account, user and household, per the [02 §9](prd/02-identity-and-access.md) table, returning `429` with `Retry-After` and a problem document.
+  - **Email transport**: SMTP, with templates rendered from i18n keys in the recipient's language.
+  - **Profile and sessions**:
+    - `/me` profile and preferences: language, timezone override, first day of week, quiet hours.
+    - `/me/sessions`: list, revoke, and sign out everywhere (FR-ID7).
+- **Inputs**
+  - PRD: [02 §1–2, §9](prd/02-identity-and-access.md); [07 §4](prd/07-nonfunctional.md); D-12, D-13
+  - API: tags `auth` and `me`
+  - Design: A-1–A-4, A-9, A-10, A-12, A-19; `auth.js` (the 12-message failure register with enumeration verdicts)
+  - home: `platform/auth` (sessions and CSRF)
+- **Done when**
+  - Enumeration tests assert identical response shapes.
+  - Limits are tested.
+  - The implemented operations are off `contract_pending`.
+- **PR:** —
+
+### 9 · Identity II — mobile tokens, MFA, Google and Apple, client versions · `planned`
+
+Phase 0 · after 8 · size L
+
+- **Scope**
+  - **Mobile token pair** (FR-ID3 mobile, FR-ID4):
+    - An access token signed EdDSA, valid 15 minutes, carrying only `sub`, `sid`, `iat`, `exp` and `client` ([D-15](prd/09-decisions.md)).
+    - A rotating, single-use refresh token. Reusing one revokes its whole family and sends an email ([D-14](prd/09-decisions.md)).
+  - **Devices**: registration; a push-token slot; revoking a device invalidates its sync cursor (hook for item 14).
+  - **MFA** (FR-ID5): TOTP plus recovery codes, required on a new device.
+  - **Federated sign-in** (FR-ID2): Google and Apple via OIDC with PKCE. `sub` is the stable identifier, and linking to an existing account needs an explicit confirmation.
+  - **Account-takeover notice.**
+  - **Client versions** ([06 §7](prd/06-clients.md), FR-HA18): a client-version header and a minimum supported version. Below it, a blocking *please update* problem is returned.
+- **Inputs**
+  - PRD: [02 §2](prd/02-identity-and-access.md); [06 §7](prd/06-clients.md); [17 FR-HA18](prd/modules/17-household-admin.md); D-7, D-14, D-15
+  - Design: A-5–A-8, A-11, A-13, A-21, C-57
+- **Done when** each of these is tested:
+  - reuse detection;
+  - the MFA new-device rule;
+  - OIDC against a mock identity provider;
+  - the please-update response.
+- **PR:** —
+
+### 10 · Households, memberships, invitations and grants · `planned`
+
+Phase 0 · after 4, 7, 8 · size L
+
+- **Scope**
+  - **Create a household** (FR-HH1): any user can. The creator becomes owner and payer of record; a trial hook fires; an 8-character household code is generated and can be regenerated.
+  - **Invitations** (FR-HH2/3):
+    - By email (14 days) or link (72 hours, `max_uses`).
+    - Each carries the proposed role and grants, plus a starting-dashboard placeholder.
+    - Accept or decline; a decline notifies the inviter.
+    - Limited to 20 per day.
+  - **Roles and grants**:
+    - Roles: owner, member and child.
+    - Module enablement: disabling returns `404`, emits a retraction hook and keeps the data.
+    - Four grant levels with the FR-AC3/AC4 defaults, and child caps.
+  - **Changing access**: a role or grant change emits a retraction hook plus the [D-78](prd/09-decisions.md) notification hook.
+  - **Leaving and removal** (FR-HH4–6):
+    - Leave refuses with `last_owner` and `billing_payer`, both reported together.
+    - Remove member.
+    - Transfer ownership.
+  - **Household settings**: timezone, locale, units and first day. A country change updates reference data, not history (FR-HA1).
+  - **Deferred**: the base-currency change lands in item 62.
+- **Inputs**
+  - PRD: [02 §3–5, §7](prd/02-identity-and-access.md); [17 FR-HA1, HA3–HA8, HA17](prd/modules/17-household-admin.md)
+  - API: `/households`, `…/invitations`, `…/members`, `…/modules`, `…/ownership`, `…/leave`
+  - Design: A-22–A-26, A-36, C-49–C-51; `household.js` (grant wording); `nav.js`; `fixtures.js` (five personas)
+- **Done when**
+  - The five personas' grants resolve exactly as in `fixtures.js`.
+  - Accepting an invitation yields exactly the proposed grants.
+  - The REST surface returns `404` for `none`.
+- **PR:** —
+
+### 11 · Child profiles · `planned`
+
+Phase 0 · after 9, 10 · size M
+
+- **Scope** (FR-CH1–5):
+  - **Profile**: display name, optional birth year and avatar, and a hashed 4–6-digit PIN.
+  - **Sign-in**: household code + profile + PIN, issuing mobile tokens.
+  - **Shared tablet**: authorised once by an owner; profiles then switch without re-authentication.
+  - **Lockout**: **10 wrong PINs lock the profile until an owner unlocks it** (Q9). An owner can reset the PIN.
+  - **Graduation**: an email is attached and verified, and the content is kept.
+  - **Restrictions**: no `manage`; Finance capped at `view`; no inviting, no settings, no deleting other people's items.
+  - **Privacy flags**: excluded from analytics ([D-18](prd/09-decisions.md)); a child's private root is readable by an owner (flag consumed by items 43 and 46).
+- **Inputs**
+  - PRD: [02 §6](prd/02-identity-and-access.md); [05 §7](prd/05-privacy-and-compliance.md); D-17–D-19
+  - API: `…/children/*`
+  - Design: A-14–A-18; `account-ui.js` (test PIN and household code)
+- **Done when**
+  - Lockout and unlock are tested.
+  - Granting a child `manage` returns `422`.
+  - Graduation keeps the child's content.
+- **PR:** —
+
+### 12 · Conformance simulator · `planned`
+
+Phase 0 · after 4, 10 · size L · **gate G-B (harness)**
+
+- **Scope**
+  - **Harness**: a deterministic multi-client harness in Go (`internal/platform/sync/sim`):
+    - N reference clients speaking the protocol;
+    - the real engine interfaces and real Postgres;
+    - scripted partitions, reordering, duplicate delivery and clock skew;
+    - a seeded random-number generator.
+  - **Scenarios**: all **18 scenarios** of [10 §4](prd/10-sync-risk.md) as executable specifications, with the six invariants checked after each.
+  - **Fuzzing**: a fuzz driver with reproducible seeds.
+  - **Golden traces**: exported as JSON for item 15.
+  - **Before the engine**: scenarios start skipped, and items 13–14 switch them on.
+- **Inputs**
+  - PRD: [10 §4, §7](prd/10-sync-risk.md); [03 §2](prd/03-platform-strands.md)
+  - Design: `sync.js`, `conformance.js`
+- **Done when**
+  - All 18 scenarios are encoded with explicit expected outcomes.
+  - A deliberately broken toy engine is caught by the invariants, proving the harness can fail.
+- **PR:** —
+
+### 13 · Sync engine I — feed, pull, snapshot, push · `planned`
+
+Phase 0 · after 12 · size XL
+
+- **Scope**
+  - **Pull** (`GET …/sync/changes`): the full visibility predicate in one indexed scan — grant, private/redacted, audience + `floor_seq`, and `for_user_id`.
+  - **Snapshot** (`POST …/sync/snapshot`): a consistent NDJSON stream at a stated `seq`.
+  - **Push** (`POST …/sync/mutations`):
+    - An ordered batch, one transaction per mutation.
+    - Outcomes `applied`/`merged`/`conflict`/`rejected`/`deferred`, each always carrying a `code`.
+    - Per-mutation idempotency held for 7 days.
+    - Limits of 500 mutations per batch and 60 batches per minute per device.
+    - Client clocks clamped to ±24 hours and flagged.
+    - Offline-write flags checked per entity.
+  - **Merge policies**:
+    - `additive`, including the cross-row invariant path that answers `monotonicity_violation`;
+    - `state_set`, keyed, resolving by `latest_client_time` or `monotonic`;
+    - `lww_field`, by server receipt.
+  - **One service layer** shared by REST and sync.
+- **Inputs**
+  - PRD: [03 §2.3–2.5, §2.8](prd/03-platform-strands.md); [10 §3](prd/10-sync-risk.md); D-22–D-26, D-84, D-90
+  - API: tag `sync`
+- **Done when** the simulator passes scenarios 1, 3, 4, 5, 8, 9, 10, 15 and 17, plus the `state_set` half of 13.
+- **PR:** —
+
+### 14 · Sync engine II — conflicts, retraction, compaction, digest, realtime · `planned`
+
+Phase 0 · after 13, 16, 18 · size XL · **gate G-B**
+
+- **Scope**
+  - **Remaining merge policies**: `lww_row` with the loser preserved; `strict_version` conflicts carrying the server's row.
+  - **Retractions** for all five causes of access loss, wired to item 10's hooks:
+    - a grant lowered to `none`;
+    - removal from an audience;
+    - an item moved from shared to private;
+    - removal from the household;
+    - a module disabled.
+    - **Not** a lapsed entitlement.
+  - **[D-88](prd/09-decisions.md) two-row emission**: private and redacted feed rows, each entity supplying its own projection.
+  - **Compaction and resnapshot**:
+    - A compaction job with a 90-day horizon; `410 {action: resnapshot}` below it.
+    - Monthly partition maintenance.
+    - Revoking a device invalidates its cursor.
+  - **Digest** (`POST …/sync/digest`, [D-85](prd/09-decisions.md)): evaluated at the client's cursor.
+  - **Stream** (`…/stream` WebSocket):
+    - Carries a nudge, not a payload ([D-8](prd/09-decisions.md)).
+    - Authenticated by cookie or JWT.
+    - Works across instances via Postgres LISTEN/NOTIFY.
+    - Reserves the hook for Chat's payload exception.
+  - **Metrics hooks**: queue depth, conflict rate, divergence.
+- **Inputs**
+  - PRD: [03 §2.3, §2.5–2.7](prd/03-platform-strands.md); [10 §5–7](prd/10-sync-risk.md); D-8, D-85, D-88, D-90
+- **Done when** — this is **G-B**:
+  - All 18 scenarios and a fuzz run are green; CI runs N seeds per PR and a long run nightly.
+  - The PR asks for a second-engineer review of the protocol and the retraction path ([10 §8](prd/10-sync-risk.md)).
+- **PR:** —
+
+### 15 · `@household/sync` client library · `planned`
+
+Phase 0 · after 14, 6 · size L
+
+- **Scope**
+  - **Cursor and bootstrap**: cursor management; streaming snapshot bootstrap; resnapshot on `410`.
+  - **Mutation queue**: persistent (it survives the app being killed), with edits coalesced into queued mutations.
+  - **Per-row state**: synced, pending, syncing, conflict, rejected or withdrawn.
+  - **Surfacing API** for the conflict inbox and for rejections ([DD-4](design/08-decisions.md)).
+  - **Keeping the replica right**: retractions applied; digests computed and posted periodically.
+  - **Connectivity and files**:
+    - The stream nudge consumer, with backoff.
+    - The attachment pending queue ([D-25](prd/09-decisions.md)).
+    - Offline-write flags respected: a row that cannot be written offline shows *needs a connection*.
+  - **Storage**:
+    - One store per household ([D-4](prd/09-decisions.md)).
+    - A storage-adapter interface with two adapters: expo-sqlite and IndexedDB.
+- **Inputs**
+  - PRD: [03 §2](prd/03-platform-strands.md); [06 §1, §5](prd/06-clients.md); [10 §5](prd/10-sync-risk.md)
+  - Design: `sync.js` (the 7-step ladder, 4 visible shapes, 4 rejection reasons, 7 honesty situations); `Sync and Honesty.dc.html`
+- **Done when** replaying the golden traces reproduces all 18 scenarios on both adapters (Node SQLite and fake-indexeddb).
+- **PR:** —
+
+### 16 · Files and storage metering · `planned`
+
+Phase 0 · after 4, 10 · size L
+
+- **Scope**
+  - **S3 client**, with MinIO in dev.
+  - **Upload pipeline** (FR-FL1):
+    - a 100 MB cap and sniffing from the bytes;
+    - blocked and active types;
+    - a quota check returning `402` with the amount over;
+    - SHA-256 and write-once keys `h/{hh}/{module}/{entity}/{variant}`;
+    - the metadata row, audit event and change in one transaction;
+    - `attachment_status`.
+  - **Delivery** (FR-FL2): per-object pre-signed URLs valid for minutes ([D-9](prd/09-decisions.md)); `nosniff`; active types download-only.
+  - **Derived variants** (FR-FL3): a Postgres-backed job queue after commit produces thumbnails, scaled images, PDF first pages, and office-to-PDF via a LibreOffice headless sidecar with a timeout (Q14).
+  - **Storage catalog** (FR-ST1): tables, prefixes and attribution.
+  - **Usage sampling** (FR-ST2): nightly, as `household_meter`, by module and member, with object and row counts.
+  - **Storage picture API** (FR-ST4, HA14): the largest items, and what deleting something would recover.
+  - **Fair-use counters.**
+- **Inputs**
+  - PRD: [01 §8](prd/01-architecture.md); [03 §3, §8](prd/03-platform-strands.md); [04 §4–5](prd/04-billing-and-entitlements.md); D-9, D-25, D-28; FR-NF3
+  - Design: C-54; `household.js` (storage arithmetic)
+  - home: `platform/{blobstore,storage}`
+- **Done when**
+  - The refusal matrix is tested: `413`, `415`, `422`, `402`, `502`.
+  - Samples break down by module and member.
+  - No URL is issued before authorisation.
+- **PR:** —
+
+### 17 · Scheduler and notification transports · `planned`
+
+Phase 0 · after 10, 6 · size L
+
+- **Scope**
+  - **Scheduler**:
+    - In-process, with an advisory-lock leader so only one instance fires.
+    - A job registry for modules.
+    - Household-timezone resolution that is DST-safe.
+    - The expiry sweep with [03 §5](prd/03-platform-strands.md)'s retention table.
+    - Invitation and token expiry.
+  - **Transports**:
+    - Web Push (VAPID) subscriptions on `/push/*`.
+    - Expo push tokens per device.
+    - Email.
+  - **Preferences**: four categories plus a master switch and quiet hours, per member per household.
+  - **Direct notifications** for modules: assignments, mentions, and access changes ([D-78](prd/09-decisions.md)).
+  - **Filtering at send time**, per recipient, by grant and by privacy (FR-NT5).
+  - **Delivery log** (FR-NT6): `404`/`410` from a push service deletes the subscription; repeated failure marks a device stale.
+  - **Rendering**: in the recipient's language, with coalescing.
+  - **Deferred**: rules and digests land in item 53.
+- **Inputs**
+  - PRD: [03 §4–5](prd/03-platform-strands.md); [06 §6](prd/06-clients.md); D-78
+  - Design: F-20; `notify.js`
+  - home: `platform/{scheduler,push}`, `modules/admin` (listener)
+- **Done when** each of these is tested:
+  - two instances fire a job once;
+  - quiet hours defer delivery;
+  - a grant of `none` suppresses delivery;
+  - outcomes are logged.
+- **PR:** —
+
+### 18 · Entitlements and the 402 gate · `planned`
+
+Phase 0 · after 10, 13 · size M
+
+- **Scope**
+  - **Billing schema.**
+  - **State machine**: eight states with their precedence (`restricted` against a lapse).
+  - **The gate** (FR-BI1): `402` on unsafe methods in non-writing states, with a **closed** exemption list (billing, exports, deletion, leave, restriction). `grace` blocks uploads only.
+  - **Restriction** (FR-BI7, [D-87](prd/09-decisions.md)): owner-set, owner-lifted, with its own problem code, and banner data naming who restricted the household and when.
+  - **Hourly transitions**: trial, dunning and grace, plus the [DD-9](design/08-decisions.md) trial-notice stages.
+  - **Retention**: a 12-month countdown with three warnings, then deletion handed to item 20.
+  - **Queued mutations** (FR-BI2): `entitlement` rejections are held and replayed if the subscription resumes (scenario 14).
+  - **Fair-use ceilings** ([04 §5](prd/04-billing-and-entitlements.md)): a warning at 80 %, then `429`.
+  - **Banner API.**
+- **Inputs**
+  - PRD: [04 §1, §3, §5](prd/04-billing-and-entitlements.md); D-30–D-32, D-87
+  - Design: DD-9, DD-15; A-30, A-31; `household.js` (the eight-state table)
+- **Done when**
+  - A table-driven test over state × method × path proves the exemption list exactly.
+  - Scenario 14 is green.
+- **PR:** —
+
+### 19 · Stripe billing and storage blocks · `planned`
+
+Phase 0 · after 18, 16 · size L
+
+- **Scope**
+  - **Subscriptions** on Stripe Billing (EU entity):
+    - A customer per payer.
+    - Annual and monthly prices per currency, from config: EUR and GBP from [04 §1](prd/04-billing-and-entitlements.md); **CZK and PLN need figures (Q1)**.
+    - Payment Element on web: card, SEPA Direct Debit, Apple Pay, Google Pay; SCA. The `billing` operations are amended in the contract to match (Q17).
+  - **Webhooks**: signature-verified and idempotent. They drive the state machine.
+  - **Stored data**: a payment-method summary only.
+  - **Invoices**: list, download and email.
+  - **Dunning**: emails at 1, 3, 5 and 7 days, plus owner banners.
+  - **Payer**:
+    - Must be verified.
+    - Take-over handshake (FR-BI6).
+    - Proration.
+  - **Storage blocks**: blocks = ceil(max(0, daily-average − 5 GB) / 10 GB), capped at 20, beyond which uploads get `402`. They are reported as metered usage.
+  - **Transparency**: the projected charge (FR-BI4) and notices at 80 % and 100 %. Members and children never see billing (FR-BI5).
+  - **Support actions** for item 21: extend trial, credit, re-issue invoice.
+- **Inputs**
+  - PRD: [04 §1, §4, §6](prd/04-billing-and-entitlements.md); D-31, D-33, D-34
+  - API: tag `billing`
+  - Design: A-27–A-29, C-55; `household.js`
+- **Done when**
+  - Stripe test-mode fixtures pass.
+  - The block vectors hold: an 18 GB average is 2 blocks and €2; a 40 GB upload deleted the same day is about 1.3 GB on the average.
+- **PR:** —
+
+### 20 · Export, erasure and diagnostics · `planned`
+
+Phase 0 · after 14, 16, 17 · size L
+
+- **Scope**
+  - **Exports** (FR-PR2):
+    - A household export (owners) and a personal export (`/me`), both async.
+    - A ZIP holding `manifest.json`, `<module>.json` from each `ExportSource`, a `files/` tree, the derivative hooks (`.ics`, `.csv`, `.md`, `.html`), and `activity-log.csv` redacted as for the requester.
+    - Ready within 24 hours, downloadable for 7 days.
+  - **Account deletion** (FR-PR3–4):
+    - Each household is resolved first.
+    - A 30-day window: the account is disabled and revoked immediately, and an email carries a cancel link.
+    - A nightly job then runs `EraseSource` everywhere, deletes object prefixes, writes an identity tombstone, and relabels authorship as *Former member*.
+  - **Household deletion** (FR-PR6): the owner types the household name, every member is notified, and the same 30-day window applies.
+  - **Private roots** when a member leaves (FR-PR7).
+  - **Lapsed deletion**: households past item 18's retention window.
+  - **Diagnostic bundle** (FR-PS1):
+    - The client assembles it; preview and redaction happen on the client.
+    - It carries **sync metadata only**: cursor, queue depth, digest mismatches, and the last N outcome codes.
+    - It expires after 30 days.
+  - **Analytics consent** (FR-PR9): stored per member; children excluded.
+- **Inputs**
+  - PRD: [05 §3–5, §9](prd/05-privacy-and-compliance.md); [02 FR-ID8, FR-PS1](prd/02-identity-and-access.md); [10 §6](prd/10-sync-risk.md); D-6, D-35
+  - Design: A-20, A-33–A-35, C-56
+- **Done when**
+  - Each archive's structure validates against its manifest.
+  - A generic erasure test over the registry leaves zero tenant rows for the household.
+- **PR:** —
+
+### 21 · Platform staff, feature flags and reference-data admin · `planned`
+
+Phase 0 · after 10, 7 · size M
+
+- **Scope**
+  - **Staff identities**: `support` and `platform_admin`, with MFA required.
+  - **Staff API** (`/platform/*`): metadata-only endpoints, plus the support actions in [02 §8](prd/02-identity-and-access.md).
+  - **Platform audit log**: a separate schema, append-only, kept 7 years.
+  - **Double logging** into the household's own activity ([D-75](prd/09-decisions.md), FR-PS2).
+  - **Feature flags** per household and per platform, so a module can ship dark.
+  - **Reference-data admin**: preset and catalog versioning, and the moderation queue for catalog suggestions (FR-GA4). Delivered as the API plus a minimal admin page in the web app.
+  - **No-content-access test** ([05 §6](prd/05-privacy-and-compliance.md)): connects as every role and expects zero rows from an unrelated household.
+- **Inputs**
+  - PRD: [02 §8](prd/02-identity-and-access.md); [05 §6](prd/05-privacy-and-compliance.md); D-3, D-75
+  - API: tag `platform`
+  - home: `platform/statusreport`
+- **Done when**
+  - The role matrix is tested.
+  - The no-content-access test runs in CI.
+  - A staff action appears in the household's activity.
+- **PR:** —
+
+### 22 · Crop catalog I — schema, climate data and the first 100 crops · `planned`
+
+Content · after 7 · size L
+
+- **Scope**
+  - **Source format** in `reference-data/garden/`: crops, varieties and rules (crop pairs, family pairs, succession).
+  - **Names**: `en`, `cs`, `sk`, `de` and `pl`, plus Latin.
+  - **Timings**: offsets from the household's frost dates. **No absolute dates.**
+  - **Harvest and storage fields**, for the pantry hook.
+  - **Provenance** on every field.
+  - **Validator**: a JSON Schema plus a completeness check.
+  - **Climate dataset** for the five countries: frost dates, hardiness zone and season length by town or grid, with its licence recorded.
+  - **Content**: about 100 of the most common crops, drafted with sources. Companion claims are marked *agronomic* or *traditional*. Everything goes on the review ledger.
+- **Inputs**
+  - PRD: [11-garden](prd/modules/11-garden.md) (the catalog, FR-GA1–GA4, D-65, D-66); [08-roadmap](prd/08-roadmap.md) (longest lead); [future/meals-and-pantry.md](prd/future/meals-and-pantry.md)
+  - Design: `garden.js` (15 crops, 5 varieties, 7 compatibility claims)
+  - home: `modules/garden/seed` (82 rules, 64 Czech companion pairs)
+- **Done when**
+  - The validator is green.
+  - 100 crops exist in all five languages.
+  - Every drafted field is on the review ledger.
+- **PR:** —
+
+### 23 · Tokens, icons and the illustration kit · `planned`
+
+Phase 0 · after 1 · size L
+
+- **Scope**
+  - **`@household/tokens`**, ported mechanically from `foundations.js`:
+    - about 45 semantic tokens and 13 status tokens;
+    - the accent map (17 modules → 6 values);
+    - the type scale (title-1 line height 1.22);
+    - space, radii, motion and thresholds, density;
+    - both themes.
+  - **Token outputs** (resolved values or primitives, per Q13):
+    - CSS custom properties: `:root`, dark-theme deltas, and density/scale/motion attributes;
+    - a TS object;
+    - an RN theme, with rem converted to px.
+  - **Contrast in CI**: the `PAIRS` table and ratio function run as a test, with the `EXEMPT` list and its reasons.
+  - **Lint**: no primitive tokens and no raw colours in application code (stylelint and ESLint).
+  - **Fonts**: self-hosted per PL-13.
+  - **`@household/icons`**:
+    - 13 status and 19 module/navigation glyphs from `icons.js` as React and react-native-svg components;
+    - vendored Lucide for the 55 base glyphs;
+    - the `LABELS` accessibility keys;
+    - a greyscale-distinguishability test.
+  - **Illustration kit**: a renderer for web and RN with 18 parts, 11 compositions and 8 rules.
+- **Inputs**
+  - PRD: [06 §3](prd/06-clients.md)
+  - Design: [01-foundations](design/01-foundations.md); DD-1, DD-3, DD-5, DD-10; `foundations.js`, `icons.js`, `illustration.js`, `conformance.js` (late colour spends), `Foundations.dc.html`, `Icons and Illustration.dc.html`
+- **Done when**
+  - The contrast test is green in both themes.
+  - Icon snapshots pass.
+  - The illustration compositions render the same on web and RN.
+- **PR:** —
+
+### 24 · Web foundation — app, primitives, twelve-state harness, quality gates · `planned`
+
+Phase 0 · after 23, 6 · size L
+
+- **Scope**
+  - **App**: `apps/web` per PL-4, with `@household/api` wired for the cookie, CSRF and problem handling.
+  - **Localisation**: an i18n runtime with a pseudo-locale switch; all formatting through `Intl`.
+  - **Display modes**: light, dark and system themes; comfortable and compact density ([DD-3](design/08-decisions.md)); text scaling.
+  - **Primitives** from [02-components](design/02-components.md):
+    - buttons, inputs, dialogs and sheets, menus, toasts;
+    - list row; a data table with compact density; key–value block;
+    - money value in mono with tabular figures; metric tile; three chart shapes;
+    - sync mark;
+    - **hold-to-complete**: 2000 ms, with an immediate keyboard and screen-reader path and reduced motion;
+    - teaching empty state; skeletons; banners.
+  - **Twelve-state harness**: a dev-only route rendering nine data bodies × 12 states × 2 themes at 200 % text.
+  - **Tests and gates in CI**:
+    - Vitest and RTL;
+    - Playwright plus axe on every route in both themes;
+    - a pseudo-locale E2E pass;
+    - a bundle budget;
+    - a CSP-clean build.
+  - **Build-id reload prompt.**
+- **Inputs**
+  - PRD: [06 §3–4, §7–8](prd/06-clients.md)
+  - Design: [02-components](design/02-components.md), [03-patterns](design/03-patterns.md), [06-accessibility](design/06-accessibility-and-i18n.md); `components.js`, `Components and States.dc.html`, `ledger.js` (the twelve states)
+  - home: the frontend (Radix, TanStack persistence, the Playwright + axe setup)
+- **Done when** the harness is axe-clean in both themes and every gate runs in CI.
+- **PR:** —
+
+### 25 · Web shell, sync UI, auth and account · `planned`
+
+Phase 0 · after 24, 15, 9, 17, 20 · size XL
+
+- **Scope**
+  - **Shell**:
+    - The sidebar with per-member order and visibility (F-13, F-15, [D-38](prd/09-decisions.md)).
+    - The household switcher (A-36).
+    - A search-field slot.
+    - The app bar (F-14).
+    - Absence derived as in `nav.js`: no trace of an ungranted module.
+  - **Deep links**: all four situations, and the neutral *not available* screen (F-16, F-17).
+  - **Sync UI** over IndexedDB:
+    - the offline bar (A-37) and sync marks (F-8);
+    - the conflict inbox (F-5), conflict resolver (F-6) and rejected-mutation resolver (F-7);
+    - the withdrawn treatment (F-9);
+    - the not-enough-information state (F-10).
+  - **Auth** (A-1–A-13):
+    - the breached-password copy;
+    - *unverified but working*;
+    - MFA enrol, challenge and recovery;
+    - password reset;
+    - the takeover notice;
+    - Google and Apple on the web.
+  - **Account settings** (A-19): profile, language, MFA, sessions and devices, notification categories, quiet hours and first day.
+  - **Web Push**: permission asked in context.
+  - **Account deletion** (A-20).
+  - **Please update.**
+- **Inputs**
+  - PRD: [02](prd/02-identity-and-access.md); [06 §2, §5–6](prd/06-clients.md)
+  - Design: [04-navigation](design/04-navigation.md), [03-patterns](design/03-patterns.md); `nav.js`, `sync.js`, `auth.js`, `account-ui.js`, and the Shells, Sync and Auth artifacts
+- **Done when**
+  - E2E passes register → verify → sign in → MFA.
+  - The listed rows reach their required states.
+- **PR:** —
+
+### 26 · Web household — create, invite, members, grants, children, modules · `planned`
+
+Phase 0 · after 25, 10, 11 · size L
+
+- **Scope**
+  - **First run** ([DD-6](design/08-decisions.md)): register → create household from confirmed device defaults (A-22) → *"what brought you here?"* → that module's capture surface → invite afterwards. Modules register their capture surface as they land.
+  - **Invitations**:
+    - The composer (A-23) with the 17-row grant matrix in plain words.
+    - The acceptance screen (A-24) showing exactly what is being given.
+    - The inviter's notice of a decline (A-25).
+  - **§1 Profile** (C-49): household code, country change, timezone, locale and units.
+  - **§2 Members and grants** (C-50):
+    - role and grant changes, with the D-78 notice;
+    - remove and promote;
+    - the nudge when there is only one owner;
+    - child profiles: create, PIN reset, unlock, locked dashboard, graduate.
+  - **§3 Modules** (C-51): each toggle says what it will do.
+  - **Leaving** (A-26): both refusals shown at once.
+  - **Ownership transfer.**
+- **Inputs**
+  - PRD: [02 §3–6](prd/02-identity-and-access.md); [17 HA1, HA3–HA8, HA17](prd/modules/17-household-admin.md)
+  - Design: `household.js`, `onboarding-ui.js`, `admin-ui.js`, `Household and Billing.dc.html`
+- **Done when**
+  - Critical path 1 passes E2E: register → create household → invite → accept ([06 §8](prd/06-clients.md)).
+  - The grant matrix reads without a legend at phone width.
+- **PR:** —
+
+### 27 · Web billing, storage, data, privacy and sync health · `planned`
+
+Phase 0 · after 26, 18, 19, 20 · size L
+
+- **Scope**
+  - **Billing**:
+    - Subscribe (A-27, Payment Element).
+    - Manage billing (A-28 = C-55): invoices, the method summary, cancel and resume.
+    - Take over billing (A-29).
+  - **Entitlement banners** (A-30): the trial stages, `past_due`, `grace`, `read_only` with its deletion date, `canceled`, and `restricted` naming who and when.
+  - **Suspended lockout** (A-31): no export button ([DD-15](design/08-decisions.md)).
+  - **Read-only mode** app-wide: writes are absent, and a banner explains.
+  - **Storage** (C-54): trend, split by module and member, the largest items, what deleting recovers, and projected blocks and charge.
+  - **Data** (C-56):
+    - export request, progress and download (A-35);
+    - household deletion with the typed name;
+    - restrict and lift;
+    - transfer.
+  - **Privacy centre** (A-34): rights, analytics consent, and the supervisory authority by country (the ICO for the UK).
+  - **Diagnostic bundle** (A-33): rendered in full before it is sent, with redaction.
+  - **Sync health** (A-32): per device, the last sync, cursor, pending count, conflicts, digest state, and a forced resnapshot.
+  - **Clients and versions** (C-57).
+- **Inputs**
+  - PRD: [04](prd/04-billing-and-entitlements.md); [05 §3–4, §9](prd/05-privacy-and-compliance.md); [17 HA14–16, HA18–20](prd/modules/17-household-admin.md); [10 §6](prd/10-sync-risk.md)
+  - Design: `household.js`
+- **Done when** critical path 3 passes E2E: subscribe (Stripe test mode) → lapse (clock advanced) → read-only → export.
+- **PR:** —
+
+### 28 · Mobile foundation — Expo app, primitives, replica, shells · `planned`
+
+Phase 0 · after 23, 6, 15, 9, 17 · size XL
+
+- **Scope**
+  - **App**: `apps/mobile` per PL-5, with EAS profiles for dev, staging and production, targeting iOS 16+ and Android 10+.
+  - **Primitives**: RN versions of item 24's. Hold-to-complete exposes an accessibility action.
+  - **Display**: an i18n runtime, themes, and dynamic type to 200 %.
+  - **Data and session**:
+    - an expo-sqlite replica per household;
+    - the token pair in SecureStore;
+    - the version header.
+  - **Navigation**:
+    - The tab bar at five and at **four** destinations (F-11, F-12, [DD-11](design/08-decisions.md)), with Q6 settled here.
+    - A More list with per-member arrange.
+    - Two-pane tablet layouts.
+  - **Sync UI**: the offline bar, sync marks, the conflict inbox and both resolvers, and the withdrawn treatment.
+  - **Deep links**: cold start, a different household, and lost access (F-16, F-17).
+  - **Please update** (A-21) as a blocking screen.
+  - **Push**: permission asked in context, and the Expo token registered.
+  - **Tooling**: a dev-build twelve-state harness; Jest and RNTL; Maestro in CI on an Android emulator; a bundle budget.
+- **Inputs**
+  - PRD: [06](prd/06-clients.md)
+  - Design: [04-navigation](design/04-navigation.md); `nav.js`, `sync.js`, `components.js`, `Shells and Navigation.dc.html`
+- **Done when**
+  - Dev builds run on iOS and Android.
+  - The Maestro smoke test is green.
+  - The harness passes RN accessibility checks.
+- **PR:** —
+
+### 29 · Mobile auth, child sign-in, household and account · `planned`
+
+Phase 0 · after 28, 9, 10, 11, 17, 18, 20 · size L
+
+- **Scope**
+  - **Sign-in** (A-1–A-13): native Apple sign-in (mandatory) and Google sign-in.
+  - **Children**:
+    - child sign-in (A-14–A-16);
+    - the tablet profile switcher (A-17);
+    - lockout (A-18).
+  - **Account**:
+    - Account settings (A-19), with notification permission and categories designed as one screen (F-20).
+    - In-app account deletion (A-20), which both stores require.
+  - **Household**:
+    - Create a household, plus the first-run flow (A-22).
+    - The switcher (A-36).
+    - Invitation acceptance with the grant matrix on a phone (A-24); the composer (A-23).
+    - Leave (A-26).
+    - A read-only view of members and grants.
+  - **Entitlement**: banners and read-only mode, with **no purchase link** — store-rule wording only ([04 §7](prd/04-billing-and-entitlements.md)).
+  - **Data and privacy**: sync health (A-32), diagnostic bundle (A-33), privacy centre (A-34), export request (A-35).
+- **Inputs**
+  - PRD: as items 25–27, plus [04 §7](prd/04-billing-and-entitlements.md)
+  - Design: `auth.js`, `account-ui.js`, `household.js`
+- **Done when** Maestro passes each flow:
+  - sign in;
+  - child PIN sign-in, including lockout;
+  - accept an invitation.
+- **PR:** —
+
+### 30 · Proof module, staging, seed and end-to-end critical paths · `planned`
+
+Phase 0 · after 27, 29, 20 · size L · **Phase 0 exit**
+
+- **Scope**
+  - **The throwaway module `proof`**:
+    - Three entities covering **all five merge policies**, including a `state_set`, an `additive` with a cross-row invariant, a private entity with a redacted projection, and an audience.
+    - Full REST and sync paths, plus export and erase.
+    - Minimal list screens on both clients.
+  - **Staging** on DigitalOcean + Coolify:
+    - the server image;
+    - the web build on nginx with strict CSP and HSTS;
+    - Postgres 17 and S3-compatible storage;
+    - EU SMTP (Q14) and Stripe test mode;
+    - migrations run as `household_migrate`;
+    - secrets in Coolify environment variables;
+    - synthetic data only;
+    - EAS staging builds pointing at it.
+  - **Canonical seed** (`fixtures/seed/`), loaded by a Go command: the five personas and two households from `fixtures.js`, with drifts fixed (Q16).
+  - **Critical paths as Playwright + Maestro E2E** ([06 §8](prd/06-clients.md)):
+    - register → create household → invite → accept;
+    - offline capture → reconnect → converge, on `proof`;
+    - subscribe → lapse → read-only → export.
+  - **Observability baseline**: OpenTelemetry traces, Prometheus RED metrics, and scrubbed error aggregation, all EU-hosted (Q14).
+  - **Dogfood environment and checklist** ([10 §8](prd/10-sync-risk.md)): a separate environment for the team's real use, per PL-8, never staging (D-10). The month of `proof` dogfooding starts here.
+- **Inputs**
+  - PRD: [08-roadmap](prd/08-roadmap.md) Phase 0 (*Proof it works*); [10 §8](prd/10-sync-risk.md); [01 §9](prd/01-architecture.md); D-10
+  - Design: `fixtures.js`; `conformance.js` `WALKS`
+- **Done when**
+  - Phones reach staging.
+  - The three critical paths pass in CI and in a staging smoke run.
+  - Every line of the Phase 0 deliverable in 08-roadmap is ticked.
+- **PR:** —
+
+---
+
+## Phase 1 — Shopping, all the way
+
+The smallest module that exercises the hardest part of the platform: two people, one list, both offline.
+
+### 31 · Shopping — server · `planned`
+
+Phase 1 · after 30 · size L
+
+- **Scope**
+  - **Lists** (`strict_version`, one default).
+  - **Items** (`lww_field`): free text plus optional quantity, unit, category, assignee, price and note. `source_ref` is reserved.
+  - **Checked state**: `state_set` keyed by item, resolving by `latest_client_time`, recording who checked it.
+  - **Positions**: `lww_field` lexorank. The shared TS + Go implementation with vectors is ported from `home`, and Tasks reuses it.
+  - **Categories**: 14, seeded from a translated catalog with keywords in all five languages.
+  - **Store layouts** per list.
+  - **Staples**: explicit, ranked by the staple rule, and recurring via the scheduler.
+  - **Clearing and trips**:
+    - Clear checked items, with an undo window.
+    - Trips (`additive`), recorded on clear with a running total.
+    - The Finance offer made by reference only. It stays absent until item 63 lands, and it resolves through item 36's reference resolver.
+  - **Realtime**: within 1 second, showing who checked.
+  - **Quick-add parser**: in `@household/domain` with a Go twin and the `PARSE_TESTS` vectors. It splits on commas and newlines; *keep as one* is offered on undo.
+  - **Catalogs**: the `shopping.lists` widget (with its D-42 projection), 2 metrics, the `open_items` list, and a search scope.
+  - **Offline writes**: `item`, `checked` and `trip` are enabled offline, the D-84 exception.
+  - **Contract**: decide PATCH/DELETE for categories and staples (Q11).
+- **Inputs**
+  - PRD: [05-shopping](prd/modules/05-shopping.md); [10](prd/10-sync-risk.md) scenario 3; D-84
+  - API: `…/shopping/*` (16 operations)
+  - Design: `shopping.js` (parser table, categories, staple rule, two-trolley log)
+  - home: `platform/lexorank`
+- **Done when** scenario 3 and acceptance cases A, B and C pass in the simulator on real Shopping entities.
+- **PR:** —
+
+### 32 · Shopping — web · `planned`
+
+Phase 1 · after 31, 25 · size M
+
+- **Scope**
+  - **Screens**: B-1–B-8 for web:
+    - the lists overview and a list with an always-focused quick add;
+    - checked items collapsed to the bottom;
+    - store order;
+    - staples;
+    - item detail;
+    - the trip summary with the optional Finance offer;
+    - the teaching empty state.
+  - **Honest offline edit**: an edit affordance that is present online and says in words why it is unavailable offline.
+  - **Two-trolley behaviour**: realtime, and no conflict dialog.
+- **Inputs**
+  - Design: `shopping.js`, `Shopping.dc.html`
+- **Done when** all rows reach their required states; four rows declare *conflicted* unreachable, per the ledger.
+- **PR:** —
+
+### 33 · Shopping — mobile · `planned`
+
+Phase 1 · after 31, 29 · size L
+
+- **Scope**
+  - **Screens**: B-1–B-8 on the primary surface.
+  - **Hand and light**: usable one-handed in bad light; adding takes under 2 seconds; check-off is **one tap, never a hold**.
+  - **Offline**: fully offline for items and checks.
+  - **The teaching empty state** becomes the **template** for the 16 modules that follow, composed from the illustration kit.
+  - **Children**: a child with `contribute` is fully useful here.
+- **Inputs**
+  - PRD: [05-shopping](prd/modules/05-shopping.md) (mobile)
+  - Design: DS-1 in [07-delivery](design/07-delivery.md)
+- **Done when** Maestro passes the offline add → check → reconnect flow.
+- **PR:** —
+
+### 34 · Gate G-C — two phones in aeroplane mode · `planned`
+
+Phase 1 · after 32, 33 · size M · **gate G-C**
+
+- **Scope**
+  - **Run the acceptance test** on **two physical phones** in aeroplane mode, following a protocol in `docs/runbooks/gate-g-c.md`. The results are recorded with sync-health captures.
+  - **Automation**: a Maestro script for the reproducible part.
+  - **Fix what it finds**: small fixes go in this PR; large ones become a split into a reserve slot.
+  - **Verdict**: written in `docs/adr/0002-gate-g-c.md`.
+  - **Remove the `proof` module** (its tables, routes and screens) only once the dogfood log shows a month of use since item 30 ([10 §8](prd/10-sync-risk.md)). If the gate passes sooner, `proof` stays, and the first Phase 2 item to merge after the month is up removes it. Start the Phase 2 dogfood log.
+- **Inputs**
+  - PRD: [10 §7](prd/10-sync-risk.md); [05-shopping](prd/modules/05-shopping.md) (acceptance); [17 FR-HA19](prd/modules/17-household-admin.md)
+- **Done when**
+  - The gate passes, **or** it fails.
+  - On a fail, the ADR adopts a vendor per ADR 0001, and this plan is rewritten before any Phase 2 item starts.
+- **PR:** —
+
+---
+
+## Phase 2 — The daily core
+
+Everything from here to item 87 is parallelisable, because modules import no module. Each module's
+server item comes before its client items.
+
+### 35 · Reminders strand, recurrence and the Reminders server · `planned`
+
+Phase 2 · after 34 · size XL
+
+- **Scope**
+  - **Recurrence** in `@household/domain`, with a Go twin: the RRULE subset of FR-RE2, the short-month clamp, and caps. It carries the 7 vectors from `reminders.js`.
+  - **Strand** (platform migration block):
+    - **Kind registry**: 21 kinds, registered as their modules land; the total is asserted in item 96.
+    - **Subscriptions**: per kind, using the lead set `0d`…`3m` or custom, with a channel and defaults by kind.
+    - **Completion and snooze**: completions shared or personal by kind; personal snoozes ([D-43](prd/09-decisions.md)).
+    - **Upcoming aggregation**: across the resolvers, applying lead windows and snoozes, with a 60-day overdue window.
+    - **Materialisation**: an hourly job, delivering through item 17.
+  - **The module**:
+    - Own reminders, with series-only edits.
+    - Anniversaries, which pass rather than complete.
+    - Sync: `reminder` (`lww_field`), `completion` and `snooze` (`state_set`), `subscription` (`lww_row`).
+    - Catalogs: widgets `reminders.due` and `this_month`, 4 metrics, a search scope.
+- **Inputs**
+  - PRD: [03 §6](prd/03-platform-strands.md); [03-reminders](prd/modules/03-reminders.md); D-27, D-43
+  - API: `…/reminders/*` (12 operations across two tags)
+  - Design: `reminders.js` (the 21 kinds, lead classes, `expand` vectors, `agendaFor`)
+  - home: `modules/events`, `platform/recur`
+- **Done when**
+  - The vectors pass in both languages.
+  - Client-side expansion equals the server's upcoming list for the fixture.
+- **PR:** —
+
+### 36 · Catalog hosts — dashboard server, metrics, lists, global search · `planned`
+
+Phase 2 · after 34, 35 · size L
+
+- **Scope**
+  - **Dashboard server**:
+    - The catalog, filtered by enablement and grant (FR-DB1).
+    - A per-member layout (`lww_row`).
+    - Owner default layouts per audience, including per invitation, with adopt-notice data (FR-DB4).
+    - Child layouts, suggested or locked ([D-41](prd/09-decisions.md)).
+    - A bounded fan-out with a per-widget timeout, an `unavailable` state, and single-widget refresh (FR-DB3).
+    - Widget actions carry `meta.via=dashboard`.
+  - **The [D-42](prd/09-decisions.md) contract**: each widget declares a server resolver and a client projection, and a vector harness proves they agree.
+  - **Metric and list resolution**, per recipient.
+  - **Global search** (FR-SE1–3):
+    - one scope registry;
+    - per-language `tsvector` with `unaccent`;
+    - grants and privacy applied **before** ranking;
+    - one hit shape for every module.
+  - **Today helpers**: the read support for Today ([DD-7](design/08-decisions.md)), so Today can also be computed offline on the client.
+  - **Cross-module references** ([D-40](prd/09-decisions.md)): the platform reference resolver and reverse index, used by six modules.
+  - **Q5**: settle search while offline.
+- **Inputs**
+  - PRD: [01-dashboard](prd/modules/01-dashboard.md); [03 §7](prd/03-platform-strands.md); D-38, D-40, D-41, D-42
+  - API: `…/dashboard/*`, `…/search`
+  - Design: DD-2, DD-7; `dashboard.js` (24 keys, `reflow`, catalog filter), `spine.js` (`todayFor`, 19 scopes)
+  - home: `modules/dashboard`, `platform/{catalog,metrics,lists}`
+- **Done when** the design vectors hold:
+  - catalog sizes 24 / 3 / 9 / 2 / 4 across the personas;
+  - the unknown key `meals.planner` is dropped;
+  - 19 search scopes for Jana, 2 for Klára;
+  - *porek* finds *pórek*.
+- **PR:** —
+
+### 37 · Dashboard, Today and search — web · `planned`
+
+Phase 2 · after 36, 25 · size L
+
+- **Scope**
+  - **Dashboard** (C-1–C-10):
+    - the ordered list at 2/4/6 columns with deterministic reflow;
+    - catalog and arrange;
+    - the owner default editor and the adopt notice;
+    - child layouts, suggested or locked, with arrange affordances *absent*;
+    - the unavailable widget;
+    - the widget shell;
+    - widgets for Shopping and Reminders.
+  - **Search** (F-1, F-2).
+  - **Today** on the web (F-3), in five groups ([DD-7](design/08-decisions.md)).
+- **Inputs**
+  - Design: `dashboard.js`, `spine.js`, `Dashboard and Widgets.dc.html`, `Today and Cross-cutting Screens.dc.html`
+- **Done when** the design's `reflow` vectors hold at all three widths.
+- **PR:** —
+
+### 38 · Dashboard, Today, Add sheet and search — mobile · `planned`
+
+Phase 2 · after 36, 29 · size L
+
+- **Scope**
+  - **Screens**: C-1–C-10 on mobile, with `large` taking two rows on a phone.
+  - **The Today tab** (F-3), computed from the replica while offline.
+  - **The Add sheet** (F-4, [DD-8](design/08-decisions.md)): ranked on a slow-moving window, cold-starting from enablement and grants, and never reordering while open.
+  - **Search** (F-1), following Q5.
+  - **Widget projections** that work offline.
+- **Inputs**
+  - Design: `dashboard.js`, `spine.js`
+- **Done when**
+  - `todayFor` block counts match (Jana 5, Adam 4, Petr 2, Klára 0).
+  - Today renders offline.
+- **PR:** —
+
+### 39 · Reminders — web and mobile · `planned`
+
+Phase 2 · after 35, 37, 38 · size M
+
+- **Scope**
+  - **Screens**: C-11–C-14 on both clients:
+    - the unified list with source badges and deep links;
+    - the own-reminder editor with recurrence;
+    - subscriptions for 21 kinds with lead times;
+    - personal snooze.
+  - **Completion** by hold-to-complete, with its keyboard path.
+  - **Anniversaries.**
+  - **Offline**: the list expands on the client, so it is complete rather than a cached window.
+- **Inputs**
+  - PRD: [03-reminders](prd/modules/03-reminders.md)
+  - Design: `reminders.js`, `Reminders and Tasks.dc.html`
+- **Done when** the `agendaFor` row counts match (Jana 15, Petr 1, Adam 3, Klára 0 — the empty state, Miloš 3).
+- **PR:** —
+
+### 40 · Tasks — server · `planned`
+
+Phase 2 · after 34, 35, 36 · size L
+
+- **Scope**
+  - **Structure**:
+    - Boards (`strict_version`, with archive and restore).
+    - Columns: kind `normal`, `now` or `done` (`strict_version`).
+  - **Cards** (`lww_field`):
+    - Markdown body and priority.
+    - Assignment: `422` if the assignee holds `none`; the assignee gets a direct notification.
+    - `due_on`, which feeds the personal `tasks.card_due` kind.
+  - **Moving cards**:
+    - Within and across boards, with the composite foreign key and the `done_at` invariant.
+    - Lexorank positions from item 31. On an exact collision the column is rebalanced and the new ranks are emitted.
+  - **Card parts**:
+    - Checklists.
+    - Labels: idempotent attach and detach.
+    - Links: document references, resolved through item 36's reference resolver.
+    - Comments (`additive`), with mentions that notify.
+  - **Reads**: the board tree with no N+1, under a query budget; card search.
+  - **Templates**: four starters as translated reference data.
+  - **Catalogs**: 2 widgets, 5 metrics plus lists, a search scope.
+  - **Offline**: `lww_field` offline writes enabled entity by entity as the suite goes green.
+- **Inputs**
+  - PRD: [02-tasks](prd/modules/02-tasks.md)
+  - API: `…/tasks/*` (31 operations)
+  - Design: `tasks.js` (templates, the lexorank vectors for six offline reorders)
+  - home: `modules/todo`
+- **Done when**
+  - Interleaved offline reorders converge in both receive orders.
+  - The query budget holds.
+- **PR:** —
+
+### 41 · Tasks — web · `planned`
+
+Phase 2 · after 40, 37 · size L
+
+- **Scope**
+  - **Screens**: C-15–C-22 for web:
+    - a board with keyboard-accessible drag and drop (dnd-kit);
+    - card detail;
+    - the template picker;
+    - labels, checklist, and comments with mentions;
+    - cross-board move;
+    - the column editor, without jargon.
+  - **The `tasks.doing` widget**, with hold-to-complete.
+- **Inputs**
+  - Design: `tasks.js`, `work-ui.js`, `gaps-ui.js` (archive a board, FR-TA1)
+- **PR:** —
+
+### 42 · Tasks — mobile · `planned`
+
+Phase 2 · after 40, 38 · size L
+
+- **Scope**
+  - **Screens**: C-15–C-22 on mobile.
+  - **Reordering**: works offline, with no conflict dialog.
+  - **Tablet**: a two-pane board with its card.
+- **PR:** —
+
+### 43 · Tree library and Notes — server · `planned`
+
+Phase 2 · after 34 · size L
+
+- **Scope**
+  - **Platform tree library** (`internal/platform/tree`), shared by Notes and Documents with no module importing the other:
+    - folders and two roots, shared and private per member;
+    - the root-scoped sibling-uniqueness index;
+    - slug paths and a resolver with no redirects;
+    - the tree read model;
+    - move, with `422` for moving into itself and `409` for cascades;
+    - pins at two scopes.
+  - **Notes**:
+    - CRUD, with hard delete needing `manage`.
+    - Private roots answer `404`; a child's is readable by an owner (Q7).
+    - Full-text search per note language, with `unaccent`.
+    - Pins (`state_set`).
+    - Inline images under `notes/`, metered. An image referenced only by a preserved loser is kept for 30 days.
+  - **Sync**:
+    - Folders are `strict_version`; metadata is `lww_field`.
+    - The body is `lww_row` with the loser preserved, and a 30-day sweep.
+    - Moving a note from shared to private emits retractions.
+  - **Catalogs**: the widget and metrics. **Export** as `notes/*.md`.
+- **Inputs**
+  - PRD: [07-notes](prd/modules/07-notes.md); D-19
+  - API: `…/notes/*` (15 operations)
+  - Design: `notes.js` (the sibling index, the 404 resolver, the preserved loser)
+  - home: `modules/notes`, `platform/{slug,slugpath}`
+- **Done when**
+  - Both 404 bodies are character-identical.
+  - The loser survives, and is pruned after 30 days.
+- **PR:** —
+
+### 44 · Notes — web · `planned`
+
+Phase 2 · after 43, 37 · size L
+
+- **Scope**
+  - **Screens**: C-23–C-27 for web:
+    - the tree browser with the root switcher;
+    - a WYSIWYG editor with a raw-Markdown toggle (Milkdown);
+    - pasting and uploading images;
+    - the conflict banner showing the preserved body;
+    - pins at two scopes;
+    - language-aware search.
+  - **A moved slug path** returns 404 (F-18).
+  - **Safety**: rendering is sanitised, and CSP-clean.
+- **Inputs**
+  - Design: `notes.js`, `Notes and Documents.dc.html`
+  - home: the Notes frontend
+- **PR:** —
+
+### 45 · Notes — mobile · `planned`
+
+Phase 2 · after 43, 38 · size M
+
+- **Scope**
+  - **Screens**: C-23–C-27 on mobile.
+  - **A moved slug path** returns 404 (F-18).
+  - **Editor**: choose an RN Markdown editor, recording the choice in the PR.
+  - **Offline**: editing works offline, and the loser banner appears after reconnecting.
+- **PR:** —
+
+### 46 · Documents — server · `planned`
+
+Phase 2 · after 43, 16, 35, 36 · size XL
+
+- **Scope**
+  - **Structure**: folders, roots and pins through the tree library.
+  - **Upload** through item 16's pipeline, with the full FR-DO1 refusal matrix and a successor link.
+  - **Content**: `…/content?variant=original|download|preview|thumbnail`:
+    - an immutable ETag and Range support;
+    - `409` while a preview is pending;
+    - active types download-only.
+  - **Derived variants**: office conversion, metered separately.
+  - **Document types**: 11 types as reference data, with a lead time and scope per type, per country ([D-53](prd/09-decisions.md)). `expires_on` feeds the `documents.expiry` kind.
+  - **References** ([D-40](prd/09-decisions.md)):
+    - documents registered as a reference target with item 36's resolver;
+    - deleting a referenced document warns and names the referrer (FR-DO12).
+  - **Bulk operations**: move, archive, zip and delete. A zip names the pending files it leaves out.
+  - **Storage visibility** (FR-DO10).
+  - **Catalogs**: 2 widgets, 4 metrics, lists and a search scope.
+  - **Export** under `files/`.
+- **Inputs**
+  - PRD: [08-documents](prd/modules/08-documents.md); [03 §8](prd/03-platform-strands.md); D-40, D-53
+  - API: `…/documents/*` (17 operations)
+  - Design: `documents.js` (11 types, the serving matrix, the storage meter)
+  - home: `modules/documents`
+- **Done when**
+  - The serving matrix is tested.
+  - The design's storage-overhead vector holds (6,10 + 0,64 GB).
+- **PR:** —
+
+### 47 · Documents — web · `planned`
+
+Phase 2 · after 46, 37 · size L
+
+- **Scope**
+  - **Screens**: C-28–C-35 for web:
+    - the tree;
+    - upload;
+    - detail with preview, raw and download, plus the download-only variant;
+    - type and expiry;
+    - bulk operations;
+    - the storage screen;
+    - the reference warning.
+- **PR:** —
+
+### 48 · Documents — mobile · `planned`
+
+Phase 2 · after 46, 38 · size L
+
+- **Scope**
+  - **Screens**: C-28–C-35 on mobile.
+  - **Capture**: the single-file picker and the camera, both OS-mediated.
+  - **Offline upload**: pending, then either ready or failed with a reason the member can act on.
+  - **Caching**: bytes in a member-controlled LRU cache; thumbnails in the replica.
+- **PR:** —
+
+### 49 · Chores — server · `planned`
+
+Phase 2 · after 35 · size XL
+
+- **Scope**
+  - **Definitions** (`strict_version`), with four schedules:
+    - `fixed_interval`, anchored on the last completion ([D-49](prd/09-decisions.md));
+    - `calendar`;
+    - `monthly_nth`;
+    - `on_demand`.
+  - **Assignment modes**: unassigned, fixed, rotating, `weekly_rotation`.
+  - **Occurrences**: materialised only when due or acted on.
+  - **Completion**: a keyed `state_set`. **Rotation advances on the server** ([D-52](prd/09-decisions.md), scenario 13).
+  - **Changes to an occurrence**: skip (the rule depends on the mode), snooze, swaps.
+  - **Verification**: optional, off by default ([D-50](prd/09-decisions.md)), with a queue.
+  - **Points**:
+    - an `additive` ledger;
+    - bonuses and penalties;
+    - rewards and redemptions (Q11 decides PATCH/DELETE for rewards).
+  - **Progress**: streaks and household progress, with **no leaderboards** ([D-51](prd/09-decisions.md)).
+  - **Stale chores**: flagged after 14 days, with an owner prune.
+  - **Setup**: starter sets and the reset day.
+  - **Catalogs**: the `chores.due` kind (Q8), 2 widgets, 5 metrics, a search scope.
+- **Inputs**
+  - PRD: [06-chores](prd/modules/06-chores.md); D-49–D-52
+  - API: `…/chores/*` (19 operations)
+  - Design: `chores.js` (D-49: 1 row versus 14; the D-52 vectors; skip rules; weekly-grid arithmetic)
+- **Done when**
+  - Two offline completions advance the rotation once.
+  - The design vectors pass.
+- **PR:** —
+
+### 50 · Chores — web · `planned`
+
+Phase 2 · after 49, 37 · size L
+
+- **Scope**
+  - **Screens**: C-36–C-44 for web:
+    - the weekly grid, compact by default, pivoting below 700 px;
+    - all chores and the editor;
+    - points and rewards;
+    - the verification queue;
+    - swaps;
+    - the stale-chore prune.
+- **Inputs**
+  - Design: `chores.js`, `Chores, Activity and Notifications.dc.html`
+- **PR:** —
+
+### 51 · Chores — mobile · `planned`
+
+Phase 2 · after 49, 38 · size L
+
+- **Scope**
+  - **Screens**: C-36–C-44 on mobile, with Today showing the member's own chores first.
+  - **Completion** by hold-to-complete.
+  - **The child experience**, including the locked dashboard.
+  - **Points and rewards.**
+  - **Tablet**: the weekly grid without its pivot.
+- **PR:** —
+
+### 52 · Activity log — server, web and mobile · `planned`
+
+Phase 2 · after 34, 37, 38 · size M
+
+- **Scope**
+  - **A reader over the audit spine**:
+    - Filtered feed with keyset pagination.
+    - Summaries rendered in the reader's language.
+    - The cross-module entity timeline, which also requires access to the entity.
+    - Field diffs.
+    - Statistics.
+    - Append-only.
+  - **The two redaction rules**: private events are redacted on read, and excluded from `q=` matching entirely.
+  - **Filtering and provenance**: by grant; platform actions shown ([D-75](prd/09-decisions.md)); `meta.via`.
+  - **Not synced** ([D-76](prd/09-decisions.md)): the last page is cached, with a needs-connection state.
+  - **Screens**: C-45–C-48 on both clients, compact on web.
+  - **Catalogs and export**: the widget, metrics and search; `activity-log.csv`.
+- **Inputs**
+  - PRD: [16-activity](prd/modules/16-activity.md); D-21, D-75, D-76
+  - Design: `activity.js`, `activity-ui.js`
+  - home: `modules/logging`
+- **PR:** —
+
+### 53 · Notification composer, setup re-entry and in-app help · `planned`
+
+Phase 2 · after 36, 17 · size L
+
+- **Scope**
+  - **Trigger rules** (FR-NT3, server):
+    - match an audit action key or prefix;
+    - filter by module, entity and level;
+    - an audience that respects grants;
+    - per-language templates;
+    - coalescing.
+  - **Scheduled digests** (FR-NT4, server): time, days, and day of month with the short-month clamp; metric tokens resolved per recipient.
+  - **Test send and delivery log** (FR-HA11–13): the rendered body is dropped after 7 days. Rules and schedules sync as `strict_version`.
+  - **Broadcast** (`POST …/notifications/broadcast`): implemented with a PRD entry, or removed from the contract with a decision entry (Q11).
+  - **Composer screens** on both clients:
+    - C-52, the composer, which must not read like business software;
+    - C-53, the delivery log and test send.
+  - **Setup re-entry** (C-58, HA9): the per-module framework.
+  - **In-app help** ([DD-13](design/08-decisions.md)):
+    - the content model and its three surfaces (F-19);
+    - entries for every module built so far.
+    - **From here on, every module PR writes its own help.**
+- **Inputs**
+  - PRD: [03 §4](prd/03-platform-strands.md); [17 HA9–HA13](prd/modules/17-household-admin.md)
+  - Design: DD-13; `notify.js`, `spine.js` (`HELP_FIELDS`)
+  - home: `modules/admin` (rules, schedules)
+- **PR:** —
+
+### 54 · Crop catalog II — the remaining crops · `planned`
+
+Content · after 22 · size L
+
+- **Scope**
+  - **Crops**: about 200 more, reaching about 300, with varieties and rules in five languages plus Latin, each with sources.
+  - **Climate data**: coverage completed for the five countries.
+  - **Review**: the review ledger and a coverage report.
+- **Done when**
+  - The validator is green.
+  - The coverage report is committed.
+- **PR:** —
+
+---
+
+## Phase 3 — The differentiators
+
+Each module's engines land first in `@household/domain` with vectors (D-37). The server's Go twin is held
+to the same vector file.
+
+### 55 · Utilities engine in `@household/domain` · `planned`
+
+Phase 3 · after 6 · size L
+
+- **Scope**
+  - **Tariff engine**:
+    - All 11 component types, with `applies_to` and ordering.
+    - VAT normalised whether prices include it or not.
+    - **Rounding**: once per consumption component; time components pro-rata by day, summed per month × version chunk; taxes and discounts once each, in order; displayed breakdowns by largest remainder.
+    - Versioned conversions (gas m³ → kWh; GJ → kWh) and registers as data.
+  - **Intervals**:
+    - Blocking: a tariff or conversion change inside an interval blocks pricing.
+    - Meter swaps and rollovers.
+    - Estimated readings kept out of money.
+    - Months counted by the first-day rule.
+  - **Projections**:
+    - A forecast with each future day priced by its own tariff.
+    - The balance and a recommended advance.
+    - Headroom with no readings at all.
+    - Monthly history, flagging approximate figures.
+- **Inputs**
+  - PRD: [10-utilities](prd/modules/10-utilities.md) (UT5–UT15, UT18); D-60–D-64
+  - Design: `utilities.js` `checks()`
+  - home: `modules/electricity` (D134–D161)
+- **Done when** `test-vectors/utilities.json` passes in TS, including:
+  - 211,67 / 183,45 (the two VAT orderings);
+  - 162,00 for a whole month inside one version;
+  - the block at 2026-01-01;
+  - the rollover 99 926,5 → 320,8;
+  - the 44 kWh conversion error;
+  - headroom 2 100;
+  - balance −476,30;
+  - the months rule;
+  - the 175,78 settlement difference.
+- **PR:** —
+
+### 56 · Utilities — server I: engine twin, presets, structure · `planned`
+
+Phase 3 · after 55, 34 · size XL
+
+- **Scope**
+  - **Go engine**, passing the same vectors.
+  - **Presets**: **13 tariff presets for five countries**, drafted with sources and versioned (D-61).
+  - **Services** in three modes ([D-60](prd/09-decisions.md)).
+  - **Meters and registers**: meters with unit, digits, decimals, multiplier and direction; registers; conversions.
+  - **Tariffs**: tariff versions carry a VAT flag, and `effective_from` is unique; components are ordered.
+  - **Money over time**:
+    - Advance schedules and payments.
+    - Billing periods (overlap returns `422`) and bills with per-register finals.
+    - Upgrading from bills-only keeps the bills (UT17).
+  - **Sync and history**: `strict_version` throughout. Tariffs are audited with field diffs.
+  - **Q10**: decide the sync policies for conversions and advance schedules.
+- **Inputs**
+  - PRD: [10-utilities](prd/modules/10-utilities.md)
+  - API: `…/utilities/*` (40 operations, shared with item 57)
+- **PR:** —
+
+### 57 · Utilities — server II: readings and computed views · `planned`
+
+Phase 3 · after 56, 35 · size L
+
+- **Scope**
+  - **Readings** (`additive`):
+    - Values cover the meter's registers exactly.
+    - Two-sided monotonicity: `422` over REST and `monotonicity_violation` over sync, naming the neighbour (scenario 17).
+    - The invariant is declared, so the client can pre-check it.
+    - Rollover is offered, not refused.
+    - Meter replacement (UT2).
+    - A photo is attached by reference.
+    - Corrections happen online under `If-Match`.
+  - **Reading anchors and cadence** (Q12).
+  - **Computed views**: overview, forecast, history, reconciliation and headroom. The blocked state has cost and balance **absent**, not zero. All computed within budget, never cached (FR-NF2).
+  - **Reminder kinds**: `reading_due`, `advance_due` and `contract_notice` ([D-58](prd/09-decisions.md)).
+  - **Catalogs**: 2 widgets, 4 metrics, 3 lists, search.
+  - **Export**: `utilities-readings.csv`.
+- **Done when** the cellar case passes on real entities: the local check accepts the reading, and the server rejects it against 2026-09-06.
+- **PR:** —
+
+### 58 · Utilities — web I: setup, services, readings, tariff composer · `planned`
+
+Phase 3 · after 57, 37 · size L
+
+- **Scope**
+  - **Setup** (D-1–D-4), driven by presets.
+  - **Services**: the overview and detail in all three modes (D-5–D-8).
+  - **Readings**: entry (D-9) and the list (D-10).
+  - **Tariff composer** (D-12): **eight controls, no free-text or expression fields**, rendered as a human-readable breakdown.
+  - **Meter replacement** (D-18).
+  - **Mode upgrade** (D-19): nothing is lost.
+- **Inputs**
+  - Design: `utilities.js`, `utilities-ui.js`, `Utilities.dc.html`
+- **PR:** —
+
+### 59 · Utilities — web II: consumption and money views · `planned`
+
+Phase 3 · after 58 · size M
+
+- **Scope**
+  - **Consumption**: the chart (D-11).
+  - **Money over time**:
+    - Advances (D-13).
+    - Billing period and settlement (D-14).
+    - Bills-only invoices and spend history (D-17).
+  - **States with a reason**: the blocked state (D-15) and headroom (D-16).
+  - **Compact breakdown** by default ([DD-3](design/08-decisions.md)).
+  - **Charts** follow the dataviz rules.
+- **PR:** —
+
+### 60 · Utilities — mobile · `planned`
+
+Phase 3 · after 57, 38 · size L
+
+- **Scope**
+  - **Screens**: D-1–D-19 on mobile, led by the **cellar screen** (D-9):
+    - offline capture;
+    - a pre-check against the neighbours the phone holds;
+    - the rollover and *lower than last time?* questions asked at the meter;
+    - a photo stays pending until it uploads;
+    - a rejection surfaced once, with the typed value kept.
+  - **Offline overview and forecast**, computed by the local engine.
+- **PR:** —
+
+### 61 · Finance engines in `@household/domain` · `planned`
+
+Phase 3 · after 6 · size L
+
+- **Scope**
+  - **Allocation engine**:
+    - Bases: `own_income`, `total_income`, `source_balance` and `fixed`.
+    - Modes: percent, amount and remainder, optionally `per_earner`.
+    - **Exactly one remainder per source**, with an error that names the source.
+    - The three FI7 invariants.
+    - A negative remainder is displayed as 0 with a footnote and stored as it is.
+  - **Splits**: five split methods, with adjustments taken out first and the last minor unit assigned by household order.
+  - **Balances and settle-up**:
+    - pairwise and net balances;
+    - simplified and pairwise settle-up suggestions.
+  - **Also**:
+    - budget projection with rollover;
+    - FX from the stored rate ([D-55](prd/09-decisions.md));
+    - dedup normalisation.
+- **Inputs**
+  - PRD: [09-finance](prd/modules/09-finance.md) (FI3–FI9, FI11–FI14, FI17, FI19); D-54–D-57
+  - Design: `finance.js` `checks()`
+  - home: `modules/finance`
+- **Done when** `test-vectors/finance.json` passes, including:
+  - `homeRun`;
+  - 68 400,00 = 61 900,00 + 6 500,00 and 8 386,67;
+  - the 116 620,00 counter-example;
+  - −12 026,67;
+  - €10 three ways;
+  - all five split methods;
+  - Petr → Jana 1 240 and Miloš → Jana 310.
+- **PR:** —
+
+### 62 · Finance — server I: structure, allocation, FX, currency · `planned`
+
+Phase 3 · after 61, 34 · size XL
+
+- **Scope**
+  - **Go engines**, passing the same vectors.
+  - **Schema constraints**:
+    - a partial unique index for the one remainder;
+    - personal accounts must have an owner;
+    - ISO 4217 checks.
+  - **Accounts and income**: six account types; income entries with a period choice.
+  - **Allocation**:
+    - Plans and rules, versioned by `effective_from` (`strict_version`).
+    - Allocation **derived on read**.
+    - Flow-view data, and *post a movement* ("record that you moved it").
+    - Missing-period detection.
+  - **Categories**:
+    - A two-level category tree with country defaults.
+    - Rules applied to history (FI20).
+  - **FX**: a daily ECB job, with the rate stored on each row.
+  - **Base-currency change** ([D-77](prd/09-decisions.md), HA2): previewed, recomputed from stored rates, audited.
+  - **Grant defaults**: `none` by default; a child capped at `view` ([D-59](prd/09-decisions.md)).
+  - **Q10** for rules and price history.
+- **Inputs**
+  - PRD: [09-finance](prd/modules/09-finance.md); [17 HA2](prd/modules/17-household-admin.md)
+  - API: `…/finance/*` (50 operations, shared with items 63–64)
+- **PR:** —
+
+### 63 · Finance — server II: ledger, sharing, budgets, recurring · `planned`
+
+Phase 3 · after 62, 35, 36 · size XL
+
+- **Scope**
+  - **Ledger**:
+    - One transaction ledger with a `source` discriminator ([D-81](prd/09-decisions.md)).
+    - Hard delete, with the full row in the audit event.
+  - **Shared expenses**:
+    - Multiple payers and participants.
+    - Shares that sum to the transaction and name only Finance-granted members (Q4).
+    - Settlements (`additive`, writable offline).
+    - Balances and settle-up.
+    - Unsplit joint expenses (FI15).
+  - **Budgets**, with rollover.
+  - **Recurring**:
+    - Materialised as pending, **never auto-posted**.
+    - Price history.
+    - Cancellation-window reminders ([D-58](prd/09-decisions.md)).
+  - **Inbound one-tap hand-offs** from Shopping, Property, Vehicles, Pets and Utilities.
+  - **Catalogs**: 3 widgets, 6 metrics, lists, search.
+  - **Export**: the CSVs.
+- **PR:** —
+
+### 64 · Finance — import: server and wizard · `planned`
+
+Phase 3 · after 63, 37 · size L
+
+- **Scope**
+  - **CSV import**: detects the delimiter and encoding; maps date, decimal and sign; saves named mappings.
+  - **camt.053 XML.**
+  - **Batches and dedup**: batches; a hash plus the bank reference; suspected duplicates **shown for confirmation**, never silently dropped.
+  - **Rules** applied on import.
+  - **Wizard screens**: D-35 and D-36 on web. Mobile gets the same flow with the file picker, or honest absence — decide in the PR.
+  - **Q10** for import tables.
+- **PR:** —
+
+### 65 · Finance — web I: setup, flow view, plan, accounts · `planned`
+
+Phase 3 · after 63, 37 · size L
+
+- **Scope**
+  - **Setup step 1** (D-20): the **four illustrated answers**, from illustration-kit compositions.
+  - **Setup steps 2–5** (D-21).
+  - **Periods**: the period overview (D-22) and the missing-period prompt (D-23).
+  - **Flow view** (D-24): stage-major on narrow screens, node-major on wide ones. **It never implies the app moved money.**
+  - **Post a movement** (D-25).
+  - **Allocation plan editor** (D-26), with a live worked example. The domain preview must equal the server's result.
+  - **Accounts** (D-27).
+- **Inputs**
+  - Design: `finance.js`, `finance-ui.js`, `gaps-ui.js` (category tree, rules, income period), `Finance.dc.html`
+- **PR:** —
+
+### 66 · Finance — web II: ledger, expenses, balances, budgets, conflicts · `planned`
+
+Phase 3 · after 65 · size L
+
+- **Scope**
+  - **Ledger** (D-28), compact.
+  - **Expense editor** (D-29), with all five split methods.
+  - **Balances and settle-up** (D-30), showing both suggestion lists.
+  - **Money over time**: budgets (D-31), recurring and subscriptions (D-32), price history (D-33), the cancellation-window reminder (D-34).
+  - **Finance conflict resolver** (D-37): *"you set 450, Petr set 500 at 18:40."*
+- **PR:** —
+
+### 67 · Finance — mobile · `planned`
+
+Phase 3 · after 63, 38, 66 · size L
+
+- **Scope**
+  - **Screens**: D-20–D-37 on mobile:
+    - expense capture;
+    - the ledger;
+    - balances;
+    - offline settlement;
+    - confirming a pending recurring bill;
+    - the flow view, stage-major at 360 px;
+    - the plan editor;
+    - the conflict resolver.
+  - **Offline writes**: **`strict_version` enabled for Finance entities, and for every module whose server item merged before this one** (D-84, Phase 3), now that the conflict UI exists on both clients.
+- **PR:** —
+
+### 68 · Garden — reference bundle and resolution · `planned`
+
+Phase 3 · after 22, 34 · size L
+
+- **Scope**
+  - **Loading**: the catalog and climate profiles load into versioned global tables.
+  - **Bundle**: a per-region bundle and its endpoint, added to `openapi.yaml` (Q11). Clients cache it; it is not synced.
+  - **Resolution function**: variety → household override → catalog. One function serves four consumers.
+  - **Climate resolution**:
+    - a town or map pin, rounded to 2 decimals;
+    - frost dates, hardiness zone and season length;
+    - manual edits protected by `is_manual`.
+  - **Occupancy windows.**
+  - **Versioned upgrades** keep overrides.
+- **Inputs**
+  - PRD: [11-garden](prd/modules/11-garden.md) (GA1–GA3); D-66
+  - Design: `garden.js` (Black Krim resolving through three layers; Kuřim vs Córdoba, 84 days apart)
+  - home: `modules/garden` (`resolve.go`, `timing.go`, `occupancy.go`)
+- **Done when** the resolution vectors pass in TS and Go.
+- **PR:** —
+
+### 69 · Garden — server I: places, plantings, harvests · `planned`
+
+Phase 3 · after 68, 35 · size L
+
+- **Scope**
+  - **Settings and tier**: the tier is a read filter, so moving between tiers reveals or hides and never migrates ([D-65](prd/09-decisions.md)).
+  - **Places**:
+    - containers;
+    - beds, with zones and lexorank adjacency.
+  - **Plantings**: area **or** count, never both; occupancy; the harvest-season rule.
+  - **Varieties and overrides.**
+  - **Photo journal** (GA9).
+  - **Care cadences** produce the `care_due` reminder kind (GA7), not tasks.
+  - **Harvests** (`additive`) against expected yield.
+  - **Storage items**, edited in place.
+  - **Q10** for Garden's unstated policies and the `task_completion` key.
+- **Inputs**
+  - API: `…/garden/*` (58 operations, shared with items 70–71)
+  - Design: `garden-ui.js`
+- **Done when** the tier walk keeps the same row counts (14 / 4 / 41 / 88 / 14 / 8 / 4).
+- **PR:** —
+
+### 70 · Garden — server II: tasks, seasons, rules, the plan check · `planned`
+
+Phase 3 · after 69 · size XL
+
+- **Scope**
+  - **Task generation**:
+    - A generation key, tombstones, and a permanent exemption for edited tasks.
+    - Drift display, and a one-action shift.
+    - The `task_due` reminder kind.
+  - **Seasons**:
+    - Copy with a rotation offset, including a `dry_run` that writes zero rows.
+    - Close.
+    - Reopen, which needs `manage` and is audited.
+  - **Rules**:
+    - crop pairs, family pairs and succession;
+    - a crop pair beats a family pair;
+    - the built-in seed comes from items 22 and 54.
+  - **Plan check C1–C11**:
+    - pure Go over a snapshot;
+    - configurable severities and per-check disabling;
+    - per-season dismissal with a note, reversible;
+    - `no_history` for C3 and C8;
+    - the reduced set at the beds tier;
+    - **never blocks a save**;
+    - 800 ms at p95.
+- **Done when** the design vectors hold:
+  - 18 findings on 37 entities;
+  - closing 2026 moves rotation findings from 2 to 7 and feeder findings from 0 to 5;
+  - the dry run writes 0 rows.
+- **PR:** —
+
+### 71 · Garden — server III: weather, frost, catalogs, exports · `planned`
+
+Phase 3 · after 70, 21 · size M
+
+- **Scope**
+  - **Weather**:
+    - Fetched twice daily from an **EU-established provider** (Q14), sending rounded coordinates only.
+    - About 90 days cached.
+    - On failure, it renders from cache (FR-NF3).
+  - **Frost warnings**:
+    - thresholds: tender plants at ≤ 2 °C, half-hardy at ≤ −2 °C;
+    - exemptions for plantings under glass or with the haulm cut;
+    - the metrics `frost_risk_tonight` and `plan_warnings`.
+  - **Catalogs**: the `garden.work` widget with hold-to-complete, `harvest_ready`, 6 metrics, search.
+  - **Catalog suggestions**: queued for moderation in item 21's admin (GA4).
+  - **Export**: CSV of plantings and harvests (GA23).
+- **Done when** at −2 °C the warning names 6 plantings in beds 3, 7 and 11, and at 6 °C it publishes nothing.
+- **PR:** —
+
+### 72 · Garden — web I: setup, pots, beds, catalog, planting editor · `planned`
+
+Phase 3 · after 69, 37 · size L
+
+- **Scope**
+  - **Setup**: the four questions (D-38).
+  - **Tier homes**: pots (D-39) and beds (D-40).
+  - **Catalog**: the browser (D-42) and household overrides (D-43).
+  - **Planting editor** (D-44), echoing the resolved dates of its timing window.
+  - **Tasks**: the generated list with tombstones (D-45) and drift detail (D-46).
+  - **Storage log** (D-50).
+  - **Frost warning** (D-51).
+- **Inputs**
+  - Design: `garden.js`, `garden-ui.js`, `Garden.dc.html`
+- **PR:** —
+
+### 73 · Garden — web II: plot tier, plan check, print · `planned`
+
+Phase 3 · after 70, 72 · size L
+
+- **Scope**
+  - **Plot tier**: the plot home and the season planner (D-41), compact.
+  - **Plan-check panel** (D-47).
+  - **Seasons**: the copy dry run (D-48) and close (D-49).
+  - **Print** ([DD-14](design/08-decisions.md)):
+    - the **print stylesheet** (D-54): greys only, statuses as words, no theme;
+    - the **"this month's work"** layout (D-52);
+    - the **season plan** layout (D-53).
+    - Both fit A4 and US Letter.
+- **Done when** "this month's work" fits one A4 page (201,5 mm of 269 mm).
+- **PR:** —
+
+### 74 · Garden — mobile · `planned`
+
+Phase 3 · after 71, 38 · size L
+
+- **Scope**
+  - **Screens**: D-38–D-51 on mobile, with **tablet layouts** for Miloš.
+  - **Offline at the end of the garden**:
+    - the catalog answers from the cached bundle;
+    - the work list completes by hold;
+    - harvests are logged.
+  - **Photo journal** capture.
+  - **Frost warning.**
+- **PR:** —
+
+---
+
+## Phase 4 — Breadth
+
+### 75 · Calendar — server I: calendars, events, recurrence, privacy · `planned`
+
+Phase 4 · after 35 · size XL
+
+- **Scope**
+  - **Calendars** in four scopes:
+    - household;
+    - personal, as a private root ([D-44](prd/09-decisions.md));
+    - `member_shared`, an audience with `floor_seq = 0`;
+    - external.
+  - **Events**:
+    - Each has its own IANA timezone ([D-45](prd/09-decisions.md)).
+    - All-day events.
+  - **Recurrence**: RFC 5545 with RDATE and EXDATE, extending the domain library in TS and Go.
+  - **Editing a series** ([D-46](prd/09-decisions.md)): overrides and the three-way edit (this, this and following, all). Following creates `continues_series_id`; orphaned overrides are surfaced.
+  - **Participants and RSVP** (`state_set`).
+  - **Privacy** ([D-88](prd/09-decisions.md)): a private event on a shared calendar emits **two feed rows**; the redacted busy row carries its own projection and test.
+  - **Availability** data for the who overlay.
+  - **Catalogs**: the `calendar.event` kind, 2 widgets, 3 metrics, search.
+  - **Export**: `calendar.ics`.
+- **Inputs**
+  - PRD: [04-calendar](prd/modules/04-calendar.md); D-44–D-46, D-88
+  - API: `…/calendar/*` (21 operations, shared with items 76–77)
+  - Design: `calendar.js`
+- **Done when** these vectors pass:
+  - editing the Pilates series touches 1, 67 and 104 terms for the three choices;
+  - rent on the 31st lands on 30 Sep;
+  - a wall-clock time holds across a DST change;
+  - the busy row keeps 5 fields and drops 9.
+- **PR:** —
+
+### 76 · Calendar — server II: connections, ICS, CalDAV and iCloud · `planned`
+
+Phase 4 · after 75 · size L
+
+- **Scope**
+  - **Connections**:
+    - Per member, and **never for a child**.
+    - Credentials encrypted with a secret-store key, in a separate table, and absent from exports and logs.
+  - **Per remote calendar**: direction (`off`, `import`, `two-way`) and detail, with busy-only offered first ([D-47](prd/09-decisions.md)).
+  - **Sync**: incremental, plus a weekly full reconciliation; ETag concurrency; a deleted event becomes a cancellation.
+  - **Conflicts** resolve by **ownership**, with the loser preserved ([D-48](prd/09-decisions.md)).
+  - **Health**: a staleness badge, notify once, proactive token refresh.
+  - **Disconnect** asks keep or remove.
+  - **ICS**:
+    - subscription polling;
+    - the **ICS export feed** as a new route (Q11), amending the contract.
+  - **CalDAV**: generic CalDAV with discovery and sync-collection; iCloud with an app-specific password.
+- **Inputs**
+  - PRD: [04-calendar](prd/modules/04-calendar.md) (CA8–CA13); [05 §10](prd/05-privacy-and-compliance.md); D-47, D-48, D-86
+- **PR:** —
+
+### 77 · Calendar — server III: Google Calendar · `planned`
+
+Phase 4 · after 76 · size M
+
+- **Scope**
+  - **OAuth**: consent that names what leaves Household ([D-86](prd/09-decisions.md)); token refresh.
+  - **Sync**: sync tokens, plus watch channels and a **webhook receiver** (Q11, amending the contract).
+  - **Disclosure**: an entry in the privacy notice.
+- **PR:** —
+
+### 78 · Calendar — web · `planned`
+
+Phase 4 · after 76, 77, 37 · size L
+
+- **Scope**
+  - **Screens**: E-1–E-14 for web, with month view by default.
+  - **Editing**: the event editor with recurrence, and the three-choice occurrence edit.
+  - **People**: participants, the who overlay, busy blocks.
+  - **Connections**: framed as privacy screens.
+  - **External conflicts** and **disconnect**.
+- **Inputs**
+  - Design: `calendar.js`, `Calendar.dc.html`, `gaps-ui.js` (the four scopes, member lists)
+- **PR:** —
+
+### 79 · Calendar — mobile · `planned`
+
+Phase 4 · after 76, 77, 38 · size L
+
+- **Scope**
+  - **Screens**: E-1–E-14 on mobile, with agenda view by default.
+  - **Offline**: the who overlay works offline.
+  - **Tablet**: a seven-column week.
+  - **Children**: no connection flow at all.
+- **PR:** —
+
+### 80 · Asset engine and Property — server · `planned`
+
+Phase 4 · after 35, 46 · size XL
+
+- **Scope**
+  - **Platform asset engine**:
+    - The tables, and the routes `…/assets/{entity_type}/{entity_id}/…`.
+    - The **grant is resolved from `entity_type`**, not from the path: `404` for `none`, and enablement applies.
+    - Schedules by time, usage or both, whichever comes first (FR-AS1).
+    - Service records, and usage readings that are `additive` and monotonic ([D-68](prd/09-decisions.md)).
+    - A projected due date labelled an estimate (FR-AS2), and *"no reading yet"* rather than never due.
+    - The due computation also runs in TS and Go, with vectors.
+  - **Property**:
+    - Properties, including leases with a notice reminder.
+    - Items, with categories as reference data carrying default intervals.
+    - Contractors.
+    - A starter checklist by country ([D-69](prd/09-decisions.md)).
+    - Meter locations (PP6).
+    - Costs, with a one-tap Finance transaction (PP7).
+    - Insured-inventory data (PP5).
+  - **Catalogs.**
+- **Inputs**
+  - PRD: [12-property](prd/modules/12-property.md); [03 §10](prd/03-platform-strands.md)
+  - API: `…/assets/*`, `…/property/*`
+  - Design: `assets.js`, `property-ui.js`
+- **Done when** these vectors pass:
+  - the Octavia is due 20 Nov 2026 at 30,8 km/day;
+  - the bike is due 21 Sep;
+  - the water filter shows *no reading yet*.
+- **PR:** —
+
+### 81 · Vehicles — server · `planned`
+
+Phase 4 · after 80 · size L
+
+- **Scope**
+  - **Vehicles**: drivetrain, and type-aware bicycles and e-bikes.
+  - **Drivers**, who set the reminder audience (Q10).
+  - **Odometer**: the asset usage log, in km or miles.
+  - **Statutory presets**: five countries as versioned reference data ([D-70](prd/09-decisions.md)), with derivation and override.
+  - **Dates and cover**: statutory dates and insurance, both `strict_version`, with notice-period reminders.
+  - **Fuel and charging log** (`additive`): consumption is **computed between full fills** ([D-71](prd/09-decisions.md)), in l/100 km, kWh/100 km or mpg.
+  - **Total cost of ownership**, with depreciation.
+  - **Catalogs.** `road_tax_due` is **absent**, not zero, for a Czech passenger car.
+- **Inputs**
+  - PRD: [13-vehicles](prd/modules/13-vehicles.md)
+  - Design: `assets.js`, `vehicles-ui.js`
+- **Done when**
+  - Four countries land on 2026-10-05 and Germany a year later.
+  - Consumption is 5,47 l/100 km against the naive 5,73.
+- **PR:** —
+
+### 82 · Pets — server · `planned`
+
+Phase 4 · after 80 · size L
+
+- **Scope**
+  - **Pets**: deceased or rehomed pets are archived gently, never deleted ([D-72](prd/09-decisions.md)).
+  - **Health entries** (`additive`), typed.
+  - **Care schedules** through the asset engine; the next due date counts from completion.
+  - **Medication**:
+    - Courses (`strict_version`).
+    - **Doses** (`state_set`) **keyed on `dose_occurrence`**: given once for the animal ([D-73](prd/09-decisions.md)).
+    - Doses generated with correct timezone and day boundaries.
+  - **Daily routine**: completions keyed on (item, date).
+  - **Records**: vets with an out-of-hours number, feeding and allergies, insurance.
+  - **Species presets.**
+  - **Weight** with a target range.
+  - **Costs**, with the Finance hand-off.
+  - **Default grant** `contribute` for everyone, children included (FR-PE10).
+  - **Chores link**: a chore can reference a pet.
+  - **Q10** for routine items.
+- **Inputs**
+  - PRD: [14-pets](prd/modules/14-pets.md)
+  - Design: `assets.js`, `pets-ui.js`
+- **PR:** —
+
+### 83 · Assets — web: Property, Vehicles, Pets and the insurance inventory · `planned`
+
+Phase 4 · after 81, 82, 37 · size XL
+
+- **Scope**
+  - **Shared asset screens** (E-15–E-19), worded in **three vocabularies**. No asset-engine word leaks into Pets.
+  - **Property** (E-20–E-22), plus the **insurance inventory print**, the third print target (E-23, DD-14).
+  - **Vehicles** (E-24–E-28).
+  - **Pets** (E-29–E-35).
+- **Inputs**
+  - Design: `Property, Vehicles, Pets and Chat.dc.html`
+- **PR:** —
+
+### 84 · Assets — mobile · `planned`
+
+Phase 4 · after 81, 82, 38 · size XL
+
+- **Scope**
+  - **Screens**: E-15–E-35 on mobile.
+  - **Vehicles offline**: fuel and odometer entries at a petrol station with no signal.
+  - **Pets offline**: doses and routine ticked offline.
+  - **Pets detail**: the weight chart, and the vet one tap from the top.
+- **PR:** —
+
+### 85 · Chat — server · `planned`
+
+Phase 4 · after 46, 14 · size XL
+
+- **Scope**
+  - **Conversations**: general, group and direct. Q3: the grant wins.
+  - **Membership**: a message-id floor and `floor_seq`, written **in one transaction** ([D-90](prd/09-decisions.md)).
+  - **Messages**:
+    - the envelope is `additive`, and the body is `lww_row` with the loser preserved;
+    - editing within a window;
+    - a tombstone on delete;
+    - reply quotes.
+  - **Reactions and reads** (`state_set`):
+    - reactions keyed on (message, user, emoji), as desired state;
+    - read markers monotonic.
+  - **Unread counts** are bounded by the floor.
+  - **Attachments** under `chat/`, with async thumbnails.
+  - **Move to Documents**: a custody transfer that moves storage attribution.
+  - **Clean-up and deletion**: clean-up data with thresholds; the bin; the general conversation cannot be deleted.
+  - **Realtime payload exception**: marshalled once per audience.
+  - **Push** respecting mutes and quiet hours.
+  - **Floor-aware search.**
+  - **Per-country switch** (Q15).
+  - **Export**: `chat.html`.
+- **Inputs**
+  - PRD: [15-chat](prd/modules/15-chat.md); D-74, D-89, D-90
+  - API: `…/chat/*` (21 operations)
+  - Design: `chat.js`
+  - home: `modules/chat` (v10/v10.1)
+- **Done when**
+  - Scenarios 16 and 18 are green on real entities.
+  - The move-to-Documents storage vector holds.
+- **PR:** —
+
+### 86 · Chat — web · `planned`
+
+Phase 4 · after 85, 37 · size M
+
+- **Scope**
+  - **Screens**: E-36–E-42 for web:
+    - the conversation list and thread;
+    - attachments;
+    - unread counts and the floor;
+    - **the storage clean-up page**;
+    - mute;
+    - search bounded by the floor.
+- **PR:** —
+
+### 87 · Chat — mobile · `planned`
+
+Phase 4 · after 85, 38 · size L
+
+- **Scope**
+  - **Screens**: E-36–E-42 on the Chat tab.
+  - **Offline sending**: queued in order, with a pending state.
+  - **Attachments** from the picker.
+  - **Tab bar**: when Chat is disabled for the country, or the member holds `none` on it, the four-tab bar applies.
+- **PR:** —
+
+---
+
+## Phase 5 — General availability (code only)
+
+### 88 · Production infrastructure · `planned`
+
+Phase 5 · after 1–87 (the Phase 4 exit, crop catalog included) · size L
+
+- **Scope**
+  - **Provider**: an ADR choosing an EU-established provider in a single EU region.
+  - **Infrastructure as code**: Terraform or OpenTofu.
+  - **Database**:
+    - multi-AZ Postgres 17 with a read replica;
+    - WAL archiving (RPO ≤ 5 min);
+    - encrypted backups kept 35 days, with separately managed keys.
+  - **Compute**: at least two API instances behind a load balancer.
+  - **Object storage**: versioning plus cross-account EU replication.
+  - **Secrets and edge**:
+    - A managed secret store.
+    - TLS 1.3, HSTS preload, and certificate-transparency monitoring.
+  - **Delivery**:
+    - Zero-downtime deploys with expand/contract migrations.
+    - EAS production profiles and update channels.
+  - **Services**:
+    - An EU email provider with SPF, DKIM and DMARC.
+    - Live Stripe.
+    - Expo push credentials.
+- **Inputs**
+  - PRD: [01 §1, §9](prd/01-architecture.md); [07 §3–4](prd/07-nonfunctional.md); D-5, D-11
+- **PR:** —
+
+### 89 · Observability, alerting and resilience drills · `planned`
+
+Phase 5 · after 88 · size L
+
+- **Scope**
+  - **Signals** from [07 §5](prd/07-nonfunctional.md):
+    - RED per endpoint and per-module error rates;
+    - sync queue depth and conflict rate, and **divergence rate as an alert** ([D-85](prd/09-decisions.md));
+    - push outcomes;
+    - storage per household;
+    - the entitlement distribution;
+    - job lag.
+  - **Logs**: an EU-hosted store kept 12 months.
+  - **Availability**: external uptime monitoring against 99.9 %.
+  - **Failure behaviour** (FR-NF3): tested for object storage, push, Stripe and weather outages.
+  - **Drills**: a **monthly automated restore drill** into an isolated environment, and a failover drill.
+  - **Runbooks**: incident response, breach notification (72 hours, to the EU authority and the ICO), restore and failover.
+  - **Cost per household** (FR-NF6).
+- **PR:** —
+
+### 90 · Performance and load · `planned`
+
+Phase 5 · after 88 · size M
+
+- **Scope**
+  - **Load tests**: k6 scenarios to the Year-3 targets (4 000 rps and 40 000 WebSockets).
+  - **Server budgets**: the p50, p95 and p99 budgets of [07 §2](prd/07-nonfunctional.md), and **query-count budgets** on every endpoint (FR-NF1).
+  - **Sync at volume**: `sync_changes` partitioning and compaction; snapshot bootstrap for a median household.
+  - **Client budgets**: mobile cold start under 1.2 s from cache; web LCP and INP.
+  - **Fixes** for what the tests find.
+- **PR:** —
+
+### 91 · Security hardening · `planned`
+
+Phase 5 · after 88 · size M
+
+- **Scope**
+  - **Browser security**: strict-CSP review (no `unsafe-inline`) and security headers.
+  - **Disclosure**: `security.txt` and a disclosure policy.
+  - **Supply chain**: an SBOM per release, and DAST added to CI.
+  - **Limits**: a review of per-household rate limits.
+  - **Operations**: secret-rotation runbooks and the dependency-patch SLA (critical ≤ 72 h).
+  - **Threat model**: a review of the four access axes.
+  - **Penetration test**: remediation of findings. The test itself is off the PR list; a large finding takes a reserve slot.
+- **PR:** —
+
+### 92 · Analytics and pricing instrumentation · `planned`
+
+Phase 5 · after 88 · size M
+
+- **Scope**
+  - **Analytics** (FR-PR9):
+    - Opt-in, into an EU-hosted store (Q14).
+    - A decline as easy as accepting.
+    - **Children excluded, and the exclusion tested.**
+  - **Product metrics**: screen views, activation, funnels, and trial-to-paid conversion by the **first module configured** ([G7](prd/00-overview.md)).
+  - **Crash reports**, scrubbed.
+  - **Pricing metrics** ([04 §8](prd/04-billing-and-entitlements.md)): object bytes and requests, egress, push and email volume, storage percentiles, the share buying a block, churn split.
+  - **Dashboards.**
+- **PR:** —
+
+### 93 · Store readiness · `planned`
+
+Phase 5 · after 1–87 · size M
+
+- **Scope**
+  - **Listings**: iOS and Android metadata and screenshots in five languages.
+  - **Permissions**: the justification table (FR-PR1), generated from app config.
+  - **Purchase posture per store and jurisdiction** ([04 §7](prd/04-billing-and-entitlements.md)): an external-link entitlement where available, otherwise the reader posture. Config-driven.
+  - **Store requirements verified**: Sign in with Apple and in-app deletion.
+  - **Privacy forms**: privacy labels and data-safety forms.
+  - **Beta channels**: TestFlight and Play internal testing, opt-in from settings.
+  - **EAS Submit.**
+- **PR:** —
+
+### 94 · Marketing site, legal pages and web purchase entry · `planned`
+
+Phase 5 · after 88 · size L
+
+- **Scope**
+  - **Site**: static, built from `@household/tokens` ([DD-12](design/08-decisions.md)), in five languages.
+  - **Pricing** per currency, and sign-up leading into the web purchase flow.
+  - **Legal pages**:
+    - terms;
+    - the privacy notice, with a children's section, the sub-processor list, the calendar-connection disclosure, and the UK Art. 27 representative and ICO;
+    - cookie posture;
+    - the DPA page.
+  - **Drafts for counsel**: the legal text is drafted here for counsel's review, which is off the PR list.
+- **PR:** —
+
+### 95 · Help, translation review and the accessibility sweep · `planned`
+
+Phase 5 · after 1–87 · size L
+
+- **Scope**
+  - **Help**: entries completed for every module in five languages.
+  - **Translations**: the review ledger cleared once native reviewers sign off.
+  - **Sweeps**: pseudolocalisation and 200 % text across every route on both clients.
+  - **Accessibility**: WCAG 2.1 AA audit remediation, plus a VoiceOver and TalkBack checklist.
+  - **Persona walkthroughs**: `conformance.js` `WALKS` (five personas, 34 steps) as E2E.
+- **PR:** —
+
+### 96 · Release candidate — contract closure and launch · `planned`
+
+Phase 5 · after 88–95 · size M
+
+- **Scope**
+  - **Contract closure**: `contract_pending` is **empty** (all 486 operations, plus any added under Q11 and Q17).
+  - **Totals asserted**: 24 widgets and 21 reminder kinds.
+  - **Final checks**:
+    - all nine architecture tests green;
+    - offline-write flags at their 1.0 state;
+    - feature-flag defaults set.
+  - **Beta**: fixes from the closed beta in CZ, SK, DE and the UK.
+  - **Release**: tags at 1.0.0; as-built notes in the PRD; the GA checklist below ticked.
+- **PR:** —
+
+---
+
+## Outside the PR list: GA prerequisites that are not code
+
+Tracked here so they are not forgotten. None of them takes a numbered slot.
+
+- [ ] Second-engineer review of the sync protocol, the policy registry and the retraction path ([10 §8](prd/10-sync-risk.md))
+- [ ] A month of dogfooding the `proof` module, then Phase 2, on real phones
+- [ ] External penetration test before GA
+- [ ] Counsel's answer on the UK Online Safety Act Schedule 1 exemption (Q15)
+- [ ] UK Art. 27 representative appointed; UK VAT registration; EU OSS registration
+- [ ] DPAs with every sub-processor: hosting, email, weather, Stripe, Expo, analytics, error aggregation
+- [ ] Counsel review of the terms, privacy notice (five languages) and DPA
+- [ ] Native-speaker review of `cs`, `sk`, `de` and `pl` (clears PL-9 drafts)
+- [ ] Agronomic review of the crop catalog; expert review of the tariff presets and statutory vehicle rules
+- [ ] CZK and PLN price points (Q1)
+- [ ] App Store and Play developer accounts; external-purchase-link entitlements where available
+- [ ] Closed beta with real households in at least CZ, SK, DE and the UK
+
+---
+
+## Change log
+
+| Date | Items | Change |
+|---|---|---|
+| 2026-09-26 | all | Plan created: 96 items across Phases 0–5, with 4 reserve slots |
+| 2026-09-26 | 7, 14, 18, 19, 25, 28–32, 34, 36, 37, 39, 40, 44–46, 53, 55, 57, 63, 67–69, 78, 79, 88, 93, 95, 96 | Review fixes: added missing dependencies (G-B, the client items, the reminder strand, the conflict UI, Google, GA). Added a dogfood environment and a month gate on removing `proof`. Moved the reference resolver to item 36 and F-18 to the Notes clients. Assigned the offline `strict_version` writes. Recorded contract gaps (Q11, Q17). Corrected vectors that differed from design/v1. Removed hand-kept progress |
