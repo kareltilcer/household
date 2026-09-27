@@ -56,7 +56,8 @@ func Creating() []sync.Entity {
 		{Name: "shopping.list", Creates: []string{"postLists", "postListsBatch", "putListsByListId", "postListsSplit", "postListsMultipart"}},
 		{Name: "shopping.item", Creates: []string{"postItems", "postItemsQuick", "postItemsOneOf", "postItemsBranches"}},
 		{Name: "shopping.staple", Creates: []string{
-			"postStaples", "getStaples", "postStaplesAction", "postNowhere", "postStaplesAllOf", "postStaplesOptional", "postStaplesSplit",
+			"postStaples", "getStaples", "postStaplesAction", "postStaplesText", "postNowhere", "postStaplesAllOf", "postStaplesOptional",
+			"postStaplesSplit",
 		}},
 	}
 }

@@ -18,7 +18,11 @@ CREATE TYPE sync_visibility AS ENUM ('shared', 'private', 'redacted');
 -- key and is also the (household_id, seq) index a pull scans. seq comes from one sequence, so
 -- it is unique on its own, and the spine takes the household's feed lock before drawing one,
 -- so that a household's rows commit in seq order and a pull that has read seq N has missed no
--- row below it (internal/platform/sync).
+-- row below it (internal/platform/sync). occurred_at is the start of the row's transaction and
+-- seq is drawn near its end, so at a month's turn a household's row in the earlier month's
+-- partition can have a greater seq than one in the later month's: the seqs of neighbouring
+-- partitions overlap, and compaction's horizon is the greatest seq it dropped, never the least
+-- one it kept.
 CREATE TABLE sync_changes (
   seq bigserial NOT NULL,
   household_id uuid NOT NULL REFERENCES households (id) ON DELETE CASCADE,

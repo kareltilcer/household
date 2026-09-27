@@ -121,7 +121,7 @@ const (
 	idRequired
 )
 
-// requiresID reports how s requires the client's id: id, a string, or ids, an array of strings,
+// requiresID reports how s requires the client's id: id, a UUID, or ids, an array of UUIDs,
 // among the members s requires. A schema requires what it and every schema it is allOf require,
 // and each member is described by whichever of them describes it: the contract writes a create
 // as allOf its update schema, which describes the members, and a schema that only lists the
@@ -195,19 +195,19 @@ func (m members) with(s *openapi3.Schema) (members, []openapi3.SchemaRefs) {
 }
 
 // requirement reports how m requires the client's id: id or ids among its required members,
-// described as a string or an array of strings by a schema that describes it.
+// described as a UUID or an array of them by a schema that describes it.
 func (m members) requirement() idRequirement {
 	best := idMissing
 	for _, name := range m.required {
 		switch name {
 		case "id":
 			best = max(best, idNotUUID)
-			if slices.ContainsFunc(m.properties[name], isString) {
+			if slices.ContainsFunc(m.properties[name], isUUID) {
 				return idRequired
 			}
 		case "ids":
 			best = max(best, idNotUUID)
-			if slices.ContainsFunc(m.properties[name], isStringArray) {
+			if slices.ContainsFunc(m.properties[name], isUUIDArray) {
 				return idRequired
 			}
 		}
@@ -215,12 +215,14 @@ func (m members) requirement() idRequirement {
 	return best
 }
 
-// isString reports whether s is a string schema, as the contract's Uuid is.
-func isString(s *openapi3.Schema) bool {
-	return s != nil && s.Type.Is(openapi3.TypeString)
+// isUUID reports whether s is a UUID, a string of format uuid, as the contract's Uuid is. Any
+// string would admit a name or a number where the client's id belongs, which the edge would pass
+// and the uuid column refuse.
+func isUUID(s *openapi3.Schema) bool {
+	return s != nil && s.Type.Is(openapi3.TypeString) && s.Format == "uuid"
 }
 
-// isStringArray reports whether s is an array of strings.
-func isStringArray(s *openapi3.Schema) bool {
-	return s != nil && s.Type.Is(openapi3.TypeArray) && s.Items != nil && isString(s.Items.Value)
+// isUUIDArray reports whether s is an array of UUIDs.
+func isUUIDArray(s *openapi3.Schema) bool {
+	return s != nil && s.Type.Is(openapi3.TypeArray) && s.Items != nil && isUUID(s.Items.Value)
 }

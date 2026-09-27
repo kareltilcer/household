@@ -10,9 +10,10 @@
 //
 //   - completed: the stored response.
 //   - in_flight or committed: 409 idempotency_in_progress, while the first request is still
-//     running. An in_flight claim older than the lease belonged to a request that ended without
-//     committing its effect, a process that died, so a repeat takes it over and runs; the
-//     request it was taken from can no longer commit (ErrClaimLost). A committed key whose
+//     running. An in_flight claim older than the lease is taken for one whose request ended
+//     without committing its effect, a process that died, so a repeat takes it over and runs;
+//     the request it was taken from, should it still be running, can no longer commit, and is
+//     answered 409 idempotency_in_progress itself (ErrClaimLost). A committed key whose
 //     response never arrived, because the process died between the commit and the store, keeps
 //     answering 409 until it expires: running the request again would repeat the effect, which
 //     is the one thing the key exists to prevent.
@@ -74,8 +75,10 @@ var storedHeaders = []string{
 }
 
 // ErrClaimLost is Commit's answer for a request whose claim on its key was taken over by a
-// repeat after the lease: the repeat is running the request, so this one must not commit.
-var ErrClaimLost = errors.New("idempotency: the key's claim was taken over")
+// repeat after the lease: the repeat is running the request, so this one must not commit. It is
+// the 409 idempotency_in_progress problem, which a handler that answers with the error it got
+// writes as it is: another request holds the key, and nothing on the server failed.
+var ErrClaimLost error = problem.New(http.StatusConflict, problem.CodeIdempotencyInProgress)
 
 type claimKey struct{}
 
@@ -366,9 +369,11 @@ type recorder struct {
 	overflow bool
 }
 
-// WriteHeader records the status and the headers as they go out.
+// WriteHeader records the status and the headers as they go out: those of the final response,
+// never an informational one (1xx other than 101) that net/http sends ahead of it.
 func (r *recorder) WriteHeader(code int) {
-	if r.code == 0 {
+	informational := code >= 100 && code <= 199 && code != http.StatusSwitchingProtocols
+	if r.code == 0 && !informational {
 		r.code = code
 		r.header = r.ResponseWriter.Header().Clone()
 	}

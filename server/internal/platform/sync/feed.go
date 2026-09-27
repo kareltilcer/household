@@ -129,8 +129,13 @@ const feedLock int32 = 0x73796e63
 // become visible in seq order. The lock is taken as late as it can be, after everything else the
 // transaction writes, and is held only for the feed's inserts and the commit: the caller takes
 // no row lock after Emit, since another transaction of the household may hold that row while it
-// waits for this lock. Two households whose hashes collide share a lock, which serialises them
-// and costs nothing else.
+// waits for this lock. Emit's own inserts take the key-share locks their foreign keys need on the
+// household's row and the module's, and must not wait for them under the lock either, since a
+// mutation may hold the household's row FOR UPDATE while it waits for the lock: the caller holds
+// them already. The mutation spine does, through the audit event it writes first, whose
+// foreign keys name the same two rows; a caller that emits without one locks both rows FOR KEY
+// SHARE before it calls Emit. Two households whose hashes collide share a lock, which serialises
+// them and costs nothing else.
 func Emit(ctx context.Context, tx pgx.Tx, household, actor uuid.UUID, changes []Change) (int64, error) {
 	if len(changes) == 0 {
 		return 0, errors.New("sync: no changes to emit")

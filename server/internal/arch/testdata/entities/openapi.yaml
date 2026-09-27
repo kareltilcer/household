@@ -113,6 +113,13 @@ paths:
                 - { type: object, properties: { name: { type: string } } }
                 - { $ref: '#/components/schemas/ListCreate' }
       responses: { '201': { description: Created } }
+  /staples/text:
+    post:
+      operationId: postStaplesText
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [id], properties: { id: { type: string } } } } }
+      responses: { '201': { description: Created } }
   /staples/split:
     post:
       operationId: postStaplesSplit
@@ -129,6 +136,7 @@ components:
   schemas:
     Uuid:
       type: string
+      format: uuid
       pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
     ListCreate:
       type: object

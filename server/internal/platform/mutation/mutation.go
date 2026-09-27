@@ -59,10 +59,12 @@ var (
 // reports them, which it never does inside a transaction: so two readings in one transaction
 // differ by the rows written between them. A row counts once its write is attempted, so one that
 // a rolled-back savepoint undid counts as written although nothing of it commits: an insert
-// refused as a duplicate, for instance, whose error the mutation caught. The transaction id is no
-// such measure: PostgreSQL assigns one to a transaction that locks a row as well as to one that
-// writes, so a mutation that took a row FOR UPDATE, or ran an upsert whose update did not apply,
-// and found nothing to change would count as having written.
+// refused as a duplicate, for instance, whose error the mutation caught. So does the row an
+// upsert (INSERT … ON CONFLICT) inserts speculatively and withdraws on finding that a concurrent
+// transaction has just inserted the same key, before it goes on to its conflict action. The
+// transaction id is no such measure: PostgreSQL assigns one to a transaction that locks a row as
+// well as to one that writes, so a mutation that took a row FOR UPDATE, or ran an upsert whose
+// update did not apply, and found nothing to change would count as having written.
 const rowsWritten = `
 	SELECT coalesce(sum(pg_stat_get_xact_tuples_inserted(c.oid) + pg_stat_get_xact_tuples_updated(c.oid)
 	                    + pg_stat_get_xact_tuples_deleted(c.oid)), 0)::bigint
@@ -122,8 +124,13 @@ func WithVia(ctx context.Context, via audit.Via) context.Context {
 // without the other, returns ErrUnrecorded. So does one that found its change in place by a
 // write it then undid, catching an insert's unique violation and rolling back to a savepoint:
 // PostgreSQL counts the attempted row as written (rowsWritten), so a mutation finds what is
-// already there by a read, a lock or an upsert instead. When ctx's request holds an
-// Idempotency-Key, the key is marked committed in the same transaction (idempotency.Commit).
+// already there by a read, a lock or an upsert instead. An upsert counts one too when it races
+// another transaction inserting the same key, and withdraws the row it had begun to insert: a
+// mutation whose upsert may find its state already in place while another request writes the
+// same key first locks the row the key hangs off (SELECT … FOR NO KEY UPDATE), so that the two
+// take turns and the second finds the first's row committed, not in flight. When ctx's request
+// holds an Idempotency-Key, the key is marked committed in the same transaction
+// (idempotency.Commit).
 func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, error) {
 	reg, _ := ctx.Value(catalogKey{}).(*module.Registry)
 	if reg == nil {
@@ -172,6 +179,8 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 			return err
 		}
 		household := scope.HouseholdID()
+		// The event before the changes, for the same reason: its foreign keys take the locks on
+		// the household's row and the module's that the feed's inserts need under the feed lock.
 		if res.EventID, err = audit.Record(ctx, tx, household, actor, via, reqctx.RequestID(ctx), rec.Event); err != nil {
 			return err
 		}

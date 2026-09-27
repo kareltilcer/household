@@ -94,7 +94,12 @@ module exists (D-82), enforced by architecture tests. None of them says:
   it, so the difference is what it wrote, whatever it wrote with. PostgreSQL counts a write when
   it is attempted, so a row a rolled-back savepoint undid counts too: a mutation finds a change
   already in place by a read, a lock or an upsert, not by catching the unique violation of an
-  insert, which is refused as unrecorded. The transaction id would not do:
+  insert, which is refused as unrecorded. An upsert that races another transaction inserting the
+  same key counts too, for the row it began to insert and withdrew before its conflict action, so
+  a mutation whose upsert may find its state in place while another request writes the same key
+  (two members checking one shopping item) first locks the row the key hangs off, `FOR NO KEY
+  UPDATE`: the two take turns, and the second finds the first's row committed. The transaction id
+  would not do:
   PostgreSQL assigns one to a transaction that locks a row as well, so a mutation that took a row
   `FOR UPDATE`, or ran a `state_set` upsert whose update did not apply, and found nothing to change
   would be refused. A server with `track_counts` off counts nothing, and there the transaction id
@@ -119,8 +124,10 @@ module exists (D-82), enforced by architecture tests. None of them says:
   representation headers and body; of an `in_flight` or `committed` key, `409
   idempotency_in_progress`; of a key used for another request (method, path, query, `If-Match`,
   media type and a JSON body, or an upload's length), `422` naming `header:Idempotency-Key`. A
-  claim past a five-minute lease belonged to a request that ended without committing its effect,
-  and a repeat takes it over; the request it was taken from can no longer commit (`ErrClaimLost`).
+  claim past a five-minute lease is taken for one whose request ended without committing its
+  effect, and a repeat takes it over; the request it was taken from, should it still be running,
+  can no longer commit, and answers `409 idempotency_in_progress` itself (`ErrClaimLost`, which
+  is that problem). The contract says so.
   Only a 2xx is stored: a refusal commits no effect, and a refusal stored for seven days would
   answer a retry after its reason had gone. A request answered otherwise after its effect
   committed, by a second mutation that failed or a handler that failed after its write, leaves
@@ -133,8 +140,9 @@ module exists (D-82), enforced by architecture tests. None of them says:
   whatever `409` it declares for its own conflicts, and the response validation the tests run holds
   it to `Problem` alone.
 - **Test 9 reads the operations an entity names among its creates.** Each must be in the contract,
-  be a POST or PUT, require a body, and require in it, in every media type, `id` as a string or
-  `ids` as an array of strings, directly, through `allOf`, or in every branch of a
+  be a POST or PUT, require a body, and require in it, in every media type, `id` as a UUID (a
+  string of format `uuid`) or `ids` as an array of them, directly, through `allOf`, or in every
+  branch of a
   `oneOf`/`anyOf`. The schemas an `allOf` combines are read as one: the contract writes a create
   as `allOf` its update schema, which describes `id`, and a schema that only lists it required
   (`HarvestCreate`).

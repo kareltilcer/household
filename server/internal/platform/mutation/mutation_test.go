@@ -27,6 +27,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
@@ -696,9 +697,13 @@ func TestAMutationCommitsItsIdempotencyKey(t *testing.T) {
 		if !errors.Is(err, idempotency.ErrClaimLost) {
 			t.Errorf("a mutation whose key was taken over: %v, want ErrClaimLost", err)
 		}
-		rw.WriteHeader(http.StatusConflict)
+		problem.Write(rw, "", err)
 	}
-	w.serve(h, u, http.Header{"Idempotency-Key": {"lost"}}, lost)
+	// It is answered as a repeat that finds the key held is: another request holds it.
+	if rec := w.serve(h, u, http.Header{"Idempotency-Key": {"lost"}}, lost); rec.Code != http.StatusConflict ||
+		!strings.Contains(rec.Body.String(), `"code":"idempotency_in_progress"`) {
+		t.Fatalf("a request whose key was taken over answered %d %s", rec.Code, rec.Body)
+	}
 	if items, events, changes := w.written(c); items+events+changes != 0 {
 		t.Fatalf("a mutation whose key was taken over left %d items, %d events, %d changes", items, events, changes)
 	}
@@ -771,6 +776,28 @@ func TestAnUnwrittenResponseIsReplayedWithItsHeaders(t *testing.T) {
 	again := w.serve(h, u, key, func(http.ResponseWriter, *http.Request) { t.Error("the repeat ran") })
 	if first.Code != http.StatusOK || again.Code != http.StatusOK || again.Header().Get("ETag") != `"7"` {
 		t.Fatalf("the first answered %d, the repeat %d with ETag %q", first.Code, again.Code, again.Header().Get("ETag"))
+	}
+}
+
+// An informational response the handler sends ahead of its final one, 103 Early Hints, does not
+// stand in for it: the final response is stored, and is what a repeat gets.
+func TestAnInformationalResponseIsNotTheOneStored(t *testing.T) {
+	w := newWorld(t)
+	h, u := w.member()
+	id := idgen.New()
+	key := http.Header{"Idempotency-Key": {"hinted"}}
+	w.serve(h, u, key, func(rw http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		if _, err := mutation.Apply(ctx, create(ctx, id, "Milk")); err != nil {
+			t.Error(err)
+		}
+		rw.WriteHeader(http.StatusEarlyHints)
+		rw.WriteHeader(http.StatusCreated)
+		_, _ = rw.Write([]byte(`{"made":1}`))
+	})
+	again := w.serve(h, u, key, func(http.ResponseWriter, *http.Request) { t.Error("the repeat ran") })
+	if again.Code != http.StatusCreated || again.Body.String() != `{"made":1}` {
+		t.Fatalf("the repeat of a request answered 103 then 201: %d %s", again.Code, again.Body)
 	}
 }
 

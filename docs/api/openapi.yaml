@@ -46,8 +46,11 @@ info:
       send it. It is **required** on `POST /sync/mutations`. A key is the caller's own, and a
       repeat of it is answered with the first request's `2xx` response. A repeat that arrives
       while the first request is still running answers `409` (`idempotency_in_progress`), as does
-      one whose first request took effect but whose response was not kept, until the key expires;
-      a key reused for a different request answers `422`, naming `header:Idempotency-Key`. A
+      one whose first request took effect but whose response was not kept, until the key expires.
+      A first request that has not taken effect five minutes after it arrived is taken to have
+      failed: a repeat then runs it, and the first, if it is still running, can no longer take
+      effect and answers `409` (`idempotency_in_progress`) itself. A key reused for a different
+      request answers `422`, naming `header:Idempotency-Key`. A
       request answered with anything but `2xx` stores nothing, so repeating it runs it again,
       unless it took effect before it was answered: then a repeat answers `409` like one whose
       response was not kept.
@@ -7966,7 +7969,10 @@ components:
         running answers `409` (`idempotency_in_progress`). So does a repeat of a request that took
         effect but whose response was not kept, because the server stopped before storing it, the
         body was larger than 1 MiB, or the request was answered with anything but `2xx` after it
-        took effect, until the key expires: running it again would repeat the effect. A key reused
+        took effect, until the key expires: running it again would repeat the effect. A first
+        request that has not taken effect five minutes after it arrived is taken to have failed: a
+        repeat then runs it, and the first, if it is still running, can no longer take effect and
+        answers `409` (`idempotency_in_progress`) itself. A key reused
         for a request with a different method, path, query, `If-Match`, `Content-Type` or JSON body
         answers `422` naming `header:Idempotency-Key`; a body in another media type, an upload, is
         compared by its length alone.
@@ -7978,7 +7984,8 @@ components:
       description: |
         Retained 7 days; replaying returns the stored result. Required here because clients retry
         batches wholesale. A repeat while the first request is still running answers `409`
-        (`idempotency_in_progress`); a key reused for a different request answers `422`.
+        (`idempotency_in_progress`), for five minutes, after which a repeat runs a first request
+        that has not taken effect; a key reused for a different request answers `422`.
       schema: { type: string, minLength: 1, maxLength: 128 }
 
   headers:
