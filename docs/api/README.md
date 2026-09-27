@@ -13,16 +13,24 @@ clients. It is not a description of the implementation — the implementation is
 
 ## Validate
 
+CI runs both validators on every pull request. Locally:
+
 ```bash
-python -m pip install openapi-spec-validator pyyaml
+python -m pip install -r docs/api/requirements.txt
 python -c "import yaml;from openapi_spec_validator import validate;validate(yaml.safe_load(open('docs/api/openapi.yaml',encoding='utf-8')));print('valid')"
 ```
 
-Or with Redocly:
+And Redocly, pinned in the workspace:
 
 ```bash
-npx @redocly/cli lint docs/api/openapi.yaml
+pnpm run lint:api
 ```
+
+`lint:api` runs Redocly's `recommended-strict` ruleset, so every finding is an error. The
+findings reviewed and kept on purpose are listed one location at a time, each with its reason,
+in [`.redocly.lint-ignore.yaml`](../../.redocly.lint-ignore.yaml); the same rule still fails
+anywhere else. A bare `redocly lint` reads [`redocly.yaml`](../../redocly.yaml), which says why
+it names the lenient `recommended` set instead.
 
 ## Generate clients
 
@@ -30,13 +38,18 @@ Both clients consume a generated, typed client — a contract change that breaks
 build ([06-clients.md](../prd/06-clients.md) §1).
 
 ```bash
-npx openapi-typescript docs/api/openapi.yaml -o packages/api/src/schema.d.ts
+pnpm dlx openapi-typescript docs/api/openapi.yaml -o packages/api/src/schema.d.ts
 ```
+
+It prints a warning for each finding in `.redocly.lint-ignore.yaml`, a file openapi-typescript
+does not read, and generates the client all the same.
 
 ## Read
 
+Render the reference to a single HTML file (`dist/` is git-ignored) and open it in a browser:
+
 ```bash
-npx @redocly/cli preview-docs docs/api/openapi.yaml
+pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
 ```
 
 ## Conventions worth knowing before reading
@@ -87,5 +100,7 @@ Three authoring hazards this document has already been bitten by, worth remember
    — while PyYAML and `openapi-spec-validator` accept it, so the other validator below stays green
    and hides the break. Keep every `{ ... }` on one line.
 
-CI runs the validator, a `$ref` resolution check and a route/contract diff against the
-implementation ([07-nonfunctional.md](../prd/07-nonfunctional.md) §6).
+CI runs both validators, openapi-spec-validator and Redocly, and each of them resolves every
+`$ref`. The route/contract diff against the implementation
+([07-nonfunctional.md](../prd/07-nonfunctional.md) §6) joins them with the server skeleton, plan
+item 2.

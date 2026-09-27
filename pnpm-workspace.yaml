@@ -1,0 +1,20 @@
+packages:
+  - apps/*
+  - packages/*
+  - tooling
+
+# One version of every shared tool across the workspace. A package names a tool as
+# `catalog:` instead of a range, so two packages cannot drift onto different compilers
+# or linters and disagree about what the same source means.
+catalog:
+  '@eslint/js': ^10.0.1
+  '@redocly/cli': 2.54.3
+  '@types/node': ^24.0.0
+  eslint: ^10.11.0
+  prettier: 3.9.9
+  # typescript-eslint 8 supports TypeScript <6.1, so TypeScript 7 waits for it.
+  typescript: ~6.0.3
+  typescript-eslint: ^8.70.1
+  vite: ^8.3.1
+  vitest: ^5.0.2
+  yaml: ^2.9.1

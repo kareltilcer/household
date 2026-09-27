@@ -18,3 +18,7 @@ dist/
 # Local environment
 .env
 .env.local
+
+# Turborepo and test output
+.turbo/
+coverage/

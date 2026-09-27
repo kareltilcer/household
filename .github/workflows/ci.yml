@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  go:
+    name: Go — build, vet, lint, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        # The image docker-compose.yml runs; tooling/src/workspace.test.ts fails when the
+        # two disagree.
+        image: postgres:17.11-trixie
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: household
+        ports:
+          - 5432:5432
+        # Over TCP, as docker-compose.yml does: see the note on its healthcheck.
+        options: >-
+          --health-cmd "pg_isready --host=127.0.0.1 --username=postgres --dbname=household"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      # 127.0.0.1, not localhost, for the reason testsupport.DefaultDatabaseURL gives.
+      HOUSEHOLD_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/household?sslmode=disable
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          # The cache key hashes these files. Each Go job names only the tools it builds,
+          # so the two jobs' caches get different keys instead of one overwriting the other.
+          cache-dependency-path: |
+            server/go.sum
+            server/tools/golangci-lint.sum
+      - name: Modules are tidy and verified
+        run: |
+          go mod tidy -diff
+          go mod verify
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Lint and format (golangci-lint)
+        run: go tool -modfile=tools/golangci-lint.mod golangci-lint run
+      - name: Test
+        # -count=1: setup-go restores the build cache, and a cached result would pass a
+        # database test without running it against this job's PostgreSQL.
+        run: go test -count=1 ./...
+
+  typescript:
+    name: TypeScript — typecheck, lint, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          cache: true
+          require-lockfile: true
+      - name: Typecheck, lint and test
+        run: pnpm exec turbo run typecheck lint test
+      - name: Format (Prettier)
+        run: pnpm run format:check
+
+  openapi:
+    name: OpenAPI — openapi-spec-validator and Redocly
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: docs/api/requirements.txt
+      - name: openapi-spec-validator
+        run: |
+          python -m pip install --requirement docs/api/requirements.txt
+          python -c "import yaml; from openapi_spec_validator import validate; validate(yaml.safe_load(open('docs/api/openapi.yaml', encoding='utf-8'))); print('valid')"
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          cache: true
+          require-lockfile: true
+      - name: Redocly
+        run: pnpm run lint:api
+
+  supply-chain:
+    name: Supply chain — govulncheck, pnpm audit, gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # gitleaks reads the whole history, not only the tip.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: |
+            server/go.sum
+            server/tools/govulncheck.sum
+            server/tools/gitleaks.sum
+      - name: govulncheck
+        working-directory: server
+        run: go tool -modfile=tools/govulncheck.mod govulncheck ./...
+      - name: gitleaks
+        working-directory: server
+        run: go tool -modfile=tools/gitleaks.mod gitleaks git --redact --no-banner --verbose ..
+      # pnpm audit reads only the lockfile, and fails when there is none.
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          install: false
+      - name: pnpm audit
+        # `pnpm run` otherwise installs the whole workspace before running a script.
+        env:
+          PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'
+        run: pnpm run audit:ts
