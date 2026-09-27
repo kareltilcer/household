@@ -91,7 +91,10 @@ module exists (D-82), enforced by architecture tests. None of them says:
   change is refused and rolled back: the rows the connection has inserted, updated and deleted,
   which PostgreSQL counts for itself and does not report inside a transaction
   (`pg_stat_get_xact_tuples_*`), are read before the mutation and, when it reports nothing, after
-  it, so the difference is what it wrote, whatever it wrote with. The transaction id would not do:
+  it, so the difference is what it wrote, whatever it wrote with. PostgreSQL counts a write when
+  it is attempted, so a row a rolled-back savepoint undid counts too: a mutation finds a change
+  already in place by a read, a lock or an upsert, not by catching the unique violation of an
+  insert, which is refused as unrecorded. The transaction id would not do:
   PostgreSQL assigns one to a transaction that locks a row as well, so a mutation that took a row
   `FOR UPDATE`, or ran a `state_set` upsert whose update did not apply, and found nothing to change
   would be refused. A server with `track_counts` off counts nothing, and there the transaction id

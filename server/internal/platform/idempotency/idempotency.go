@@ -322,8 +322,9 @@ func answer(w http.ResponseWriter, requestID string, f found, fingerprint []byte
 // store records the response rec captured under c's key, which the request still holds.
 func store(ctx context.Context, c claim, rec *recorder) error {
 	header := map[string]string{}
+	sent := rec.sent()
 	for _, name := range storedHeaders {
-		if v := rec.header.Get(name); v != "" {
+		if v := sent.Get(name); v != "" {
 			header[name] = v
 		}
 	}
@@ -400,4 +401,13 @@ func (r *recorder) status() int {
 		return http.StatusOK
 	}
 	return r.code
+}
+
+// sent is the header that went out: for a response that wrote nothing, the handler's header as
+// it stands once the handler has returned, which is what net/http then sends.
+func (r *recorder) sent() http.Header {
+	if r.code == 0 {
+		return r.Header()
+	}
+	return r.header
 }

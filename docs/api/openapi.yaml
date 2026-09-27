@@ -8009,7 +8009,11 @@ components:
       description: Validation failed. `errors` names each offending field.
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/ValidationProblem' } } }
     VersionConflict:
-      description: The `If-Match` version did not match. The current representation is returned so the client can merge or re-present.
+      description: |
+        The `If-Match` version did not match. The current representation is returned so the client
+        can merge or re-present. A `409` from an operation that accepts `Idempotency-Key` can
+        instead be `idempotency_in_progress`, a plain `Problem` with no `current`, so a client
+        switches on `code` before it reads `current`.
       headers: { ETag: { $ref: '#/components/headers/ETag' } }
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/ConflictProblem' } } }
     PaymentRequired:
@@ -8103,10 +8107,13 @@ components:
         and client cannot drift on spelling.
 
         Every value below corresponds to a condition this document describes on some response,
-        except the two protocol-level codes any operation can answer with: `method_not_allowed`
+        except the protocol-level codes, which no operation declares: `method_not_allowed`
         (`405`, a method the path does not serve, with an `Allow` header) and `internal` (`500`,
-        a failure the caller cannot act on). Adding a code is a contract change and belongs in
-        the same review as the endpoint that raises it.
+        a failure the caller cannot act on), which any operation can answer with, and
+        `idempotency_in_progress` (`409`, a repeated `Idempotency-Key` whose first request is
+        still running or whose response was not kept), which any operation that accepts
+        `Idempotency-Key` can. Adding a code is a contract change and belongs in the same review
+        as the endpoint that raises it.
       enum:
         # Cross-cutting — the reusable responses in `components.responses`
         - unauthenticated
@@ -8114,13 +8121,13 @@ components:
         - not_found
         - validation_failed
         - version_conflict
-        - idempotency_in_progress
         - entitlement_read_only
         - entitlement_restricted
         - rate_limited
-        # Protocol-level — answerable by any operation, so declared on none
+        # Protocol-level — declared on no operation (see the description)
         - method_not_allowed
         - internal
+        - idempotency_in_progress
         # Authentication and identity
         - refresh_token_invalid
         - account_disabled

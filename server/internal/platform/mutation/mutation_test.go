@@ -354,6 +354,24 @@ func TestApplyRefusesAWriteItCannotRecord(t *testing.T) {
 			}
 		})
 	}
+	// So is a write a rolled-back savepoint undid, as PostgreSQL counts it: a mutation does not
+	// find its change already in place by catching the refusal of a duplicate insert.
+	w.in(h, u, func(ctx context.Context) {
+		refused := false
+		_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+			savepoint, err := tx.Begin(ctx)
+			if err != nil {
+				return mutation.Record{}, err
+			}
+			_, err = savepoint.Exec(ctx, "INSERT INTO spine_items (id, household_id, title) VALUES ($1, app_household_id(), 'Milk')", existing)
+			var pgErr *pgconn.PgError
+			refused = errors.As(err, &pgErr) && pgErr.Code == "23505" // unique_violation
+			return mutation.Record{}, savepoint.Rollback(ctx)
+		})
+		if !refused || !errors.Is(err, mutation.ErrUnrecorded) {
+			t.Errorf("a duplicate insert undone by its savepoint (refused %v), reported as nothing: %v, want ErrUnrecorded", refused, err)
+		}
+	})
 	if n := w.count("SELECT count(*) FROM spine_items WHERE id = $1 AND title = 'Milk' AND version = 1", existing); n != 1 {
 		t.Fatal("a write reported as nothing was committed")
 	}
@@ -606,7 +624,11 @@ func TestAHouseholdsChangesCommitInSeqOrder(t *testing.T) {
 			seqA = res.Seq
 		})
 	}()
-	<-paused
+	select {
+	case <-paused:
+	case <-doneA:
+		t.Fatal("the first mutation ended without reaching its commit")
+	}
 	go func() {
 		defer close(doneB)
 		w.in(h, u, func(ctx context.Context) {
@@ -739,6 +761,19 @@ func TestAResponseTooLargeToStoreIsNotReplayed(t *testing.T) {
 	}
 }
 
+// A response the handler answered by writing nothing, a 200 with the headers it had set when it
+// returned, is what a repeat gets, headers included.
+func TestAnUnwrittenResponseIsReplayedWithItsHeaders(t *testing.T) {
+	w := newWorld(t)
+	h, u := w.member()
+	key := http.Header{"Idempotency-Key": {"unwritten"}}
+	first := w.serve(h, u, key, func(rw http.ResponseWriter, _ *http.Request) { rw.Header().Set("ETag", `"7"`) })
+	again := w.serve(h, u, key, func(http.ResponseWriter, *http.Request) { t.Error("the repeat ran") })
+	if first.Code != http.StatusOK || again.Code != http.StatusOK || again.Header().Get("ETag") != `"7"` {
+		t.Fatalf("the first answered %d, the repeat %d with ETag %q", first.Code, again.Code, again.Header().Get("ETag"))
+	}
+}
+
 // A mutation holding the household's feed lock waits on no row another mutation may hold: the
 // key is marked committed before the lock is taken. Here the owner removes a member, whose
 // membership takes their Idempotency-Keys with it, while that member's own keyed request is
@@ -764,7 +799,11 @@ func TestAKeyIsCommittedOutsideTheFeedLock(t *testing.T) {
 			rw.WriteHeader(http.StatusNoContent)
 		})
 	}()
-	<-claimed
+	select {
+	case <-claimed:
+	case <-done:
+		t.Fatal("the member's keyed request did not reach its handler")
+	}
 	w.in(h, owner, func(ctx context.Context) {
 		id := idgen.New()
 		_, removal = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
@@ -778,6 +817,13 @@ func TestAKeyIsCommittedOutsideTheFeedLock(t *testing.T) {
 			return create(ctx, id, "Removed")(tx)
 		})
 	})
+	select {
+	case <-removing:
+	default:
+		// The removal never reached its mutation: let the member's request go on, so the test
+		// fails on what it finds rather than waiting for ever.
+		close(removing)
+	}
 	<-done
 	if removal != nil || !errors.Is(keyed, idempotency.ErrClaimLost) {
 		t.Fatalf("the removal: %v; the member's keyed request: %v, want ErrClaimLost", removal, keyed)

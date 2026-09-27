@@ -54,13 +54,15 @@ var (
 	ErrNoVia = errors.New("mutation: no via in this context")
 )
 
-// rowsWritten is how many rows the connection has inserted, updated and deleted in the tables
-// outside PostgreSQL's own catalog, by the statistics it keeps for itself until it next reports
-// them, which it never does inside a transaction: so two readings in one transaction differ by
-// exactly the rows written between them. The transaction id is no such measure: PostgreSQL
-// assigns one to a transaction that locks a row as well as to one that writes, so a mutation that
-// took a row FOR UPDATE, or ran an upsert whose update did not apply, and found nothing to change
-// would count as having written.
+// rowsWritten is how many rows the connection has tried to insert, update and delete in the
+// tables outside PostgreSQL's own catalog, by the statistics it keeps for itself until it next
+// reports them, which it never does inside a transaction: so two readings in one transaction
+// differ by the rows written between them. A row counts once its write is attempted, so one that
+// a rolled-back savepoint undid counts as written although nothing of it commits: an insert
+// refused as a duplicate, for instance, whose error the mutation caught. The transaction id is no
+// such measure: PostgreSQL assigns one to a transaction that locks a row as well as to one that
+// writes, so a mutation that took a row FOR UPDATE, or ran an upsert whose update did not apply,
+// and found nothing to change would count as having written.
 const rowsWritten = `
 	SELECT coalesce(sum(pg_stat_get_xact_tuples_inserted(c.oid) + pg_stat_get_xact_tuples_updated(c.oid)
 	                    + pg_stat_get_xact_tuples_deleted(c.oid)), 0)::bigint
@@ -117,8 +119,11 @@ func WithVia(ctx context.Context, via audit.Via) context.Context {
 // a request that asked for a change already in place, found as it may be found, by a read, by
 // a row it locked (SELECT … FOR UPDATE) or by an upsert whose update did not apply. One that
 // inserted, updated or deleted a row without reporting an event and a change, or reported one
-// without the other, returns ErrUnrecorded. When ctx's request holds an Idempotency-Key, the
-// key is marked committed in the same transaction (idempotency.Commit).
+// without the other, returns ErrUnrecorded. So does one that found its change in place by a
+// write it then undid, catching an insert's unique violation and rolling back to a savepoint:
+// PostgreSQL counts the attempted row as written (rowsWritten), so a mutation finds what is
+// already there by a read, a lock or an upsert instead. When ctx's request holds an
+// Idempotency-Key, the key is marked committed in the same transaction (idempotency.Commit).
 func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, error) {
 	reg, _ := ctx.Value(catalogKey{}).(*module.Registry)
 	if reg == nil {
