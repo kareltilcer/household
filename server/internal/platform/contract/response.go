@@ -44,9 +44,8 @@ func protocolStatus(o *Operation, status int) bool {
 //
 // A matched route's response must have a status its operation declares, or one of
 // ProtocolStatuses the operation may answer undeclared, and a body its declared schema
-// accepts. A problem document, whatever
-// the status and whether or not a route matched, must be a valid Problem, and a
-// validation_failed one a valid ValidationProblem.
+// accepts. A problem document, whatever the status and whether or not a route matched,
+// must be a valid Problem, and a validation_failed one a valid ValidationProblem.
 func (c *Contract) ValidateResponse(req *http.Request, pattern string, params map[string]string, status int, header http.Header, body []byte) error {
 	if isProblem(header) {
 		if err := c.validateProblem(body); err != nil {

@@ -31,7 +31,8 @@ type Passwords struct {
 	Migrate, App, Meter string
 }
 
-func (p Passwords) of(role string) string {
+// Of returns role's password, or "" for a role that is not one of the three.
+func (p Passwords) Of(role string) string {
 	switch role {
 	case RoleMigrate:
 		return p.Migrate
@@ -121,7 +122,7 @@ func CreateRoles(ctx context.Context, tx pgx.Tx, passwords Passwords) error {
 		return fmt.Errorf("lock: %w", err)
 	}
 	for _, role := range Roles {
-		password := passwords.of(role)
+		password := passwords.Of(role)
 		if password == "" {
 			return fmt.Errorf("no password for %s", role)
 		}

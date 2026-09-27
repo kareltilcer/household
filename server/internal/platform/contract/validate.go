@@ -1,7 +1,10 @@
 package contract
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -9,6 +12,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -196,6 +200,29 @@ func requestMediaType(r *http.Request, body *openapi3.RequestBody) (mediaType st
 
 func isJSON(mediaType string) bool {
 	return mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
+}
+
+// init has kin-openapi decode application/json, the only JSON media type the contract
+// declares a body in, with strictJSON instead of its own decoder. A contract that declares
+// another registers it here too.
+func init() {
+	openapi3filter.RegisterBodyDecoder("application/json", strictJSON)
+}
+
+// strictJSON decodes a JSON body as kin-openapi's own decoder does, and first refuses one
+// that is not a JSON text (RFC 8259): that decoder reads only the first value, so a body
+// with anything after it (`{…} x`, `{…}{…}`) would be validated by its first value and
+// handed on whole, and it reads bytes that are not UTF-8 as U+FFFD, which a text column
+// would refuse. The refusal is a ParseError, which the edge answers 422 malformed.
+func strictJSON(body io.Reader, header http.Header, schema *openapi3.SchemaRef, encoding openapi3filter.EncodingFn) (any, error) {
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return nil, &openapi3filter.ParseError{Kind: openapi3filter.KindInvalidFormat, Cause: err}
+	}
+	if !json.Valid(data) || !utf8.Valid(data) {
+		return nil, &openapi3filter.ParseError{Kind: openapi3filter.KindInvalidFormat, Reason: "not a JSON text"}
+	}
+	return openapi3filter.JSONBodyDecoder(bytes.NewReader(data), header, schema, encoding)
 }
 
 // toProblem turns a kin-openapi validation error into the problem the client receives.

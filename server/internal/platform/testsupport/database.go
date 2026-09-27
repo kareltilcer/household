@@ -128,11 +128,7 @@ func databaseURL(database, role string) (string, error) {
 	}
 	u.Path = "/" + database
 	if role != "" {
-		password := map[string]string{
-			db.RoleMigrate: Passwords.Migrate,
-			db.RoleApp:     Passwords.App,
-			db.RoleMeter:   Passwords.Meter,
-		}[role]
+		password := Passwords.Of(role)
 		if password == "" {
 			return "", fmt.Errorf("no test password for role %q", role)
 		}

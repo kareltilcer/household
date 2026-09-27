@@ -207,6 +207,10 @@ func NotFound(w http.ResponseWriter, r *http.Request) {
 // MethodNotAllowed returns the handler for a path router serves but not with the request's
 // method: 405 method_not_allowed, with the Allow header RFC 9110 §15.5.6 requires. chi
 // passes a custom handler no list of methods, so it asks router for each.
+//
+// chi also sends here, before it routes at all, a request whose method it does not know
+// (PROPFIND, QUERY), whatever its path. A path no method serves is answered 404 not_found,
+// as a known method on it is: there is no resource there, and no Allow a 405 could carry.
 func MethodNotAllowed(router chi.Routes) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := RoutePath(r)
@@ -216,9 +220,11 @@ func MethodNotAllowed(router chi.Routes) http.HandlerFunc {
 				allowed = append(allowed, method)
 			}
 		}
-		if len(allowed) > 0 {
-			w.Header().Set("Allow", strings.Join(allowed, ", "))
+		if len(allowed) == 0 {
+			NotFound(w, r)
+			return
 		}
+		w.Header().Set("Allow", strings.Join(allowed, ", "))
 		problem.Write(w, reqctx.RequestID(r.Context()), problem.New(http.StatusMethodNotAllowed, problem.CodeMethodNotAllowed))
 	}
 }

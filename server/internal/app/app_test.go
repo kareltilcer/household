@@ -134,6 +134,19 @@ func TestAnUnservedMethodIs405WithAllow(t *testing.T) {
 	if allow := rec.Header().Get("Allow"); allow != "GET" {
 		t.Fatalf("Allow %q, want GET", allow)
 	}
+
+	// chi hands a method it does not know to the 405 handler before routing: on a path that
+	// is served it is a 405 like any other, and on one that is not, the 404 a GET would get.
+	rec = testsupport.Serve(t, r, httptest.NewRequestWithContext(t.Context(), "PROPFIND", "/api/v1/healthz", nil))
+	if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "GET" {
+		t.Fatalf("PROPFIND on a served path: %d, Allow %q", rec.Code, rec.Header().Get("Allow"))
+	}
+	for _, path := range []string{"/api/v1/nowhere", "/elsewhere"} {
+		rec = testsupport.Serve(t, r, httptest.NewRequestWithContext(t.Context(), "PROPFIND", path, nil))
+		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"code":"not_found"`) || rec.Header().Get("Allow") != "" {
+			t.Fatalf("PROPFIND %s: %d, Allow %q, %s", path, rec.Code, rec.Header().Get("Allow"), rec.Body.String())
+		}
+	}
 }
 
 func TestEveryResponseCarriesItsRequestID(t *testing.T) {

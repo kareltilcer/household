@@ -340,19 +340,34 @@ func TestTheRequestIsNotRewrittenWithDefaults(t *testing.T) {
 	}
 }
 
+// A body that is not a JSON text is malformed, however valid its first value: kin-openapi's
+// own decoder reads only that value, and would hand the rest to the handler unvalidated.
 func TestMalformedAndMissingBodies(t *testing.T) {
-	h, _ := router(t)
+	h, seen := router(t)
+	valid := `{"id":"` + other + `","name":"x"}`
 	for name, tc := range map[string]struct {
 		c    call
 		want problem.FieldError
 	}{
-		"not JSON":  {call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"name":`}, problem.FieldError{Field: "", Code: "malformed"}},
-		"no body":   {call{method: http.MethodPost, path: lists, contentType: "application/json"}, problem.FieldError{Field: "", Code: "required"}},
-		"no header": {call{method: http.MethodPost, path: lists}, problem.FieldError{Field: "", Code: "required"}},
+		"not JSON":        {call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"name":`}, problem.FieldError{Field: "", Code: "malformed"}},
+		"data after it":   {call{method: http.MethodPost, path: lists, contentType: "application/json", body: valid + ` x`}, problem.FieldError{Field: "", Code: "malformed"}},
+		"a second value":  {call{method: http.MethodPost, path: lists, contentType: "application/json", body: valid + `{"name":5}`}, problem.FieldError{Field: "", Code: "malformed"}},
+		"bytes not UTF-8": {call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"id":"` + other + `","name":"x` + "\xff" + `"}`}, problem.FieldError{Field: "", Code: "malformed"}},
+		"no body":         {call{method: http.MethodPost, path: lists, contentType: "application/json"}, problem.FieldError{Field: "", Code: "required"}},
+		"no header":       {call{method: http.MethodPost, path: lists}, problem.FieldError{Field: "", Code: "required"}},
+		"whitespace only": {call{method: http.MethodPost, path: lists, contentType: "application/json", body: " \n"}, problem.FieldError{Field: "", Code: "malformed"}},
 	} {
 		t.Run(name, func(t *testing.T) {
+			seen.called = false
 			sameErrors(t, fieldErrors(t, tc.c.do(t, h)), tc.want)
+			if seen.called {
+				t.Fatal("the handler ran")
+			}
 		})
+	}
+	// Whitespace around the one value is part of a JSON text.
+	if rec := (call{method: http.MethodPost, path: lists, contentType: "application/json", body: " " + valid + "\n"}).do(t, h); rec.Code != http.StatusNoContent {
+		t.Fatalf("a valid body with whitespace around it: %d %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -601,6 +616,9 @@ func TestValidateResponse(t *testing.T) {
 	}
 	if err := c.ValidateResponse(get, "/healthz", nil, http.StatusOK, jsonHeader, []byte(`{"status":"fine"}`)); err == nil {
 		t.Error("a body that breaks `const: ok` passed")
+	}
+	if err := c.ValidateResponse(get, "/healthz", nil, http.StatusOK, jsonHeader, []byte(`{"status":"ok"}{"status":"ok"}`)); err == nil {
+		t.Error("a body of two JSON values passed")
 	}
 	if err := c.ValidateResponse(get, "/healthz", nil, http.StatusTeapot, jsonHeader, []byte(`{}`)); err == nil {
 		t.Error("an undeclared status passed")

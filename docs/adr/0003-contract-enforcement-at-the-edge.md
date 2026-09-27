@@ -47,10 +47,13 @@ be enforced rather than intended:
   takes none answers `422`, whether it comes with a `Content-Length` or chunked; a body in a
   media type the operation does not declare answers `415`, media types compared without regard
   to case or to the whitespace around their parameters; a multipart upload is left to its
-  handler to stream, under its own cap and deadline. A query string pair that `net/url` cannot
-  parse, which it would drop without a word, answers `422 malformed`: a dropped cursor would
-  otherwise be answered with page one. The contract says that any operation can answer the `422`
-  refusals, and any operation that takes a body the `413` and `415`, declared or not.
+  handler to stream, under its own cap and deadline. A JSON body that is not a JSON text, with
+  anything after its first value or bytes that are not UTF-8, answers `422 malformed`:
+  kin-openapi's own decoder reads only the first value, so the contract package registers a
+  strict one for `application/json`. A query string pair that `net/url` cannot parse, which it
+  would drop without a word, answers `422 malformed`: a dropped cursor would otherwise be
+  answered with page one. The contract says that any operation can answer the `422` refusals,
+  and any operation that takes a body the `413` and `415`, declared or not.
 - **Every request body must arrive within `HOUSEHOLD_BODY_TIMEOUT`** (60 s) or the connection
   is closed, since the server itself bounds only the reading of headers. The deadline is set
   for every request with a body before it is routed (`httpx.BodyDeadline`), not only for the
@@ -71,8 +74,9 @@ be enforced rather than intended:
   `one_of`), `malformed` for a value that does not parse (an empty `?limit=` included), or
   `invalid` for a refusal no keyword names, such as a body on an operation that takes none; a
   `null` the type does not admit is `type`, although kin-openapi's built-in validator names it
-  `nullable`, a 3.0 keyword the 3.1 contract never uses. An `allOf` failure is reported as the failures inside it, each at its
-  own pointer, since `allOf` is how a Create composes its Update with a required list.
+  `nullable`, a 3.0 keyword the 3.1 contract never uses. An `allOf` failure is reported as the
+  failures inside it, each at its own pointer, since `allOf` is how a Create composes its
+  Update with a required list.
 - **`ProblemCode` gains `method_not_allowed` and `internal`**, the two codes any operation can
   answer with and none declares. The Go enum is generated from the contract (`pnpm run gen`),
   and a test fails when the generated file is stale, since CI does not run `go generate`.
