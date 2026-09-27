@@ -1,5 +1,6 @@
 # Every violation architecture test 2 must report for tables.sql, table by table in name order,
 # and the stale exemptions last.
+arch_testdata.members_writable has permissive policy member_access, which writes beyond the household; a wider rule is a FOR SELECT policy
 arch_testdata.no_household has no household_id column
 arch_testdata.no_household has no tenant isolation policy; create it with enable_tenant_isolation
 arch_testdata.no_policy has no tenant isolation policy; create it with enable_tenant_isolation

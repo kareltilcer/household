@@ -18,7 +18,9 @@ import (
 // tenant isolation that enable_tenant_isolation creates. Another permissive policy would widen
 // what a household can read, since permissive policies are ORed; a rule narrower than the
 // tenant's is a restrictive policy, which is ANDed with it. A materialized view cannot hold a
-// policy at all, so none may hold a household's rows.
+// policy at all, so none may hold a household's rows. A table exempted for a policy of its own
+// may read more widely than its household, but only in a FOR SELECT policy: it is written only
+// in its household's context.
 //
 // It reads the schema from PostgreSQL's catalog, as the migrations left it in the package's
 // database: every table in every schema, whichever migration made it and however it spelled
@@ -40,10 +42,12 @@ func TestTenantTablesAreIsolatedCatchesEachViolation(t *testing.T) {
 	dir := filepath.Join("testdata", "tenancy")
 	execFile(t, tx, dir, "tables.sql")
 	got := tenancyViolations(t, tx, "arch_testdata", map[string]exemption{
-		"arch_testdata.catalog":        {why: "reference data"},
-		"arch_testdata.roots":          {ownPolicy: true, why: "a tenant root with a policy of its own"},
-		"arch_testdata.roots_unforced": {ownPolicy: true, why: "a tenant root that does not force its policy"},
-		"arch_testdata.gone":           {why: "a table that has since been dropped"},
+		"arch_testdata.catalog":          {why: "reference data"},
+		"arch_testdata.roots":            {ownPolicy: true, key: "id", why: "a tenant root with a policy of its own"},
+		"arch_testdata.roots_unforced":   {ownPolicy: true, key: "id", why: "a tenant root that does not force its policy"},
+		"arch_testdata.members":          {ownPolicy: true, why: "read more widely, written in the household"},
+		"arch_testdata.members_writable": {ownPolicy: true, why: "written wherever it is read"},
+		"arch_testdata.gone":             {why: "a table that has since been dropped"},
 	})
 	want := lines(t, os.DirFS(dir), "want.txt")
 	if !slices.Equal(got, want) {
@@ -54,10 +58,22 @@ func TestTenantTablesAreIsolatedCatchesEachViolation(t *testing.T) {
 // exemption is why a table is not held to the tenant-table rule.
 type exemption struct {
 	// ownPolicy marks a table that holds households' rows but is isolated by a policy of its
-	// own: it must still enable and force row-level security and have a policy. A table
-	// without it is global, and holds no household's rows.
+	// own: it must still enable and force row-level security, have a policy, and be written
+	// only in its household's context. A table without it is global, and holds no household's
+	// rows.
 	ownPolicy bool
-	why       string
+	// key is the column that names the household of an own-policy table's row, when it is not
+	// household_id: the tenant root's own id.
+	key string
+	why string
+}
+
+// column returns the column that names the household of the table's row.
+func (e exemption) column() string {
+	if e.key != "" {
+		return e.key
+	}
+	return "household_id"
 }
 
 // exemptions are the server's tables that are not tenant tables, each with its reason. An
@@ -67,15 +83,19 @@ var exemptions = map[string]exemption{
 	"public.goose_db_version": {why: "goose's record of the migrations applied"},
 	"public.modules":          {why: "the module ids: reference data, the same for every household"},
 	"public.users":            {why: "PRD 01 §2.4: a user exists independently of any household"},
-	"public.households": {ownPolicy: true, why: "the tenant root, keyed on id; its members read it before a " +
-		"household context exists, to list their households"},
+	"public.households": {ownPolicy: true, key: "id", why: "the tenant root, keyed on id; its members read it " +
+		"before a household context exists, to list their households"},
 	"public.memberships": {ownPolicy: true, why: "PRD 01 §2.4: how tenancy is resolved, read before a " +
-		"household context exists, so its policy is keyed on user_id as well"},
+		"household context exists, so its policy is keyed on user_id there"},
 }
 
 // tenantIsolation is the expression of the policy enable_tenant_isolation creates, both its
 // USING and its WITH CHECK, as PostgreSQL prints it back.
 const tenantIsolation = "(household_id = app_household_id())"
+
+// isolation is the same expression on the household named by column, the key of an
+// own-policy table.
+func isolation(column string) string { return "(" + column + " = app_household_id())" }
 
 // table is a relation that can hold rows, as the catalog describes it.
 type table struct {
@@ -155,6 +175,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 			if len(policies[tb.oid]) == 0 {
 				out = append(out, tb.name+" has no policy, so the request role reads none of it")
 			}
+			out = append(out, ownWriteViolations(tb, policies[tb.oid], e.column())...)
 			continue
 		case tb.kind == "m":
 			out = append(out, tb.name+" is a materialized view, which row-level security cannot hold, so it may hold no household's rows")
@@ -193,6 +214,30 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 	}
 	slices.Sort(stale)
 	return append(out, stale...)
+}
+
+// ownWriteViolations reports each permissive policy through which a transaction writes an
+// own-policy table beyond the household in its context. Only a FOR SELECT policy may be wider
+// than the household. A policy that applies to a write is held to the household named by
+// column in its USING, which is all a DELETE is checked against, and in its WITH CHECK, or in
+// its USING where it has none; an INSERT policy has only a WITH CHECK.
+func ownWriteViolations(tb table, policies []policy, column string) []string {
+	own := isolation(column)
+	var out []string
+	for _, p := range policies {
+		if !p.permissive || p.command == "r" {
+			continue
+		}
+		check := p.with
+		if check == "" {
+			check = p.using
+		}
+		if (p.command != "a" && p.using != own) || check != own {
+			out = append(out, fmt.Sprintf("%s has permissive policy %s, which writes beyond the household; "+
+				"a wider rule is a FOR SELECT policy", tb.name, p.name))
+		}
+	}
+	return out
 }
 
 // rlsViolations reports a table that does not enable or does not force row-level security.

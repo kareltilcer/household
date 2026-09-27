@@ -83,6 +83,14 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 	return &world{t: t, contract: c, router: r, admin: d.Pool(t, ""), logs: logs}
 }
 
+// in returns w reporting to t, a subtest of w's test, so that a failure in the subtest fails it
+// rather than calling its parent's FailNow from the subtest's goroutine.
+func (w *world) in(t *testing.T) *world {
+	sub := *w
+	sub.t = t
+	return &sub
+}
+
 func (w *world) exec(sql string, args ...any) {
 	w.t.Helper()
 	if _, err := w.admin.Exec(w.t.Context(), sql, args...); err != nil {
@@ -243,10 +251,11 @@ func TestAModuleGrantedNoneIsAbsent(t *testing.T) {
 	it := w.item(h)
 	for name, l := range map[string]*access.Level{"granted none": level(access.None), "no grant row": nil} {
 		t.Run(name, func(t *testing.T) {
-			u := w.member(h, access.Member, l)
-			expect(t, w.do(http.MethodGet, items(h), u, ""), http.StatusNotFound, problem.CodeNotFound)
-			expect(t, w.do(http.MethodPost, items(h), u, itemBody(idgen.New(), h)), http.StatusNotFound, problem.CodeNotFound)
-			expect(t, w.do(http.MethodDelete, itemPath(h, it), u, ""), http.StatusNotFound, problem.CodeNotFound)
+			sub := w.in(t)
+			u := sub.member(h, access.Member, l)
+			expect(t, sub.do(http.MethodGet, items(h), u, ""), http.StatusNotFound, problem.CodeNotFound)
+			expect(t, sub.do(http.MethodPost, items(h), u, itemBody(idgen.New(), h)), http.StatusNotFound, problem.CodeNotFound)
+			expect(t, sub.do(http.MethodDelete, itemPath(h, it), u, ""), http.StatusNotFound, problem.CodeNotFound)
 		})
 	}
 	if w.count(it) != 1 {

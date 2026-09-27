@@ -137,7 +137,9 @@ func Middleware(cfg Config) (func(http.Handler) http.Handler, error) {
 				problem.Write(w, requestID, problem.New(http.StatusUnauthorized, problem.CodeUnauthenticated))
 				return
 			}
-			// The edge has checked the parameter against the contract's Uuid already.
+			// The edge checks the parameter against the contract's Uuid on a route the contract
+			// declares, but passes through a path no route matches, for the router to answer 404:
+			// such a path reaches here with whatever the client put in it.
 			household, err := uuid.Parse(chi.URLParam(r, Param))
 			if err != nil {
 				problem.Write(w, requestID, problem.NotFound())

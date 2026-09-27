@@ -18,7 +18,9 @@ import (
 // primary key, and finds none. A tenant table is any table exemptions does not call global, its
 // own-policy tables included, so a new table without a policy fails it, which is the point; so
 // does a new table with no row of household A in the fixture, since a read of a table that
-// holds nothing proves nothing.
+// holds nothing proves nothing. The reader is household B's owner, who is a member of household
+// A as well: a policy that lets a user read their own rows wherever they hold them, rather than
+// the household's, lets that reader through, and is caught doing so in household B's context.
 //
 // The reads run as household_app in a transaction the administrator opened, SET LOCAL ROLE, as
 // the server's own transactions run (tenant.InTx): the same privileges and the same policies as
@@ -46,17 +48,14 @@ func TestTenantIsolationCatchesEachViolation(t *testing.T) {
 	}
 }
 
-// The fixture's two households, and the owner of each.
+// The fixture's two households, and the owner of each. Household B's owner is a member of
+// household A too.
 const (
 	householdA = "01900000-0000-7000-8000-00000000000a"
 	householdB = "01900000-0000-7000-8000-00000000000b"
 	ownerA     = "01900000-0000-7000-8000-0000000000a1"
 	ownerB     = "01900000-0000-7000-8000-0000000000b1"
 )
-
-// householdKey names the column that says which household a row belongs to, where it is not
-// household_id: the tenant root's own id.
-var householdKey = map[string]string{"public.households": "id"}
 
 // isolationViolations returns each violation of the isolation test on tx, which must be the
 // administrator's, with the fixture loaded.
@@ -102,13 +101,11 @@ func isolationViolations(t *testing.T, tx pgx.Tx) []string {
 	var out []string
 	var checked []*target
 	for _, tb := range targets {
-		if e, ok := exemptions[tb.name]; ok && !e.ownPolicy {
+		e, exempted := exemptions[tb.name]
+		if exempted && !e.ownPolicy {
 			continue
 		}
-		column := householdKey[tb.name]
-		if column == "" {
-			column = "household_id"
-		}
+		column := e.column()
 		switch {
 		case !slices.Contains(tb.columns, column):
 			out = append(out, tb.name+" has no "+column+" column to tell household A's rows by")

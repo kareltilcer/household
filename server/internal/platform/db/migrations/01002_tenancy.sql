@@ -107,19 +107,31 @@ SELECT enable_tenant_isolation('module_grants');
 
 -- The two tables tenancy is resolved through have policies of their own (PRD 01 §2.4). Both are
 -- read before a household context exists, to list a user's households and to check that the
--- caller is a member of the one a request addresses; both are written only in the household's
--- own context.
+-- caller is a member of the one a request addresses, so outside any household's context a user
+-- reads their own memberships and the households they hold them in. Inside a household's
+-- context both read as a tenant table does, that household's rows only: a query that forgets
+-- its WHERE household_id does not reach the caller's rows in another household, where the
+-- caller may hold another role. The wider read is a FOR SELECT policy, and both tables are
+-- written only through a second policy held to the household's context. A DELETE is checked
+-- against a policy's USING alone, so a USING that admitted the caller's rows everywhere would
+-- let a transaction in one household delete them in another. Architecture test 2 holds both
+-- tables to this.
 ALTER TABLE households ENABLE ROW LEVEL SECURITY;
 ALTER TABLE households FORCE ROW LEVEL SECURITY;
-CREATE POLICY household_access ON households
+CREATE POLICY household_read ON households FOR SELECT
   USING (
     id = app_household_id()
-    OR EXISTS (SELECT FROM memberships m WHERE m.household_id = households.id AND m.user_id = app_user_id())
-  )
+    OR (app_household_id() IS NULL
+      AND EXISTS (SELECT FROM memberships m WHERE m.household_id = households.id AND m.user_id = app_user_id()))
+  );
+CREATE POLICY household_write ON households
+  USING (id = app_household_id())
   WITH CHECK (id = app_household_id());
 
 ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE memberships FORCE ROW LEVEL SECURITY;
-CREATE POLICY membership_access ON memberships
-  USING (user_id = app_user_id() OR household_id = app_household_id())
+CREATE POLICY membership_read ON memberships FOR SELECT
+  USING (household_id = app_household_id() OR (app_household_id() IS NULL AND user_id = app_user_id()));
+CREATE POLICY membership_write ON memberships
+  USING (household_id = app_household_id())
   WITH CHECK (household_id = app_household_id());

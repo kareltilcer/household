@@ -52,10 +52,15 @@ tenant table, compares each row's `household_id` with the setting. It says the m
   CHECK`. A tenant table's only permissive policy is that one; a narrower rule, such as a
   private item's owner, is a restrictive policy on top, which PostgreSQL ANDs with it where it
   would OR a second permissive one.
-- **Two tables have policies of their own** (PRD 01 §2.4). `memberships` is readable by the
-  user it names and by the members of its household, and writable only in its household's
-  context. `households` is readable in its own context and by its members, and writable only in
-  its own context. `users` and `modules` are global and hold no household's rows.
+- **Two tables have policies of their own** (PRD 01 §2.4). Inside a household's context each
+  reads as a tenant table does, that household's rows only. Outside any household's context,
+  where the tenant middleware checks membership and a user lists their households,
+  `memberships` is readable by the user it names and `households` by its members. The wider
+  read is a `FOR SELECT` policy, and each table is written through a second policy held to its
+  household's context: PostgreSQL checks a `DELETE` against a policy's `USING` alone, so one
+  policy whose `USING` admitted the caller's rows everywhere would let a transaction in one
+  household delete them in another. `users` and `modules` are global and hold no household's
+  rows.
 - **A `modules` table lists the module ids**, seeded with `ModuleKeyValue`'s seventeen, and
   `module_enablement` and `module_grants` reference it. A test holds it equal to the contract's
   enum. A module with no enablement row is disabled, and a member with no grant row has
@@ -77,12 +82,15 @@ tenant table, compares each row's `household_id` with the setting. It says the m
   other module and not the module list, and the platform imports neither. Test 2 reads
   PostgreSQL's catalog after every block has run: every table not exempted by name, with a
   reason, has `household_id uuid NOT NULL`, row-level security enabled and forced, and the
-  template as its only permissive policy; a materialized view, which no policy can hold, is
-  refused; an exemption that names no table is refused. Test 3 type-asserts every registered
-  module to `ExportSource` and `EraseSource`. The isolation test (FR-NF4) loads a fixture of two
-  households with a row in every tenant table and, as `household_app` in household B, reads each
-  of household A's rows by primary key and finds none, then reads each as household A and finds
-  it, so that finding nothing proves something; a tenant table with no fixture row fails it.
+  template as its only permissive policy; a table exempted for a policy of its own has only
+  `FOR SELECT` policies wider than its household; a materialized view, which no policy can
+  hold, is refused; an exemption that names no table is refused. Test 3 type-asserts every
+  registered module to `ExportSource` and `EraseSource`. The isolation test (FR-NF4) loads a
+  fixture of two households with a row in every tenant table and, as `household_app` in
+  household B, with household B's owner as the caller, who is a member of household A as well,
+  reads each of household A's rows by primary key and finds none, then reads each as household
+  A and finds it, so that finding nothing proves something; a tenant table with no fixture row
+  fails it.
 - **A test module proves the rest.** `internal/app/testdata/probe` is a module with a table, a
   block (99), a contract of its own, a list handler with no `WHERE` and a create handler that
   writes the household its body names. `testsupport.Main(m, blocks…)` migrates a package's clone
@@ -98,6 +106,7 @@ tenant table, compares each row's `household_id` with the setting. It says the m
 | A `CHECK` constraint listing the module ids | A test module could not have an enablement row; a new module would drop and re-add the constraint instead of inserting a row |
 | Architecture test 2 by parsing migrations | Misses a policy created by a function, a `DO` block or a later `ALTER`; the catalog is what PostgreSQL enforces |
 | Test 2 checking only that RLS is enabled and forced | A policy `USING (true)`, or a second permissive policy, passes it and isolates nothing |
+| One policy on `memberships` and `households`, keyed on the user as well as the household in every context | Its `USING` reaches the caller's rows in their other households: inside household A's context a `DELETE` that forgets its `WHERE household_id` removes the caller's membership in household B, or household B itself and every row that cascades from it, and a role lookup that forgets it can find their role in household B |
 | Rows fabricated per table from the catalog for the isolation test | Check constraints, foreign keys and enums defeat a generic fabricator; a fixture row per table is explicit, and missing one fails loudly |
 | The module blocks in the template database | `testsupport` would import every module, and a module's own tests import `testsupport`: an import cycle for every in-package module test |
 | `ExportSource` and `EraseSource` in the `Module` interface | Enforced by the compiler, but PRD 01 §4 lists them as catalogs and names architecture test 3 as the check; either holds, and this keeps the PRD's shape |
@@ -111,6 +120,10 @@ tenant table, compares each row's `household_id` with the setting. It says the m
   them has one request in flight complete; the next is refused (D-15's "next request").
 - Every migration that creates a tenant table calls `enable_tenant_isolation`, and the PR that
   adds one adds its rows to `internal/arch/testdata/isolation/fixture.sql`.
+- Reading a user's memberships across households, as listing their households does, takes a
+  transaction with only the caller set, as the middleware's resolution runs; inside a
+  household's context those rows read as a tenant table's. Item 10's `invitations`, the third
+  table PRD 01 §2.4 gives a policy of its own, takes the same shape, and test 2 holds it to it.
 - Item 4's mutation spine builds on `InTx`; item 10 writes enablement rows and grant defaults;
   item 18 fills in the entitlement hook (`tenant.Config.Entitlement`).
 - Revisit the two-transaction resolution if its round trips show in latency at real load

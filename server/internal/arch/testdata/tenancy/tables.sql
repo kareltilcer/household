@@ -78,3 +78,22 @@ CREATE POLICY root_access ON arch_testdata.roots USING (id = app_household_id())
 CREATE TABLE arch_testdata.roots_unforced (id uuid PRIMARY KEY);
 ALTER TABLE arch_testdata.roots_unforced ENABLE ROW LEVEL SECURITY;
 CREATE POLICY root_access ON arch_testdata.roots_unforced USING (id = app_household_id());
+
+-- Exempted with policies of its own: read by the user it names as well, and written only in its
+-- household's context.
+CREATE TABLE arch_testdata.members (household_id uuid NOT NULL, user_id uuid NOT NULL, PRIMARY KEY (household_id, user_id));
+ALTER TABLE arch_testdata.members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE arch_testdata.members FORCE ROW LEVEL SECURITY;
+CREATE POLICY member_read ON arch_testdata.members FOR SELECT
+  USING (household_id = app_household_id() OR user_id = app_user_id());
+CREATE POLICY member_write ON arch_testdata.members
+  USING (household_id = app_household_id()) WITH CHECK (household_id = app_household_id());
+
+-- Exempted with a policy of its own whose wider rule reaches writes too: a DELETE, checked
+-- against its USING alone, removes the user's rows in every household from any one.
+CREATE TABLE arch_testdata.members_writable (household_id uuid NOT NULL, user_id uuid NOT NULL, PRIMARY KEY (household_id, user_id));
+ALTER TABLE arch_testdata.members_writable ENABLE ROW LEVEL SECURITY;
+ALTER TABLE arch_testdata.members_writable FORCE ROW LEVEL SECURITY;
+CREATE POLICY member_access ON arch_testdata.members_writable
+  USING (household_id = app_household_id() OR user_id = app_user_id())
+  WITH CHECK (household_id = app_household_id());

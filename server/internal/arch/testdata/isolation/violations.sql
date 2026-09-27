@@ -25,6 +25,13 @@ ALTER TABLE isolation_blind FORCE ROW LEVEL SECURITY;
 CREATE TABLE isolation_keyless (household_id uuid NOT NULL);
 SELECT enable_tenant_isolation('isolation_keyless');
 
+-- Keyed on the user as well as the household, in every context: household B's owner, a member
+-- of household A too, reads the row of theirs that household A holds.
+CREATE TABLE isolation_own_rows (id uuid PRIMARY KEY, household_id uuid NOT NULL, user_id uuid NOT NULL);
+ALTER TABLE isolation_own_rows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE isolation_own_rows FORCE ROW LEVEL SECURITY;
+CREATE POLICY own_rows ON isolation_own_rows USING (household_id = app_household_id() OR user_id = app_user_id());
+
 RESET ROLE;
 
 INSERT INTO isolation_open VALUES ('01900000-0000-7000-8000-000000000001', '01900000-0000-7000-8000-00000000000a');
@@ -32,3 +39,5 @@ INSERT INTO isolation_wide VALUES ('01900000-0000-7000-8000-000000000002', '0190
 INSERT INTO isolation_empty VALUES ('01900000-0000-7000-8000-000000000003', '01900000-0000-7000-8000-00000000000b');
 INSERT INTO isolation_blind VALUES ('01900000-0000-7000-8000-000000000004', '01900000-0000-7000-8000-00000000000a');
 INSERT INTO isolation_keyless VALUES ('01900000-0000-7000-8000-00000000000a');
+INSERT INTO isolation_own_rows VALUES
+  ('01900000-0000-7000-8000-000000000005', '01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000b1');
