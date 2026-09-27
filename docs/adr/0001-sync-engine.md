@@ -63,8 +63,8 @@ and its own `Shape` (the one failure in scenario 7 above and two in access loss 
 and 15 of 15 with a tag-aware replica. The harness's own totals for Electric (15, 19 and 19) count
 the notes it logs beside the checks, which pass or fail nothing. Both candidates took item 4's
 tables without a column changed, but not without setup: the spike set `REPLICA IDENTITY FULL` on
-every table either engine replicated (`shopping_items`, `memberships`, `module_enablement`,
-`module_grants` and its own), which Electric needs for an update's old values and PowerSync was
+every table either engine replicated (`memberships`, `module_enablement`, `module_grants` and its
+own, `shopping_items` among them), which Electric needs for an update's old values and PowerSync was
 never run without, and it added each engine's role and publication. Every scenario ran on a fresh
 household in a database holding every earlier scenario's households, and no replica received
 another household's row; each member belonged to one household, so this is not the isolation test
@@ -194,8 +194,11 @@ read path, which adoption gives up; the generated streams and the isolation test
   spine still writes it, under a per-household lock that serialises a household's commits, so its
   monthly partitions still have to be made while it does. Item 14 either names a consumer or stops
   the write and drops the table through an expand/contract migration, recording the choice in a new
-  ADR (ADR 0006 is accepted, so it is not rewritten) and amending PRD 03 §2.2, CLAUDE.md and the
-  push's response.
+  ADR (ADR 0006 is accepted, so it is not rewritten) and amending PRD 03 §2.2, 07 §1, CLAUDE.md
+  and the push's response.
+- **The tenant middleware is not on the read path.** It resolves the entitlement state on every
+  request, and PRD 04 §3 gives a `suspended` household no sync at all. The credentials and the
+  streams hold that instead, which item 18 adds.
 - **D-85's digest is partly the engine's now.** PowerSync verifies each bucket's checksum at every
   checkpoint and downloads it again on a mismatch. That holds a replica to PowerSync's buckets, not
   the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an

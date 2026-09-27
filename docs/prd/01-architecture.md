@@ -37,6 +37,12 @@ EU one (**D-89**): a UK household's data is EU-resident like everyone else's, wh
 because the UK treats the EEA as adequate. The market list does not change the deployment; it
 changes the paperwork ([05-privacy-and-compliance.md](05-privacy-and-compliance.md) §11).
 
+> **Under D-93 a second service runs beside the binary in every environment**: PowerSync,
+> self-hosted in the same EU region, which clients reach over a connection of their own to
+> replicate, with its bucket storage in a PostgreSQL database of its own and the cluster at
+> `wal_level=logical` (§2.3, §7, [ADR 0001](../adr/0001-sync-engine.md)). Writes still go through
+> the binary's API.
+
 ### Why a monolith, still
 
 `home` is a modular monolith and it is the right shape here too, for reasons that got
