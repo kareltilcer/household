@@ -1,0 +1,120 @@
+package arch_test
+
+import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+// Architecture test 4 (PRD 01 §3, §10, FR-AU1, FR-SY1): a mutation writes an audit event and a
+// sync change, in its own transaction. The rule is held three times, and this test is the part
+// a build can check without running a module's routes:
+//
+//   - tenant.InTx, through which a handler reads, is read-only, so PostgreSQL refuses a write
+//     there (internal/app's probe tests prove it);
+//   - mutation.Apply, the one entry point that may write, commits only what it records: it rolls
+//     back a mutation that reports nothing and refuses one that reports half
+//     (internal/platform/mutation's tests prove it);
+//   - and no module opens a write transaction of its own: this test fails a module, its tests
+//     and its testdata included, that names tenant.InWriteTx, which only the platform may, or
+//     dot-imports the tenant package, which would hide the name from it.
+func TestModulesWriteOnlyThroughTheSpine(t *testing.T) {
+	// The server's internal directory, one up.
+	for _, v := range spineViolations(t, os.DirFS("..")) {
+		t.Error(v)
+	}
+}
+
+// Test 4 against deliberate violations: testdata/spine is a small internal directory whose
+// modules open write transactions in the ways the test must catch, and some that it must not,
+// and want.txt is every violation it must report.
+func TestModulesWriteOnlyThroughTheSpineCatchesEachViolation(t *testing.T) {
+	root := os.DirFS(filepath.Join("testdata", "spine"))
+	got := spineViolations(t, root)
+	want := lines(t, root, "want.txt")
+	if !slices.Equal(got, want) {
+		t.Fatalf("violations:\n  %s\nwant:\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+// tenantPath is the import path of the package whose write transaction only the platform opens.
+const tenantPath = internalPath + "platform/tenant"
+
+// spineViolations walks root, an internal directory, and returns each place a module's Go file
+// names tenant.InWriteTx or dot-imports the tenant package, as "path:line: message".
+func spineViolations(t *testing.T, root fs.FS) []string {
+	t.Helper()
+	var out []string
+	fset := token.NewFileSet()
+	err := fs.WalkDir(root, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if p != "." && strings.HasPrefix(d.Name(), ".") {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(p, ".go") {
+			return nil
+		}
+		mod, ok := owner(path.Dir(p))
+		if !ok || mod == platform || mod == list {
+			return nil
+		}
+		src, err := fs.ReadFile(root, p)
+		if err != nil {
+			return err
+		}
+		file, err := parser.ParseFile(fset, p, src, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		var names []string
+		for _, spec := range file.Imports {
+			imported, err := strconv.Unquote(spec.Path.Value)
+			if err != nil {
+				return err
+			}
+			if imported != tenantPath {
+				continue
+			}
+			switch {
+			case spec.Name == nil:
+				names = append(names, "tenant")
+			case spec.Name.Name == ".":
+				out = append(out, fmt.Sprintf("%s:%d: module %s dot-imports the tenant package, which hides tenant.InWriteTx from this test",
+					p, fset.Position(spec.Pos()).Line, mod))
+			case spec.Name.Name != "_":
+				names = append(names, spec.Name.Name)
+			}
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "InWriteTx" {
+				return true
+			}
+			if x, ok := sel.X.(*ast.Ident); ok && slices.Contains(names, x.Name) {
+				out = append(out, fmt.Sprintf("%s:%d: module %s opens a write transaction of its own; "+
+					"a module writes through mutation.Apply, which records the audit event and the sync change",
+					p, fset.Position(sel.Pos()).Line, mod))
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}

@@ -19,6 +19,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/app/testdata/probe"
 	"github.com/kareltilcer/household/server/internal/platform/access"
+	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
@@ -26,6 +27,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
@@ -146,16 +148,26 @@ func (w *world) count(id uuid.UUID) int {
 }
 
 // do sends a request as user, or with no caller when user is uuid.Nil, and checks the
-// response against the probe's contract.
+// response against the probe's contract. It arrives via the web, as the session cookie will
+// say (item 8).
 func (w *world) do(method, path string, user uuid.UUID, body string) *httptest.ResponseRecorder {
+	w.t.Helper()
+	return w.send(method, path, user, body, nil)
+}
+
+// send is do with further request headers.
+func (w *world) send(method, path string, user uuid.UUID, body string, header http.Header) *httptest.ResponseRecorder {
 	w.t.Helper()
 	var reader io.Reader
 	if body != "" {
 		reader = strings.NewReader(body)
 	}
-	req := httptest.NewRequestWithContext(w.t.Context(), method, path, reader)
+	req := httptest.NewRequestWithContext(mutation.WithVia(w.t.Context(), audit.ViaWeb), method, path, reader)
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for key, values := range header {
+		req.Header[key] = values
 	}
 	if user != uuid.Nil {
 		req = req.WithContext(auth.WithUser(req.Context(), user))

@@ -15,13 +15,17 @@ import (
 // internal/app.
 
 func TestInTxOutsideAHouseholdRunsNothing(t *testing.T) {
-	ran := false
-	err := tenant.InTx(t.Context(), func(pgx.Tx) error {
-		ran = true
-		return nil
-	})
-	if !errors.Is(err, tenant.ErrNoTenant) || ran {
-		t.Fatalf("InTx outside a household: %v, ran %v", err, ran)
+	for name, inTx := range map[string]func(context.Context, func(pgx.Tx) error) error{
+		"InTx": tenant.InTx, "InWriteTx": tenant.InWriteTx,
+	} {
+		ran := false
+		err := inTx(t.Context(), func(pgx.Tx) error {
+			ran = true
+			return nil
+		})
+		if !errors.Is(err, tenant.ErrNoTenant) || ran {
+			t.Fatalf("%s outside a household: %v, ran %v", name, err, ran)
+		}
 	}
 	if tenant.From(t.Context()) != nil {
 		t.Fatal("a context outside a request carries a tenant")
@@ -31,7 +35,9 @@ func TestInTxOutsideAHouseholdRunsNothing(t *testing.T) {
 // beginner is a pool that is never asked for a transaction.
 type beginner struct{}
 
-func (beginner) Begin(context.Context) (pgx.Tx, error) { return nil, errors.New("not a pool") }
+func (beginner) BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error) {
+	return nil, errors.New("not a pool")
+}
 
 func TestTheMiddlewareNeedsAPoolAndALogger(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)

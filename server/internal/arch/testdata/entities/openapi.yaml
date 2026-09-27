@@ -1,0 +1,147 @@
+openapi: 3.1.0
+info: { title: The create operations of entities.Creating, version: '1' }
+paths:
+  /lists:
+    post:
+      operationId: postLists
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ListCreate' } } } }
+      responses: { '201': { description: Created } }
+  /lists/batch:
+    post:
+      operationId: postListsBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [ids], properties: { ids: { type: array, items: { $ref: '#/components/schemas/Uuid' } } } }
+      responses: { '201': { description: Created } }
+  /lists/{list_id}:
+    put:
+      operationId: putListsByListId
+      parameters: [{ name: list_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ListCreate' } } } }
+      responses: { '201': { description: Created } }
+  /lists/split:
+    post:
+      operationId: postListsSplit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/ListUpdate' }
+                - { required: [id, name] }
+      responses: { '201': { description: Created } }
+  /lists/multipart:
+    post:
+      operationId: postListsMultipart
+      requestBody:
+        required: true
+        content:
+          multipart/form-data: { schema: { $ref: '#/components/schemas/ListCreate' } }
+          application/json: { schema: { type: object, properties: { id: { $ref: '#/components/schemas/Uuid' } } } }
+      responses: { '201': { description: Created } }
+  /items:
+    post:
+      operationId: postItems
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [text], properties: { id: { $ref: '#/components/schemas/Uuid' }, text: { type: string } } } } }
+      responses: { '201': { description: Created } }
+  /items/quick:
+    post:
+      operationId: postItemsQuick
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [text], properties: { text: { type: string }, ids: { type: array, items: { $ref: '#/components/schemas/Uuid' } } } } } }
+      responses: { '201': { description: Created } }
+  /items/oneof:
+    post:
+      operationId: postItemsOneOf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - { $ref: '#/components/schemas/ListCreate' }
+                - { type: object, required: [text], properties: { text: { type: string } } }
+      responses: { '201': { description: Created } }
+  /items/branches:
+    post:
+      operationId: postItemsBranches
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { id: { $ref: '#/components/schemas/Uuid' }, text: { type: string }, quantity: { type: integer } }
+              oneOf:
+                - { required: [id, text] }
+                - { required: [id, quantity] }
+      responses: { '201': { description: Created } }
+  /staples:
+    get:
+      operationId: getStaples
+      responses: { '200': { description: Listed } }
+    post:
+      operationId: postStaples
+      responses: { '201': { description: Created } }
+  /staples/action:
+    post:
+      operationId: postStaplesAction
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [id], properties: { id: { type: integer } } } } }
+      responses: { '201': { description: Created } }
+  /staples/optional:
+    post:
+      operationId: postStaplesOptional
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/ListCreate' } } } }
+      responses: { '201': { description: Created } }
+  /staples/allof:
+    post:
+      operationId: postStaplesAllOf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { type: object, properties: { name: { type: string } } }
+                - { $ref: '#/components/schemas/ListCreate' }
+      responses: { '201': { description: Created } }
+  /staples/text:
+    post:
+      operationId: postStaplesText
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [id], properties: { id: { type: string } } } } }
+      responses: { '201': { description: Created } }
+  /staples/split:
+    post:
+      operationId: postStaplesSplit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { type: object, properties: { id: { type: integer } } }
+                - { required: [id] }
+      responses: { '201': { description: Created } }
+components:
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+      pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    ListCreate:
+      type: object
+      required: [id, name]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, name: { type: string } }
+    ListUpdate:
+      type: object
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, name: { type: string } }

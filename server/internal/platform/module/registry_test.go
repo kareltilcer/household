@@ -11,6 +11,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
 // fake is a module with a name and migrations, and nothing else.
@@ -86,6 +87,68 @@ func TestTheRegistryRefusesWhatIsNotAModule(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := module.NewRegistry(tc.modules...)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("NewRegistry: %v, want an error saying %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// declaring is a module that declares audit actions and sync entities.
+type declaring struct {
+	fake
+	actions  []module.AuditAction
+	entities []sync.Entity
+}
+
+func (d declaring) AuditActions() []module.AuditAction { return d.actions }
+func (d declaring) SyncEntities() []sync.Entity        { return d.entities }
+
+func TestTheRegistryHoldsWhatModulesDeclare(t *testing.T) {
+	create := module.AuditAction{Key: "garden.planting.create", SummaryKey: "garden.planting.create"}
+	planting := sync.Entity{Name: "garden.planting", Table: "garden_plantings", Policy: sync.LWWField, Access: sync.Grant}
+	bed := sync.Entity{Name: "garden.bed", Table: "garden_beds", Policy: sync.StrictVersion, Access: sync.Grant}
+	r, err := module.NewRegistry(declaring{fake{"garden", nil}, []module.AuditAction{create}, []sync.Entity{planting, bed}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, ok := r.Action("garden.planting.create"); !ok || a != create {
+		t.Errorf("Action: %+v, %v", a, ok)
+	}
+	if _, ok := r.Action("garden.planting.delete"); ok {
+		t.Error("Action found an action nobody declared")
+	}
+	if e, ok := r.Entity("garden.planting"); !ok || e.Table != planting.Table {
+		t.Errorf("Entity: %+v, %v", e, ok)
+	}
+	if got := r.Entities(); len(got) != 2 || got[0].Name != "garden.bed" || got[1].Name != "garden.planting" {
+		t.Errorf("Entities: %+v", got)
+	}
+	var none *module.Registry
+	if _, ok := none.Action("garden.planting.create"); ok {
+		t.Error("a nil registry found an action")
+	}
+	if _, ok := none.Entity("garden.planting"); ok || none.Entities() != nil {
+		t.Error("a nil registry found an entity")
+	}
+}
+
+func TestTheRegistryRefusesWhatAModuleDeclaresWrongly(t *testing.T) {
+	good := sync.Entity{Name: "garden.planting", Table: "garden_plantings", Policy: sync.LWWField, Access: sync.Grant}
+	for name, tc := range map[string]struct {
+		actions  []module.AuditAction
+		entities []sync.Entity
+		want     string
+	}{
+		"another module's action":   {[]module.AuditAction{{Key: "notes.page.create", SummaryKey: "x"}}, nil, `"notes.page.create" is not garden.<action>`},
+		"an unqualified action":     {[]module.AuditAction{{Key: "garden", SummaryKey: "x"}}, nil, `"garden" is not garden.<action>`},
+		"an action twice":           {[]module.AuditAction{{Key: "garden.bed.create", SummaryKey: "x"}, {Key: "garden.bed.create", SummaryKey: "y"}}, nil, "declared twice"},
+		"an action with no summary": {[]module.AuditAction{{Key: "garden.bed.create"}}, nil, "has no summary key"},
+		"an entity with no policy": {nil, []sync.Entity{good, {Name: "garden.bed", Table: "garden_beds", Access: sync.Grant}},
+			"garden.bed: no merge policy"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := module.NewRegistry(declaring{fake{"garden", nil}, tc.actions, tc.entities})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("NewRegistry: %v, want an error saying %q", err, tc.want)
 			}

@@ -1,8 +1,9 @@
 // Package probe is a module that exists only for the tests. It stands in for a feature module
-// to prove what the platform does to every one (plan item 3): the tenant middleware in front of
-// its routes, the gate, the grant levels, and the row-level security under its table. Two of
-// its handlers are wrong on purpose, as a module's handler could be: list reads with no WHERE
-// clause, and create writes into whichever household its body names.
+// to prove what the platform does to every one (plan items 3 and 4): the tenant middleware in
+// front of its routes, the gate, the grant levels, the row-level security under its table, and
+// the mutation spine and the Idempotency-Key under its writes. Two of its handlers are wrong on
+// purpose, as a module's handler could be: list reads with no WHERE clause, and create writes
+// into whichever household its body names.
 package probe
 
 import (
@@ -20,16 +21,22 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/access"
+	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/grant"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
+	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
 // Name is the probe's module id.
 const Name = "probe"
+
+// Entity is the probe's one sync entity.
+const Entity = "probe.item"
 
 //go:embed migrations/*.sql
 var migrations embed.FS
@@ -49,6 +56,7 @@ type Module struct {
 
 var (
 	_ module.Module       = Module{}
+	_ module.SyncSource   = Module{}
 	_ module.ExportSource = Module{}
 	_ module.EraseSource  = Module{}
 )
@@ -65,8 +73,21 @@ func (Module) Migrations() fs.FS {
 	return sub
 }
 
-// AuditActions returns none: the audit spine is item 4's.
-func (Module) AuditActions() []module.AuditAction { return nil }
+// AuditActions returns the actions the probe's mutations record.
+func (Module) AuditActions() []module.AuditAction {
+	return []module.AuditAction{
+		{Key: "probe.item.create", SummaryKey: "probe.item.create"},
+		{Key: "probe.item.delete", SummaryKey: "probe.item.delete"},
+	}
+}
+
+// SyncEntities returns the probe's item.
+func (Module) SyncEntities() []sync.Entity {
+	return []sync.Entity{{
+		Name: Entity, Table: "probe_items", Policy: sync.LWWField, Access: sync.Grant,
+		Creates: []string{"postProbeItems"},
+	}}
+}
 
 // Export writes nothing: export is item 20's.
 func (Module) Export(context.Context, uuid.UUID, io.Writer) error { return nil }
@@ -112,7 +133,8 @@ func (m Module) list(w http.ResponseWriter, r *http.Request) {
 }
 
 // create writes the item into the household its body names, not the one in the path: a
-// handler that trusts the body writes across tenants, and row-level security refuses it.
+// handler that trusts the body writes across tenants, and row-level security refuses it, and
+// with it the audit event and the change the spine would have written.
 func (m Module) create(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if err := grant.Require(ctx, Name, access.Contribute); err != nil {
@@ -124,9 +146,16 @@ func (m Module) create(w http.ResponseWriter, r *http.Request) {
 		m.fail(w, r, problem.Validation(problem.FieldError{Field: "", Code: problem.FieldMalformed}))
 		return
 	}
-	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, "INSERT INTO probe_items (id, household_id) VALUES ($1, $2)", item.ID, item.HouseholdID)
-		return err
+	_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		var version int64
+		if err := tx.QueryRow(ctx, "INSERT INTO probe_items (id, household_id) VALUES ($1, $2) RETURNING version",
+			item.ID, item.HouseholdID).Scan(&version); err != nil {
+			return mutation.Record{}, err
+		}
+		return mutation.Record{
+			Event:   audit.Event{Module: Name, Action: "item.create", EntityType: Entity, EntityID: item.ID, SummaryKey: "probe.item.create"},
+			Changes: []sync.Change{{Entity: Entity, ID: item.ID, Op: sync.Upsert, Version: version, Row: item}},
+		}, nil
 	})
 	if err != nil {
 		m.fail(w, r, err)
@@ -142,20 +171,30 @@ func (m Module) remove(w http.ResponseWriter, r *http.Request) {
 		m.fail(w, r, err)
 		return
 	}
-	var deleted int64
-	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, "DELETE FROM probe_items WHERE id = $1", chi.URLParam(r, "item_id"))
-		deleted = tag.RowsAffected()
-		return err
-	})
-	switch {
-	case err != nil:
-		m.fail(w, r, err)
-	case deleted == 0:
+	id, err := uuid.Parse(chi.URLParam(r, "item_id"))
+	if err != nil {
 		m.fail(w, r, problem.NotFound())
-	default:
-		w.WriteHeader(http.StatusNoContent)
+		return
 	}
+	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		var version int64
+		err := tx.QueryRow(ctx, "DELETE FROM probe_items WHERE id = $1 RETURNING version", id).Scan(&version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return mutation.Record{}, problem.NotFound()
+		}
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		return mutation.Record{
+			Event:   audit.Event{Module: Name, Action: "item.delete", EntityType: Entity, EntityID: id, SummaryKey: "probe.item.delete"},
+			Changes: []sync.Change{{Entity: Entity, ID: id, Op: sync.Delete, Version: version + 1}},
+		}, nil
+	})
+	if err != nil {
+		m.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // fail answers err's problem, or 500 for an error that is not one, which it logs.

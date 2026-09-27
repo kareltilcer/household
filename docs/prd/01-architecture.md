@@ -249,7 +249,7 @@ the tenant middleware and carried in the request context. A handler asks
 | **Platform scope** | `/api/v1/platform/…`, staff only, metadata only |
 | **Pagination** | Opaque cursor + `limit`, keyset on a natural ordering key. A malformed cursor is `422`, never a silent page one |
 | **Concurrency** | The row `version` is returned as an `ETag` and sent back in `If-Match` on updates that can conflict; `409` with the current representation on mismatch |
-| **Idempotency** | `Idempotency-Key` accepted on every unsafe method, required on every sync mutation |
+| **Idempotency** | `Idempotency-Key` accepted on every unsafe method, required on every sync mutation, and retained 7 days: a repeat of a request answered `2xx` is answered with that response and its effect is not repeated. A request refused before it took effect stores nothing, so a repeat runs it again once the reason for the refusal has gone (**D-92**, [ADR 0006](../adr/0006-sync-ready-schema-and-the-mutation-spine.md)) |
 | **Errors** | RFC 9457 `application/problem+json`, with a stable machine-readable `type` and a `code` clients switch on — never on the human-readable message |
 | **Partial update** | `PATCH` with a JSON merge body. `PUT` is used only where the whole representation is genuinely replaced |
 

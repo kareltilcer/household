@@ -86,18 +86,23 @@ pnpm run down         # stop the services; volumes are kept
   `enable_tenant_isolation`, and the PR adds its rows to the isolation fixture
   (`server/internal/arch/testdata/isolation/fixture.sql`). A foreign key to another tenant
   table carries the household, `(household_id, x_id)`, since PostgreSQL checks it past
-  row-level security. A handler reaches the database only through `tenant.InTx`, and asks
-  `grant.Require` for any level above `view`.
+  row-level security. A handler reads through `tenant.InTx`, which is read-only, writes only
+  through `mutation.Apply`, and asks `grant.Require` for any level above `view`.
 - **`404`, not `403`,** for anything the caller may not see: a module they hold `none` on, a
   disabled module, a private item, a conversation they are not in. `403` means "you can see
   it and may not do this to it".
 - **The mutation spine.** Every mutation writes its row, an audit event and a sync change
-  in one transaction, through one service-layer entry point. REST and sync both write
-  through it.
+  in one transaction, through one service-layer entry point, `mutation.Apply`, which commits
+  only what it records. REST and sync both write through it. An entity's table
+  calls `add_entity_columns` for the base columns (`version`, `created_*`, `updated_*`,
+  `deleted_at`), and its module declares it through `SyncSource` with its merge policy and
+  access (architecture tests 5 and 9; [ADR 0006](docs/adr/0006-sync-ready-schema-and-the-mutation-spine.md)).
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`
-  (`409` carries the current representation); unsafe methods accept `Idempotency-Key`.
+  (`etag.Set`, `etag.IfMatch`; `problem.Conflict` is the `409` with the current
+  representation); unsafe methods accept `Idempotency-Key`, which the platform's middleware
+  answers for every module route.
 - **Migrations** are goose, one numbered block per module, forward-only and
   expand/contract: an old app in the field must keep working against the new schema.
 - **Tests hit real PostgreSQL.** No database mocks: RLS, `SET LOCAL` and the change feed

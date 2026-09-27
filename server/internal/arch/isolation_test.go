@@ -25,6 +25,11 @@ import (
 // The reads run as household_app in a transaction the administrator opened, SET LOCAL ROLE, as
 // the server's own transactions run (tenant.InTx): the same privileges and the same policies as
 // connecting as household_app, with the fixture visible without being committed.
+//
+// A partition is read through its parent, which holds a row of household A in whichever
+// partition that row belongs to, and not on its own: which months a partitioned table has
+// depends on when it was migrated, and test 2 holds every partition to the tenant isolation and
+// to taking no privilege of the request role's, which reaches it only through its parent.
 func TestTenantIsolation(t *testing.T) {
 	tx := adminTx(t)
 	execFile(t, tx, filepath.Join("testdata", "isolation"), "fixture.sql")
@@ -72,7 +77,7 @@ func isolationViolations(t *testing.T, tx pgx.Tx) []string {
 		  array(SELECT a.attname::text FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped)
 		FROM pg_class c
 		JOIN pg_namespace n ON n.oid = c.relnamespace
-		WHERE c.relkind IN ('r', 'p')
+		WHERE c.relkind IN ('r', 'p') AND NOT c.relispartition
 		  AND n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
 		ORDER BY n.nspname, c.relname`)
 	if err != nil {

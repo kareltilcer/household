@@ -18,6 +18,7 @@ const (
 	CodeRateLimited              Code = "rate_limited"
 	CodeMethodNotAllowed         Code = "method_not_allowed"
 	CodeInternal                 Code = "internal"
+	CodeIdempotencyInProgress    Code = "idempotency_in_progress"
 	CodeRefreshTokenInvalid      Code = "refresh_token_invalid"
 	CodeAccountDisabled          Code = "account_disabled"
 	CodeAccountUnverified        Code = "account_unverified"
@@ -75,6 +76,7 @@ var Codes = []Code{
 	CodeRateLimited,
 	CodeMethodNotAllowed,
 	CodeInternal,
+	CodeIdempotencyInProgress,
 	CodeRefreshTokenInvalid,
 	CodeAccountDisabled,
 	CodeAccountUnverified,

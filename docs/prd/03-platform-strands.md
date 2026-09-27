@@ -81,7 +81,7 @@ One append-only table per deployment, keyed by household, ordered by a monotonic
 
 | Column | Type | Notes |
 |---|---|---|
-| `seq` | `bigserial` PK | Global monotonic. Monotonic per household as a consequence |
+| `seq` | `bigserial`, unique | Global monotonic. Monotonic per household as a consequence, and a household's rows commit in `seq` order, so a pull that has read `seq` N has missed nothing below it. The table is partitioned by month on `occurred_at`, so its primary key is `(household_id, seq, occurred_at)` ([ADR 0006](../adr/0006-sync-ready-schema-and-the-mutation-spine.md)) |
 | `household_id` | `uuid` | Tenant |
 | `entity_type` | `text` | e.g. `garden.planting` — the module-qualified entity name |
 | `entity_id` | `uuid` | |
@@ -380,6 +380,7 @@ schedulers to forget one of.
 | What it drops | Retention | Stated in |
 |---|---|---|
 | Mutation idempotency records | 7 days | FR-SY5 |
+| `Idempotency-Key` records of REST requests | 7 days | [01-architecture.md](01-architecture.md) §6 |
 | Preserved note-body losers | 30 days | [modules/07-notes.md](modules/07-notes.md) FR-NO10 |
 | Generated export archives | 7 days after generation | [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §3 |
 | Diagnostic bundles | 30 days | [02-identity-and-access.md](02-identity-and-access.md) FR-PS1 |

@@ -1,0 +1,13 @@
+# Every violation architecture test 9 must report for entities.Creating against openapi.yaml,
+# entity by entity and operation by operation in declaration order.
+shopping.list: create operation postListsMultipart does not require the client's id in its application/json body
+shopping.item: create operation postItems does not require the client's id in its application/json body
+shopping.item: create operation postItemsQuick does not require the client's id in its application/json body
+shopping.item: create operation postItemsOneOf does not require the client's id in its application/json body
+shopping.staple: create operation postStaples takes no body to carry the client's id
+shopping.staple: create operation getStaples is a GET, which creates nothing
+shopping.staple: create operation postStaplesAction requires id in its application/json body, but not as a UUID
+shopping.staple: create operation postStaplesText requires id in its application/json body, but not as a UUID
+shopping.staple: create operation postNowhere is not in the contract
+shopping.staple: create operation postStaplesOptional does not require its body, so a create may come without the client's id
+shopping.staple: create operation postStaplesSplit requires id in its application/json body, but not as a UUID

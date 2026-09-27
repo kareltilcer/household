@@ -18,6 +18,8 @@ import (
 	"maps"
 	"net/http"
 	"strconv"
+
+	"github.com/kareltilcer/household/server/internal/platform/etag"
 )
 
 // ContentType is the media type of every problem document.
@@ -64,6 +66,9 @@ type Problem struct {
 	// Extensions are further top-level members, such as ConflictProblem's `current` and
 	// `current_version`. A key that names a member this package writes is ignored.
 	Extensions map[string]any
+	// Header holds response headers the problem answers with, such as a conflict's ETag. The
+	// headers this package writes itself are not taken from it.
+	Header http.Header
 }
 
 // reserved are the members this package writes, which an extension may not replace.
@@ -87,6 +92,19 @@ func NotFound() *Problem { return New(http.StatusNotFound, CodeNotFound) }
 // on the server; the response says only that it did.
 func Internal() *Problem { return New(http.StatusInternalServerError, CodeInternal) }
 
+// Conflict is the 409 version_conflict for a write whose If-Match named a version the entity
+// no longer has (the contract's VersionConflict): it carries current, the entity's
+// representation now, and its version, as current_version and as the ETag, so that the client
+// can merge or re-present the member's change without reading the entity again.
+func Conflict(current any, version int64) *Problem {
+	return &Problem{
+		Status:     http.StatusConflict,
+		Code:       CodeVersionConflict,
+		Extensions: map[string]any{"current": current, "current_version": version},
+		Header:     http.Header{"Etag": {etag.Format(version)}},
+	}
+}
+
 // Error reports the status and code, for logs and test failures.
 func (p *Problem) Error() string {
 	return "problem " + strconv.Itoa(p.Status) + " " + string(p.Code)
@@ -106,6 +124,9 @@ func Write(w http.ResponseWriter, requestID string, err error) {
 		body, _ = json.Marshal(p.document(requestID))
 	}
 	h := w.Header()
+	for key, values := range p.Header {
+		h[http.CanonicalHeaderKey(key)] = values
+	}
 	h.Set("Content-Type", ContentType)
 	h.Set("Content-Length", strconv.Itoa(len(body)))
 	h.Set("X-Content-Type-Options", "nosniff")

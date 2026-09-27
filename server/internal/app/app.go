@@ -18,7 +18,9 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/grant"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
+	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
@@ -28,7 +30,7 @@ type Deps struct {
 	Contract *contract.Contract
 	Health   *health.Health
 	// Pool opens every transaction of a household-scoped request, connected as the request
-	// role (tenant.InTx).
+	// role (tenant.InTx, and the mutation spine's tenant.InWriteTx).
 	Pool tenant.Beginner
 	// Modules are the modules served, each under /households/{household_id}/<name>.
 	Modules *module.Registry
@@ -47,9 +49,11 @@ type Deps struct {
 // to build with a route the contract does not declare, so the server never serves one.
 //
 // Everything under /households/{household_id} passes the tenant middleware, which answers a
-// caller who is not a member of the household before any route does. Each module's routes are
-// mounted below that at /<name>, behind the gate that answers 404 to a member who cannot see
-// the module (PRD modules/00 §1).
+// caller who is not a member of the household before any route does, and carries the module
+// registry the mutation spine checks each mutation against. Each module's routes are mounted
+// below that at /<name>, behind the gate that answers 404 to a member who cannot see the module
+// (PRD modules/00 §1), and behind the Idempotency-Key middleware, which answers a repeated
+// unsafe request with its first response.
 func NewRouter(d Deps) (*chi.Mux, error) {
 	tenancy, err := tenant.Middleware(tenant.Config{Pool: d.Pool, Logger: d.Logger, Entitlement: d.Entitlement})
 	if err != nil {
@@ -70,10 +74,10 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	api.Get("/readyz", d.Health.Readiness)
 
 	api.Route("/households/{"+tenant.Param+"}", func(household chi.Router) {
-		household.Use(tenancy)
+		household.Use(tenancy, mutation.Catalog(d.Modules))
 		for _, m := range d.Modules.All() {
 			household.Route("/"+m.Name(), func(r chi.Router) {
-				r.Use(grant.Gate(m.Name()))
+				r.Use(grant.Gate(m.Name()), idempotency.Middleware(d.Logger, d.MaxBodyBytes))
 				m.RegisterRoutes(r)
 			})
 		}
