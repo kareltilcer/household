@@ -55,7 +55,7 @@ any module is built on top of it.** Retrofitting offline-first onto a data model
 plan for it is a rewrite; planning for it costs four columns and a discipline.
 
 > **The mitigation plan for this risk is [10-sync-risk.md](10-sync-risk.md)** — schema before
-> engine, buy before build, offline writes tiered by merge policy, a conformance simulator written
+> engine, buy before build, offline writes tiered by merge policy, a conformance suite written
 > before the engine, production replica digests, and three gates with a named fallback. Read it
 > alongside this section; this one is the design, that one is how not to get it wrong.
 

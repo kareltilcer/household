@@ -90,7 +90,8 @@ devices with last-seen, approximate location from IP and user agent. Any can be 
 individually; "sign out everywhere" revokes all. Revoking a device also invalidates its offline
 sync cursor, so its local replica is discarded on next contact rather than being resumed. Under
 D-93 the device is refused any further sync token, and its client discards the replica when it is
-refused.
+refused. A sync token already issued keeps the device replicating until it expires, so that
+token's lifetime is how long a revoked device can still receive new rows; plan item 13 sets it.
 
 **FR-ID8 — Account deletion.** Self-service, from the app. See
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §4 for what happens to households
@@ -311,6 +312,14 @@ Every read path resolves all four. Every write path resolves all four plus the l
 sync feed row carries the fields needed to evaluate all four without joining back to the
 module's tables — see [03-platform-strands.md](03-platform-strands.md) §2.2.
 
+> **Under D-93 the replicated path reads no feed row.** Stream definitions generated from the
+> entity registry read each entity's own table, the grant and an audience's membership through
+> subqueries, and an audience with a floor through the readers the server keeps on each row it
+> bounds ([03-platform-strands.md](03-platform-strands.md) §2,
+> [modules/15-chat.md](modules/15-chat.md) Sync). The check still lives in one place, the
+> generator. The membership axis stays an interval on both paths: the API evaluates the floor, and
+> a member is a reader of nothing before theirs.
+
 ## 8. Platform staff
 
 Two platform-level roles. Neither is a household role and neither appears in any household's
@@ -325,7 +334,9 @@ member list.
 impersonation feature, no "view as", no support session, no content-reading endpoint and — the
 part that makes it structural rather than aspirational — **no database role that bypasses RLS
 for content tables**. See [01-architecture.md](01-architecture.md) §2.3 and
-[05-privacy-and-compliance.md](05-privacy-and-compliance.md) §6. **D-3.**
+[05-privacy-and-compliance.md](05-privacy-and-compliance.md) §6. **D-3.** Under D-93 one role does
+bypass it, PowerSync's replication role; it is the sync service's own credential, and neither
+platform role holds it (01 §2.3).
 
 **FR-PS1 — The diagnostic bundle** is how content bugs are debugged without content access. A
 member hits a problem and taps *"send diagnostics"*; the client assembles a bundle scoped to the

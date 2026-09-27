@@ -62,13 +62,14 @@ build proceeds — but it proceeds having learnt from two designs and knowing ex
 requirement forced the decision.
 
 **The verdict (D-93, [ADR 0001](../adr/0001-sync-engine.md)): adopt PowerSync, self-hosted, for
-replication, and keep the write path.** Both scenarios passed on PowerSync with every write going
-through the mutation spine. Electric passed only with client code its own client lacks; Zero has no
-offline writes; Replicache is in maintenance mode. Two axes of the predicate needed a workaround
-each: the floor became a reader set on the row, and a redacted projection reaches its owner as
-well. The requirement that decided it was retraction, which PowerSync met for every cause with no
-client code. The requirement that came closest to forcing a build was keeping row-level security
-under the read path, which a generated stream template and an isolation test now hold instead.
+replication, and keep the write path.** Both scenarios passed on PowerSync with every member's
+write going through the mutation spine. Electric passed only with client code its own client lacks;
+Zero has no offline writes; Replicache is in maintenance mode. Two axes of the predicate needed a
+workaround each: the floor became a reader set on the row, and a redacted projection reaches its
+owner as well. The requirement that decided it was retraction, which PowerSync met for every cause
+with no client code. The requirement that came closest to forcing a build was keeping row-level
+security under the read path, which a generated stream template and an isolation test now hold
+instead.
 
 ## 3. Tier the promise by merge policy
 
@@ -127,10 +128,12 @@ is the single most valuable artefact produced in Phase 0.
 > **Under D-93 the suite runs against the adopted engine** rather than an in-process one: N
 > PowerSync clients, the real service and the real API in containers, partitions scripted by
 > disconnecting clients and by a network that refuses requests and loses responses, duplicate
-> delivery by replaying an upload, skew through `client_time`. It is slower and less deterministic
-> than an in-process simulator, so the fuzz run on each change is short and the long one nightly.
-> The scenarios and the invariants below stand. Where one names a mechanism of the replaced feed,
-> the table gives its D-93 form beside it (scenarios 6 and 18).
+> delivery by replaying an upload, skew through `client_time`. Reordering becomes the order in
+> which clients reconnect and upload, scripted per scenario: one client's uploads cannot reorder,
+> since its connector drains PowerSync's queue in order, one transaction at a time. It is slower
+> and less deterministic than an in-process simulator, so the fuzz run on each change is short and
+> the long one nightly. The scenarios and the invariants below stand. Where one names a mechanism of
+> the replaced feed, the table gives its D-93 form beside it (scenarios 6 and 18).
 
 ### The scenarios it must cover
 
@@ -189,9 +192,10 @@ The response is a forced resnapshot for that device plus a telemetry event. **Di
 alerting metric** ([07-nonfunctional.md](07-nonfunctional.md) §5), not a support ticket.
 
 > **Under D-93** PowerSync verifies a checksum per bucket at every checkpoint and downloads a
-> bucket again when it does not match, which covers divergence inside the engine. The digest
-> remains the check on what the engine cannot see, such as a local write that never reached the
-> server; plan item 14 decides whether that keeps an endpoint of its own.
+> bucket again when it does not match, which holds a replica to PowerSync's buckets. It does not
+> hold the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an
+> entity's declared access, passes every checksum. The digest, computed from PostgreSQL, remains
+> the check on that; plan item 14 decides whether it keeps an endpoint of its own.
 
 ## 6. The interaction with the no-content-access guarantee
 
@@ -239,7 +243,7 @@ just spent a quarter on the thing they would be abandoning.
 - **Dogfood the throwaway module for a month.** [08-roadmap.md](08-roadmap.md) already specifies a
   three-entity module exercising every merge policy. Use it as the team's own shopping list, on
   real phones, on real networks — then delete it. A month of genuine irritation surfaces things no
-  simulator will.
+  conformance suite will.
 
 ## 9. What this changes in the plan
 

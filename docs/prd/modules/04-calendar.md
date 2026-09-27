@@ -52,7 +52,7 @@ Light, and skippable. On first open:
 | `status` | `confirmed` · `tentative` · `cancelled` |
 | `participants[]` | Household members, each with an RSVP state |
 | `reminders[]` | Per-event lead times, feeding the reminder strand |
-| `visibility` | `default` · `private` — a private event on a shared calendar shows as "Busy" with no title. It syncs as **two feed rows** ([03](../03-platform-strands.md) §2.2, **D-88**): the full event to its owner, a redacted busy block to everyone else |
+| `visibility` | `default` · `private` — a private event on a shared calendar shows as "Busy" with no title. It syncs as **two feed rows** ([03](../03-platform-strands.md) §2.2, **D-88**): the full event to its owner, a redacted busy block to everyone else. Under D-93 the busy block is a client table of its own that reaches the owner as well, who is shown the full event over it |
 | `external_uid`, `external_etag`, `connection_id` | Present when the event mirrors an external one |
 
 **D-45: an event stores its own IANA timezone.** A recurring 08:00 school run is 08:00 local

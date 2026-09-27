@@ -19,7 +19,7 @@ each file stays reviewable on its own; read them in the order below the first ti
 | 07 | [Non-functional requirements](07-nonfunctional.md) | Performance, availability, security, observability, scale targets |
 | 08 | [Roadmap](08-roadmap.md) | Release phasing from 1.0 to 2.0 |
 | 09 | [Decision register](09-decisions.md) | Every decision D1–Dn with its rationale and the alternative that was rejected |
-| 10 | [De-risking the sync engine](10-sync-risk.md) | The mitigation plan for the product's largest technical risk: schema-before-engine, buy-before-build, tiered offline writes, the conformance simulator, and the three gates |
+| 10 | [De-risking the sync engine](10-sync-risk.md) | The mitigation plan for the product's largest technical risk: schema-before-engine, buy-before-build, tiered offline writes, the conformance suite, and the three gates |
 
 ## Modules
 

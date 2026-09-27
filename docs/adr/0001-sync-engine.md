@@ -19,10 +19,13 @@ existing systems that building it should be a decision rather than a default.
 The spike ran PRD 10 §4's scenario 3 (two members check one shopping item offline) and scenario 7
 (a grant is revoked while a member is offline with writes queued) against both candidates,
 self-hosted in docker beside a PostgreSQL 17 carrying item 4's migrations. Its backend imported the
-server's own packages, so every write went through the tenant middleware, `grant.Require` and
-`mutation.Apply`, and wrote its row, its audit event and its feed change in one transaction. The
-harness, the configurations and the full results are in the commit that adds `spikes/sync-engine`
-(fbfdec0); the directory was deleted before merge.
+server's own packages, so every write a member made went through the tenant middleware,
+`grant.Require` and `mutation.Apply`, and wrote its row, its audit event and its feed change in one
+transaction. The harness made every other write directly as the administrator, standing in for the
+API later items build: the grant, module and membership changes, the soft delete, and every row of
+the visibility and audience cases, their readers included. The harness, the configurations and the
+full results are in the commit that adds `spikes/sync-engine` (fbfdec0); the directory was deleted
+before merge.
 
 ### The candidates, as they stood on 2026-09-27
 
@@ -44,20 +47,23 @@ an unmaintained community package. Neither was run. **CRDT libraries** stay reje
 
 ### What the spike measured
 
-Times are to the harness's first 100 ms poll that saw the state, so "about 100 ms" means "by the
-first look".
+Times are to the first of the harness's looks that saw the state. It looks at once and then every
+100 ms, so "about 100 ms" means the state was not there at the first look and was there within one
+poll.
 
 | Case | PowerSync | Electric |
 |---|---|---|
 | **Scenario 3.** Petr and Eva check Milk offline, one second apart, then reconnect | Both replicas equal the server 243 ms after reconnecting. The server holds one check (version 1 → 2), one audit event, one feed change; the outcomes were one `applied` and one `applied` no-op; no conflict | The same on the server. The outbox, the optimistic view and their persistence are ours: Electric replicates reads only |
-| **Scenario 7.** Offline, Petr checks Bread and adds Butter; his grant is lowered to `none`; he reconnects | The replica is empty by the first look (104 ms), the optimistic Butter included. Both writes came back `rejected` / `not_found` once and were not retried; the server wrote nothing | With the grant checked in our proxy, the proxy answers `404` and nothing clears the replica unless our client treats the `404` as "delete what you hold". With the grant as subqueries in the shape, Electric sends a `move-out` event and **its own `Shape` class ignores it: all three rows stay** (3 failures). A replica of ours that applies its positional tag protocol empties by the first look |
-| **Access loss while connected** | Rows deleted by the first look for each cause the spike could make: grant to `none`, module disabled household-wide (for a member and the owner), removal from the household, soft delete; rows back when the grant returns | As above: with the proxy gate, a grant lowered to `none` clears the replica only through our client's `404` convention, which drops the whole shape at once; with subqueries, only our own tag-aware replica is correct |
-| **Visibility and audience** (below), including scenarios 16 and 18 | 7 of 7, through two workarounds | Expressible, with the caller's ids and floor as constants the proxy writes |
+| **Scenario 7.** Offline, Petr checks Bread and adds Butter; his grant is lowered to `none`; he reconnects | The replica is empty within one poll (104 ms), the optimistic Butter included. Both writes came back `rejected` / `not_found` once and were not retried; the server wrote nothing | With the grant checked in our proxy, the proxy answers `404` and nothing clears the replica unless our client treats the `404` as "delete what you hold". With the grant as subqueries in the shape, Electric sends a `move-out` event and **its own `Shape` class ignores it: all three rows stay**. A replica of ours that applies its positional tag protocol empties within one poll (102 ms) |
+| **Access loss while connected** | Rows deleted within one poll for each cause the spike could make: grant to `none`, module disabled household-wide (for a member and the owner), removal from the household, soft delete; rows back when the grant returns | As above: with the proxy gate, a grant lowered to `none` clears the replica only through our client's `404` convention, which drops the whole shape at once; with subqueries, its own `Shape` keeps the rows for a grant lowered to `none` and for a module disabled, and only our own tag-aware replica is correct |
+| **Visibility and audience** (below), including scenarios 16 and 18 | 7 of 7, through two workarounds | Not run. The probes found it expressible, with the caller's ids and floor as constants the proxy writes |
 
-The totals are PowerSync 26 of 26; Electric 15 of 15 with the proxy gate, 16 of 19 with subqueries
-and its own `Shape`, 19 of 19 with a tag-aware replica. Both candidates took item 4's tables
-without a column changed, but not without setup: the spike set `REPLICA IDENTITY FULL` on every
-table either engine replicated (`shopping_items`, `memberships`, `module_enablement`,
+The totals are PowerSync 26 of 26; Electric 13 of 13 with the proxy gate, 12 of 15 with subqueries
+and its own `Shape` (the one failure in scenario 7 above and two in access loss while connected),
+and 15 of 15 with a tag-aware replica. The harness's own totals for Electric (15, 19 and 19) count
+the notes it logs beside the checks, which pass or fail nothing. Both candidates took item 4's
+tables without a column changed, but not without setup: the spike set `REPLICA IDENTITY FULL` on
+every table either engine replicated (`shopping_items`, `memberships`, `module_enablement`,
 `module_grants` and its own), which Electric needs for an update's old values and PowerSync was
 never run without, and it added each engine's role and publication. Every scenario ran on a fresh
 household in a database holding every earlier scenario's households, and no replica received
@@ -114,14 +120,21 @@ read path, which adoption gives up; the generated streams and the isolation test
   records any outcome but `applied` in a local-only table that the conflict inbox and the
   sync-health screen read. A response that answers no mutation is not an answer: on a `401` the
   connector fetches new credentials, on a `429` it waits out the delay the response names, and on a
-  `413` it sends the transaction in smaller batches; a `402` or a `404` answers every mutation in
-  the batch alike, `rejected` with `entitlement` or `not_found`, as the spike's harness did for a
-  `404`. It throws, and so retries, only on a transport failure, a `5xx`, a `401` or a `429`:
-  PowerSync applies no checkpoint while the queue holds anything, so a connector that retried a
-  refusal would freeze the replica. PowerSync's queue holds row writes, so what a mutation carries
-  that a row write does not (its `mutation_id`, the `client_time` it was made at, its
-  `base_version`, any `action`) is recorded with the write when it is made; the spike's harness
-  stamped the upload time instead. Merge policies, idempotency, clock clamping and the offline
+  `413` it sends the transaction in smaller batches. A `422` locates the mutation the edge refused
+  ([ADR 0003](0003-contract-enforcement-at-the-edge.md)), which is `rejected` with that code while
+  the rest are sent again without it. A `402` or a `404` answers every mutation in the batch alike,
+  `rejected` with `entitlement` or `not_found`, as the spike's harness did for a `404`. A
+  `409 idempotency_in_progress` means an earlier send of the same transaction is still running or
+  took effect without its response being kept (D-92): the connector sends it again, and once
+  D-92's five minutes have passed it sends it under a fresh key, which per-mutation idempotency
+  (FR-SY5) answers from each mutation's stored result. It throws, and so retries, only on a
+  transport failure, a `5xx`, a `401`, a `409` or a `429`: PowerSync applies no checkpoint while
+  the queue holds anything, so a connector that retried a refusal would freeze the replica.
+  PowerSync's queue holds row writes, so what a mutation carries that a row write does not (its
+  `mutation_id`, the `client_time` it was made at, its `base_version`, any `action`) is recorded
+  with the write when it is made. The spike's harness minted the `mutation_id` at upload, took a
+  check's `client_time` from the `checked_at` column the check itself wrote, and stamped every
+  other write with the upload time. Merge policies, idempotency, clock clamping and the offline
   write flags are unchanged.
 - **The access predicate becomes stream definitions generated from the entity registry**, never
   written by hand, so the check still lives in one place (the reasoning behind D-22):
@@ -137,12 +150,18 @@ read path, which adoption gives up; the generated streams and the isolation test
   engine sets no tenant, so without `BYPASSRLS` it reads nothing. An isolation test, the read-path
   twin of FR-NF4, connects a replica for one household's member and asserts that none of another
   household's rows arrive.
+- **It is the one exception to D-3.** D-3 says no database role bypasses row-level security for
+  content, and this one does. It is the PowerSync service's own credential: no staff member, staff
+  tool or support system connects with it, so the no-content-access test (PRD 05 §6) leaves it out
+  and the isolation test above holds it instead. PowerSync's bucket storage holds the replicated
+  rows outside row-level security, so it is household content under the same residency, encryption
+  and access rules as the database. PRD 01 §2.3, 02 §8 and 05 §6 record the exception.
 
 ## Alternatives rejected
 
 | Alternative | Why not |
 |---|---|
-| **Build PRD 03 §2's engine**: the feed pull, the snapshot, the `retract` rows, the digest, the realtime nudge, and a TypeScript client with two storage adapters (plan items 12–15 as first written: sizes L, XL, XL and L). Whether the digest and the nudge keep endpoints beside PowerSync is a separate question, left to item 14 | The spike's hardest cases, retraction for every cause and a queue that outlives going offline and whose refusals are surfaced once, came from PowerSync with no client code but the connector, on item 4's schema, with writes still through the spine. Building keeps two things adoption gives up: row-level security under the read path, and the floor as one term of the predicate. Each has a replacement that a test holds (above), and neither is worth four items of the riskiest work in the programme |
+| **Build PRD 03 §2's engine**: the feed pull, the snapshot, the `retract` rows, the digest, the realtime nudge, and a TypeScript client with two storage adapters (plan items 12–15 as first written: sizes L, XL, XL and L). Whether the digest and the nudge keep endpoints beside PowerSync is a separate question, left to item 14 | The spike's hardest cases, retraction for every cause and a queue that outlives going offline and whose refusals are surfaced once, came from PowerSync with no client code but the connector, on item 4's schema, with members' writes still through the spine. Building keeps two things adoption gives up: row-level security under the read path, and the floor as one term of the predicate. Each has a replacement that a test holds (above), and neither is worth four items of the riskiest work in the programme |
 | **Electric** | It replicates reads only, so the outbox, its persistence and the optimistic state are ours to build, as the spike did. Its own client (1.5.28) ignores the `move-out` events that carry access loss, so a revoked grant leaves the rows on the device; a correct replica has to evaluate its positional tag protocol, which is the kind of client code the adoption was meant to avoid. Its React Native persistence is pre-1.0 |
 | **Zero** | No offline writes |
 | **Replicache** | In maintenance mode; no maintained React Native binding; no per-mutation outcomes on push |
@@ -160,23 +179,33 @@ read path, which adoption gives up; the generated streams and the isolation test
   adds the endpoint that hands a client PowerSync's URL and a token of its own. PowerSync checks a
   token's `aud` against the audience it is configured with, and item 9's access token carries no
   `aud` (D-15), so the API's own token is never the one PowerSync reads. Item 14 decides the fate of
-  `postSyncDigest`, `postSyncReset`, `getSyncState` and `…/stream`.
-- **`sync_changes` has no reader.** Item 4's spine still writes it, under a per-household lock that
-  serialises a household's commits, so its monthly partitions still have to be made while it does.
-  Item 14 either names a consumer or stops the write and drops the table through an expand/contract
-  migration, recording the choice in a new ADR (ADR 0006 is accepted, so it is not rewritten) and
-  amending PRD 03 §2.2 and CLAUDE.md.
+  `postSyncDigest`, `postSyncReset`, `getSyncState` and `…/stream`, whose frames carry entitlement
+  and access changes as well as Chat's payloads.
+- **`sync_changes` has no reader**, and neither has the `seq` the push's response carries. Item 4's
+  spine still writes it, under a per-household lock that serialises a household's commits, so its
+  monthly partitions still have to be made while it does. Item 14 either names a consumer or stops
+  the write and drops the table through an expand/contract migration, recording the choice in a new
+  ADR (ADR 0006 is accepted, so it is not rewritten) and amending PRD 03 §2.2, CLAUDE.md and the
+  push's response.
 - **D-85's digest is partly the engine's now.** PowerSync verifies each bucket's checksum at every
-  checkpoint and downloads it again on a mismatch. That catches divergence inside the engine, but
-  not a local write our connector never uploaded; item 14 decides whether the digest endpoint
-  stays for that.
+  checkpoint and downloads it again on a mismatch. That holds a replica to PowerSync's buckets, not
+  the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an
+  entity's declared access, passes every checksum. A digest computed from PostgreSQL still sees
+  that, and item 14 decides whether its endpoint stays for it. A local write the server never took
+  is not such a case: PowerSync drops it at the next checkpoint, as it dropped the spike's rejected
+  Butter.
 - **Operations gain a service and a replication slot.** A slot retains write-ahead log while
   PowerSync is down, so its lag is monitored and `max_slot_wal_keep_size` bounds it (a runbook in
-  item 13). A dev compose file gains `wal_level=logical`, and each replicated table is set to
-  `REPLICA IDENTITY FULL`, as the spike ran them.
+  item 13), and it has to survive a failover of the database. A dev compose file gains
+  `wal_level=logical`, and each replicated table is set to `REPLICA IDENTITY FULL`, as the spike ran
+  them. PostgreSQL lets only a role that holds `REPLICATION` and `BYPASSRLS` grant them (ADR 0004),
+  so the production provider chosen in item 88 must allow it; items 30 and 88 deploy the service.
 - **Removing a member from an audience rewrites every row of that audience**, to take the member
-  out of each row's readers. A household's conversations are small enough that this is cheap;
-  item 90's load tests measure it.
+  out of each row's readers. A household's conversations are small enough that this is cheap. A
+  `member_shared` calendar's audience is every event of the calendar, which can be many more rows;
+  it has no floor, so item 14 may resolve it through the calendar's member list in the stream
+  instead, which the probes accepted though never beside the grant's subquery. Item 90's load tests
+  measure whichever remains.
 - **A private row's owner holds its redacted form as well**, in a separate table. The client never
   shows it where the full row exists; nothing leaks, since the owner may see the full row anyway.
 - **The licence** permits this use, and each release becomes Apache-2.0 two years after it ships.
