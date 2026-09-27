@@ -10,7 +10,9 @@
 //
 // **A malformed cursor is 422, never a silent page one.** A client whose cursor is quietly
 // dropped receives page one again, reads it as the end of the list, and stops. FromRequest
-// is therefore the only way a handler reads the parameter.
+// is therefore the only way a handler reads the parameter, and the edge validator refuses a
+// query pair net/url cannot parse (`cursor=a;b`), which it would otherwise drop before
+// FromRequest could see it.
 //
 // Cursors are not signed. A client that forges one moves its own keyset position within a
 // query that is already scoped to what it may see, which it could do by paging anyway.

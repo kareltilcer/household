@@ -5,22 +5,26 @@ import (
 	"encoding/json"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
 
 const (
-	household = "0190f3a2-4c1b-7c3e-9a5f-2b6d8e4f1a90"
-	other     = "0190f3a2-4c1b-7c3e-9a5f-2b6d8e4f1a91"
-	maxBody   = 1 << 10
+	household   = "0190f3a2-4c1b-7c3e-9a5f-2b6d8e4f1a90"
+	other       = "0190f3a2-4c1b-7c3e-9a5f-2b6d8e4f1a91"
+	maxBody     = 1 << 10
+	bodyTimeout = 300 * time.Millisecond
 )
 
 func load(t *testing.T) *contract.Contract {
@@ -79,7 +83,8 @@ func router(t *testing.T) (http.Handler, *recorder) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 	api := chi.NewRouter()
-	api.Use(c.Middleware(api, maxBody))
+	api.Use(c.Middleware(api, contract.Limits{MaxBody: maxBody, BodyTimeout: bodyTimeout}))
+	api.Put("/me/consents", handle)
 	api.Post("/households/{household_id}/shopping/lists", handle)
 	api.Patch("/households/{household_id}/shopping/lists/{list_id}", handle)
 	api.Get("/households/{household_id}/garden/harvests", handle)
@@ -169,9 +174,150 @@ func TestAnInvalidBodyIs422NamingEachField(t *testing.T) {
 func TestAValidBodyReachesTheHandlerAsSent(t *testing.T) {
 	h, seen := router(t)
 	body := `{"id":"` + other + `","name":"Groceries"}`
-	rec := call{method: http.MethodPost, path: lists, contentType: "application/json; charset=utf-8", body: body}.do(t, h)
+	// Media types are case-insensitive (RFC 9110 §8.3.1).
+	for _, contentType := range []string{"application/json; charset=utf-8", "Application/JSON; charset=UTF-8"} {
+		seen.body = nil
+		rec := call{method: http.MethodPost, path: lists, contentType: contentType, body: body}.do(t, h)
+		if rec.Code != http.StatusNoContent || string(seen.body) != body {
+			t.Fatalf("%s: status %d, handler saw %q", contentType, rec.Code, seen.body)
+		}
+	}
+}
+
+// A client that sends back the object it read, readOnly members and all, is not refused
+// for them: the members are still validated, and the handler ignores them. putMeConsents
+// takes Consents, whose updated_at is readOnly.
+func TestAReadOnlyMemberSentBackIsValidatedNotRefused(t *testing.T) {
+	h, seen := router(t)
+	body := `{"analytics":true,"marketing_email":false,"updated_at":"2026-09-27T08:15:00Z"}`
+	rec := call{method: http.MethodPut, path: "/me/consents", contentType: "application/json", body: body}.do(t, h)
 	if rec.Code != http.StatusNoContent || string(seen.body) != body {
-		t.Fatalf("status %d, handler saw %q", rec.Code, seen.body)
+		t.Fatalf("status %d %s, handler saw %q", rec.Code, rec.Body.String(), seen.body)
+	}
+	rec = call{method: http.MethodPut, path: "/me/consents", contentType: "application/json", body: `{"updated_at":5}`}.do(t, h)
+	sameErrors(t, fieldErrors(t, rec), problem.FieldError{Field: "/updated_at", Code: "type"})
+}
+
+// kin-openapi marks the failures inside an allOf with the allOf's own path, so one below
+// the root is named once: /items/1/x, never /items/1/items/1/x. No request body in the
+// committed contract nests an allOf yet, so the fixture does.
+func TestAnAllOfBelowTheRootIsNamedAtItsOwnPointer(t *testing.T) {
+	c, err := contract.Parse([]byte(`openapi: 3.1.0
+info: {title: t, version: '1'}
+paths:
+  /things:
+    post:
+      operationId: postThings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                one: { $ref: '#/components/schemas/ThingCreate' }
+                items: { type: array, items: { $ref: '#/components/schemas/ThingCreate' } }
+      responses: { '204': { description: Created } }
+components:
+  schemas:
+    ThingUpdate: { type: object, properties: { name: { type: string } } }
+    ThingCreate:
+      allOf:
+        - { $ref: '#/components/schemas/ThingUpdate' }
+        - { required: [name] }
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := chi.NewRouter()
+	api.Use(c.Middleware(api, contract.Limits{MaxBody: maxBody}))
+	api.Post("/things", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	root := chi.NewRouter()
+	root.Mount(contract.BasePath, api)
+
+	for body, want := range map[string]problem.FieldError{
+		`{"one":{}}`:                          {Field: "/one/name", Code: "required"},
+		`{"items":[{"name":"a"},{}]}`:         {Field: "/items/1/name", Code: "required"},
+		`{"items":[{"name":"a"},{"name":5}]}`: {Field: "/items/1/name", Code: "type"},
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, contract.BasePath+"/things", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		root.ServeHTTP(rec, req)
+		sameErrors(t, fieldErrors(t, rec), want)
+	}
+}
+
+// A client that trickles a JSON body is disconnected once the body is overdue, rather than
+// holding the connection for as long as it likes. The writer is wrapped as the server's
+// middleware wraps it, so the deadline reaches the connection through Unwrap.
+func TestAJSONBodyThatDoesNotArriveInTimeIsCutOff(t *testing.T) {
+	h, seen := router(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(middleware.NewWrapResponseWriter(w, r.ProtoMajor), r)
+	}))
+	defer srv.Close()
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	_, err = io.WriteString(conn, "POST "+contract.BasePath+lists+" HTTP/1.1\r\nHost: test\r\n"+
+		"Content-Type: application/json\r\nContent-Length: 64\r\n\r\n{\"id\":")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(10 * bodyTimeout))
+	start := time.Now()
+	got, err := io.ReadAll(conn)
+	if err != nil {
+		t.Fatalf("the connection was not closed: %v", err)
+	}
+	if len(got) != 0 || seen.called {
+		t.Fatalf("the server answered %q; handler ran %t", got, seen.called)
+	}
+	if elapsed := time.Since(start); elapsed < bodyTimeout/2 {
+		t.Fatalf("closed after %s, before the body was overdue", elapsed)
+	}
+}
+
+// The body's deadline ends with the body: a handler that runs past it keeps its request's
+// context, which net/http cancels when a deadline reaches the read it keeps open to notice
+// the client leaving. postFinanceRulesApply's body is optional, so it is tried with one and
+// without.
+func TestTheBodyDeadlineDoesNotOutliveTheBody(t *testing.T) {
+	api := chi.NewRouter()
+	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody, BodyTimeout: bodyTimeout}))
+	api.Post("/households/{household_id}/finance/rules/apply", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(3 * bodyTimeout):
+			w.WriteHeader(http.StatusNoContent)
+		case <-r.Context().Done():
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+	})
+	root := chi.NewRouter()
+	root.Mount(contract.BasePath, api)
+	srv := httptest.NewServer(root)
+	defer srv.Close()
+
+	for _, body := range []string{`{"dry_run":true}`, ""} {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost,
+			srv.URL+contract.BasePath+"/households/"+household+"/finance/rules/apply", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if body != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		resp, err := srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("body %q: status %d; the handler's context ended with the body's deadline", body, resp.StatusCode)
+		}
 	}
 }
 
@@ -276,6 +422,13 @@ func TestParametersAreValidated(t *testing.T) {
 		header: map[string]string{"Idempotency-Key": strings.Repeat("k", 129)},
 	}.do(t, h)), problem.FieldError{Field: "header:Idempotency-Key", Code: "max_length"})
 
+	// net/url drops a pair it cannot parse without a word; a cursor dropped that way
+	// would be answered with page one (PRD 01 §6).
+	sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: harvests + "?cursor=a;b"}.do(t, h)),
+		problem.FieldError{Field: "query:cursor", Code: "malformed"})
+	sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: harvests + "?limit=%zz&season_year=2026"}.do(t, h)),
+		problem.FieldError{Field: "query:limit", Code: "malformed"})
+
 	if rec := (call{method: http.MethodGet, path: harvests + "?limit=200&season_year=2026"}).do(t, h); rec.Code != http.StatusNoContent {
 		t.Fatalf("valid parameters: %d %s", rec.Code, rec.Body.String())
 	}
@@ -306,6 +459,8 @@ func TestTheOpenAPI31ConstructsTheContractUses(t *testing.T) {
 		"type array admits null": {call{method: http.MethodPatch, path: lists + "/" + other, body: `{"icon":null,"store":"Albert"}`}, nil},
 		"type array refuses a number": {call{method: http.MethodPatch, path: lists + "/" + other, body: `{"icon":3}`},
 			[]problem.FieldError{{Field: "/icon", Code: "type"}}},
+		"a type without null refuses null": {call{method: http.MethodPost, path: lists, body: `{"id":"` + other + `","name":null}`},
+			[]problem.FieldError{{Field: "/name", Code: "type"}}},
 		"exclusiveMinimum admits above": {call{method: http.MethodPost, path: harvests, body: harvest("0.5")}, nil},
 		"exclusiveMinimum refuses the bound": {call{method: http.MethodPost, path: harvests, body: harvest("0")},
 			[]problem.FieldError{{Field: "/quantity", Code: "exclusive_minimum"}}},

@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/fs"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing/fstest"
 
 	"github.com/pressly/goose/v3"
@@ -84,15 +86,23 @@ func Assemble(blocks ...Block) (fs.FS, error) {
 // forwardOnly checks a migration has an Up section and no Down section. Migrations are
 // forward-only and expand/contract (D-11): a release is undone by a later release, since
 // a down migration that drops what a newer app still reads is the outage it would undo.
+//
+// It reads annotations as goose does, whose parser takes any comment line naming +goose
+// and ignores case and spacing: `--+goose down` opens a Down section as surely as
+// `-- +goose Down`.
 func forwardOnly(sql []byte) error {
 	up := false
 	scanner := bufio.NewScanner(bytes.NewReader(sql))
 	for scanner.Scan() {
-		line := bytes.TrimSpace(scanner.Bytes())
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "--") || !strings.Contains(line, "+goose") {
+			continue
+		}
+		annotation := strings.TrimSpace(strings.Replace(strings.ReplaceAll(line, "--", ""), "+goose", "", 1))
 		switch {
-		case bytes.HasPrefix(line, []byte("-- +goose Up")):
+		case strings.EqualFold(annotation, "Up"):
 			up = true
-		case bytes.HasPrefix(line, []byte("-- +goose Down")):
+		case strings.EqualFold(annotation, "Down"):
 			return fmt.Errorf("has a Down section; migrations are forward-only")
 		}
 	}
@@ -109,7 +119,8 @@ func forwardOnly(sql []byte) error {
 // takes a session advisory lock, so two instances deploying at once apply each migration
 // once. Out-of-order application is allowed: a migration added to an earlier block after a
 // later block's newer one has run is a new migration, not a gap (blocks own disjoint
-// tables, so their relative order carries no meaning).
+// tables, so their relative order carries no meaning). It returns the migrations it
+// applied, and on failure those it applied before the one that failed.
 func Migrate(ctx context.Context, db *sql.DB, blocks ...Block) ([]*goose.MigrationResult, error) {
 	fsys, err := Assemble(blocks...)
 	if err != nil {
@@ -129,6 +140,12 @@ func Migrate(ctx context.Context, db *sql.DB, blocks ...Block) ([]*goose.Migrati
 	}
 	results, err := provider.Up(ctx)
 	if err != nil {
+		// goose returns the migrations it applied before the failure inside the error;
+		// each ran in its own transaction and stays applied.
+		var partial *goose.PartialError
+		if errors.As(err, &partial) {
+			results = partial.Applied
+		}
 		return results, fmt.Errorf("migrations: %w", err)
 	}
 	return results, nil

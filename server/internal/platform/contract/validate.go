@@ -4,8 +4,10 @@ import (
 	"errors"
 	"mime"
 	"net/http"
-	"slices"
+	"net/url"
+	"os"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -18,10 +20,21 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
 )
 
+// Limits bound what the edge reads of a JSON request body.
+type Limits struct {
+	// MaxBody caps its size in bytes: a larger body is answered 413.
+	MaxBody int64
+	// BodyTimeout caps how long it may take to arrive, zero for no cap: a client still
+	// sending when it passes is disconnected. The server bounds only the reading of
+	// headers, since an upload its handler streams legitimately takes minutes, so without
+	// this a JSON body trickled a byte at a time would hold its connection indefinitely.
+	BodyTimeout time.Duration
+}
+
 // Middleware validates each request that router routes against the operation of the
 // route it matched, before the handler runs, and answers a request that fails with its
 // problem document: 422 validation_failed naming each offending field, 413 for a JSON body
-// over maxBody bytes, 415 for a body in a media type the operation does not declare.
+// over limits.MaxBody bytes, 415 for a body in a media type the operation does not declare.
 //
 // It finds the route with router.Find, the lookup chi itself routes with, so a request is
 // always validated against the operation whose handler will serve it; a request no route
@@ -31,11 +44,14 @@ import (
 // Authentication is not checked here: security requirements are the auth middleware's
 // (items 8 and 9). Defaults are not written into the request either, so a handler reads
 // the body the client sent; a PATCH that filled in defaults would overwrite fields the
-// client never mentioned.
+// client never mentioned. A readOnly member the client sends back, as a GET-modify-PUT
+// round trip does, is validated against its schema and otherwise left for the handler to
+// ignore: JSON Schema allows either ignoring or refusing it, and kin-openapi's refusal names
+// no field.
 //
 // A body in a media type other than JSON, a multipart upload for instance, is not read
-// here: its handler streams it, and applies its own cap.
-func (c *Contract) Middleware(router chi.Routes, maxBody int64) func(http.Handler) http.Handler {
+// here: its handler streams it, and applies its own cap and deadline.
+func (c *Contract) Middleware(router chi.Routes, limits Limits) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rctx := chi.NewRouteContext()
@@ -55,7 +71,7 @@ func (c *Contract) Middleware(router chi.Routes, maxBody int64) func(http.Handle
 			for i, key := range rctx.URLParams.Keys {
 				params[key] = rctx.URLParams.Values[i]
 			}
-			if p := c.validate(w, r, op, params, maxBody); p != nil {
+			if p := c.validate(w, r, op, params, limits); p != nil {
 				problem.Write(w, reqctx.RequestID(r.Context()), p)
 				return
 			}
@@ -64,12 +80,17 @@ func (c *Contract) Middleware(router chi.Routes, maxBody int64) func(http.Handle
 	}
 }
 
-func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation, params map[string]string, maxBody int64) *problem.Problem {
-	options := &openapi3filter.Options{
-		MultiError:          true,
-		AuthenticationFunc:  openapi3filter.NoopAuthenticationFunc,
-		SkipSettingDefaults: true,
+func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation, params map[string]string, limits Limits) *problem.Problem {
+	if fields := malformedQuery(r.URL.RawQuery); len(fields) > 0 {
+		return problem.Validation(fields...)
 	}
+	options := &openapi3filter.Options{
+		MultiError:                 true,
+		AuthenticationFunc:         openapi3filter.NoopAuthenticationFunc,
+		SkipSettingDefaults:        true,
+		ExcludeReadOnlyValidations: true,
+	}
+	clearDeadline := func() {}
 	body := o.op.RequestBody
 	if body == nil || body.Value == nil {
 		// A body where the operation declares none. kin-openapi applies this option to
@@ -86,7 +107,17 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 		case present && !isJSON(mediaType):
 			options.ExcludeRequestBody = true
 		default:
-			r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+			r.Body = http.MaxBytesReader(w, r.Body, limits.MaxBody)
+			// Only a request with a body gets a deadline. Without one, net/http is already
+			// reading the connection to notice the client leaving, and a deadline reaching
+			// that read would cancel the request's context mid-handler when it passed.
+			if limits.BodyTimeout > 0 && r.ContentLength != 0 {
+				rc := http.NewResponseController(w)
+				// A writer that cannot set a deadline, a test's recorder, reads without one.
+				if rc.SetReadDeadline(time.Now().Add(limits.BodyTimeout)) == nil {
+					clearDeadline = func() { _ = rc.SetReadDeadline(time.Time{}) }
+				}
+			}
 		}
 	}
 
@@ -103,23 +134,68 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 		Options: options,
 	})
 	if err == nil {
+		// The deadline was the body's, and the handler's own reads are not the edge's to
+		// bound. A refused request keeps it: the unread rest of its body, which net/http
+		// drains before reusing the connection, stays bounded by it.
+		clearDeadline()
 		return nil
+	}
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		// The body did not arrive within limits.BodyTimeout. A client that slow is not
+		// reading a response either: net/http closes the connection without one.
+		panic(http.ErrAbortHandler)
 	}
 	return toProblem(err)
 }
 
+// malformedQuery names each pair of the query string that net/url cannot parse: one with a
+// bad escape, or with a ';', which Go no longer takes for a separator. net/url drops such a
+// pair without a word, so neither kin-openapi nor the handler would see it, and a cursor
+// dropped that way would be answered with page one, as if none had been sent (PRD 01 §6).
+func malformedQuery(raw string) []problem.FieldError {
+	var out []problem.FieldError
+	for pair := range strings.SplitSeq(raw, "&") {
+		if pair == "" {
+			continue
+		}
+		key, value, _ := strings.Cut(pair, "=")
+		name, keyErr := url.QueryUnescape(key)
+		_, valueErr := url.QueryUnescape(value)
+		if keyErr == nil && valueErr == nil && !strings.Contains(pair, ";") {
+			continue
+		}
+		if keyErr != nil {
+			name = key
+		}
+		out = append(out, problem.FieldError{Field: "query:" + name, Code: problem.FieldMalformed})
+	}
+	return out
+}
+
 // requestMediaType returns the media type the request declares, whether the operation
 // declares it too, and whether the request has a Content-Type at all.
+//
+// Media types are case-insensitive (RFC 9110 §8.3.1), but kin-openapi looks the header up
+// as it is written, so a declared one written in another case is handed on in canonical
+// form.
 func requestMediaType(r *http.Request, body *openapi3.RequestBody) (mediaType string, declared, present bool) {
 	header := r.Header.Get("Content-Type")
 	if header == "" {
 		return "", false, false
 	}
-	mediaType, _, err := mime.ParseMediaType(header)
+	mediaType, params, err := mime.ParseMediaType(header)
 	if err != nil {
 		return "", false, true
 	}
-	return mediaType, body.Content.Get(header) != nil, true
+	if body.Content.Get(mediaType) == nil {
+		return mediaType, false, true
+	}
+	if !strings.HasPrefix(header, mediaType) {
+		if canonical := mime.FormatMediaType(mediaType, params); canonical != "" {
+			r.Header.Set("Content-Type", canonical)
+		}
+	}
+	return mediaType, true, true
 }
 
 func isJSON(mediaType string) bool {
@@ -179,7 +255,7 @@ func fieldErrors(err error) []problem.FieldError {
 		var parseErr *openapi3filter.ParseError
 		switch {
 		case errors.As(cause, &schemaErr):
-			for _, f := range schemaFieldErrors(schemaErr, nil) {
+			for _, f := range schemaFieldErrors(schemaErr) {
 				if re.Parameter != nil {
 					f.Field = base
 				}
@@ -198,24 +274,25 @@ func fieldErrors(err error) []problem.FieldError {
 	return out
 }
 
-// schemaFieldErrors describes one schema failure at its JSON Pointer below prefix. An
-// allOf failure is described by what failed inside it, since allOf is how the contract
-// composes a Create from its Update plus a required list, and "all_of" at the root would
-// name neither the field nor the check. A oneOf or anyOf failure stays as it is: which
-// branch the client meant is not knowable, so listing every branch's complaint would
-// mislead.
-func schemaFieldErrors(err *openapi3.SchemaError, prefix []string) []problem.FieldError {
-	path := append(slices.Clone(prefix), err.JSONPointer()...)
+// schemaFieldErrors describes one schema failure at its JSON Pointer. An allOf failure is
+// described by what failed inside it, since allOf is how the contract composes a Create
+// from its Update plus a required list, and "all_of" at the root would name neither the
+// field nor the check. Each failure inside already carries its whole path: kin-openapi
+// marks them with every key it marks the allOf's own error with, so prefixing the allOf's
+// path again would name /items/1/items/1/x for /items/1/x. A oneOf or anyOf failure stays
+// as it is: which branch the client meant is not knowable, so listing every branch's
+// complaint would mislead.
+func schemaFieldErrors(err *openapi3.SchemaError) []problem.FieldError {
 	if err.SchemaField == "allOf" {
 		var out []problem.FieldError
 		for _, inner := range schemaErrors(err.Origin) {
-			out = append(out, schemaFieldErrors(inner, path)...)
+			out = append(out, schemaFieldErrors(inner)...)
 		}
 		if len(out) > 0 {
 			return out
 		}
 	}
-	return []problem.FieldError{{Field: pointer(path), Code: keyword(err.SchemaField)}}
+	return []problem.FieldError{{Field: pointer(err.JSONPointer()), Code: keyword(err.SchemaField)}}
 }
 
 // schemaErrors returns every SchemaError inside err, through the MultiErrors and the
@@ -259,8 +336,14 @@ func pointer(path []string) string {
 // keyword turns a JSON Schema keyword into the snake_case code a FieldError carries:
 // maxLength becomes max_length.
 func keyword(k string) string {
-	if k == "" {
+	switch k {
+	case "":
 		return problem.FieldInvalid
+	case "nullable":
+		// The built-in validator refuses a null under its OpenAPI 3.0 name. In the
+		// contract's 3.1 vocabulary there is no nullable: a null the type does not admit
+		// fails type.
+		return "type"
 	}
 	var b strings.Builder
 	for i, r := range k {

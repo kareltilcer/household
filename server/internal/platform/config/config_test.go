@@ -24,7 +24,7 @@ func TestDevelopmentNeedsNothingSet(t *testing.T) {
 			t.Fatalf("%s: %v", command, err)
 		}
 		if c.Env != config.Development || c.HTTPAddr != "127.0.0.1:8080" || c.LogLevel != slog.LevelInfo ||
-			c.ShutdownTimeout != 20*time.Second || c.MaxBodyBytes != 1<<20 {
+			c.ShutdownTimeout != 20*time.Second || c.MaxBodyBytes != 1<<20 || c.BodyTimeout != time.Minute {
 			t.Fatalf("%s: %+v", command, c)
 		}
 	}
@@ -105,11 +105,12 @@ func TestMalformedValuesAreAllReported(t *testing.T) {
 		config.LogLevelVar:        "loud",
 		config.ShutdownTimeoutVar: "-5s",
 		config.MaxBodyBytesVar:    "a lot",
+		config.BodyTimeoutVar:     "forever",
 	}))
 	if err == nil {
 		t.Fatal("loaded")
 	}
-	for _, key := range []string{config.EnvVar, config.LogLevelVar, config.ShutdownTimeoutVar, config.MaxBodyBytesVar, config.DatabaseURLVar} {
+	for _, key := range []string{config.EnvVar, config.LogLevelVar, config.ShutdownTimeoutVar, config.MaxBodyBytesVar, config.BodyTimeoutVar, config.DatabaseURLVar} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("the error does not name %s: %v", key, err)
 		}
@@ -122,11 +123,13 @@ func TestValuesAreRead(t *testing.T) {
 		config.LogLevelVar:        "debug",
 		config.ShutdownTimeoutVar: "3s",
 		config.MaxBodyBytesVar:    "2048",
+		config.BodyTimeoutVar:     "90s",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.HTTPAddr != ":9090" || c.LogLevel != slog.LevelDebug || c.ShutdownTimeout != 3*time.Second || c.MaxBodyBytes != 2048 {
+	if c.HTTPAddr != ":9090" || c.LogLevel != slog.LevelDebug || c.ShutdownTimeout != 3*time.Second || c.MaxBodyBytes != 2048 ||
+		c.BodyTimeout != 90*time.Second {
 		t.Fatalf("%+v", c)
 	}
 }

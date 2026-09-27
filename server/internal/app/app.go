@@ -26,6 +26,8 @@ type Deps struct {
 	Health   *health.Health
 	// MaxBodyBytes caps a JSON request body at the edge.
 	MaxBodyBytes int64
+	// BodyTimeout caps how long a JSON request body may take to arrive, zero for no cap.
+	BodyTimeout time.Duration
 }
 
 // NewRouter returns the server's whole HTTP surface: the platform middleware, and under
@@ -38,7 +40,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	root.MethodNotAllowed(httpx.MethodNotAllowed(root))
 
 	api := chi.NewRouter()
-	api.Use(d.Contract.Middleware(api, d.MaxBodyBytes))
+	api.Use(d.Contract.Middleware(api, contract.Limits{MaxBody: d.MaxBodyBytes, BodyTimeout: d.BodyTimeout}))
 	api.NotFound(httpx.NotFound)
 	api.MethodNotAllowed(httpx.MethodNotAllowed(api))
 
@@ -94,7 +96,8 @@ func Serve(ctx context.Context, log *slog.Logger, srv *http.Server, ln net.Liste
 // NewServer returns the http.Server for handler. Reading a request's headers is bounded,
 // against slow-loris clients. Reading a body and writing a response are not bounded here:
 // an upload over a slow connection (item 16) and the sync stream (item 14) legitimately
-// take minutes, and set their own deadlines through http.ResponseController.
+// take minutes, and set their own deadlines through http.ResponseController, as the edge
+// does for every JSON body it reads (Deps.BodyTimeout).
 func NewServer(handler http.Handler, log *slog.Logger) *http.Server {
 	return &http.Server{
 		Handler:           handler,

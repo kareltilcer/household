@@ -89,6 +89,7 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 		Contract:     c,
 		Health:       health.New(log, 2*time.Second, health.Database(pool)),
 		MaxBodyBytes: cfg.MaxBodyBytes,
+		BodyTimeout:  cfg.BodyTimeout,
 	})
 	if err != nil {
 		return err

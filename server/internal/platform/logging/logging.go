@@ -8,7 +8,8 @@
 //   - An allowlisted key given content as its value. Keys are chosen for values that are
 //     identifiers or measurements, and a key is added to the list in review, not in passing.
 //   - Error text, which can quote the input that caused it. A PostgreSQL error is reduced to
-//     its SQLSTATE and the names of the objects involved (see errorText), and Stack drops the
+//     its SQLSTATE and the names of the objects involved, and pgx's own errors for a value it
+//     could not encode or scan to the type or column (see errorText); Stack drops the
 //     argument words a goroutine dump prints.
 //
 // Groups are flattened: the allowlist names top-level keys, so WithGroup is a no-op and an
@@ -22,8 +23,10 @@ import (
 	"log/slog"
 	"regexp"
 	"runtime/debug"
+	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
@@ -116,31 +119,64 @@ func (h handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 // WithGroup is a no-op: the allowlist is flat, so a grouped key would never be written.
 func (h handler) WithGroup(string) slog.Handler { return h }
 
-// errorText is err's message with any PostgreSQL error in it reduced to its SQLSTATE and
-// the objects it names. PostgreSQL quotes the offending input in some messages (`invalid
-// input syntax for type uuid: "…"`), and that input is a member's content.
+// errorText is err's message with each part that can quote a member's content reduced to
+// where the failure happened:
+//   - a PostgreSQL error, which quotes the offending input in some messages (`invalid input
+//     syntax for type uuid: "…"`), to its SQLSTATE and the objects it names;
+//   - a value pgx could not scan, whose cause quotes the column's content (`strconv.ParseInt:
+//     parsing "…"`), to the column;
+//   - a value pgx could not encode, which it prints whole and its cause quotes again
+//     (`unable to encode 5000000000 into binary format for int4 (OID 23): 5000000000 is
+//     greater than maximum value for int4`), to the type it was meant for.
 func errorText(err error) string {
 	text := err.Error()
 	var pg *pgconn.PgError
-	if !errors.As(err, &pg) {
-		return text
-	}
-	safe := "SQLSTATE " + pg.Code
-	for _, part := range []struct{ name, value string }{
-		{"table", pg.TableName},
-		{"column", pg.ColumnName},
-		{"constraint", pg.ConstraintName},
-	} {
-		if part.value != "" {
-			safe += " " + part.name + " " + part.value
+	if errors.As(err, &pg) {
+		safe := "SQLSTATE " + pg.Code
+		for _, part := range []struct{ name, value string }{
+			{"table", pg.TableName},
+			{"column", pg.ColumnName},
+			{"constraint", pg.ConstraintName},
+		} {
+			if part.value != "" {
+				safe += " " + part.name + " " + part.value
+			}
 		}
+		return reduce(text, pg.Error(), safe)
 	}
-	if raw := pg.Error(); strings.Contains(text, raw) {
+	var scan pgx.ScanArgError
+	if errors.As(err, &scan) {
+		safe := "can't scan into dest[" + strconv.Itoa(scan.ColumnIndex) + "]"
+		if scan.FieldName != "" && scan.FieldName != "?column?" {
+			safe += " (col: " + scan.FieldName + ")"
+		}
+		return reduce(text, scan.Error(), safe)
+	}
+	if i := strings.Index(text, encodePrefix); i >= 0 {
+		safe := encodePrefix + "a value"
+		if m := encodeFailure.FindStringSubmatch(text[i:]); m != nil {
+			safe += " into " + m[1] + " format for " + m[2] + " (OID " + m[3] + ")"
+		}
+		// Everything after is the value's causes, which quote it again.
+		return text[:i] + safe
+	}
+	return text
+}
+
+// reduce replaces raw, the message of an error inside the one whose message is text, with
+// safe. A wrapper that did not quote raw verbatim may have paraphrased it, and is dropped.
+func reduce(text, raw, safe string) string {
+	if strings.Contains(text, raw) {
 		return strings.ReplaceAll(text, raw, safe)
 	}
-	// A wrapper that did not quote the PostgreSQL error verbatim may have paraphrased it.
 	return safe
 }
+
+// encodePrefix starts pgx's message for an argument it could not encode, which then prints
+// the argument with %#v; encodeFailure reads the target type from what follows it.
+const encodePrefix = "unable to encode "
+
+var encodeFailure = regexp.MustCompile(`(?s)^unable to encode .*? into (.+?) format for (.+?) \(OID (\d+)\)`)
 
 // frameArgs matches the argument list a goroutine dump prints at the end of each function
 // line: hex words, `?` after an inexact one, `...` where it stopped, braces around a

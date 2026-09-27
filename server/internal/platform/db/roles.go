@@ -55,9 +55,41 @@ func (p Passwords) of(role string) string {
 // the tests the maintenance database HOUSEHOLD_TEST_DATABASE_URL names.
 const CatalogLock int64 = 0x686f7573_65686f6c // "househol"
 
-// attributes are what each role is, whatever it was before: Bootstrap restores them on a
-// role that already exists, so a BYPASSRLS granted by hand does not survive a deploy.
+// attributes are what each role is, whatever it was before: Bootstrap creates a role with
+// them and restores any that drifted on a role that already exists, so a BYPASSRLS granted
+// by hand does not survive a deploy.
 const attributes = "LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
+
+// roleAttributes are an existing role's attributes, as pg_roles reports them.
+type roleAttributes struct {
+	login, super, createDB, createRole, replication, bypassRLS bool
+}
+
+// restore returns the clauses that put the role back to attributes, naming only those that
+// differ. PostgreSQL 16 and later refuse a SUPERUSER, REPLICATION or BYPASSRLS clause, the
+// NO form included, from an administrator without that attribute, which a managed
+// database's administrator is: restating every clause would fail each run after the first.
+// A clause that did drift is still named, and fails loudly when the administrator cannot
+// undo it.
+func (a roleAttributes) restore() string {
+	var clauses string
+	for _, c := range []struct {
+		drifted bool
+		clause  string
+	}{
+		{!a.login, "LOGIN"},
+		{a.super, "NOSUPERUSER"},
+		{a.createDB, "NOCREATEDB"},
+		{a.createRole, "NOCREATEROLE"},
+		{a.replication, "NOREPLICATION"},
+		{a.bypassRLS, "NOBYPASSRLS"},
+	} {
+		if c.drifted {
+			clauses += c.clause + " "
+		}
+	}
+	return clauses
+}
 
 // Bootstrap creates the three roles, or restores an existing one's attributes and sets its
 // password, and then prepares database: the migrate role owns it, and only the three
@@ -81,9 +113,9 @@ func Bootstrap(ctx context.Context, admin *pgx.Conn, database string, passwords 
 	})
 }
 
-// CreateRoles creates the three roles, or restores an existing one's attributes and sets
-// its password. It holds a transaction-scoped advisory lock, since CREATE ROLE races with
-// itself: two sessions that both find a role missing both try to create it.
+// CreateRoles creates the three roles, or restores an existing one's drifted attributes and
+// sets its password. It holds a transaction-scoped advisory lock, since CREATE ROLE races
+// with itself: two sessions that both find a role missing both try to create it.
 func CreateRoles(ctx context.Context, tx pgx.Tx, passwords Passwords) error {
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", CatalogLock); err != nil {
 		return fmt.Errorf("lock: %w", err)
@@ -93,16 +125,19 @@ func CreateRoles(ctx context.Context, tx pgx.Tx, passwords Passwords) error {
 		if password == "" {
 			return fmt.Errorf("no password for %s", role)
 		}
-		var exists bool
-		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_roles WHERE rolname = $1)", role).Scan(&exists); err != nil {
+		var a roleAttributes
+		err := tx.QueryRow(ctx,
+			"SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1", role,
+		).Scan(&a.login, &a.super, &a.createDB, &a.createRole, &a.replication, &a.bypassRLS)
+		verb, clauses := "ALTER", a.restore()
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			verb, clauses = "CREATE", attributes+" "
+		case err != nil:
 			return fmt.Errorf("look up %s: %w", role, err)
 		}
-		verb := "CREATE"
-		if exists {
-			verb = "ALTER"
-		}
 		// format() quotes the role as an identifier and the password as a literal.
-		if err := execFormatted(ctx, tx, "%s ROLE %I WITH "+attributes+" PASSWORD %L", verb, role, password); err != nil {
+		if err := execFormatted(ctx, tx, "%s ROLE %I WITH "+clauses+"PASSWORD %L", verb, role, password); err != nil {
 			return fmt.Errorf("%s ROLE %s: %w", verb, role, err)
 		}
 	}

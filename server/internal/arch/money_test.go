@@ -24,9 +24,10 @@ import (
 //
 // Without type information the test goes by names: an identifier whose words include a
 // money word and no unit word. It reads struct fields and their JSON tags, named types,
-// function parameters and results, and variables with a declared type; in SQL, column
-// definitions, column type changes and casts. PostgreSQL's money type is refused whatever
-// the column is called.
+// function parameters and results, and variables with a declared type, through pointers,
+// slices, maps, variadics, channels and generic instantiations; in SQL, column definitions,
+// column type changes, casts and domains. PostgreSQL's money type is refused whatever the
+// column is called.
 func TestMoneyIsNeverFloatOrNumeric(t *testing.T) {
 	// The server module, two directories up.
 	for _, v := range moneyViolations(t, os.DirFS(filepath.Join("..", ".."))) {
@@ -137,11 +138,14 @@ func moneyViolations(t *testing.T, root fs.FS) []string {
 	return out
 }
 
-// floatTypes are the Go types that are not an integer minor unit: binary floats and the
+// floatTypes are the Go types that are not an integer minor unit: binary floats, their
+// nullable wrappers (sqlc generates pgtype.Float8 for a double precision column), and the
 // arbitrary-precision decimals.
-var floatTypes = set("float32", "float64", "big.Float", "big.Rat", "decimal.Decimal", "pgtype.Numeric", "apd.Decimal")
+var floatTypes = set("float32", "float64", "sql.NullFloat64", "pgtype.Float4", "pgtype.Float8",
+	"big.Float", "big.Rat", "decimal.Decimal", "pgtype.Numeric", "apd.Decimal")
 
-// goType renders a type expression's element type: *[]float64 is float64.
+// goType renders a type expression's element type: *[]float64, ...float64, chan float64
+// and sql.Null[float64] are all float64.
 func goType(expr ast.Expr) string {
 	switch e := expr.(type) {
 	case *ast.Ident:
@@ -150,12 +154,33 @@ func goType(expr ast.Expr) string {
 		return goType(e.X) + "." + e.Sel.Name
 	case *ast.StarExpr:
 		return goType(e.X)
+	case *ast.ParenExpr:
+		return goType(e.X)
 	case *ast.ArrayType:
+		return goType(e.Elt)
+	case *ast.Ellipsis:
 		return goType(e.Elt)
 	case *ast.MapType:
 		return goType(e.Value)
+	case *ast.ChanType:
+		return goType(e.Value)
+	case *ast.IndexExpr:
+		return typeArgument(e.X, e.Index)
+	case *ast.IndexListExpr:
+		return typeArgument(e.X, e.Indices...)
 	}
 	return ""
+}
+
+// typeArgument renders an instantiated generic type by the float among its type
+// arguments, if one is: sql.Null[float64] holds a float64. Otherwise it is the generic type.
+func typeArgument(generic ast.Expr, arguments ...ast.Expr) string {
+	for _, a := range arguments {
+		if kind := goType(a); floatTypes[kind] {
+			return kind
+		}
+	}
+	return goType(generic)
 }
 
 func goMoney(t *testing.T, rel string, src []byte) []string {
@@ -220,10 +245,12 @@ var (
 	sqlComment = regexp.MustCompile(`--[^\n]*|/\*[\s\S]*?\*/`)
 	sqlString  = regexp.MustCompile(`'(?:[^']|'')*'`)
 	sqlDecimal = `(numeric|decimal|real|double\s+precision|float4|float8|float|money)\b`
-	// A column definition or type change, "amount numeric(12,2)" or "ALTER COLUMN amount
-	// TYPE real", or a cast, "amount_minor::numeric".
-	sqlColumn = regexp.MustCompile(`(?i)\b([a-z_][a-z0-9_]*)\s+(?:set\s+data\s+)?(?:type\s+)?` + sqlDecimal)
-	sqlCast   = regexp.MustCompile(`(?i)\b([a-z_][a-z0-9_]*)\s*::\s*` + sqlDecimal)
+	// A column definition or type change, "amount numeric(12,2)", `"price" real` or "ALTER
+	// COLUMN amount TYPE real"; a cast, "amount_minor::numeric" or "CAST(amount_minor AS
+	// numeric)"; a domain, "CREATE DOMAIN amount_eur AS numeric".
+	sqlColumn = regexp.MustCompile(`(?i)\b([a-z_][a-z0-9_]*)"?\s+(?:set\s+data\s+)?(?:type\s+)?` + sqlDecimal)
+	sqlCast   = regexp.MustCompile(`(?i)\b([a-z_][a-z0-9_]*)"?\s*::\s*` + sqlDecimal)
+	sqlAs     = regexp.MustCompile(`(?i)\b(?:cast\s*\(\s*(?:[a-z_][a-z0-9_]*\.)?|domain\s+)"?([a-z_][a-z0-9_]*)"?\s+as\s+` + sqlDecimal)
 )
 
 // blank replaces every character of s but line breaks with a space, so that text removed
@@ -245,23 +272,26 @@ func sqlMoney(rel, sql string) []string {
 		msg    string
 	}
 	var hits []hit
+	// Keyed by where the type is written, so a type two patterns match ("CAST(x AS money)"
+	// is also "AS money" to sqlColumn) is reported once.
 	seen := map[int]bool{}
-	for _, re := range []*regexp.Regexp{sqlColumn, sqlCast} {
+	for _, re := range []*regexp.Regexp{sqlColumn, sqlCast, sqlAs} {
 		for _, m := range re.FindAllStringSubmatchIndex(src, -1) {
-			if seen[m[0]] {
+			at := m[4]
+			if seen[at] {
 				continue
 			}
 			name := src[m[2]:m[3]]
 			kind := strings.Join(strings.Fields(strings.ToLower(src[m[4]:m[5]])), " ")
 			switch {
 			case kind == "money":
-				hits = append(hits, hit{m[0], "PostgreSQL's money type rounds to the server locale's currency; use amount_minor bigint and currency char(3)"})
+				hits = append(hits, hit{at, "PostgreSQL's money type rounds to the server locale's currency; use amount_minor bigint and currency char(3)"})
 			case isMoney(name):
-				hits = append(hits, hit{m[0], fmt.Sprintf("%s is money stored as %s; use amount_minor bigint and currency char(3)", name, kind)})
+				hits = append(hits, hit{at, fmt.Sprintf("%s is money stored as %s; use amount_minor bigint and currency char(3)", name, kind)})
 			default:
 				continue
 			}
-			seen[m[0]] = true
+			seen[at] = true
 		}
 	}
 	slices.SortFunc(hits, func(a, b hit) int { return a.offset - b.offset })

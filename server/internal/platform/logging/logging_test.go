@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
@@ -126,6 +129,40 @@ func TestAPostgresErrorIsReducedToWhatItNames(t *testing.T) {
 	logging.New(&buf, slog.LevelInfo).Error("dial failed", slog.Any("error", errors.New("connection refused")))
 	if !strings.Contains(buf.String(), `"error":"connection refused"`) {
 		t.Fatalf("an ordinary error lost its text: %s", buf.String())
+	}
+}
+
+// pgx prints a value it could not encode, and the cause of a failed scan quotes the column's
+// content. The encode error is pgx's own, built as a query would build it.
+func TestAPgxValueErrorIsReducedToWhereItFailed(t *testing.T) {
+	encodeErr := (&pgx.ExtendedQueryBuilder{}).Build(pgtype.NewMap(),
+		&pgconn.StatementDescription{ParamOIDs: []uint32{pgtype.UUIDOID, pgtype.Int4OID}},
+		[]any{"0190f3a2-4c1b-7c3e-9a5f-2b6d8e4f1a90", int64(4711000000)})
+	if encodeErr == nil || !strings.Contains(encodeErr.Error(), "4711000000") {
+		t.Fatalf("pgx no longer prints the value, so this test proves nothing: %v", encodeErr)
+	}
+	_, parseErr := strconv.ParseInt("Jana's diary", 10, 64)
+	scanErr := pgx.ScanArgError{ColumnIndex: 2, FieldName: "amount_minor", Err: parseErr}
+
+	for name, tc := range map[string]struct {
+		err  error
+		want string
+	}{
+		"encode": {fmt.Errorf("insert expense: %w", encodeErr),
+			"insert expense: failed to encode args[1]: unable to encode a value into binary format for int4 (OID 23)"},
+		"scan": {fmt.Errorf("load expense: %w", scanErr), "load expense: can't scan into dest[2] (col: amount_minor)"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var buf bytes.Buffer
+			logging.New(&buf, slog.LevelInfo).Error("query failed", slog.Any("error", tc.err))
+			var line map[string]any
+			if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
+				t.Fatal(err)
+			}
+			if line["error"] != tc.want {
+				t.Fatalf("error %q, want %q", line["error"], tc.want)
+			}
+		})
 	}
 }
 

@@ -3,8 +3,10 @@
 package money
 
 import (
+	"database/sql"
 	"math/big"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -26,6 +28,15 @@ func Total(prices []float64, taxRate float32) (totalCost float64) { return 0 }
 
 var budget float64
 
+func Split(amounts ...float64) {}
+
+type Refund struct {
+	Amount   sql.NullFloat64
+	Fee      sql.Null[float64]
+	Charge   pgtype.Float8
+	Deposits chan float64
+}
+
 // Kept.
 
 type Harvest struct {
@@ -38,6 +49,8 @@ type Harvest struct {
 	Temperature  float64
 	PriceMinor   int64
 	BalanceMinor int64
+	WeightKg     sql.Null[float64]
+	CostMinor    sql.Null[int64]
 }
 
 func Ratio(a, b float64) float64 { return a / b }

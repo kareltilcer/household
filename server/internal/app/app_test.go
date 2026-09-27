@@ -174,10 +174,14 @@ func TestTheAccessLogNamesTheRouteNotThePath(t *testing.T) {
 	}
 }
 
-// A panic becomes a 500 problem, logged by its type and stack and never its value.
+// A panic becomes a 500 problem, logged by its type and stack and never its value, and
+// without the headers the handler set for the response it meant to send.
 func TestAPanicIsA500Problem(t *testing.T) {
 	r, logs := router(t)
-	r.Get("/panics", func(http.ResponseWriter, *http.Request) {
+	r.Get("/panics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("ETag", `"7"`)
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Cache-Control", "max-age=3600")
 		panic("the member's diary says: meet at noon")
 	})
 	rec := httptest.NewRecorder()
@@ -194,18 +198,40 @@ func TestAPanicIsA500Problem(t *testing.T) {
 	if !strings.Contains(logs.String(), `"status":500`) {
 		t.Fatalf("the access log missed the 500:\n%s", logs)
 	}
+	for _, key := range []string{"ETag", "Content-Encoding", "Cache-Control"} {
+		if v := rec.Header().Get(key); v != "" {
+			t.Errorf("the problem carries the handler's %s: %q", key, v)
+		}
+	}
 }
 
-func TestAPanicAfterTheResponseStartedKeepsTheResponse(t *testing.T) {
-	r, _ := router(t)
+// A stream that panics halfway cannot become a problem, and must not end as if it were
+// complete: the client sees the transfer fail, and the access log records an error.
+func TestAPanicAfterTheResponseStartedAbortsIt(t *testing.T) {
+	r, logs := router(t)
 	r.Get("/half", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = io.WriteString(w, "{\"line\":1}\n")
+		_ = http.NewResponseController(w).Flush()
 		panic("late")
 	})
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, get(t, "/half"))
-	if rec.Code != http.StatusAccepted || rec.Body.Len() != 0 {
-		t.Fatalf("%d %q", rec.Code, rec.Body.String())
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/half", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err == nil {
+		t.Fatalf("a truncated stream read as complete: %d %q", resp.StatusCode, body)
+	}
+	if !strings.Contains(logs.String(), `"level":"ERROR","msg":"request"`) {
+		t.Fatalf("the access log did not record the aborted request as an error:\n%s", logs)
 	}
 }
 

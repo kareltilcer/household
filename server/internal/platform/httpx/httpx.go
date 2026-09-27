@@ -42,40 +42,52 @@ func RequestScope(next http.Handler) http.Handler {
 // matched, its status, its duration and the bytes written. Never the path or the query,
 // which carry ids the pattern does not need and search terms (logging's allowlist would
 // drop them anyway).
+//
+// The line is written on the way out whether the handler returned or was aborted with
+// http.ErrAbortHandler, which Recover raises for a response it can no longer replace; an
+// aborted request is logged as an error, whatever status went out before it was cut off.
 func AccessLog(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-			next.ServeHTTP(ww, r)
-
-			status := ww.Status()
-			if status == 0 {
-				status = http.StatusOK
-			}
-			attrs := []slog.Attr{
-				slog.String("method", r.Method),
-				slog.Int("status", status),
-				slog.Int64("duration_ms", time.Since(start).Milliseconds()),
-				slog.Int("bytes", ww.BytesWritten()),
-			}
-			if rctx := chi.RouteContext(r.Context()); rctx != nil {
-				if pattern := rctx.RoutePattern(); pattern != "" {
-					attrs = append(attrs, slog.String("route", pattern))
+			returned := false
+			defer func() {
+				status := ww.Status()
+				if status == 0 {
+					status = http.StatusOK
 				}
-			}
-			level := slog.LevelInfo
-			if status >= http.StatusInternalServerError {
-				level = slog.LevelError
-			}
-			log.LogAttrs(r.Context(), level, "request", attrs...)
+				attrs := []slog.Attr{
+					slog.String("method", r.Method),
+					slog.Int("status", status),
+					slog.Int64("duration_ms", time.Since(start).Milliseconds()),
+					slog.Int("bytes", ww.BytesWritten()),
+				}
+				if rctx := chi.RouteContext(r.Context()); rctx != nil {
+					if pattern := rctx.RoutePattern(); pattern != "" {
+						attrs = append(attrs, slog.String("route", pattern))
+					}
+				}
+				level := slog.LevelInfo
+				if status >= http.StatusInternalServerError || !returned {
+					level = slog.LevelError
+				}
+				log.LogAttrs(r.Context(), level, "request", attrs...)
+			}()
+			next.ServeHTTP(ww, r)
+			returned = true
 		})
 	}
 }
 
-// Recover answers a handler's panic with a 500 problem, if nothing has been written yet,
-// and logs it by the panic value's type and the stack: the value itself can hold anything,
-// content included. http.ErrAbortHandler, the deliberate abort, is left to net/http.
+// Recover answers a handler's panic with a 500 problem, and logs it by the panic value's
+// type and the stack: the value itself can hold anything, content included.
+// http.ErrAbortHandler, the deliberate abort, is left to net/http.
+//
+// A panic after the status line was written can no longer become a problem, and finishing
+// the response would pass a truncated body off as complete: net/http would end a chunked
+// stream cleanly. Recover aborts it instead, with http.ErrAbortHandler, so the client sees
+// the transfer fail.
 func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -95,13 +107,26 @@ func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 					slog.String("panic", typeName(v)),
 					slog.String("stack", logging.Stack()),
 				)
-				if ww.Status() == 0 {
-					problem.Write(ww, reqctx.RequestID(r.Context()), problem.Internal())
+				if ww.Status() != 0 {
+					panic(http.ErrAbortHandler)
 				}
+				// Headers the handler set for the response it meant to send do not describe
+				// the problem that replaces it.
+				for _, key := range representationHeaders {
+					ww.Header().Del(key)
+				}
+				problem.Write(ww, reqctx.RequestID(r.Context()), problem.Internal())
 			}()
 			next.ServeHTTP(ww, r)
 		})
 	}
+}
+
+// representationHeaders describe a response body and how to cache or find it, and are
+// dropped when a panic replaces that response with a problem.
+var representationHeaders = []string{
+	"Cache-Control", "Content-Disposition", "Content-Encoding", "Content-Language",
+	"Content-Location", "Content-Range", "ETag", "Expires", "Last-Modified", "Location",
 }
 
 // typeName is the panic value's type, which is safe to log where the value is not.

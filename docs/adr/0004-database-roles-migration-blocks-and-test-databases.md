@@ -18,12 +18,16 @@ PostgreSQL, and `go test ./...` runs packages in parallel against one cluster.
 
 **Roles.** `household-api bootstrap`, run as an administrator, creates `household_migrate`,
 `household_app` and `household_meter` as `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
-NOREPLICATION NOBYPASSRLS`, and on every later run restores those attributes and resets each
-password to the one its connection string carries (`HOUSEHOLD_DATABASE_URL`,
-`HOUSEHOLD_MIGRATE_DATABASE_URL`, `HOUSEHOLD_METER_DATABASE_URL`). It then makes
-`household_migrate` the owner of the database, revokes the database from `PUBLIC`, and grants
-`CONNECT` to the three roles and to itself. `serve` refuses a `HOUSEHOLD_DATABASE_URL` that does
-not log in as `household_app`, and `migrate` one that does not log in as `household_migrate`.
+NOREPLICATION NOBYPASSRLS`, and on every later run restores whichever of those attributes has
+drifted and resets each password to the one its connection string carries
+(`HOUSEHOLD_DATABASE_URL`, `HOUSEHOLD_MIGRATE_DATABASE_URL`, `HOUSEHOLD_METER_DATABASE_URL`).
+It names only the attributes that differ: PostgreSQL 16 and later refuse a `SUPERUSER`,
+`REPLICATION` or `BYPASSRLS` clause, the `NO` form included, from an administrator without that
+attribute, so restating them all would fail every run after the first on a managed database.
+It then makes `household_migrate` the owner of the database, revokes the database from
+`PUBLIC`, and grants `CONNECT` to the three roles and to itself. `serve` refuses a
+`HOUSEHOLD_DATABASE_URL` that does not log in as `household_app`, and `migrate` one that does
+not log in as `household_migrate`.
 
 **Privileges.** The migrate role owns the database and, through `pg_database_owner`, its public
 schema. The platform block's first migration grants the request role `USAGE` on the schema and,
@@ -35,8 +39,9 @@ columns one at a time (item 16).
 `NNSSS_description.sql`: block 01 (the platform) runs `01001`, `01002`, …. All blocks share one
 goose sequence, applied out of order where a lower block gains a migration after a higher one
 has run, since blocks own disjoint tables. Assembly refuses a file numbered for another block, a
-number used twice, and any migration with a `-- +goose Down` section. A session advisory lock
-keeps two deploys from applying a migration twice.
+number used twice, and any migration with a Down section, its annotation read as goose reads it
+(`-- +goose Down`, `--+goose down`). A session advisory lock keeps two deploys from applying a
+migration twice, and a run that fails reports the migrations it applied before the failure.
 
 **Test databases.** `testsupport` builds a template database by migrating an empty one as the
 migrate role, names it after a hash of the migrations, and clones it per test package

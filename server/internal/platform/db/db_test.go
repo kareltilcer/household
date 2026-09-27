@@ -3,6 +3,7 @@ package db_test
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -72,6 +73,33 @@ func TestCreateRolesRestoresTheAttributes(t *testing.T) {
 	}
 	if bypass || createDB {
 		t.Fatalf("after CreateRoles: bypassrls %t, createdb %t", bypass, createDB)
+	}
+}
+
+// A managed database's administrator may create roles but is no superuser, and PostgreSQL
+// 16 and later refuse a NOSUPERUSER, NOREPLICATION or NOBYPASSRLS clause from it. The
+// bootstrap after the first must still run: roles whose attributes have not drifted get
+// only their password set. The administrator exists only in the transaction the test
+// rolls back.
+func TestCreateRolesRunsAgainForAnAdministratorWhoIsNoSuperuser(t *testing.T) {
+	admin := connect(t, testsupport.AdminURL())
+	tx, err := admin.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	for _, stmt := range []string{
+		"SELECT pg_advisory_xact_lock(" + strconv.FormatInt(db.CatalogLock, 10) + ")",
+		"CREATE ROLE household_test_managed_admin NOLOGIN CREATEROLE",
+		"GRANT household_migrate, household_app, household_meter TO household_test_managed_admin WITH ADMIN OPTION",
+		"SET LOCAL ROLE household_test_managed_admin",
+	} {
+		if _, err := tx.Exec(t.Context(), stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+	if err := db.CreateRoles(t.Context(), tx, testsupport.Passwords); err != nil {
+		t.Fatalf("CreateRoles as a non-superuser administrator: %v", err)
 	}
 }
 
@@ -187,6 +215,17 @@ func TestMigrateAppliesEachMigrationOnce(t *testing.T) {
 	if err != nil || len(results) != 1 || results[0].Source.Version != 97001 {
 		t.Fatalf("Migrate with block 97 after 98: %v, %v", results, err)
 	}
+
+	// A run that fails partway still reports what it applied before the failure, which
+	// stays applied: the deploy's log is where an operator learns it.
+	failing := db.Block{Name: "failing", Number: 96, FS: fstest.MapFS{
+		"96001_applies.sql": {Data: []byte("-- +goose Up\nCREATE TABLE applies_probe (id bigint);\n")},
+		"96002_fails.sql":   {Data: []byte("-- +goose Up\nSELECT * FROM no_such_table;\n")},
+	}}
+	results, err = db.Migrate(t.Context(), sqlDB, db.Platform(), later, earlier, failing)
+	if err == nil || len(results) != 1 || results[0].Source.Version != 96001 {
+		t.Fatalf("Migrate with a failing migration: %v, %v", results, err)
+	}
 }
 
 func TestAssembleRefusesWhatIsNotAForwardOnlyBlock(t *testing.T) {
@@ -199,16 +238,19 @@ func TestAssembleRefusesWhatIsNotAForwardOnlyBlock(t *testing.T) {
 		return db.Block{Name: "b" + string(rune('a'+number%26)), Number: number, FS: fsys}
 	}
 	for name, blocks := range map[string][]db.Block{
-		"number 0":         {block(0, map[string][]byte{"00001_a.sql": up})},
-		"number 100":       {block(100, map[string][]byte{"100001_a.sql": up})},
-		"shared number":    {block(20, map[string][]byte{"20001_a.sql": up}), {Name: "other", Number: 20, FS: fstest.MapFS{}}},
-		"shared name":      {{Name: "x", Number: 20, FS: fstest.MapFS{}}, {Name: "x", Number: 21, FS: fstest.MapFS{}}},
-		"another block's":  {block(20, map[string][]byte{"21001_a.sql": up})},
-		"sequence 000":     {block(20, map[string][]byte{"20000_a.sql": up})},
-		"no description":   {block(20, map[string][]byte{"20001.sql": up})},
-		"CamelCase name":   {block(20, map[string][]byte{"20001_AddThing.sql": up})},
-		"not SQL":          {block(20, map[string][]byte{"README.md": []byte("x")})},
-		"a Down section":   {block(20, map[string][]byte{"20001_a.sql": []byte("-- +goose Up\nSELECT 1;\n-- +goose Down\nSELECT 2;\n")})},
+		"number 0":        {block(0, map[string][]byte{"00001_a.sql": up})},
+		"number 100":      {block(100, map[string][]byte{"100001_a.sql": up})},
+		"shared number":   {block(20, map[string][]byte{"20001_a.sql": up}), {Name: "other", Number: 20, FS: fstest.MapFS{}}},
+		"shared name":     {{Name: "x", Number: 20, FS: fstest.MapFS{}}, {Name: "x", Number: 21, FS: fstest.MapFS{}}},
+		"another block's": {block(20, map[string][]byte{"21001_a.sql": up})},
+		"sequence 000":    {block(20, map[string][]byte{"20000_a.sql": up})},
+		"no description":  {block(20, map[string][]byte{"20001.sql": up})},
+		"CamelCase name":  {block(20, map[string][]byte{"20001_AddThing.sql": up})},
+		"not SQL":         {block(20, map[string][]byte{"README.md": []byte("x")})},
+		"a Down section":  {block(20, map[string][]byte{"20001_a.sql": []byte("-- +goose Up\nSELECT 1;\n-- +goose Down\nSELECT 2;\n")})},
+		// goose reads annotations regardless of case and spacing.
+		"a lowercase Down": {block(20, map[string][]byte{"20001_a.sql": []byte("-- +goose Up\nSELECT 1;\n-- +goose down\nSELECT 2;\n")})},
+		"a Down unspaced":  {block(20, map[string][]byte{"20001_a.sql": []byte("-- +goose Up\nSELECT 1;\n--+goose Down\nSELECT 2;\n")})},
 		"no Up annotation": {block(20, map[string][]byte{"20001_a.sql": []byte("SELECT 1;\n")})},
 		"a subdirectory":   {block(20, map[string][]byte{"sub/20001_a.sql": up})},
 	} {
@@ -218,7 +260,8 @@ func TestAssembleRefusesWhatIsNotAForwardOnlyBlock(t *testing.T) {
 			}
 		})
 	}
-	if _, err := db.Assemble(db.Platform(), block(20, map[string][]byte{"20001_a.sql": up, "20002_b_c.sql": up})); err != nil {
+	lowerUp := []byte("-- +goose up\nSELECT 1;\n")
+	if _, err := db.Assemble(db.Platform(), block(20, map[string][]byte{"20001_a.sql": up, "20002_b_c.sql": lowerUp})); err != nil {
 		t.Fatalf("Assemble refused good blocks: %v", err)
 	}
 }

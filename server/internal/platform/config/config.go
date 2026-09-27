@@ -59,6 +59,7 @@ const (
 	LogLevelVar           = "HOUSEHOLD_LOG_LEVEL"
 	ShutdownTimeoutVar    = "HOUSEHOLD_SHUTDOWN_TIMEOUT"
 	MaxBodyBytesVar       = "HOUSEHOLD_MAX_BODY_BYTES"
+	BodyTimeoutVar        = "HOUSEHOLD_BODY_TIMEOUT"
 )
 
 // The development defaults: the compose services, and the role passwords .env.example
@@ -93,6 +94,9 @@ type Config struct {
 	ShutdownTimeout time.Duration
 	// MaxBodyBytes caps a JSON request body.
 	MaxBodyBytes int64
+	// BodyTimeout caps how long a JSON request body may take to arrive. Its default leaves
+	// a full-size body a slow mobile connection's time.
+	BodyTimeout time.Duration
 }
 
 // Getenv looks a variable up, reporting whether it is set.
@@ -124,6 +128,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 	c.LogLevel = l.level(LogLevelVar, slog.LevelInfo)
 	c.ShutdownTimeout = l.duration(ShutdownTimeoutVar, 20*time.Second)
 	c.MaxBodyBytes = l.positive(MaxBodyBytesVar, 1<<20)
+	c.BodyTimeout = l.duration(BodyTimeoutVar, 60*time.Second)
 
 	// url reads a connection string command needs, defaulted in development only, and
 	// checks that it logs in as role (any role, when role is empty).
