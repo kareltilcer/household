@@ -48,7 +48,9 @@ info:
       while the first request is still running answers `409` (`idempotency_in_progress`), as does
       one whose first request took effect but whose response was not kept, until the key expires;
       a key reused for a different request answers `422`, naming `header:Idempotency-Key`. A
-      request answered with anything but `2xx` stores nothing, so repeating it runs it again.
+      request answered with anything but `2xx` stores nothing, so repeating it runs it again,
+      unless it took effect before it was answered: then a repeat answers `409` like one whose
+      response was not kept.
     - Entities with a `version` return it as an `ETag`, and accept that entity-tag back in
       `If-Match`; a mismatch is `409` carrying the current representation.
 
@@ -7960,10 +7962,11 @@ components:
         operation is what lets a generated client send it at all.
 
         A key is the caller's own. Only a `2xx` response is stored: a repeat of a request that was
-        refused runs it again. A repeat while the first request is still running answers `409`
-        (`idempotency_in_progress`). So does a repeat of a request that took effect but whose
-        response was not kept, because the server stopped before storing it or the body was larger
-        than 1 MiB, until the key expires: running it again would repeat the effect. A key reused
+        refused before it took effect runs it again. A repeat while the first request is still
+        running answers `409` (`idempotency_in_progress`). So does a repeat of a request that took
+        effect but whose response was not kept, because the server stopped before storing it, the
+        body was larger than 1 MiB, or the request was answered with anything but `2xx` after it
+        took effect, until the key expires: running it again would repeat the effect. A key reused
         for a request with a different method, path, query, `If-Match`, `Content-Type` or JSON body
         answers `422` naming `header:Idempotency-Key`; a body in another media type, an upload, is
         compared by its length alone.

@@ -126,10 +126,11 @@ const feedLock int32 = 0x73796e63
 // two orders differ between concurrent transactions: without the lock a pull could read seq 101
 // before seq 100 committed, advance its cursor past 100, and never see it. Under the lock a
 // household's transactions draw their seqs and commit one at a time, so the household's rows
-// become visible in seq order. The lock is taken as late as it can be, after the mutation's own
-// writes and its audit event, and is held only for the feed's inserts, what the spine does after
-// them in the same transaction, and the commit. Two households whose hashes collide share a
-// lock, which serialises them and costs nothing else.
+// become visible in seq order. The lock is taken as late as it can be, after everything else the
+// transaction writes, and is held only for the feed's inserts and the commit: the caller takes
+// no row lock after Emit, since another transaction of the household may hold that row while it
+// waits for this lock. Two households whose hashes collide share a lock, which serialises them
+// and costs nothing else.
 func Emit(ctx context.Context, tx pgx.Tx, household, actor uuid.UUID, changes []Change) (int64, error) {
 	if len(changes) == 0 {
 		return 0, errors.New("sync: no changes to emit")

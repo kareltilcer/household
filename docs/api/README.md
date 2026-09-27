@@ -73,8 +73,8 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
   representation.
 - **`Idempotency-Key`** on unsafe methods — declared on every one of them, so a generated client
   can actually send it — and required on `POST …/sync/mutations`. A key is the caller's own and
-  is kept 7 days; a repeat gets the first request's `2xx` response, and a refused request stores
-  nothing, so a repeat runs it again.
+  is kept 7 days; a repeat gets the first request's `2xx` response, and a request refused before
+  it took effect stores nothing, so a repeat runs it again.
 - **`402` is declared on every household-scoped unsafe method**, because the entitlement gate is
   middleware and can refuse any of them ([04](../prd/04-billing-and-entitlements.md) FR-BI1). The
   exceptions are the operations that must keep working in a non-writing state: billing, export,

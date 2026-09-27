@@ -395,6 +395,7 @@ Phase 0 · after 3, 6 · size L
     - `/me` profile and preferences: language, timezone override, first day of week, quiet hours.
     - `/me/sessions`: list, revoke, and sign out everywhere (FR-ID7).
   - **Audit context** (item 4): a request the session cookie authenticates records `via: web` (`mutation.WithVia`), and the spine writes the actor's display name as each audit event's `actor_label`.
+  - **`Idempotency-Key` outside a household** (item 4): `idempotency_keys` holds a member's keys in their household, so the `/auth` and `/me` routes, and item 10's household create, need keys of their own; decide where they live and serve the same answers ([ADR 0006](adr/0006-sync-ready-schema-and-the-mutation-spine.md)).
 - **Inputs**
   - PRD: [02 §1–2, §9](prd/02-identity-and-access.md); [07 §4](prd/07-nonfunctional.md); D-12, D-13
   - API: tags `auth` and `me`
@@ -451,6 +452,7 @@ Phase 0 · after 4, 7, 8 · size L
     - Remove member.
     - Transfer ownership.
   - **Household settings**: timezone, locale, units and first day. A country change updates reference data, not history (FR-HA1).
+  - **`Idempotency-Key`** (item 4): the household-scoped routes here are not a module's, so they mount `idempotency.Middleware` themselves; creating a household uses item 8's keys outside a household.
   - **Deferred**: the base-currency change lands in item 62.
 - **Inputs**
   - PRD: [02 §3–5, §7](prd/02-identity-and-access.md); [17 FR-HA1, HA3–HA8, HA17](prd/modules/17-household-admin.md)
@@ -2375,4 +2377,4 @@ Tracked here so they are not forgotten. None of them takes a numbered slot.
 | 2026-09-26 | 7, 14, 18, 19, 25, 28–32, 34, 36, 37, 39, 40, 44–46, 53, 55, 57, 63, 67–69, 78, 79, 88, 93, 95, 96 | Review fixes: added missing dependencies (G-B, the client items, the reminder strand, the conflict UI, Google, GA). Added a dogfood environment and a month gate on removing `proof`. Moved the reference resolver to item 36 and F-18 to the Notes clients. Assigned the offline `strict_version` writes. Recorded contract gaps (Q11, Q17). Corrected vectors that differed from design/v1. Removed hand-kept progress |
 | 2026-09-26 | PL-1, PL-8, 1, 16 | Item 1: MinIO replaced by RustFS as the dev S3 store, because MinIO's repository is archived and its images are no longer published. PL-1 gains `tooling/`, a workspace package for guards over the workspace itself (strict flags, catalog pins, local/CI parity) |
 | 2026-09-27 | 3 | Item 3: the tenant middleware resolves the caller in a transaction of its own, and each unit of work opens its own transaction with the tenant settings, committed before the handler answers, instead of one transaction held for the request, which would commit after the response ([ADR 0005](adr/0005-tenancy-registry-and-row-level-security.md), PRD 01 §2.2 amended). A tenant table added later also adds its rows to the isolation fixture (`server/internal/arch/testdata/isolation/fixture.sql`) |
-| 2026-09-27 | 4, 8, 9, 13, 14, Q11 | Item 4: `tenant.InTx` is read-only and `mutation.Apply` is the only write, refusing a write it cannot record; the feed takes a per-household lock so a household's rows commit in `seq` order, and is keyed `(household_id, seq, occurred_at)` because it is partitioned by month (PRD 03 §2.2 amended); the contract gains `idempotency_in_progress` ([ADR 0006](adr/0006-sync-ready-schema-and-the-mutation-spine.md)). Items 8, 9 and 13 set the audit `via`, item 8 the actor label, item 14's partition maintenance handles the default partition. Q11 records three creates that do not require the client's id |
+| 2026-09-27 | 4, 8, 9, 10, 13, 14, Q11 | Item 4: `tenant.InTx` is read-only and `mutation.Apply` is the only write, refusing a write it cannot record; the feed takes a per-household lock so a household's rows commit in `seq` order, and is keyed `(household_id, seq, occurred_at)` because it is partitioned by month (PRD 03 §2.2 amended); the contract gains `idempotency_in_progress` ([ADR 0006](adr/0006-sync-ready-schema-and-the-mutation-spine.md)). Items 8, 9 and 13 set the audit `via`, item 8 the actor label, item 14's partition maintenance handles the default partition. `Idempotency-Key` covers module routes; item 10 mounts it on its household routes, and item 8 decides where the keys of routes outside a household live. Q11 records three creates that do not require the client's id |

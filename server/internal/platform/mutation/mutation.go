@@ -110,7 +110,8 @@ func WithVia(ctx context.Context, via audit.Via) context.Context {
 // The actor is the caller in ctx's tenant scope, the system when it has none, and the audit
 // event records how the change arrived (WithVia) and the request it arrived in. The event's
 // action must be one its module declares, and each change must name an entity of that module,
-// consistent with the entity's declared access (sync.Change.Check).
+// consistent with the entity's declared access (sync.Change.Check); an event with a private
+// change is private to that change's owner.
 //
 // A mutation that wrote nothing and reports nothing commits nothing and returns a zero Result:
 // a request that asked for a change already in place, found as it may be found, by a read, by
@@ -159,14 +160,17 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 		if err := check(reg, rec); err != nil {
 			return err
 		}
+		// The key first, before the feed lock: a row lock taken under the feed lock could be one
+		// another mutation of the household holds while it waits for the feed lock, a member's
+		// removal taking their keys with their membership, and the two would deadlock.
+		if err := idempotency.Commit(ctx, tx); err != nil {
+			return err
+		}
 		household := scope.HouseholdID()
 		if res.EventID, err = audit.Record(ctx, tx, household, actor, via, reqctx.RequestID(ctx), rec.Event); err != nil {
 			return err
 		}
 		if res.Seq, err = sync.Emit(ctx, tx, household, actor.ID, rec.Changes); err != nil {
-			return err
-		}
-		if err := idempotency.Commit(ctx, tx); err != nil {
 			return err
 		}
 		if hook, ok := ctx.Value(hookKey{}).(func()); ok {
@@ -181,8 +185,10 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 }
 
 // check returns what makes rec unrecordable: an incomplete record, an event its module does
-// not declare, or a change of an entity the event's module does not declare or inconsistent
-// with it.
+// not declare, a change of an entity the event's module does not declare or inconsistent with
+// it, or a private change in an event that is not private to the same owner. The activity log
+// redacts a private event for everyone but its owner (FR-AU4); a shared event about a private
+// row would show its summary and its diff to every member.
 func check(reg *module.Registry, rec Record) error {
 	if rec.Event.Module == "" || len(rec.Changes) == 0 {
 		return ErrUnrecorded
@@ -204,6 +210,9 @@ func check(reg *module.Registry, rec Record) error {
 		}
 		if err := c.Check(e); err != nil {
 			return err
+		}
+		if c.Visibility == sync.Private && (rec.Event.Visibility != audit.Private || rec.Event.Owner != c.Owner) {
+			return fmt.Errorf("mutation: a private change of %s %s in an event that is not private to its owner", c.Entity, c.ID)
 		}
 	}
 	return nil

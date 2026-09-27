@@ -77,7 +77,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		household.Use(tenancy, mutation.Catalog(d.Modules))
 		for _, m := range d.Modules.All() {
 			household.Route("/"+m.Name(), func(r chi.Router) {
-				r.Use(grant.Gate(m.Name()), idempotency.Middleware(d.Logger))
+				r.Use(grant.Gate(m.Name()), idempotency.Middleware(d.Logger, d.MaxBodyBytes))
 				m.RegisterRoutes(r)
 			})
 		}

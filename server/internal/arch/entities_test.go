@@ -13,7 +13,6 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/arch/testdata/entities"
 	"github.com/kareltilcer/household/server/internal/platform/db"
-	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
@@ -21,21 +20,11 @@ import (
 // states its merge policy and its access, a state_set its key and resolution, and an additive
 // series any invariant it carries, as sync.Violations holds them; and its table carries the
 // base columns, as add_entity_columns makes them, which is the sync-ready schema gate G-A
-// requires of every module's first migration. The registry refuses the first of these at
-// startup; this test names every one.
+// requires of every module's first migration. The registry refuses a module whose declarations
+// break the first of these, naming each violation, when the server starts and when this
+// package's TestMain builds it; this test reads each entity's table.
 func TestSyncEntitiesAreDeclaredAndSyncReady(t *testing.T) {
-	var all []sync.Entity
-	for _, m := range registry(t).All() {
-		source, ok := m.(module.SyncSource)
-		if !ok {
-			continue
-		}
-		for _, v := range sync.Violations(m.Name(), source.SyncEntities()) {
-			t.Error(v)
-		}
-		all = append(all, source.SyncEntities()...)
-	}
-	for _, v := range baseColumnViolations(t, adminTx(t), all) {
+	for _, v := range baseColumnViolations(t, adminTx(t), registry(t).Entities()) {
 		t.Error(v)
 	}
 }

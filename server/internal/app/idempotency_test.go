@@ -2,14 +2,20 @@ package app_test
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/kareltilcer/household/server/internal/platform/access"
+	"github.com/kareltilcer/household/server/internal/platform/audit"
+	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
+	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
 // The tests in this file prove the Idempotency-Key through the probe's routes: what a repeat
@@ -137,4 +143,44 @@ func TestAKeyInProgressIsNotRunTwice(t *testing.T) {
 	// A key past its 7 days is a new key.
 	w.exec("UPDATE idempotency_keys SET created_at = now() - interval '8 days' WHERE "+key, h, u)
 	expect(t, w.send(http.MethodPost, items(h), u, itemBody(it, h), withKey("k")), http.StatusCreated, "")
+}
+
+// endless is a request body that never ends, and counts how much of it was read.
+type endless struct{ read int64 }
+
+func (e *endless) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = ' '
+	}
+	e.read += int64(len(p))
+	return len(p), nil
+}
+
+// A keyed request whose body the edge did not bound, because no operation matches it, is not
+// read past the edge's limit to tell it from another request: a member cannot make the server
+// hold a body of any size.
+func TestAKeyedBodyIsBounded(t *testing.T) {
+	w := newWorld(t)
+	h := w.household(true)
+	u := w.member(h, access.Member, level(access.Contribute))
+	for name, target := range map[string]struct{ method, path string }{
+		"a path no operation has":          {http.MethodPost, items(h) + "/elsewhere"},
+		"a method the operation lacks":     {http.MethodPut, items(h)},
+		"a method the item route lacks":    {http.MethodPatch, itemPath(h, idgen.New())},
+		"a body the operation would bound": {http.MethodPost, items(h)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := &endless{}
+			ctx := auth.WithUser(mutation.WithVia(t.Context(), audit.ViaWeb), u)
+			req := httptest.NewRequestWithContext(ctx, target.method, target.path, io.LimitReader(body, 64<<20))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Idempotency-Key", "big")
+			rec := testsupport.ServeContract(t, w.contract, w.router, req)
+			expect(t, rec, http.StatusRequestEntityTooLarge, problem.CodePayloadTooLarge)
+			// The limit is 1 KiB; a reader may ask for a buffer's worth past it.
+			if body.read > 64<<10 {
+				t.Fatalf("read %d bytes of the body", body.read)
+			}
+		})
+	}
 }

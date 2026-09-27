@@ -104,8 +104,9 @@ type Event struct {
 	Changes []Change
 }
 
-// Change is one field's value before and after. Old or New is nil where the field had no
-// value; each is stored as the JSON it serialises to.
+// Change is one field's value before and after. Old or New is nil, or a nil pointer, where the
+// field had no value, and is stored as NULL; any other value is stored as the JSON it
+// serialises to.
 type Change struct {
 	Field string
 	Old   any
@@ -247,12 +248,17 @@ func Record(ctx context.Context, tx pgx.Tx, household uuid.UUID, actor Actor, vi
 	return id, nil
 }
 
-// value is v as JSON, or NULL for nil.
+// value is v as JSON, or NULL for a value that serialises to null, a nil pointer as well as
+// nil: a field with no value is NULL however the mutation spelled it.
 func value(v any) (any, error) {
 	if v == nil {
 		return nil, nil
 	}
-	return json.Marshal(v)
+	data, err := json.Marshal(v)
+	if err != nil || string(data) == "null" {
+		return nil, err
+	}
+	return data, nil
 }
 
 // nullUUID is id, or NULL for the zero UUID.

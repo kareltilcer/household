@@ -69,8 +69,10 @@ module exists (D-82), enforced by architecture tests. None of them says:
 - **A household's changes commit in `seq` order.** `sync.Emit` takes a transaction-scoped
   advisory lock on the household before inserting, so a household's transactions draw their seqs
   and commit one at a time, and a pull that has read seq N has missed nothing below it. The lock is
-  taken after the mutation's own writes and its audit event, and held only for the feed inserts,
-  the idempotency key's commit and the commit. The feed is pulled per household, so a global
+  taken after the mutation's own writes, the idempotency key's commit and the audit event, and
+  held only for the feed inserts and the commit: a row lock taken under it could be one that
+  another mutation of the household holds while it waits for the lock, as a member's removal
+  holds their keys, and the two would deadlock. The feed is pulled per household, so a global
   order is not needed.
 - **The audit spine** is `audit_events`, keyed `(household_id, id)`, and `audit_changes`, one row
   per field with its old and new JSON. `actor_type` is an enum, extensible with `ALTER TYPE`
@@ -82,7 +84,9 @@ module exists (D-82), enforced by architecture tests. None of them says:
   (`tenant.InWriteTx`), runs the mutation, and records what the mutation reports — an
   `audit.Event` and one `sync.Change` per row — then commits. The actor is the caller in the tenant
   scope. It refuses an action the event's module does not declare, a change of an entity no module
-  declares or another module's, and a change the entity's access does not admit. A mutation that
+  declares or another module's, a change the entity's access does not admit, and a private change
+  in an event that is not private to the same owner, which the activity log would otherwise show
+  everyone unredacted (FR-AU4). A mutation that
   wrote nothing and reports nothing commits nothing. One that wrote and reports no event or no
   change is refused and rolled back: the rows the connection has inserted, updated and deleted,
   which PostgreSQL counts for itself and does not report inside a transaction
@@ -102,8 +106,9 @@ module exists (D-82), enforced by architecture tests. None of them says:
 - **ETag and If-Match** live in `platform/etag`: a version is the entity-tag `"42"`, and
   `IfMatch` compares strongly, as RFC 9110 requires of `If-Match`, so a weak tag, a tag this server
   could not have issued and a list match nothing and the write is refused as a conflict rather
-  than applied. `problem.Conflict` is the `409 version_conflict` with the current representation,
-  its version, and the ETag, which a problem now carries in `Problem.Header`.
+  than applied; `*` matches any version, as RFC 9110 defines it. `problem.Conflict` is the `409
+  version_conflict` with the current representation, its version, and the ETag, which a problem
+  now carries in `Problem.Header`.
 - **`Idempotency-Key` is claimed, committed and completed.** The middleware, behind the tenant
   middleware and the module's gate, claims the caller's key (`in_flight`) before the handler runs;
   `mutation.Apply` marks it `committed` in the transaction that commits the effect; the middleware
@@ -114,14 +119,20 @@ module exists (D-82), enforced by architecture tests. None of them says:
   claim past a five-minute lease belonged to a request that ended without committing its effect,
   and a repeat takes it over; the request it was taken from can no longer commit (`ErrClaimLost`).
   Only a 2xx is stored: a refusal commits no effect, and a refusal stored for seven days would
-  answer a retry after its reason had gone. A key is the caller's own, in their household.
+  answer a retry after its reason had gone. A request answered otherwise after its effect
+  committed, by a second mutation that failed or a handler that failed after its write, leaves
+  its key `committed`, and a repeat is answered `409` as for a response that was never stored. A
+  key is the caller's own, in their household. A JSON body read to fingerprint the request is
+  held to the edge's cap on a body, since the middleware also serves requests no operation
+  matches, whose bodies the edge does not read.
 - **The contract gains `idempotency_in_progress`**, declared in `ProblemCode` and described with
   the other protocol-level answers: any operation that accepts `Idempotency-Key` may answer it,
   whatever `409` it declares for its own conflicts, and the response validation the tests run holds
   it to `Problem` alone.
 - **Test 9 reads the operations an entity names among its creates.** Each must be in the contract,
-  be a POST or PUT, take a body, and require, in every media type, `id` as a string or `ids` as an
-  array of strings, directly, through `allOf`, or in every branch of a `oneOf`/`anyOf`.
+  be a POST or PUT, require a body, and require in it, in every media type, `id` as a string or
+  `ids` as an array of strings, directly, through `allOf`, or in every branch of a
+  `oneOf`/`anyOf`.
 
 ## Alternatives rejected
 
@@ -153,10 +164,14 @@ module exists (D-82), enforced by architecture tests. None of them says:
   redacted rows to the spine from each entity's `Redact`.
 - Item 17's expiry sweep deletes `idempotency_keys` past seven days (PRD 03 §5).
 - A key whose effect committed but whose response was never stored, because the process died
-  between the two or the response was larger than the 1 MiB a key keeps, answers `409` until it
-  expires: running it again would repeat the effect, the one thing the key exists to prevent. The
-  contract says so. An upload that takes longer than the lease needs its claim
-  renewed (item 16).
+  between the two, the response was larger than the 1 MiB a key keeps, or the request was
+  answered other than `2xx` after its effect committed, answers `409` until it expires: running it
+  again would repeat the effect, the one thing the key exists to prevent. The contract says so. An
+  upload that takes longer than the lease needs its claim renewed (item 16).
+- The Idempotency-Key middleware is mounted on module routes. A household-scoped route outside a
+  module (item 10's members, invitations and grants) mounts it as well. A route outside any
+  household (`/auth`, `/me`, creating a household) has no household to hold its key in, since a
+  key belongs to a membership; the first item that builds one (8) decides where its keys live.
 - A household's mutations serialise at their commit. Revisit if a household's write rate ever
   makes that visible (item 90).
 - Three creates in today's contract accept a client id without requiring it (plan Q11); test 9

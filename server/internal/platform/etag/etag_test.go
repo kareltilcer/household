@@ -21,7 +21,8 @@ func TestFormatQuotesTheVersion(t *testing.T) {
 
 // If-Match asks for the version its tag spells, compared strongly: a weak tag, a tag this
 // server could not have issued, and more than one header match no version, so the write is a
-// conflict rather than applied; no header asks nothing.
+// conflict rather than applied; `*` matches any version, and expects none; no header asks
+// nothing.
 func TestIfMatch(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -39,7 +40,9 @@ func TestIfMatch(t *testing.T) {
 		{"zero", []string{`"0"`}, true, false, 0},
 		{"negative", []string{`"-42"`}, true, false, 0},
 		{"unquoted", []string{`42`}, true, false, 0},
-		{"any", []string{`*`}, true, false, 0},
+		{"any", []string{`*`}, true, true, -1},
+		{"any, spaced", []string{` * `}, true, true, -1},
+		{"any in a list", []string{`*, "42"`}, true, false, 0},
 		{"a list", []string{`"42", "43"`}, true, false, 0},
 		{"two headers", []string{`"42"`, `"42"`}, true, false, 0},
 		{"too large", []string{`"9223372036854775808"`}, true, false, 0},

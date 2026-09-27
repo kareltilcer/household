@@ -70,6 +70,11 @@ paths:
         required: true
         content: { application/json: { schema: { type: object, required: [id], properties: { id: { type: integer } } } } }
       responses: { '201': { description: Created } }
+  /staples/optional:
+    post:
+      operationId: postStaplesOptional
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/ListCreate' } } } }
+      responses: { '201': { description: Created } }
   /staples/allof:
     post:
       operationId: postStaplesAllOf

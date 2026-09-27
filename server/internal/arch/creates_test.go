@@ -14,7 +14,6 @@ import (
 
 	apispec "github.com/kareltilcer/household/docs/api"
 	"github.com/kareltilcer/household/server/internal/arch/testdata/entities"
-	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
@@ -23,20 +22,15 @@ import (
 // and a client id offline is the dual identity D-23 exists to prevent, and the requirement is
 // easy to meet on the sync path and to forget on the REST one. It reads the contract and the
 // registry together: each operation an entity names among its Creates must be in the contract,
-// be a POST or a PUT, take a body, and require, in every media type it takes, either id, a UUID,
-// or ids, an array of them, for an operation that creates several.
+// be a POST or a PUT, require a body, since a create that may come without one may come without
+// an id, and require in it, in every media type it takes, either id, a UUID, or ids, an array of
+// them, for an operation that creates several.
 func TestCreatesRequireTheClientsID(t *testing.T) {
 	doc, err := openapi3.NewLoader().LoadFromData(apispec.OpenAPI)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var all []sync.Entity
-	for _, m := range registry(t).All() {
-		if source, ok := m.(module.SyncSource); ok {
-			all = append(all, source.SyncEntities()...)
-		}
-	}
-	for _, v := range createViolations(doc, all) {
+	for _, v := range createViolations(doc, registry(t).Entities()) {
 		t.Error(v)
 	}
 }
@@ -91,6 +85,8 @@ func createViolations(doc *openapi3.T, es []sync.Entity) []string {
 			case o.op.RequestBody == nil || o.op.RequestBody.Value == nil || len(o.op.RequestBody.Value.Content) == 0:
 				bad("takes no body to carry the client's id")
 				continue
+			case !o.op.RequestBody.Value.Required:
+				bad("does not require its body, so a create may come without the client's id")
 			}
 			content := o.op.RequestBody.Value.Content
 			mediaTypes := make([]string, 0, len(content))

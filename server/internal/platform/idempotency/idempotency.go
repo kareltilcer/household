@@ -20,7 +20,9 @@
 //
 // A response other than a 2xx is not stored, and the claim is released, so that a repeat runs
 // the request again: a refusal commits no effect, and a refusal stored for 7 days would answer a
-// retry after the reason had gone, a 402 after the payment, a 404 after the grant.
+// retry after the reason had gone, a 402 after the payment, a 404 after the grant. A request
+// answered so after its effect committed, by a second mutation that failed for instance, keeps
+// its key committed, and a repeat is answered 409 as for a response that never arrived.
 package idempotency
 
 import (
@@ -106,8 +108,11 @@ func Commit(ctx context.Context, tx pgx.Tx) error {
 
 // Middleware makes the unsafe requests it serves that carry Idempotency-Key repeatable. Install
 // it behind the tenant middleware and the module's gate, so that a caller who may no longer see
-// a module is not answered from it; log records a failure to store or release a key.
-func Middleware(log *slog.Logger) func(http.Handler) http.Handler {
+// a module is not answered from it; log records a failure to store or release a key. maxBody is
+// the edge's cap on a JSON body (contract.Limits.MaxBody), which a JSON body read here is held
+// to as well: the edge bounds the body of a request an operation matches, and this middleware
+// also serves the requests none does, which the router then refuses.
+func Middleware(log *slog.Logger, maxBody int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := r.Header.Get(Header)
@@ -117,8 +122,13 @@ func Middleware(log *slog.Logger) func(http.Handler) http.Handler {
 				return
 			}
 			requestID := reqctx.RequestID(r.Context())
-			fingerprint, err := fingerprintOf(r)
-			if err != nil {
+			fingerprint, err := fingerprintOf(w, r, maxBody)
+			var tooLarge *http.MaxBytesError
+			switch {
+			case errors.As(err, &tooLarge):
+				problem.Write(w, requestID, problem.New(http.StatusRequestEntityTooLarge, problem.CodePayloadTooLarge))
+				return
+			case err != nil:
 				log.LogAttrs(r.Context(), slog.LevelError, "idempotency: read the request", slog.Any("error", err))
 				problem.Write(w, requestID, problem.Internal())
 				return
@@ -170,10 +180,11 @@ func safe(method string) bool {
 }
 
 // fingerprintOf is what makes two requests the same request: the method, the path and query,
-// the precondition, the media type and the body. A JSON body is in memory, read and bounded at
-// the edge; a body in another media type, an upload, is the handler's to stream and is not read
-// here, so its length stands in for it.
-func fingerprintOf(r *http.Request) ([]byte, error) {
+// the precondition, the media type and the body. A JSON body is read, up to maxBody bytes, and
+// put back for the handler; on a request an operation matches, the edge has already read it
+// into memory under the same cap. A body in another media type, an upload, is the handler's to
+// stream and is not read here, so its length stands in for it.
+func fingerprintOf(w http.ResponseWriter, r *http.Request, maxBody int64) ([]byte, error) {
 	h := sha256.New()
 	contentType := r.Header.Get("Content-Type")
 	for _, part := range []string{r.Method, r.URL.EscapedPath(), r.URL.RawQuery, r.Header.Get("If-Match"), contentType} {
@@ -186,7 +197,7 @@ func fingerprintOf(r *http.Request) ([]byte, error) {
 		_, _ = io.WriteString(h, strconv.FormatInt(r.ContentLength, 10))
 		return h.Sum(nil), nil
 	}
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
 		return nil, err
 	}

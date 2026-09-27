@@ -135,7 +135,7 @@ func (w *world) serve(household, user uuid.UUID, header http.Header, handler htt
 	}
 	r := chi.NewRouter()
 	r.Route("/households/{"+tenant.Param+"}", func(h chi.Router) {
-		h.Use(tenancy, mutation.Catalog(w.reg), idempotency.Middleware(slog.New(slog.DiscardHandler)))
+		h.Use(tenancy, mutation.Catalog(w.reg), idempotency.Middleware(slog.New(slog.DiscardHandler), 1<<20))
 		h.Post("/x", handler)
 	})
 	ctx := auth.WithUser(mutation.WithVia(context.Background(), audit.ViaWeb), user)
@@ -239,6 +239,31 @@ func TestApplyWritesTheRowTheEventAndTheChange(t *testing.T) {
 	}
 	if seq != res.Seq || op != "upsert" || module != "spine" || rowVersion != 1 || changeBy != u || payload["title"] != "Milk" {
 		t.Fatalf("change seq %d (result %d) %s %s version %d by %s payload %v", seq, res.Seq, op, module, rowVersion, changeBy, payload)
+	}
+}
+
+// A field with no value is NULL in its diff however the mutation spells it, nil or a nil
+// pointer, and never the JSON null.
+func TestADiffOfNoValueIsNull(t *testing.T) {
+	w := newWorld(t)
+	h, u := w.member()
+	id := idgen.New()
+	w.in(h, u, func(ctx context.Context) {
+		_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+			rec, err := create(ctx, id, "Milk")(tx)
+			rec.Event.Changes = []audit.Change{
+				{Field: "title", Old: (*string)(nil), New: "Milk"},
+				{Field: "note", Old: nil, New: (*string)(nil)},
+			}
+			return rec, err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	if n := w.count(`SELECT count(*) FROM audit_changes c JOIN audit_events e ON e.household_id = c.household_id AND e.id = c.event_id
+		WHERE e.entity_id = $1 AND c.old_value IS NULL AND (c.field = 'note') = (c.new_value IS NULL)`, id); n != 2 {
+		t.Fatalf("%d of the 2 diffs store no value as NULL", n)
 	}
 }
 
@@ -375,8 +400,9 @@ func TestApplyWithNothingToDoRecordsNothing(t *testing.T) {
 }
 
 // A record is checked against what its module declares: an action it does not declare, an
-// entity no module declares, another module's entity, and a change its entity's access does not
-// admit are refused, and nothing is written.
+// entity no module declares, another module's entity, a change its entity's access does not
+// admit, and a private change in an event not private to its owner are refused, and nothing is
+// written.
 func TestApplyChecksTheRecordAgainstTheModules(t *testing.T) {
 	w := newWorld(t)
 	h, u := w.member()
@@ -387,6 +413,13 @@ func TestApplyChecksTheRecordAgainstTheModules(t *testing.T) {
 		"a private row that cannot be": func(r *mutation.Record) { r.Changes[0].Visibility = sync.Private; r.Changes[0].Owner = u },
 		"a private row with no owner": func(r *mutation.Record) {
 			r.Changes[0].Entity, r.Changes[0].Visibility = "spine.note", sync.Private
+		},
+		"a private row in a shared event": func(r *mutation.Record) {
+			r.Changes[0].Entity, r.Changes[0].Visibility, r.Changes[0].Owner = "spine.note", sync.Private, u
+		},
+		"a private row in another's private event": func(r *mutation.Record) {
+			r.Changes[0].Entity, r.Changes[0].Visibility, r.Changes[0].Owner = "spine.note", sync.Private, u
+			r.Event.Visibility, r.Event.Owner = audit.Private, idgen.New()
 		},
 		"an audience it has none of": func(r *mutation.Record) { r.Changes[0].Audience = idgen.New() },
 		"a row on a delete":          func(r *mutation.Record) { r.Changes[0].Op = sync.Delete },
@@ -413,12 +446,14 @@ func TestApplyChecksTheRecordAgainstTheModules(t *testing.T) {
 		})
 	}
 
-	// A private row of an entity that may have them, with its owner, is written as such.
+	// A private row of an entity that may have them, with its owner, in an event private to them,
+	// is written as such.
 	id := idgen.New()
 	w.in(h, u, func(ctx context.Context) {
 		_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 			rec, err := create(ctx, id, "Diary")(tx)
 			rec.Changes[0].Entity, rec.Changes[0].Visibility, rec.Changes[0].Owner = "spine.note", sync.Private, u
+			rec.Event.Visibility, rec.Event.Owner = audit.Private, u
 			return rec, err
 		})
 		if err != nil {
@@ -646,6 +681,66 @@ func TestAMutationCommitsItsIdempotencyKey(t *testing.T) {
 	}
 	if n := w.count("SELECT count(*) FROM idempotency_keys WHERE household_id = $1 AND key = 'lost' AND state = 'in_flight'", h); n != 1 {
 		t.Fatal("the request whose key was taken over released it from the request that took it")
+	}
+
+	// A request answered other than 2xx after its effect committed keeps its key committed: a
+	// repeat is answered 409 and does not run it again.
+	d := idgen.New()
+	failed := http.Header{"Idempotency-Key": {"failed"}}
+	w.serve(h, u, failed, func(rw http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		if _, err := mutation.Apply(ctx, create(ctx, d, "Milk")); err != nil {
+			t.Error(err)
+		}
+		rw.WriteHeader(http.StatusInternalServerError)
+	})
+	if rec := w.serve(h, u, failed, func(http.ResponseWriter, *http.Request) { t.Error("the repeat ran") }); rec.Code != http.StatusConflict {
+		t.Fatalf("a repeat of a request answered 500 after its effect: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// A mutation holding the household's feed lock waits on no row another mutation may hold: the
+// key is marked committed before the lock is taken. Here the owner removes a member, whose
+// membership takes their Idempotency-Keys with it, while that member's own keyed request is
+// committing; the removal commits, and the member's request finds its key gone, rather than
+// the two waiting on each other until PostgreSQL aborts one as a deadlock.
+func TestAKeyIsCommittedOutsideTheFeedLock(t *testing.T) {
+	w := newWorld(t)
+	h, owner := w.member()
+	member := idgen.New()
+	w.exec("INSERT INTO users (id) VALUES ($1)", member)
+	w.exec("INSERT INTO memberships (household_id, user_id, role) VALUES ($1, $2, 'member')", h, member)
+
+	claimed, removing := make(chan struct{}), make(chan struct{})
+	var keyed, removal error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		w.serve(h, member, http.Header{"Idempotency-Key": {"mine"}}, func(rw http.ResponseWriter, r *http.Request) {
+			close(claimed)
+			<-removing
+			ctx := r.Context()
+			_, keyed = mutation.Apply(ctx, create(ctx, idgen.New(), "Milk"))
+			rw.WriteHeader(http.StatusNoContent)
+		})
+	}()
+	<-claimed
+	w.in(h, owner, func(ctx context.Context) {
+		id := idgen.New()
+		_, removal = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+			if _, err := tx.Exec(ctx, "DELETE FROM memberships WHERE household_id = app_household_id() AND user_id = $1", member); err != nil {
+				return mutation.Record{}, err
+			}
+			// The member's key is locked now, with their membership. Their request goes on to
+			// commit, and waits on it; this one then takes the feed lock.
+			close(removing)
+			time.Sleep(300 * time.Millisecond)
+			return create(ctx, id, "Removed")(tx)
+		})
+	})
+	<-done
+	if removal != nil || !errors.Is(keyed, idempotency.ErrClaimLost) {
+		t.Fatalf("the removal: %v; the member's keyed request: %v, want ErrClaimLost", removal, keyed)
 	}
 }
 
