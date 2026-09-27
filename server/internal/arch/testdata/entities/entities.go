@@ -53,8 +53,10 @@ func Tabled() []sync.Entity {
 // test 9.
 func Creating() []sync.Entity {
 	return []sync.Entity{
-		{Name: "shopping.list", Creates: []string{"postLists", "postListsBatch", "putListsByListId", "postListsMultipart"}},
-		{Name: "shopping.item", Creates: []string{"postItems", "postItemsQuick", "postItemsOneOf"}},
-		{Name: "shopping.staple", Creates: []string{"postStaples", "getStaples", "postStaplesAction", "postNowhere", "postStaplesAllOf", "postStaplesOptional"}},
+		{Name: "shopping.list", Creates: []string{"postLists", "postListsBatch", "putListsByListId", "postListsSplit", "postListsMultipart"}},
+		{Name: "shopping.item", Creates: []string{"postItems", "postItemsQuick", "postItemsOneOf", "postItemsBranches"}},
+		{Name: "shopping.staple", Creates: []string{
+			"postStaples", "getStaples", "postStaplesAction", "postNowhere", "postStaplesAllOf", "postStaplesOptional", "postStaplesSplit",
+		}},
 	}
 }

@@ -1,6 +1,7 @@
 package mutation_test
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"errors"
@@ -696,6 +697,45 @@ func TestAMutationCommitsItsIdempotencyKey(t *testing.T) {
 	})
 	if rec := w.serve(h, u, failed, func(http.ResponseWriter, *http.Request) { t.Error("the repeat ran") }); rec.Code != http.StatusConflict {
 		t.Fatalf("a repeat of a request answered 500 after its effect: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// A response larger than the 1 MiB a key keeps is not stored, however it was written: a repeat
+// of a request whose effect committed is answered 409 and does not run it again, and one that
+// committed nothing finds its key released and runs.
+func TestAResponseTooLargeToStoreIsNotReplayed(t *testing.T) {
+	w := newWorld(t)
+	h, u := w.member()
+	large := bytes.Repeat([]byte("x"), 1<<20+1)
+	id := idgen.New()
+	effect := http.Header{"Idempotency-Key": {"large-effect"}}
+	w.serve(h, u, effect, func(rw http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		if _, err := mutation.Apply(ctx, create(ctx, id, "Milk")); err != nil {
+			t.Error(err)
+		}
+		rw.WriteHeader(http.StatusCreated)
+		_, _ = rw.Write(large)
+	})
+	if rec := w.serve(h, u, effect, func(http.ResponseWriter, *http.Request) { t.Error("the repeat ran") }); rec.Code != http.StatusConflict {
+		t.Fatalf("a repeat of a request whose effect committed and whose response was too large to store: %d", rec.Code)
+	}
+
+	// Written in two parts, each small enough to keep, together too large.
+	ran := 0
+	read := http.Header{"Idempotency-Key": {"large-read"}}
+	for range 2 {
+		w.serve(h, u, read, func(rw http.ResponseWriter, _ *http.Request) {
+			ran++
+			_, _ = rw.Write(large[:1<<19])
+			_, _ = rw.Write(large[1<<19:])
+		})
+	}
+	if ran != 2 {
+		t.Fatalf("a request that committed nothing and whose response was too large to store ran %d times, want 2", ran)
+	}
+	if n := w.count("SELECT count(*) FROM idempotency_keys WHERE household_id = $1 AND key = 'large-read'", h); n != 0 {
+		t.Fatal("the key of a response too large to store was kept")
 	}
 }
 

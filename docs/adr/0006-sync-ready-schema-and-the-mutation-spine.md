@@ -5,7 +5,7 @@
 - **Plan item:** 4
 - **Decides for:** PRD 01 §3 (data-model conventions, the two things every mutation does), §6
   (concurrency, idempotency), §10 tests 4, 5 and 9; PRD 03 §1 (FR-AU1–FR-AU5), §2.2 (the change
-  feed, FR-SY1), §2.5 (merge policy); PRD 10 §1, §3; D-22–D-24, D-82, D-84, D-88, D-91;
+  feed, FR-SY1), §2.5 (merge policy); PRD 10 §1, §3; D-22–D-24, D-82, D-84, D-88, D-91, D-92;
   future/ai-assistant ("What 1.0 must not do")
 
 ## Context
@@ -132,7 +132,9 @@ module exists (D-82), enforced by architecture tests. None of them says:
 - **Test 9 reads the operations an entity names among its creates.** Each must be in the contract,
   be a POST or PUT, require a body, and require in it, in every media type, `id` as a string or
   `ids` as an array of strings, directly, through `allOf`, or in every branch of a
-  `oneOf`/`anyOf`.
+  `oneOf`/`anyOf`. The schemas an `allOf` combines are read as one: the contract writes a create
+  as `allOf` its update schema, which describes `id`, and a schema that only lists it required
+  (`HarvestCreate`).
 
 ## Alternatives rejected
 

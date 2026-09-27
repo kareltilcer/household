@@ -122,49 +122,95 @@ const (
 )
 
 // requiresID reports how s requires the client's id: id, a string, or ids, an array of strings,
-// among its required members or those of any schema it is allOf, or of every schema it is
-// oneOf or anyOf, since a body need match only one of those.
+// among the members s requires. A schema requires what it and every schema it is allOf require,
+// and each member is described by whichever of them describes it: the contract writes a create
+// as allOf its update schema, which describes the members, and a schema that only lists the
+// required ones (HarvestCreate). A oneOf or anyOf requires the id only if every branch does,
+// read together with the schemas it is combined with, since a body need match only one branch.
 func requiresID(s *openapi3.Schema) idRequirement {
+	return requirement(s, members{})
+}
+
+// requirement is requiresID for s combined with outer, the members of the schemas s is a branch
+// of.
+func requirement(s *openapi3.Schema, outer members) idRequirement {
 	if s == nil {
 		return idMissing
 	}
-	best := idMissing
-	for _, name := range s.Required {
-		var member *openapi3.Schema
-		if ref := s.Properties[name]; ref != nil {
-			member = ref.Value
+	m, groups := outer.with(s)
+	best := m.requirement()
+	for _, branches := range groups {
+		weakest := idRequired
+		for _, ref := range branches {
+			var branch *openapi3.Schema
+			if ref != nil {
+				branch = ref.Value
+			}
+			weakest = min(weakest, requirement(branch, m))
 		}
+		best = max(best, weakest)
+	}
+	return best
+}
+
+// members are the members a schema requires, and the schemas that describe each member.
+type members struct {
+	required   []string
+	properties map[string][]*openapi3.Schema
+}
+
+// with returns m together with what s and every schema it is allOf require and describe, and
+// the oneOf and anyOf groups among them, each of which a body matches one branch of. m is left
+// as it is, since each branch of a group is combined with it on its own.
+func (m members) with(s *openapi3.Schema) (members, []openapi3.SchemaRefs) {
+	out := members{required: slices.Clone(m.required), properties: make(map[string][]*openapi3.Schema, len(m.properties))}
+	for name, described := range m.properties {
+		out.properties[name] = slices.Clone(described)
+	}
+	var groups []openapi3.SchemaRefs
+	var add func(*openapi3.Schema)
+	add = func(s *openapi3.Schema) {
+		if s == nil {
+			return
+		}
+		out.required = append(out.required, s.Required...)
+		for name, ref := range s.Properties {
+			if ref != nil && ref.Value != nil {
+				out.properties[name] = append(out.properties[name], ref.Value)
+			}
+		}
+		for _, branches := range []openapi3.SchemaRefs{s.OneOf, s.AnyOf} {
+			if len(branches) > 0 {
+				groups = append(groups, branches)
+			}
+		}
+		for _, ref := range s.AllOf {
+			if ref != nil {
+				add(ref.Value)
+			}
+		}
+	}
+	add(s)
+	return out, groups
+}
+
+// requirement reports how m requires the client's id: id or ids among its required members,
+// described as a string or an array of strings by a schema that describes it.
+func (m members) requirement() idRequirement {
+	best := idMissing
+	for _, name := range m.required {
 		switch name {
 		case "id":
 			best = max(best, idNotUUID)
-			if isString(member) {
+			if slices.ContainsFunc(m.properties[name], isString) {
 				return idRequired
 			}
 		case "ids":
 			best = max(best, idNotUUID)
-			if member != nil && member.Type.Is(openapi3.TypeArray) && member.Items != nil && isString(member.Items.Value) {
+			if slices.ContainsFunc(m.properties[name], isStringArray) {
 				return idRequired
 			}
 		}
-	}
-	for _, ref := range s.AllOf {
-		if ref != nil {
-			best = max(best, requiresID(ref.Value))
-		}
-	}
-	for _, branches := range []openapi3.SchemaRefs{s.OneOf, s.AnyOf} {
-		if len(branches) == 0 {
-			continue
-		}
-		weakest := idRequired
-		for _, ref := range branches {
-			if ref == nil {
-				weakest = idMissing
-				continue
-			}
-			weakest = min(weakest, requiresID(ref.Value))
-		}
-		best = max(best, weakest)
 	}
 	return best
 }
@@ -172,4 +218,9 @@ func requiresID(s *openapi3.Schema) idRequirement {
 // isString reports whether s is a string schema, as the contract's Uuid is.
 func isString(s *openapi3.Schema) bool {
 	return s != nil && s.Type.Is(openapi3.TypeString)
+}
+
+// isStringArray reports whether s is an array of strings.
+func isStringArray(s *openapi3.Schema) bool {
+	return s != nil && s.Type.Is(openapi3.TypeArray) && s.Items != nil && isString(s.Items.Value)
 }

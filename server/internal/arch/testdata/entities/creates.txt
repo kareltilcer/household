@@ -9,3 +9,4 @@ shopping.staple: create operation getStaples is a GET, which creates nothing
 shopping.staple: create operation postStaplesAction requires id in its application/json body, but not as a UUID
 shopping.staple: create operation postNowhere is not in the contract
 shopping.staple: create operation postStaplesOptional does not require its body, so a create may come without the client's id
+shopping.staple: create operation postStaplesSplit requires id in its application/json body, but not as a UUID

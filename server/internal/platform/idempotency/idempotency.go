@@ -36,9 +36,11 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -111,7 +113,8 @@ func Commit(ctx context.Context, tx pgx.Tx) error {
 // a module is not answered from it; log records a failure to store or release a key. maxBody is
 // the edge's cap on a JSON body (contract.Limits.MaxBody), which a JSON body read here is held
 // to as well: the edge bounds the body of a request an operation matches, and this middleware
-// also serves the requests none does, which the router then refuses.
+// also serves the requests none does, which the router then refuses. For the same reason it
+// refuses a key the edge would, and answers a body that stops arriving as the edge does.
 func Middleware(log *slog.Logger, maxBody int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -122,15 +125,23 @@ func Middleware(log *slog.Logger, maxBody int64) func(http.Handler) http.Handler
 				return
 			}
 			requestID := reqctx.RequestID(r.Context())
+			if code, ok := unstorable(key); ok {
+				problem.Write(w, requestID, problem.Validation(problem.FieldError{Field: "header:" + Header, Code: code}))
+				return
+			}
 			fingerprint, err := fingerprintOf(w, r, maxBody)
 			var tooLarge *http.MaxBytesError
 			switch {
 			case errors.As(err, &tooLarge):
 				problem.Write(w, requestID, problem.New(http.StatusRequestEntityTooLarge, problem.CodePayloadTooLarge))
 				return
+			case errors.Is(err, os.ErrDeadlineExceeded):
+				// The body did not arrive within its deadline (httpx.BodyDeadline), as the edge
+				// treats it: a client that slow is not reading a response either.
+				panic(http.ErrAbortHandler)
 			case err != nil:
-				log.LogAttrs(r.Context(), slog.LevelError, "idempotency: read the request", slog.Any("error", err))
-				problem.Write(w, requestID, problem.Internal())
+				// The client stopped sending the body it announced; the edge answers the same.
+				problem.Write(w, requestID, problem.Validation(problem.FieldError{Field: "", Code: problem.FieldInvalid}))
 				return
 			}
 			c := claim{household: scope.HouseholdID(), user: scope.UserID(), key: key, token: idgen.New()}
@@ -168,6 +179,25 @@ func Middleware(log *slog.Logger, maxBody int64) func(http.Handler) http.Handler
 			completed = true
 		})
 	}
+}
+
+// maxKeyLength is the longest key a row holds, in characters: the contract's maxLength.
+const maxKeyLength = 128
+
+// unstorable returns why key cannot be held, in the code the edge refuses the header with, and
+// false for a key that can: bytes that are not UTF-8, or U+0000, which PostgreSQL does not store
+// as text, are malformed, and a key longer than the contract allows fails max_length. The edge
+// refuses both on an operation that declares the header, as every unsafe one does; this
+// middleware also serves the requests no operation matches, whose headers the edge does not
+// read, and the row would refuse such a key with a 500.
+func unstorable(key string) (string, bool) {
+	switch {
+	case !utf8.ValidString(key) || strings.ContainsRune(key, 0):
+		return problem.FieldMalformed, true
+	case utf8.RuneCountInString(key) > maxKeyLength:
+		return "max_length", true
+	}
+	return "", false
 }
 
 // safe reports whether method is one RFC 9110 calls safe, which repeats harmlessly anyway.
@@ -279,7 +309,11 @@ func answer(w http.ResponseWriter, requestID string, f found, fingerprint []byte
 				h.Set(name, v)
 			}
 		}
-		h.Set("Content-Length", strconv.Itoa(len(f.body)))
+		// A 204 carries no body, and no Content-Length either (RFC 9110 §8.6), as the handler's
+		// own 204 did not.
+		if f.status != http.StatusNoContent {
+			h.Set("Content-Length", strconv.Itoa(len(f.body)))
+		}
 		w.WriteHeader(f.status)
 		_, _ = w.Write(f.body)
 	}

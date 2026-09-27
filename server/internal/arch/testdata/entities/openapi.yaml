@@ -21,6 +21,18 @@ paths:
       parameters: [{ name: list_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ListCreate' } } } }
       responses: { '201': { description: Created } }
+  /lists/split:
+    post:
+      operationId: postListsSplit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/ListUpdate' }
+                - { required: [id, name] }
+      responses: { '201': { description: Created } }
   /lists/multipart:
     post:
       operationId: postListsMultipart
@@ -56,6 +68,20 @@ paths:
                 - { $ref: '#/components/schemas/ListCreate' }
                 - { type: object, required: [text], properties: { text: { type: string } } }
       responses: { '201': { description: Created } }
+  /items/branches:
+    post:
+      operationId: postItemsBranches
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { id: { $ref: '#/components/schemas/Uuid' }, text: { type: string }, quantity: { type: integer } }
+              oneOf:
+                - { required: [id, text] }
+                - { required: [id, quantity] }
+      responses: { '201': { description: Created } }
   /staples:
     get:
       operationId: getStaples
@@ -87,6 +113,18 @@ paths:
                 - { type: object, properties: { name: { type: string } } }
                 - { $ref: '#/components/schemas/ListCreate' }
       responses: { '201': { description: Created } }
+  /staples/split:
+    post:
+      operationId: postStaplesSplit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { type: object, properties: { id: { type: integer } } }
+                - { required: [id] }
+      responses: { '201': { description: Created } }
 components:
   schemas:
     Uuid:
@@ -95,4 +133,7 @@ components:
     ListCreate:
       type: object
       required: [id, name]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, name: { type: string } }
+    ListUpdate:
+      type: object
       properties: { id: { $ref: '#/components/schemas/Uuid' }, name: { type: string } }

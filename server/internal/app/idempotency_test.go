@@ -5,7 +5,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"slices"
+	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/google/uuid"
 
@@ -58,6 +62,85 @@ func TestARepeatedKeyGetsTheFirstResponse(t *testing.T) {
 	expect(t, w.send(http.MethodPost, items(h), other, itemBody(mine, h), withKey("add-milk")), http.StatusCreated, "")
 	if w.count(mine) != 1 {
 		t.Fatal("another member's request with the same key was answered from the first member's")
+	}
+}
+
+// A repeated delete is answered 204 as the first was: no body, and no Content-Length, which a
+// 204 never carries (RFC 9110 §8.6). The item is deleted once.
+func TestARepeatedDeleteGetsTheFirst204(t *testing.T) {
+	w := newWorld(t)
+	h := w.household(true)
+	u := w.member(h, access.Member, level(access.Manage))
+	it := w.item(h)
+	expect(t, w.send(http.MethodDelete, itemPath(h, it), u, "", withKey("drop")), http.StatusNoContent, "")
+	again := w.send(http.MethodDelete, itemPath(h, it), u, "", withKey("drop"))
+	expect(t, again, http.StatusNoContent, "")
+	if _, ok := again.Header()["Content-Length"]; ok || again.Body.Len() != 0 {
+		t.Fatalf("the repeat answered Content-Length %q and %d bytes", again.Header().Get("Content-Length"), again.Body.Len())
+	}
+	if w.events(it) != 1 {
+		t.Fatalf("%d events after a repeated delete, want 1", w.events(it))
+	}
+}
+
+// A key a row cannot hold is refused, naming the header, on a path no operation has as on one
+// an operation has, where the edge refuses it: the edge does not read the headers of a request
+// no operation matches, and the key is never claimed, so it cannot fail as a 500.
+func TestAKeyThatCannotBeHeldIsRefused(t *testing.T) {
+	w := newWorld(t)
+	h := w.household(true)
+	u := w.member(h, access.Member, level(access.Contribute))
+	for name, tc := range map[string]struct{ key, code string }{
+		"too long":  {strings.Repeat("k", 129), "max_length"},
+		"not UTF-8": {"k\xff", problem.FieldMalformed},
+	} {
+		for _, path := range []string{items(h), items(h) + "/elsewhere"} {
+			rec := w.send(http.MethodPost, path, u, itemBody(idgen.New(), h), withKey(tc.key))
+			var doc struct {
+				Errors []problem.FieldError `json:"errors"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &doc); rec.Code != http.StatusUnprocessableEntity || err != nil ||
+				!slices.Equal(doc.Errors, []problem.FieldError{{Field: "header:Idempotency-Key", Code: tc.code}}) {
+				t.Errorf("a key %s, to %s: %d %s", name, path, rec.Code, rec.Body)
+			}
+		}
+	}
+	var keys int
+	if err := w.admin.QueryRow(t.Context(), "SELECT count(*) FROM idempotency_keys WHERE user_id = $1", u).Scan(&keys); err != nil || keys != 0 {
+		t.Fatalf("%d keys claimed (%v)", keys, err)
+	}
+	if strings.Contains(w.logs.String(), "idempotency:") {
+		t.Fatalf("a refused key was logged as a failure: %s", w.logs)
+	}
+}
+
+// A keyed body that stops arriving is answered as the edge answers one: refused when the client
+// stops sending it, and aborted when its deadline passes, never logged as the server's failure.
+// The path is one no operation has, so the body is read here and not at the edge.
+func TestAKeyedBodyThatStopsArrivingIsRefused(t *testing.T) {
+	w := newWorld(t)
+	h := w.household(true)
+	u := w.member(h, access.Member, level(access.Contribute))
+	request := func(cause error) *http.Request {
+		ctx := auth.WithUser(mutation.WithVia(t.Context(), audit.ViaWeb), u)
+		req := httptest.NewRequestWithContext(ctx, http.MethodPost, items(h)+"/elsewhere",
+			io.MultiReader(strings.NewReader(`{"id":`), iotest.ErrReader(cause)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Idempotency-Key", "cut")
+		return req
+	}
+	rec := testsupport.ServeContract(t, w.contract, w.router, request(io.ErrUnexpectedEOF))
+	expect(t, rec, http.StatusUnprocessableEntity, problem.CodeValidationFailed)
+	func() {
+		defer func() {
+			if v := recover(); v != any(http.ErrAbortHandler) {
+				t.Errorf("a body past its deadline: recovered %v, want http.ErrAbortHandler", v)
+			}
+		}()
+		w.router.ServeHTTP(httptest.NewRecorder(), request(os.ErrDeadlineExceeded))
+	}()
+	if strings.Contains(w.logs.String(), "idempotency:") {
+		t.Fatalf("a body that stopped arriving was logged as a failure: %s", w.logs)
 	}
 }
 
