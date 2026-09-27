@@ -39,8 +39,10 @@ Everything after that is genuinely parallelisable, because modules do not import
    against off-the-shelf sync engines. Gate **G-A**. See [10-sync-risk.md](10-sync-risk.md) §1–2.
 2. **The conformance simulator** — a deterministic multi-client harness with scripted partitions,
    reordering and clock skew, written **before** the engine, covering 18 named scenarios and six
-   invariants, then fuzzed. Gate **G-B**.
-3. **The engine**, satisfying it.
+   invariants, then fuzzed. Gate **G-B**. Since the spike adopted PowerSync (D-93) it drives
+   PowerSync clients against the real stack ([10-sync-risk.md](10-sync-risk.md) §4).
+3. **The engine**, satisfying it: PowerSync's replication, and the push, streams and client library
+   that are Household's.
 4. Everything else listed above — plus the **sync-health screen**, which moves here from the admin
    module, because with no-content-access it is the only view anyone gets of a sync failure.
 

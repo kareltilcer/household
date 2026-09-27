@@ -61,6 +61,14 @@ and the shopping-list scenario (§4, scenarios 7 and 3) against each candidate. 
 build proceeds — but it proceeds having learnt from two designs and knowing exactly which
 requirement forced the decision.
 
+**The verdict (D-93, [ADR 0001](../adr/0001-sync-engine.md)): adopt PowerSync, self-hosted, for
+replication, and keep the write path.** Both scenarios passed on PowerSync with every write going
+through the mutation spine. Electric passed only with client code its own client lacks; Zero has no
+offline writes; Replicache is in maintenance mode. Two axes of the predicate needed a workaround
+each: the floor became a reader set on the row, and a redacted projection reaches its owner as
+well. The requirement that came closest to forcing a build was keeping row-level security under
+the read path, which a generated stream template and an isolation test now hold instead.
+
 ## 3. Tier the promise by merge policy
 
 **D-84: offline *writes* ship per merge policy, behind a per-entity flag, not all at once.**
@@ -114,6 +122,13 @@ satisfy.**
 It models N clients, a server, scripted network partitions, message reordering, duplicate delivery
 and clock skew — in process, with no devices and no network. It is days of work, not weeks, and it
 is the single most valuable artefact produced in Phase 0.
+
+> **Under D-93 the suite runs against the adopted engine** rather than an in-process one: N
+> PowerSync clients, the real service and the real API in containers, partitions scripted by
+> disconnecting clients and by a network that refuses requests and loses responses, duplicate
+> delivery by replaying an upload, skew through `client_time`. It is slower and less deterministic
+> than an in-process simulator, so the fuzz run on each change is short and the long one nightly.
+> The scenarios and the invariants below are unchanged.
 
 ### The scenarios it must cover
 
@@ -171,6 +186,11 @@ a periodic check alongside the pull rather than a per-pull cost.
 The response is a forced resnapshot for that device plus a telemetry event. **Divergence rate is an
 alerting metric** ([07-nonfunctional.md](07-nonfunctional.md) §5), not a support ticket.
 
+> **Under D-93** PowerSync verifies a checksum per bucket at every checkpoint and downloads a
+> bucket again when it does not match, which covers divergence inside the engine. The digest
+> remains the check on what the engine cannot see, such as a local write that never reached the
+> server; plan item 14 decides whether that keeps an endpoint of its own.
+
 ## 6. The interaction with the no-content-access guarantee
 
 **Worth stating explicitly because it is a genuine collision between two decisions.**
@@ -199,10 +219,10 @@ Three points where the plan stops rather than continues on optimism.
 |---|---|---|---|
 | **G-A** | End of Phase 0, week 1 | The sync-ready schema is enforced by architecture tests, and the buy-vs-build verdict is written down | Do not start any module |
 | **G-B** | End of Phase 0 | The conformance suite is green, including all 18 scenarios, plus a fuzz run | Do not start Phase 1 |
-| **G-C** | End of Phase 1 | The Shopping acceptance criterion passes **on two physical phones in aeroplane mode**, and the sync-health screen shows what happened | **Stop and adopt a vendor.** Do not proceed to Phase 2 on an engine that is not trusted |
+| **G-C** | End of Phase 1 | The Shopping acceptance criterion passes **on two physical phones in aeroplane mode**, and the sync-health screen shows what happened | **Stop and build [03](03-platform-strands.md) §2's engine** on the schema and the write path, which are already ours. Do not proceed to Phase 2 on an engine that is not trusted. (The fallback was *adopt a vendor* until D-93 adopted one at G-A) |
 
 **G-C is the one that matters and it is named in the roadmap already.** Writing the fallback down
-now — *adopt a vendor* — is what makes it a gate rather than a wish, because the decision at that
+now — *build the engine*, since D-93 adopted the vendor — is what makes it a gate rather than a wish, because the decision at that
 point will be made under schedule pressure by people who have just spent a quarter on the thing
 they would be abandoning.
 
@@ -224,5 +244,5 @@ they would be abandoning.
 | Phase 0 builds the engine, then modules follow | Phase 0 **week 1**: schema mandate + buy-vs-build spike (G-A). Then the conformance simulator. Then the engine |
 | Offline writes ship complete | Offline writes ship **per merge policy**: `additive` and `state_set` in Phase 1, the rest gated on the suite |
 | Sync-health screen in Phase 4 with the admin module | Sync-health screen in **Phase 0** |
-| "If sync is not solid, everything stops" | A named gate (G-C) with a named fallback (adopt a vendor) |
+| "If sync is not solid, everything stops" | A named gate (G-C) with a named fallback: adopt a vendor, and since D-93 adopted one at G-A, build the engine |
 | Divergence found by users | Divergence found by **replica digests**, alerted on, resnapshot automatically |

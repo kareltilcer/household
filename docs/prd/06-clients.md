@@ -9,7 +9,7 @@ Two client applications, one contract, one design system, one set of translation
 | **Platforms** | iOS 16+, Android 10+ | Evergreen Chrome, Safari, Firefox, Edge; last two majors |
 | **Primary role** | Daily use, capture, notifications, everything offline | Setup, configuration, planning, long-form reading, admin, billing |
 | **Offline** | Full local replica, queued writes | Reads from cache, queued writes; a browser is not the offline-first surface |
-| **Data layer** | SQLite (expo-sqlite) as the replica + sync engine | TanStack Query with a persisted cache |
+| **Data layer** | SQLite as the replica, kept by the sync engine: PowerSync's React Native SDK on op-sqlite, in a dev build (D-93) | TanStack Query with a persisted cache |
 
 **D-36: two codebases, not React Native Web.** The shared surface is the *contract, the tokens
 and the strings* — not the components. RN Web produces desktop layouts that are worse than the

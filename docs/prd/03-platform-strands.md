@@ -59,6 +59,18 @@ plan for it is a rewrite; planning for it costs four columns and a discipline.
 > before the engine, production replica digests, and three gates with a named fallback. Read it
 > alongside this section; this one is the design, that one is how not to get it wrong.
 
+> **The engine is PowerSync, self-hosted, and the write path is ours (D-93,
+> [ADR 0001](../adr/0001-sync-engine.md)).** What this section asks of sync stands: the promises
+> (§2.1), the push and its per-mutation outcomes (§2.4), the merge policies (§2.5), what counts as
+> access loss and that it deletes (§2.6), attachments (§2.7) and clocks (§2.8). What changes is how
+> the read half is delivered. PowerSync replicates from the write-ahead log into per-member
+> buckets, so the pull, the snapshot, the horizon's `410` and the `retract` rows of §2.2–§2.3 and
+> FR-SY7 are its checkpoints and buckets, and a retraction is a row leaving every bucket a member
+> holds. §2.3's predicate is stream definitions generated from the entity registry: the floor is a
+> reader set kept on each row rather than a term, and a redacted projection reaches its owner as
+> well, in a table of its own. Where §2.2–§2.3 describe the feed's own mechanics, they describe the
+> design D-93 replaced; plan items 13 and 14 amend them as they build.
+
 ### 2.1 What is promised
 
 | Promise | Meaning |
