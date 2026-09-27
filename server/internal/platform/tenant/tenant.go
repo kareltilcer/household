@@ -1,9 +1,9 @@
 // Package tenant holds a household-scoped request to its household (PRD 01 §2.2, D-2, D-4).
 // Its middleware resolves {household_id} from the path, checks that the caller holds a
 // membership there, and resolves the caller's effective level on each module the household
-// enables (PRD 01 §5). Handlers then reach the database through InTx, whose every transaction
-// carries the household and the caller to PostgreSQL, where row-level security holds each
-// query to them.
+// enables (PRD 01 §5). Handlers then read the database through InTx, and write it through the
+// mutation spine, whose every transaction carries the household and the caller to PostgreSQL,
+// where row-level security holds each query to them.
 //
 // A transaction is a unit of work that InTx opens and commits before the handler answers, not
 // one transaction held for the whole request: that one would commit after the response had
@@ -41,7 +41,7 @@ var errNotMember = errors.New("tenant: not a member")
 
 // Beginner opens transactions: a pool connected as the request role.
 type Beginner interface {
-	Begin(ctx context.Context) (pgx.Tx, error)
+	BeginTx(ctx context.Context, options pgx.TxOptions) (pgx.Tx, error)
 }
 
 // Scope is the resolved tenant of one request: the household, the caller, their role there and
@@ -75,18 +75,35 @@ func (s *Scope) Role() access.Role { return s.role }
 // not enable, and for one it has no row for. grant.Require is how a handler asks.
 func (s *Scope) Level(module string) access.Level { return s.levels[module] }
 
-// InTx runs fn in a transaction of ctx's household, and commits it when fn returns nil; an
-// error or a panic rolls it back. The transaction runs as the request role, with the household
-// and the caller set for as long as it lasts (SET LOCAL), so a query in fn that forgets its
-// WHERE household_id reads only this household's rows, a row written for another household is
-// refused, and the connection goes back to the pool with neither set. Outside a
-// household-scoped request InTx returns ErrNoTenant without running fn.
+// InTx runs fn in a read-only transaction of ctx's household, and commits it when fn returns
+// nil; an error or a panic rolls it back. The transaction runs as the request role, with the
+// household and the caller set for as long as it lasts (SET LOCAL), so a query in fn that
+// forgets its WHERE household_id reads only this household's rows, and the connection goes back
+// to the pool with neither set. Outside a household-scoped request InTx returns ErrNoTenant
+// without running fn.
+//
+// It is read-only because every write goes through the mutation spine, which records the audit
+// event and the sync change in the write's own transaction (PRD 01 §3): PostgreSQL refuses an
+// INSERT, UPDATE or DELETE here, so a handler cannot write around the spine by accident.
 func InTx(ctx context.Context, fn func(pgx.Tx) error) error {
+	return inTx(ctx, pgx.ReadOnly, fn)
+}
+
+// InWriteTx is InTx for a transaction that may write: a row written for another household is
+// refused by row-level security. Only the platform calls it: the mutation spine, for every
+// mutation, and the platform's own bookkeeping, such as idempotency keys. Architecture test 4
+// fails a module that does, since a module's write that bypassed the spine would commit
+// without its audit event and its sync change.
+func InWriteTx(ctx context.Context, fn func(pgx.Tx) error) error {
+	return inTx(ctx, pgx.ReadWrite, fn)
+}
+
+func inTx(ctx context.Context, mode pgx.TxAccessMode, fn func(pgx.Tx) error) error {
 	s := From(ctx)
 	if s == nil {
 		return ErrNoTenant
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: mode}, func(tx pgx.Tx) error {
 		if err := enter(ctx, tx, s.householdID.String(), s.userID.String()); err != nil {
 			return err
 		}
@@ -182,7 +199,7 @@ func Middleware(cfg Config) (func(http.Handler) http.Handler, error) {
 // caller's grants are read under the tenant policy.
 func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Scope, error) {
 	s := &Scope{householdID: household, userID: user, levels: map[string]access.Level{}, pool: pool}
-	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		if err := enter(ctx, tx, "", user.String()); err != nil {
 			return err
 		}

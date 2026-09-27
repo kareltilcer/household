@@ -13,6 +13,7 @@ const (
 	CodeNotFound                 Code = "not_found"
 	CodeValidationFailed         Code = "validation_failed"
 	CodeVersionConflict          Code = "version_conflict"
+	CodeIdempotencyInProgress    Code = "idempotency_in_progress"
 	CodeEntitlementReadOnly      Code = "entitlement_read_only"
 	CodeEntitlementRestricted    Code = "entitlement_restricted"
 	CodeRateLimited              Code = "rate_limited"
@@ -70,6 +71,7 @@ var Codes = []Code{
 	CodeNotFound,
 	CodeValidationFailed,
 	CodeVersionConflict,
+	CodeIdempotencyInProgress,
 	CodeEntitlementReadOnly,
 	CodeEntitlementRestricted,
 	CodeRateLimited,

@@ -26,7 +26,10 @@ import (
 // foreign key between two tables that hold households' rows pairs their households' columns:
 // PostgreSQL checks a foreign key past row-level security too, so a key on an id alone lets a
 // row of one household name another household's row, whose delete there is then refused, or
-// acts on this household's row.
+// acts on this household's row. A partition is held to all of it, since a query that reaches a
+// partition directly is held to the partition's own policies, and it takes no privilege of the
+// request role's, which reaches it only through its parent, whose privileges then hold: a
+// partition the request role could delete from would undo an append-only parent.
 //
 // It reads the schema from PostgreSQL's catalog, as the migrations left it in the package's
 // database: every table in every schema, whichever migration made it and however it spelled
@@ -106,13 +109,15 @@ const tenantIsolation = "(household_id = app_household_id())"
 // own-policy table.
 func isolation(column string) string { return "(" + column + " = app_household_id())" }
 
-// table is a relation that can hold rows, as the catalog describes it.
+// table is a relation that can hold rows, as the catalog describes it: whether it is a
+// partition, and whether the request role holds any privilege on it.
 type table struct {
-	oid          uint32
-	name         string
-	kind         string
-	rls, force   bool
-	householdCol string
+	oid                  uint32
+	name                 string
+	kind                 string
+	rls, force           bool
+	householdCol         string
+	partition, reachable bool
 }
 
 // policy is a row-level security policy, as the catalog describes it.
@@ -144,19 +149,21 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 		SELECT c.oid, n.nspname || '.' || c.relname, c.relkind::text, c.relrowsecurity, c.relforcerowsecurity,
 		  coalesce((SELECT format_type(a.atttypid, a.atttypmod) || CASE WHEN a.attnotnull THEN ' NOT NULL' ELSE '' END
 		            FROM pg_attribute a
-		            WHERE a.attrelid = c.oid AND a.attname = 'household_id' AND NOT a.attisdropped), '')
+		            WHERE a.attrelid = c.oid AND a.attname = 'household_id' AND NOT a.attisdropped), ''),
+		  c.relispartition,
+		  has_table_privilege($2::name, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
 		FROM pg_class c
 		JOIN pg_namespace n ON n.oid = c.relnamespace
 		WHERE c.relkind IN ('r', 'p', 'm')
 		  AND n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
 		  AND ($1 = '' OR n.nspname = $1)
-		ORDER BY n.nspname, c.relname`, schema)
+		ORDER BY n.nspname, c.relname`, schema, db.RoleApp)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tables, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (table, error) {
 		var tb table
-		err := row.Scan(&tb.oid, &tb.name, &tb.kind, &tb.rls, &tb.force, &tb.householdCol)
+		err := row.Scan(&tb.oid, &tb.name, &tb.kind, &tb.rls, &tb.force, &tb.householdCol, &tb.partition, &tb.reachable)
 		return tb, err
 	})
 	if err != nil {
@@ -223,6 +230,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 			continue
 		case exempted:
 			out = append(out, rlsViolations(tb)...)
+			out = append(out, partitionViolations(tb)...)
 			if len(policies[tb.oid]) == 0 {
 				out = append(out, tb.name+" has no policy, so the request role reads none of it")
 			}
@@ -243,6 +251,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 			out = append(out, fmt.Sprintf("%s.household_id is %s; it must be uuid NOT NULL", tb.name, tb.householdCol))
 		}
 		out = append(out, rlsViolations(tb)...)
+		out = append(out, partitionViolations(tb)...)
 		isolated := false
 		for _, p := range policies[tb.oid] {
 			switch {
@@ -344,6 +353,15 @@ func globalActionViolations(tb table, fks []foreignKey, exempt map[string]exempt
 		}
 	}
 	return out
+}
+
+// partitionViolations reports a partition the request role holds a privilege on.
+func partitionViolations(tb table) []string {
+	if tb.partition && tb.reachable {
+		return []string{tb.name + " is a partition the request role can reach directly; revoke its privileges, " +
+			"so that it is reached through its parent, whose privileges and policies hold"}
+	}
+	return nil
 }
 
 // rlsViolations reports a table that does not enable or does not force row-level security.

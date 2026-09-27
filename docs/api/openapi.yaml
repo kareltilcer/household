@@ -43,7 +43,11 @@ info:
     ## Concurrency and idempotency
 
     - Unsafe methods accept `Idempotency-Key`, declared on each of them so a generated client can
-      send it. It is **required** on `POST /sync/mutations`.
+      send it. It is **required** on `POST /sync/mutations`. A key is the caller's own, and a
+      repeat of it is answered with the first request's `2xx` response. A repeat that arrives
+      while the first request is still running answers `409` (`idempotency_in_progress`); a key
+      reused for a different request answers `422`, naming `header:Idempotency-Key`. A request
+      answered with anything but `2xx` stores nothing, so repeating it runs it again.
     - Entities with a `version` return it as an `ETag`, and accept that entity-tag back in
       `If-Match`; a mismatch is `409` carrying the current representation.
 
@@ -55,7 +59,8 @@ info:
     Any operation can also answer `405` (`method_not_allowed`) or `500` (`internal`). Every request
     is checked against this document before it is served, so any operation can also answer `422`
     (`validation_failed`) for a request the document does not admit, and any operation that takes
-    a body `413` (`payload_too_large`) or `415` (`unsupported_media_type`). None of these is
+    a body `413` (`payload_too_large`) or `415` (`unsupported_media_type`). Any operation that
+    accepts `Idempotency-Key` can also answer `409` (`idempotency_in_progress`). None of these is
     declared on each operation.
 
     In a `ValidationProblem`, each `errors[].field` is an RFC 6901 JSON Pointer into the request
@@ -7952,13 +7957,21 @@ components:
         rather than repeating the effect. An offline-first client that retries a `POST` whose
         response was lost needs this to avoid creating the row twice — declaring it on the
         operation is what lets a generated client send it at all.
-      schema: { type: string, maxLength: 128 }
+
+        A key is the caller's own. Only a `2xx` response is stored: a repeat of a request that was
+        refused runs it again. A repeat while the first request is still running answers `409`
+        (`idempotency_in_progress`), and a key reused for a request with a different method, path,
+        query, `If-Match` or body answers `422` naming `header:Idempotency-Key`.
+      schema: { type: string, minLength: 1, maxLength: 128 }
     IdempotencyKeyRequired:
       name: Idempotency-Key
       in: header
       required: true
-      description: Retained 7 days; replaying returns the stored result. Required here because clients retry batches wholesale.
-      schema: { type: string, maxLength: 128 }
+      description: |
+        Retained 7 days; replaying returns the stored result. Required here because clients retry
+        batches wholesale. A repeat while the first request is still running answers `409`
+        (`idempotency_in_progress`); a key reused for a different request answers `422`.
+      schema: { type: string, minLength: 1, maxLength: 128 }
 
   headers:
     ETag:
@@ -8093,6 +8106,7 @@ components:
         - not_found
         - validation_failed
         - version_conflict
+        - idempotency_in_progress
         - entitlement_read_only
         - entitlement_restricted
         - rate_limited

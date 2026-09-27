@@ -47,11 +47,15 @@ func protocolStatus(o *Operation, status int) bool {
 // accepts. A problem document, whatever the status and whether or not a route matched,
 // must be a valid Problem, and a validation_failed one a valid ValidationProblem. What no
 // schema describes must be a problem document: the answer to a request no route matched,
-// and a status the operation answers undeclared.
+// and a status the operation answers undeclared. The 409 idempotency_in_progress, which the
+// contract admits from every operation that accepts Idempotency-Key, is held to Problem alone,
+// whatever 409 the operation declares for its own conflicts.
 func (c *Contract) ValidateResponse(req *http.Request, pattern string, params map[string]string, status int, header http.Header, body []byte) error {
 	problemDocument := isProblem(header)
+	var code problem.Code
 	if problemDocument {
-		if err := c.validateProblem(body); err != nil {
+		var err error
+		if code, err = c.validateProblem(body); err != nil {
 			return err
 		}
 	}
@@ -64,6 +68,12 @@ func (c *Contract) ValidateResponse(req *http.Request, pattern string, params ma
 	o, ok := c.Lookup(req.Method, pattern)
 	if !ok {
 		return fmt.Errorf("%s %s is not in the contract", req.Method, pattern)
+	}
+	if code == problem.CodeIdempotencyInProgress {
+		if status != http.StatusConflict || !o.acceptsIdempotencyKey() {
+			return fmt.Errorf("%s %s answered %d %s, which only a 409 from an operation that accepts Idempotency-Key may", req.Method, pattern, status, code)
+		}
+		return nil
 	}
 	if o.op.Responses.Status(status) == nil && o.op.Responses.Default() == nil {
 		switch {
@@ -97,22 +107,41 @@ func isProblem(header http.Header) bool {
 }
 
 // validateProblem checks body against Problem, or ValidationProblem when its code is
-// validation_failed.
-func (c *Contract) validateProblem(body []byte) error {
+// validation_failed, and returns its code.
+func (c *Contract) validateProblem(body []byte) (problem.Code, error) {
 	var value any
 	if err := json.Unmarshal(body, &value); err != nil {
-		return fmt.Errorf("the problem document is not JSON: %w", err)
+		return "", fmt.Errorf("the problem document is not JSON: %w", err)
+	}
+	var code problem.Code
+	if doc, ok := value.(map[string]any); ok {
+		s, _ := doc["code"].(string)
+		code = problem.Code(s)
 	}
 	name := "Problem"
-	if doc, ok := value.(map[string]any); ok && doc["code"] == string(problem.CodeValidationFailed) {
+	if code == problem.CodeValidationFailed {
 		name = "ValidationProblem"
 	}
 	ref := c.doc.Components.Schemas[name]
 	if ref == nil || ref.Value == nil {
-		return errors.New("the contract has no " + name + " schema")
+		return "", errors.New("the contract has no " + name + " schema")
 	}
 	if err := ref.Value.VisitJSON(value, openapi3.MultiErrors(), openapi3.VisitAsResponse()); err != nil {
-		return fmt.Errorf("the problem document is not a valid %s: %w", name, err)
+		return "", fmt.Errorf("the problem document is not a valid %s: %w", name, err)
 	}
-	return nil
+	return code, nil
+}
+
+// acceptsIdempotencyKey reports whether o declares the Idempotency-Key header, on itself or on
+// its path.
+func (o *Operation) acceptsIdempotencyKey() bool {
+	for _, params := range []openapi3.Parameters{o.op.Parameters, o.item.Parameters} {
+		for _, p := range params {
+			if p != nil && p.Value != nil && p.Value.In == openapi3.ParameterInHeader &&
+				http.CanonicalHeaderKey(p.Value.Name) == "Idempotency-Key" {
+				return true
+			}
+		}
+	}
+	return false
 }

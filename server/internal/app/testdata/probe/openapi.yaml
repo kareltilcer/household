@@ -16,6 +16,7 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
     post:
       operationId: postProbeItems
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProbeItem' } } } }
       responses:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ProbeItem' } } } }
@@ -27,6 +28,7 @@ paths:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: item_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
     delete:
       operationId: deleteProbeItemsByItemId
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Deleted }
         '401': { $ref: '#/components/responses/Problem' }
@@ -36,6 +38,7 @@ paths:
 components:
   parameters:
     HouseholdId: { name: household_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string, minLength: 1, maxLength: 128 } }
   responses:
     Problem:
       description: A problem.

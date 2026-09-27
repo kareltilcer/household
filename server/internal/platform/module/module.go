@@ -15,6 +15,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
+	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
 // Module is what every feature module implements.
@@ -30,16 +32,20 @@ type Module interface {
 	// RegisterRoutes registers the module's routes on r, with patterns relative to it. The
 	// platform mounts r at /households/{household_id}/<name>, behind the tenant middleware and
 	// a gate that answers 404 to a member who cannot see the module (grant.Gate). A handler
-	// asks grant.Require for more than seeing, and reaches the database through tenant.InTx.
+	// asks grant.Require for more than seeing, reads the database through tenant.InTx, whose
+	// transactions are read-only, and writes it through the mutation spine, mutation.Apply.
 	RegisterRoutes(r chi.Router)
-	// AuditActions lists the actions the module's mutations record (FR-AU1).
+	// AuditActions lists the actions the module's mutations record (FR-AU1). The mutation
+	// spine refuses to record an action its module does not list.
 	AuditActions() []AuditAction
 }
 
-// AuditAction is an action a module's mutations record in the audit spine (item 4), which the
-// activity log renders and the notification composer offers.
+// AuditAction is an action a module's mutations record in the audit spine, which the activity
+// log renders and the notification composer offers.
 type AuditAction struct {
-	// Key names the action: "<module>.<verb>".
+	// Key names the action, qualified by its module: "<module>.<action>", as
+	// "garden.planting.create", whose event records module "garden" and action
+	// "planting.create".
 	Key string
 	// SummaryKey is the translation key the activity log renders one event of it with.
 	SummaryKey string
@@ -67,8 +73,10 @@ type StorageSource interface {
 	Blobs(ctx context.Context, householdID uuid.UUID) ([]BlobUsage, error)
 }
 
-// SyncSource declares the entities that replicate offline (item 4).
-type SyncSource interface{ SyncEntities() []SyncEntity }
+// SyncSource declares the entities that replicate offline, each with its merge policy and its
+// access (PRD 03 §2.5, D-24). The registry refuses an entity that declares either wrongly
+// (architecture test 5), and the mutation spine a change of an entity no module declares.
+type SyncSource interface{ SyncEntities() []sync.Entity }
 
 // ReminderSource declares the date-bearing things a member may be reminded about (item 35).
 type ReminderSource interface{ ReminderKinds() []ReminderKind }
@@ -102,9 +110,6 @@ type BlobUsage struct {
 	Prefix string
 	Bytes  int64
 }
-
-// SyncEntity is an entity that replicates offline.
-type SyncEntity struct{ Name string }
 
 // ReminderKind is a kind of date-bearing thing a member may be reminded about.
 type ReminderKind struct{ Key string }

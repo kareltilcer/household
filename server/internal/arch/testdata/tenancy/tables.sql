@@ -81,6 +81,20 @@ ALTER TABLE arch_testdata.wrong_column FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON arch_testdata.wrong_column
   USING (other_id = app_household_id()) WITH CHECK (household_id = app_household_id());
 
+-- A partitioned tenant table. Each partition is held to the rule on its own, since a query that
+-- reaches one directly is held to its policies alone. One keeps it: the template, and no
+-- privilege of the request role's, which reaches it through its parent. One has no policy at
+-- all; one grants the request role a delete its parent may not allow.
+CREATE TABLE arch_testdata.feed (seq bigint NOT NULL, household_id uuid NOT NULL, at date NOT NULL, PRIMARY KEY (household_id, seq, at))
+  PARTITION BY RANGE (at);
+SELECT enable_tenant_isolation('arch_testdata.feed');
+CREATE TABLE arch_testdata.feed_sealed PARTITION OF arch_testdata.feed FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+SELECT enable_tenant_isolation('arch_testdata.feed_sealed');
+CREATE TABLE arch_testdata.feed_bare PARTITION OF arch_testdata.feed FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+CREATE TABLE arch_testdata.feed_open PARTITION OF arch_testdata.feed FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
+SELECT enable_tenant_isolation('arch_testdata.feed_open');
+GRANT SELECT, DELETE ON arch_testdata.feed_open TO household_app;
+
 -- A materialized view, which row-level security cannot hold.
 CREATE MATERIALIZED VIEW arch_testdata.summary AS
   SELECT household_id, count(*) AS items FROM arch_testdata.compliant GROUP BY household_id;

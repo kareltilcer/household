@@ -1,30 +1,46 @@
 package module
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
 // name is the form a module id takes: lowercase, English, a word or words joined by
 // underscores (PRD modules/00 §1).
 var name = regexp.MustCompile(`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`)
 
+// actionKey is the form an audit action's key takes: its module, then lowercase words joined
+// by dots.
+var actionKey = regexp.MustCompile(`^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$`)
+
 // Registry is the modules compiled into the server, checked once at startup (PRD 01 §4).
 type Registry struct {
-	modules []Module
-	byName  map[string]Module
-	blocks  []db.Block
+	modules  []Module
+	byName   map[string]Module
+	blocks   []db.Block
+	actions  map[string]AuditAction
+	entities map[string]sync.Entity
 }
 
 // NewRegistry checks mods and returns their registry. It refuses a nil module, a name that is
-// not a module id, two modules with one name, and migrations that are not one block of the
-// module's own under db.Assemble's rules, the platform's block included.
+// not a module id, two modules with one name, migrations that are not one block of the
+// module's own under db.Assemble's rules, the platform's block included, an audit action that
+// is not the module's or is declared twice or without its summary key, and a sync entity that
+// sync.Violations finds wrong.
 func NewRegistry(mods ...Module) (*Registry, error) {
-	r := &Registry{byName: make(map[string]Module, len(mods))}
+	r := &Registry{
+		byName:   make(map[string]Module, len(mods)),
+		actions:  map[string]AuditAction{},
+		entities: map[string]sync.Entity{},
+	}
 	for i, m := range mods {
 		if m == nil {
 			return nil, fmt.Errorf("module: module %d is nil", i)
@@ -46,11 +62,54 @@ func NewRegistry(mods ...Module) (*Registry, error) {
 		if ok {
 			r.blocks = append(r.blocks, block)
 		}
+		if err := r.addActions(m); err != nil {
+			return nil, err
+		}
+		if err := r.addEntities(m); err != nil {
+			return nil, err
+		}
 	}
 	if _, err := db.Assemble(append([]db.Block{db.Platform()}, r.blocks...)...); err != nil {
 		return nil, fmt.Errorf("module: %w", err)
 	}
 	return r, nil
+}
+
+// addActions checks m's audit actions and adds them.
+func (r *Registry) addActions(m Module) error {
+	var errs []error
+	for _, a := range m.AuditActions() {
+		switch {
+		case !actionKey.MatchString(a.Key) || !strings.HasPrefix(a.Key, m.Name()+"."):
+			errs = append(errs, fmt.Errorf("audit action %q is not %s.<action> in lowercase words joined by dots", a.Key, m.Name()))
+		case r.actions[a.Key] != (AuditAction{}):
+			errs = append(errs, fmt.Errorf("audit action %s is declared twice", a.Key))
+		case a.SummaryKey == "":
+			errs = append(errs, fmt.Errorf("audit action %s has no summary key", a.Key))
+		default:
+			r.actions[a.Key] = a
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return fmt.Errorf("module: %s: %w", m.Name(), err)
+	}
+	return nil
+}
+
+// addEntities checks the sync entities m declares, when it declares any, and adds them.
+func (r *Registry) addEntities(m Module) error {
+	source, ok := m.(SyncSource)
+	if !ok {
+		return nil
+	}
+	entities := source.SyncEntities()
+	if v := sync.Violations(m.Name(), entities); len(v) > 0 {
+		return fmt.Errorf("module: %s declares sync entities wrongly:\n  %s", m.Name(), strings.Join(v, "\n  "))
+	}
+	for _, e := range entities {
+		r.entities[e.Name] = e
+	}
+	return nil
 }
 
 // blockOf returns m's migration block, numbered by its migrations' names, and false when m
@@ -99,4 +158,35 @@ func (r *Registry) Blocks() []db.Block {
 		return nil
 	}
 	return append([]db.Block(nil), r.blocks...)
+}
+
+// Action returns the audit action whose key is key, "<module>.<action>".
+func (r *Registry) Action(key string) (AuditAction, bool) {
+	if r == nil {
+		return AuditAction{}, false
+	}
+	a, ok := r.actions[key]
+	return a, ok
+}
+
+// Entity returns the sync entity named n.
+func (r *Registry) Entity(n string) (sync.Entity, bool) {
+	if r == nil {
+		return sync.Entity{}, false
+	}
+	e, ok := r.entities[n]
+	return e, ok
+}
+
+// Entities returns every sync entity the modules declare, ordered by name.
+func (r *Registry) Entities() []sync.Entity {
+	if r == nil {
+		return nil
+	}
+	out := make([]sync.Entity, 0, len(r.entities))
+	for _, e := range r.entities {
+		out = append(out, e)
+	}
+	slices.SortFunc(out, func(a, b sync.Entity) int { return strings.Compare(a.Name, b.Name) })
+	return out
 }
