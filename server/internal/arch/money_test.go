@@ -23,11 +23,12 @@ import (
 // both are refused wherever the name says money, in Go types and in migrations.
 //
 // Without type information the test goes by names: an identifier whose words include a
-// money word and no unit word. It reads struct fields and their JSON tags, named types,
-// function parameters and results, and variables with a declared type, through pointers,
-// slices, maps, variadics, channels and generic instantiations; in SQL, column definitions,
-// column type changes, casts and domains. PostgreSQL's money type is refused whatever the
-// column is called.
+// money word and no unit word, or, for a rate, whose words before "per" do. It reads struct
+// fields and their JSON tags, named types, function parameters and results, and variables
+// with a declared type, through pointers, slices, maps, variadics, channels and generic
+// instantiations; in SQL, column definitions, column type changes, casts and domains, with
+// or without the type's schema. PostgreSQL's money type is refused whatever the column is
+// called.
 func TestMoneyIsNeverFloatOrNumeric(t *testing.T) {
 	// The server module, two directories up.
 	for _, v := range moneyViolations(t, os.DirFS(filepath.Join("..", ".."))) {
@@ -91,9 +92,16 @@ func words(name string) []string {
 	return out
 }
 
+// isMoney reports whether name names money: a money word among its words, and no unit word,
+// which makes it a quantity. A rate is what it is a rate of, the words before "per": a
+// price_per_kg is money, and a kwh_per_day is not.
 func isMoney(name string) bool {
+	of := words(name)
+	if per := slices.Index(of, "per"); per >= 0 {
+		of = of[:per]
+	}
 	money := false
-	for _, w := range words(name) {
+	for _, w := range of {
 		if unitWords[w] {
 			return false
 		}
@@ -244,8 +252,9 @@ func goMoney(t *testing.T, rel string, src []byte) []string {
 var (
 	// A comment or a string literal, whichever starts first: a string can hold "--" and a
 	// comment an apostrophe, so neither can be removed before the other.
-	sqlText    = regexp.MustCompile(`--[^\n]*|/\*[\s\S]*?\*/|'(?:[^']|'')*'`)
-	sqlDecimal = `(numeric|decimal|real|double\s+precision|float4|float8|float|money)\b`
+	sqlText = regexp.MustCompile(`--[^\n]*|/\*[\s\S]*?\*/|'(?:[^']|'')*'`)
+	// The type, which may name its schema: pg_catalog.numeric is numeric.
+	sqlDecimal = `(?:"?pg_catalog"?\s*\.\s*)?(numeric|decimal|real|double\s+precision|float4|float8|float|money)\b`
 	// A column definition or type change, "amount numeric(12,2)", `"price" real` or "ALTER
 	// COLUMN amount TYPE real"; a cast, "amount_minor::numeric" or "CAST(amount_minor AS
 	// numeric)"; a domain, "CREATE DOMAIN amount_eur AS numeric".

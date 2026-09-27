@@ -91,9 +91,10 @@ func AccessLog(log *slog.Logger) func(http.Handler) http.Handler {
 //
 // A request without a body gets no deadline: net/http is already reading its connection to
 // notice the client leaving, and a deadline reaching that read would cancel the request's
-// context mid-handler when it passed. For the same reason a handler that reads its body to
-// the end clears the deadline once it has, as the edge does for every JSON body it
-// validates; one that streams an upload sets its own through http.ResponseController.
+// context mid-handler when it passed. A body read to its end takes its deadline with it:
+// net/http clears it as it starts that read, so a handler that runs longer keeps its
+// context. A handler that streams an upload for longer than the deadline extends it through
+// http.ResponseController.
 func BodyDeadline(timeout time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if timeout <= 0 {
@@ -111,7 +112,11 @@ func BodyDeadline(timeout time.Duration) func(http.Handler) http.Handler {
 
 // Recover answers a handler's panic with a 500 problem, and logs it by the panic value's
 // type and the stack: the value itself can hold anything, content included.
-// http.ErrAbortHandler, the deliberate abort, is left to net/http.
+// http.ErrAbortHandler, the deliberate abort, is left to net/http, and so is an error that
+// wraps it, raised again as http.ErrAbortHandler itself: net/http lets only that value pass
+// in silence, and logs any other panic with the client's address, the value and a stack
+// whose argument words are not elided, as the message of a line the allowlist cannot see
+// into (NewServer in internal/app sends net/http's log to the logger).
 //
 // A panic after the status line was written or flushed can no longer become a problem, and
 // finishing the response would pass a truncated body off as complete: net/http would end a
@@ -127,7 +132,7 @@ func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 					return
 				}
 				if err, ok := v.(error); ok && errors.Is(err, http.ErrAbortHandler) {
-					panic(v)
+					panic(http.ErrAbortHandler)
 				}
 				log.LogAttrs(r.Context(), slog.LevelError, "panic",
 					slog.String("panic", typeName(v)),
@@ -210,14 +215,18 @@ func NotFound(w http.ResponseWriter, r *http.Request) {
 //
 // chi also sends here, before it routes at all, a request whose method it does not know
 // (PROPFIND, QUERY), whatever its path. A path no method serves is answered 404 not_found,
-// as a known method on it is: there is no resource there, and no Allow a 405 could carry.
+// as a known method on it is: there is no resource there, and no Allow a 405 could carry. So
+// is a mount point, which chi reports as served by every method (see MountPoint), and whose
+// every known method is routed below it and answered 404.
 func MethodNotAllowed(router chi.Routes) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := RoutePath(r)
 		var allowed []string
-		for _, method := range methods {
-			if router.Match(chi.NewRouteContext(), method, path) {
-				allowed = append(allowed, method)
+		if !MountPoint(router, path) {
+			for _, method := range methods {
+				if router.Match(chi.NewRouteContext(), method, path) {
+					allowed = append(allowed, method)
+				}
 			}
 		}
 		if len(allowed) == 0 {
@@ -227,6 +236,17 @@ func MethodNotAllowed(router chi.Routes) http.HandlerFunc {
 		w.Header().Set("Allow", strings.Join(allowed, ", "))
 		problem.Write(w, reqctx.RequestID(r.Context()), problem.New(http.StatusMethodNotAllowed, problem.CodeMethodNotAllowed))
 	}
+}
+
+// MountPoint reports whether path is where router mounts another router, the mounted
+// router's own path: /api/v1 itself, say, below which the API is mounted. chi's Mount
+// registers it for every method, to hand the request on to the mounted router as "/", and
+// chi's Find and Match report that registration as a route of every method, CONNECT
+// included. No route of this server takes CONNECT, since the contract declares no CONNECT
+// operation and the router refuses to serve an undeclared one, so a path that matches
+// CONNECT is a mount point and not a route.
+func MountPoint(router chi.Routes, path string) bool {
+	return router.Find(chi.NewRouteContext(), http.MethodConnect, path) != ""
 }
 
 // methods are the methods an Allow header can name, in the order it names them.

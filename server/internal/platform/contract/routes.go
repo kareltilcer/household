@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 )
 
 // Route is a method and a path pattern a router serves.
@@ -78,10 +79,6 @@ func (v Violation) String() string {
 	return fmt.Sprintf("violation %d", v.Kind)
 }
 
-// parameterPattern matches the regular expression chi allows inside a path parameter,
-// {id:[0-9]+}, which the contract's template does not carry.
-var parameterPattern = regexp.MustCompile(`\{([^{}:]+):[^{}]*\}`)
-
 // contractPath is route's path as the contract would write it, and whether it is under
 // BasePath at all.
 func contractPath(route string) (string, bool) {
@@ -92,8 +89,39 @@ func contractPath(route string) (string, bool) {
 	return template(path), true
 }
 
-// template is a chi pattern less the regular expressions in its parameters.
-func template(pattern string) string { return parameterPattern.ReplaceAllString(pattern, "{$1}") }
+// template is a chi pattern less the regular expressions chi allows in its parameters,
+// which the contract's template does not carry: {id:[0-9]+} is {id}. A regular expression
+// may hold braces of its own, {id:[0-9]{8}}, and chi finds the brace that closes the
+// parameter by counting them, as template does.
+func template(pattern string) string {
+	var b strings.Builder
+	for i := 0; i < len(pattern); i++ {
+		b.WriteByte(pattern[i])
+		if pattern[i] != '{' {
+			continue
+		}
+		name := i + 1
+		i = name
+		for i < len(pattern) && pattern[i] != ':' && pattern[i] != '}' {
+			i++
+		}
+		b.WriteString(pattern[name:i])
+		// From a ':' on is the regular expression, up to the brace that closes the parameter.
+		for depth := 1; i < len(pattern); i++ {
+			switch pattern[i] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+			}
+			if depth == 0 {
+				break
+			}
+		}
+		b.WriteByte('}')
+	}
+	return b.String()
+}
 
 // Match is the route a router serves a request with.
 type Match struct {
@@ -110,10 +138,14 @@ type Match struct {
 // routes with, or false when no route matches. path is what router routes by, which
 // httpx.RoutePath returns: below the mount point for a router mounted at BasePath, the
 // whole path, escaped as sent, for the root router that mounts it.
+//
+// A mount point is no route, although chi's lookup reports it as one of every method
+// (httpx.MountPoint): chi routes it on to the router mounted there, as "/", where no
+// contract path is.
 func Find(router chi.Routes, method, path string) (Match, bool) {
 	rctx := chi.NewRouteContext()
 	route := router.Find(rctx, method, path)
-	if route == "" {
+	if route == "" || httpx.MountPoint(router, path) {
 		return Match{}, false
 	}
 	params := make(map[string]string, len(rctx.URLParams.Keys))

@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
-	"time"
 	"unicode"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -51,10 +52,10 @@ type Limits struct {
 // no field.
 //
 // A JSON body is read here under the deadline httpx.BodyDeadline set, and a client that
-// does not send it in time is disconnected; once the body is in, the deadline is cleared,
-// since the handler's own work is not the body's to bound. A body in a media type other
-// than JSON, a multipart upload for instance, is not read here: its handler streams it, and
-// applies its own cap and deadline.
+// does not send it in time is disconnected; once the body is in, net/http clears the
+// deadline, and the handler's own work is not the body's to bound. A body in a media type
+// other than JSON, a multipart upload for instance, is not read here: its handler streams
+// it, and applies its own cap and deadline.
 func (c *Contract) Middleware(router chi.Routes, limits Limits) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +73,8 @@ func (c *Contract) Middleware(router chi.Routes, limits Limits) func(http.Handle
 			op, ok := c.Lookup(r.Method, m.Path)
 			if !ok {
 				// A route the contract does not declare. The router refuses to build with
-				// one (and architecture test 6 fails on it), so this is unreachable.
+				// one (and architecture test 6 fails on it), and Find reports no mount
+				// point, which chi's lookup matches without a route, so this is unreachable.
 				problem.Write(w, reqctx.RequestID(r.Context()), problem.Internal())
 				return
 			}
@@ -97,7 +99,6 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 		SkipSettingDefaults:        true,
 		ExcludeReadOnlyValidations: true,
 	}
-	clearDeadline := func() {}
 	body := o.op.RequestBody
 	if body == nil || body.Value == nil {
 		// A body where the operation declares none, framed by a Content-Length or chunked.
@@ -117,15 +118,10 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 		case present && !isJSON(mediaType):
 			options.ExcludeRequestBody = true
 		default:
+			// The validator reads the body to its end, under the deadline httpx.BodyDeadline
+			// set. There net/http clears the deadline itself, as it starts the read that
+			// notices the client leaving, so the handler's own work is not bounded by it.
 			r.Body = http.MaxBytesReader(w, r.Body, limits.MaxBody)
-			// The validator reads the body to its end, and net/http then reads the connection
-			// to notice the client leaving: the body's deadline (httpx.BodyDeadline) reaching
-			// that read would cancel the request's context mid-handler, so a body that
-			// validates takes its deadline with it. A writer that cannot set a deadline, a
-			// test's recorder, never had one.
-			if r.ContentLength != 0 {
-				clearDeadline = func() { _ = http.NewResponseController(w).SetReadDeadline(time.Time{}) }
-			}
 		}
 	}
 
@@ -136,7 +132,6 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 		Options:    options,
 	})
 	if err == nil {
-		clearDeadline()
 		return nil
 	}
 	if errors.Is(err, os.ErrDeadlineExceeded) {
@@ -144,7 +139,7 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 		// response either: net/http closes the connection without one.
 		panic(http.ErrAbortHandler)
 	}
-	// A refused request keeps the deadline: the unread rest of its body, which net/http
+	// A refused request whose body is not all in keeps the deadline: the rest, which net/http
 	// drains before answering, stays bounded by it.
 	return toProblem(err)
 }
@@ -210,19 +205,60 @@ func init() {
 }
 
 // strictJSON decodes a JSON body as kin-openapi's own decoder does, and first refuses one
-// that is not a JSON text (RFC 8259): that decoder reads only the first value, so a body
-// with anything after it (`{…} x`, `{…}{…}`) would be validated by its first value and
-// handed on whole, and it reads bytes that are not UTF-8 as U+FFFD, which a text column
-// would refuse. The refusal is a ParseError, which the edge answers 422 malformed.
+// that is not a JSON text (RFC 8259) whose every string is text PostgreSQL can store. That
+// decoder reads only the first value, so a body with anything after it (`{…} x`, `{…}{…}`)
+// would be validated by its first value and handed on whole. Go's decoder reads bytes that
+// are not UTF-8, and a \u escape of half a surrogate pair (`"\ud800"`), as U+FFFD, so the
+// handler would store a character the client never sent; and it reads `\u0000` as the NUL
+// character, which a text or jsonb column refuses, so the handler's write would fail as a
+// 500. The refusal is a ParseError, which the edge answers 422 malformed.
 func strictJSON(body io.Reader, header http.Header, schema *openapi3.SchemaRef, encoding openapi3filter.EncodingFn) (any, error) {
 	data, err := io.ReadAll(body)
 	if err != nil {
 		return nil, &openapi3filter.ParseError{Kind: openapi3filter.KindInvalidFormat, Cause: err}
 	}
-	if !json.Valid(data) || !utf8.Valid(data) {
+	if !json.Valid(data) || !utf8.Valid(data) || !storableEscapes(data) {
 		return nil, &openapi3filter.ParseError{Kind: openapi3filter.KindInvalidFormat, Reason: "not a JSON text"}
 	}
 	return openapi3filter.JSONBodyDecoder(bytes.NewReader(data), header, schema, encoding)
+}
+
+// storableEscapes reports whether every \u escape in data, a valid JSON text, names a
+// character PostgreSQL stores as sent: neither U+0000 nor half of a surrogate pair. JSON
+// escapes a character outside the Basic Multilingual Plane as a pair, a high half and then
+// a low one.
+func storableEscapes(data []byte) bool {
+	// A JSON text has a backslash only inside a string, where it starts an escape: a
+	// character, or u and four hex digits.
+	unit := func(i int) (rune, bool) {
+		if i+6 > len(data) || data[i] != '\\' || data[i+1] != 'u' {
+			return 0, false
+		}
+		n, err := strconv.ParseUint(string(data[i+2:i+6]), 16, 16)
+		return rune(n), err == nil
+	}
+	for i := 0; i < len(data); i++ {
+		if data[i] != '\\' {
+			continue
+		}
+		r, ok := unit(i)
+		if !ok {
+			i++ // A one-character escape, `\"` or `\\` among them: skip what it escapes.
+			continue
+		}
+		i += 5
+		switch {
+		case r == 0:
+			return false
+		case utf16.IsSurrogate(r):
+			low, ok := unit(i + 1)
+			if !ok || utf16.DecodeRune(r, low) == unicode.ReplacementChar {
+				return false
+			}
+			i += 6
+		}
+	}
+	return true
 }
 
 // toProblem turns a kin-openapi validation error into the problem the client receives.

@@ -33,3 +33,8 @@ CREATE VIEW expense_euros AS
 
 -- A string that holds a comment marker hides nothing after it on its line.
 ALTER TABLE expenses ADD COLUMN memo text DEFAULT '-- none', ADD COLUMN fee_eur real;
+
+-- A price per unit is money and a quantity per unit is not, and a type may name its schema.
+ALTER TABLE expenses ADD COLUMN price_per_kg numeric, ADD COLUMN kwh_per_day numeric;
+ALTER TABLE expenses ADD COLUMN fee_total pg_catalog.numeric(12, 2), ADD COLUMN tax_rate pg_catalog.float8;
+CREATE VIEW expense_casts AS SELECT id, amount_minor::pg_catalog.float8 / 100 AS euros FROM expenses;

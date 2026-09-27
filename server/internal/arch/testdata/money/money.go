@@ -54,3 +54,11 @@ type Harvest struct {
 }
 
 func Ratio(a, b float64) float64 { return a / b }
+
+// A price per unit is money, and a quantity per unit is not.
+
+type Tariff struct {
+	PricePerKwh float64
+	CostPerKm   float32
+	KwhPerDay   float64
+}

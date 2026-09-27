@@ -2,10 +2,17 @@ package db
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/pbkdf2"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/text/secure/precis"
 )
 
 // The three roles of PRD 01 §2.3. None is a superuser or may bypass row-level security;
@@ -97,8 +104,8 @@ func (a roleAttributes) restore() string {
 // roles and the caller may connect to it. It runs as a role that may create roles, a
 // superuser locally and in CI, and is safe to run again.
 //
-// Passwords travel in the statements, where statement logging would record them; the
-// server must not log DDL while this runs (docs/runbooks, when item 30 deploys it).
+// No password travels in a statement, only its SCRAM secret (see scramSecret), so neither
+// statement logging nor the log of a statement that failed can record one.
 func Bootstrap(ctx context.Context, admin *pgx.Conn, database string, passwords Passwords) error {
 	if database == "" {
 		return errors.New("db: bootstrap: no database")
@@ -137,12 +144,56 @@ func CreateRoles(ctx context.Context, tx pgx.Tx, passwords Passwords) error {
 		case err != nil:
 			return fmt.Errorf("look up %s: %w", role, err)
 		}
-		// format() quotes the role as an identifier and the password as a literal.
-		if err := execFormatted(ctx, tx, "%s ROLE %I WITH "+clauses+"PASSWORD %L", verb, role, password); err != nil {
+		salt := make([]byte, scramSaltBytes)
+		_, _ = rand.Read(salt) // It never fails: the process ends first.
+		secret, err := scramSecret(password, salt, scramIterations)
+		if err != nil {
+			return fmt.Errorf("the SCRAM secret for %s: %w", role, err)
+		}
+		// format() quotes the role as an identifier and the secret as a literal.
+		if err := execFormatted(ctx, tx, "%s ROLE %I WITH "+clauses+"PASSWORD %L", verb, role, secret); err != nil {
 			return fmt.Errorf("%s ROLE %s: %w", verb, role, err)
 		}
 	}
 	return nil
+}
+
+// The parameters of the SCRAM secrets CreateRoles sets: PostgreSQL's own, which it uses for
+// a password it hashes itself (scram_iterations, and its 16-byte salt).
+const (
+	scramIterations = 4096
+	scramSaltBytes  = 16
+)
+
+// scramSecret returns password as pg_authid stores it, the SCRAM-SHA-256 secret of RFC 5802
+// and RFC 7677, SCRAM-SHA-256$<iterations>:<salt>$<StoredKey>:<ServerKey>, over salt.
+//
+// CreateRoles sets this secret, never the password itself. PostgreSQL stores a password
+// given in this form as it is, and a role statement's text is not private: the server logs a
+// statement that fails in full by default (log_min_error_statement is error), password
+// literal and all, and statement logging records every one. The secret is what the server
+// holds anyway; the password cannot be read back from it, only guessed.
+//
+// The password is prepared as pgx prepares it to log in, with precis.OpaqueString (the
+// successor to SASLprep), and used as it is when that refuses it, as PostgreSQL does. An
+// ASCII password, as the connection strings carry, is its own preparation either way.
+func scramSecret(password string, salt []byte, iterations int) (string, error) {
+	if prepared, err := precis.OpaqueString.String(password); err == nil {
+		password = prepared
+	}
+	salted, err := pbkdf2.Key(sha256.New, password, salt, iterations, sha256.Size)
+	if err != nil {
+		return "", err
+	}
+	keyed := func(message string) []byte {
+		mac := hmac.New(sha256.New, salted)
+		mac.Write([]byte(message))
+		return mac.Sum(nil)
+	}
+	storedKey := sha256.Sum256(keyed("Client Key"))
+	encode := base64.StdEncoding.EncodeToString
+	return "SCRAM-SHA-256$" + strconv.Itoa(iterations) + ":" + encode(salt) +
+		"$" + encode(storedKey[:]) + ":" + encode(keyed("Server Key")), nil
 }
 
 // PrepareDatabase hands database to the migrate role and lets only the three roles and

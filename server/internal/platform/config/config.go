@@ -5,13 +5,16 @@
 //
 // In development, and only there, every value has a default that points at the services
 // docker-compose.yml starts, so a fresh clone runs with nothing set. Everywhere else, what
-// a command needs must be set explicitly.
+// a command needs must be set explicitly. HOUSEHOLD_ENV itself defaults to development, so
+// bootstrap, which sets the roles' passwords, sets a defaulted one only on a cluster on this
+// machine.
 package config
 
 import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -132,6 +135,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 
 	// url reads a connection string command needs, defaulted in development only, and
 	// checks that it logs in as role (any role, when role is empty).
+	var defaulted []string
 	url := func(key, devDefault, role string) string {
 		value, ok := l.getenv(key)
 		if !ok || value == "" {
@@ -140,6 +144,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 				return ""
 			}
 			value = devDefault
+			defaulted = append(defaulted, key)
 		}
 		cfg, err := pgconn.ParseConfig(value)
 		if err != nil {
@@ -167,6 +172,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 		c.MeterDatabaseURL = url(MeterDatabaseURLVar, devMeterDatabaseURL, db.RoleMeter)
 		c.AdminDatabaseURL = url(AdminDatabaseURLVar, devAdminDatabaseURL, "")
 		l.sameDatabase(c.DatabaseURL, c.MigrateDatabaseURL, c.MeterDatabaseURL)
+		l.localDefaults(defaulted, c.AdminDatabaseURL)
 	default:
 		l.fail("unknown command %q", command)
 	}
@@ -248,6 +254,39 @@ func (l *loader) positive(key string, def int64) int64 {
 		return def
 	}
 	return n
+}
+
+// localDefaults refuses a development default among the connection strings Bootstrap reads
+// when the administrator's names a cluster off this machine. Bootstrap sets each role's
+// password to the one its string carries, and a default carries the one .env.example
+// publishes, which would leave that role open to anyone on a remote cluster. HOUSEHOLD_ENV
+// itself defaults to development, so a deploy that forgets it is stopped here rather than
+// by a crash that never comes.
+func (l *loader) localDefaults(defaulted []string, adminURL string) {
+	if len(defaulted) == 0 || adminURL == "" || local(adminURL) {
+		return
+	}
+	l.fail("%s not set, and a development default carries a published password, which bootstrap sets only on a cluster on this machine; %s names another",
+		strings.Join(defaulted, ", "), AdminDatabaseURLVar)
+}
+
+// local reports whether a connection string reaches PostgreSQL on this machine only, over
+// loopback or a Unix socket, at every host it names.
+func local(url string) bool {
+	cfg, err := pgconn.ParseConfig(url)
+	if err != nil {
+		return false
+	}
+	hosts := []string{cfg.Host}
+	for _, fallback := range cfg.Fallbacks {
+		hosts = append(hosts, fallback.Host)
+	}
+	for _, host := range hosts {
+		if ip := net.ParseIP(host); host != "localhost" && !strings.HasPrefix(host, "/") && (ip == nil || !ip.IsLoopback()) {
+			return false
+		}
+	}
+	return true
 }
 
 // sameDatabase checks the role connection strings Bootstrap reads all name one database,

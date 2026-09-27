@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -112,9 +113,12 @@ func TestReadinessFailsWhenACheckDoes(t *testing.T) {
 	}
 }
 
+// The API's own mount point is no route either, although chi's lookup reports it as one:
+// testsupport.Serve, which finds the route as the edge does, would otherwise hold its 404
+// against an operation GET /api/v1 that the contract does not have.
 func TestAnUnknownPathIsANotFoundProblem(t *testing.T) {
 	r, _ := router(t)
-	for _, path := range []string{"/api/v1/no-such-thing", "/elsewhere", "/"} {
+	for _, path := range []string{"/api/v1/no-such-thing", "/elsewhere", "/", "/api/v1", "/api/v1/"} {
 		rec := testsupport.Serve(t, r, get(t, path))
 		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"code":"not_found"`) {
 			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body.String())
@@ -137,11 +141,12 @@ func TestAnUnservedMethodIs405WithAllow(t *testing.T) {
 
 	// chi hands a method it does not know to the 405 handler before routing: on a path that
 	// is served it is a 405 like any other, and on one that is not, the 404 a GET would get.
+	// The mount point is one of those, although chi reports every method as serving it.
 	rec = testsupport.Serve(t, r, httptest.NewRequestWithContext(t.Context(), "PROPFIND", "/api/v1/healthz", nil))
 	if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "GET" {
 		t.Fatalf("PROPFIND on a served path: %d, Allow %q", rec.Code, rec.Header().Get("Allow"))
 	}
-	for _, path := range []string{"/api/v1/nowhere", "/elsewhere"} {
+	for _, path := range []string{"/api/v1/nowhere", "/elsewhere", "/api/v1", "/api/v1/"} {
 		rec = testsupport.Serve(t, r, httptest.NewRequestWithContext(t.Context(), "PROPFIND", path, nil))
 		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"code":"not_found"`) || rec.Header().Get("Allow") != "" {
 			t.Fatalf("PROPFIND %s: %d, Allow %q, %s", path, rec.Code, rec.Header().Get("Allow"), rec.Body.String())
@@ -354,20 +359,29 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 }
 
 // A request cut off before anything was written, as the edge cuts off a body that arrives
-// too slowly, went out with no status, and is not logged as a 200.
+// too slowly, went out with no status, and is not logged as a 200. An abort wrapped in
+// another error reaches net/http as http.ErrAbortHandler itself: net/http compares the
+// value, and logs any other with the client's address and an unelided stack.
 func TestARequestAbortedBeforeAnswerIsLoggedWithoutAStatus(t *testing.T) {
-	r, logs := router(t)
-	r.Get("/cut", func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) })
-	func() {
-		defer func() {
-			if err, ok := recover().(error); !ok || !errors.Is(err, http.ErrAbortHandler) {
-				t.Fatalf("recovered %v, want http.ErrAbortHandler", err)
+	for name, abort := range map[string]error{
+		"bare":    http.ErrAbortHandler,
+		"wrapped": fmt.Errorf("stream cut: %w", http.ErrAbortHandler),
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, logs := router(t)
+			r.Get("/cut", func(http.ResponseWriter, *http.Request) { panic(abort) })
+			func() {
+				defer func() {
+					if v := recover(); v != any(http.ErrAbortHandler) {
+						t.Fatalf("recovered %v, want http.ErrAbortHandler itself", v)
+					}
+				}()
+				r.ServeHTTP(httptest.NewRecorder(), get(t, "/cut"))
+			}()
+			if !strings.Contains(logs.String(), `"level":"ERROR","msg":"request","method":"GET","status":0`) {
+				t.Fatalf("access log:\n%s", logs)
 			}
-		}()
-		r.ServeHTTP(httptest.NewRecorder(), get(t, "/cut"))
-	}()
-	if !strings.Contains(logs.String(), `"level":"ERROR","msg":"request","method":"GET","status":0`) {
-		t.Fatalf("access log:\n%s", logs)
+		})
 	}
 }
 

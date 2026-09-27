@@ -285,8 +285,9 @@ func TestAJSONBodyThatDoesNotArriveInTimeIsCutOff(t *testing.T) {
 
 // The body's deadline ends with the body: a handler that runs past it keeps its request's
 // context, which net/http cancels when a deadline reaches the read it keeps open to notice
-// the client leaving. postFinanceRulesApply's body is optional, so it is tried with one and
-// without.
+// the client leaving. net/http clears the deadline as it starts that read, once the edge has
+// read a body to its end; with no body the read starts at once, so no deadline may be set.
+// postFinanceRulesApply's body is optional, so it is tried with one and without.
 func TestTheBodyDeadlineDoesNotOutliveTheBody(t *testing.T) {
 	api := chi.NewRouter()
 	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody}))
@@ -341,21 +342,31 @@ func TestTheRequestIsNotRewrittenWithDefaults(t *testing.T) {
 }
 
 // A body that is not a JSON text is malformed, however valid its first value: kin-openapi's
-// own decoder reads only that value, and would hand the rest to the handler unvalidated.
+// own decoder reads only that value, and would hand the rest to the handler unvalidated. So
+// is a string PostgreSQL cannot store as sent: an escaped NUL, which a text column refuses,
+// or half a surrogate pair, which Go reads as U+FFFD.
 func TestMalformedAndMissingBodies(t *testing.T) {
 	h, seen := router(t)
 	valid := `{"id":"` + other + `","name":"x"}`
+	named := func(name string) call {
+		return call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"id":"` + other + `","name":"` + name + `"}`}
+	}
 	for name, tc := range map[string]struct {
 		c    call
 		want problem.FieldError
 	}{
-		"not JSON":        {call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"name":`}, problem.FieldError{Field: "", Code: "malformed"}},
-		"data after it":   {call{method: http.MethodPost, path: lists, contentType: "application/json", body: valid + ` x`}, problem.FieldError{Field: "", Code: "malformed"}},
-		"a second value":  {call{method: http.MethodPost, path: lists, contentType: "application/json", body: valid + `{"name":5}`}, problem.FieldError{Field: "", Code: "malformed"}},
-		"bytes not UTF-8": {call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"id":"` + other + `","name":"x` + "\xff" + `"}`}, problem.FieldError{Field: "", Code: "malformed"}},
-		"no body":         {call{method: http.MethodPost, path: lists, contentType: "application/json"}, problem.FieldError{Field: "", Code: "required"}},
-		"no header":       {call{method: http.MethodPost, path: lists}, problem.FieldError{Field: "", Code: "required"}},
-		"whitespace only": {call{method: http.MethodPost, path: lists, contentType: "application/json", body: " \n"}, problem.FieldError{Field: "", Code: "malformed"}},
+		"not JSON":                 {call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"name":`}, problem.FieldError{Field: "", Code: "malformed"}},
+		"data after it":            {call{method: http.MethodPost, path: lists, contentType: "application/json", body: valid + ` x`}, problem.FieldError{Field: "", Code: "malformed"}},
+		"a second value":           {call{method: http.MethodPost, path: lists, contentType: "application/json", body: valid + `{"name":5}`}, problem.FieldError{Field: "", Code: "malformed"}},
+		"bytes not UTF-8":          {call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"id":"` + other + `","name":"x` + "\xff" + `"}`}, problem.FieldError{Field: "", Code: "malformed"}},
+		"no body":                  {call{method: http.MethodPost, path: lists, contentType: "application/json"}, problem.FieldError{Field: "", Code: "required"}},
+		"no header":                {call{method: http.MethodPost, path: lists}, problem.FieldError{Field: "", Code: "required"}},
+		"whitespace only":          {call{method: http.MethodPost, path: lists, contentType: "application/json", body: " \n"}, problem.FieldError{Field: "", Code: "malformed"}},
+		"an escaped NUL":           {named(`a\u0000b`), problem.FieldError{Field: "", Code: "malformed"}},
+		"a high half":              {named(`a\ud83d`), problem.FieldError{Field: "", Code: "malformed"}},
+		"a low half":               {named(`\ude00a`), problem.FieldError{Field: "", Code: "malformed"}},
+		"halves reversed":          {named(`\ude00\ud83d`), problem.FieldError{Field: "", Code: "malformed"}},
+		"a high half and a letter": {named(`\ud83d\u0041`), problem.FieldError{Field: "", Code: "malformed"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			seen.called = false
@@ -368,6 +379,12 @@ func TestMalformedAndMissingBodies(t *testing.T) {
 	// Whitespace around the one value is part of a JSON text.
 	if rec := (call{method: http.MethodPost, path: lists, contentType: "application/json", body: " " + valid + "\n"}).do(t, h); rec.Code != http.StatusNoContent {
 		t.Fatalf("a valid body with whitespace around it: %d %s", rec.Code, rec.Body.String())
+	}
+	// A whole pair is a character, and an escaped backslash escapes no u after it.
+	for _, name := range []string{`\ud83d\ude00`, `\\u0000`, `\u00e9\"\\`} {
+		if rec := named(name).do(t, h); rec.Code != http.StatusNoContent {
+			t.Fatalf("the name %s: %d %s", name, rec.Code, rec.Body.String())
+		}
 	}
 }
 
@@ -522,10 +539,11 @@ func TestARouteWithAParameterPatternIsValidated(t *testing.T) {
 	sameErrors(t, fieldErrors(t, rec), problem.FieldError{Field: "/name", Code: "required"})
 }
 
+// A parameter's regular expression may hold braces of its own, which chi matches by depth.
 func TestFind(t *testing.T) {
 	api := chi.NewRouter()
 	noop := func(http.ResponseWriter, *http.Request) {}
-	api.Get("/households/{household_id:[0-9a-f-]+}/notes/{note_id}", noop)
+	api.Get("/households/{household_id:[0-9a-f]{8}-[0-9a-f-]{27}}/notes/{note_id}", noop)
 	root := chi.NewRouter()
 	root.Mount(contract.BasePath, api)
 
@@ -548,6 +566,40 @@ func TestFind(t *testing.T) {
 	if _, ok := contract.Find(root, http.MethodPost, contract.BasePath+note); ok {
 		t.Error("Find matched a method the route does not serve")
 	}
+	// chi's lookup reports the mount point as a route of every method; it is none.
+	for _, path := range []string{contract.BasePath, contract.BasePath + "/"} {
+		if m, ok := contract.Find(root, http.MethodGet, path); ok {
+			t.Errorf("Find matched the mount point %s: %+v", path, m)
+		}
+	}
+}
+
+// A router mounted inside the API, as a group of routes behind middleware of their own, has
+// a mount point chi's lookup reports as a route of every method. It is no operation: any
+// method on it is routed below it and answered 404, neither validated as an operation it is
+// not nor refused as a route the contract does not declare.
+func TestAMountPointIsNoRoute(t *testing.T) {
+	api := chi.NewRouter()
+	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody}))
+	api.NotFound(httpx.NotFound)
+	api.MethodNotAllowed(httpx.MethodNotAllowed(api))
+	api.Route("/households/{household_id}", func(r chi.Router) {
+		r.Get("/garden/harvests", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	})
+	root := chi.NewRouter()
+	root.NotFound(httpx.NotFound)
+	root.MethodNotAllowed(httpx.MethodNotAllowed(root))
+	root.Mount(contract.BasePath, api)
+
+	for _, method := range []string{http.MethodGet, http.MethodPut, "PROPFIND"} {
+		rec := call{method: method, path: "/households/" + household}.do(t, root)
+		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"code":"not_found"`) || rec.Header().Get("Allow") != "" {
+			t.Errorf("%s on the mount point: %d, Allow %q, %s", method, rec.Code, rec.Header().Get("Allow"), rec.Body.String())
+		}
+	}
+	// The routes below it are validated as ever.
+	sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: "/households/" + household + "/garden/harvests?limit=500"}.do(t, root)),
+		problem.FieldError{Field: "query:limit", Code: "maximum"})
 }
 
 // The OpenAPI 3.1 constructs this contract uses, each checked by the built-in validator

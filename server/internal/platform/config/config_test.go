@@ -99,6 +99,33 @@ func TestEachConnectionMustLogInAsItsRole(t *testing.T) {
 	}
 }
 
+// Bootstrap sets each role's password to the one its connection string carries, and a
+// development default carries the one .env.example publishes. A deploy that forgets
+// HOUSEHOLD_ENV runs as development, so bootstrap takes a defaulted password only for a
+// cluster on this machine, and never leaves a remote role open with a published one.
+func TestADefaultedPasswordIsSetOnlyOnALocalCluster(t *testing.T) {
+	remote := map[string]string{
+		config.AdminDatabaseURLVar:   dsn("postgres", "s3cret", "db.internal:5432", "household"),
+		config.DatabaseURLVar:        dsn("household_app", "a", "db.internal:5432", "household"),
+		config.MigrateDatabaseURLVar: dsn("household_migrate", "m", "db.internal:5432", "household"),
+	}
+	_, err := config.Load(config.Bootstrap, env(remote))
+	if err == nil || !strings.Contains(err.Error(), config.MeterDatabaseURLVar) {
+		t.Fatalf("a remote cluster with the meter's password defaulted: %v", err)
+	}
+
+	remote[config.MeterDatabaseURLVar] = dsn("household_meter", "r", "db.internal:5432", "household")
+	if _, err := config.Load(config.Bootstrap, env(remote)); err != nil {
+		t.Fatalf("a remote cluster with every string set: %v", err)
+	}
+	for _, host := range []string{"localhost:5432", "127.0.0.1:5433", "[::1]:5432"} {
+		local := map[string]string{config.AdminDatabaseURLVar: dsn("postgres", "postgres", host, "household")}
+		if _, err := config.Load(config.Bootstrap, env(local)); err != nil {
+			t.Errorf("a cluster at %s with the roles' strings defaulted: %v", host, err)
+		}
+	}
+}
+
 func TestMalformedValuesAreAllReported(t *testing.T) {
 	_, err := config.Load(config.Serve, env(map[string]string{
 		config.EnvVar:             "prod",

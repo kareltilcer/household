@@ -50,19 +50,23 @@ be enforced rather than intended:
   handler to stream, under its own cap and deadline. A JSON body that is not a JSON text, with
   anything after its first value or bytes that are not UTF-8, answers `422 malformed`:
   kin-openapi's own decoder reads only the first value, so the contract package registers a
-  strict one for `application/json`. A query string pair that `net/url` cannot parse, which it
-  would drop without a word, answers `422 malformed`: a dropped cursor would otherwise be
-  answered with page one. The contract says that any operation can answer the `422` refusals,
-  and any operation that takes a body the `413` and `415`, declared or not.
+  strict one for `application/json`. So does a string escaping U+0000, which a `text` or
+  `jsonb` column refuses, or half a surrogate pair, which Go would read as U+FFFD. A query
+  string pair that `net/url` cannot parse, which it would drop without a word, answers `422
+  malformed`: a dropped cursor would otherwise be answered with page one. The contract says
+  that any operation can answer the `422` refusals, and any operation that takes a body the
+  `413` and `415`, declared or not.
 - **Every request body must arrive within `HOUSEHOLD_BODY_TIMEOUT`** (60 s) or the connection
   is closed, since the server itself bounds only the reading of headers. The deadline is set
   for every request with a body before it is routed (`httpx.BodyDeadline`), not only for the
   JSON bodies the edge reads: net/http reads the body a handler leaves unread before it
   answers, so a request that declared a body and never sent it would otherwise hold its
-  connection through a `404`, a `405` or any refusal. The edge clears the deadline once a JSON
-  body has validated, since net/http then reads the connection to notice the client leaving and
-  a deadline passing would cancel the request's context mid-handler; a handler that streams an
-  upload extends it through `http.ResponseController`.
+  connection through a `404`, a `405` or any refusal. Once a body has been read to its end,
+  net/http clears the deadline itself, as it starts reading the connection to notice the client
+  leaving, so a handler that runs longer keeps its context; a request without a body gets no
+  deadline, since that read starts at once and a deadline reaching it would cancel the
+  request's context mid-handler. A handler that streams an upload extends the deadline through
+  `http.ResponseController`.
 - **A `readOnly` member the client sends is validated against its schema and left to the
   handler to ignore**, not refused. JSON Schema allows either; refusing breaks the GET-modify-PUT
   round trip (`putMeConsents` takes the `Consents` a GET returns, `updated_at` and all), and

@@ -2,7 +2,9 @@ package db_test
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -100,6 +102,85 @@ func TestCreateRolesRunsAgainForAnAdministratorWhoIsNoSuperuser(t *testing.T) {
 	}
 	if err := db.CreateRoles(t.Context(), tx, testsupport.Passwords); err != nil {
 		t.Fatalf("CreateRoles as a non-superuser administrator: %v", err)
+	}
+}
+
+// statements records every statement a connection sends, with its arguments.
+type statements struct{ sent []string }
+
+func (s *statements) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	s.sent = append(s.sent, fmt.Sprint(data.SQL, data.Args))
+	return ctx
+}
+
+func (*statements) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+// A role statement's text is not private: PostgreSQL logs one that fails in full by
+// default, and statement logging logs every one. CreateRoles sends each role's SCRAM secret
+// and never its password, and the secret stored is that password's. The roles change in a
+// transaction the test rolls back.
+func TestCreateRolesSendsNoPassword(t *testing.T) {
+	cfg, err := pgx.ParseConfig(testsupport.AdminURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	traced := &statements{}
+	cfg.Tracer = traced
+	admin, err := pgx.ConnectConfig(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = admin.Close(context.Background()) })
+	tx, err := admin.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	passwords := db.Passwords{Migrate: "never-sent-migrate", App: "never-sent-app", Meter: "never-sent-meter"}
+	if err := db.CreateRoles(t.Context(), tx, passwords); err != nil {
+		t.Fatalf("CreateRoles: %v", err)
+	}
+	for _, s := range traced.sent {
+		if strings.Contains(s, "never-sent") {
+			t.Errorf("a statement carries a password: %s", s)
+		}
+	}
+	for _, role := range db.Roles {
+		var stored string
+		if err := tx.QueryRow(t.Context(), "SELECT rolpassword FROM pg_authid WHERE rolname = $1", role).Scan(&stored); err != nil {
+			t.Fatal(err)
+		}
+		// SCRAM-SHA-256$<iterations>:<salt>$<StoredKey>:<ServerKey>
+		_, rest, _ := strings.Cut(stored, "$")
+		params, _, _ := strings.Cut(rest, "$")
+		count, encodedSalt, _ := strings.Cut(params, ":")
+		iterations, err := strconv.Atoi(count)
+		if err != nil {
+			t.Fatalf("%s stores %q, not a SCRAM secret", role, stored)
+		}
+		salt, err := base64.StdEncoding.DecodeString(encodedSalt)
+		if err != nil {
+			t.Fatalf("%s stores %q, not a SCRAM secret", role, stored)
+		}
+		if want, err := db.ScramSecret(passwords.Of(role), salt, iterations); err != nil || stored != want {
+			t.Errorf("%s stores %q, want the secret of its password, %q (%v)", role, stored, want, err)
+		}
+	}
+}
+
+// The secret PostgreSQL derives from a password itself (RFC 5802, RFC 7677), computed
+// independently with Python's hashlib and hmac for a fixed salt.
+func TestScramSecretIsTheOnePostgreSQLDerives(t *testing.T) {
+	salt := make([]byte, 16)
+	for i := range salt {
+		salt[i] = byte(i)
+	}
+	got, err := db.ScramSecret("household_app", salt, 4096)
+	want := "SCRAM-SHA-256$4096:AAECAwQFBgcICQoLDA0ODw==$" +
+		"M7tCItLxEflmRdxeBVwT8GxANdr83m7cfBdo/10HMWk=:samGcdp6/DvAAdphf/5vcaRPMitfwWIYqiZSniPUrwg="
+	if err != nil || got != want {
+		t.Fatalf("ScramSecret = %q, %v; want %q", got, err, want)
 	}
 }
 
