@@ -116,7 +116,10 @@ useful when a member reports something the others do not see.
 conflicts awaiting resolution, **replica-digest state** (when the device last verified itself
 through `POST …/sync/digest`, and which entity types disagreed — [D-85](../09-decisions.md)), and a
 **force re-snapshot** action. When offline-first goes wrong, this is the screen that tells a member
-why, and its absence is why sync bugs become support tickets. **D-79.**
+why, and its absence is why sync bugs become support tickets. **D-79.** Under D-93 the cursor
+position is the replica's last checkpoint, the replica-digest state is its bucket-checksum state
+(with the digest's, if the plan keeps that endpoint), and the re-snapshot is a re-download of the
+replica.
 
 **It ships in Phase 0, not with this module** ([10-sync-risk.md](../10-sync-risk.md) §6). Because
 platform staff cannot read household content ([D-3](../09-decisions.md)), nobody can inspect a
@@ -133,7 +136,10 @@ tables live in the billing schema.
 Audience membership rows — chat conversation members and `member_shared` calendar members — carry
 `floor_seq` beside their own module's membership fields, because the sync pull predicate evaluates
 it ([03](../03-platform-strands.md) §2.3, **D-90**). They are the owning module's rows, not this
-module's; they are named here only so the list of things that gate access is in one place.
+module's; they are named here only so the list of things that gate access is in one place. Under
+**D-93** the replicated path reads no `floor_seq`, and none is stored: what gates it is the readers
+the owning module keeps on each row of the audience, derived from these membership rows
+([15-chat](15-chat.md) Sync).
 
 ## Sync
 

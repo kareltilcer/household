@@ -51,13 +51,18 @@ first look".
 |---|---|---|
 | **Scenario 3.** Petr and Eva check Milk offline, one second apart, then reconnect | Both replicas equal the server 243 ms after reconnecting. The server holds one check (version 1 → 2), one audit event, one feed change; the outcomes were one `applied` and one `applied` no-op; no conflict | The same on the server. The outbox, the optimistic view and their persistence are ours: Electric replicates reads only |
 | **Scenario 7.** Offline, Petr checks Bread and adds Butter; his grant is lowered to `none`; he reconnects | The replica is empty by the first look (104 ms), the optimistic Butter included. Both writes came back `rejected` / `not_found` once and were not retried; the server wrote nothing | With the grant checked in our proxy, the proxy answers `404` and nothing clears the replica unless our client treats the `404` as "delete what you hold". With the grant as subqueries in the shape, Electric sends a `move-out` event and **its own `Shape` class ignores it: all three rows stay** (3 failures). A replica of ours that applies its positional tag protocol empties by the first look |
-| **Access loss while connected** | Rows deleted by the first look for each cause the spike could make: grant to `none`, module disabled household-wide (for a member and the owner), removal from the household, soft delete; rows back when the grant returns | As above: correct only with our own tag-aware replica |
+| **Access loss while connected** | Rows deleted by the first look for each cause the spike could make: grant to `none`, module disabled household-wide (for a member and the owner), removal from the household, soft delete; rows back when the grant returns | As above: with the proxy gate, a grant lowered to `none` clears the replica only through our client's `404` convention, which drops the whole shape at once; with subqueries, only our own tag-aware replica is correct |
 | **Visibility and audience** (below), including scenarios 16 and 18 | 7 of 7, through two workarounds | Expressible, with the caller's ids and floor as constants the proxy writes |
 
 The totals are PowerSync 26 of 26; Electric 15 of 15 with the proxy gate, 16 of 19 with subqueries
-and its own `Shape`, 19 of 19 with a tag-aware replica. Both candidates accepted item 4's schema as
-it is. Every scenario ran on a fresh household in a database holding every earlier scenario's
-households, and no replica received another household's row.
+and its own `Shape`, 19 of 19 with a tag-aware replica. Both candidates took item 4's tables
+without a column changed, but not without setup: the spike set `REPLICA IDENTITY FULL` on every
+table either engine replicated (`shopping_items`, `memberships`, `module_enablement`,
+`module_grants` and its own), which Electric needs for an update's old values and PowerSync was
+never run without, and it added each engine's role and publication. Every scenario ran on a fresh
+household in a database holding every earlier scenario's households, and no replica received
+another household's row; each member belonged to one household, so this is not the isolation test
+the decision below asks for.
 
 ### What each access language can say
 
@@ -80,7 +85,7 @@ each one (`probes/` in the spike).
 | Question | PowerSync | Electric |
 |---|---|---|
 | Can it express all four access axes? | Yes, two of them through a workaround each | Yes, through a proxy writing constants, one shape per member per conversation |
-| Does access loss propagate as deletion? | Yes, for every cause tried, with no client code | Only with a client that implements its tag protocol, which its own client does not |
+| Does access loss propagate as deletion? | Yes, for every cause tried, with no client code | Only through client code of ours: a replica that implements its tag protocol, which its own client does not, or a proxy `404` that the client takes as the loss of the whole shape |
 | Do writes go through our own API? | Yes, through a connector of about forty lines | Yes, because there is no write path: queue, persistence and optimistic state are ours |
 | How good is the React Native story? | Maintained SDK on op-sqlite, dev build; web and Node SDKs from the same core | Pre-1.0 persistence adapters |
 | Can it be self-hosted in the EU? | Yes, once telemetry sharing is turned off | Yes |
@@ -89,6 +94,12 @@ each one (`probes/` in the spike).
 
 **Adopt PowerSync, self-hosted, as the read half of the sync engine. The write half stays
 Household's.** Recorded in the PRD as **D-93**.
+
+The requirement that decided it is retraction: access loss must reach the device as deletion, which
+PRD 10 §2 names as the thing most likely not to fit. PowerSync deleted the rows for every cause
+with no client code; Electric's own client kept them, and Zero cannot write offline at all. The
+requirement that came closest to forcing a build instead is keeping row-level security under the
+read path, which adoption gives up; the generated streams and the isolation test below hold it.
 
 - **What PowerSync does.** It replicates from PostgreSQL's write-ahead log into per-member buckets,
   holds the client replica in SQLite (op-sqlite on React Native, wa-sqlite on the web,
@@ -101,9 +112,16 @@ Household's.** Recorded in the PRD as **D-93**.
   where every mutation goes through `mutation.Apply` and is answered with PRD 03 §2.4's outcome
   and a code. The connector completes every mutation the server answered, whatever the answer, and
   records any outcome but `applied` in a local-only table that the conflict inbox and the
-  sync-health screen read. It throws, and so retries, only on a transport failure or a `5xx`:
+  sync-health screen read. A response that answers no mutation is not an answer: on a `401` the
+  connector fetches new credentials, on a `429` it waits out the delay the response names, and on a
+  `413` it sends the transaction in smaller batches; a `402` or a `404` answers every mutation in
+  the batch alike, `rejected` with `entitlement` or `not_found`, as the spike's harness did for a
+  `404`. It throws, and so retries, only on a transport failure, a `5xx`, a `401` or a `429`:
   PowerSync applies no checkpoint while the queue holds anything, so a connector that retried a
-  refusal would freeze the replica. Merge policies, idempotency, clock clamping and the offline
+  refusal would freeze the replica. PowerSync's queue holds row writes, so what a mutation carries
+  that a row write does not (its `mutation_id`, the `client_time` it was made at, its
+  `base_version`, any `action`) is recorded with the write when it is made; the spike's harness
+  stamped the upload time instead. Merge policies, idempotency, clock clamping and the offline
   write flags are unchanged.
 - **The access predicate becomes stream definitions generated from the entity registry**, never
   written by hand, so the check still lives in one place (the reasoning behind D-22):
@@ -124,7 +142,7 @@ Household's.** Recorded in the PRD as **D-93**.
 
 | Alternative | Why not |
 |---|---|
-| **Build PRD 03 §2's engine**: the feed pull, the snapshot, the digest, the realtime nudge, and a TypeScript client with two storage adapters (plan items 12–15 as first written: sizes L, XL, XL and L) | The spike's hardest cases, retraction for every cause and a replica that survives a restart with its queue, came from PowerSync with no client code but the connector, on item 4's schema, with writes still through the spine. Building keeps two things adoption gives up: row-level security under the read path, and the floor as one term of the predicate. Each has a replacement that a test holds (above), and neither is worth four items of the riskiest work in the programme |
+| **Build PRD 03 §2's engine**: the feed pull, the snapshot, the `retract` rows, the digest, the realtime nudge, and a TypeScript client with two storage adapters (plan items 12–15 as first written: sizes L, XL, XL and L). Whether the digest and the nudge keep endpoints beside PowerSync is a separate question, left to item 14 | The spike's hardest cases, retraction for every cause and a queue that outlives going offline and whose refusals are surfaced once, came from PowerSync with no client code but the connector, on item 4's schema, with writes still through the spine. Building keeps two things adoption gives up: row-level security under the read path, and the floor as one term of the predicate. Each has a replacement that a test holds (above), and neither is worth four items of the riskiest work in the programme |
 | **Electric** | It replicates reads only, so the outbox, its persistence and the optimistic state are ours to build, as the spike did. Its own client (1.5.28) ignores the `move-out` events that carry access loss, so a revoked grant leaves the rows on the device; a correct replica has to evaluate its positional tag protocol, which is the kind of client code the adoption was meant to avoid. Its React Native persistence is pre-1.0 |
 | **Zero** | No offline writes |
 | **Replicache** | In maintenance mode; no maintained React Native binding; no per-mutation outcomes on push |
@@ -139,18 +157,23 @@ Household's.** Recorded in the PRD as **D-93**.
   op-sqlite in a dev build rather than expo-sqlite, and PL-6 says PowerSync.
 - **The contract changes later, not here.** `getSyncChanges` and `postSyncSnapshot` describe the
   replaced pull and bootstrap; item 13 removes them from `openapi.yaml` and `contract_pending` and
-  adds the endpoint that hands a client PowerSync's URL and token. Item 14 decides the fate of
+  adds the endpoint that hands a client PowerSync's URL and a token of its own. PowerSync checks a
+  token's `aud` against the audience it is configured with, and item 9's access token carries no
+  `aud` (D-15), so the API's own token is never the one PowerSync reads. Item 14 decides the fate of
   `postSyncDigest`, `postSyncReset`, `getSyncState` and `…/stream`.
 - **`sync_changes` has no reader.** Item 4's spine still writes it, under a per-household lock that
-  serialises a household's commits. Item 14 either names a consumer or stops the write and drops
-  the table through an expand/contract migration, amending ADR 0006 and CLAUDE.md.
+  serialises a household's commits, so its monthly partitions still have to be made while it does.
+  Item 14 either names a consumer or stops the write and drops the table through an expand/contract
+  migration, recording the choice in a new ADR (ADR 0006 is accepted, so it is not rewritten) and
+  amending PRD 03 §2.2 and CLAUDE.md.
 - **D-85's digest is partly the engine's now.** PowerSync verifies each bucket's checksum at every
   checkpoint and downloads it again on a mismatch. That catches divergence inside the engine, but
   not a local write our connector never uploaded; item 14 decides whether the digest endpoint
   stays for that.
 - **Operations gain a service and a replication slot.** A slot retains write-ahead log while
   PowerSync is down, so its lag is monitored and `max_slot_wal_keep_size` bounds it (a runbook in
-  item 13). A dev compose file gains `wal_level=logical`.
+  item 13). A dev compose file gains `wal_level=logical`, and each replicated table is set to
+  `REPLICA IDENTITY FULL`, as the spike ran them.
 - **Removing a member from an audience rewrites every row of that audience**, to take the member
   out of each row's readers. A household's conversations are small enough that this is cheap;
   item 90's load tests measure it.
@@ -162,5 +185,9 @@ Household's.** Recorded in the PRD as **D-93**.
   build PRD 03 §2's engine (the schema half and the write half carry over, which is D-82's point);
   a module whose access the stream language cannot express; a change in PowerSync's licence or
   maintenance.
-- **Not verified by the spike**: the React Native SDK on a device (gate G-C does that on two
+- **Not verified by the spike**: a restart, since offline was `disconnect()` on a database left
+  open, so a queue that survives the app being killed rests on the SDK's persistence until item 15
+  tests it; tokens signed EdDSA and read from a JWKS (the spike signed HS256); the per-household
+  subscription parameter, which the probes compiled and no scenario ran; the replicated tables
+  without `REPLICA IDENTITY FULL`; the React Native SDK on a device (gate G-C does that on two
   phones), the web SDK, and bucket storage at a real household's volume (item 90).

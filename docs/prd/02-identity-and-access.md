@@ -19,7 +19,7 @@ User ──┬─< Credential        (password | google | apple | child_pin)
 | **User** | Global | A person. Exists without any household. Identified by `id`; addressed by email where one exists |
 | **Credential** | Per user | A user may hold several: a password *and* Google *and* Apple. A child holds exactly one, of type `child_pin` |
 | **Session** | Per user | A web session. Sliding expiry, revocable individually or all-at-once |
-| **Device** | Per user | A mobile installation. Holds a refresh-token family, a push token and the sync cursor |
+| **Device** | Per user | A mobile installation. Holds a refresh-token family, a push token and the sync cursor (under D-93, the right to a sync token) |
 | **Household** | Tenant root | Has a name, a timezone, a base currency, a country profile, a locale and an owner-set module enablement |
 | **Membership** | (user, household) | Carries the role and the module grants. **A user may hold several memberships with different roles** |
 | **Invitation** | Per household | A pending membership. Email or link. Expires |
@@ -88,7 +88,9 @@ and sends a confirmation email to the old address.
 **FR-ID7 — Session and device management.** `GET /api/v1/me/sessions` lists active sessions and
 devices with last-seen, approximate location from IP and user agent. Any can be revoked
 individually; "sign out everywhere" revokes all. Revoking a device also invalidates its offline
-sync cursor, so its local replica is discarded on next contact rather than being resumed.
+sync cursor, so its local replica is discarded on next contact rather than being resumed. Under
+D-93 the device is refused any further sync token, and its client discards the replica when it is
+refused.
 
 **FR-ID8 — Account deletion.** Self-service, from the app. See
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §4 for what happens to households

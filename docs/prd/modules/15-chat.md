@@ -105,6 +105,14 @@ replicate every message in it still inside the 90-day horizon: the back catalogu
 withhold, delivered by the path nobody was looking at. The two floors are written in one transaction
 from one event, so they cannot drift.
 
+> **Under D-93 the replicated path is PowerSync's streams, and the floor is not a term of them**,
+> because a stream cannot compare a row with a member's floor ([09](../09-decisions.md) D-93). The
+> server keeps each message's **readers** on the row instead: the conversation's members whose
+> floor the message is at or above. The write that creates a message sets them, and a change of
+> membership rewrites them in the transaction that makes it. A member added with a floor is a
+> reader of nothing before it, so FR-CT2's floor holds on the replicated path as well. `floor_seq`,
+> a position in a feed nothing now pulls, has no reader under D-93 and is not stored.
+
 ## Catalog contributions
 
 Widget `chat.unread`; metrics `chat.unread_total` and `chat.unread_conversations` (both per

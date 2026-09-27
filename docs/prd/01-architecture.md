@@ -278,6 +278,11 @@ Household has **one** realtime channel and it exists to serve the sync engine.
 - **Chat is the single exception.** Message payloads ride the socket to resolved conversation
   members, because a pull round-trip is visible latency in a chat and nowhere else.
 
+> **Under D-93 replication is PowerSync's**, over its own connection from each client to the
+> PowerSync service, so a client neither pulls `GET …/sync/changes` nor needs a nudge to learn that
+> the feed advanced. Whether this socket stays, for Chat's payload exception alone, is plan item
+> 14's decision, and this section is amended with it ([ADR 0001](../adr/0001-sync-engine.md)).
+
 The full design of the change feed, the mutation queue, retractions and conflict policy is in
 [03-platform-strands.md](03-platform-strands.md) §2. It is the largest single piece of new
 platform work in the product.

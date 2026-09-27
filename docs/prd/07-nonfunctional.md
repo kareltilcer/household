@@ -40,6 +40,9 @@ Budgets, measured at the stated percentile in production, per environment region
 | Garden plan check, full season | 300 ms | 800 ms | 2 000 ms |
 | Pre-signed URL issue | 20 ms | 60 ms | 150 ms |
 
+Under D-93 the pull and the bootstrap are PowerSync's: the pull's budget applies to a checkpoint of
+500 changes reaching a connected client, and the bootstrap's to a replica's initial sync.
+
 Client-side:
 
 | | Target |

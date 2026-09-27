@@ -66,8 +66,9 @@ replication, and keep the write path.** Both scenarios passed on PowerSync with 
 through the mutation spine. Electric passed only with client code its own client lacks; Zero has no
 offline writes; Replicache is in maintenance mode. Two axes of the predicate needed a workaround
 each: the floor became a reader set on the row, and a redacted projection reaches its owner as
-well. The requirement that came closest to forcing a build was keeping row-level security under
-the read path, which a generated stream template and an isolation test now hold instead.
+well. The requirement that decided it was retraction, which PowerSync met for every cause with no
+client code. The requirement that came closest to forcing a build was keeping row-level security
+under the read path, which a generated stream template and an isolation test now hold instead.
 
 ## 3. Tier the promise by merge policy
 
@@ -128,7 +129,8 @@ is the single most valuable artefact produced in Phase 0.
 > disconnecting clients and by a network that refuses requests and loses responses, duplicate
 > delivery by replaying an upload, skew through `client_time`. It is slower and less deterministic
 > than an in-process simulator, so the fuzz run on each change is short and the long one nightly.
-> The scenarios and the invariants below are unchanged.
+> The scenarios and the invariants below stand. Where one names a mechanism of the replaced feed,
+> the table gives its D-93 form beside it (scenarios 6 and 18).
 
 ### The scenarios it must cover
 
@@ -139,7 +141,7 @@ is the single most valuable artefact produced in Phase 0.
 | 3 | Two clients offline check the **same** shopping item | One check; idempotent; no conflict dialog |
 | 4 | Client A creates X offline and edits it twice before syncing | One entity, final state, no id remapping |
 | 5 | Client A creates X, edits X, deletes X — all offline | Server sees three mutations for an id it never had; net effect is a tombstone and **no error storm** |
-| 6 | Client offline past the compaction horizon | `410` → resnapshot → converges |
+| 6 | Client offline past the compaction horizon | `410` → resnapshot → converges. Under D-93: the client catches up from PowerSync's compacted buckets, downloading again any bucket whose checksum no longer matches, and converges with its queue intact |
 | 7 | **Grant revoked while the client is offline** | On reconnect, retractions delete the local rows; queued mutations against them are `rejected`, surfaced once, and not retried forever |
 | 8 | Batch where mutation 3 fails | 1–2 apply, 3 rejected, 4+ `deferred`; retry resolves |
 | 9 | Whole batch delivered twice (network retry) | Identical result; no duplicates |
@@ -151,7 +153,7 @@ is the single most valuable artefact produced in Phase 0.
 | 15 | Two devices of the **same** member, both offline | Converge; no self-echo loops |
 | 16 | Member removed from a conversation while offline | Messages retracted; the floor still holds for everyone else |
 | 17 | **Offline `additive` create that violates a cross-row invariant on arrival** — a meter reading back-filled below a neighbour the replica did not hold | `rejected` with `monotonicity_violation`, surfaced once with the offending neighbour named, never retried in a loop, and the member's typed value preserved so they can correct it rather than re-read the meter |
-| 18 | **Member added to an existing conversation, then pulls** | Nothing before their `floor_seq` is delivered, on the feed as well as the API (**D-90**). The assertion is on the *count* of message rows received, not on their content, because a leak here is a row that should not have been sent at all |
+| 18 | **Member added to an existing conversation, then pulls** | Nothing before their `floor_seq` is delivered, on the feed as well as the API (**D-90**). Under D-93: nothing before their floor reaches their replica, because they are not among the readers of any earlier message. The assertion is on the *count* of message rows received, not on their content, because a leak here is a row that should not have been sent at all |
 
 ### The invariants it asserts after every scenario
 
@@ -206,8 +208,10 @@ Three consequences, all requirements rather than observations:
    for the purposes of building the engine it must exist as soon as the engine does. It is the only
    view anyone gets of what went wrong.
 2. **The diagnostic bundle carries sync state** — cursor, queue depth, per-entity digest mismatch,
-   the last N mutation outcomes and their reasons, with **no field values**. That makes it
-   metadata, which means it can be sent without the member having to expose content.
+   the last N mutation outcomes and their reasons, with **no field values**. Under D-93 the cursor
+   is the replica's last checkpoint, and the mismatches are its bucket-checksum failures and any
+   digest item 14 keeps. That makes it metadata, which means it can be sent without the member
+   having to expose content.
 3. **Mutation outcomes carry a machine-readable `code`, always.** "Rejected" with no reason is
    undebuggable by anyone, and here there is no second route to the answer.
 
@@ -222,9 +226,9 @@ Three points where the plan stops rather than continues on optimism.
 | **G-C** | End of Phase 1 | The Shopping acceptance criterion passes **on two physical phones in aeroplane mode**, and the sync-health screen shows what happened | **Stop and build [03](03-platform-strands.md) §2's engine** on the schema and the write path, which are already ours. Do not proceed to Phase 2 on an engine that is not trusted. (The fallback was *adopt a vendor* until D-93 adopted one at G-A) |
 
 **G-C is the one that matters and it is named in the roadmap already.** Writing the fallback down
-now — *build the engine*, since D-93 adopted the vendor — is what makes it a gate rather than a wish, because the decision at that
-point will be made under schedule pressure by people who have just spent a quarter on the thing
-they would be abandoning.
+now — *build the engine*, since D-93 adopted the vendor — is what makes it a gate rather than a
+wish, because the decision at that point will be made under schedule pressure by people who have
+just spent a quarter on the thing they would be abandoning.
 
 ## 8. Two smaller things that pay for themselves
 
@@ -241,8 +245,8 @@ they would be abandoning.
 
 | Was | Now |
 |---|---|
-| Phase 0 builds the engine, then modules follow | Phase 0 **week 1**: schema mandate + buy-vs-build spike (G-A). Then the conformance simulator. Then the engine |
+| Phase 0 builds the engine, then modules follow | Phase 0 **week 1**: schema mandate + buy-vs-build spike (G-A). Then the conformance suite. Then the engine, which since D-93 is PowerSync plus Household's push, streams and client library |
 | Offline writes ship complete | Offline writes ship **per merge policy**: `additive` and `state_set` in Phase 1, the rest gated on the suite |
 | Sync-health screen in Phase 4 with the admin module | Sync-health screen in **Phase 0** |
 | "If sync is not solid, everything stops" | A named gate (G-C) with a named fallback: adopt a vendor, and since D-93 adopted one at G-A, build the engine |
-| Divergence found by users | Divergence found by **replica digests**, alerted on, resnapshot automatically |
+| Divergence found by users | Divergence found by **replica digests**, alerted on, resnapshot automatically; since D-93, by PowerSync's bucket checksums first (§5) |

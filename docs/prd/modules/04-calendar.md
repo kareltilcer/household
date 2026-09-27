@@ -186,7 +186,7 @@ in the same table as the sync state, and are excluded from every export and ever
 
 | Entity | Policy | Notes |
 |---|---|---|
-| `calendar.calendar` | `strict_version` | Structural. A `member_shared` calendar sets `audience_id` on every feed row it and its events produce, and the membership axis resolves it exactly as it resolves a conversation ([02](../02-identity-and-access.md) §7). Its audience has no floor — joining grants the whole calendar — so its membership row stores `floor_seq = 0` |
+| `calendar.calendar` | `strict_version` | Structural. A `member_shared` calendar sets `audience_id` on every feed row it and its events produce, and the membership axis resolves it exactly as it resolves a conversation ([02](../02-identity-and-access.md) §7). Its audience has no floor — joining grants the whole calendar — so its membership row stores `floor_seq = 0`. Under D-93 the audience reaches the replica through the readers kept on each row ([15-chat](15-chat.md) Sync): here every member of the calendar reads every row, a join or a departure rewrites the readers of all of them, and no `floor_seq` is stored |
 | `calendar.event` | `strict_version` | **Deliberately strict.** Two people moving the same appointment must be told, not merged. An event with `visibility: private` also declares a **redacted projection** (**D-88**) — the busy block every other member replicates |
 | `calendar.override` | `strict_version` | Same |
 | `calendar.participant` | `state_set` | An RSVP is a per-(event, user) toggle and cannot meaningfully conflict |
