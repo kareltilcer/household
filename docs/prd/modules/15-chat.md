@@ -112,9 +112,12 @@ from one event, so they cannot drift.
 > attachments' metadata, since each is an entity with a stream of its own, and a row resolved
 > through the conversation's membership instead would reach every member of it, whatever their
 > floor. The write that creates such a row sets them, and a change of membership rewrites them in
-> the transaction that makes it. A member added with a floor is a reader of nothing before it, so
-> FR-CT2's floor holds on the replicated path as well. `floor_seq`, a position in a feed nothing
-> now pulls, has no reader under D-93 and is not stored.
+> the transaction that makes it, removal from the household included: readers left behind would
+> reach a member re-added later with the grant, in conversations they are no longer in. A rewrite
+> of the readers alone is not an edit of the row, so a queued or `If-Match` edit to it still
+> applies against the version it was made at. A member added with a floor is a reader of nothing
+> before it, so FR-CT2's floor holds on the replicated path as well. `floor_seq`, a position in a
+> feed nothing now pulls, has no reader under D-93 and is not stored.
 
 ## Catalog contributions
 

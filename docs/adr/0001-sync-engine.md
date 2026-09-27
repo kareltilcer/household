@@ -217,7 +217,11 @@ read path, which adoption gives up; the generated streams and the isolation test
   §1's Year-3 target. It is also a dependency that can fail on its own, so item 13 defines its
   failure behaviour (PRD 07 FR-NF3) and item 89 tests it.
 - **Removing a member from an audience rewrites every row of that audience**, to take the member
-  out of each row's readers. A household's conversations are small enough that this is cheap. A
+  out of each row's readers, and removal from the household does so for every audience they were
+  in. The rewrite is not an edit of the row: item 4's `touch_entity` bumps `version` on every
+  update, which would turn each queued or `If-Match` edit to a row of the audience into a conflict,
+  so item 14 keeps the readers out of the version, or in a table of their own, which the probes
+  also accepted. A household's conversations are small enough that this is cheap. A
   `member_shared` calendar's audience is every event of the calendar, which can be many more rows;
   it has no floor, so item 14 may resolve it through the calendar's member list in the stream
   instead, which the probes accepted though never beside the grant's subquery. Item 90's load tests

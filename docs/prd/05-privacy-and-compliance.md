@@ -93,11 +93,13 @@ The flow resolves each of the user's households first, and states plainly what w
 | Billing payer | Must transfer billing or cancel first |
 
 **FR-PR4 — Deletion is a 30-day soft window then irreversible.** The account is disabled
-immediately, sessions and tokens are revoked, and the user is emailed a cancellation link. After
-30 days a nightly job executes: `EraseSource` on every module for the affected scope, object-store
-prefix deletion, and replacement of the identity row with a tombstone carrying only the id and the
-deletion timestamp. **Authorship references become an opaque id with a translated label**
-("Former member") — dangling foreign keys and rewritten history are both worse than a tombstone.
+immediately, sessions and tokens are revoked (under D-93 a sync token already issued runs until it
+expires, as [02](02-identity-and-access.md) FR-ID7 says), and the user is emailed a cancellation
+link. After 30 days a nightly job executes: `EraseSource` on every module for the affected scope,
+object-store prefix deletion, and replacement of the identity row with a tombstone carrying only
+the id and the deletion timestamp. **Authorship references become an opaque id with a translated
+label** ("Former member") — dangling foreign keys and rewritten history are both worse than a
+tombstone.
 
 **FR-PR5 — Backups are excluded from the 30-day guarantee and the policy says so.** Encrypted
 backups are retained 35 days and are not selectively editable. Deleted data ages out of backups
