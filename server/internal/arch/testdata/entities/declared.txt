@@ -1,0 +1,22 @@
+# Every violation architecture test 5 must report for entities.Declared, module by module in name
+# order, entity by entity in declaration order.
+garden.planting: no merge policy; every entity declares one of lww_field, additive, lww_row, strict_version, state_set
+garden.bed: merge policy "last_write_wins" is not one of lww_field, additive, lww_row, strict_version, state_set
+garden.dose: state_set without its key and resolution
+garden.marker: state_set without its key
+garden.marker: state_set resolution "newest" is not latest_client_time or monotonic
+garden.note: a state_set key and resolution on merge policy lww_field
+garden.plan: a cross-row invariant on merge policy lww_field; only an additive series declares one
+garden.plan: invariant rule "increasing" is not non_decreasing
+garden.plan: an invariant that does not name its series, its order and its field
+garden.photo: no access; every entity declares the axes its rows are held to
+garden.season: access without the module grant, which holds every entity
+garden.weather: access holds an axis that is not grant, owner or audience
+garden.rule: a redacted projection on an entity whose rows are never private
+garden.variety: no table, or one that is not a lowercase identifier
+garden.variety: create operation "postGardenVarieties" is empty or named twice
+garden.variety: create operation "" is empty or named twice
+garden.planting: the name is declared twice
+notes.page: the name is not qualified by its module, garden
+Garden.Tool: the name is not <module>.<entity> in lowercase words joined by underscores
+garden entity 16: the name is not <module>.<entity> in lowercase words joined by underscores

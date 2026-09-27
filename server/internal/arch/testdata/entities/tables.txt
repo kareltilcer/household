@@ -1,0 +1,15 @@
+# Every violation architecture test 5 must report for the tables of entities.Tabled, entity by
+# entity in declaration order.
+probe.bare: arch_testdata.bare_items has no version column; add the base columns with add_entity_columns
+probe.bare: arch_testdata.bare_items has no created_by column; add the base columns with add_entity_columns
+probe.bare: arch_testdata.bare_items has no created_at column; add the base columns with add_entity_columns
+probe.bare: arch_testdata.bare_items has no updated_by column; add the base columns with add_entity_columns
+probe.bare: arch_testdata.bare_items has no updated_at column; add the base columns with add_entity_columns
+probe.bare: arch_testdata.bare_items has no deleted_at column; add the base columns with add_entity_columns
+probe.bare: arch_testdata.bare_items has no touch_entity trigger, so its version does not grow on an update
+probe.drifted: arch_testdata.drifted_items.version is integer NOT NULL; it must be bigint NOT NULL
+probe.drifted: arch_testdata.drifted_items.created_at is timestamp without time zone; it must be timestamp with time zone NOT NULL
+probe.drifted: arch_testdata.drifted_items.deleted_at is timestamp with time zone NOT NULL; it must be timestamp with time zone
+probe.drifted: arch_testdata.drifted_items has no touch_entity trigger, so its version does not grow on an update
+probe.keyed: arch_testdata.keyed_items's primary key is not id alone, which the client generates
+probe.gone: arch_testdata.gone_items does not exist

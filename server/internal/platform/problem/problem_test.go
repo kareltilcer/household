@@ -132,6 +132,26 @@ func TestExtensionsCannotReplaceStandardMembers(t *testing.T) {
 	}
 }
 
+// A version conflict carries the entity as it is now and its version, in the body and as the
+// ETag (the contract's VersionConflict), and its own headers cannot replace the document's.
+func TestAConflictCarriesTheCurrentRepresentation(t *testing.T) {
+	p := problem.Conflict(map[string]any{"title": "Oat milk"}, 12)
+	p.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+	problem.Write(rec, "", p)
+	doc := decode(t, rec)
+	current, _ := doc["current"].(map[string]any)
+	if rec.Code != http.StatusConflict || doc["code"] != "version_conflict" || doc["current_version"] != float64(12) || current["title"] != "Oat milk" {
+		t.Fatalf("%d %v", rec.Code, doc)
+	}
+	if got := rec.Header().Get("ETag"); got != `"12"` {
+		t.Errorf("ETag %q, want \"12\"", got)
+	}
+	if got := rec.Header().Get("Content-Type"); got != problem.ContentType {
+		t.Errorf("Content-Type %q", got)
+	}
+}
+
 func TestAnErrorThatIsNotAProblemIsInternal(t *testing.T) {
 	for _, err := range []error{errors.New("pq: secret detail"), nil} {
 		rec := httptest.NewRecorder()

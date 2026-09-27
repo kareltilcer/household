@@ -734,6 +734,20 @@ func TestValidateResponse(t *testing.T) {
 		http.StatusUnsupportedMediaType, problemHeader, unsupported); err != nil {
 		t.Errorf("a 415 from an operation that takes a body: %v", err)
 	}
+	// A repeated Idempotency-Key's 409 is any operation's that accepts the key, whatever 409 it
+	// declares for its own conflicts, and no other's.
+	inProgress := []byte(`{"type":"urn:household:problem:idempotency_in_progress","title":"Conflict","status":409,"code":"idempotency_in_progress"}`)
+	if err := c.ValidateResponse(post, "/households/{household_id}/shopping/lists", map[string]string{"household_id": household},
+		http.StatusConflict, problemHeader, inProgress); err != nil {
+		t.Errorf("a 409 idempotency_in_progress from an operation that accepts Idempotency-Key: %v", err)
+	}
+	if err := c.ValidateResponse(get, "/healthz", nil, http.StatusConflict, problemHeader, inProgress); err == nil {
+		t.Error("a 409 idempotency_in_progress from an operation that does not accept Idempotency-Key passed")
+	}
+	if err := c.ValidateResponse(post, "/households/{household_id}/shopping/lists", map[string]string{"household_id": household},
+		http.StatusBadRequest, problemHeader, inProgress); err == nil {
+		t.Error("an idempotency_in_progress answered with another status passed")
+	}
 	if err := c.ValidateResponse(get, "", nil, http.StatusNotFound, problemHeader, []byte(`{"type":"x","title":"Not Found","status":404}`)); err == nil {
 		t.Error("a problem without a code passed")
 	}

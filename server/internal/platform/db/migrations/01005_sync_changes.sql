@@ -40,7 +40,8 @@ CREATE TABLE sync_changes (
   -- leaks nothing (FR-SY7); an upsert carries the row, a delete only its id and version.
   CHECK ((op = 'retract') = (for_user_id IS NOT NULL)),
   CHECK ((op = 'upsert') = (payload IS NOT NULL)),
-  CHECK (op = 'retract' OR row_version > 0),
+  CHECK ((op = 'retract') = (row_version IS NULL)),
+  CHECK (row_version > 0),
   CHECK (visibility = 'shared' OR owner_id IS NOT NULL)
 ) PARTITION BY RANGE (occurred_at);
 

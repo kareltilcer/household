@@ -165,7 +165,7 @@ you**, not from the implementing session.
 | Q8 | **`chores.due` completion scope.** Personal or household? The prototype is internally inconsistent. Also: can points exist with no child profile, and what happens when a rotation member loses the grant mid-cycle? | 06-chores; design/v1 `ledger.js` GAPS | 49 |
 | Q9 | **PIN lockout.** The PRD says 10 attempts, then owner unlock. The prototype pauses after 5. **The PRD wins**; the fixture is corrected | 02 FR-CH5 | 11 |
 | Q10 | **Unstated sync policies**: Finance import/rules/price history; Utilities conversions/advance schedules; Garden overrides/varieties/dismissals/photos and the `task_completion` key; `vehicle_drivers`; pet `routine_items` | module pages | 62–64, 56, 69, 81, 82 |
-| Q11 | **Contract gaps**: no route serves the Calendar ICS feed; no receiver for Google push notifications; Chores rewards and Shopping categories/staples have no PATCH or DELETE; no path for the reference-data reads or the Garden region bundle; `POST …/notifications/broadcast` has no PRD requirement (implement it with a PRD entry, or remove it with a decision entry) | `openapi.yaml` vs PRD | 76, 77, 49, 31, 7, 68, 53 |
+| Q11 | **Contract gaps**: no route serves the Calendar ICS feed; no receiver for Google push notifications; Chores rewards and Shopping categories/staples have no PATCH or DELETE; no path for the reference-data reads or the Garden region bundle; `POST …/notifications/broadcast` has no PRD requirement (implement it with a PRD entry, or remove it with a decision entry). Three creates accept a client id without requiring it (D-91): `postTasksCardsByCardIdChecklist` (`id`), `postShoppingListsByListIdItems` (`ids`) and `postChoresRedemptions` (`id`); architecture test 9 fails each once its entity names it among its creates | `openapi.yaml` vs PRD | 76, 77, 49, 31, 7, 68, 53, 40 |
 | Q12 | **Reading anchors** (FR-UT9): a conversion change also blocks, and each service has its own reading cadence | design/v1 `utilities.js` | 57 |
 | Q13 | **Tokens**: emit resolved values or add primitives? Many semantic tokens in the prototype sit off the primitive ramp | design/v1 `foundations.js` | 23 |
 | Q14 | **Vendors not named in the PRD**, each EU-established: weather provider, email provider, analytics store, error aggregation. The office-to-PDF converter (LibreOffice headless is assumed) | 05 §10, 07 §5 | 71, 30/88, 92, 30, 16 |
@@ -270,7 +270,7 @@ Phase 0 · after 2 · size L
   - Each architecture test fails on its violation.
 - **PR:** [#6](https://github.com/kareltilcer/household/pull/6)
 
-### 4 · Sync-ready schema, entity registry and the mutation spine · `planned`
+### 4 · Sync-ready schema, entity registry and the mutation spine · `done`
 
 Phase 0 · after 3 · size L · **gate G-A (schema half)**
 
@@ -394,6 +394,7 @@ Phase 0 · after 3, 6 · size L
   - **Profile and sessions**:
     - `/me` profile and preferences: language, timezone override, first day of week, quiet hours.
     - `/me/sessions`: list, revoke, and sign out everywhere (FR-ID7).
+  - **Audit context** (item 4): a request the session cookie authenticates records `via: web` (`mutation.WithVia`), and the spine writes the actor's display name as each audit event's `actor_label`.
 - **Inputs**
   - PRD: [02 §1–2, §9](prd/02-identity-and-access.md); [07 §4](prd/07-nonfunctional.md); D-12, D-13
   - API: tags `auth` and `me`
@@ -418,6 +419,7 @@ Phase 0 · after 8 · size L
   - **Federated sign-in** (FR-ID2): Google and Apple via OIDC with PKCE. `sub` is the stable identifier, and linking to an existing account needs an explicit confirmation.
   - **Account-takeover notice.**
   - **Client versions** ([06 §7](prd/06-clients.md), FR-HA18): a client-version header and a minimum supported version. Below it, a blocking *please update* problem is returned.
+  - **Audit context** (item 4): a request the access token authenticates records `via: mobile` (`mutation.WithVia`).
 - **Inputs**
   - PRD: [02 §2](prd/02-identity-and-access.md); [06 §7](prd/06-clients.md); [17 FR-HA18](prd/modules/17-household-admin.md); D-7, D-14, D-15
   - Design: A-5–A-8, A-11, A-13, A-21, C-57
@@ -522,7 +524,7 @@ Phase 0 · after 12 · size XL
     - `additive`, including the cross-row invariant path that answers `monotonicity_violation`;
     - `state_set`, keyed, resolving by `latest_client_time` or `monotonic`;
     - `lww_field`, by server receipt.
-  - **One service layer** shared by REST and sync.
+  - **One service layer** shared by REST and sync: each applied mutation goes through `mutation.Apply`, recording `via: sync`.
 - **Inputs**
   - PRD: [03 §2.3–2.5, §2.8](prd/03-platform-strands.md); [10 §3](prd/10-sync-risk.md); D-22–D-26, D-84, D-90
   - API: tag `sync`
@@ -545,7 +547,7 @@ Phase 0 · after 13, 16, 18 · size XL · **gate G-B**
   - **[D-88](prd/09-decisions.md) two-row emission**: private and redacted feed rows, each entity supplying its own projection.
   - **Compaction and resnapshot**:
     - A compaction job with a 90-day horizon; `410 {action: resnapshot}` below it.
-    - Monthly partition maintenance.
+    - Monthly partition maintenance (`sync_changes_add_partitions`), moving any rows that reached the default partition into their month's before creating it.
     - Revoking a device invalidates its cursor.
   - **Digest** (`POST …/sync/digest`, [D-85](prd/09-decisions.md)): evaluated at the client's cursor.
   - **Stream** (`…/stream` WebSocket):
@@ -2373,3 +2375,4 @@ Tracked here so they are not forgotten. None of them takes a numbered slot.
 | 2026-09-26 | 7, 14, 18, 19, 25, 28–32, 34, 36, 37, 39, 40, 44–46, 53, 55, 57, 63, 67–69, 78, 79, 88, 93, 95, 96 | Review fixes: added missing dependencies (G-B, the client items, the reminder strand, the conflict UI, Google, GA). Added a dogfood environment and a month gate on removing `proof`. Moved the reference resolver to item 36 and F-18 to the Notes clients. Assigned the offline `strict_version` writes. Recorded contract gaps (Q11, Q17). Corrected vectors that differed from design/v1. Removed hand-kept progress |
 | 2026-09-26 | PL-1, PL-8, 1, 16 | Item 1: MinIO replaced by RustFS as the dev S3 store, because MinIO's repository is archived and its images are no longer published. PL-1 gains `tooling/`, a workspace package for guards over the workspace itself (strict flags, catalog pins, local/CI parity) |
 | 2026-09-27 | 3 | Item 3: the tenant middleware resolves the caller in a transaction of its own, and each unit of work opens its own transaction with the tenant settings, committed before the handler answers, instead of one transaction held for the request, which would commit after the response ([ADR 0005](adr/0005-tenancy-registry-and-row-level-security.md), PRD 01 §2.2 amended). A tenant table added later also adds its rows to the isolation fixture (`server/internal/arch/testdata/isolation/fixture.sql`) |
+| 2026-09-27 | 4, 8, 9, 13, 14, Q11 | Item 4: `tenant.InTx` is read-only and `mutation.Apply` is the only write, refusing a write it cannot record; the feed takes a per-household lock so a household's rows commit in `seq` order, and is keyed `(household_id, seq, occurred_at)` because it is partitioned by month (PRD 03 §2.2 amended); the contract gains `idempotency_in_progress` ([ADR 0006](adr/0006-sync-ready-schema-and-the-mutation-spine.md)). Items 8, 9 and 13 set the audit `via`, item 8 the actor label, item 14's partition maintenance handles the default partition. Q11 records three creates that do not require the client's id |

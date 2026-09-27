@@ -181,7 +181,8 @@ func fingerprintOf(r *http.Request) ([]byte, error) {
 		_, _ = h.Write([]byte{0})
 	}
 	mediaType, _, _ := mime.ParseMediaType(contentType)
-	if r.Body == nil || r.Body == http.NoBody || !(mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")) {
+	isJSON := mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
+	if r.Body == nil || r.Body == http.NoBody || !isJSON {
 		_, _ = io.WriteString(h, strconv.FormatInt(r.ContentLength, 10))
 		return h.Sum(nil), nil
 	}

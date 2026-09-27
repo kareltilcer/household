@@ -27,3 +27,4 @@ Numbers 0001 and 0002 are reserved by the plan for item 5 (`0001-sync-engine.md`
 | [0003](0003-contract-enforcement-at-the-edge.md) | The server validates against the committed contract, and says what failed where | Accepted |
 | [0004](0004-database-roles-migration-blocks-and-test-databases.md) | Database roles, migration blocks, and one database per test package | Accepted |
 | [0005](0005-tenancy-registry-and-row-level-security.md) | A transaction per unit of work carries the tenant, and row-level security is one template | Accepted |
+| [0006](0006-sync-ready-schema-and-the-mutation-spine.md) | The sync-ready schema is enforced, and every write goes through one spine | Accepted |
