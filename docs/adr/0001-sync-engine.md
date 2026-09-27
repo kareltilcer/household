@@ -119,9 +119,11 @@ read path, which adoption gives up; the generated streams and the isolation test
   batches a minute, and a device back from days offline can hold more transactions than that while
   PowerSync applies no checkpoint. There every mutation goes through `mutation.Apply` and is
   answered with PRD 03 §2.4's outcome and a code. The connector completes every mutation the server
-  answered, whatever the answer, and records any outcome but `applied` in a local-only table that
-  the conflict inbox and the sync-health screen read, and that keeps an `entitlement` or `deferred`
-  mutation to replay when its cause clears (FR-BI2, PRD 03 §2.4). A response that answers no
+  answered, whatever the answer, and records any outcome but `applied` in a local-only table with
+  the mutation it answers, since the next checkpoint replaces the local write: the conflict inbox
+  shows the member's change from it, a rejection keeps what they typed (PRD 10 §4, scenario 17), the
+  sync-health screen reads it, and an `entitlement` or `deferred` mutation waits there
+  to replay when its cause clears (FR-BI2, PRD 03 §2.4). A response that answers no
   mutation is not an answer: on a `401` the connector renews the API credential the push was sent
   with, which is never PowerSync's token, on a `429` it waits out the delay the response names, and
   on a `413` it sends the batch in smaller ones. A `422` locates the mutation the edge refused
