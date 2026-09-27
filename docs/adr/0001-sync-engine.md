@@ -48,15 +48,15 @@ an unmaintained community package. Neither was run. **CRDT libraries** stay reje
 ### What the spike measured
 
 Times are to the first of the harness's looks that saw the state. It looks at once and then every
-100 ms, so "about 100 ms" means the state was not there at the first look and was there within one
-poll.
+100 ms, so "within one poll" means the state was not there at the first look and was there at the
+next, about 100 ms later.
 
 | Case | PowerSync | Electric |
 |---|---|---|
 | **Scenario 3.** Petr and Eva check Milk offline, one second apart, then reconnect | Both replicas equal the server 243 ms after reconnecting. The server holds one check (version 1 → 2), one audit event, one feed change; the outcomes were one `applied` and one `applied` no-op; no conflict | The same on the server. The outbox, the optimistic view and their persistence are ours: Electric replicates reads only |
 | **Scenario 7.** Offline, Petr checks Bread and adds Butter; his grant is lowered to `none`; he reconnects | The replica is empty within one poll (104 ms), the optimistic Butter included. Both writes came back `rejected` / `not_found` once and were not retried; the server wrote nothing | With the grant checked in our proxy, the proxy answers `404` and nothing clears the replica unless our client treats the `404` as "delete what you hold". With the grant as subqueries in the shape, Electric sends a `move-out` event and **its own `Shape` class ignores it: all three rows stay**. A replica of ours that applies its positional tag protocol empties within one poll (102 ms) |
 | **Access loss while connected** | Rows deleted within one poll for each cause the spike could make: grant to `none`, module disabled household-wide (for a member and the owner), removal from the household, soft delete; rows back when the grant returns | As above: with the proxy gate, a grant lowered to `none` clears the replica only through our client's `404` convention, which drops the whole shape at once; with subqueries, its own `Shape` keeps the rows for a grant lowered to `none` and for a module disabled, and only our own tag-aware replica is correct |
-| **Visibility and audience** (below), including scenarios 16 and 18 | 7 of 7, through two workarounds | Not run. The probes found it expressible, with the caller's ids and floor as constants the proxy writes |
+| **Visibility and audience** (below), including scenario 18, and scenario 16 with the member removed while connected rather than offline | 7 of 7, through two workarounds | Not run. The probes found it expressible, with the caller's ids and floor as constants the proxy writes |
 
 The totals are PowerSync 26 of 26; Electric 13 of 13 with the proxy gate, 12 of 15 with subqueries
 and its own `Shape` (the one failure in scenario 7 above and two in access loss while connected),
@@ -120,24 +120,26 @@ read path, which adoption gives up; the generated streams and the isolation test
   PowerSync applies no checkpoint. There every mutation goes through `mutation.Apply` and is
   answered with PRD 03 §2.4's outcome and a code. The connector completes every mutation the server
   answered, whatever the answer, and records any outcome but `applied` in a local-only table that
-  the conflict inbox and the sync-health screen read. A response that answers no mutation is not an
-  answer: on a `401` the connector fetches new credentials, on a `429` it waits out the delay the
-  response names, and on a `413` it sends the batch in smaller ones. A `422` locates the mutation
-  the edge refused ([ADR 0003](0003-contract-enforcement-at-the-edge.md)), which is `rejected` with
-  that code while the rest are sent again without it. A `402` or a `404` answers every mutation in
-  the batch alike, `rejected` with `entitlement` or `not_found`, as the spike's harness did for a
-  `404`. A `409 idempotency_in_progress` means an earlier send of the same batch is still running or
-  took effect without its response being kept (D-92): the connector sends it again, and once
-  D-92's five minutes have passed it sends it under a fresh key, which per-mutation idempotency
-  (FR-SY5) answers from each mutation's stored result. It throws, and so retries, only on a
-  transport failure, a `5xx`, a `401`, a `409` or a `429`: PowerSync applies no checkpoint while
-  the queue holds anything, so a connector that retried a refusal would freeze the replica.
-  PowerSync's queue holds row writes, so what a mutation carries that a row write does not (its
-  `mutation_id`, the `client_time` it was made at, its `base_version`, any `action`) is recorded
-  with the write when it is made. The spike's harness minted the `mutation_id` at upload, took a
-  check's `client_time` from the `checked_at` column the check itself wrote, and stamped every
-  other write with the upload time. Merge policies, idempotency, clock clamping and the offline
-  write flags are unchanged.
+  the conflict inbox and the sync-health screen read, and that keeps an `entitlement` or `deferred`
+  mutation to replay when its cause clears (FR-BI2, PRD 03 §2.4). A response that answers no
+  mutation is not an answer: on a `401` the connector fetches new credentials, on a `429` it waits
+  out the delay the response names, and on a `413` it sends the batch in smaller ones. A `422`
+  locates the mutation the edge refused ([ADR 0003](0003-contract-enforcement-at-the-edge.md)),
+  which is `rejected` with that code while the rest are sent again without it. A `402` or a `404`
+  answers every mutation in the batch alike, `rejected` with `entitlement` or `not_found`, as the
+  spike's harness was written to do for a `404`, though no scenario reached it: scenario 7's
+  `not_found` came per mutation, in a `200`. A `409 idempotency_in_progress` means an earlier send
+  of the same batch is still running or took effect without its response being kept (D-92): the
+  connector sends it again, and once D-92's five minutes have passed it sends it under a fresh key,
+  which per-mutation idempotency (FR-SY5) answers from each mutation's stored result. It throws, and
+  so retries, only on a transport failure, a `5xx`, a `401`, a `409` or a `429`: PowerSync applies
+  no checkpoint while the queue holds anything, so a connector that retried a refusal would freeze
+  the replica. PowerSync's queue holds row writes, so what a mutation carries that a row write does
+  not (its `mutation_id`, the `client_time` it was made at, its `base_version`, any `action`) is
+  recorded with the write when it is made. The spike's harness minted the `mutation_id` at upload,
+  took a check's `client_time` from the `checked_at` column the check itself wrote, and stamped
+  every other write with the upload time. Merge policies, idempotency, clock clamping and the
+  offline write flags are unchanged.
 - **The access predicate becomes stream definitions generated from the entity registry**, never
   written by hand, so the check still lives in one place (the reasoning behind D-22):
   - the grant as its two arms, per household as a subscription parameter (D-4);
@@ -154,8 +156,8 @@ read path, which adoption gives up; the generated streams and the isolation test
 - **The tenant boundary on the read path is the generated streams.** PowerSync's replication role
   holds `REPLICATION` and `BYPASSRLS`: every tenant table forces row-level security, and the
   engine sets no tenant, so without `BYPASSRLS` it reads nothing. An isolation test, the read-path
-  twin of FR-NF4, connects a replica for one household's member and asserts that none of another
-  household's rows arrive.
+  twin of FR-NF4, connects a member of two households to one of them and asserts that none of the
+  other's rows arrive, nor any row of a household they are not in.
 - **It is the one exception to D-3.** D-3 says no database role bypasses row-level security for
   content, and this one does. It is the PowerSync service's own credential: no staff member, staff
   tool or support system connects with it, so the no-content-access test (PRD 05 §6) leaves it out
@@ -224,6 +226,7 @@ read path, which adoption gives up; the generated streams and the isolation test
 - **Not verified by the spike**: a restart, since offline was `disconnect()` on a database left
   open, so a queue that survives the app being killed rests on the SDK's persistence until item 15
   tests it; tokens signed EdDSA and read from a JWKS (the spike signed HS256); the per-household
-  subscription parameter, which the probes compiled and no scenario ran; the replicated tables
-  without `REPLICA IDENTITY FULL`; the React Native SDK on a device (gate G-C does that on two
-  phones), the web SDK, and bucket storage at a real household's volume (item 90).
+  subscription parameter, which the probes compiled and no scenario ran; scenario 16 as PRD 10 §4
+  states it, with the member offline when removed; the replicated tables without `REPLICA IDENTITY
+  FULL`; the React Native SDK on a device (gate G-C does that on two phones), the web SDK, and
+  bucket storage at a real household's volume (item 90).

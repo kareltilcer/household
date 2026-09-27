@@ -336,8 +336,9 @@ impersonation feature, no "view as", no support session, no content-reading endp
 part that makes it structural rather than aspirational — **no database role that bypasses RLS
 for content tables**. See [01-architecture.md](01-architecture.md) §2.3 and
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §6. **D-3.** Under D-93 one role does
-bypass it, PowerSync's replication role; it is the sync service's own credential, and neither
-platform role holds it (01 §2.3).
+bypass it, PowerSync's replication role, and PowerSync's bucket storage holds the replicated rows
+outside it; both credentials are the sync service's own, and neither platform role holds either
+(01 §2.3).
 
 **FR-PS1 — The diagnostic bundle** is how content bugs are debugged without content access. A
 member hits a problem and taps *"send diagnostics"*; the client assembles a bundle scoped to the
