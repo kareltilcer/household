@@ -130,10 +130,10 @@ is the single most valuable artefact produced in Phase 0.
 > disconnecting clients and by a network that refuses requests and loses responses, duplicate
 > delivery by replaying an upload, skew through `client_time`. Reordering becomes the order in
 > which clients reconnect and upload, scripted per scenario: one client's uploads cannot reorder,
-> since its connector drains PowerSync's queue in order, one transaction at a time. It is slower
-> and less deterministic than an in-process simulator, so the fuzz run on each change is short and
-> the long one nightly. The scenarios and the invariants below stand. Where one names a mechanism of
-> the replaced feed, the table gives its D-93 form beside it (scenarios 6 and 18).
+> since its connector drains PowerSync's queue in order, one batch at a time. It is slower and less
+> deterministic than an in-process simulator, so the fuzz run on each change is short and the long
+> one nightly. The scenarios and the invariants below stand. Where one names a mechanism of the
+> replaced feed, its D-93 form is given beside it (scenarios 6 and 18, and invariant 5).
 
 ### The scenarios it must cover
 
@@ -164,7 +164,8 @@ is the single most valuable artefact produced in Phase 0.
 2. **No acknowledged write is lost.**
 3. **Idempotency** — replaying any batch produces identical state.
 4. **Retraction completeness** — no client retains a row it was retracted from.
-5. **Monotonicity** — sequence numbers and read markers never move backwards.
+5. **Monotonicity** — sequence numbers and read markers never move backwards. Under D-93 a client
+   sees no feed sequence number: what never moves backwards is its replica's checkpoint.
 6. **Terminality** — every mutation reaches exactly one of `applied`/`merged`/`conflict`/`rejected`.
 
 Then **fuzz it**: randomised operation schedules and partition timing over the same invariants.

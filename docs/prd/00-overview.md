@@ -109,7 +109,9 @@ the short version:
   whether Utilities or Garden or Finance is the thing that actually sells.
 - **G8** — Support can resolve account, billing, entitlement and delivery problems **without
   ever reading household content**, and the platform makes reading it impossible rather than
-  merely forbidden.
+  merely forbidden. D-93 makes one exception, the sync service's own database credentials, for
+  which it rests on who holds them ([05-privacy-and-compliance.md](05-privacy-and-compliance.md)
+  §6).
 - **G9** — Storage cost per household is measurable daily and attributable per module, so the
   per-GB price is set from data and the meter can be shown to the customer.
 

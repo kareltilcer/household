@@ -107,24 +107,26 @@ with no client code; Electric's own client kept them, and Zero cannot write offl
 requirement that came closest to forcing a build instead is keeping row-level security under the
 read path, which adoption gives up; the generated streams and the isolation test below hold it.
 
-- **What PowerSync does.** It replicates from PostgreSQL's write-ahead log into per-member buckets,
-  holds the client replica in SQLite (op-sqlite on React Native, wa-sqlite on the web,
-  better-sqlite3 in Node tests), moves each client from checkpoint to checkpoint with per-bucket
-  checksums, and deletes from the client any row that leaves every bucket it holds. The service is
-  the Open Edition, its image pinned, its bucket storage a PostgreSQL database of its own, and its
-  telemetry sharing off.
+- **What PowerSync does.** It replicates from PostgreSQL's write-ahead log into buckets, each keyed
+  by its stream's parameters and shared by every member they admit, holds the client replica in
+  SQLite (op-sqlite on React Native, wa-sqlite on the web, better-sqlite3 in Node tests), moves each
+  client from checkpoint to checkpoint with per-bucket checksums, and deletes from the client any
+  row that leaves every bucket it holds. The service is the Open Edition, its image pinned, its
+  bucket storage a PostgreSQL database of its own, and its telemetry sharing off.
 - **What stays ours.** The client's upload queue is PowerSync's, persisted in the replica, but the
-  connector that drains it is ours. It posts each queued transaction to `POST …/sync/mutations`,
-  where every mutation goes through `mutation.Apply` and is answered with PRD 03 §2.4's outcome
-  and a code. The connector completes every mutation the server answered, whatever the answer, and
-  records any outcome but `applied` in a local-only table that the conflict inbox and the
-  sync-health screen read. A response that answers no mutation is not an answer: on a `401` the
-  connector fetches new credentials, on a `429` it waits out the delay the response names, and on a
-  `413` it sends the transaction in smaller batches. A `422` locates the mutation the edge refused
-  ([ADR 0003](0003-contract-enforcement-at-the-edge.md)), which is `rejected` with that code while
-  the rest are sent again without it. A `402` or a `404` answers every mutation in the batch alike,
-  `rejected` with `entitlement` or `not_found`, as the spike's harness did for a `404`. A
-  `409 idempotency_in_progress` means an earlier send of the same transaction is still running or
+  connector that drains it is ours. It posts the queue to `POST …/sync/mutations` in order, several
+  queued transactions to a batch up to the contract's 500 mutations: PRD 02 §9 allows a device 60
+  batches a minute, and a device back from days offline can hold more transactions than that while
+  PowerSync applies no checkpoint. There every mutation goes through `mutation.Apply` and is
+  answered with PRD 03 §2.4's outcome and a code. The connector completes every mutation the server
+  answered, whatever the answer, and records any outcome but `applied` in a local-only table that
+  the conflict inbox and the sync-health screen read. A response that answers no mutation is not an
+  answer: on a `401` the connector fetches new credentials, on a `429` it waits out the delay the
+  response names, and on a `413` it sends the batch in smaller ones. A `422` locates the mutation
+  the edge refused ([ADR 0003](0003-contract-enforcement-at-the-edge.md)), which is `rejected` with
+  that code while the rest are sent again without it. A `402` or a `404` answers every mutation in
+  the batch alike, `rejected` with `entitlement` or `not_found`, as the spike's harness did for a
+  `404`. A `409 idempotency_in_progress` means an earlier send of the same batch is still running or
   took effect without its response being kept (D-92): the connector sends it again, and once
   D-92's five minutes have passed it sends it under a fresh key, which per-mutation idempotency
   (FR-SY5) answers from each mutation's stored result. It throws, and so retries, only on a
@@ -144,7 +146,11 @@ read path, which adoption gives up; the generated streams and the isolation test
   - an audience's floor through a reader set the server keeps on each row: the members whose floor
     the row is at or above, written by the mutation that writes the row and rewritten by the one
     that changes the audience.
-- **Retraction** (FR-SY7) is a row leaving a member's buckets. There are no `retract` rows.
+- **Retraction** (FR-SY7) is a row leaving a member's buckets. There are no `retract` rows, so the
+  client learns of a retraction only as the row leaving its replica, which is also how a row
+  another member deleted leaves it when a stream drops tombstones, as the spike's did. The design's
+  withdrawn state tells the two apart (design 03-patterns, *When access is withdrawn*), so items 13
+  and 15 must give the client a way to tell them apart.
 - **The tenant boundary on the read path is the generated streams.** PowerSync's replication role
   holds `REPLICATION` and `BYPASSRLS`: every tenant table forces row-level security, and the
   engine sets no tenant, so without `BYPASSRLS` it reads nothing. An isolation test, the read-path
@@ -154,14 +160,15 @@ read path, which adoption gives up; the generated streams and the isolation test
   content, and this one does. It is the PowerSync service's own credential: no staff member, staff
   tool or support system connects with it, so the no-content-access test (PRD 05 §6) leaves it out
   and the isolation test above holds it instead. PowerSync's bucket storage holds the replicated
-  rows outside row-level security, so it is household content under the same residency, encryption
-  and access rules as the database. PRD 01 §2.3, 02 §8 and 05 §6 record the exception.
+  rows outside row-level security, so it is household content under the same residency and
+  encryption rules as the database, and the credential to its database is likewise the service's
+  alone. PRD 01 §2.3, 02 §8 and 05 §6 record the exception.
 
 ## Alternatives rejected
 
 | Alternative | Why not |
 |---|---|
-| **Build PRD 03 §2's engine**: the feed pull, the snapshot, the `retract` rows, the digest, the realtime nudge, and a TypeScript client with two storage adapters (plan items 12–15 as first written: sizes L, XL, XL and L). Whether the digest and the nudge keep endpoints beside PowerSync is a separate question, left to item 14 | The spike's hardest cases, retraction for every cause and a queue that outlives going offline and whose refusals are surfaced once, came from PowerSync with no client code but the connector, on item 4's schema, with members' writes still through the spine. Building keeps two things adoption gives up: row-level security under the read path, and the floor as one term of the predicate. Each has a replacement that a test holds (above), and neither is worth four items of the riskiest work in the programme |
+| **Build PRD 03 §2's engine**: the feed pull, the snapshot, the `retract` rows, the digest, the realtime nudge, and a TypeScript client with two storage adapters (plan items 12–15 as first written: sizes L, XL, XL and L). Whether the digest and the nudge keep endpoints beside PowerSync is a separate question, left to item 14 | The spike's hardest cases, retraction for every cause and a queue that outlives going offline and whose refusals are surfaced once, came from PowerSync with no client code but the connector, on item 4's schema, with members' writes still through the spine. Building keeps two things adoption gives up: row-level security under the read path, and the floor as one term of the predicate. Each has a replacement that a test holds (above), and neither is worth building replication, retraction and the client replica ourselves, the riskiest work in the programme. Items 12–15 stay four items at the same sizes, but they build around PowerSync rather than that |
 | **Electric** | It replicates reads only, so the outbox, its persistence and the optimistic state are ours to build, as the spike did. Its own client (1.5.28) ignores the `move-out` events that carry access loss, so a revoked grant leaves the rows on the device; a correct replica has to evaluate its positional tag protocol, which is the kind of client code the adoption was meant to avoid. Its React Native persistence is pre-1.0 |
 | **Zero** | No offline writes |
 | **Replicache** | In maintenance mode; no maintained React Native binding; no per-mutation outcomes on push |
@@ -178,9 +185,9 @@ read path, which adoption gives up; the generated streams and the isolation test
   replaced pull and bootstrap; item 13 removes them from `openapi.yaml` and `contract_pending` and
   adds the endpoint that hands a client PowerSync's URL and a token of its own. PowerSync checks a
   token's `aud` against the audience it is configured with, and item 9's access token carries no
-  `aud` (D-15), so the API's own token is never the one PowerSync reads. Item 14 decides the fate of
-  `postSyncDigest`, `postSyncReset`, `getSyncState` and `…/stream`, whose frames carry entitlement
-  and access changes as well as Chat's payloads.
+  `aud` (only `sub`, `sid`, `iat`, `exp` and `client`), so the API's own token is never the one
+  PowerSync reads. Item 14 decides the fate of `postSyncDigest`, `postSyncReset`, `getSyncState`
+  and `…/stream`, whose frames carry entitlement and access changes as well as Chat's payloads.
 - **`sync_changes` has no reader**, and neither has the `seq` the push's response carries. Item 4's
   spine still writes it, under a per-household lock that serialises a household's commits, so its
   monthly partitions still have to be made while it does. Item 14 either names a consumer or stops

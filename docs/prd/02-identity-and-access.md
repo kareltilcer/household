@@ -313,12 +313,13 @@ sync feed row carries the fields needed to evaluate all four without joining bac
 module's tables — see [03-platform-strands.md](03-platform-strands.md) §2.2.
 
 > **Under D-93 the replicated path reads no feed row.** Stream definitions generated from the
-> entity registry read each entity's own table, the grant and an audience's membership through
-> subqueries, and an audience with a floor through the readers the server keeps on each row it
-> bounds ([03-platform-strands.md](03-platform-strands.md) §2,
-> [modules/15-chat.md](modules/15-chat.md) Sync). The check still lives in one place, the
-> generator. The membership axis stays an interval on both paths: the API evaluates the floor, and
-> a member is a reader of nothing before theirs.
+> entity registry read each entity's own table and the grant through subqueries, and an audience
+> through the readers the server keeps on each row it bounds
+> ([03-platform-strands.md](03-platform-strands.md) §2, [modules/15-chat.md](modules/15-chat.md)
+> and [modules/04-calendar.md](modules/04-calendar.md) Sync, where plan item 14 may resolve a
+> `member_shared` calendar, which has no floor, through its member list instead). The check still
+> lives in one place, the generator. The membership axis stays an interval on both paths: the API
+> evaluates the floor, and a member is a reader of nothing before theirs.
 
 ## 8. Platform staff
 

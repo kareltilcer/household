@@ -133,7 +133,9 @@ property of the system rather than a policy (**D-3**, and see
 > service's own credential, and no staff member or tool connects with it. On its path the tenant
 > boundary is the stream definitions generated from the entity registry, which a read-path isolation
 > test holds to one household. It is the one exception to the paragraph above
-> ([ADR 0001](../adr/0001-sync-engine.md)).
+> ([ADR 0001](../adr/0001-sync-engine.md)). What it replicates lands in PowerSync's bucket storage,
+> a database of its own with no row-level security, whose credential is likewise the service's
+> alone ([05](05-privacy-and-compliance.md) §6).
 
 ### 2.4 What is *not* tenant-scoped
 

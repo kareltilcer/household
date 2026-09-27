@@ -128,9 +128,11 @@ member discovers by finding something missing is a bug"* ([D-78](../prd/modules/
 Absence is the steady state; **retraction is the transition into it**, and it has its own design.
 When a member loses access to data they already hold locally, the server emits `op: retract` rows
 and the client **deletes them from the local store on receipt**
-([03-strands §2.6](../prd/03-platform-strands.md), FR-SY7). Five ordinary events cause it: a grant
-lowered to `none`, removal from a conversation or a `member_shared` calendar, an item moved from
-shared to private, removal from the household, and a module disabled household-wide.
+([03-strands §2.6](../prd/03-platform-strands.md), FR-SY7); under D-93 there are no `retract`
+rows, and the rows leave the member's PowerSync buckets, which removes them from the replica. Five
+ordinary events cause it: a grant lowered to `none`, removal from a conversation or a
+`member_shared` calendar, an item moved from shared to private, removal from the household, and a
+module disabled household-wide.
 
 It can land **while the member is looking at the row**. So:
 

@@ -139,7 +139,8 @@ it ([03](../03-platform-strands.md) §2.3, **D-90**). They are the owning module
 module's; they are named here only so the list of things that gate access is in one place. Under
 **D-93** the replicated path reads no `floor_seq`, and none is stored: what gates it is the readers
 the owning module keeps on each row of the audience, derived from these membership rows
-([15-chat](15-chat.md) Sync).
+([15-chat](15-chat.md) Sync), or for a `member_shared` calendar possibly the member list itself
+([04-calendar](04-calendar.md) Sync).
 
 ## Sync
 
