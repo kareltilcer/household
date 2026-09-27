@@ -56,7 +56,8 @@ Client-side:
 
 **FR-NF1 — No N+1 anywhere.** The dashboard fan-out, the sync pull, the tree reads and the
 search are all single-query-set operations. A test asserts the query count per endpoint against a
-recorded budget and fails when it grows.
+recorded budget and fails when it grows. Under D-93 the pull is PowerSync's and no endpoint of
+ours, so this test does not hold it; the note under the budgets above says what its budget covers.
 
 **FR-NF2 — Computed views are computed, not cached, unless proven otherwise.** `home` established
 this for the Utilities summary and the Garden check, and it was right: a cache of a derived figure

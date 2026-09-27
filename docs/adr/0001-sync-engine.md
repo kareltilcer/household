@@ -154,10 +154,12 @@ read path, which adoption gives up; the generated streams and the isolation test
   withdrawn state tells the two apart (design 03-patterns, *When access is withdrawn*), so items 13
   and 15 must give the client a way to tell them apart.
 - **The tenant boundary on the read path is the generated streams.** PowerSync's replication role
-  holds `REPLICATION` and `BYPASSRLS`: every tenant table forces row-level security, and the
-  engine sets no tenant, so without `BYPASSRLS` it reads nothing. An isolation test, the read-path
-  twin of FR-NF4, connects a member of two households to one of them and asserts that none of the
-  other's rows arrive, nor any row of a household they are not in.
+  holds `REPLICATION` and `BYPASSRLS`. Every tenant table forces row-level security and the engine
+  sets no tenant, so without `BYPASSRLS` it could read no table's initial snapshot (the spike never
+  ran without it); the changes it streams from the write-ahead log pass no row-level security in
+  any case. An isolation test, the read-path twin of FR-NF4, connects a member of two households to
+  one of them and asserts that none of the other's rows arrive, nor any row of a household they
+  are not in.
 - **It is the one exception to D-3.** D-3 says no database role bypasses row-level security for
   content, and this one does. It is the PowerSync service's own credential: no staff member, staff
   tool or support system connects with it, so the no-content-access test (PRD 05 §6) leaves it out
@@ -219,15 +221,18 @@ read path, which adoption gives up; the generated streams and the isolation test
 - **Removing a member from an audience rewrites every row of that audience**, to take the member
   out of each row's readers, and removal from the household does so for every audience they were
   in. The rewrite is not an edit of the row: item 4's `touch_entity` bumps `version` on every
-  update, which would turn each queued or `If-Match` edit to a row of the audience into a conflict,
-  so item 14 keeps the readers out of the version, or in a table of their own, which the probes
-  also accepted. A household's conversations are small enough that this is cheap. A
+  update, which would turn each queued or `If-Match` edit to a row of the audience into a conflict
+  or a preserved loser, so item 14 keeps the readers out of the version, a change to ADR 0006's
+  trigger that a new ADR records and PRD 01 §3 already notes, or in a table of their own, which the
+  probes also accepted. A household's conversations are small enough that this is cheap. A
   `member_shared` calendar's audience is every event of the calendar, which can be many more rows;
   it has no floor, so item 14 may resolve it through the calendar's member list in the stream
   instead, which the probes accepted though never beside the grant's subquery. Item 90's load tests
   measure whichever remains.
 - **A private row's owner holds its redacted form as well**, in a separate table. The client never
   shows it where the full row exists; nothing leaks, since the owner may see the full row anyway.
+  Item 14 declares each projection as the column list its stream selects, in place of the `Redact`
+  function ADR 0006 gave `sync.Entity` and the redacted feed rows it left to item 14.
 - **The licence** permits this use, and each release becomes Apache-2.0 two years after it ships.
   A later release under different terms can be declined: the pinned version keeps working.
 - **What would make this worth revisiting**: gate G-C failing on PowerSync, whose fallback is now to

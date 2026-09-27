@@ -134,8 +134,9 @@ property of the system rather than a policy (**D-3**, and see
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md)).
 
 > **Under D-93 a fourth role replicates, and it bypasses row-level security.** PowerSync reads the
-> write-ahead log and sets no tenant, so its replication role holds `REPLICATION` and `BYPASSRLS`:
-> without them it reads nothing from a table that forces row-level security. It is the PowerSync
+> write-ahead log and sets no tenant, so its replication role holds `REPLICATION`, whose stream of
+> changes row-level security does not filter, and `BYPASSRLS`, without which it could read no
+> table's initial snapshot, since every tenant table forces row-level security. It is the PowerSync
 > service's own credential, and no staff member or tool connects with it. On its path the tenant
 > boundary is the stream definitions generated from the entity registry, which a read-path isolation
 > test holds to one household. It is the one exception to the paragraph above, and the one path
@@ -169,7 +170,7 @@ Applied by every module without exception; stated once here.
 |---|---|
 | **Primary keys** | `uuid` holding a **UUIDv7**. Clients generate them (the sync engine requires client-side id generation so an offline create has a stable identity) |
 | **Tenant key** | `household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE` on every tenant row |
-| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token |
+| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token. Under D-93 a rewrite of an audience's readers alone does not count as an update ([modules/15-chat.md](modules/15-chat.md) Sync): plan item 14 keeps it out of the version, or holds the readers in a table of their own |
 | **Audit columns** | `created_by`, `created_at`, `updated_by`, `updated_at` — `timestamptz`, never local time |
 | **Soft delete** | `deleted_at timestamptz NULL`. Hard delete is reserved for the destructive-operation gate and for erasure |
 | **Ordering** | Lexorank `position text` where users order things by hand |

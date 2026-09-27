@@ -138,15 +138,15 @@ What that means concretely:
 
 > **Under D-93 one database credential does bypass row-level security: PowerSync's replication
 > role** ([01](01-architecture.md) §2.3, [ADR 0001](../adr/0001-sync-engine.md)). The sync
-> service replicates from the write-ahead log with no tenant set, and could read nothing otherwise.
-> The credential is the service's own; no staff member, staff tool or support system connects with
-> it, so it is not a staff-facing role and the test above leaves it out. What it reads reaches a
-> member only through the stream definitions generated from the entity registry, and a read-path
-> isolation test holds them to one household. PowerSync's bucket storage holds the replicated rows
-> outside row-level security, so it is household content under this section, kept in the EU and
-> encrypted at rest like the database, and the credential to its database is the service's own as
-> well. For these two credentials the guarantee rests on who holds them rather than on their
-> absence, and the privacy policy says so.
+> service replicates from the write-ahead log, which row-level security does not filter, and sets
+> no tenant, so it could read no table's initial snapshot otherwise. The credential is the service's
+> own; no staff member, staff tool or support system connects with it, so it is not a staff-facing
+> role and the test above leaves it out. What it reads reaches a member only through the stream
+> definitions generated from the entity registry, and a read-path isolation test holds them to one
+> household. PowerSync's bucket storage holds the replicated rows outside row-level security, so it
+> is household content under this section, kept in the EU and encrypted at rest like the database,
+> and the credential to its database is the service's own as well. For these two credentials the
+> guarantee rests on who holds them rather than on their absence, and the privacy policy says so.
 
 **FR-PR8 — Lawful access requests** are handled by `platform_admin` and can compel disclosure that
 the architecture makes technically difficult. The honest statement — which belongs in the privacy
