@@ -1,7 +1,0 @@
-shared rows, grant                           accepted
-private rows to their owner                  accepted
-redacted form to all but the owner           accepted
-audience, no floor                           accepted
-audience + floor as a constant               accepted
-audience + floor, scalar subquery            REFUSED: {"message":"Invalid request","errors":{"where":["At location 7: only `value IN (SELECT ...)` sublinks are supported right now"]}}
-retraction: NOT IN                           REFUSED: {"error":"Internal server error"}
