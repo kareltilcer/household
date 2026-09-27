@@ -3,11 +3,13 @@
 // before it serves anything, because a silently defaulted secret or database is worse
 // than a crash.
 //
-// In development, and only there, every value has a default that points at the services
-// docker-compose.yml starts, so a fresh clone runs with nothing set. Everywhere else, what
-// a command needs must be set explicitly. HOUSEHOLD_ENV itself defaults to development, so
-// bootstrap, which sets the roles' passwords, sets a defaulted one only on a cluster on this
-// machine.
+// In development, and only there, the connection strings default to the services
+// docker-compose.yml starts, so a fresh clone runs with nothing set. Everywhere else, each
+// connection string a command needs must be set explicitly. The other settings, which
+// carry no secret and name no database, default everywhere; only the listen address
+// differs, loopback in development and :8080 elsewhere. HOUSEHOLD_ENV itself defaults to
+// development, so bootstrap, which sets the roles' passwords, sets a defaulted one only on a
+// cluster on this machine.
 package config
 
 import (

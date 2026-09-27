@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -91,8 +95,8 @@ func (c *Contract) Middleware(router chi.Routes, limits Limits) func(http.Handle
 }
 
 func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation, params map[string]string, limits Limits) *problem.Problem {
-	if fields := malformedQuery(r.URL.RawQuery); len(fields) > 0 {
-		return problem.Validation(fields...)
+	if fields := unreadableParameters(r, o, params); len(fields) > 0 {
+		return problem.Validation(dedupe(fields)...)
 	}
 	options := &openapi3filter.Options{
 		MultiError:                 true,
@@ -144,10 +148,41 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 	return toProblem(err)
 }
 
-// malformedQuery names each pair of the query string that net/url cannot parse: one with a
-// bad escape, or with a ';', which Go no longer takes for a separator. net/url drops such a
-// pair without a word, so neither kin-openapi nor the handler would see it, and a cursor
-// dropped that way would be answered with page one, as if none had been sent (PRD 01 §6).
+// unreadableParameters names each parameter the edge refuses as malformed before kin-openapi
+// reads any: a query pair net/url cannot parse, and a query, path or header value that is not
+// text PostgreSQL stores as sent. A value that decodes to U+0000 or to bytes that are not
+// UTF-8 (`%00`, `%FF`) is refused in a parameter as strictJSON refuses it in a body: a text
+// column refuses it, so the handler's query would fail as a 500. A header has no escapes, but
+// may carry bytes that are not UTF-8; only the headers the operation declares are read.
+func unreadableParameters(r *http.Request, o *Operation, params map[string]string) []problem.FieldError {
+	out := malformedQuery(r.URL.RawQuery)
+	for _, name := range slices.Sorted(maps.Keys(params)) {
+		if !storable(params[name]) {
+			out = append(out, problem.FieldError{Field: "path:" + name, Code: problem.FieldMalformed})
+		}
+	}
+	for _, declared := range []openapi3.Parameters{o.item.Parameters, o.op.Parameters} {
+		for _, ref := range declared {
+			p := ref.Value
+			if p == nil || p.In != openapi3.ParameterInHeader {
+				continue
+			}
+			for _, value := range r.Header.Values(p.Name) {
+				if !storable(value) {
+					out = append(out, problem.FieldError{Field: "header:" + p.Name, Code: problem.FieldMalformed})
+					break
+				}
+			}
+		}
+	}
+	return out
+}
+
+// malformedQuery names each pair of the query string that net/url cannot parse, or that
+// decodes to text PostgreSQL does not store as sent. net/url drops a pair with a bad escape,
+// or with a ';', which Go no longer takes for a separator, without a word, so neither
+// kin-openapi nor the handler would see it, and a cursor dropped that way would be answered
+// with page one, as if none had been sent (PRD 01 §6).
 func malformedQuery(raw string) []problem.FieldError {
 	var out []problem.FieldError
 	for pair := range strings.SplitSeq(raw, "&") {
@@ -156,16 +191,21 @@ func malformedQuery(raw string) []problem.FieldError {
 		}
 		key, value, _ := strings.Cut(pair, "=")
 		name, keyErr := url.QueryUnescape(key)
-		_, valueErr := url.QueryUnescape(value)
-		if keyErr == nil && valueErr == nil && !strings.Contains(pair, ";") {
+		decoded, valueErr := url.QueryUnescape(value)
+		if keyErr == nil && valueErr == nil && !strings.Contains(pair, ";") && storable(name) && storable(decoded) {
 			continue
 		}
-		if keyErr != nil {
+		if keyErr != nil || !storable(name) {
 			name = key
 		}
 		out = append(out, problem.FieldError{Field: "query:" + name, Code: problem.FieldMalformed})
 	}
 	return out
+}
+
+// storable reports whether s is text PostgreSQL stores as sent: UTF-8, without U+0000.
+func storable(s string) bool {
+	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 
 // requestMediaType returns the media type the request declares, whether the operation
@@ -200,8 +240,29 @@ func isJSON(mediaType string) bool {
 // init has kin-openapi decode application/json, the only JSON media type the contract
 // declares a body in, with strictJSON instead of its own decoder. A contract that declares
 // another registers it here too.
+//
+// It also has kin-openapi hold `date` and `date-time` to the calendar and the clock. Its own
+// check is a regular expression, which takes 2026-02-31 for a date and +99:99 for an offset:
+// PostgreSQL refuses both, so the handler's write would fail as a 500. The expression still
+// holds a value to RFC 3339's grammar, which Go's parser reads more loosely (it takes a comma
+// before a fraction of a second), and the parser then holds it to the calendar. Go's parser
+// takes no leap second, so neither does the edge: 23:59:60 is refused.
 func init() {
 	openapi3filter.RegisterBodyDecoder("application/json", strictJSON)
+	openapi3.DefineStringFormatValidator("date", onTheCalendar(openapi3.FormatOfStringDate, time.DateOnly))
+	openapi3.DefineStringFormatValidator("date-time", onTheCalendar(openapi3.FormatOfStringDateTime, time.RFC3339))
+}
+
+// onTheCalendar validates a value that pattern matches and that time.Parse reads with layout.
+func onTheCalendar(pattern, layout string) openapi3.StringFormatValidator {
+	grammar := regexp.MustCompile(pattern)
+	return openapi3.NewCallbackValidator(func(value string) error {
+		if !grammar.MatchString(value) {
+			return errors.New("not RFC 3339")
+		}
+		_, err := time.Parse(layout, value)
+		return err
+	})
 }
 
 // strictJSON decodes a JSON body as kin-openapi's own decoder does, and first refuses one

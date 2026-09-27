@@ -35,7 +35,11 @@ be enforced rather than intended:
   is the switch kin uses to choose. The built-in validator implements every 3.1 construct the
   contract uses: type arrays with `null` (427 uses), `const` (9), a numeric `exclusiveMinimum`
   (1), `{ type: 'null' }` branches of a `oneOf` (141). `contract_test.go` pins each against a real
-  operation, so a kin upgrade that changes this fails there.
+  operation, so a kin upgrade that changes this fails there. Its check of a `date` and a
+  `date-time` is a regular expression that takes 2026-02-31, which PostgreSQL refuses, so the
+  contract package has it parse each as well, holding it to the calendar (and refusing a leap
+  second, which Go's parser does not take). `email` and `uri` stay annotations, as JSON Schema
+  2020-12 leaves `format` by default: the handler that takes one checks it.
 - **The edge validates the operation chi routed to**, found with the router's own `Find`, so a
   body is never checked against a different operation's schema. It validates parameters, headers
   and JSON bodies; it neither authenticates (items 8, 9) nor writes defaults into the request,
@@ -53,7 +57,9 @@ be enforced rather than intended:
   strict one for `application/json`. So does a string escaping U+0000, which a `text` or
   `jsonb` column refuses, or half a surrogate pair, which Go would read as U+FFFD. A query
   string pair that `net/url` cannot parse, which it would drop without a word, answers `422
-  malformed`: a dropped cursor would otherwise be answered with page one. The contract says
+  malformed`: a dropped cursor would otherwise be answered with page one. So does a query,
+  path or declared header value that decodes to U+0000 or to bytes that are not UTF-8, which a
+  `text` column refuses in a parameter as surely as in a body. The contract says
   that any operation can answer the `422` refusals, and any operation that takes a body the
   `413` and `415`, declared or not.
 - **Every request body must arrive within `HOUSEHOLD_BODY_TIMEOUT`** (60 s) or the connection

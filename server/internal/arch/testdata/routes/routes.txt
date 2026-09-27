@@ -7,7 +7,9 @@ GET /api/v1/things
 GET /api/v1/things/{thing_id:[0-9]{1,8}}
 # Served while still pending.
 POST /api/v1/things
-# Not declared: the contract has no PUT on this path.
+# Not declared: the contract has no PUT and no PATCH on this path. chi reports a path's
+# methods in no order; the test reports them in the order of their names.
 PUT /api/v1/things/{thing_id}
+PATCH /api/v1/things/{thing_id}
 # Served outside /api/v1, where no contract path can describe it.
 GET /metrics

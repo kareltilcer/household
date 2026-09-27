@@ -38,12 +38,12 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	root := chi.NewRouter()
 	root.Use(httpx.RequestScope, httpx.AccessLog(d.Logger), httpx.Recover(d.Logger), httpx.BodyDeadline(d.BodyTimeout))
 	root.NotFound(httpx.NotFound)
-	root.MethodNotAllowed(httpx.MethodNotAllowed(root))
+	root.MethodNotAllowed(httpx.MethodNotAllowed)
 
 	api := chi.NewRouter()
 	api.Use(d.Contract.Middleware(api, contract.Limits{MaxBody: d.MaxBodyBytes}))
 	api.NotFound(httpx.NotFound)
-	api.MethodNotAllowed(httpx.MethodNotAllowed(api))
+	api.MethodNotAllowed(httpx.MethodNotAllowed)
 
 	api.Get("/healthz", d.Health.Liveness)
 	api.Get("/readyz", d.Health.Readiness)

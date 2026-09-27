@@ -19,10 +19,12 @@
 package cursor
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
@@ -69,10 +71,12 @@ func (k Keyset) Encode(values ...string) string {
 }
 
 // Decode returns the values of token, or ErrMalformed when token was not minted by
-// Encode on this keyset.
+// Encode on this keyset. A token whose values are not text PostgreSQL stores as sent,
+// holding U+0000 or bytes that are not UTF-8, is forged, since the values of a row never
+// are: handed to the listing's query, it would fail it as a 500.
 func (k Keyset) Decode(token string) ([]string, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil {
+	if err != nil || !utf8.Valid(raw) || bytes.IndexByte(raw, 0) >= 0 {
 		return nil, ErrMalformed
 	}
 	parts := strings.Split(string(raw), sep)

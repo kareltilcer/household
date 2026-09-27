@@ -21,7 +21,9 @@ type Route struct {
 	Path string
 }
 
-// Routes lists every route router serves.
+// Routes lists every route router serves, ordered by path and then method. chi.Walk reports
+// the methods of one path in the order of a map, which is none, so a list in its order would
+// differ from one run to the next.
 func Routes(router chi.Routes) ([]Route, error) {
 	var routes []Route
 	err := chi.Walk(router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
@@ -31,6 +33,12 @@ func Routes(router chi.Routes) ([]Route, error) {
 	if err != nil {
 		return nil, fmt.Errorf("contract: walk the routes: %w", err)
 	}
+	slices.SortFunc(routes, func(a, b Route) int {
+		if n := strings.Compare(a.Path, b.Path); n != 0 {
+			return n
+		}
+		return strings.Compare(a.Method, b.Method)
+	})
 	return routes, nil
 }
 

@@ -496,6 +496,19 @@ func TestParametersAreValidated(t *testing.T) {
 	sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: harvests + "?limit=%zz&season_year=2026"}.do(t, h)),
 		problem.FieldError{Field: "query:limit", Code: "malformed"})
 
+	// Text PostgreSQL cannot store, U+0000 or bytes that are not UTF-8, is malformed in a
+	// parameter as it is in a body: the handler's query would otherwise fail as a 500.
+	for query, field := range map[string]string{"cursor=%00": "query:cursor", "cursor=a%FFb": "query:cursor", "%00=x": "query:%00"} {
+		sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: harvests + "?" + query}.do(t, h)),
+			problem.FieldError{Field: field, Code: "malformed"})
+	}
+	sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: "/households/%00/garden/harvests"}.do(t, h)),
+		problem.FieldError{Field: "path:household_id", Code: "malformed"})
+	sameErrors(t, fieldErrors(t, call{
+		method: http.MethodPost, path: lists, contentType: "application/json", body: `{"id":"` + other + `","name":"x"}`,
+		header: map[string]string{"Idempotency-Key": "key-\xff"},
+	}.do(t, h)), problem.FieldError{Field: "header:Idempotency-Key", Code: "malformed"})
+
 	if rec := (call{method: http.MethodGet, path: harvests + "?limit=200&season_year=2026"}).do(t, h); rec.Code != http.StatusNoContent {
 		t.Fatalf("valid parameters: %d %s", rec.Code, rec.Body.String())
 	}
@@ -577,18 +590,20 @@ func TestFind(t *testing.T) {
 // A router mounted inside the API, as a group of routes behind middleware of their own, has
 // a mount point chi's lookup reports as a route of every method. It is no operation: any
 // method on it is routed below it and answered 404, neither validated as an operation it is
-// not nor refused as a route the contract does not declare.
+// not nor refused as a route the contract does not declare. A method the routes below it do
+// not serve is a 405 naming those they do: chi hands the API's 405 handler on to the router
+// mounted there, which routes by what is left of the path.
 func TestAMountPointIsNoRoute(t *testing.T) {
 	api := chi.NewRouter()
 	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody}))
 	api.NotFound(httpx.NotFound)
-	api.MethodNotAllowed(httpx.MethodNotAllowed(api))
+	api.MethodNotAllowed(httpx.MethodNotAllowed)
 	api.Route("/households/{household_id}", func(r chi.Router) {
 		r.Get("/garden/harvests", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	})
 	root := chi.NewRouter()
 	root.NotFound(httpx.NotFound)
-	root.MethodNotAllowed(httpx.MethodNotAllowed(root))
+	root.MethodNotAllowed(httpx.MethodNotAllowed)
 	root.Mount(contract.BasePath, api)
 
 	for _, method := range []string{http.MethodGet, http.MethodPut, "PROPFIND"} {
@@ -600,6 +615,10 @@ func TestAMountPointIsNoRoute(t *testing.T) {
 	// The routes below it are validated as ever.
 	sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: "/households/" + household + "/garden/harvests?limit=500"}.do(t, root)),
 		problem.FieldError{Field: "query:limit", Code: "maximum"})
+	rec := call{method: http.MethodDelete, path: "/households/" + household + "/garden/harvests"}.do(t, root)
+	if rec.Code != http.StatusMethodNotAllowed || !strings.Contains(rec.Body.String(), `"code":"method_not_allowed"`) || rec.Header().Get("Allow") != "GET" {
+		t.Errorf("DELETE on a GET route below the mount point: %d, Allow %q, %s", rec.Code, rec.Header().Get("Allow"), rec.Body.String())
+	}
 }
 
 // The OpenAPI 3.1 constructs this contract uses, each checked by the built-in validator
@@ -642,6 +661,32 @@ func TestTheOpenAPI31ConstructsTheContractUses(t *testing.T) {
 			}
 			sameErrors(t, fieldErrors(t, rec), tc.want...)
 		})
+	}
+}
+
+// kin-openapi's own check of a date is a regular expression, which takes a day the month does
+// not have and an offset no zone has. PostgreSQL refuses both, so the edge does.
+func TestADateIsADayOnTheCalendar(t *testing.T) {
+	h, _ := router(t)
+	harvests := "/households/" + household + "/garden/harvests"
+	harvest := func(on string) call {
+		return call{method: http.MethodPost, path: harvests, contentType: "application/json",
+			body: `{"id":"` + other + `","planting_id":"` + other + `","harvested_on":"` + on + `","quantity":1}`}
+	}
+	consents := func(at string) call {
+		return call{method: http.MethodPut, path: "/me/consents", contentType: "application/json", body: `{"updated_at":"` + at + `"}`}
+	}
+	for _, on := range []string{"2026-02-30", "2025-02-29", "2026-04-31"} {
+		sameErrors(t, fieldErrors(t, harvest(on).do(t, h)), problem.FieldError{Field: "/harvested_on", Code: "format"})
+	}
+	// RFC 3339's grammar still holds: a comma before the fraction is Go's leniency, not the RFC's.
+	for _, at := range []string{"2026-02-30T08:15:00Z", "2026-09-27T08:15:00+99:00", "2026-09-27T08:15:00,5Z"} {
+		sameErrors(t, fieldErrors(t, consents(at).do(t, h)), problem.FieldError{Field: "/updated_at", Code: "format"})
+	}
+	for _, c := range []call{harvest("2028-02-29"), consents("2026-09-27T08:15:00.123456+02:00")} {
+		if rec := c.do(t, h); rec.Code != http.StatusNoContent {
+			t.Fatalf("%s: %d %s", c.body, rec.Code, rec.Body.String())
+		}
 	}
 }
 
@@ -691,6 +736,14 @@ func TestValidateResponse(t *testing.T) {
 	}
 	if err := c.ValidateResponse(get, "", nil, http.StatusNotFound, problemHeader, []byte(`{"type":"x","title":"Not Found","status":404}`)); err == nil {
 		t.Error("a problem without a code passed")
+	}
+	// What no schema describes is a problem document: chi's own 404, or an http.Error.
+	plain := http.Header{"Content-Type": []string{"text/plain; charset=utf-8"}}
+	if err := c.ValidateResponse(get, "", nil, http.StatusNotFound, plain, []byte("404 page not found\n")); err == nil {
+		t.Error("a 404 to a request no route matched passed as plain text")
+	}
+	if err := c.ValidateResponse(get, "/healthz", nil, http.StatusInternalServerError, plain, []byte("boom\n")); err == nil {
+		t.Error("a protocol-level 500 passed as plain text")
 	}
 	if err := c.ValidateResponse(get, "", nil, http.StatusNotFound, problemHeader, []byte(`{"type":"x","title":"Not Found","status":404,"code":"gone_fishing"}`)); err == nil {
 		t.Error("a problem with a code outside ProblemCode passed")

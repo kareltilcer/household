@@ -209,19 +209,23 @@ func NotFound(w http.ResponseWriter, r *http.Request) {
 	problem.Write(w, reqctx.RequestID(r.Context()), problem.NotFound())
 }
 
-// MethodNotAllowed returns the handler for a path router serves but not with the request's
-// method: 405 method_not_allowed, with the Allow header RFC 9110 §15.5.6 requires. chi
-// passes a custom handler no list of methods, so it asks router for each.
+// MethodNotAllowed answers a path the server serves, but not with the request's method: 405
+// method_not_allowed, with the Allow header RFC 9110 §15.5.6 requires. chi passes a custom
+// handler no list of methods, so it asks for each one, of the router chi first routed the
+// request with (the route context's Routes) and on the whole path. Never of the router it is
+// installed on: chi hands a router's handler on to every router mounted below it (Mount,
+// Route), where the path left to route is relative to that router, and a lookup on it would
+// find no method at all, answering a DELETE on a GET route 404.
 //
 // chi also sends here, before it routes at all, a request whose method it does not know
 // (PROPFIND, QUERY), whatever its path. A path no method serves is answered 404 not_found,
 // as a known method on it is: there is no resource there, and no Allow a 405 could carry. So
 // is a mount point, which chi reports as served by every method (see MountPoint), and whose
 // every known method is routed below it and answered 404.
-func MethodNotAllowed(router chi.Routes) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		path := RoutePath(r)
-		var allowed []string
+func MethodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	var allowed []string
+	if rctx := chi.RouteContext(r.Context()); rctx != nil && rctx.Routes != nil {
+		router, path := rctx.Routes, requestPath(r)
 		if !MountPoint(router, path) {
 			for _, method := range methods {
 				if router.Match(chi.NewRouteContext(), method, path) {
@@ -229,13 +233,13 @@ func MethodNotAllowed(router chi.Routes) http.HandlerFunc {
 				}
 			}
 		}
-		if len(allowed) == 0 {
-			NotFound(w, r)
-			return
-		}
-		w.Header().Set("Allow", strings.Join(allowed, ", "))
-		problem.Write(w, reqctx.RequestID(r.Context()), problem.New(http.StatusMethodNotAllowed, problem.CodeMethodNotAllowed))
 	}
+	if len(allowed) == 0 {
+		NotFound(w, r)
+		return
+	}
+	w.Header().Set("Allow", strings.Join(allowed, ", "))
+	problem.Write(w, reqctx.RequestID(r.Context()), problem.New(http.StatusMethodNotAllowed, problem.CodeMethodNotAllowed))
 }
 
 // MountPoint reports whether path is where router mounts another router, the mounted
@@ -261,6 +265,12 @@ func RoutePath(r *http.Request) string {
 	if rctx := chi.RouteContext(r.Context()); rctx != nil && rctx.RoutePath != "" {
 		return rctx.RoutePath
 	}
+	return requestPath(r)
+}
+
+// requestPath is the whole path, escaped as sent, which the router that mounts every other
+// routes the request by.
+func requestPath(r *http.Request) string {
 	if r.URL.RawPath != "" {
 		return r.URL.RawPath
 	}

@@ -41,6 +41,9 @@ func TestDecodeRefusesWhatItDidNotMint(t *testing.T) {
 		"a page number":     "2",
 		"the empty string":  "",
 		"a plain text pair": base64.RawURLEncoding.EncodeToString([]byte("a,b")),
+		// Values PostgreSQL refuses as text, which no row's values are.
+		"a NUL":           base64.RawURLEncoding.EncodeToString([]byte("notes.updated_at\x1fa\x00\x1fb")),
+		"bytes not UTF-8": base64.RawURLEncoding.EncodeToString([]byte("notes.updated_at\x1fa\xff\x1fb")),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := byUpdated.Decode(token); !errors.Is(err, cursor.ErrMalformed) {

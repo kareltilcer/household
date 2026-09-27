@@ -45,14 +45,20 @@ func protocolStatus(o *Operation, status int) bool {
 // A matched route's response must have a status its operation declares, or one of
 // ProtocolStatuses the operation may answer undeclared, and a body its declared schema
 // accepts. A problem document, whatever the status and whether or not a route matched,
-// must be a valid Problem, and a validation_failed one a valid ValidationProblem.
+// must be a valid Problem, and a validation_failed one a valid ValidationProblem. What no
+// schema describes must be a problem document: the answer to a request no route matched,
+// and a status the operation answers undeclared.
 func (c *Contract) ValidateResponse(req *http.Request, pattern string, params map[string]string, status int, header http.Header, body []byte) error {
-	if isProblem(header) {
+	problemDocument := isProblem(header)
+	if problemDocument {
 		if err := c.validateProblem(body); err != nil {
 			return err
 		}
 	}
 	if pattern == "" {
+		if !problemDocument {
+			return fmt.Errorf("%s answered %d to a request no route matched, and not with a problem document", req.Method, status)
+		}
 		return nil
 	}
 	o, ok := c.Lookup(req.Method, pattern)
@@ -60,10 +66,13 @@ func (c *Contract) ValidateResponse(req *http.Request, pattern string, params ma
 		return fmt.Errorf("%s %s is not in the contract", req.Method, pattern)
 	}
 	if o.op.Responses.Status(status) == nil && o.op.Responses.Default() == nil {
-		if protocolStatus(o, status) {
-			return nil
+		switch {
+		case !protocolStatus(o, status):
+			return fmt.Errorf("%s %s answered %d, which operation %s does not declare", req.Method, pattern, status, o.ID)
+		case !problemDocument:
+			return fmt.Errorf("%s %s answered %d, which operation %s does not declare, and not with a problem document", req.Method, pattern, status, o.ID)
 		}
-		return fmt.Errorf("%s %s answered %d, which operation %s does not declare", req.Method, pattern, status, o.ID)
+		return nil
 	}
 	err := openapi3filter.ValidateResponse(context.Background(), &openapi3filter.ResponseValidationInput{
 		RequestValidationInput: &openapi3filter.RequestValidationInput{
