@@ -20,9 +20,13 @@ import (
 // tenant's is a restrictive policy, which is ANDed with it. A materialized view cannot hold a
 // policy at all, so none may hold a household's rows. A table exempted for a policy of its own
 // may read more widely than its household, but only in a FOR SELECT policy: it is written only
-// in its household's context. And no global table's row, deleted or updated by the request
-// role, changes a household's rows through a foreign key's action: a referential action runs
-// past row-level security, so it would reach every household from any household's context.
+// in its household's context. No global table's row, deleted or updated by the request role,
+// changes a household's rows through a foreign key's action: a referential action runs past
+// row-level security, so it would reach every household from any household's context. And a
+// foreign key between two tables that hold households' rows pairs their households' columns:
+// PostgreSQL checks a foreign key past row-level security too, so a key on an id alone lets a
+// row of one household name another household's row, whose delete there is then refused, or
+// acts on this household's row.
 //
 // It reads the schema from PostgreSQL's catalog, as the migrations left it in the package's
 // database: every table in every schema, whichever migration made it and however it spelled
@@ -47,6 +51,7 @@ func TestTenantTablesAreIsolatedCatchesEachViolation(t *testing.T) {
 		"arch_testdata.catalog":          {why: "reference data"},
 		"arch_testdata.people":           {why: "global, and the request role deletes and updates its rows"},
 		"arch_testdata.tombstoned":       {why: "global, and the request role updates its rows but never deletes one"},
+		"arch_testdata.labelled":         {why: "global, and the request role updates a column of its rows the key is not in"},
 		"arch_testdata.roots":            {ownPolicy: true, key: "id", why: "a tenant root with a policy of its own"},
 		"arch_testdata.roots_unforced":   {ownPolicy: true, key: "id", why: "a tenant root that does not force its policy"},
 		"arch_testdata.members":          {ownPolicy: true, why: "read more widely, written in the household"},
@@ -119,12 +124,15 @@ type policy struct {
 }
 
 // foreignKey is a foreign key, as the catalog describes it: the table it references, its
-// actions on a delete and on an update there, and whether the request role may make either.
+// actions on a delete and on an update there, whether the request role may make either, a
+// delete of a row or an update of a column the key references, and its columns, each paired
+// with the one it references.
 type foreignKey struct {
 	name                 string
 	references           string
 	onDelete, onUpdate   string
 	canDelete, canUpdate bool
+	columns, referenced  []string
 }
 
 // tenancyViolations returns each violation of test 2 in schema, or in every schema that is not
@@ -177,7 +185,13 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 
 	rows, err = tx.Query(ctx, `
 		SELECT k.conrelid, k.conname, n.nspname || '.' || c.relname, k.confdeltype::text, k.confupdtype::text,
-		  has_table_privilege($1, k.confrelid, 'DELETE'), has_any_column_privilege($1, k.confrelid, 'UPDATE')
+		  has_table_privilege($1::name, k.confrelid, 'DELETE'),
+		  EXISTS (SELECT FROM unnest(k.confkey) AS key(attnum)
+		          WHERE has_column_privilege($1::name, k.confrelid, key.attnum, 'UPDATE')),
+		  array(SELECT a.attname::text FROM unnest(k.conkey) WITH ORDINALITY AS key(attnum, i)
+		        JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = key.attnum ORDER BY key.i),
+		  array(SELECT a.attname::text FROM unnest(k.confkey) WITH ORDINALITY AS key(attnum, i)
+		        JOIN pg_attribute a ON a.attrelid = k.confrelid AND a.attnum = key.attnum ORDER BY key.i)
 		FROM pg_constraint k
 		JOIN pg_class c ON c.oid = k.confrelid
 		JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -188,8 +202,12 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 	}
 	foreignKeys := map[uint32][]foreignKey{}
 	var fk foreignKey
-	if _, err := pgx.ForEachRow(rows, []any{&relid, &fk.name, &fk.references, &fk.onDelete, &fk.onUpdate, &fk.canDelete, &fk.canUpdate}, func() error {
-		foreignKeys[relid] = append(foreignKeys[relid], fk)
+	if _, err := pgx.ForEachRow(rows, []any{
+		&relid, &fk.name, &fk.references, &fk.onDelete, &fk.onUpdate, &fk.canDelete, &fk.canUpdate, &fk.columns, &fk.referenced,
+	}, func() error {
+		key := fk
+		key.columns, key.referenced = slices.Clone(fk.columns), slices.Clone(fk.referenced)
+		foreignKeys[relid] = append(foreignKeys[relid], key)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -210,6 +228,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 			}
 			out = append(out, ownWriteViolations(tb, policies[tb.oid], e.column())...)
 			out = append(out, globalActionViolations(tb, foreignKeys[tb.oid], exempt)...)
+			out = append(out, householdKeyViolations(tb, foreignKeys[tb.oid], exempt, e.column())...)
 			continue
 		case tb.kind == "m":
 			out = append(out, tb.name+" is a materialized view, which row-level security cannot hold, so it may hold no household's rows")
@@ -239,6 +258,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 			out = append(out, tb.name+" has no tenant isolation policy; create it with enable_tenant_isolation")
 		}
 		out = append(out, globalActionViolations(tb, foreignKeys[tb.oid], exempt)...)
+		out = append(out, householdKeyViolations(tb, foreignKeys[tb.oid], exempt, "household_id")...)
 	}
 
 	var stale []string
@@ -275,10 +295,38 @@ func ownWriteViolations(tb table, policies []policy, column string) []string {
 	return out
 }
 
+// householdKeyViolations reports each foreign key from tb, whose rows name their household in
+// column, to another table that holds households' rows, which does not pair column with the
+// column that names the household there. PostgreSQL checks a foreign key past row-level
+// security, so only the pair holds the row a key names to the household of the row that names
+// it. A key to a global table is globalActionViolations' concern.
+func householdKeyViolations(tb table, fks []foreignKey, exempt map[string]exemption, column string) []string {
+	var out []string
+	for _, fk := range fks {
+		e, exempted := exempt[fk.references]
+		if exempted && !e.ownPolicy {
+			continue
+		}
+		paired := false
+		for i, c := range fk.columns {
+			if c == column && i < len(fk.referenced) && fk.referenced[i] == e.column() {
+				paired = true
+			}
+		}
+		if !paired {
+			out = append(out, fmt.Sprintf("%s has foreign key %s, which references %s without pairing %s with its %s; "+
+				"a foreign key is checked past row-level security, so it can name another household's row",
+				tb.name, fk.name, fk.references, column, e.column()))
+		}
+	}
+	return out
+}
+
 // globalActionViolations reports each foreign key through which a delete or an update of a
 // global table's row, which the request role may make, changes tb's rows: a CASCADE, SET NULL
 // or SET DEFAULT action. The action runs past row-level security, so a delete in one
-// household's context would reach tb's rows in every household.
+// household's context would reach tb's rows in every household. An update acts only when a
+// column the key references changes, so only the request role's privilege on those counts.
 func globalActionViolations(tb table, fks []foreignKey, exempt map[string]exemption) []string {
 	acts := func(action string) bool { return action == "c" || action == "n" || action == "d" }
 	var out []string

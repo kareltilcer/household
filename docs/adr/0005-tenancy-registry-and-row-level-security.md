@@ -87,9 +87,13 @@ tenant table, compares each row's `household_id` with the setting. It says the m
   and forced, and the template as its only permissive policy; a table exempted for a policy of
   its own has only `FOR SELECT` policies wider than its household; a materialized view, which no
   policy can hold, is refused; a foreign key from a table holding households' rows acts on a
-  delete or an update of a global table's row only where the request role cannot make one,
-  since a referential action runs past row-level security; an exemption that names no table is
-  refused. Test 3 type-asserts every registered module to `ExportSource` and `EraseSource`. The
+  delete or an update of a global table's row only where the request role cannot make one (an
+  update counts only where it may change a column the key references), since a referential
+  action runs past row-level security; a foreign key from one table holding households' rows to
+  another pairs its household column with the other's, since PostgreSQL checks a foreign key past
+  row-level security too, and a key on an id alone would let a row of household B name household
+  A's row, whose delete in household A would then be refused or act on household B's row; an
+  exemption that names no table is refused. Test 3 type-asserts every registered module to `ExportSource` and `EraseSource`. The
   isolation test (FR-NF4) loads a fixture of two households with a row in every tenant table
   and, as `household_app` in household B, with household B's owner as the caller, who is a
   member of household A as well, reads each of household A's rows by primary key and finds
@@ -118,12 +122,17 @@ tenant table, compares each row's `household_id` with the setting. It says the m
 ## Consequences
 
 - A handler that writes the response before its transaction commits cannot do so by accident:
-  `InTx` returns once the commit has. A handler that needs a consistent snapshot across
-  several statements puts them in one `InTx`.
+  `InTx` returns once the commit has. A handler whose statements must commit or fail together
+  puts them in one `InTx`. The transaction is `READ COMMITTED`, PostgreSQL's default, so each
+  statement in it sees what had committed when that statement began: statements that must read
+  one snapshot need a stronger isolation level, which `InTx` does not offer yet.
 - The membership check and the handler's work are two transactions, so a member removed between
   them has one request in flight complete; the next is refused (D-15's "next request").
 - Every migration that creates a tenant table calls `enable_tenant_isolation`, and the PR that
-  adds one adds its rows to `internal/arch/testdata/isolation/fixture.sql`.
+  adds one adds its rows to `internal/arch/testdata/isolation/fixture.sql`. A tenant table that
+  another references gives it a key with the household, `UNIQUE (household_id, id)`, and the
+  reference is `FOREIGN KEY (household_id, x_id) REFERENCES x (household_id, id)`, as
+  `module_grants` references `memberships`.
 - Reading a user's memberships across households, as listing their households does, takes a
   transaction with only the caller set, as the middleware's resolution runs; inside a
   household's context those rows read as a tenant table's. Item 10's `invitations`, the third

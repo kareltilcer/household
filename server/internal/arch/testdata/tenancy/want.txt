@@ -2,6 +2,8 @@
 # and the stale exemptions last.
 arch_testdata.assigned has foreign key assigned_person_id_fkey, which acts on a delete from arch_testdata.people, a global table the request role deletes from; the action runs past row-level security, into every household
 arch_testdata.assigned has foreign key assigned_person_id_fkey, which acts on an update of arch_testdata.people, a global table the request role updates; the action runs past row-level security, into every household
+arch_testdata.linked has foreign key linked_partner_id_fkey, which references arch_testdata.roots without pairing household_id with its id; a foreign key is checked past row-level security, so it can name another household's row
+arch_testdata.loose_child has foreign key loose_child_parent_id_fkey, which references arch_testdata.compliant without pairing household_id with its household_id; a foreign key is checked past row-level security, so it can name another household's row
 arch_testdata.members_writable has permissive policy member_access, which writes beyond the household; a wider rule is a FOR SELECT policy
 arch_testdata.no_household has no household_id column
 arch_testdata.no_household has no tenant isolation policy; create it with enable_tenant_isolation

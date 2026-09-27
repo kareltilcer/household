@@ -3,9 +3,29 @@
 
 CREATE SCHEMA arch_testdata;
 
--- Keeps it: the template.
-CREATE TABLE arch_testdata.compliant (id uuid PRIMARY KEY, household_id uuid NOT NULL);
+-- Keeps it: the template, and a key with the household for another tenant table to reference.
+CREATE TABLE arch_testdata.compliant (id uuid PRIMARY KEY, household_id uuid NOT NULL, UNIQUE (household_id, id));
 SELECT enable_tenant_isolation('arch_testdata.compliant');
+
+-- Keeps it: a reference to another tenant table's row that pairs the two households, so the
+-- row it names is in its own household.
+CREATE TABLE arch_testdata.compliant_child (
+  id uuid PRIMARY KEY,
+  household_id uuid NOT NULL,
+  parent_id uuid NOT NULL,
+  FOREIGN KEY (household_id, parent_id) REFERENCES arch_testdata.compliant (household_id, id) ON DELETE CASCADE
+);
+SELECT enable_tenant_isolation('arch_testdata.compliant_child');
+
+-- A reference to another tenant table's row by its id alone. The key is checked past row-level
+-- security, so a row of one household can name another household's row, whose delete there is
+-- then refused.
+CREATE TABLE arch_testdata.loose_child (
+  id uuid PRIMARY KEY,
+  household_id uuid NOT NULL,
+  parent_id uuid NOT NULL REFERENCES arch_testdata.compliant (id)
+);
+SELECT enable_tenant_isolation('arch_testdata.loose_child');
 
 -- Keeps it: the template, narrowed by a restrictive policy.
 CREATE TABLE arch_testdata.narrowed (id uuid PRIMARY KEY, household_id uuid NOT NULL, owner_id uuid NOT NULL);
@@ -90,11 +110,32 @@ CREATE TABLE arch_testdata.authored (
 );
 SELECT enable_tenant_isolation('arch_testdata.authored');
 
+-- Keeps it: exempted as global, and the request role updates a column of its rows but not the
+-- key a tenant table references, so the tenant table's action on an update of the key never
+-- runs.
+CREATE TABLE arch_testdata.labelled (id uuid PRIMARY KEY, label text NOT NULL);
+GRANT SELECT, UPDATE (label) ON arch_testdata.labelled TO household_app;
+CREATE TABLE arch_testdata.tagged (
+  id uuid PRIMARY KEY,
+  household_id uuid NOT NULL,
+  label_id uuid NOT NULL REFERENCES arch_testdata.labelled (id) ON UPDATE CASCADE
+);
+SELECT enable_tenant_isolation('arch_testdata.tagged');
+
 -- Exempted with a policy of its own, which it has, enabled and forced.
 CREATE TABLE arch_testdata.roots (id uuid PRIMARY KEY);
 ALTER TABLE arch_testdata.roots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE arch_testdata.roots FORCE ROW LEVEL SECURITY;
 CREATE POLICY root_access ON arch_testdata.roots USING (id = app_household_id());
+
+-- Its household is a tenant root's row, which keeps it; its partner is another root's row,
+-- named by an id that no household pairs.
+CREATE TABLE arch_testdata.linked (
+  id uuid PRIMARY KEY,
+  household_id uuid NOT NULL REFERENCES arch_testdata.roots (id) ON DELETE CASCADE,
+  partner_id uuid NOT NULL REFERENCES arch_testdata.roots (id)
+);
+SELECT enable_tenant_isolation('arch_testdata.linked');
 
 -- Exempted with a policy of its own, which it does not force.
 CREATE TABLE arch_testdata.roots_unforced (id uuid PRIMARY KEY);

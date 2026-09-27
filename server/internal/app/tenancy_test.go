@@ -377,6 +377,35 @@ func TestACrossTenantInsertErrors(t *testing.T) {
 	expect(t, w.do(http.MethodPost, items(ours), u, itemBody(it, ours)), http.StatusCreated, "")
 }
 
+// A handler that deletes by id alone deletes only in the household the request addresses (D-2):
+// the probe's remove has no WHERE household_id. Another household's item is not found through
+// this one's path, even by a manager of both, and stays.
+func TestAHandlerMissingItsWhereDeletesOnlyInItsHousehold(t *testing.T) {
+	w := newWorld(t)
+	ours, theirs := w.household(true), w.household(true)
+	it := w.item(theirs)
+	u := w.member(ours, access.Member, level(access.Manage))
+	w.join(theirs, u, access.Member, level(access.Manage))
+
+	expect(t, w.do(http.MethodDelete, itemPath(ours, it), u, ""), http.StatusNotFound, problem.CodeNotFound)
+	if w.count(it) != 1 {
+		t.Fatal("a request addressed to one household deleted another's item")
+	}
+	expect(t, w.do(http.MethodDelete, itemPath(theirs, it), u, ""), http.StatusNoContent, "")
+	if w.count(it) != 0 {
+		t.Fatal("the delete addressed to the item's own household left it")
+	}
+}
+
+// The edge checks the household against the contract only on a route the contract declares,
+// and lets any other path through for the router to answer: there a household that is not a
+// UUID is one that does not exist.
+func TestAHouseholdThatIsNotAUUIDIsNotFound(t *testing.T) {
+	w := newWorld(t)
+	u := w.member(w.household(true), access.Owner, nil)
+	expect(t, w.do(http.MethodGet, "/api/v1/households/not-a-uuid/probe/nowhere", u, ""), http.StatusNotFound, problem.CodeNotFound)
+}
+
 // The tenant lasts as long as its transaction (PRD 01 §2.2), and each transaction runs as the
 // request role whatever role its pool logs in as. Served through a pool that logs in as the
 // administrator, whom no policy holds, a request still reads only its own household, and the
