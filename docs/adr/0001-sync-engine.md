@@ -122,24 +122,25 @@ read path, which adoption gives up; the generated streams and the isolation test
   answered, whatever the answer, and records any outcome but `applied` in a local-only table that
   the conflict inbox and the sync-health screen read, and that keeps an `entitlement` or `deferred`
   mutation to replay when its cause clears (FR-BI2, PRD 03 §2.4). A response that answers no
-  mutation is not an answer: on a `401` the connector fetches new credentials, on a `429` it waits
-  out the delay the response names, and on a `413` it sends the batch in smaller ones. A `422`
-  locates the mutation the edge refused ([ADR 0003](0003-contract-enforcement-at-the-edge.md)),
-  which is `rejected` with that code while the rest are sent again without it. A `402` or a `404`
-  answers every mutation in the batch alike, `rejected` with `entitlement` or `not_found`, as the
-  spike's harness was written to do for a `404`, though no scenario reached it: scenario 7's
-  `not_found` came per mutation, in a `200`. A `409 idempotency_in_progress` means an earlier send
-  of the same batch is still running or took effect without its response being kept (D-92): the
-  connector sends it again, and once D-92's five minutes have passed it sends it under a fresh key,
-  which per-mutation idempotency (FR-SY5) answers from each mutation's stored result. It throws, and
-  so retries, only on a transport failure, a `5xx`, a `401`, a `409` or a `429`: PowerSync applies
-  no checkpoint while the queue holds anything, so a connector that retried a refusal would freeze
-  the replica. PowerSync's queue holds row writes, so what a mutation carries that a row write does
-  not (its `mutation_id`, the `client_time` it was made at, its `base_version`, any `action`) is
-  recorded with the write when it is made. The spike's harness minted the `mutation_id` at upload,
-  took a check's `client_time` from the `checked_at` column the check itself wrote, and stamped
-  every other write with the upload time. Merge policies, idempotency, clock clamping and the
-  offline write flags are unchanged.
+  mutation is not an answer: on a `401` the connector renews the API credential the push was sent
+  with, which is never PowerSync's token, on a `429` it waits out the delay the response names, and
+  on a `413` it sends the batch in smaller ones. A `422` locates the mutation the edge refused
+  ([ADR 0003](0003-contract-enforcement-at-the-edge.md)), which is `rejected` with that code while
+  the rest are sent again without it. A `402` or a `404` answers every mutation in the batch alike,
+  `rejected` with `entitlement` or `not_found`, as the spike's harness was written to do for a
+  `404`, though no scenario reached it: scenario 7's `not_found` came per mutation, in a `200`. A
+  `409 idempotency_in_progress` means an earlier send of the same batch is still running or took
+  effect without its response being kept (D-92): the connector sends it again, and once D-92's five
+  minutes have passed it sends it under a fresh key, which per-mutation idempotency (FR-SY5)
+  answers from each mutation's stored result. It throws, and so retries, only on a transport
+  failure, a `5xx`, a `401`, a `409` or a `429`: PowerSync applies no checkpoint while the queue
+  holds anything, so a connector that retried a refusal would freeze the replica. PowerSync's queue
+  holds row writes, so what a mutation carries that a row write does not (its `mutation_id`, the
+  `client_time` it was made at, its `base_version`, any `action`) is recorded with the write when
+  it is made. The spike's harness minted the `mutation_id` at upload, took a check's `client_time`
+  from the `checked_at` column the check itself wrote, and stamped every other write with the
+  upload time. Merge policies, idempotency, clock clamping and the offline write flags are
+  unchanged.
 - **The access predicate becomes stream definitions generated from the entity registry**, never
   written by hand, so the check still lives in one place (the reasoning behind D-22):
   - the grant as its two arms, per household as a subscription parameter (D-4);
@@ -160,13 +161,14 @@ read path, which adoption gives up; the generated streams and the isolation test
   any case. An isolation test, the read-path twin of FR-NF4, connects a member of two households to
   one of them and asserts that none of the other's rows arrive, nor any row of a household they
   are not in.
-- **It is the one exception to D-3.** D-3 says no database role bypasses row-level security for
-  content, and this one does. It is the PowerSync service's own credential: no staff member, staff
-  tool or support system connects with it, so the no-content-access test (PRD 05 §6) leaves it out
-  and the isolation test above holds it instead. PowerSync's bucket storage holds the replicated
-  rows outside row-level security, so it is household content under the same residency and
-  encryption rules as the database, and the credential to its database is likewise the service's
-  alone. PRD 01 §2.3, 02 §8 and 05 §6 record the exception.
+- **With its bucket storage's credential, it is the one exception to D-3.** D-3 says no database
+  role bypasses row-level security for content, and this one does. It is the PowerSync service's
+  own credential: no staff member, staff tool or support system connects with it, so the
+  no-content-access test (PRD 05 §6) leaves it out and the isolation test above holds it instead.
+  PowerSync's bucket storage holds the replicated rows outside row-level security, so it is
+  household content under the same residency and encryption rules as the database, and the
+  credential to its database is likewise the service's alone. PRD 01 §2.3, 02 §8 and 05 §6 record
+  the exception.
 
 ## Alternatives rejected
 
@@ -215,16 +217,18 @@ read path, which adoption gives up; the generated streams and the isolation test
   them. PostgreSQL lets only a role that holds `REPLICATION` and `BYPASSRLS` grant them (ADR 0004),
   so the production provider chosen in item 88 must allow it; items 30 and 88 deploy the service.
   PowerSync's deployment guidance caps one API process at 200 concurrent client connections and
-  recommends 100, so the service scales out with connected devices; item 90 measures it at PRD 07
-  §1's Year-3 target. It is also a dependency that can fail on its own, so item 13 defines its
-  failure behaviour (PRD 07 FR-NF3) and item 89 tests it.
+  recommends 100, so the service scales out with connected devices. PRD 07 §1's Year-3 connection
+  target names only the socket (40 000), so item 14 restates it for PowerSync when it decides the
+  socket's fate, and item 90 measures the service against it. It is also a dependency that can fail
+  on its own, so item 13 defines its failure behaviour (PRD 07 FR-NF3) and item 89 tests it.
 - **Removing a member from an audience rewrites every row of that audience**, to take the member
   out of each row's readers, and removal from the household does so for every audience they were
   in. The rewrite is not an edit of the row: item 4's `touch_entity` bumps `version` on every
   update, which would turn each queued or `If-Match` edit to a row of the audience into a conflict
   or a preserved loser, so item 14 keeps the readers out of the version, a change to ADR 0006's
   trigger that a new ADR records and PRD 01 §3 already notes, or in a table of their own, which the
-  probes also accepted. A household's conversations are small enough that this is cheap. A
+  probes accepted only alone: never beside the grant's subquery, and against a table the spike
+  never created. A household's conversations are small enough that this is cheap. A
   `member_shared` calendar's audience is every event of the calendar, which can be many more rows;
   it has no floor, so item 14 may resolve it through the calendar's member list in the stream
   instead, which the probes accepted though never beside the grant's subquery. Item 90's load tests
