@@ -52,6 +52,15 @@ info:
     RFC 9457 `application/problem+json` throughout, with a stable machine-readable `code` that
     clients switch on. Never switch on `detail`, which is human-readable and translated.
 
+    Any operation can also answer `405` (`method_not_allowed`) or `500` (`internal`); neither is
+    declared on each operation.
+
+    In a `ValidationProblem`, each `errors[].field` is an RFC 6901 JSON Pointer into the request
+    body (`/name`, `/items/0/amount_minor`, or an empty string for the body as a whole), or, for a
+    parameter, its location and name: `query:limit`, `header:If-Match`, `path:household_id`.
+    `errors[].code` names the check that failed in snake_case: a JSON Schema keyword such as
+    `required`, `type`, `max_length` or `pattern`, or `malformed` for a value that does not parse.
+
     ## Money and quantities
 
     Money is always an integer in the currency's minor unit plus an ISO 4217 code. There are no
@@ -8067,9 +8076,11 @@ components:
         removed code breaks the build instead of failing silently at runtime, and so that server
         and client cannot drift on spelling.
 
-        Every value below corresponds to a condition this document describes on some response.
-        Adding a code is a contract change and belongs in the same review as the endpoint that
-        raises it.
+        Every value below corresponds to a condition this document describes on some response,
+        except the two protocol-level codes any operation can answer with: `method_not_allowed`
+        (`405`, a method the path does not serve, with an `Allow` header) and `internal` (`500`,
+        a failure the caller cannot act on). Adding a code is a contract change and belongs in
+        the same review as the endpoint that raises it.
       enum:
         # Cross-cutting — the reusable responses in `components.responses`
         - unauthenticated
@@ -8080,6 +8091,9 @@ components:
         - entitlement_read_only
         - entitlement_restricted
         - rate_limited
+        # Protocol-level — answerable by any operation, so declared on none
+        - method_not_allowed
+        - internal
         # Authentication and identity
         - refresh_token_invalid
         - account_disabled
@@ -8155,8 +8169,16 @@ components:
                 type: object
                 required: [field, code]
                 properties:
-                  field: { type: string }
-                  code: { type: string }
+                  field:
+                    type: string
+                    description: |
+                      An RFC 6901 JSON Pointer into the request body, empty for the body as a
+                      whole; or, for a parameter, `<in>:<name>` as declared, such as `query:limit`.
+                    examples: ['/name', 'query:limit']
+                  code:
+                    type: string
+                    description: The check that failed, in snake_case — a JSON Schema keyword such as `required` or `max_length`, or `malformed`.
+                    examples: [required, max_length, malformed]
                   message: { type: string }
 
     ConflictProblem:

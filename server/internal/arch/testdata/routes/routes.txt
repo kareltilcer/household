@@ -1,0 +1,12 @@
+# The routes of the fixture router, as "METHOD path".
+
+# Declared and served: no violation.
+GET /api/v1/things
+# Declared, with a regular expression in the parameter chi routes by: no violation.
+GET /api/v1/things/{thing_id:[0-9]+}
+# Served while still pending.
+POST /api/v1/things
+# Not declared: the contract has no PUT on this path.
+PUT /api/v1/things/{thing_id}
+# Served outside /api/v1, where no contract path can describe it.
+GET /metrics

@@ -13,6 +13,8 @@
   "scripts": {
     "up": "docker compose up --detach --wait",
     "down": "docker compose down",
+    "db:setup": "cd server && go run ./cmd/household-api bootstrap && go run ./cmd/household-api migrate",
+    "dev:api": "cd server && go run ./cmd/household-api serve",
     "gen": "turbo run gen && pnpm run gen:go",
     "gen:go": "cd server && go generate ./...",
     "typecheck": "turbo run typecheck",

@@ -1,0 +1,85 @@
+# 0003 — The server validates against the committed contract, and says what failed where
+
+- **Status:** Accepted
+- **Date:** 2026-09-27
+- **Plan item:** 2
+- **Decides for:** PRD 07 §4 (input validation at the edge), §6 (the contract diff); PRD 01 §6
+  (RFC 9457 errors), §10 test 6; PL-2 (kin-openapi), PL-7 (`contract_pending`)
+
+## Context
+
+The contract (`docs/api/openapi.yaml`, OpenAPI 3.1, 486 operations) is the source of truth, and
+the server is checked against it, never the reverse. Four things had to be settled for that to
+be enforced rather than intended:
+
+1. **Where the server gets the document.** It lives in `docs/api/`, outside the Go module in
+   `server/`, and `go:embed` cannot reach a parent directory. A copy inside `server/` would drift.
+2. **How it validates.** kin-openapi v0.149 loads the document and validates 3.1. For a 3.1
+   document it validates each value with a JSON Schema 2020-12 validator that it compiles from
+   the schema on every call, so once per request. That path reports a failure as one sentence
+   with no location (`jsonschema validation failed … at '/icon': got number, want null or
+   string`), and it cannot resolve a component `$ref` from a lone schema. On most of this
+   contract's bodies it therefore falls back to kin's built-in validator anyway.
+3. **What a 422 says.** `ValidationProblem.errors[]` has `field` and `code`, and nothing said
+   what either holds. A client form needs to put each error on its input.
+4. **What a 500 and a 405 carry.** `Problem.code` is required and must be a `ProblemCode`, and
+   the enum had no member for either.
+
+## Decision
+
+- **`docs/api/` is a Go module** (`github.com/kareltilcer/household/docs/api`, one file,
+  `embed.go`) that embeds `openapi.yaml`. `server/go.mod` requires it through
+  `replace … => ../docs/api`. The server, its tests and architecture test 6 all read those bytes.
+- **Validation uses kin-openapi's built-in validator** for every request and response. The
+  contract package hands kin a shallow copy of the document that reports itself as 3.0.3, which
+  is the switch kin uses to choose. The built-in validator implements every 3.1 construct the
+  contract uses: type arrays with `null` (427 uses), `const` (9), a numeric `exclusiveMinimum`
+  (1), `{ type: 'null' }` branches of a `oneOf` (141). `contract_test.go` pins each against a real
+  operation, so a kin upgrade that changes this fails there.
+- **The edge validates the operation chi routed to**, found with the router's own `Find`, so a
+  body is never checked against a different operation's schema. It validates parameters,
+  headers and JSON bodies; it neither authenticates (items 8, 9) nor writes defaults into the
+  request, since a `PATCH` that grew defaulted members would overwrite what the client never
+  sent. A JSON body is capped (`HOUSEHOLD_MAX_BODY_BYTES`, 1 MiB) and answers `413` above it; a
+  body in a media type the operation does not declare answers `415`; a multipart upload is left
+  to its handler to stream.
+- **`errors[].field` is an RFC 6901 JSON Pointer into the body** (`/items/0/amount_minor`, `""`
+  for the whole body), **or `<in>:<name>` for a parameter** (`query:limit`,
+  `header:If-Match`). A pointer is empty or starts with `/`, so the two forms cannot collide.
+  **`errors[].code` is the failed JSON Schema keyword in snake_case** (`required`, `max_length`,
+  `one_of`), or `malformed` for a value that does not parse. An `allOf` failure is reported as
+  the failures inside it, since `allOf` is how a Create composes its Update with a required list.
+- **`ProblemCode` gains `method_not_allowed` and `internal`**, the two codes any operation can
+  answer with and none declares. The Go enum is generated from the contract (`pnpm run gen`),
+  and a test fails when the generated file is stale, since CI does not run `go generate`.
+- **A problem's `type` is `urn:household:problem:<code>`**, `title` is the HTTP reason phrase,
+  and no `detail` is sent: the contract calls `detail` translated, and the server has no
+  translated strings yet (PRD 03 §9). Clients switch on `code`.
+- **Routes and the contract are diffed in both directions** (architecture test 6), with
+  `server/internal/arch/contract_pending.txt` naming the operations not built yet. The router
+  also refuses to build with a route the contract does not declare, so the server never serves
+  one even outside CI.
+
+## Alternatives rejected
+
+| Alternative | Why not |
+|---|---|
+| Commit a copy of `openapi.yaml` inside `server/`, with a drift test | Every contract change lands twice, 680 KB each time, and a reviewer reads both diffs |
+| Read `openapi.yaml` from disk at run time | The binary then depends on a file beside it; a deploy that ships the wrong one validates against the wrong contract |
+| kin-openapi's JSON Schema 2020-12 path, as it chooses for 3.1 | A schema compiled per request, errors with no location, and a silent fallback to the built-in validator on every body that uses a `$ref` |
+| libopenapi-validator (pb33f) | Also validates 3.1, but PL-2 chose kin-openapi and kin's built-in validator covers every construct the contract uses; changing library would be a decision without a failing requirement behind it |
+| Validate with a second router (kin's `gorillamux`) matched against the document | Two routers can disagree on which template a path matches; a body would then be checked against an operation other than the one that serves it |
+| `errors[].field` as a dotted path (`items.0.amount_minor`) | Ambiguous for keys containing dots; JSON Pointer is the RFC 9457 examples' own choice |
+| Map a 500 and a 405 to an existing code, or send no `code` | `code` is required and enumerated; `not_found` for a 405 would tell a client the resource is gone |
+| An English `detail` on every problem | The one user-visible literal the product forbids; a client that showed it would show English to a Czech member |
+
+## Consequences
+
+- A contract change that adds, removes or renames a `ProblemCode` needs `pnpm run gen` in the
+  same PR, or the problem package's test fails.
+- Every PR that builds an operation deletes its line from `contract_pending.txt`; at general
+  availability the file is empty (item 96).
+- Revisit if the contract adopts a 3.1 keyword the built-in validator does not implement
+  (`prefixItems`, `unevaluatedProperties`, `dependentRequired`): the pinning test will not
+  catch a keyword it does not exercise, so the PR that introduces one extends that test first.
+- Revisit `type` URNs when the problem codes get a documentation page to point at.

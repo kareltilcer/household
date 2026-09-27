@@ -19,6 +19,10 @@ old one's status becomes *Superseded by NNNN*.
 
 ## Index
 
+Numbers 0001 and 0002 are reserved by the plan for item 5 (`0001-sync-engine.md`) and item 34
+(`0002-gate-g-c.md`).
+
 | # | Decision | Status |
 |---|---|---|
-| — | None yet. Plan item 5 writes `0001-sync-engine.md` | |
+| [0003](0003-contract-enforcement-at-the-edge.md) | The server validates against the committed contract, and says what failed where | Accepted |
+| [0004](0004-database-roles-migration-blocks-and-test-databases.md) | Database roles, migration blocks, and one database per test package | Accepted |

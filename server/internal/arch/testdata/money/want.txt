@@ -1,0 +1,15 @@
+# Every violation architecture test 8 reports on this fixture, in its order.
+migrations/10001_money.sql:7: amount is money stored as numeric; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:8: unit_price is money stored as real; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:9: fee is money stored as double precision; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:10: PostgreSQL's money type rounds to the server locale's currency; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:18: amount_minor is money stored as decimal; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:22: amount_minor is money stored as numeric; use amount_minor bigint and currency char(3)
+money.go:15: Amount is money held as float64; use an int64 amount_minor and a currency
+money.go:16: UnitPrice is money held as big.Float; use an int64 amount_minor and a currency
+money.go:17: Fees is money held as float32; use an int64 amount_minor and a currency
+money.go:18: balance is money held as decimal.Decimal; use an int64 amount_minor and a currency
+money.go:23: Price is money held as float64; use an int64 amount_minor and a currency
+money.go:25: prices is money held as float64; use an int64 amount_minor and a currency
+money.go:25: totalCost is money held as float64; use an int64 amount_minor and a currency
+money.go:27: budget is money held as float64; use an int64 amount_minor and a currency

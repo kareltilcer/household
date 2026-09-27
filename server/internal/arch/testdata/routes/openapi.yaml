@@ -1,0 +1,12 @@
+openapi: 3.1.0
+info: { title: Architecture test 6 fixture, version: '1' }
+paths:
+  /things:
+    get: { operationId: getThings, responses: { '200': { description: Listed } } }
+    post: { operationId: postThings, responses: { '201': { description: Created } } }
+  /things/{thing_id}:
+    parameters: [{ name: thing_id, in: path, required: true, schema: { type: string } }]
+    get: { operationId: getThingsByThingId, responses: { '200': { description: Found } } }
+    delete: { operationId: deleteThingsByThingId, responses: { '204': { description: Deleted } } }
+  /widgets:
+    get: { operationId: getWidgets, responses: { '200': { description: Listed } } }

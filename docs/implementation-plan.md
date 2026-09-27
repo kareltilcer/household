@@ -208,7 +208,7 @@ Phase 0 · after — · size M
   - CI is green, and the committed `openapi.yaml` validates under both validators.
 - **PR:** [#4](https://github.com/kareltilcer/household/pull/4)
 
-### 2 · Server skeleton and contract enforcement · `planned`
+### 2 · Server skeleton and contract enforcement · `done`
 
 Phase 0 · after 1 · size M
 

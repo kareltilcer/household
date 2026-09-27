@@ -80,6 +80,10 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
   breaks the day a card expires.
 - **Errors are RFC 9457** `application/problem+json`, with a body on every error response. Switch
   on `code`, never on `detail`; `code` is the `ProblemCode` enum, so the switch is exhaustive.
+  Any operation can also answer `405 method_not_allowed` or `500 internal`, which no operation
+  declares. A `422 validation_failed` names each failure in `errors[]`: `field` is a JSON Pointer
+  into the body (`/name`) or `<in>:<name>` for a parameter (`query:limit`), and `code` is the
+  check that failed (`required`, `max_length`, `malformed`, …).
 - **The sync endpoints are the offline path**; the per-module REST endpoints are the online path.
   Both write through the same service layer.
 
@@ -101,6 +105,23 @@ Three authoring hazards this document has already been bitten by, worth remember
    and hides the break. Keep every `{ ... }` on one line.
 
 CI runs both validators, openapi-spec-validator and Redocly, and each of them resolves every
-`$ref`. The route/contract diff against the implementation
-([07-nonfunctional.md](../prd/07-nonfunctional.md) §6) joins them with the server skeleton, plan
-item 2.
+`$ref`.
+
+## How the server holds itself to it
+
+This directory is also a small Go module (`go.mod`, `embed.go`) that embeds `openapi.yaml`, and
+the server requires it through a `replace` directive. The server reads the committed document
+itself, never a copy, in three places:
+
+- **At the edge**, every request routed to an operation is validated against it before the
+  handler runs: parameters, headers and JSON bodies (`server/internal/platform/contract`).
+- **In the tests**, `testsupport.Serve` validates every response a test sees: a declared status,
+  a body the declared schema accepts, and a valid `Problem` on every error.
+- **Architecture test 6** ([01-architecture.md](../prd/01-architecture.md) §10,
+  [07-nonfunctional.md](../prd/07-nonfunctional.md) §6) diffs the server's routes against the
+  document. `server/internal/arch/contract_pending.txt` lists the operations not built yet; the
+  test fails on a route the document does not declare, a route built while still pending, a
+  pending entry the document does not declare, and an operation neither built nor pending.
+
+The Go `ProblemCode` enum is generated from this document: after changing it, run
+`pnpm run gen`. A test fails until the generated file matches.

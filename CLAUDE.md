@@ -27,6 +27,8 @@ downloads the version `devEngines.runtime` names and runs every script on it.
 ```bash
 pnpm install          # workspace dependencies
 pnpm run up           # Postgres 17, RustFS (S3) and Mailpit, waiting until healthy
+pnpm run db:setup     # create the three database roles, then apply the migrations
+pnpm run dev:api      # serve the API on 127.0.0.1:8080 (/api/v1/healthz, /api/v1/readyz)
 pnpm test             # Vitest through turbo, then go test against the compose Postgres
 pnpm run lint         # ESLint, golangci-lint, Redocly and Prettier
 pnpm typecheck        # tsc in every package
@@ -42,7 +44,15 @@ pnpm run down         # stop the services; volumes are kept
   (gitleaks). Each has its own modfile, so no tool's dependencies can move another's.
 - **Go tests need the database.** They fail, rather than skip, when PostgreSQL is not
   reachable, and run with `-count=1` so that no cached result stands in for a run. Set
-  `HOUSEHOLD_TEST_DATABASE_URL` to point them elsewhere.
+  `HOUSEHOLD_TEST_DATABASE_URL` to point them elsewhere. A package that touches the
+  database calls `testsupport.Main` from its `TestMain` and gets its own clone of a
+  migrated template (`testsupport.Open`); `testsupport.Serve` checks every response a test
+  sees against `openapi.yaml`.
+- **The contract is enforced from both ends.** Request bodies and parameters are validated
+  against `openapi.yaml` at the edge. Architecture test 6 fails when a route and the
+  contract disagree; `server/internal/arch/contract_pending.txt` lists the operations not
+  built yet, and the PR that builds one deletes its line. `pnpm run gen` regenerates the Go
+  `ProblemCode` enum after a contract change, and a test fails until it has.
 - CI ([`.github/workflows/`](.github/workflows/)) runs the checks above (typecheck, lint,
   format check and test), plus openapi-spec-validator, govulncheck, pnpm audit, gitleaks
   and CodeQL. Typecheck, lint and test depend on each package's `gen` in turbo, so CI
