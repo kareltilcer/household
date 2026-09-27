@@ -138,8 +138,9 @@ property of the system rather than a policy (**D-3**, and see
 > without them it reads nothing from a table that forces row-level security. It is the PowerSync
 > service's own credential, and no staff member or tool connects with it. On its path the tenant
 > boundary is the stream definitions generated from the entity registry, which a read-path isolation
-> test holds to one household. It is the one exception to the paragraph above
-> ([ADR 0001](../adr/0001-sync-engine.md)). What it replicates lands in PowerSync's bucket storage,
+> test holds to one household. It is the one exception to the paragraph above, and the one path
+> on which §2.1's rule constrains a query once rather than twice (**D-2**,
+> [ADR 0001](../adr/0001-sync-engine.md)). What it replicates lands in PowerSync's bucket storage,
 > a database of its own with no row-level security, whose credential is likewise the service's
 > alone ([05](05-privacy-and-compliance.md) §6).
 

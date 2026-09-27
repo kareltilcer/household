@@ -119,7 +119,10 @@ the short version:
 
 - **G10** — Cross-tenant data disclosure is prevented **twice**: by application scoping and
   independently by PostgreSQL row-level security, such that a missing `WHERE` clause returns
-  nothing rather than someone else's family.
+  nothing rather than someone else's family. D-93 makes one exception, the replicated path, which
+  PowerSync reads past row-level security: there it is prevented once, by stream definitions
+  generated from the entity registry, which a read-path isolation test holds
+  ([01-architecture.md](01-architecture.md) §2.3).
 - **G11** — The module boundary from `home` survives: a module owns its routes, migrations,
   audit actions, sync entities and catalog contributions, and imports no other module. An
   architecture test fails the build on a cross-module import.

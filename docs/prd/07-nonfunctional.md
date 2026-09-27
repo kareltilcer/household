@@ -93,7 +93,7 @@ provider unavailable ⇒ Garden renders from cache with no error the member can 
 | Tokens | Access JWT 15 min, EdDSA; refresh tokens rotating and single-use with family reuse detection |
 | Session | `__Host-` prefixed, `HttpOnly`, `Secure`, `SameSite=Lax`; double-submit CSRF plus an Origin allowlist |
 | Authorization | Resolved server-side from the membership on every request. **Never from a client-supplied field, never from a JWT claim** |
-| Tenant isolation | Application scoping **and** RLS with `FORCE`. Tested in CI |
+| Tenant isolation | Application scoping **and** RLS with `FORCE`. Tested in CI. Under D-93 the replicated path has the generated stream definitions alone, held by a read-path isolation test ([01](01-architecture.md) §2.3) |
 | Input | Every request body validated against the OpenAPI schema at the edge |
 | Uploads | Type sniffed from bytes; size capped; active types download-only; `nosniff` everywhere |
 | Output | The web app sets a strict CSP with no `unsafe-inline`; user content is rendered through sanitising renderers only |

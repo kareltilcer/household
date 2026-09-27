@@ -55,7 +55,7 @@ next, about 100 ms later.
 |---|---|---|
 | **Scenario 3.** Petr and Eva check Milk offline, one second apart, then reconnect | Both replicas equal the server 243 ms after reconnecting. The server holds one check (version 1 → 2), one audit event, one feed change; the outcomes were one `applied` and one `applied` no-op; no conflict | The same on the server. The outbox, the optimistic view and their persistence are ours: Electric replicates reads only |
 | **Scenario 7.** Offline, Petr checks Bread and adds Butter; his grant is lowered to `none`; he reconnects | The replica is empty within one poll (104 ms), the optimistic Butter included. Both writes came back `rejected` / `not_found` once and were not retried; the server wrote nothing | With the grant checked in our proxy, the proxy answers `404` and nothing clears the replica unless our client treats the `404` as "delete what you hold". With the grant as subqueries in the shape, Electric sends a `move-out` event and **its own `Shape` class ignores it: all three rows stay**. A replica of ours that applies its positional tag protocol empties within one poll (102 ms) |
-| **Access loss while connected** | Rows deleted within one poll for each cause the spike could make: grant to `none`, module disabled household-wide (for a member and the owner), removal from the household, soft delete; rows back when the grant returns | As above: with the proxy gate, a grant lowered to `none` clears the replica only through our client's `404` convention, which drops the whole shape at once; with subqueries, its own `Shape` keeps the rows for a grant lowered to `none` and for a module disabled, and only our own tag-aware replica is correct |
+| **Access loss while connected** | Rows deleted within one poll for each cause the spike could make: grant to `none`, module disabled household-wide (for a member and the owner), removal from the household; rows back when the grant returns. The harness's same run soft-deleted an item, which is a deletion rather than access loss, and its row left the owner's replica within one poll too | As above: with the proxy gate, a grant lowered to `none` clears the replica only through our client's `404` convention, which drops the whole shape at once; with subqueries, its own `Shape` keeps the rows for a grant lowered to `none` and for a module disabled, and only our own tag-aware replica is correct |
 | **Visibility and audience** (below), including scenario 18, and scenario 16 with the member removed while connected rather than offline | 7 of 7, through two workarounds | Not run. The probes found it expressible, with the caller's ids and floor as constants the proxy writes |
 
 The totals are PowerSync 26 of 26; Electric 13 of 13 with the proxy gate, 12 of 15 with subqueries
@@ -195,7 +195,7 @@ read path, which adoption gives up; the generated streams and the isolation test
   monthly partitions still have to be made while it does. Item 14 either names a consumer or stops
   the write and drops the table through an expand/contract migration, recording the choice in a new
   ADR (ADR 0006 is accepted, so it is not rewritten) and amending PRD 03 §2.2, 07 §1, CLAUDE.md
-  and the push's response.
+  and the push's response, and PRD 01 §3 and §10's check 4 if the write stops.
 - **The tenant middleware is not on the read path.** It resolves the entitlement state on every
   request, and PRD 04 §3 gives a `suspended` household no sync at all. The credentials and the
   streams hold that instead, which item 18 adds.
@@ -212,6 +212,10 @@ read path, which adoption gives up; the generated streams and the isolation test
   `wal_level=logical`, and each replicated table is set to `REPLICA IDENTITY FULL`, as the spike ran
   them. PostgreSQL lets only a role that holds `REPLICATION` and `BYPASSRLS` grant them (ADR 0004),
   so the production provider chosen in item 88 must allow it; items 30 and 88 deploy the service.
+  PowerSync's deployment guidance caps one API process at 200 concurrent client connections and
+  recommends 100, so the service scales out with connected devices; item 90 measures it at PRD 07
+  §1's Year-3 target. It is also a dependency that can fail on its own, so item 13 defines its
+  failure behaviour (PRD 07 FR-NF3) and item 89 tests it.
 - **Removing a member from an audience rewrites every row of that audience**, to take the member
   out of each row's readers. A household's conversations are small enough that this is cheap. A
   `member_shared` calendar's audience is every event of the calendar, which can be many more rows;
