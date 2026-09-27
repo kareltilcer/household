@@ -1,0 +1,13 @@
+{
+  "name": "household-sync-spike-harness",
+  "private": true,
+  "type": "module",
+  "description": "The sync-engine spike's scenarios (plan item 5). Throwaway.",
+  "dependencies": {
+    "@electric-sql/client": "^1.5.28",
+    "@powersync/node": "^1.1.0",
+    "better-sqlite3": "^13.0.3",
+    "pg": "^8.23.0",
+    "uuid": "^14.0.2"
+  }
+}

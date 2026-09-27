@@ -1,0 +1,87 @@
+## PowerSync 1.26.1, @powersync/node 1.1.0
+PASS  PowerSync, scenario 3: offline, each replica shows its own check at once
+PASS  PowerSync, scenario 3: each queued one write
+PASS  PowerSync, scenario 3: both replicas converge on the server row  (243 ms after reconnecting)
+PASS  PowerSync, scenario 3: the server holds one check: Milk checked, version 1 to 2  (version 2)
+PASS  PowerSync, scenario 3: one audit event  (["shopping.item.check"])
+PASS  PowerSync, scenario 3: one change in the feed
+PASS  PowerSync, scenario 3: two applied outcomes, one of them a no-op  (["applied (noop)","applied v2"])
+PASS  PowerSync, scenario 3: no rejection and no conflict
+PASS  PowerSync, scenario 7: offline, Petr checks Bread and adds Butter: 4 rows, 2 queued
+PASS  PowerSync, scenario 7: on reconnect the replica holds nothing: every row retracted, the optimistic Butter included  (104 ms after reconnecting)
+PASS  PowerSync, scenario 7: both queued writes rejected, with not_found  (["not_found","not_found"])
+PASS  PowerSync, scenario 7: the rejections are surfaced once and not retried  (2 uploads, 3 s later)
+PASS  PowerSync, scenario 7: the server is unchanged: Bread unchecked at version 1, no Butter
+PASS  PowerSync, scenario 7: no audit event and no change written
+PASS  PowerSync, access loss while connected: grant lowered to none: rows deleted  (104 ms)
+PASS  PowerSync, access loss while connected: grant raised to view: rows back  (108 ms)
+PASS  PowerSync, access loss while connected: module disabled household-wide: rows deleted for a member and for the owner  (105 ms)
+PASS  PowerSync, access loss while connected: removed from the household: rows deleted  (104 ms)
+PASS  PowerSync, access loss while connected: an item soft-deleted: its row leaves the owner's replica  (105 ms)
+PASS  PowerSync, visibility and audience: Eva holds the shared note whole and not Petr's private one  (["Holiday plan"])
+PASS  PowerSync, visibility and audience: Eva holds the private note's redacted form: id, owner, version, no title or body  (["id","household_id","owner_id","version"])
+PASS  PowerSync, visibility and audience: Petr holds his private note whole, and its redacted form as well (the workaround)
+PASS  PowerSync, visibility and audience: the conversation reaches its members only
+PASS  PowerSync, visibility and audience: scenario 18: Eva, added with floor 2, receives one message row and nothing before her floor  (rows received: 1)
+PASS  PowerSync, visibility and audience: scenario 16: Petr removed, his messages retracted; the floor still holds for Eva, Jana keeps all three  (116 ms; the server rewrote 3 rows to do it)
+PASS  PowerSync, visibility and audience: a shared note made private: its full row leaves Eva's replica and its redacted form arrives  (104 ms)
+{"failed":0,"total":26}
+## Electric 1.8.1, @electric-sql/client 1.5.28: proxy gate, replica shape
+PASS  Electric (gate), scenario 3: offline, each shows its own check at once (our outbox, over the shape)
+PASS  Electric (gate), scenario 3: both replicas converge on the server row  (8 ms after reconnecting)
+PASS  Electric (gate), scenario 3: the server holds one check: Milk checked, version 1 to 2  (version 2)
+PASS  Electric (gate), scenario 3: one audit event
+PASS  Electric (gate), scenario 3: one change in the feed
+PASS  Electric (gate), scenario 3: two applied outcomes, one a no-op  (["applied (noop)","applied v2"])
+PASS  Electric (gate), scenario 3: no rejection and no conflict
+PASS  Electric (gate, official Shape), scenario 7: offline, Petr checks Bread and adds Butter: 4 rows, 2 queued
+PASS  Electric (gate, official Shape), scenario 7: both queued writes rejected, with not_found  (["not_found","not_found"])
+PASS  Electric (gate, official Shape), scenario 7: on reconnect the replica holds nothing  (0 ms after reconnecting; the proxy answered 404 and our client cleared its rows)
+NOTE  Electric (gate, official Shape), scenario 7: messages after reconnecting: []
+PASS  Electric (gate, official Shape), scenario 7: the server is unchanged: Bread unchecked at version 1, no Butter
+PASS  Electric (gate, official Shape), scenario 7: no audit event and no change written
+PASS  Electric (gate, official Shape), access loss while connected: grant lowered to none: rows deleted  (106 ms)
+NOTE  Electric (gate, official Shape), access loss while connected: messages: []
+{"failed":0,"total":15}
+## Electric 1.8.1, @electric-sql/client 1.5.28: proxy subquery, replica shape
+PASS  Electric (subquery), scenario 3: offline, each shows its own check at once (our outbox, over the shape)
+PASS  Electric (subquery), scenario 3: both replicas converge on the server row  (8 ms after reconnecting)
+PASS  Electric (subquery), scenario 3: the server holds one check: Milk checked, version 1 to 2  (version 2)
+PASS  Electric (subquery), scenario 3: one audit event
+PASS  Electric (subquery), scenario 3: one change in the feed
+PASS  Electric (subquery), scenario 3: two applied outcomes, one a no-op  (["applied v2","applied (noop)"])
+PASS  Electric (subquery), scenario 3: no rejection and no conflict
+PASS  Electric (subquery, official Shape), scenario 7: offline, Petr checks Bread and adds Butter: 4 rows, 2 queued
+PASS  Electric (subquery, official Shape), scenario 7: both queued writes rejected, with not_found  (["not_found","not_found"])
+FAIL  Electric (subquery, official Shape), scenario 7: on reconnect the replica holds nothing  (still holds 3: Bread, Eggs, Milk)
+NOTE  Electric (subquery, official Shape), scenario 7: messages after reconnecting: ["event:move-out","control:up-to-date"]
+PASS  Electric (subquery, official Shape), scenario 7: the server is unchanged: Bread unchecked at version 1, no Butter
+PASS  Electric (subquery, official Shape), scenario 7: no audit event and no change written
+FAIL  Electric (subquery, official Shape), access loss while connected: grant lowered to none: rows deleted  (not within 10 s; Petr holds 3, Jana 3)
+NOTE  Electric (subquery, official Shape), access loss while connected: messages: ["control:snapshot-end","control:up-to-date"]
+PASS  Electric (subquery, official Shape), access loss while connected: grant raised to view: rows back  (0 ms)
+NOTE  Electric (subquery, official Shape), access loss while connected: messages: []
+FAIL  Electric (subquery, official Shape), access loss while connected: module disabled household-wide: rows deleted for a member and the owner  (not within 10 s; Petr holds 3, Jana 3)
+NOTE  Electric (subquery, official Shape), access loss while connected: messages: ["event:move-out","control:up-to-date","insert","insert","insert","control:snapshot-end","control:up-to-date","event:move-out","control:up-to-date"]
+{"failed":3,"total":19}
+## Electric 1.8.1, @electric-sql/client 1.5.28: proxy subquery, replica tags
+PASS  Electric (subquery), scenario 3: offline, each shows its own check at once (our outbox, over the shape)
+PASS  Electric (subquery), scenario 3: both replicas converge on the server row  (9 ms after reconnecting)
+PASS  Electric (subquery), scenario 3: the server holds one check: Milk checked, version 1 to 2  (version 2)
+PASS  Electric (subquery), scenario 3: one audit event
+PASS  Electric (subquery), scenario 3: one change in the feed
+PASS  Electric (subquery), scenario 3: two applied outcomes, one a no-op  (["applied v2","applied (noop)"])
+PASS  Electric (subquery), scenario 3: no rejection and no conflict
+PASS  Electric (subquery, tag-aware replica), scenario 7: offline, Petr checks Bread and adds Butter: 4 rows, 2 queued
+PASS  Electric (subquery, tag-aware replica), scenario 7: both queued writes rejected, with not_found  (["not_found","not_found"])
+PASS  Electric (subquery, tag-aware replica), scenario 7: on reconnect the replica holds nothing  (102 ms after reconnecting; Electric removed the rows)
+NOTE  Electric (subquery, tag-aware replica), scenario 7: messages after reconnecting: ["event:move-out","control:up-to-date"]
+PASS  Electric (subquery, tag-aware replica), scenario 7: the server is unchanged: Bread unchecked at version 1, no Butter
+PASS  Electric (subquery, tag-aware replica), scenario 7: no audit event and no change written
+PASS  Electric (subquery, tag-aware replica), access loss while connected: grant lowered to none: rows deleted  (114 ms)
+NOTE  Electric (subquery, tag-aware replica), access loss while connected: messages: ["control:snapshot-end","control:up-to-date"]
+PASS  Electric (subquery, tag-aware replica), access loss while connected: grant raised to view: rows back  (105 ms)
+NOTE  Electric (subquery, tag-aware replica), access loss while connected: messages: ["control:up-to-date","insert","insert","insert","control:snapshot-end","control:up-to-date"]
+PASS  Electric (subquery, tag-aware replica), access loss while connected: module disabled household-wide: rows deleted for a member and the owner  (106 ms)
+NOTE  Electric (subquery, tag-aware replica), access loss while connected: messages: ["control:snapshot-end","control:up-to-date","event:move-out","control:up-to-date"]
+{"failed":0,"total":19}
