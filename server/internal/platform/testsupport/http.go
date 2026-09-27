@@ -17,13 +17,20 @@ import (
 // response that breaks the contract fails the test, whatever the test itself asserts.
 func Serve(t testing.TB, router chi.Router, req *http.Request) *httptest.ResponseRecorder {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
 	c, err := contract.Load()
 	if err != nil {
 		t.Fatalf("load the contract: %v", err)
 	}
+	return ServeContract(t, c, router, req)
+}
+
+// ServeContract is Serve against c: for a router built with a contract other than the
+// committed one, a test module's.
+func ServeContract(t testing.TB, c *contract.Contract, router chi.Router, req *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
 	// The route the edge validated the request against, found the way the edge finds it.
 	m, _ := contract.Find(router, req.Method, httpx.RoutePath(req))
 	if err := c.ValidateResponse(req, m.Path, m.Params, rec.Code, rec.Header(), rec.Body.Bytes()); err != nil {

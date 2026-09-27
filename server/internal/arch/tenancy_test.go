@@ -1,0 +1,208 @@
+package arch_test
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/kareltilcer/household/server/internal/platform/db"
+)
+
+// Architecture test 2 (PRD 01 §2.2, §10, D-2): every tenant table carries household_id uuid NOT
+// NULL, enables and forces row-level security, and has as its only permissive policy the
+// tenant isolation that enable_tenant_isolation creates. Another permissive policy would widen
+// what a household can read, since permissive policies are ORed; a rule narrower than the
+// tenant's is a restrictive policy, which is ANDed with it. A materialized view cannot hold a
+// policy at all, so none may hold a household's rows.
+//
+// It reads the schema from PostgreSQL's catalog, as the migrations left it in the package's
+// database: every table in every schema, whichever migration made it and however it spelled
+// it. A table is a tenant table unless exemptions names it.
+func TestTenantTablesAreIsolated(t *testing.T) {
+	for _, v := range tenancyViolations(t, adminTx(t), "", exemptions) {
+		t.Error(v)
+	}
+}
+
+// Test 2 against deliberate violations: testdata/tenancy/tables.sql makes, in a schema of its
+// own and in a transaction that is rolled back, tables that break the rule and some that keep
+// it, and want.txt is every violation the test must report.
+func TestTenantTablesAreIsolatedCatchesEachViolation(t *testing.T) {
+	tx := adminTx(t)
+	if _, err := tx.Exec(t.Context(), "SET LOCAL ROLE "+db.RoleMigrate); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join("testdata", "tenancy")
+	execFile(t, tx, dir, "tables.sql")
+	got := tenancyViolations(t, tx, "arch_testdata", map[string]exemption{
+		"arch_testdata.catalog":        {why: "reference data"},
+		"arch_testdata.roots":          {ownPolicy: true, why: "a tenant root with a policy of its own"},
+		"arch_testdata.roots_unforced": {ownPolicy: true, why: "a tenant root that does not force its policy"},
+		"arch_testdata.gone":           {why: "a table that has since been dropped"},
+	})
+	want := lines(t, os.DirFS(dir), "want.txt")
+	if !slices.Equal(got, want) {
+		t.Fatalf("violations:\n  %s\nwant:\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+// exemption is why a table is not held to the tenant-table rule.
+type exemption struct {
+	// ownPolicy marks a table that holds households' rows but is isolated by a policy of its
+	// own: it must still enable and force row-level security and have a policy. A table
+	// without it is global, and holds no household's rows.
+	ownPolicy bool
+	why       string
+}
+
+// exemptions are the server's tables that are not tenant tables, each with its reason. An
+// exemption that names no table is a violation, so that a renamed table is not exempted by a
+// name nothing has.
+var exemptions = map[string]exemption{
+	"public.goose_db_version": {why: "goose's record of the migrations applied"},
+	"public.modules":          {why: "the module ids: reference data, the same for every household"},
+	"public.users":            {why: "PRD 01 §2.4: a user exists independently of any household"},
+	"public.households": {ownPolicy: true, why: "the tenant root, keyed on id; its members read it before a " +
+		"household context exists, to list their households"},
+	"public.memberships": {ownPolicy: true, why: "PRD 01 §2.4: how tenancy is resolved, read before a " +
+		"household context exists, so its policy is keyed on user_id as well"},
+}
+
+// tenantIsolation is the expression of the policy enable_tenant_isolation creates, both its
+// USING and its WITH CHECK, as PostgreSQL prints it back.
+const tenantIsolation = "(household_id = app_household_id())"
+
+// table is a relation that can hold rows, as the catalog describes it.
+type table struct {
+	oid          uint32
+	name         string
+	kind         string
+	rls, force   bool
+	householdCol string
+}
+
+// policy is a row-level security policy, as the catalog describes it.
+type policy struct {
+	name        string
+	permissive  bool
+	command     string
+	using, with string
+}
+
+// tenancyViolations returns each violation of test 2 in schema, or in every schema that is not
+// PostgreSQL's own when schema is "".
+func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string]exemption) []string {
+	t.Helper()
+	ctx := t.Context()
+	rows, err := tx.Query(ctx, `
+		SELECT c.oid, n.nspname || '.' || c.relname, c.relkind::text, c.relrowsecurity, c.relforcerowsecurity,
+		  coalesce((SELECT format_type(a.atttypid, a.atttypmod) || CASE WHEN a.attnotnull THEN ' NOT NULL' ELSE '' END
+		            FROM pg_attribute a
+		            WHERE a.attrelid = c.oid AND a.attname = 'household_id' AND NOT a.attisdropped), '')
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind IN ('r', 'p', 'm')
+		  AND n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
+		  AND ($1 = '' OR n.nspname = $1)
+		ORDER BY n.nspname, c.relname`, schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (table, error) {
+		var tb table
+		err := row.Scan(&tb.oid, &tb.name, &tb.kind, &tb.rls, &tb.force, &tb.householdCol)
+		return tb, err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err = tx.Query(ctx, `
+		SELECT polrelid, polname, polpermissive, polcmd::text,
+		  coalesce(pg_get_expr(polqual, polrelid), ''), coalesce(pg_get_expr(polwithcheck, polrelid), '')
+		FROM pg_policy
+		ORDER BY polrelid, polname`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policies := map[uint32][]policy{}
+	var (
+		relid uint32
+		p     policy
+	)
+	if _, err := pgx.ForEachRow(rows, []any{&relid, &p.name, &p.permissive, &p.command, &p.using, &p.with}, func() error {
+		policies[relid] = append(policies[relid], p)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out []string
+	seen := map[string]bool{}
+	for _, tb := range tables {
+		seen[tb.name] = true
+		e, exempted := exempt[tb.name]
+		switch {
+		case exempted && !e.ownPolicy:
+			continue
+		case exempted:
+			out = append(out, rlsViolations(tb)...)
+			if len(policies[tb.oid]) == 0 {
+				out = append(out, tb.name+" has no policy, so the request role reads none of it")
+			}
+			continue
+		case tb.kind == "m":
+			out = append(out, tb.name+" is a materialized view, which row-level security cannot hold, so it may hold no household's rows")
+			continue
+		}
+
+		switch tb.householdCol {
+		case "":
+			out = append(out, tb.name+" has no household_id column")
+		case "uuid NOT NULL":
+		default:
+			out = append(out, fmt.Sprintf("%s.household_id is %s; it must be uuid NOT NULL", tb.name, tb.householdCol))
+		}
+		out = append(out, rlsViolations(tb)...)
+		isolated := false
+		for _, p := range policies[tb.oid] {
+			switch {
+			case !p.permissive:
+			case p.command == "*" && p.using == tenantIsolation && p.with == tenantIsolation:
+				isolated = true
+			default:
+				out = append(out, fmt.Sprintf("%s has permissive policy %s, which is not the tenant isolation; "+
+					"a narrower rule is a restrictive policy", tb.name, p.name))
+			}
+		}
+		if !isolated {
+			out = append(out, tb.name+" has no tenant isolation policy; create it with enable_tenant_isolation")
+		}
+	}
+
+	var stale []string
+	for name := range exempt {
+		if !seen[name] {
+			stale = append(stale, name+" is exempted, but no such table exists")
+		}
+	}
+	slices.Sort(stale)
+	return append(out, stale...)
+}
+
+// rlsViolations reports a table that does not enable or does not force row-level security.
+func rlsViolations(tb table) []string {
+	var out []string
+	if !tb.rls {
+		out = append(out, tb.name+" does not enable row-level security")
+	}
+	if !tb.force {
+		out = append(out, tb.name+" does not force row-level security, so the migrate role, which owns it, bypasses it")
+	}
+	return out
+}

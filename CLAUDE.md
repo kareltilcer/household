@@ -82,7 +82,10 @@ pnpm run down         # stop the services; volumes are kept
   comment. No user-visible string is a literal: it is a translation key, present in all five
   catalogs (`en`, `cs`, `sk`, `de`, `pl`).
 - **The tenant is in the path**: `/api/v1/households/{household_id}/…`. Every tenant table
-  has `household_id`, row-level security enabled **and** forced.
+  has `household_id`, row-level security enabled **and** forced: its migration calls
+  `enable_tenant_isolation`, and the PR adds its rows to the isolation fixture
+  (`server/internal/arch/testdata/isolation/fixture.sql`). A handler reaches the database only
+  through `tenant.InTx`, and asks `grant.Require` for any level above `view`.
 - **`404`, not `403`,** for anything the caller may not see: a module they hold `none` on, a
   disabled module, a private item, a conversation they are not in. `403` means "you can see
   it and may not do this to it".

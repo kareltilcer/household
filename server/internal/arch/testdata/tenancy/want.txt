@@ -1,0 +1,18 @@
+# Every violation architecture test 2 must report for tables.sql, table by table in name order,
+# and the stale exemptions last.
+arch_testdata.no_household has no household_id column
+arch_testdata.no_household has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.no_policy has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.not_enabled does not enable row-level security
+arch_testdata.not_forced does not force row-level security, so the migrate role, which owns it, bypasses it
+arch_testdata.nullable_household.household_id is uuid; it must be uuid NOT NULL
+arch_testdata.roots_unforced does not force row-level security, so the migrate role, which owns it, bypasses it
+arch_testdata.select_only has permissive policy tenant_isolation, which is not the tenant isolation; a narrower rule is a restrictive policy
+arch_testdata.select_only has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.summary is a materialized view, which row-level security cannot hold, so it may hold no household's rows
+arch_testdata.text_household.household_id is text NOT NULL; it must be uuid NOT NULL
+arch_testdata.text_household has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.widened has permissive policy everyone_reads, which is not the tenant isolation; a narrower rule is a restrictive policy
+arch_testdata.wrong_column has permissive policy tenant_isolation, which is not the tenant isolation; a narrower rule is a restrictive policy
+arch_testdata.wrong_column has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.gone is exempted, but no such table exists

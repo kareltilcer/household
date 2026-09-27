@@ -28,7 +28,9 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
-func TestMain(m *testing.M) { testsupport.Main(m) }
+// TestMain gives the package's database the probe module's table, which tenancy_test.go's
+// tests serve.
+func TestMain(m *testing.M) { testsupport.Main(m, probeBlocks()...) }
 
 // syncBuffer is a log destination the server's goroutines may write to concurrently.
 type syncBuffer struct {
@@ -57,7 +59,8 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 	logs := &syncBuffer{}
 	log := logging.New(logs, slog.LevelDebug)
 	r, err := app.NewRouter(app.Deps{
-		Logger: log, Contract: c, Health: health.New(log, time.Second, checks...), MaxBodyBytes: 1 << 10,
+		Logger: log, Contract: c, Health: health.New(log, time.Second, checks...),
+		Pool: testsupport.Open(t).Pool(t, db.RoleApp), MaxBodyBytes: 1 << 10,
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
@@ -323,7 +326,8 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 	const timeout = 300 * time.Millisecond
 	log := logging.New(io.Discard, slog.LevelError)
 	r, err := app.NewRouter(app.Deps{
-		Logger: log, Contract: c, Health: health.New(log, time.Second), MaxBodyBytes: 1 << 10, BodyTimeout: timeout,
+		Logger: log, Contract: c, Health: health.New(log, time.Second),
+		Pool: testsupport.Open(t).Pool(t, db.RoleApp), MaxBodyBytes: 1 << 10, BodyTimeout: timeout,
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

@@ -1,0 +1,7 @@
+# Every violation the isolation test must report with violations.sql loaded: the tables it
+# cannot read from in name order, then what household B reads, then what household A cannot.
+public.isolation_empty has no row of household A; the isolation fixture must hold one
+public.isolation_keyless has no primary key to read a row by
+public.isolation_open: household B reads household A's row (01900000-0000-7000-8000-000000000001)
+public.isolation_wide: household B reads household A's row (01900000-0000-7000-8000-000000000002)
+public.isolation_blind: household A cannot read its own row (01900000-0000-7000-8000-000000000004), so the read proves nothing

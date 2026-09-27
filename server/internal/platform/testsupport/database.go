@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -30,7 +31,10 @@ var Passwords = db.Passwords{
 	Meter:   "household_meter",
 }
 
-// Blocks are the migrations the template database is built from.
+// Blocks are the migrations the template database is built from: the platform's. A package
+// whose tests need a module's tables passes the module's block to Main, which migrates the
+// package's own database with it. The template cannot hold them: testsupport would have to
+// import the modules, and a module's own tests import testsupport.
 var Blocks = []db.Block{db.Platform()}
 
 // templateFormat changes when the way a template is prepared changes, so that templates
@@ -59,20 +63,21 @@ var current *Database
 //
 //	func TestMain(m *testing.M) { testsupport.Main(m) }
 //
-// A cluster that cannot be reached fails the package; it does not skip it.
-func Main(m *testing.M) {
-	os.Exit(run(m))
+// The database is a clone of the template, migrated further with extra: the blocks of the
+// modules the package's tests need, or of a test module. A cluster that cannot be reached
+// fails the package; it does not skip it.
+func Main(m *testing.M, extra ...db.Block) {
+	os.Exit(run(m, extra))
 }
 
-func run(m *testing.M) int {
+func run(m *testing.M, extra []db.Block) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 	d, err := create(ctx)
-	cancel()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "testsupport: create the test database (start PostgreSQL with `pnpm run up`, or set %s): %v\n", DatabaseURLEnv, err)
 		return 1
 	}
-	current = d
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -80,6 +85,16 @@ func run(m *testing.M) int {
 			fmt.Fprintf(os.Stderr, "testsupport: drop %s: %v\n", d.Name, err)
 		}
 	}()
+	// The clone is this package's alone, so it is migrated outside the catalog lock that
+	// creating it took.
+	if len(extra) > 0 {
+		if err := migrate(ctx, d.Name, append(slices.Clone(Blocks), extra...)); err != nil {
+			fmt.Fprintf(os.Stderr, "testsupport: migrate %s: %v\n", d.Name, err)
+			return 1
+		}
+	}
+	cancel()
+	current = d
 	return m.Run()
 }
 
@@ -229,14 +244,14 @@ func ensureTemplate(ctx context.Context, admin *pgx.Conn, template string) error
 	}); err != nil {
 		return err
 	}
-	if err := migrate(ctx, build); err != nil {
+	if err := migrate(ctx, build, Blocks); err != nil {
 		return err
 	}
 	return exec(ctx, admin, "ALTER DATABASE %I RENAME TO %I", build, template)
 }
 
-// migrate applies Blocks to database as the migrate role, as a deploy does.
-func migrate(ctx context.Context, database string) error {
+// migrate applies blocks to database as the migrate role, as a deploy does.
+func migrate(ctx context.Context, database string, blocks []db.Block) error {
 	u, err := databaseURL(database, db.RoleMigrate)
 	if err != nil {
 		return err
@@ -248,7 +263,7 @@ func migrate(ctx context.Context, database string) error {
 	// Closed before the rename that follows, which fails while any session is connected.
 	sqlDB := stdlib.OpenDB(*cfg)
 	defer func() { _ = sqlDB.Close() }()
-	_, err = db.Migrate(ctx, sqlDB, Blocks...)
+	_, err = db.Migrate(ctx, sqlDB, blocks...)
 	return err
 }
 
