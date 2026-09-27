@@ -72,7 +72,9 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
   returns it as an entity-tag; send that back in `If-Match`. `409` returns the current
   representation.
 - **`Idempotency-Key`** on unsafe methods — declared on every one of them, so a generated client
-  can actually send it — and required on `POST …/sync/mutations`.
+  can actually send it — and required on `POST …/sync/mutations`. A key is the caller's own and
+  is kept 7 days; a repeat gets the first request's `2xx` response, and a refused request stores
+  nothing, so a repeat runs it again.
 - **`402` is declared on every household-scoped unsafe method**, because the entitlement gate is
   middleware and can refuse any of them ([04](../prd/04-billing-and-entitlements.md) FR-BI1). The
   exceptions are the operations that must keep working in a non-writing state: billing, export,
@@ -82,7 +84,8 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
   on `code`, never on `detail`; `code` is the `ProblemCode` enum, so the switch is exhaustive.
   Any operation can also answer `405 method_not_allowed`, `500 internal`, and
   `422 validation_failed` for a request the document does not admit, and one that takes a body
-  `413 payload_too_large` or `415 unsupported_media_type`, whether or not it declares them. A
+  `413 payload_too_large` or `415 unsupported_media_type`, and one that accepts
+  `Idempotency-Key` `409 idempotency_in_progress`, whether or not it declares them. A
   `422 validation_failed` names each failure in `errors[]`: `field` is a JSON Pointer into the
   body (`/name`) or `<in>:<name>` for a parameter (`query:limit`), and `code` is the check that
   failed (`required`, `max_length`, `malformed`, …), or `invalid` for a refusal no JSON Schema

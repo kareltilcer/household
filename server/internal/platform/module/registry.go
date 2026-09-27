@@ -79,10 +79,11 @@ func NewRegistry(mods ...Module) (*Registry, error) {
 func (r *Registry) addActions(m Module) error {
 	var errs []error
 	for _, a := range m.AuditActions() {
+		_, declared := r.actions[a.Key]
 		switch {
 		case !actionKey.MatchString(a.Key) || !strings.HasPrefix(a.Key, m.Name()+"."):
 			errs = append(errs, fmt.Errorf("audit action %q is not %s.<action> in lowercase words joined by dots", a.Key, m.Name()))
-		case r.actions[a.Key] != (AuditAction{}):
+		case declared:
 			errs = append(errs, fmt.Errorf("audit action %s is declared twice", a.Key))
 		case a.SummaryKey == "":
 			errs = append(errs, fmt.Errorf("audit action %s has no summary key", a.Key))

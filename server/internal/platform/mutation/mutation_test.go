@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/entity"
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/module"
@@ -249,6 +251,7 @@ func TestApplyRollsBackTogether(t *testing.T) {
 		"the mutation fails":           func(*mutation.Record) error { return errors.New("refused") },
 		"the event cannot be recorded": func(r *mutation.Record) error { r.Event.Meta = map[string]any{"bad": make(chan int)}; return nil },
 		"the change cannot be written": func(r *mutation.Record) error { r.Changes[0].Row = make(chan int); return nil },
+		"the change's row is nil":      func(r *mutation.Record) error { r.Changes[0].Row = (*struct{})(nil); return nil },
 	} {
 		t.Run(name, func(t *testing.T) {
 			id := idgen.New()
@@ -299,33 +302,75 @@ func TestApplyRefusesAWriteItCannotRecord(t *testing.T) {
 			}
 		})
 	}
+	// An insert, an update and a delete reported as nothing are each refused, and roll back.
+	existing := idgen.New()
 	w.in(h, u, func(ctx context.Context) {
-		_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
-			_, err := create(ctx, idgen.New(), "Milk")(tx)
-			return mutation.Record{}, err
-		})
-		if !errors.Is(err, mutation.ErrUnrecorded) {
-			t.Errorf("a write reported as nothing: %v, want ErrUnrecorded", err)
+		if _, err := mutation.Apply(ctx, create(ctx, existing, "Milk")); err != nil {
+			t.Fatal(err)
 		}
 	})
+	for name, stmt := range map[string]string{
+		"an insert": "INSERT INTO spine_items (id, household_id, title) VALUES (gen_random_uuid(), app_household_id(), 'Bread')",
+		"an update": "UPDATE spine_items SET title = 'Oat milk' WHERE id = $1",
+		"a delete":  "DELETE FROM spine_items WHERE id = $1",
+	} {
+		w.in(h, u, func(ctx context.Context) {
+			_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+				var args []any
+				if strings.Contains(stmt, "$1") {
+					args = append(args, existing)
+				}
+				_, err := tx.Exec(ctx, stmt, args...)
+				return mutation.Record{}, err
+			})
+			if !errors.Is(err, mutation.ErrUnrecorded) {
+				t.Errorf("%s reported as nothing: %v, want ErrUnrecorded", name, err)
+			}
+		})
+	}
+	if n := w.count("SELECT count(*) FROM spine_items WHERE id = $1 AND title = 'Milk' AND version = 1", existing); n != 1 {
+		t.Fatal("a write reported as nothing was committed")
+	}
 }
 
-// A mutation that finds nothing to change writes nothing, records nothing and commits.
+// A mutation that finds nothing to change writes nothing, records nothing and commits: whether
+// it found it by a read, by a row it locked, or by an upsert whose update did not apply, since a
+// row lock is not a write.
 func TestApplyWithNothingToDoRecordsNothing(t *testing.T) {
 	w := newWorld(t)
 	h, u := w.member()
-	before := w.count("SELECT count(*) FROM audit_events WHERE household_id = $1", h)
+	id := idgen.New()
 	w.in(h, u, func(ctx context.Context) {
-		res, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
-			var n int
-			return mutation.Record{}, tx.QueryRow(ctx, "SELECT count(*) FROM spine_items").Scan(&n)
-		})
-		if err != nil || res != (mutation.Result{}) {
-			t.Errorf("a mutation with nothing to do: %v, %+v", err, res)
+		if _, err := mutation.Apply(ctx, create(ctx, id, "Milk")); err != nil {
+			t.Fatal(err)
 		}
 	})
+	before := w.count("SELECT count(*) FROM audit_events WHERE household_id = $1", h)
+	for name, stmt := range map[string]string{
+		"a read":    "SELECT id FROM spine_items WHERE id = $1",
+		"a lock":    "SELECT id FROM spine_items WHERE id = $1 FOR UPDATE",
+		"a no-op":   "UPDATE spine_items SET title = 'Milk' WHERE id = $1 AND title <> 'Milk' RETURNING id",
+		"an upsert": "INSERT INTO spine_items (id, household_id, title) VALUES ($1, app_household_id(), 'Milk') ON CONFLICT (id) DO UPDATE SET title = excluded.title WHERE spine_items.title <> excluded.title RETURNING id",
+	} {
+		w.in(h, u, func(ctx context.Context) {
+			res, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+				rows, err := tx.Query(ctx, stmt, id)
+				if err != nil {
+					return mutation.Record{}, err
+				}
+				rows.Close()
+				return mutation.Record{}, rows.Err()
+			})
+			if err != nil || res != (mutation.Result{}) {
+				t.Errorf("a mutation with nothing to do, found by %s: %v, %+v", name, err, res)
+			}
+		})
+	}
 	if after := w.count("SELECT count(*) FROM audit_events WHERE household_id = $1", h); after != before {
 		t.Fatalf("recorded %d events", after-before)
+	}
+	if n := w.count("SELECT count(*) FROM spine_items WHERE id = $1 AND version = 1", id); n != 1 {
+		t.Fatal("a mutation with nothing to do changed the row")
 	}
 }
 
@@ -470,6 +515,36 @@ func TestAnUpdateGrowsTheVersion(t *testing.T) {
 	if version != 2 || createdBy != u || updatedBy != editor || !createdEarlier || len(rowVersions) != 2 || rowVersions[1] != 2 {
 		t.Fatalf("version %d, created by %s, updated by %s, created before the update %v, change versions %v",
 			version, createdBy, updatedBy, createdEarlier, rowVersions)
+	}
+}
+
+// entity.Columns names the base columns add_entity_columns adds, in the order Base.Targets
+// scans them, so a module's SELECT of them reads each into its own field.
+func TestTheBaseColumnsScanIntoBase(t *testing.T) {
+	w := newWorld(t)
+	h, u := w.member()
+	id := idgen.New()
+	w.in(h, u, func(ctx context.Context) {
+		if _, err := mutation.Apply(ctx, create(ctx, id, "Milk")); err != nil {
+			t.Fatal(err)
+		}
+	})
+	w.exec("UPDATE spine_items SET deleted_at = created_at + interval '1 hour' WHERE id = $1", id)
+	var (
+		b     entity.Base
+		title string
+	)
+	if err := w.admin.QueryRow(t.Context(), "SELECT "+entity.Columns+", title FROM spine_items WHERE id = $1", id).
+		Scan(append(b.Targets(), &title)...); err != nil {
+		t.Fatal(err)
+	}
+	switch {
+	case b.ID != id || b.HouseholdID != h || b.Version != 2 || title != "Milk":
+		t.Fatalf("id %s household %s version %d title %q", b.ID, b.HouseholdID, b.Version, title)
+	case b.CreatedBy == nil || *b.CreatedBy != u || b.UpdatedBy != nil:
+		t.Fatalf("created by %v, updated by %v; want %s, and nobody for the administrator's update", b.CreatedBy, b.UpdatedBy, u)
+	case !b.Deleted() || !b.DeletedAt.Equal(b.CreatedAt.Add(time.Hour)) || b.UpdatedAt.Before(b.CreatedAt):
+		t.Fatalf("created %s, updated %s, deleted %v", b.CreatedAt, b.UpdatedAt, b.DeletedAt)
 	}
 }
 

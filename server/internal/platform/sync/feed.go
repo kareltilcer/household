@@ -127,8 +127,9 @@ const feedLock int32 = 0x73796e63
 // before seq 100 committed, advance its cursor past 100, and never see it. Under the lock a
 // household's transactions draw their seqs and commit one at a time, so the household's rows
 // become visible in seq order. The lock is taken as late as it can be, after the mutation's own
-// writes, and is held only for the feed's and the audit event's inserts and the commit. Two
-// households whose hashes collide share a lock, which serialises them and costs nothing else.
+// writes and its audit event, and is held only for the feed's inserts, what the spine does after
+// them in the same transaction, and the commit. Two households whose hashes collide share a
+// lock, which serialises them and costs nothing else.
 func Emit(ctx context.Context, tx pgx.Tx, household, actor uuid.UUID, changes []Change) (int64, error) {
 	if len(changes) == 0 {
 		return 0, errors.New("sync: no changes to emit")
@@ -143,6 +144,11 @@ func Emit(ctx context.Context, tx pgx.Tx, household, actor uuid.UUID, changes []
 			var err error
 			if payload, err = json.Marshal(c.Row); err != nil {
 				return 0, fmt.Errorf("sync: serialise %s %s: %w", c.Entity, c.ID, err)
+			}
+			// A nil pointer in Row passes Check, which sees a value, and serialises to the JSON
+			// null, which the feed's check takes for a payload: a replica would upsert nothing.
+			if string(payload) == "null" {
+				return 0, fmt.Errorf("sync: the row of %s %s serialises to null; an upsert carries its row", c.Entity, c.ID)
 			}
 		}
 		visibility := c.Visibility

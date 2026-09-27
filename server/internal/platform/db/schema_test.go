@@ -98,17 +98,26 @@ func TestTheFeedIsPartitionedByMonth(t *testing.T) {
 		t.Fatalf("the changes landed in %v, want [%s sync_changes_default]", partitions, thisMonth)
 	}
 
-	var isolated, reachable int
+	// The template this database was cloned from may have been migrated in an earlier month, and
+	// kept its partitions from then: which partitions exist beyond this month and the three after
+	// it depends on when, so the test counts rather than expects a number.
+	var total, ahead, isolated, reachable int
 	if err := tx.QueryRow(ctx, `
-		SELECT count(*) FILTER (WHERE c.relrowsecurity AND c.relforcerowsecurity
+		SELECT count(*),
+		       count(*) FILTER (WHERE c.relname IN (
+		         SELECT 'sync_changes_y' || to_char(m, 'YYYY"m"MM')
+		         FROM generate_series(date_trunc('month', now() AT TIME ZONE 'UTC'),
+		                              date_trunc('month', now() AT TIME ZONE 'UTC') + interval '3 months', interval '1 month') m)),
+		       count(*) FILTER (WHERE c.relrowsecurity AND c.relforcerowsecurity
 		                          AND EXISTS (SELECT FROM pg_policy p WHERE p.polrelid = c.oid AND p.polname = 'tenant_isolation')),
 		       count(*) FILTER (WHERE has_table_privilege($1::name, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'))
 		FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
-		WHERE i.inhparent = 'sync_changes'::regclass`, db.RoleApp).Scan(&isolated, &reachable); err != nil {
+		WHERE i.inhparent = 'sync_changes'::regclass`, db.RoleApp).Scan(&total, &ahead, &isolated, &reachable); err != nil {
 		t.Fatal(err)
 	}
-	if isolated != 5 || reachable != 0 {
-		t.Fatalf("%d of the five partitions are isolated, %d reachable by the request role", isolated, reachable)
+	if ahead != 4 || isolated != total || reachable != 0 {
+		t.Fatalf("%d of this month and the three after it have a partition, %d of the %d partitions are isolated, %d reachable by the request role",
+			ahead, isolated, total, reachable)
 	}
 }
 

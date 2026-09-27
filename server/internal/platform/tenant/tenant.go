@@ -103,8 +103,14 @@ func inTx(ctx context.Context, mode pgx.TxAccessMode, fn func(pgx.Tx) error) err
 	if s == nil {
 		return ErrNoTenant
 	}
+	// A scope with no caller, the system's, carries none, so that app_user_id() is NULL and the
+	// base columns record nobody (add_entity_columns) rather than the zero UUID, which is no user.
+	user := ""
+	if s.userID != uuid.Nil {
+		user = s.userID.String()
+	}
 	return pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: mode}, func(tx pgx.Tx) error {
-		if err := enter(ctx, tx, s.householdID.String(), s.userID.String()); err != nil {
+		if err := enter(ctx, tx, s.householdID.String(), user); err != nil {
 			return err
 		}
 		return fn(tx)

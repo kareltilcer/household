@@ -69,8 +69,9 @@ module exists (D-82), enforced by architecture tests. None of them says:
 - **A household's changes commit in `seq` order.** `sync.Emit` takes a transaction-scoped
   advisory lock on the household before inserting, so a household's transactions draw their seqs
   and commit one at a time, and a pull that has read seq N has missed nothing below it. The lock is
-  taken after the mutation's own writes and held only for the feed and audit inserts and the
-  commit. The feed is pulled per household, so a global order is not needed.
+  taken after the mutation's own writes and its audit event, and held only for the feed inserts,
+  the idempotency key's commit and the commit. The feed is pulled per household, so a global
+  order is not needed.
 - **The audit spine** is `audit_events`, keyed `(household_id, id)`, and `audit_changes`, one row
   per field with its old and new JSON. `actor_type` is an enum, extensible with `ALTER TYPE`
   (future/ai-assistant). The summary is a key and arguments (FR-AU3). `meta` carries `via` and the
@@ -83,9 +84,14 @@ module exists (D-82), enforced by architecture tests. None of them says:
   scope. It refuses an action the event's module does not declare, a change of an entity no module
   declares or another module's, and a change the entity's access does not admit. A mutation that
   wrote nothing and reports nothing commits nothing. One that wrote and reports no event or no
-  change is refused and rolled back: PostgreSQL assigns a transaction an id at its first write and
-  never to one that only read, so `pg_current_xact_id_if_assigned()` tells whether it wrote,
-  whatever it wrote with. The module registry and how the change arrived (`via`) travel in the
+  change is refused and rolled back: the rows the connection has inserted, updated and deleted,
+  which PostgreSQL counts for itself and does not report inside a transaction
+  (`pg_stat_get_xact_tuples_*`), are read before the mutation and, when it reports nothing, after
+  it, so the difference is what it wrote, whatever it wrote with. The transaction id would not do:
+  PostgreSQL assigns one to a transaction that locks a row as well, so a mutation that took a row
+  `FOR UPDATE`, or ran a `state_set` upsert whose update did not apply, and found nothing to change
+  would be refused. A server with `track_counts` off counts nothing, and there the transaction id
+  is the fallback. The module registry and how the change arrived (`via`) travel in the
   context: the router carries the registry into every household-scoped request, and the front door
   that lets a request in says how it arrived (`mutation.WithVia`).
 - **Test 4 is held three times.** `tenant.InTx`, through which a handler reads, is now read-only,
@@ -123,6 +129,7 @@ module exists (D-82), enforced by architecture tests. None of them says:
 |---|---|
 | A deferred constraint trigger on every entity table that fails a commit with no audit event and change in its transaction | A lookup per written row on the hottest path, and an exemption mechanism for erasure and data migrations, which is a bypass the tests would then have to police |
 | Static call-graph analysis for test 4, from each mutating route to the spine | A new dependency (`x/tools`), and it misses writes reached dynamically; a read-only `InTx` makes the wrong path fail every time it runs instead |
+| Tell whether a mutation that reports nothing wrote by whether its transaction has an id (`pg_current_xact_id_if_assigned()`) | A row lock assigns one too, so a mutation that locked a row, or upserted a `state_set` row already in its state, and found nothing to change would be refused as an unrecorded write |
 | Handlers keep a read-write `InTx` and the spine is one option among others | A write through `InTx` would commit with no history and no change, and nothing but review would catch it |
 | No feed lock; a pull withholds rows whose transactions may still be in flight, by transaction-id snapshot | Every pull reasons about concurrent transactions, and `seq` order still differs from commit order; the lock costs a household's writers a serialised commit |
 | Partitions by `seq` range, keeping `seq` alone as the key | The range a month fills depends on every household's write volume, so partitions would be sized by guesswork, and compaction by age would have to read each partition's newest row; a month's partition is dropped whole |
@@ -146,8 +153,9 @@ module exists (D-82), enforced by architecture tests. None of them says:
   redacted rows to the spine from each entity's `Redact`.
 - Item 17's expiry sweep deletes `idempotency_keys` past seven days (PRD 03 §5).
 - A key whose effect committed but whose response was never stored, because the process died
-  between the two, answers `409` until it expires: running it again would repeat the effect, the
-  one thing the key exists to prevent. An upload that takes longer than the lease needs its claim
+  between the two or the response was larger than the 1 MiB a key keeps, answers `409` until it
+  expires: running it again would repeat the effect, the one thing the key exists to prevent. The
+  contract says so. An upload that takes longer than the lease needs its claim
   renewed (item 16).
 - A household's mutations serialise at their commit. Revisit if a household's write rate ever
   makes that visible (item 90).

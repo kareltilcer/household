@@ -45,9 +45,10 @@ info:
     - Unsafe methods accept `Idempotency-Key`, declared on each of them so a generated client can
       send it. It is **required** on `POST /sync/mutations`. A key is the caller's own, and a
       repeat of it is answered with the first request's `2xx` response. A repeat that arrives
-      while the first request is still running answers `409` (`idempotency_in_progress`); a key
-      reused for a different request answers `422`, naming `header:Idempotency-Key`. A request
-      answered with anything but `2xx` stores nothing, so repeating it runs it again.
+      while the first request is still running answers `409` (`idempotency_in_progress`), as does
+      one whose first request took effect but whose response was not kept, until the key expires;
+      a key reused for a different request answers `422`, naming `header:Idempotency-Key`. A
+      request answered with anything but `2xx` stores nothing, so repeating it runs it again.
     - Entities with a `version` return it as an `ETag`, and accept that entity-tag back in
       `If-Match`; a mismatch is `409` carrying the current representation.
 
@@ -7960,8 +7961,12 @@ components:
 
         A key is the caller's own. Only a `2xx` response is stored: a repeat of a request that was
         refused runs it again. A repeat while the first request is still running answers `409`
-        (`idempotency_in_progress`), and a key reused for a request with a different method, path,
-        query, `If-Match` or body answers `422` naming `header:Idempotency-Key`.
+        (`idempotency_in_progress`). So does a repeat of a request that took effect but whose
+        response was not kept, because the server stopped before storing it or the body was larger
+        than 1 MiB, until the key expires: running it again would repeat the effect. A key reused
+        for a request with a different method, path, query, `If-Match`, `Content-Type` or JSON body
+        answers `422` naming `header:Idempotency-Key`; a body in another media type, an upload, is
+        compared by its length alone.
       schema: { type: string, minLength: 1, maxLength: 128 }
     IdempotencyKeyRequired:
       name: Idempotency-Key
