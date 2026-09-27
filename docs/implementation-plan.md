@@ -208,7 +208,7 @@ Phase 0 · after — · size M
   - CI is green, and the committed `openapi.yaml` validates under both validators.
 - **PR:** [#4](https://github.com/kareltilcer/household/pull/4)
 
-### 2 · Server skeleton and contract enforcement · `planned`
+### 2 · Server skeleton and contract enforcement · `done`
 
 Phase 0 · after 1 · size M
 
@@ -239,7 +239,7 @@ Phase 0 · after 1 · size M
   - An invalid body returns `422` with a problem `code`.
   - A test proves that a field not on the allowlist is dropped from the logs.
   - Both architecture tests fail on deliberate violations kept in `testdata`.
-- **PR:** —
+- **PR:** [#5](https://github.com/kareltilcer/household/pull/5)
 
 ### 3 · Module registry, tenancy and row-level security · `planned`
 

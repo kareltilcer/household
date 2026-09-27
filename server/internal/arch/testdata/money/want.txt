@@ -1,0 +1,29 @@
+# Every violation architecture test 8 reports on this fixture, in its order.
+migrations/10001_money.sql:7: amount is money stored as numeric; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:8: unit_price is money stored as real; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:9: fee is money stored as double precision; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:10: PostgreSQL's money type rounds to the server locale's currency; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:18: amount_minor is money stored as decimal; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:22: amount_minor is money stored as numeric; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:25: amount_eur is money stored as numeric; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:28: price is money stored as numeric; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:31: amount_minor is money stored as numeric; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:35: fee_eur is money stored as real; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:38: price_per_kg is money stored as numeric; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:39: fee_total is money stored as numeric; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:40: amount_minor is money stored as float8; use amount_minor bigint and currency char(3)
+money.go:17: Amount is money held as float64; use an int64 amount_minor and a currency
+money.go:18: UnitPrice is money held as big.Float; use an int64 amount_minor and a currency
+money.go:19: Fees is money held as float32; use an int64 amount_minor and a currency
+money.go:20: balance is money held as decimal.Decimal; use an int64 amount_minor and a currency
+money.go:25: Price is money held as float64; use an int64 amount_minor and a currency
+money.go:27: prices is money held as float64; use an int64 amount_minor and a currency
+money.go:27: totalCost is money held as float64; use an int64 amount_minor and a currency
+money.go:29: budget is money held as float64; use an int64 amount_minor and a currency
+money.go:31: amounts is money held as float64; use an int64 amount_minor and a currency
+money.go:34: Amount is money held as sql.NullFloat64; use an int64 amount_minor and a currency
+money.go:35: Fee is money held as float64; use an int64 amount_minor and a currency
+money.go:36: Charge is money held as pgtype.Float8; use an int64 amount_minor and a currency
+money.go:37: Deposits is money held as float64; use an int64 amount_minor and a currency
+money.go:61: PricePerKwh is money held as float64; use an int64 amount_minor and a currency
+money.go:62: CostPerKm is money held as float32; use an int64 amount_minor and a currency

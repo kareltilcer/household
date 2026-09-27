@@ -1,0 +1,10 @@
+# The fixture's contract_pending.
+
+# Pending, not served: no violation.
+getWidgets
+# Pending and served.
+postThings
+# Not in the contract.
+getGadgets
+# Listed twice.
+getWidgets

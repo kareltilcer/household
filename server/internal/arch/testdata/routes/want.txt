@@ -1,0 +1,8 @@
+# Every violation architecture test 6 reports on this fixture, in its order.
+GET /metrics is served outside /api/v1, where the contract cannot declare it
+PATCH /things/{thing_id} is served but not declared in openapi.yaml
+PUT /things/{thing_id} is served but not declared in openapi.yaml
+postThings (POST /things) is implemented; remove it from contract_pending
+contract_pending lists getGadgets, which openapi.yaml does not declare or which it lists twice
+contract_pending lists getWidgets, which openapi.yaml does not declare or which it lists twice
+deleteThingsByThingId (DELETE /things/{thing_id}) is neither served nor listed on contract_pending

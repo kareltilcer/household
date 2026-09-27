@@ -19,6 +19,10 @@ linters:
     - gosec
     # A //nolint must name the linter it silences and say why.
     - nolintlint
+    # The logger's field allowlist drops a key it does not know, but it cannot read a
+    # message: a constant message is what keeps content out of it (FR-NF5, see
+    # internal/platform/logging).
+    - sloglint
     - unconvert
     - usestdlibvars
     - usetesting
@@ -26,6 +30,13 @@ linters:
     nolintlint:
       require-explanation: true
       require-specific: true
+    sloglint:
+      no-mixed-args: true
+      static-msg: true
+      key-naming-case: snake
+      # Where a context is in scope, the *Context call carries the request's ids to the
+      # line.
+      context: scope
 
 formatters:
   enable:
