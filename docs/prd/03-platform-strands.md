@@ -68,8 +68,8 @@ plan for it is a rewrite; planning for it costs four columns and a discipline.
 > §2.2–§2.3 and FR-SY7 are its checkpoints and buckets, and a retraction is a row leaving every
 > bucket a member holds. §2.3's predicate is stream definitions generated from the entity registry:
 > the floor is a reader set kept on each row rather than a term, and a redacted projection reaches
-> its owner as well, in a table of its own. Where §2.2–§2.3 describe the feed's own mechanics, they
-> describe the design D-93 replaced; plan items 13 and 14 amend them as they build.
+> its owner as well, in a table of its own. Where §2.2–§2.3 and FR-SY7 describe the feed's own
+> mechanics, they describe the design D-93 replaced; plan items 13 and 14 amend them as they build.
 
 ### 2.1 What is promised
 

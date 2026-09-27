@@ -170,7 +170,7 @@ Applied by every module without exception; stated once here.
 |---|---|
 | **Primary keys** | `uuid` holding a **UUIDv7**. Clients generate them (the sync engine requires client-side id generation so an offline create has a stable identity) |
 | **Tenant key** | `household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE` on every tenant row |
-| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token. Under D-93 a rewrite of an audience's readers alone does not count as an update ([modules/15-chat.md](modules/15-chat.md) Sync): plan item 14 keeps it out of the version, or holds the readers in a table of their own |
+| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token. Under D-93 a rewrite alone of the access fields a row carries for its stream does not count as an update: an audience's readers ([modules/15-chat.md](modules/15-chat.md) Sync), or the visibility and owner a row takes from the private item that bounds it. Plan item 14 keeps such a rewrite out of the version, or keeps those fields off the row |
 | **Audit columns** | `created_by`, `created_at`, `updated_by`, `updated_at` — `timestamptz`, never local time |
 | **Soft delete** | `deleted_at timestamptz NULL`. Hard delete is reserved for the destructive-operation gate and for erasure |
 | **Ordering** | Lexorank `position text` where users order things by hand |

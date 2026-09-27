@@ -21,6 +21,10 @@ imprecision is what makes it feel unmanageable. There are two distinct things:
 | **The sync-ready schema** | **Catastrophic** — every table, every module, a data migration across live households | `household_id` on every row · `version` on every row · **client-generated UUIDv7 primary keys** · soft-delete tombstones · the denormalised access fields on the change row (`module`, `visibility`, `owner_id`, `audience_id`) · a declared merge policy per entity |
 | **The sync engine** | **Contained** — one package, one protocol version, no data migration | The change feed, the mutation queue, conflict resolution, retraction, compaction, the client replica |
 
+> **Under D-93** the replicated path reads no change row: PowerSync's streams read the access fields
+> on each entity's own row, and plan item 14 decides how a row that a private item or an audience
+> bounds carries them ([ADR 0001](../adr/0001-sync-engine.md)).
+
 The schema half is **cheap to get right and must be right on day one**. It is four columns, an id
 strategy and a registry. None of it requires the engine to exist. All of it is enforceable by the
 architecture tests already specified ([01-architecture.md](01-architecture.md) §10, checks 2 and 5)
