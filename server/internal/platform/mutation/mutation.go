@@ -5,9 +5,9 @@
 // to the household's feed (FR-SY1), so that the three commit or roll back together.
 //
 // It is the only way to write. tenant.InTx, through which a handler reads, is read-only, so
-// PostgreSQL refuses a write there; Apply's transaction may write, and refuses to commit one
-// that wrote without an audit event and a change; and architecture test 4 fails a module that
-// opens a write transaction of its own (tenant.InWriteTx).
+// PostgreSQL refuses a write there; Apply's transaction may write, and commits only what it
+// records, rolling back a mutation that reports nothing; and architecture test 4 fails a module
+// that opens a write transaction of its own (tenant.InWriteTx).
 package mutation
 
 import (
@@ -43,8 +43,8 @@ type Result struct {
 }
 
 var (
-	// ErrUnrecorded is Apply's answer to a mutation that wrote without reporting both an audit
-	// event and a change, or reported one without the other. Its transaction is rolled back.
+	// ErrUnrecorded is Apply's answer to a mutation that reports an audit event without a
+	// change, or a change without an event. Its transaction is rolled back.
 	ErrUnrecorded = errors.New("mutation: a mutation must record an audit event and at least one change")
 	// ErrNoCatalog is Apply's answer outside a context that carries the module registry: a bug
 	// in the caller, since the router carries it into every household-scoped request.
@@ -54,30 +54,8 @@ var (
 	ErrNoVia = errors.New("mutation: no via in this context")
 )
 
-// rowsWritten is how many rows the connection has tried to insert, update and delete in the
-// tables outside PostgreSQL's own catalog, by the statistics it keeps for itself until it next
-// reports them, which it never does inside a transaction: so two readings in one transaction
-// differ by the rows written between them. A row counts once its write is attempted, so one that
-// a rolled-back savepoint undid counts as written although nothing of it commits: an insert
-// refused as a duplicate, for instance, whose error the mutation caught. So does the row an
-// upsert (INSERT … ON CONFLICT) inserts speculatively and withdraws on finding that a concurrent
-// transaction has just inserted the same key, before it goes on to its conflict action. The
-// transaction id is no such measure: PostgreSQL assigns one to a transaction that locks a row as
-// well as to one that writes, so a mutation that took a row FOR UPDATE, or ran an upsert whose
-// update did not apply, and found nothing to change would count as having written.
-const rowsWritten = `
-	SELECT coalesce(sum(pg_stat_get_xact_tuples_inserted(c.oid) + pg_stat_get_xact_tuples_updated(c.oid)
-	                    + pg_stat_get_xact_tuples_deleted(c.oid)), 0)::bigint
-	FROM pg_class c
-	WHERE c.relkind = 'r' AND c.relnamespace <> 'pg_catalog'::regnamespace`
-
-// wroteSince reports whether the transaction wrote a row since rowsWritten read $1. A server
-// that keeps no such statistics (track_counts off) counts nothing, and there it falls back to
-// whether the transaction has an id, which refuses a lock as though it were a write rather than
-// commit a write unrecorded.
-const wroteSince = `
-	SELECT pg_current_xact_id_if_assigned() IS NOT NULL
-	  AND (NOT current_setting('track_counts')::boolean OR (` + rowsWritten + `) <> $1)`
+// errNothing rolls back the transaction of a mutation that reports nothing.
+var errNothing = errors.New("mutation: nothing to record")
 
 type (
 	catalogKey struct{}
@@ -117,20 +95,14 @@ func WithVia(ctx context.Context, via audit.Via) context.Context {
 // consistent with the entity's declared access (sync.Change.Check); an event with a private
 // change is private to that change's owner.
 //
-// A mutation that wrote nothing and reports nothing commits nothing and returns a zero Result:
-// a request that asked for a change already in place, found as it may be found, by a read, by
-// a row it locked (SELECT … FOR UPDATE) or by an upsert whose update did not apply. One that
-// inserted, updated or deleted a row without reporting an event and a change, or reported one
-// without the other, returns ErrUnrecorded. So does one that found its change in place by a
-// write it then undid, catching an insert's unique violation and rolling back to a savepoint:
-// PostgreSQL counts the attempted row as written (rowsWritten), so a mutation finds what is
-// already there by a read, a lock or an upsert instead. An upsert counts one too when it races
-// another transaction inserting the same key, and withdraws the row it had begun to insert: a
-// mutation whose upsert may find its state already in place while another request writes the
-// same key first locks the row the key hangs off (SELECT … FOR NO KEY UPDATE), so that the two
-// take turns and the second finds the first's row committed, not in flight. When ctx's request
-// holds an Idempotency-Key, the key is marked committed in the same transaction
-// (idempotency.Commit).
+// A mutation that reports nothing, a request for a change already in place, is rolled back,
+// whatever it did, and Apply returns a zero Result: Apply commits only what it records. So a
+// write a mutation forgot to report is undone rather than committed without its history, and a
+// mutation that found its state in place is never taken for one that wrote, however it looked:
+// by a read, a row lock, an upsert whose update did not apply or that lost a race for its key,
+// or an insert its savepoint undid. One that reports an event without a change, or a change
+// without an event, returns ErrUnrecorded. When ctx's request holds an Idempotency-Key, the key
+// is marked committed in the same transaction as the effect (idempotency.Commit).
 func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, error) {
 	reg, _ := ctx.Value(catalogKey{}).(*module.Registry)
 	if reg == nil {
@@ -151,23 +123,12 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 
 	var res Result
 	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
-		var before int64
-		if err := tx.QueryRow(ctx, rowsWritten).Scan(&before); err != nil {
-			return err
-		}
 		rec, err := fn(tx)
 		if err != nil {
 			return err
 		}
 		if rec.Event.Module == "" && rec.Event.Action == "" && len(rec.Changes) == 0 {
-			var wrote bool
-			if err := tx.QueryRow(ctx, wroteSince, before).Scan(&wrote); err != nil {
-				return err
-			}
-			if wrote {
-				return ErrUnrecorded
-			}
-			return nil
+			return errNothing
 		}
 		if err := check(reg, rec); err != nil {
 			return err
@@ -192,7 +153,10 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 		}
 		return nil
 	})
-	if err != nil {
+	switch {
+	case errors.Is(err, errNothing):
+		return Result{}, nil
+	case err != nil:
 		return Result{}, err
 	}
 	return res, nil

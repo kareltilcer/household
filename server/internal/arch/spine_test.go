@@ -21,8 +21,9 @@ import (
 //
 //   - tenant.InTx, through which a handler reads, is read-only, so PostgreSQL refuses a write
 //     there (internal/app's probe tests prove it);
-//   - mutation.Apply, the one entry point that may write, refuses to commit a transaction that
-//     wrote without both (internal/platform/mutation's tests prove it);
+//   - mutation.Apply, the one entry point that may write, commits only what it records: it rolls
+//     back a mutation that reports nothing and refuses one that reports half
+//     (internal/platform/mutation's tests prove it);
 //   - and no module opens a write transaction of its own: this test fails a module, its tests
 //     and its testdata included, that names tenant.InWriteTx, which only the platform may, or
 //     dot-imports the tenant package, which would hide the name from it.

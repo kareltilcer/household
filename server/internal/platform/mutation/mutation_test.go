@@ -301,13 +301,12 @@ func TestApplyRollsBackTogether(t *testing.T) {
 	}
 }
 
-// A mutation that wrote and does not report an event and a change is refused and rolled back;
-// so is one that reports one without the other.
-func TestApplyRefusesAWriteItCannotRecord(t *testing.T) {
+// A mutation that reports an event without a change, or a change without an event, is refused
+// and rolled back.
+func TestApplyRefusesAHalfRecord(t *testing.T) {
 	w := newWorld(t)
 	h, u := w.member()
 	for name, strip := range map[string]func(mutation.Record) mutation.Record{
-		"nothing":     func(mutation.Record) mutation.Record { return mutation.Record{} },
 		"no change":   func(r mutation.Record) mutation.Record { r.Changes = nil; return r },
 		"no event":    func(r mutation.Record) mutation.Record { r.Event = audit.Event{}; return r },
 		"no module":   func(r mutation.Record) mutation.Record { r.Event.Module = ""; return r },
@@ -329,58 +328,65 @@ func TestApplyRefusesAWriteItCannotRecord(t *testing.T) {
 			}
 		})
 	}
-	// An insert, an update and a delete reported as nothing are each refused, and roll back.
-	existing := idgen.New()
+}
+
+// A mutation that reports nothing is rolled back, whatever it wrote: an insert, an update or a
+// delete it forgot to report is undone rather than committed without its audit event and its
+// change, and so is a duplicate insert its savepoint refused.
+func TestApplyRollsBackAMutationThatReportsNothing(t *testing.T) {
+	w := newWorld(t)
+	h, u := w.member()
+	existing, inserted := idgen.New(), idgen.New()
 	w.in(h, u, func(ctx context.Context) {
 		if _, err := mutation.Apply(ctx, create(ctx, existing, "Milk")); err != nil {
 			t.Fatal(err)
 		}
 	})
-	for name, stmt := range map[string]string{
-		"an insert": "INSERT INTO spine_items (id, household_id, title) VALUES (gen_random_uuid(), app_household_id(), 'Bread')",
-		"an update": "UPDATE spine_items SET title = 'Oat milk' WHERE id = $1",
-		"a delete":  "DELETE FROM spine_items WHERE id = $1",
-	} {
-		w.in(h, u, func(ctx context.Context) {
-			_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
-				var args []any
-				if strings.Contains(stmt, "$1") {
-					args = append(args, existing)
-				}
-				_, err := tx.Exec(ctx, stmt, args...)
-				return mutation.Record{}, err
-			})
-			if !errors.Is(err, mutation.ErrUnrecorded) {
-				t.Errorf("%s reported as nothing: %v, want ErrUnrecorded", name, err)
-			}
-		})
-	}
-	// So is a write a rolled-back savepoint undid, as PostgreSQL counts it: a mutation does not
-	// find its change already in place by catching the refusal of a duplicate insert.
-	w.in(h, u, func(ctx context.Context) {
-		refused := false
-		_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+	for name, write := range map[string]func(context.Context, pgx.Tx) error{
+		"an insert": func(ctx context.Context, tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, "INSERT INTO spine_items (id, household_id, title) VALUES ($1, app_household_id(), 'Bread')", inserted)
+			return err
+		},
+		"an update": func(ctx context.Context, tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, "UPDATE spine_items SET title = 'Oat milk' WHERE id = $1", existing)
+			return err
+		},
+		"a delete": func(ctx context.Context, tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, "DELETE FROM spine_items WHERE id = $1", existing)
+			return err
+		},
+		"a duplicate insert its savepoint undid": func(ctx context.Context, tx pgx.Tx) error {
 			savepoint, err := tx.Begin(ctx)
 			if err != nil {
-				return mutation.Record{}, err
+				return err
 			}
 			_, err = savepoint.Exec(ctx, "INSERT INTO spine_items (id, household_id, title) VALUES ($1, app_household_id(), 'Milk')", existing)
 			var pgErr *pgconn.PgError
-			refused = errors.As(err, &pgErr) && pgErr.Code == "23505" // unique_violation
-			return mutation.Record{}, savepoint.Rollback(ctx)
+			if !errors.As(err, &pgErr) || pgErr.Code != "23505" { // unique_violation
+				t.Errorf("the duplicate insert: %v, want unique_violation", err)
+			}
+			return savepoint.Rollback(ctx)
+		},
+	} {
+		w.in(h, u, func(ctx context.Context) {
+			res, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+				return mutation.Record{}, write(ctx, tx)
+			})
+			if err != nil || res != (mutation.Result{}) {
+				t.Errorf("%s reported as nothing: %v, %+v; want a zero result", name, err, res)
+			}
 		})
-		if !refused || !errors.Is(err, mutation.ErrUnrecorded) {
-			t.Errorf("a duplicate insert undone by its savepoint (refused %v), reported as nothing: %v, want ErrUnrecorded", refused, err)
-		}
-	})
+	}
 	if n := w.count("SELECT count(*) FROM spine_items WHERE id = $1 AND title = 'Milk' AND version = 1", existing); n != 1 {
-		t.Fatal("a write reported as nothing was committed")
+		t.Fatal("an update or a delete reported as nothing was committed")
+	}
+	if items, _, _ := w.written(inserted); items != 0 {
+		t.Fatal("an insert reported as nothing was committed")
 	}
 }
 
-// A mutation that finds nothing to change writes nothing, records nothing and commits: whether
-// it found it by a read, by a row it locked, or by an upsert whose update did not apply, since a
-// row lock is not a write.
+// A mutation that finds nothing to change records nothing and succeeds: whether it found it by a
+// read, by a row it locked, or by an upsert whose update did not apply.
 func TestApplyWithNothingToDoRecordsNothing(t *testing.T) {
 	w := newWorld(t)
 	h, u := w.member()

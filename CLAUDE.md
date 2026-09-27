@@ -92,8 +92,8 @@ pnpm run down         # stop the services; volumes are kept
   disabled module, a private item, a conversation they are not in. `403` means "you can see
   it and may not do this to it".
 - **The mutation spine.** Every mutation writes its row, an audit event and a sync change
-  in one transaction, through one service-layer entry point, `mutation.Apply`, which refuses
-  to commit a write it cannot record. REST and sync both write through it. An entity's table
+  in one transaction, through one service-layer entry point, `mutation.Apply`, which commits
+  only what it records. REST and sync both write through it. An entity's table
   calls `add_entity_columns` for the base columns (`version`, `created_*`, `updated_*`,
   `deleted_at`), and its module declares it through `SyncSource` with its merge policy and
   access (architecture tests 5 and 9; [ADR 0006](docs/adr/0006-sync-ready-schema-and-the-mutation-spine.md)).

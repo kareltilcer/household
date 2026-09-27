@@ -86,28 +86,18 @@ module exists (D-82), enforced by architecture tests. None of them says:
   scope. It refuses an action the event's module does not declare, a change of an entity no module
   declares or another module's, a change the entity's access does not admit, and a private change
   in an event that is not private to the same owner, which the activity log would otherwise show
-  everyone unredacted (FR-AU4). A mutation that
-  wrote nothing and reports nothing commits nothing. One that wrote and reports no event or no
-  change is refused and rolled back: the rows the connection has inserted, updated and deleted,
-  which PostgreSQL counts for itself and does not report inside a transaction
-  (`pg_stat_get_xact_tuples_*`), are read before the mutation and, when it reports nothing, after
-  it, so the difference is what it wrote, whatever it wrote with. PostgreSQL counts a write when
-  it is attempted, so a row a rolled-back savepoint undid counts too: a mutation finds a change
-  already in place by a read, a lock or an upsert, not by catching the unique violation of an
-  insert, which is refused as unrecorded. An upsert that races another transaction inserting the
-  same key counts too, for the row it began to insert and withdrew before its conflict action, so
-  a mutation whose upsert may find its state in place while another request writes the same key
-  (two members checking one shopping item) first locks the row the key hangs off, `FOR NO KEY
-  UPDATE`: the two take turns, and the second finds the first's row committed. The transaction id
-  would not do:
-  PostgreSQL assigns one to a transaction that locks a row as well, so a mutation that took a row
-  `FOR UPDATE`, or ran a `state_set` upsert whose update did not apply, and found nothing to change
-  would be refused. A server with `track_counts` off counts nothing, and there the transaction id
-  is the fallback. The module registry and how the change arrived (`via`) travel in the
-  context: the router carries the registry into every household-scoped request, and the front door
-  that lets a request in says how it arrived (`mutation.WithVia`).
+  everyone unredacted (FR-AU4). Apply commits only what it records: a mutation that reports
+  nothing, a request for a change already in place, is rolled back whatever it did, and Apply
+  answers it with a zero result. A write a mutation forgot to report is undone rather than
+  committed without its history, and a mutation that found its state in place is never taken for
+  one that wrote, however it looked: a read, a row lock, an upsert whose update did not apply or
+  that lost a race for its key (two members checking one shopping item), an insert its savepoint
+  undid. One that reports an event without a change, or the reverse, is refused. The module
+  registry and how the change arrived (`via`) travel in the context: the router carries the
+  registry into every household-scoped request, and the front door that lets a request in says
+  how it arrived (`mutation.WithVia`).
 - **Test 4 is held three times.** `tenant.InTx`, through which a handler reads, is now read-only,
-  so PostgreSQL refuses a write there. `mutation.Apply` refuses to commit a write it cannot record.
+  so PostgreSQL refuses a write there. `mutation.Apply` commits only what it records.
   And architecture test 4 parses every module's Go files, tests and testdata included, and fails
   one that names `tenant.InWriteTx`, which only the platform may call, or dot-imports the tenant
   package. The first two are proven by the probe and the spine's own tests.
@@ -153,7 +143,7 @@ module exists (D-82), enforced by architecture tests. None of them says:
 |---|---|
 | A deferred constraint trigger on every entity table that fails a commit with no audit event and change in its transaction | A lookup per written row on the hottest path, and an exemption mechanism for erasure and data migrations, which is a bypass the tests would then have to police |
 | Static call-graph analysis for test 4, from each mutating route to the spine | A new dependency (`x/tools`), and it misses writes reached dynamically; a read-only `InTx` makes the wrong path fail every time it runs instead |
-| Tell whether a mutation that reports nothing wrote by whether its transaction has an id (`pg_current_xact_id_if_assigned()`) | A row lock assigns one too, so a mutation that locked a row, or upserted a `state_set` row already in its state, and found nothing to change would be refused as an unrecorded write |
+| Refuse a mutation that reports nothing when it wrote, told by whether its transaction has an id (`pg_current_xact_id_if_assigned()`) or by PostgreSQL's per-transaction row counts (`pg_stat_get_xact_tuples_*`) | Both count what never commits: a row lock assigns a transaction id, and the counts include a row a rolled-back savepoint undid and the row an upsert withdraws when it loses a race for its key. A mutation that found its state in place, two members checking one shopping item among them, would be answered 500. Rolling back whatever a mutation that reports nothing did needs no such guess |
 | Handlers keep a read-write `InTx` and the spine is one option among others | A write through `InTx` would commit with no history and no change, and nothing but review would catch it |
 | No feed lock; a pull withholds rows whose transactions may still be in flight, by transaction-id snapshot | Every pull reasons about concurrent transactions, and `seq` order still differs from commit order; the lock costs a household's writers a serialised commit |
 | Partitions by `seq` range, keeping `seq` alone as the key | The range a month fills depends on every household's write volume, so partitions would be sized by guesswork, and compaction by age would have to read each partition's newest row; a month's partition is dropped whole |
