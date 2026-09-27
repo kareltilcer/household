@@ -23,11 +23,13 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/kareltilcer/household/server/internal/app"
+	"github.com/kareltilcer/household/server/internal/modules"
 	"github.com/kareltilcer/household/server/internal/platform/config"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
+	"github.com/kareltilcer/household/server/internal/platform/module"
 )
 
 func main() {
@@ -78,6 +80,10 @@ func run(ctx context.Context, args []string, getenv config.Getenv, stdout, stder
 // serve serves the API until ctx ends. listening, when not nil, receives the address once
 // the server listens.
 func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening chan<- net.Addr) error {
+	registry, err := module.NewRegistry(modules.All()...)
+	if err != nil {
+		return err
+	}
 	pool, err := db.Open(ctx, cfg.DatabaseURL, "household-api")
 	if err != nil {
 		return err
@@ -91,6 +97,8 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 		Logger:       log,
 		Contract:     c,
 		Health:       health.New(log, 2*time.Second, health.Database(pool)),
+		Pool:         pool,
+		Modules:      registry,
 		MaxBodyBytes: cfg.MaxBodyBytes,
 		BodyTimeout:  cfg.BodyTimeout,
 	})
@@ -110,15 +118,20 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 	return app.Serve(ctx, log, app.NewServer(router, log), ln, cfg.ShutdownTimeout)
 }
 
-// migrate applies every pending migration, logging each one it applies.
+// migrate applies every pending migration, the platform's and each module's, logging each one
+// it applies.
 func migrate(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
+	registry, err := module.NewRegistry(modules.All()...)
+	if err != nil {
+		return err
+	}
 	connConfig, err := pgx.ParseConfig(cfg.MigrateDatabaseURL)
 	if err != nil {
 		return err
 	}
 	sqlDB := stdlib.OpenDB(*connConfig)
 	defer func() { _ = sqlDB.Close() }()
-	results, err := db.Migrate(ctx, sqlDB, db.Platform())
+	results, err := db.Migrate(ctx, sqlDB, append([]db.Block{db.Platform()}, registry.Blocks()...)...)
 	for _, r := range results {
 		log.LogAttrs(ctx, slog.LevelInfo, "migration applied", slog.String("migration", r.Source.Path))
 	}

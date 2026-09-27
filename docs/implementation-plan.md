@@ -241,7 +241,7 @@ Phase 0 · after 1 · size M
   - Both architecture tests fail on deliberate violations kept in `testdata`.
 - **PR:** [#5](https://github.com/kareltilcer/household/pull/5)
 
-### 3 · Module registry, tenancy and row-level security · `planned`
+### 3 · Module registry, tenancy and row-level security · `done`
 
 Phase 0 · after 2 · size L
 
@@ -252,7 +252,7 @@ Phase 0 · after 2 · size L
     - Resolves `{household_id}` from the path and checks membership, returning `404` if there is none.
     - Computes the effective level as min(enablement, grant) and carries it in the request context.
     - Has an entitlement hook, filled in by item 18.
-    - Opens the transaction with `SET LOCAL app.household_id`, `app.user_id` and `ROLE household_app`.
+    - Opens each of the request's transactions with `SET LOCAL app.household_id`, `app.user_id` and `ROLE household_app`; a transaction is a unit of work that commits before the handler answers ([ADR 0005](adr/0005-tenancy-registry-and-row-level-security.md)).
   - **Grant check**: `grant.Require(ctx, module, level)`. `404` for `none` or disabled; `403` only for *"can see, may not do"*.
   - **Policies**: an RLS policy template, plus the membership policy keyed on `user_id`.
   - **Architecture tests 1, 2 and 3**:
@@ -268,7 +268,7 @@ Phase 0 · after 2 · size L
   - A handler missing its `WHERE` returns an empty set.
   - A cross-tenant insert errors.
   - Each architecture test fails on its violation.
-- **PR:** —
+- **PR:** [#6](https://github.com/kareltilcer/household/pull/6)
 
 ### 4 · Sync-ready schema, entity registry and the mutation spine · `planned`
 
@@ -2372,3 +2372,4 @@ Tracked here so they are not forgotten. None of them takes a numbered slot.
 | 2026-09-26 | all | Plan created: 96 items across Phases 0–5, with 4 reserve slots |
 | 2026-09-26 | 7, 14, 18, 19, 25, 28–32, 34, 36, 37, 39, 40, 44–46, 53, 55, 57, 63, 67–69, 78, 79, 88, 93, 95, 96 | Review fixes: added missing dependencies (G-B, the client items, the reminder strand, the conflict UI, Google, GA). Added a dogfood environment and a month gate on removing `proof`. Moved the reference resolver to item 36 and F-18 to the Notes clients. Assigned the offline `strict_version` writes. Recorded contract gaps (Q11, Q17). Corrected vectors that differed from design/v1. Removed hand-kept progress |
 | 2026-09-26 | PL-1, PL-8, 1, 16 | Item 1: MinIO replaced by RustFS as the dev S3 store, because MinIO's repository is archived and its images are no longer published. PL-1 gains `tooling/`, a workspace package for guards over the workspace itself (strict flags, catalog pins, local/CI parity) |
+| 2026-09-27 | 3 | Item 3: the tenant middleware resolves the caller in a transaction of its own, and each unit of work opens its own transaction with the tenant settings, committed before the handler answers, instead of one transaction held for the request, which would commit after the response ([ADR 0005](adr/0005-tenancy-registry-and-row-level-security.md), PRD 01 §2.2 amended). A tenant table added later also adds its rows to the isolation fixture (`server/internal/arch/testdata/isolation/fixture.sql`) |

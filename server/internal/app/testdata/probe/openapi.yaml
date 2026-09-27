@@ -1,0 +1,81 @@
+openapi: 3.1.0
+info: { title: The probe module's contract, version: '1' }
+paths:
+  /healthz:
+    get: { operationId: getHealthz, security: [], responses: { '200': { description: Alive } } }
+  /readyz:
+    get: { operationId: getReadyz, security: [], responses: { '200': { description: Ready }, '503': { description: Not ready } } }
+  /households/{household_id}/probe/items:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get:
+      operationId: getProbeItems
+      responses:
+        '200': { description: Listed, content: { application/json: { schema: { $ref: '#/components/schemas/ProbeItems' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '402': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: postProbeItems
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProbeItem' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ProbeItem' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '402': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /households/{household_id}/probe/items/{item_id}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: item_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    delete:
+      operationId: deleteProbeItemsByItemId
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Problem' }
+        '402': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    HouseholdId: { name: household_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+  responses:
+    Problem:
+      description: A problem.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+  schemas:
+    Uuid:
+      type: string
+      pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    ProbeItem:
+      type: object
+      required: [id, household_id]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        household_id: { $ref: '#/components/schemas/Uuid' }
+    ProbeItems:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ProbeItem' } }
+    ProblemCode: { type: string }
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { $ref: '#/components/schemas/ProblemCode' }
+        request_id: { type: string }
+    ValidationProblem:
+      allOf:
+        - { $ref: '#/components/schemas/Problem' }
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, code]
+                properties:
+                  field: { type: string }
+                  code: { type: string }

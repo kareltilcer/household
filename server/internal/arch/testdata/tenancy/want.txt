@@ -1,0 +1,23 @@
+# Every violation architecture test 2 must report for tables.sql, table by table in name order,
+# and the stale exemptions last.
+arch_testdata.assigned has foreign key assigned_person_id_fkey, which acts on a delete from arch_testdata.people, a global table the request role deletes from; the action runs past row-level security, into every household
+arch_testdata.assigned has foreign key assigned_person_id_fkey, which acts on an update of arch_testdata.people, a global table the request role updates; the action runs past row-level security, into every household
+arch_testdata.linked has foreign key linked_partner_id_fkey, which references arch_testdata.roots without pairing household_id with its id; a foreign key is checked past row-level security, so it can name another household's row
+arch_testdata.loose_child has foreign key loose_child_parent_id_fkey, which references arch_testdata.compliant without pairing household_id with its household_id; a foreign key is checked past row-level security, so it can name another household's row
+arch_testdata.members_writable has permissive policy member_access, which writes beyond the household; a wider rule is a FOR SELECT policy
+arch_testdata.no_household has no household_id column
+arch_testdata.no_household has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.no_policy has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.not_enabled does not enable row-level security
+arch_testdata.not_forced does not force row-level security, so the migrate role, which owns it, bypasses it
+arch_testdata.nullable_household.household_id is uuid; it must be uuid NOT NULL
+arch_testdata.roots_unforced does not force row-level security, so the migrate role, which owns it, bypasses it
+arch_testdata.select_only has permissive policy tenant_isolation, which is not the tenant isolation; a narrower rule is a restrictive policy
+arch_testdata.select_only has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.summary is a materialized view, which row-level security cannot hold, so it may hold no household's rows
+arch_testdata.text_household.household_id is text NOT NULL; it must be uuid NOT NULL
+arch_testdata.text_household has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.widened has permissive policy everyone_reads, which is not the tenant isolation; a narrower rule is a restrictive policy
+arch_testdata.wrong_column has permissive policy tenant_isolation, which is not the tenant isolation; a narrower rule is a restrictive policy
+arch_testdata.wrong_column has no tenant isolation policy; create it with enable_tenant_isolation
+arch_testdata.gone is exempted, but no such table exists

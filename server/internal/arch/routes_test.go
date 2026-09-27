@@ -17,8 +17,10 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
+	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
 // Architecture test 6 (PRD 01 §10, PRD 07 §6): the routes the server serves and the
@@ -33,7 +35,8 @@ func TestRoutesMatchTheContract(t *testing.T) {
 	}
 	log := logging.New(io.Discard, slog.LevelError)
 	router, err := app.NewRouter(app.Deps{
-		Logger: log, Contract: c, Health: health.New(log, time.Second), MaxBodyBytes: 1,
+		Logger: log, Contract: c, Health: health.New(log, time.Second),
+		Pool: testsupport.Open(t).Pool(t, db.RoleApp), Modules: registry(t), MaxBodyBytes: 1,
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

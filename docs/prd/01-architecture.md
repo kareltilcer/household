@@ -80,8 +80,8 @@ Three layers, and the third is the one that matters:
    logs, in traces, in cache keys and in code review.
 
 2. **Tenant middleware.** One middleware resolves `{household_id}`, verifies the caller has a
-   live membership in it, loads that membership's role and module grants, and opens the
-   request's database transaction with:
+   live membership in it, loads that membership's role and module grants, and carries them in
+   the request's context. Every database transaction the request then opens starts with:
 
    ```sql
    SET LOCAL app.household_id = '<uuid>';
@@ -90,7 +90,10 @@ Three layers, and the third is the one that matters:
    ```
 
    `SET LOCAL` is transaction-scoped, so a pooled connection cannot leak the setting into the
-   next request even if a handler panics.
+   next request even if a handler panics. A transaction is a unit of work that commits before
+   the handler answers, never one held across the whole request: that one would commit after
+   the response had told the client its write succeeded
+   ([ADR 0005](../adr/0005-tenancy-registry-and-row-level-security.md)).
 
 3. **Row-level security.** Every tenant table has RLS enabled and forced, with a policy of the
    form:
@@ -99,12 +102,13 @@ Three layers, and the third is the one that matters:
    ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;
    ALTER TABLE <t> FORCE ROW LEVEL SECURITY;
    CREATE POLICY tenant_isolation ON <t>
-     USING      (household_id = current_setting('app.household_id')::uuid)
-     WITH CHECK (household_id = current_setting('app.household_id')::uuid);
+     USING      (household_id = app_household_id())
+     WITH CHECK (household_id = app_household_id());
    ```
 
-   `FORCE` matters: without it the table owner bypasses the policy, and the migration role is
-   the table owner.
+   `app_household_id()` reads `app.household_id` back, as `NULL` when it is unset, so a query
+   with no tenant context reads nothing and writes nothing. `FORCE` matters: without it the
+   table owner bypasses the policy, and the migration role is the table owner.
 
 **The consequence is the point.** A handler that forgets its `WHERE household_id = $1` returns
 an empty set, not another family's data. A handler that writes a row with the wrong

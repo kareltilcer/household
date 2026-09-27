@@ -1,0 +1,5 @@
+# Every violation architecture test 3 must report for privacy.go's modules, in their order.
+module no_export does not implement module.ExportSource
+module no_erase does not implement module.EraseSource
+module neither does not implement module.ExportSource
+module neither does not implement module.EraseSource

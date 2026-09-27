@@ -1,5 +1,5 @@
-// Package app assembles the HTTP API from the platform and, from item 3, the modules the
-// registry holds, and serves it.
+// Package app assembles the HTTP API from the platform and the modules the registry holds, and
+// serves it.
 package app
 
 import (
@@ -15,8 +15,11 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/contract"
+	"github.com/kareltilcer/household/server/internal/platform/grant"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
+	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
 // Deps are what the router's handlers need.
@@ -24,6 +27,14 @@ type Deps struct {
 	Logger   *slog.Logger
 	Contract *contract.Contract
 	Health   *health.Health
+	// Pool opens every transaction of a household-scoped request, connected as the request
+	// role (tenant.InTx).
+	Pool tenant.Beginner
+	// Modules are the modules served, each under /households/{household_id}/<name>.
+	Modules *module.Registry
+	// Entitlement is the tenant middleware's entitlement check (tenant.Config), nil until item
+	// 18 fills it in.
+	Entitlement func(*http.Request) error
 	// MaxBodyBytes caps a JSON request body at the edge.
 	MaxBodyBytes int64
 	// BodyTimeout caps how long any request body may take to arrive, zero for no cap
@@ -34,7 +45,17 @@ type Deps struct {
 // NewRouter returns the server's whole HTTP surface: the platform middleware, and under
 // contract.BasePath the contract's edge validation and every implemented route. It refuses
 // to build with a route the contract does not declare, so the server never serves one.
+//
+// Everything under /households/{household_id} passes the tenant middleware, which answers a
+// caller who is not a member of the household before any route does. Each module's routes are
+// mounted below that at /<name>, behind the gate that answers 404 to a member who cannot see
+// the module (PRD modules/00 §1).
 func NewRouter(d Deps) (*chi.Mux, error) {
+	tenancy, err := tenant.Middleware(tenant.Config{Pool: d.Pool, Logger: d.Logger, Entitlement: d.Entitlement})
+	if err != nil {
+		return nil, fmt.Errorf("app: %w", err)
+	}
+
 	root := chi.NewRouter()
 	root.Use(httpx.RequestScope, httpx.AccessLog(d.Logger), httpx.Recover(d.Logger), httpx.BodyDeadline(d.BodyTimeout))
 	root.NotFound(httpx.NotFound)
@@ -47,6 +68,16 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 
 	api.Get("/healthz", d.Health.Liveness)
 	api.Get("/readyz", d.Health.Readiness)
+
+	api.Route("/households/{"+tenant.Param+"}", func(household chi.Router) {
+		household.Use(tenancy)
+		for _, m := range d.Modules.All() {
+			household.Route("/"+m.Name(), func(r chi.Router) {
+				r.Use(grant.Gate(m.Name()))
+				m.RegisterRoutes(r)
+			})
+		}
+	})
 
 	root.Mount(contract.BasePath, api)
 
