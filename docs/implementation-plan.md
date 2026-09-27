@@ -268,7 +268,7 @@ Phase 0 · after 2 · size L
   - A handler missing its `WHERE` returns an empty set.
   - A cross-tenant insert errors.
   - Each architecture test fails on its violation.
-- **PR:** —
+- **PR:** [#6](https://github.com/kareltilcer/household/pull/6)
 
 ### 4 · Sync-ready schema, entity registry and the mutation spine · `planned`
 
