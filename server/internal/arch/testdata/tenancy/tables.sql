@@ -68,6 +68,28 @@ CREATE MATERIALIZED VIEW arch_testdata.summary AS
 -- Exempted as global: nothing is asked of it.
 CREATE TABLE arch_testdata.catalog (id text PRIMARY KEY);
 
+-- Exempted as global, and the request role deletes and updates its rows: a tenant table whose
+-- rows go with a person's is changed in every household from any one.
+CREATE TABLE arch_testdata.people (id uuid PRIMARY KEY);
+GRANT SELECT, INSERT, UPDATE, DELETE ON arch_testdata.people TO household_app;
+CREATE TABLE arch_testdata.assigned (
+  id uuid PRIMARY KEY,
+  household_id uuid NOT NULL,
+  person_id uuid NOT NULL REFERENCES arch_testdata.people (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+SELECT enable_tenant_isolation('arch_testdata.assigned');
+
+-- Keeps it: exempted as global, and the request role updates its rows but deletes none, so a
+-- tenant table may cascade a delete from it, and takes no action on an update.
+CREATE TABLE arch_testdata.tombstoned (id uuid PRIMARY KEY);
+GRANT SELECT, INSERT, UPDATE ON arch_testdata.tombstoned TO household_app;
+CREATE TABLE arch_testdata.authored (
+  id uuid PRIMARY KEY,
+  household_id uuid NOT NULL,
+  author_id uuid NOT NULL REFERENCES arch_testdata.tombstoned (id) ON DELETE CASCADE
+);
+SELECT enable_tenant_isolation('arch_testdata.authored');
+
 -- Exempted with a policy of its own, which it has, enabled and forced.
 CREATE TABLE arch_testdata.roots (id uuid PRIMARY KEY);
 ALTER TABLE arch_testdata.roots ENABLE ROW LEVEL SECURITY;

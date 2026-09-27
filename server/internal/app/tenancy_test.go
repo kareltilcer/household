@@ -377,10 +377,13 @@ func TestACrossTenantInsertErrors(t *testing.T) {
 	expect(t, w.do(http.MethodPost, items(ours), u, itemBody(it, ours)), http.StatusCreated, "")
 }
 
-// The tenant lasts as long as its transaction (PRD 01 §2.2): the connection a request used goes
-// back to the pool with no household, no caller, and the request role.
+// The tenant lasts as long as its transaction (PRD 01 §2.2), and each transaction runs as the
+// request role whatever role its pool logs in as. Served through a pool that logs in as the
+// administrator, whom no policy holds, a request still reads only its own household, and the
+// connection it used goes back to the pool with no household, no caller, and the role it
+// logged in as.
 func TestTheTenantDoesNotOutliveItsTransaction(t *testing.T) {
-	cfg, err := pgxpool.ParseConfig(testsupport.Open(t).URL(db.RoleApp))
+	cfg, err := pgxpool.ParseConfig(testsupport.Open(t).URL(""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,19 +395,25 @@ func TestTheTenantDoesNotOutliveItsTransaction(t *testing.T) {
 	t.Cleanup(pool.Close)
 	w := newWorld(t, func(d *app.Deps) { d.Pool = pool })
 	h := w.household(true)
+	it := w.item(h)
+	w.item(w.household(true))
 	u := w.member(h, access.Member, level(access.View))
-	expect(t, w.do(http.MethodGet, items(h), u, ""), http.StatusOK, "")
+	rec := w.do(http.MethodGet, items(h), u, "")
+	expect(t, rec, http.StatusOK, "")
+	if got := listed(t, rec); !slices.Equal(got, []uuid.UUID{it}) {
+		t.Fatalf("served as the administrator, the request lists %v, want only its household's %v", got, []uuid.UUID{it})
+	}
 
 	var noHousehold, noUser bool
-	var role string
+	var role, login string
 	if err := pool.QueryRow(t.Context(),
-		"SELECT app_household_id() IS NULL, app_user_id() IS NULL, current_user::text",
-	).Scan(&noHousehold, &noUser, &role); err != nil {
+		"SELECT app_household_id() IS NULL, app_user_id() IS NULL, current_user::text, session_user::text",
+	).Scan(&noHousehold, &noUser, &role, &login); err != nil {
 		t.Fatal(err)
 	}
-	if !noHousehold || !noUser || role != db.RoleApp {
-		t.Fatalf("after the request the pooled connection has household unset %v, user unset %v, role %s",
-			noHousehold, noUser, role)
+	if !noHousehold || !noUser || role != login {
+		t.Fatalf("after the request the pooled connection has household unset %v, user unset %v, role %s, logged in as %s",
+			noHousehold, noUser, role, login)
 	}
 }
 

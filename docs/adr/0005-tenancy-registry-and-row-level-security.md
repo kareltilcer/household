@@ -60,7 +60,9 @@ tenant table, compares each row's `household_id` with the setting. It says the m
   household's context: PostgreSQL checks a `DELETE` against a policy's `USING` alone, so one
   policy whose `USING` admitted the caller's rows everywhere would let a transaction in one
   household delete them in another. `users` and `modules` are global and hold no household's
-  rows.
+  rows, and the request role deletes from neither: an account's row is replaced by a tombstone,
+  never deleted (FR-PR4), and a user's memberships and grants cascade from it, so a delete in
+  one household's context would reach every other household, past any policy.
 - **A `modules` table lists the module ids**, seeded with `ModuleKeyValue`'s seventeen, and
   `module_enablement` and `module_grants` reference it. A test holds it equal to the contract's
   enum. A module with no enablement row is disabled, and a member with no grant row has
@@ -78,19 +80,21 @@ tenant table, compares each row's `household_id` with the setting. It says the m
 - **The registry** takes the modules `internal/modules.All()` lists, refuses a nil module, a
   name that is not a module id, a name used twice and migrations that are not one block of the
   module's own, and gives each module's block its number from its files' names.
-- **The architecture tests.** Test 1 parses imports: a module, test files included, imports no
-  other module and not the module list, and the platform imports neither. Test 2 reads
-  PostgreSQL's catalog after every block has run: every table not exempted by name, with a
-  reason, has `household_id uuid NOT NULL`, row-level security enabled and forced, and the
-  template as its only permissive policy; a table exempted for a policy of its own has only
-  `FOR SELECT` policies wider than its household; a materialized view, which no policy can
-  hold, is refused; an exemption that names no table is refused. Test 3 type-asserts every
-  registered module to `ExportSource` and `EraseSource`. The isolation test (FR-NF4) loads a
-  fixture of two households with a row in every tenant table and, as `household_app` in
-  household B, with household B's owner as the caller, who is a member of household A as well,
-  reads each of household A's rows by primary key and finds none, then reads each as household
-  A and finds it, so that finding nothing proves something; a tenant table with no fixture row
-  fails it.
+- **The architecture tests.** Test 1 parses imports: a module, its test files and the packages
+  in its testdata included, imports no other module and not the module list, and the platform
+  imports neither. Test 2 reads PostgreSQL's catalog after every block has run: every table not
+  exempted by name, with a reason, has `household_id uuid NOT NULL`, row-level security enabled
+  and forced, and the template as its only permissive policy; a table exempted for a policy of
+  its own has only `FOR SELECT` policies wider than its household; a materialized view, which no
+  policy can hold, is refused; a foreign key from a table holding households' rows acts on a
+  delete or an update of a global table's row only where the request role cannot make one,
+  since a referential action runs past row-level security; an exemption that names no table is
+  refused. Test 3 type-asserts every registered module to `ExportSource` and `EraseSource`. The
+  isolation test (FR-NF4) loads a fixture of two households with a row in every tenant table
+  and, as `household_app` in household B, with household B's owner as the caller, who is a
+  member of household A as well, reads each of household A's rows by primary key and finds
+  none, then reads each as household A and finds it, so that finding nothing proves something;
+  a tenant table with no fixture row fails it.
 - **A test module proves the rest.** `internal/app/testdata/probe` is a module with a table, a
   block (99), a contract of its own, a list handler with no `WHERE` and a create handler that
   writes the household its body names. `testsupport.Main(m, blocks…)` migrates a package's clone

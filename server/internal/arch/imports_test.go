@@ -18,8 +18,8 @@ import (
 // imports none. What a module needs from another it gets through a catalog the platform owns,
 // and the platform reaches the modules only through the registry the server builds from
 // internal/modules, the list of them, which only the server's composition may import. Test
-// files are held to it too: a module whose tests import another has coupled the two just the
-// same.
+// files are held to it too, and so are the packages in a module's testdata, which only its
+// tests import: a module whose tests import another has coupled the two just the same.
 func TestModulesImportNoOtherModule(t *testing.T) {
 	// The server's internal directory, one up.
 	for _, v := range importViolations(t, os.DirFS("..")) {
@@ -42,8 +42,10 @@ func TestModulesImportNoOtherModuleCatchesEachViolation(t *testing.T) {
 // internalPath is the import path of the server's internal directory.
 const internalPath = "github.com/kareltilcer/household/server/internal/"
 
-// importViolations walks root, an internal directory, skipping testdata directories below it,
-// and returns each forbidden import as "path:line: message", path relative to root.
+// importViolations walks root, an internal directory, skipping hidden directories below it,
+// and returns each forbidden import as "path:line: message", path relative to root. A testdata
+// directory is walked like any other, and owner ignores one that belongs to neither a module
+// nor the platform, such as this package's own.
 func importViolations(t *testing.T, root fs.FS) []string {
 	t.Helper()
 	var out []string
@@ -53,7 +55,7 @@ func importViolations(t *testing.T, root fs.FS) []string {
 			return err
 		}
 		if d.IsDir() {
-			if p != "." && (d.Name() == "testdata" || strings.HasPrefix(d.Name(), ".")) {
+			if p != "." && strings.HasPrefix(d.Name(), ".") {
 				return fs.SkipDir
 			}
 			return nil

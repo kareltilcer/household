@@ -6,6 +6,6 @@ package modules
 
 import "github.com/kareltilcer/household/server/internal/platform/module"
 
-// All returns one of each module, in the order of the contract's ModuleKeyValue. Item 31 adds
+// All returns one of each module, in the order of the contract's ModuleKeyValue. Item 30 adds
 // the first.
 func All() []module.Module { return nil }

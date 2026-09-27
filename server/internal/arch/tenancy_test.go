@@ -20,7 +20,9 @@ import (
 // tenant's is a restrictive policy, which is ANDed with it. A materialized view cannot hold a
 // policy at all, so none may hold a household's rows. A table exempted for a policy of its own
 // may read more widely than its household, but only in a FOR SELECT policy: it is written only
-// in its household's context.
+// in its household's context. And no global table's row, deleted or updated by the request
+// role, changes a household's rows through a foreign key's action: a referential action runs
+// past row-level security, so it would reach every household from any household's context.
 //
 // It reads the schema from PostgreSQL's catalog, as the migrations left it in the package's
 // database: every table in every schema, whichever migration made it and however it spelled
@@ -43,6 +45,8 @@ func TestTenantTablesAreIsolatedCatchesEachViolation(t *testing.T) {
 	execFile(t, tx, dir, "tables.sql")
 	got := tenancyViolations(t, tx, "arch_testdata", map[string]exemption{
 		"arch_testdata.catalog":          {why: "reference data"},
+		"arch_testdata.people":           {why: "global, and the request role deletes and updates its rows"},
+		"arch_testdata.tombstoned":       {why: "global, and the request role updates its rows but never deletes one"},
 		"arch_testdata.roots":            {ownPolicy: true, key: "id", why: "a tenant root with a policy of its own"},
 		"arch_testdata.roots_unforced":   {ownPolicy: true, key: "id", why: "a tenant root that does not force its policy"},
 		"arch_testdata.members":          {ownPolicy: true, why: "read more widely, written in the household"},
@@ -114,6 +118,15 @@ type policy struct {
 	using, with string
 }
 
+// foreignKey is a foreign key, as the catalog describes it: the table it references, its
+// actions on a delete and on an update there, and whether the request role may make either.
+type foreignKey struct {
+	name                 string
+	references           string
+	onDelete, onUpdate   string
+	canDelete, canUpdate bool
+}
+
 // tenancyViolations returns each violation of test 2 in schema, or in every schema that is not
 // PostgreSQL's own when schema is "".
 func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string]exemption) []string {
@@ -162,6 +175,26 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 		t.Fatal(err)
 	}
 
+	rows, err = tx.Query(ctx, `
+		SELECT k.conrelid, k.conname, n.nspname || '.' || c.relname, k.confdeltype::text, k.confupdtype::text,
+		  has_table_privilege($1, k.confrelid, 'DELETE'), has_any_column_privilege($1, k.confrelid, 'UPDATE')
+		FROM pg_constraint k
+		JOIN pg_class c ON c.oid = k.confrelid
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE k.contype = 'f'
+		ORDER BY k.conrelid, k.conname`, db.RoleApp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignKeys := map[uint32][]foreignKey{}
+	var fk foreignKey
+	if _, err := pgx.ForEachRow(rows, []any{&relid, &fk.name, &fk.references, &fk.onDelete, &fk.onUpdate, &fk.canDelete, &fk.canUpdate}, func() error {
+		foreignKeys[relid] = append(foreignKeys[relid], fk)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
 	var out []string
 	seen := map[string]bool{}
 	for _, tb := range tables {
@@ -176,6 +209,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 				out = append(out, tb.name+" has no policy, so the request role reads none of it")
 			}
 			out = append(out, ownWriteViolations(tb, policies[tb.oid], e.column())...)
+			out = append(out, globalActionViolations(tb, foreignKeys[tb.oid], exempt)...)
 			continue
 		case tb.kind == "m":
 			out = append(out, tb.name+" is a materialized view, which row-level security cannot hold, so it may hold no household's rows")
@@ -204,6 +238,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 		if !isolated {
 			out = append(out, tb.name+" has no tenant isolation policy; create it with enable_tenant_isolation")
 		}
+		out = append(out, globalActionViolations(tb, foreignKeys[tb.oid], exempt)...)
 	}
 
 	var stale []string
@@ -235,6 +270,29 @@ func ownWriteViolations(tb table, policies []policy, column string) []string {
 		if (p.command != "a" && p.using != own) || check != own {
 			out = append(out, fmt.Sprintf("%s has permissive policy %s, which writes beyond the household; "+
 				"a wider rule is a FOR SELECT policy", tb.name, p.name))
+		}
+	}
+	return out
+}
+
+// globalActionViolations reports each foreign key through which a delete or an update of a
+// global table's row, which the request role may make, changes tb's rows: a CASCADE, SET NULL
+// or SET DEFAULT action. The action runs past row-level security, so a delete in one
+// household's context would reach tb's rows in every household.
+func globalActionViolations(tb table, fks []foreignKey, exempt map[string]exemption) []string {
+	acts := func(action string) bool { return action == "c" || action == "n" || action == "d" }
+	var out []string
+	for _, fk := range fks {
+		if e, ok := exempt[fk.references]; !ok || e.ownPolicy {
+			continue
+		}
+		if acts(fk.onDelete) && fk.canDelete {
+			out = append(out, fmt.Sprintf("%s has foreign key %s, which acts on a delete from %s, a global table the request "+
+				"role deletes from; the action runs past row-level security, into every household", tb.name, fk.name, fk.references))
+		}
+		if acts(fk.onUpdate) && fk.canUpdate {
+			out = append(out, fmt.Sprintf("%s has foreign key %s, which acts on an update of %s, a global table the request "+
+				"role updates; the action runs past row-level security, into every household", tb.name, fk.name, fk.references))
 		}
 	}
 	return out

@@ -1,5 +1,7 @@
 # Every violation architecture test 2 must report for tables.sql, table by table in name order,
 # and the stale exemptions last.
+arch_testdata.assigned has foreign key assigned_person_id_fkey, which acts on a delete from arch_testdata.people, a global table the request role deletes from; the action runs past row-level security, into every household
+arch_testdata.assigned has foreign key assigned_person_id_fkey, which acts on an update of arch_testdata.people, a global table the request role updates; the action runs past row-level security, into every household
 arch_testdata.members_writable has permissive policy member_access, which writes beyond the household; a wider rule is a FOR SELECT policy
 arch_testdata.no_household has no household_id column
 arch_testdata.no_household has no tenant isolation policy; create it with enable_tenant_isolation

@@ -1,6 +1,7 @@
 package tenant_test
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"testing"
@@ -27,8 +28,20 @@ func TestInTxOutsideAHouseholdRunsNothing(t *testing.T) {
 	}
 }
 
+// beginner is a pool that is never asked for a transaction.
+type beginner struct{}
+
+func (beginner) Begin(context.Context) (pgx.Tx, error) { return nil, errors.New("not a pool") }
+
 func TestTheMiddlewareNeedsAPoolAndALogger(t *testing.T) {
-	if _, err := tenant.Middleware(tenant.Config{Logger: slog.New(slog.DiscardHandler)}); err == nil {
+	logger := slog.New(slog.DiscardHandler)
+	if _, err := tenant.Middleware(tenant.Config{Logger: logger}); err == nil {
 		t.Error("no pool")
+	}
+	if _, err := tenant.Middleware(tenant.Config{Pool: beginner{}}); err == nil {
+		t.Error("no logger")
+	}
+	if _, err := tenant.Middleware(tenant.Config{Pool: beginner{}, Logger: logger}); err != nil {
+		t.Errorf("a pool and a logger: %v", err)
 	}
 }

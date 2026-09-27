@@ -2,6 +2,7 @@
 modules/finance/finance_test.go:4: module finance imports module garden; a module imports no other module
 modules/garden/garden.go:4: module garden imports module finance; a module imports no other module
 modules/garden/seed/seed.go:4: module garden imports module finance; a module imports no other module
+modules/garden/testdata/fixture/fixture.go:4: module garden imports module finance; a module imports no other module
 modules/notes/notes.go:4: module notes imports the module list, internal/modules, and through it every module
 platform/dashboard/dashboard.go:4: the platform imports module garden; it reaches modules only through the registry
 platform/registry/registry.go:3: the platform imports the module list, internal/modules; it reaches modules only through the registry

@@ -64,6 +64,13 @@ CREATE TABLE users (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- A deleted account's row is replaced by a tombstone, never deleted (FR-PR4), so the request
+-- role deletes no user. A delete would reach past row-level security: a user's memberships,
+-- and through them their grants, cascade from their row, so a delete in one household's
+-- context would remove them from every other household too. Architecture test 2 fails a
+-- global table the request role deletes from whose deletion acts on households' rows.
+REVOKE DELETE ON users FROM household_app;
+
 -- The tenant root. Item 10 gives it its name, country, timezone, currency, locale and code.
 CREATE TABLE households (
   id uuid PRIMARY KEY,
