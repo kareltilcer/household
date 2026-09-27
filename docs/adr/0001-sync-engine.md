@@ -207,9 +207,10 @@ read path, which adoption gives up; the generated streams and the isolation test
   checkpoint and downloads it again on a mismatch. That holds a replica to PowerSync's buckets, not
   the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an
   entity's declared access, passes every checksum. A digest computed from PostgreSQL still sees
-  that, and item 14 decides whether its endpoint stays for it. A local write the server never took
-  is not such a case: PowerSync drops it at the next checkpoint, as it dropped the spike's rejected
-  Butter.
+  that, and item 14 decides whether its endpoint stays for it and, since PRD 10 §5 evaluates it at
+  the client's feed cursor and a PowerSync client has none, the point it is computed at. A local
+  write the server never took is not such a case: PowerSync drops it at the next checkpoint, as it
+  dropped the spike's rejected Butter.
 - **Operations gain a service and a replication slot.** A slot retains write-ahead log while
   PowerSync is down, so its lag is monitored and `max_slot_wal_keep_size` bounds it (a runbook in
   item 13), and it has to survive a failover of the database. A dev compose file gains
@@ -245,7 +246,8 @@ read path, which adoption gives up; the generated streams and the isolation test
   maintenance.
 - **Not verified by the spike**: a restart, since offline was `disconnect()` on a database left
   open, so a queue that survives the app being killed rests on the SDK's persistence until item 15
-  tests it; tokens signed EdDSA and read from a JWKS (the spike signed HS256); the per-household
+  tests it; tokens signed EdDSA, with the key PowerSync fetches from a JWKS the API publishes (the
+  spike signed HS256, with the key inline in PowerSync's configuration); the per-household
   subscription parameter, which the probes compiled and no scenario ran; scenario 16 as PRD 10 §4
   states it, with the member offline when removed; the replicated tables without `REPLICA IDENTITY
   FULL`; the React Native SDK on a device (gate G-C does that on two phones), the web SDK, and

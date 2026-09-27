@@ -68,8 +68,8 @@ Zero has no offline writes; Replicache is in maintenance mode. Two axes of the p
 workaround each: the floor became a reader set on the row, and a redacted projection reaches its
 owner as well. The requirement that decided it was retraction, which PowerSync met for every cause
 with no client code. The requirement that came closest to forcing a build was keeping row-level
-security under the read path, which a generated stream template and an isolation test now hold
-instead.
+security under the read path, which stream definitions generated from the entity registry and an
+isolation test now hold instead.
 
 ## 3. Tier the promise by merge policy
 
@@ -129,11 +129,13 @@ is the single most valuable artefact produced in Phase 0.
 > PowerSync clients, the real service and the real API in containers, partitions scripted by
 > disconnecting clients and by a network that refuses requests and loses responses, duplicate
 > delivery by replaying an upload, skew through `client_time`. Reordering becomes the order in
-> which clients reconnect and upload, scripted per scenario: one client's uploads cannot reorder,
-> since its connector drains PowerSync's queue in order, one batch at a time. It is slower and less
-> deterministic than an in-process simulator, so the fuzz run on each change is short and the long
-> one nightly. The scenarios and the invariants below stand. Where one names a mechanism of the
-> replaced feed, its D-93 form is given beside it (scenarios 6 and 18, and invariant 5).
+> which clients reconnect and upload, scripted per scenario. One client's connector drains
+> PowerSync's queue in order, one batch at a time, so its uploads reorder only where it replays a
+> held `deferred` or `entitlement` mutation after writes queued later; the suite scripts that too,
+> with a later write to the same row. It is slower and less deterministic than an in-process
+> simulator, so the fuzz run on each change is short and the long one nightly. The scenarios and
+> the invariants below stand. Where one names a mechanism of the replaced feed, its D-93 form is
+> given beside it (scenarios 6 and 18, and invariant 5).
 
 ### The scenarios it must cover
 
@@ -196,7 +198,9 @@ alerting metric** ([07-nonfunctional.md](07-nonfunctional.md) §5), not a suppor
 > bucket again when it does not match, which holds a replica to PowerSync's buckets. It does not
 > hold the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an
 > entity's declared access, passes every checksum. The digest, computed from PostgreSQL, remains
-> the check on that; plan item 14 decides whether it keeps an endpoint of its own.
+> the check on that, but it is evaluated above at the client's cursor, and a PowerSync client holds
+> no feed cursor. Plan item 14 decides whether it keeps an endpoint of its own and, if it does, the
+> point it is computed at.
 
 ## 6. The interaction with the no-content-access guarantee
 
