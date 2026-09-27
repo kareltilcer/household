@@ -302,7 +302,7 @@ Phase 0 · after 3 · size L · **gate G-A (schema half)**
 - **Done when**
   - Each of architecture tests 4, 5 and 9 fails on its violation.
   - A spine test proves the row, the audit event and the change commit and roll back together.
-- **PR:** —
+- **PR:** [#7](https://github.com/kareltilcer/household/pull/7)
 
 ### 5 · Sync engine spike and written verdict · `planned`
 
