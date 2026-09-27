@@ -256,9 +256,11 @@ func migrate(ctx context.Context, database string) error {
 	return err
 }
 
-// sweep drops templates for other migration sets, and test databases left behind by
-// runs that were killed, as long as nothing is connected to them. A failure is not the
-// run's concern: the next run sweeps again.
+// sweep drops templates for other migration sets, half-built templates, and test databases
+// left behind by runs that were killed, as long as nothing is connected to them. A
+// template is only ever built under db.CatalogLock, which the caller holds, so a *_build
+// database found here is one whose build died. A failure is not the run's concern: the
+// next run sweeps again.
 func sweep(ctx context.Context, admin *pgx.Conn, keep string) {
 	rows, err := admin.Query(ctx, `
 		SELECT datname FROM pg_database d
@@ -274,7 +276,7 @@ func sweep(ctx context.Context, admin *pgx.Conn, keep string) {
 	cutoff := time.Now().Add(-staleAfter).Unix()
 	for _, name := range names {
 		switch {
-		case name == keep, strings.HasSuffix(name, "_build"):
+		case name == keep:
 			continue
 		case strings.HasPrefix(name, clonePrefix):
 			stamp, _, _ := strings.Cut(strings.TrimPrefix(name, clonePrefix), "_")

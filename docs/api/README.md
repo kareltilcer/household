@@ -80,10 +80,12 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
   breaks the day a card expires.
 - **Errors are RFC 9457** `application/problem+json`, with a body on every error response. Switch
   on `code`, never on `detail`; `code` is the `ProblemCode` enum, so the switch is exhaustive.
-  Any operation can also answer `405 method_not_allowed` or `500 internal`, which no operation
-  declares. A `422 validation_failed` names each failure in `errors[]`: `field` is a JSON Pointer
-  into the body (`/name`) or `<in>:<name>` for a parameter (`query:limit`), and `code` is the
-  check that failed (`required`, `max_length`, `malformed`, …).
+  Any operation can also answer `405 method_not_allowed`, `500 internal`, and
+  `422 validation_failed` for a request the document does not admit, and one that takes a body
+  `413 payload_too_large` or `415 unsupported_media_type`, whether or not it declares them. A
+  `422 validation_failed` names each failure in `errors[]`: `field` is a JSON Pointer into the
+  body (`/name`) or `<in>:<name>` for a parameter (`query:limit`), and `code` is the check that
+  failed (`required`, `max_length`, `malformed`, …).
 - **The sync endpoints are the offline path**; the per-module REST endpoints are the online path.
   Both write through the same service layer.
 

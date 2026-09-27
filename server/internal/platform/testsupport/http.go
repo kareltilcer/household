@@ -3,12 +3,12 @@ package testsupport
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/contract"
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 )
 
 // Serve sends req through router, the server's root router, and checks the response
@@ -24,13 +24,9 @@ func Serve(t testing.TB, router chi.Router, req *http.Request) *httptest.Respons
 	if err != nil {
 		t.Fatalf("load the contract: %v", err)
 	}
-	rctx := chi.NewRouteContext()
-	pattern := strings.TrimPrefix(router.Find(rctx, req.Method, req.URL.Path), contract.BasePath)
-	params := make(map[string]string, len(rctx.URLParams.Keys))
-	for i, key := range rctx.URLParams.Keys {
-		params[key] = rctx.URLParams.Values[i]
-	}
-	if err := c.ValidateResponse(req, pattern, params, rec.Code, rec.Header(), rec.Body.Bytes()); err != nil {
+	// The route the edge validated the request against, found the way the edge finds it.
+	m, _ := contract.Find(router, req.Method, httpx.RoutePath(req))
+	if err := c.ValidateResponse(req, m.Path, m.Params, rec.Code, rec.Header(), rec.Body.Bytes()); err != nil {
 		t.Errorf("the response breaks the contract: %v\n%s", err, rec.Body.String())
 	}
 	return rec

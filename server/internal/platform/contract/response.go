@@ -13,7 +13,6 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
-	"github.com/getkin/kin-openapi/routers"
 
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
@@ -60,9 +59,7 @@ func (c *Contract) ValidateResponse(req *http.Request, pattern string, params ma
 		RequestValidationInput: &openapi3filter.RequestValidationInput{
 			Request:    req,
 			PathParams: params,
-			Route: &routers.Route{
-				Spec: c.validating, Path: o.Path, PathItem: o.item, Method: o.Method, Operation: o.op,
-			},
+			Route:      c.route(o),
 		},
 		Status:  status,
 		Header:  header,

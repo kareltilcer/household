@@ -45,16 +45,18 @@ func RequestScope(next http.Handler) http.Handler {
 //
 // The line is written on the way out whether the handler returned or was aborted with
 // http.ErrAbortHandler, which Recover raises for a response it can no longer replace; an
-// aborted request is logged as an error, whatever status went out before it was cut off.
+// aborted request is logged as an error, with the status that went out before it was cut
+// off, or 0 when none did.
 func AccessLog(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			ww := wrap(w, r.ProtoMajor)
 			returned := false
 			defer func() {
-				status := ww.Status()
-				if status == 0 {
+				status := ww.sent()
+				if status == 0 && returned {
+					// A handler that wrote nothing answered 200.
 					status = http.StatusOK
 				}
 				attrs := []slog.Attr{
@@ -84,17 +86,14 @@ func AccessLog(log *slog.Logger) func(http.Handler) http.Handler {
 // type and the stack: the value itself can hold anything, content included.
 // http.ErrAbortHandler, the deliberate abort, is left to net/http.
 //
-// A panic after the status line was written can no longer become a problem, and finishing
-// the response would pass a truncated body off as complete: net/http would end a chunked
-// stream cleanly. Recover aborts it instead, with http.ErrAbortHandler, so the client sees
-// the transfer fail.
+// A panic after the status line was written or flushed can no longer become a problem, and
+// finishing the response would pass a truncated body off as complete: net/http would end a
+// chunked stream cleanly. Recover aborts it instead, with http.ErrAbortHandler, so the
+// client sees the transfer fail.
 func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ww, ok := w.(middleware.WrapResponseWriter)
-			if !ok {
-				ww = middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-			}
+			ww := wrap(w, r.ProtoMajor)
 			defer func() {
 				v := recover()
 				if v == nil {
@@ -107,12 +106,12 @@ func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 					slog.String("panic", typeName(v)),
 					slog.String("stack", logging.Stack()),
 				)
-				if ww.Status() != 0 {
+				if ww.sent() != 0 {
 					panic(http.ErrAbortHandler)
 				}
 				// Headers the handler set for the response it meant to send do not describe
 				// the problem that replaces it.
-				for _, key := range representationHeaders {
+				for _, key := range handlerHeaders {
 					ww.Header().Del(key)
 				}
 				problem.Write(ww, reqctx.RequestID(r.Context()), problem.Internal())
@@ -122,11 +121,52 @@ func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-// representationHeaders describe a response body and how to cache or find it, and are
-// dropped when a panic replaces that response with a problem.
-var representationHeaders = []string{
+// handlerHeaders describe the response a handler meant to send: its body, how to cache or
+// find it, and the cookies that came with it. They are dropped when a panic replaces that
+// response with a problem; a cookie for a session whose transaction the panic rolled back
+// would otherwise reach the client with the 500.
+var handlerHeaders = []string{
 	"Cache-Control", "Content-Disposition", "Content-Encoding", "Content-Language",
 	"Content-Location", "Content-Range", "ETag", "Expires", "Last-Modified", "Location",
+	"Set-Cookie",
+}
+
+// responseWriter is the writer the plumbing hands on: chi's, which records the status and
+// the bytes written, and a note of a Flush, which sends the status line (200, when none was
+// written) as surely as WriteHeader does, but which chi's writer does not record as one.
+// Handlers reach what it wraps, to hijack the connection or set a deadline, through
+// http.NewResponseController.
+type responseWriter struct {
+	middleware.WrapResponseWriter
+	flushed bool
+}
+
+// wrap returns w as a responseWriter, wrapping it unless it already is one.
+func wrap(w http.ResponseWriter, protoMajor int) *responseWriter {
+	if rw, ok := w.(*responseWriter); ok {
+		return rw
+	}
+	return &responseWriter{WrapResponseWriter: middleware.NewWrapResponseWriter(w, protoMajor)}
+}
+
+// Flush sends what has been written, and the status line with it if it has not gone yet.
+func (w *responseWriter) Flush() {
+	w.flushed = true
+	_ = http.NewResponseController(w.WrapResponseWriter).Flush()
+}
+
+// Unwrap returns chi's writer, for http.NewResponseController.
+func (w *responseWriter) Unwrap() http.ResponseWriter { return w.WrapResponseWriter }
+
+// sent returns the status that went out, or 0 while none has.
+func (w *responseWriter) sent() int {
+	if status := w.Status(); status != 0 {
+		return status
+	}
+	if w.flushed {
+		return http.StatusOK
+	}
+	return 0
 }
 
 // typeName is the panic value's type, which is safe to log where the value is not.

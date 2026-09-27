@@ -18,7 +18,6 @@ package logging
 
 import (
 	"context"
-	"errors"
 	"io"
 	"log/slog"
 	"regexp"
@@ -128,29 +127,24 @@ func (h handler) WithGroup(string) slog.Handler { return h }
 //   - a value pgx could not encode, which it prints whole and its cause quotes again
 //     (`unable to encode 5000000000 into binary format for int4 (OID 23): 5000000000 is
 //     greater than maximum value for int4`), to the type it was meant for.
+//
+// Every such error in the chain is reduced, those joined beside another (errors.Join)
+// included. A wrapper that did not quote one verbatim may have paraphrased it, so the
+// message is then dropped, and only the reduced forms are kept.
 func errorText(err error) string {
 	text := err.Error()
-	var pg *pgconn.PgError
-	if errors.As(err, &pg) {
-		safe := "SQLSTATE " + pg.Code
-		for _, part := range []struct{ name, value string }{
-			{"table", pg.TableName},
-			{"column", pg.ColumnName},
-			{"constraint", pg.ConstraintName},
-		} {
-			if part.value != "" {
-				safe += " " + part.name + " " + part.value
-			}
+	var reduced []string
+	verbatim := true
+	for _, q := range quoting(err) {
+		reduced = append(reduced, q.safe)
+		if strings.Contains(text, q.raw) {
+			text = strings.ReplaceAll(text, q.raw, q.safe)
+		} else {
+			verbatim = false
 		}
-		return reduce(text, pg.Error(), safe)
 	}
-	var scan pgx.ScanArgError
-	if errors.As(err, &scan) {
-		safe := "can't scan into dest[" + strconv.Itoa(scan.ColumnIndex) + "]"
-		if scan.FieldName != "" && scan.FieldName != "?column?" {
-			safe += " (col: " + scan.FieldName + ")"
-		}
-		return reduce(text, scan.Error(), safe)
+	if !verbatim {
+		return strings.Join(reduced, "; ")
 	}
 	if i := strings.Index(text, encodePrefix); i >= 0 {
 		safe := encodePrefix + "a value"
@@ -163,13 +157,44 @@ func errorText(err error) string {
 	return text
 }
 
-// reduce replaces raw, the message of an error inside the one whose message is text, with
-// safe. A wrapper that did not quote raw verbatim may have paraphrased it, and is dropped.
-func reduce(text, raw, safe string) string {
-	if strings.Contains(text, raw) {
-		return strings.ReplaceAll(text, raw, safe)
+// quote is an error whose message can quote a member's content, and what is logged in its
+// place.
+type quote struct{ raw, safe string }
+
+// quoting returns every PostgreSQL error and failed pgx scan in err's tree. errors.As would
+// stop at the first.
+func quoting(err error) []quote {
+	var out []quote
+	//nolint:errorlint // A type switch on purpose: each layer is unwrapped here, one at a time.
+	switch e := err.(type) {
+	case nil:
+	case *pgconn.PgError:
+		safe := "SQLSTATE " + e.Code
+		for _, part := range []struct{ name, value string }{
+			{"table", e.TableName},
+			{"column", e.ColumnName},
+			{"constraint", e.ConstraintName},
+		} {
+			if part.value != "" {
+				safe += " " + part.name + " " + part.value
+			}
+		}
+		out = append(out, quote{raw: e.Error(), safe: safe})
+	case pgx.ScanArgError:
+		// Its cause, which quotes the column's content, is part of its message.
+		safe := "can't scan into dest[" + strconv.Itoa(e.ColumnIndex) + "]"
+		if e.FieldName != "" && e.FieldName != "?column?" {
+			safe += " (col: " + e.FieldName + ")"
+		}
+		out = append(out, quote{raw: e.Error(), safe: safe})
+	case interface{ Unwrap() []error }:
+		for _, inner := range e.Unwrap() {
+			out = append(out, quoting(inner)...)
+		}
+	case interface{ Unwrap() error }:
+		out = append(out, quoting(e.Unwrap())...)
 	}
-	return safe
+	return out
 }
 
 // encodePrefix starts pgx's message for an argument it could not encode, which then prints

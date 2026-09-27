@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/routers"
 
 	apispec "github.com/kareltilcer/household/docs/api"
 )
@@ -42,6 +43,8 @@ type Operation struct {
 
 	item *openapi3.PathItem
 	op   *openapi3.Operation
+	// validating is op as kin-openapi's validators are given it; see validatingOperation.
+	validating *openapi3.Operation
 }
 
 // load parses the committed contract once per process.
@@ -70,7 +73,7 @@ func Parse(spec []byte) (*Contract, error) {
 	}
 	for path, item := range doc.Paths.Map() {
 		for method, op := range item.Operations() {
-			o := &Operation{ID: op.OperationID, Method: method, Path: path, item: item, op: op}
+			o := &Operation{ID: op.OperationID, Method: method, Path: path, item: item, op: op, validating: validatingOperation(op)}
 			if o.ID == "" {
 				return nil, fmt.Errorf("contract: %s %s has no operationId", method, path)
 			}
@@ -123,4 +126,24 @@ func newValidatingView(doc *openapi3.T) *openapi3.T {
 	view := *doc // A shallow copy: both share every path, operation and schema.
 	view.OpenAPI = "3.0.3"
 	return &view
+}
+
+// validatingOperation returns op as the validators are to see it: the same operation, with
+// no security requirement.
+//
+// Authentication is the auth middleware's (items 8 and 9), not the validator's, and
+// kin-openapi's check of a requirement reads the whole request body into memory before
+// anything else, whatever its media type and whether or not the operation declares one.
+// Under the contract's global requirement that is every operation but the two probes: a
+// multipart upload would be buffered before its handler could stream it, and a body on an
+// operation that takes none read to its end, both past the edge's cap and deadline.
+func validatingOperation(op *openapi3.Operation) *openapi3.Operation {
+	view := *op // A shallow copy: both share every parameter, body and response.
+	view.Security = &openapi3.SecurityRequirements{}
+	return &view
+}
+
+// route is o as kin-openapi's validators take it.
+func (c *Contract) route(o *Operation) *routers.Route {
+	return &routers.Route{Spec: c.validating, Path: o.Path, PathItem: o.item, Method: o.Method, Operation: o.validating}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -14,9 +15,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/kareltilcer/household/server/internal/platform/contract"
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
+	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
 
@@ -174,8 +176,9 @@ func TestAnInvalidBodyIs422NamingEachField(t *testing.T) {
 func TestAValidBodyReachesTheHandlerAsSent(t *testing.T) {
 	h, seen := router(t)
 	body := `{"id":"` + other + `","name":"Groceries"}`
-	// Media types are case-insensitive (RFC 9110 §8.3.1).
-	for _, contentType := range []string{"application/json; charset=utf-8", "Application/JSON; charset=UTF-8"} {
+	// Media types are case-insensitive (RFC 9110 §8.3.1), and a parameter's ';' may have
+	// whitespace around it (§5.6.6).
+	for _, contentType := range []string{"application/json; charset=utf-8", "Application/JSON; charset=UTF-8", "application/json ; charset=utf-8"} {
 		seen.body = nil
 		rec := call{method: http.MethodPost, path: lists, contentType: contentType, body: body}.do(t, h)
 		if rec.Code != http.StatusNoContent || string(seen.body) != body {
@@ -249,13 +252,12 @@ components:
 }
 
 // A client that trickles a JSON body is disconnected once the body is overdue, rather than
-// holding the connection for as long as it likes. The writer is wrapped as the server's
-// middleware wraps it, so the deadline reaches the connection through Unwrap.
+// holding the connection for as long as it likes. The server's own middleware wraps the
+// writer, so the deadline reaches the connection through Unwrap.
 func TestAJSONBodyThatDoesNotArriveInTimeIsCutOff(t *testing.T) {
 	h, seen := router(t)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.ServeHTTP(middleware.NewWrapResponseWriter(w, r.ProtoMajor), r)
-	}))
+	log := logging.New(io.Discard, slog.LevelError)
+	srv := httptest.NewServer(httpx.AccessLog(log)(httpx.Recover(log)(h)))
 	defer srv.Close()
 	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", srv.Listener.Addr().String())
 	if err != nil {
@@ -386,21 +388,50 @@ func TestAJSONBodyOverTheCapIs413(t *testing.T) {
 	}
 }
 
+// counting is a request body that counts the bytes read from it.
+type counting struct {
+	r    io.Reader
+	read int
+}
+
+func (c *counting) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.read += n
+	return n, err
+}
+
 // An upload is streamed by its handler, which applies its own cap; the JSON cap and the
-// JSON validator stay out of its way.
+// JSON validator stay out of its way, and the edge reads none of it. The operation is
+// secured, as every one but the probes is, and kin-openapi reads a body whole to check a
+// security requirement.
 func TestAMultipartUploadIsLeftToItsHandler(t *testing.T) {
-	h, seen := router(t)
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
 	part, _ := form.CreateFormFile("file", "photo.jpg")
 	_, _ = part.Write(bytes.Repeat([]byte{0xff}, 4*maxBody))
 	_ = form.Close()
-	rec := call{
-		method: http.MethodPost, path: "/households/" + household + "/notes/" + other + "/images",
-		contentType: form.FormDataContentType(), body: body.String(),
-	}.do(t, h)
-	if rec.Code != http.StatusNoContent || len(seen.body) != body.Len() {
-		t.Fatalf("status %d, handler saw %d of %d bytes", rec.Code, len(seen.body), body.Len())
+	size := body.Len()
+	upload := &counting{r: &body}
+
+	api := chi.NewRouter()
+	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody, BodyTimeout: bodyTimeout}))
+	readBefore, handled := -1, 0
+	api.Post("/households/{household_id}/notes/{note_id}/images", func(w http.ResponseWriter, r *http.Request) {
+		readBefore = upload.read
+		b, _ := io.ReadAll(r.Body)
+		handled = len(b)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	root := chi.NewRouter()
+	root.Mount(contract.BasePath, api)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+		contract.BasePath+"/households/"+household+"/notes/"+other+"/images", upload)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	rec := httptest.NewRecorder()
+	root.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent || readBefore != 0 || handled != size {
+		t.Fatalf("status %d; the edge read %d bytes before the handler, which saw %d of %d", rec.Code, readBefore, handled, size)
 	}
 }
 
@@ -434,12 +465,66 @@ func TestParametersAreValidated(t *testing.T) {
 	}
 }
 
+// The body is refused by its length, unread: an operation that takes none has no cap to
+// read one under.
 func TestABodyOnAnOperationThatTakesNoneIs422(t *testing.T) {
 	h, seen := router(t)
-	rec := call{method: http.MethodGet, path: "/households/" + household + "/garden/harvests", contentType: "application/json", body: `{}`}.do(t, h)
+	body := &counting{r: strings.NewReader(strings.Repeat("x", 64*maxBody))}
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, contract.BasePath+"/households/"+household+"/garden/harvests", body)
+	req.ContentLength = 64 * maxBody
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
 	sameErrors(t, fieldErrors(t, rec), problem.FieldError{Field: "", Code: "invalid"})
-	if seen.called {
-		t.Fatal("the handler ran")
+	if seen.called || body.read != 0 {
+		t.Fatalf("the handler ran %t; the edge read %d bytes", seen.called, body.read)
+	}
+}
+
+// A route whose parameter carries a regular expression is validated against the operation
+// whose path it serves, as architecture test 6 matches it.
+func TestARouteWithAParameterPatternIsValidated(t *testing.T) {
+	api := chi.NewRouter()
+	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody}))
+	api.Post("/households/{household_id:[0-9a-f-]+}/shopping/lists", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	root := chi.NewRouter()
+	root.Mount(contract.BasePath, api)
+
+	rec := call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"id":"` + other + `","name":"x"}`}.do(t, root)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("a valid body: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = call{method: http.MethodPost, path: lists, contentType: "application/json", body: `{"id":"` + other + `"}`}.do(t, root)
+	sameErrors(t, fieldErrors(t, rec), problem.FieldError{Field: "/name", Code: "required"})
+}
+
+func TestFind(t *testing.T) {
+	api := chi.NewRouter()
+	noop := func(http.ResponseWriter, *http.Request) {}
+	api.Get("/households/{household_id:[0-9a-f-]+}/notes/{note_id}", noop)
+	root := chi.NewRouter()
+	root.Mount(contract.BasePath, api)
+
+	note := "/households/" + household + "/notes/" + other
+	for name, tc := range map[string]struct {
+		router chi.Routes
+		path   string
+	}{
+		"below the mount point": {api, note},
+		"from the root":         {root, contract.BasePath + note},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, ok := contract.Find(tc.router, http.MethodGet, tc.path)
+			if !ok || m.Path != "/households/{household_id}/notes/{note_id}" ||
+				len(m.Params) != 2 || m.Params["household_id"] != household || m.Params["note_id"] != other {
+				t.Fatalf("Find = %+v, %t", m, ok)
+			}
+		})
+	}
+	if _, ok := contract.Find(root, http.MethodPost, contract.BasePath+note); ok {
+		t.Error("Find matched a method the route does not serve")
 	}
 }
 

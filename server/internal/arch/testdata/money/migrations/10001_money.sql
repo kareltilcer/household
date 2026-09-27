@@ -30,3 +30,6 @@ ALTER TABLE expenses ADD COLUMN "price" numeric;
 CREATE VIEW expense_euros AS
   SELECT id, CAST(amount_minor AS numeric) / 100 AS euros, CAST(quantity_kg AS float8) AS kg
   FROM expenses;
+
+-- A string that holds a comment marker hides nothing after it on its line.
+ALTER TABLE expenses ADD COLUMN memo text DEFAULT '-- none', ADD COLUMN fee_eur real;

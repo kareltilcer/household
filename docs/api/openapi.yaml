@@ -52,7 +52,10 @@ info:
     RFC 9457 `application/problem+json` throughout, with a stable machine-readable `code` that
     clients switch on. Never switch on `detail`, which is human-readable and translated.
 
-    Any operation can also answer `405` (`method_not_allowed`) or `500` (`internal`); neither is
+    Any operation can also answer `405` (`method_not_allowed`) or `500` (`internal`). Every request
+    is checked against this document before it is served, so any operation can also answer `422`
+    (`validation_failed`) for a request the document does not admit, and any operation that takes
+    a body `413` (`payload_too_large`) or `415` (`unsupported_media_type`). None of these is
     declared on each operation.
 
     In a `ValidationProblem`, each `errors[].field` is an RFC 6901 JSON Pointer into the request

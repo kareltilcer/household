@@ -37,16 +37,21 @@ be enforced rather than intended:
   (1), `{ type: 'null' }` branches of a `oneOf` (141). `contract_test.go` pins each against a real
   operation, so a kin upgrade that changes this fails there.
 - **The edge validates the operation chi routed to**, found with the router's own `Find`, so a
-  body is never checked against a different operation's schema. It validates parameters,
-  headers and JSON bodies; it neither authenticates (items 8, 9) nor writes defaults into the
-  request, since a `PATCH` that grew defaulted members would overwrite what the client never
-  sent. A JSON body is capped (`HOUSEHOLD_MAX_BODY_BYTES`, 1 MiB) and answers `413` above it,
-  and must arrive within `HOUSEHOLD_BODY_TIMEOUT` (60 s) or the connection is closed, since the
-  server itself bounds only the reading of headers; a body in a media type the operation does
-  not declare answers `415`, media types compared without regard to case; a multipart upload is
-  left to its handler to stream, under its own cap and deadline. A query string pair that
-  `net/url` cannot parse, which it would drop without a word, answers `422 malformed`: a
-  dropped cursor would otherwise be answered with page one.
+  body is never checked against a different operation's schema. It validates parameters, headers
+  and JSON bodies; it neither authenticates (items 8, 9) nor writes defaults into the request,
+  since a `PATCH` that grew defaulted members would overwrite what the client never sent.
+  kin-openapi is handed each operation without its security requirements: to check one, it reads
+  the whole body into memory first, whatever its media type, which would buffer every upload and
+  every body sent to an operation that takes none, uncapped. A JSON body is capped
+  (`HOUSEHOLD_MAX_BODY_BYTES`, 1 MiB) and answers `413` above it, and must arrive within
+  `HOUSEHOLD_BODY_TIMEOUT` (60 s) or the connection is closed, since the server itself bounds
+  only the reading of headers; a body in a media type the operation does not declare answers
+  `415`, media types compared without regard to case or to the whitespace around their
+  parameters; a multipart upload is left to its handler to stream, under its own cap and
+  deadline. A query string pair that `net/url` cannot parse, which it would drop without a word,
+  answers `422 malformed`: a dropped cursor would otherwise be answered with page one. The
+  contract says that any operation can answer these `413`, `415` and `422` refusals, declared or
+  not.
 - **A `readOnly` member the client sends is validated against its schema and left to the
   handler to ignore**, not refused. JSON Schema allows either; refusing breaks the GET-modify-PUT
   round trip (`putMeConsents` takes the `Consents` a GET returns, `updated_at` and all), and

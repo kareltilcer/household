@@ -174,6 +174,24 @@ func TestTheAccessLogNamesTheRouteNotThePath(t *testing.T) {
 	}
 }
 
+// A request the edge refuses is never routed, and is logged under the route it was refused
+// for all the same, not under the mount point.
+func TestTheAccessLogNamesTheRouteOfARefusedRequest(t *testing.T) {
+	r, logs := router(t)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/healthz", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	if rec := testsupport.Serve(t, r, req); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("a body on getHealthz: %d %s", rec.Code, rec.Body.String())
+	}
+	var line map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(logs.String())), &line); err != nil {
+		t.Fatal(err)
+	}
+	if line["route"] != "/api/v1/healthz" || line["status"] != float64(422) {
+		t.Fatalf("access log line %v", line)
+	}
+}
+
 // A panic becomes a 500 problem, logged by its type and stack and never its value, and
 // without the headers the handler set for the response it meant to send.
 func TestAPanicIsA500Problem(t *testing.T) {
@@ -182,6 +200,9 @@ func TestAPanicIsA500Problem(t *testing.T) {
 		w.Header().Set("ETag", `"7"`)
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Cache-Control", "max-age=3600")
+		http.SetCookie(w, &http.Cookie{
+			Name: "__Host-hh_session", Value: "minted", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		})
 		panic("the member's diary says: meet at noon")
 	})
 	rec := httptest.NewRecorder()
@@ -198,7 +219,7 @@ func TestAPanicIsA500Problem(t *testing.T) {
 	if !strings.Contains(logs.String(), `"status":500`) {
 		t.Fatalf("the access log missed the 500:\n%s", logs)
 	}
-	for _, key := range []string{"ETag", "Content-Encoding", "Cache-Control"} {
+	for _, key := range []string{"ETag", "Content-Encoding", "Cache-Control", "Set-Cookie"} {
 		if v := rec.Header().Get(key); v != "" {
 			t.Errorf("the problem carries the handler's %s: %q", key, v)
 		}
@@ -206,32 +227,68 @@ func TestAPanicIsA500Problem(t *testing.T) {
 }
 
 // A stream that panics halfway cannot become a problem, and must not end as if it were
-// complete: the client sees the transfer fail, and the access log records an error.
+// complete: the client sees the transfer fail, and the access log records an error with the
+// status that went out. A Flush sends the status line as surely as a write does, so a
+// stream that has only flushed its headers is past saving too.
 func TestAPanicAfterTheResponseStartedAbortsIt(t *testing.T) {
+	for name, start := range map[string]func(http.ResponseWriter){
+		"written": func(w http.ResponseWriter) {
+			_, _ = io.WriteString(w, "{\"line\":1}\n")
+			_ = http.NewResponseController(w).Flush()
+		},
+		"flushed": func(w http.ResponseWriter) { _ = http.NewResponseController(w).Flush() },
+		"flushed directly": func(w http.ResponseWriter) {
+			f, ok := w.(http.Flusher)
+			if !ok {
+				panic("the writer cannot flush")
+			}
+			f.Flush()
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, logs := router(t)
+			r.Get("/half", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/x-ndjson")
+				start(w)
+				panic("late")
+			})
+			srv := httptest.NewServer(r)
+			defer srv.Close()
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/half", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp, err := srv.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if err == nil {
+				t.Fatalf("a truncated stream read as complete: %d %q", resp.StatusCode, body)
+			}
+			if !strings.Contains(logs.String(), `"level":"ERROR","msg":"request","method":"GET","status":200`) {
+				t.Fatalf("the access log did not record the aborted request as an error:\n%s", logs)
+			}
+		})
+	}
+}
+
+// A request cut off before anything was written, as the edge cuts off a body that arrives
+// too slowly, went out with no status, and is not logged as a 200.
+func TestARequestAbortedBeforeAnswerIsLoggedWithoutAStatus(t *testing.T) {
 	r, logs := router(t)
-	r.Get("/half", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/x-ndjson")
-		_, _ = io.WriteString(w, "{\"line\":1}\n")
-		_ = http.NewResponseController(w).Flush()
-		panic("late")
-	})
-	srv := httptest.NewServer(r)
-	defer srv.Close()
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/half", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, err := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	if err == nil {
-		t.Fatalf("a truncated stream read as complete: %d %q", resp.StatusCode, body)
-	}
-	if !strings.Contains(logs.String(), `"level":"ERROR","msg":"request"`) {
-		t.Fatalf("the access log did not record the aborted request as an error:\n%s", logs)
+	r.Get("/cut", func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) })
+	func() {
+		defer func() {
+			if err, ok := recover().(error); !ok || !errors.Is(err, http.ErrAbortHandler) {
+				t.Fatalf("recovered %v, want http.ErrAbortHandler", err)
+			}
+		}()
+		r.ServeHTTP(httptest.NewRecorder(), get(t, "/cut"))
+	}()
+	if !strings.Contains(logs.String(), `"level":"ERROR","msg":"request","method":"GET","status":0`) {
+		t.Fatalf("access log:\n%s", logs)
 	}
 }
 

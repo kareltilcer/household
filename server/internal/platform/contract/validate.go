@@ -12,7 +12,6 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
-	"github.com/getkin/kin-openapi/routers"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
@@ -36,13 +35,15 @@ type Limits struct {
 // problem document: 422 validation_failed naming each offending field, 413 for a JSON body
 // over limits.MaxBody bytes, 415 for a body in a media type the operation does not declare.
 //
-// It finds the route with router.Find, the lookup chi itself routes with, so a request is
-// always validated against the operation whose handler will serve it; a request no route
-// matches passes through untouched for chi to answer 404 or 405. Install it on the router
-// that holds the contract's paths, the one mounted at BasePath.
+// It finds the route with Find, the lookup chi itself routes with, so a request is always
+// validated against the operation whose handler will serve it; a request no route matches
+// passes through untouched for chi to answer 404 or 405. Install it on the router that
+// holds the contract's paths, the one mounted at BasePath. A request it refuses is recorded
+// under its route, as chi records one it serves, so the access log names the operation.
 //
 // Authentication is not checked here: security requirements are the auth middleware's
-// (items 8 and 9). Defaults are not written into the request either, so a handler reads
+// (items 8 and 9), and the validator is handed each operation without them (see
+// validatingOperation). Defaults are not written into the request either, so a handler reads
 // the body the client sent; a PATCH that filled in defaults would overwrite fields the
 // client never mentioned. A readOnly member the client sends back, as a GET-modify-PUT
 // round trip does, is validated against its schema and otherwise left for the handler to
@@ -54,26 +55,30 @@ type Limits struct {
 func (c *Contract) Middleware(router chi.Routes, limits Limits) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			rctx := chi.NewRouteContext()
-			pattern := router.Find(rctx, r.Method, httpx.RoutePath(r))
-			if pattern == "" {
+			m, found := Find(router, r.Method, httpx.RoutePath(r))
+			if !found {
 				next.ServeHTTP(w, r)
 				return
 			}
-			op, ok := c.Lookup(r.Method, pattern)
+			// The route is recorded for as long as the edge answers for it: chi records the
+			// route of a request it routes, and a refused request is never routed.
+			rctx := chi.RouteContext(r.Context())
+			if rctx != nil {
+				rctx.RoutePatterns = append(rctx.RoutePatterns, m.Route)
+			}
+			op, ok := c.Lookup(r.Method, m.Path)
 			if !ok {
 				// A route the contract does not declare. The router refuses to build with
 				// one (and architecture test 6 fails on it), so this is unreachable.
 				problem.Write(w, reqctx.RequestID(r.Context()), problem.Internal())
 				return
 			}
-			params := make(map[string]string, len(rctx.URLParams.Keys))
-			for i, key := range rctx.URLParams.Keys {
-				params[key] = rctx.URLParams.Values[i]
-			}
-			if p := c.validate(w, r, op, params, limits); p != nil {
+			if p := c.validate(w, r, op, m.Params, limits); p != nil {
 				problem.Write(w, reqctx.RequestID(r.Context()), p)
 				return
+			}
+			if rctx != nil {
+				rctx.RoutePatterns = rctx.RoutePatterns[:len(rctx.RoutePatterns)-1]
 			}
 			next.ServeHTTP(w, r)
 		})
@@ -86,7 +91,6 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 	}
 	options := &openapi3filter.Options{
 		MultiError:                 true,
-		AuthenticationFunc:         openapi3filter.NoopAuthenticationFunc,
 		SkipSettingDefaults:        true,
 		ExcludeReadOnlyValidations: true,
 	}
@@ -124,14 +128,8 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 	err := openapi3filter.ValidateRequest(r.Context(), &openapi3filter.RequestValidationInput{
 		Request:    r,
 		PathParams: params,
-		Route: &routers.Route{
-			Spec:      c.validating,
-			Path:      o.Path,
-			PathItem:  o.item,
-			Method:    o.Method,
-			Operation: o.op,
-		},
-		Options: options,
+		Route:      c.route(o),
+		Options:    options,
 	})
 	if err == nil {
 		// The deadline was the body's, and the handler's own reads are not the edge's to
@@ -175,9 +173,10 @@ func malformedQuery(raw string) []problem.FieldError {
 // requestMediaType returns the media type the request declares, whether the operation
 // declares it too, and whether the request has a Content-Type at all.
 //
-// Media types are case-insensitive (RFC 9110 §8.3.1), but kin-openapi looks the header up
-// as it is written, so a declared one written in another case is handed on in canonical
-// form.
+// Media types are case-insensitive (RFC 9110 §8.3.1) and may have whitespace around the
+// ';' before a parameter (§5.6.6), but kin-openapi looks the header up as it is written, so
+// a declared one written any other way is handed on in canonical form:
+// `Application/JSON ; charset=UTF-8` as `application/json; charset=UTF-8`.
 func requestMediaType(r *http.Request, body *openapi3.RequestBody) (mediaType string, declared, present bool) {
 	header := r.Header.Get("Content-Type")
 	if header == "" {
@@ -190,10 +189,8 @@ func requestMediaType(r *http.Request, body *openapi3.RequestBody) (mediaType st
 	if body.Content.Get(mediaType) == nil {
 		return mediaType, false, true
 	}
-	if !strings.HasPrefix(header, mediaType) {
-		if canonical := mime.FormatMediaType(mediaType, params); canonical != "" {
-			r.Header.Set("Content-Type", canonical)
-		}
+	if canonical := mime.FormatMediaType(mediaType, params); canonical != "" && canonical != header {
+		r.Header.Set("Content-Type", canonical)
 	}
 	return mediaType, true, true
 }
@@ -323,12 +320,15 @@ func schemaErrors(err error) []*openapi3.SchemaError {
 	return nil
 }
 
+// pointerEscape escapes a JSON Pointer reference token (RFC 6901 §3).
+var pointerEscape = strings.NewReplacer("~", "~0", "/", "~1")
+
 // pointer renders a path of object keys and array indexes as an RFC 6901 JSON Pointer.
 func pointer(path []string) string {
 	var b strings.Builder
 	for _, token := range path {
 		b.WriteByte('/')
-		b.WriteString(strings.NewReplacer("~", "~0", "/", "~1").Replace(token))
+		b.WriteString(pointerEscape.Replace(token))
 	}
 	return b.String()
 }

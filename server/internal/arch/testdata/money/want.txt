@@ -8,6 +8,7 @@ migrations/10001_money.sql:22: amount_minor is money stored as numeric; use amou
 migrations/10001_money.sql:25: amount_eur is money stored as numeric; use amount_minor bigint and currency char(3)
 migrations/10001_money.sql:28: price is money stored as numeric; use amount_minor bigint and currency char(3)
 migrations/10001_money.sql:31: amount_minor is money stored as numeric; use amount_minor bigint and currency char(3)
+migrations/10001_money.sql:35: fee_eur is money stored as real; use amount_minor bigint and currency char(3)
 money.go:17: Amount is money held as float64; use an int64 amount_minor and a currency
 money.go:18: UnitPrice is money held as big.Float; use an int64 amount_minor and a currency
 money.go:19: Fees is money held as float32; use an int64 amount_minor and a currency

@@ -111,6 +111,9 @@ func TestAPostgresErrorIsReducedToWhatItNames(t *testing.T) {
 		"bare":        pg,
 		"wrapped":     fmt.Errorf("load note: %w", pg),
 		"paraphrased": &paraphrase{pg},
+		// errors.As finds only the first of two joined errors; each is reduced.
+		"joined second": errors.Join(&pgconn.PgError{Severity: "ERROR", Code: "23505", TableName: "notes"}, pg),
+		"joined twice":  fmt.Errorf("save: %w", errors.Join(pg, errors.New("rollback: conn closed"), &paraphrase{pg})),
 	} {
 		t.Run(name, func(t *testing.T) {
 			var buf bytes.Buffer

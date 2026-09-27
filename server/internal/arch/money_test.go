@@ -242,8 +242,9 @@ func goMoney(t *testing.T, rel string, src []byte) []string {
 }
 
 var (
-	sqlComment = regexp.MustCompile(`--[^\n]*|/\*[\s\S]*?\*/`)
-	sqlString  = regexp.MustCompile(`'(?:[^']|'')*'`)
+	// A comment or a string literal, whichever starts first: a string can hold "--" and a
+	// comment an apostrophe, so neither can be removed before the other.
+	sqlText    = regexp.MustCompile(`--[^\n]*|/\*[\s\S]*?\*/|'(?:[^']|'')*'`)
 	sqlDecimal = `(numeric|decimal|real|double\s+precision|float4|float8|float|money)\b`
 	// A column definition or type change, "amount numeric(12,2)", `"price" real` or "ALTER
 	// COLUMN amount TYPE real"; a cast, "amount_minor::numeric" or "CAST(amount_minor AS
@@ -265,7 +266,7 @@ func blank(s string) string {
 }
 
 func sqlMoney(rel, sql string) []string {
-	src := sqlString.ReplaceAllStringFunc(sqlComment.ReplaceAllStringFunc(sql, blank), blank)
+	src := sqlText.ReplaceAllStringFunc(sql, blank)
 
 	type hit struct {
 		offset int

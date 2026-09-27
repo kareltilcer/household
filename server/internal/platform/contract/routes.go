@@ -89,7 +89,44 @@ func contractPath(route string) (string, bool) {
 	if !ok || !strings.HasPrefix(path, "/") {
 		return "", false
 	}
-	return parameterPattern.ReplaceAllString(path, "{$1}"), true
+	return template(path), true
+}
+
+// template is a chi pattern less the regular expressions in its parameters.
+func template(pattern string) string { return parameterPattern.ReplaceAllString(pattern, "{$1}") }
+
+// Match is the route a router serves a request with.
+type Match struct {
+	// Route is the pattern as chi reports it, relative to the router it was found on, with
+	// any regular expression in a parameter left in place.
+	Route string
+	// Path is the contract path it serves, the form Lookup takes.
+	Path string
+	// Params are the route's path parameters.
+	Params map[string]string
+}
+
+// Find returns the route router serves method on path with, found by the lookup chi itself
+// routes with, or false when no route matches. path is what router routes by, which
+// httpx.RoutePath returns: below the mount point for a router mounted at BasePath, the
+// whole path, escaped as sent, for the root router that mounts it.
+func Find(router chi.Routes, method, path string) (Match, bool) {
+	rctx := chi.NewRouteContext()
+	route := router.Find(rctx, method, path)
+	if route == "" {
+		return Match{}, false
+	}
+	params := make(map[string]string, len(rctx.URLParams.Keys))
+	for i, key := range rctx.URLParams.Keys {
+		if key != "*" { // The mount point's wildcard, which no contract path has.
+			params[key] = rctx.URLParams.Values[i]
+		}
+	}
+	path = route
+	if below, ok := strings.CutPrefix(route, BasePath); ok && strings.HasPrefix(below, "/") {
+		path = below
+	}
+	return Match{Route: route, Path: template(path), Params: params}, true
 }
 
 // Diff reports every disagreement between the routes a router serves, the contract, and
