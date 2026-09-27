@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
@@ -269,6 +271,70 @@ func TestAPanicAfterTheResponseStartedAbortsIt(t *testing.T) {
 			}
 			if !strings.Contains(logs.String(), `"level":"ERROR","msg":"request","method":"GET","status":200`) {
 				t.Fatalf("the access log did not record the aborted request as an error:\n%s", logs)
+			}
+		})
+	}
+}
+
+// A response that cannot be encoded is a bug: it becomes the 500 problem, carrying the
+// request's id, and the failure is logged by its type, as a panic is.
+func TestAResponseThatCannotBeEncodedIsA500Problem(t *testing.T) {
+	r, logs := router(t)
+	r.Get("/unencodable", func(w http.ResponseWriter, _ *http.Request) {
+		httpx.WriteJSON(w, http.StatusOK, map[string]float64{"ratio": math.Inf(1)})
+	})
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, get(t, "/unencodable"))
+	id := rec.Header().Get("X-Request-Id")
+	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), `"request_id":"`+id+`"`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(logs.String(), `"panic":"*json.UnsupportedValueError"`) {
+		t.Fatalf("the failure was not logged:\n%s", logs)
+	}
+}
+
+// A request that declares a body and never sends it is disconnected once the body is
+// overdue, whatever it asked for. net/http reads a body nobody read before it answers, so a
+// refusal, a 404 or a 405 would otherwise wait on the client for as long as it likes.
+func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
+	c, err := contract.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const timeout = 300 * time.Millisecond
+	log := logging.New(io.Discard, slog.LevelError)
+	r, err := app.NewRouter(app.Deps{
+		Logger: log, Contract: c, Health: health.New(log, time.Second), MaxBodyBytes: 1 << 10, BodyTimeout: timeout,
+	})
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	for name, tc := range map[string]struct{ request, status string }{
+		"an operation that takes none": {"GET /api/v1/healthz", "422"},
+		"no route":                     {"POST /api/v1/nowhere", "404"},
+		"no such method":               {"DELETE /api/v1/healthz", "405"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			request, status := tc.request, tc.status
+			conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", srv.Listener.Addr().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = conn.Close() }()
+			if _, err := io.WriteString(conn, request+" HTTP/1.1\r\nHost: test\r\nContent-Length: 64\r\n\r\n"); err != nil {
+				t.Fatal(err)
+			}
+			_ = conn.SetReadDeadline(time.Now().Add(10 * timeout))
+			got, err := io.ReadAll(conn)
+			if err != nil {
+				t.Fatalf("the connection was held: %v", err)
+			}
+			if !strings.HasPrefix(string(got), "HTTP/1.1 "+status+" ") {
+				t.Fatalf("answered %q, want %s", got, status)
 			}
 		})
 	}

@@ -46,9 +46,10 @@ type FieldError struct {
 // Field error codes that are not JSON Schema keywords.
 const (
 	// FieldMalformed is a value that does not parse: a body that is not JSON, a query
-	// value that is not the declared type, a cursor this server did not mint.
+	// value that is not the declared type or is empty, a cursor this server did not mint.
 	FieldMalformed = "malformed"
-	// FieldInvalid is a value the validator refused for a reason it did not name.
+	// FieldInvalid is a refusal no keyword names: a body on an operation that takes none,
+	// or a failure the validator did not describe.
 	FieldInvalid = "invalid"
 )
 

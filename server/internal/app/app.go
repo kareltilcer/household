@@ -26,7 +26,8 @@ type Deps struct {
 	Health   *health.Health
 	// MaxBodyBytes caps a JSON request body at the edge.
 	MaxBodyBytes int64
-	// BodyTimeout caps how long a JSON request body may take to arrive, zero for no cap.
+	// BodyTimeout caps how long any request body may take to arrive, zero for no cap
+	// (httpx.BodyDeadline).
 	BodyTimeout time.Duration
 }
 
@@ -35,12 +36,12 @@ type Deps struct {
 // to build with a route the contract does not declare, so the server never serves one.
 func NewRouter(d Deps) (*chi.Mux, error) {
 	root := chi.NewRouter()
-	root.Use(httpx.RequestScope, httpx.AccessLog(d.Logger), httpx.Recover(d.Logger))
+	root.Use(httpx.RequestScope, httpx.AccessLog(d.Logger), httpx.Recover(d.Logger), httpx.BodyDeadline(d.BodyTimeout))
 	root.NotFound(httpx.NotFound)
 	root.MethodNotAllowed(httpx.MethodNotAllowed(root))
 
 	api := chi.NewRouter()
-	api.Use(d.Contract.Middleware(api, contract.Limits{MaxBody: d.MaxBodyBytes, BodyTimeout: d.BodyTimeout}))
+	api.Use(d.Contract.Middleware(api, contract.Limits{MaxBody: d.MaxBodyBytes}))
 	api.NotFound(httpx.NotFound)
 	api.MethodNotAllowed(httpx.MethodNotAllowed(api))
 
@@ -96,8 +97,9 @@ func Serve(ctx context.Context, log *slog.Logger, srv *http.Server, ln net.Liste
 // NewServer returns the http.Server for handler. Reading a request's headers is bounded,
 // against slow-loris clients. Reading a body and writing a response are not bounded here:
 // an upload over a slow connection (item 16) and the sync stream (item 14) legitimately
-// take minutes, and set their own deadlines through http.ResponseController, as the edge
-// does for every JSON body it reads (Deps.BodyTimeout).
+// take minutes, which a server-wide timeout would cut off. A body is bounded per request
+// instead, by httpx.BodyDeadline (Deps.BodyTimeout), which such a handler extends through
+// http.ResponseController.
 func NewServer(handler http.Handler, log *slog.Logger) *http.Server {
 	return &http.Server{
 		Handler:           handler,

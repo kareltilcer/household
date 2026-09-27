@@ -62,7 +62,9 @@ info:
     body (`/name`, `/items/0/amount_minor`, or an empty string for the body as a whole), or, for a
     parameter, its location and name: `query:limit`, `header:If-Match`, `path:household_id`.
     `errors[].code` names the check that failed in snake_case: a JSON Schema keyword such as
-    `required`, `type`, `max_length` or `pattern`, or `malformed` for a value that does not parse.
+    `required`, `type`, `max_length` or `pattern`; `malformed` for a value that does not parse,
+    an empty one included; or `invalid` for a refusal no keyword names, such as a body sent to an
+    operation that takes none.
 
     ## Money and quantities
 
@@ -8180,8 +8182,12 @@ components:
                     examples: ['/name', 'query:limit']
                   code:
                     type: string
-                    description: The check that failed, in snake_case — a JSON Schema keyword such as `required` or `max_length`, or `malformed`.
-                    examples: [required, max_length, malformed]
+                    description: |
+                      The check that failed, in snake_case — a JSON Schema keyword such as
+                      `required` or `max_length`; `malformed` for a value that does not parse; or
+                      `invalid` for a refusal no keyword names, such as a body on an operation
+                      that takes none.
+                    examples: [required, max_length, malformed, invalid]
                   message: { type: string }
 
     ConflictProblem:

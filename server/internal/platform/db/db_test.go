@@ -153,6 +153,8 @@ func TestTheRequestRoleUsesTablesAndCreatesNone(t *testing.T) {
 	if _, err := migrate.Exec(t.Context(), "CREATE TABLE privileges_probe (id bigint PRIMARY KEY, note text)"); err != nil {
 		t.Fatalf("the migrate role cannot create a table: %v", err)
 	}
+	// The package's database outlives the test, and `go test -count=2` runs it again.
+	t.Cleanup(func() { _, _ = migrate.Exec(context.Background(), "DROP TABLE IF EXISTS privileges_probe") })
 
 	app := connect(t, d.URL(db.RoleApp))
 	for _, stmt := range []string{
@@ -192,6 +194,18 @@ func TestMigrateAppliesEachMigrationOnce(t *testing.T) {
 	}
 	sqlDB := stdlib.OpenDB(*cfg)
 	t.Cleanup(func() { _ = sqlDB.Close() })
+	// The package's database outlives the test, and `go test -count=2` runs it again: the
+	// blocks below are undone, their tables and their goose versions both.
+	t.Cleanup(func() {
+		for _, stmt := range []string{
+			"DROP TABLE IF EXISTS later_probe, earlier_probe, applies_probe",
+			"DELETE FROM goose_db_version WHERE version_id IN (96001, 97001, 98001)",
+		} {
+			if _, err := sqlDB.ExecContext(context.Background(), stmt); err != nil {
+				t.Errorf("clean up, %s: %v", stmt, err)
+			}
+		}
+	})
 
 	// The package's database was cloned from a template the platform block already ran on.
 	results, err := db.Migrate(t.Context(), sqlDB, db.Platform())

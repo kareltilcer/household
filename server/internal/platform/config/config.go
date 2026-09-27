@@ -94,8 +94,8 @@ type Config struct {
 	ShutdownTimeout time.Duration
 	// MaxBodyBytes caps a JSON request body.
 	MaxBodyBytes int64
-	// BodyTimeout caps how long a JSON request body may take to arrive. Its default leaves
-	// a full-size body a slow mobile connection's time.
+	// BodyTimeout caps how long a request body may take to arrive. Its default leaves a
+	// full-size JSON body a slow mobile connection's time; an upload's handler extends it.
 	BodyTimeout time.Duration
 }
 

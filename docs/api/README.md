@@ -85,7 +85,8 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
   `413 payload_too_large` or `415 unsupported_media_type`, whether or not it declares them. A
   `422 validation_failed` names each failure in `errors[]`: `field` is a JSON Pointer into the
   body (`/name`) or `<in>:<name>` for a parameter (`query:limit`), and `code` is the check that
-  failed (`required`, `max_length`, `malformed`, …).
+  failed (`required`, `max_length`, `malformed`, …), or `invalid` for a refusal no JSON Schema
+  keyword names, such as a body sent to an operation that takes none.
 - **The sync endpoints are the offline path**; the per-module REST endpoints are the online path.
   Both write through the same service layer.
 

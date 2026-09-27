@@ -85,7 +85,7 @@ func router(t *testing.T) (http.Handler, *recorder) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 	api := chi.NewRouter()
-	api.Use(c.Middleware(api, contract.Limits{MaxBody: maxBody, BodyTimeout: bodyTimeout}))
+	api.Use(c.Middleware(api, contract.Limits{MaxBody: maxBody}))
 	api.Put("/me/consents", handle)
 	api.Post("/households/{household_id}/shopping/lists", handle)
 	api.Patch("/households/{household_id}/shopping/lists/{list_id}", handle)
@@ -257,7 +257,7 @@ components:
 func TestAJSONBodyThatDoesNotArriveInTimeIsCutOff(t *testing.T) {
 	h, seen := router(t)
 	log := logging.New(io.Discard, slog.LevelError)
-	srv := httptest.NewServer(httpx.AccessLog(log)(httpx.Recover(log)(h)))
+	srv := httptest.NewServer(httpx.AccessLog(log)(httpx.Recover(log)(httpx.BodyDeadline(bodyTimeout)(h))))
 	defer srv.Close()
 	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", srv.Listener.Addr().String())
 	if err != nil {
@@ -289,7 +289,7 @@ func TestAJSONBodyThatDoesNotArriveInTimeIsCutOff(t *testing.T) {
 // without.
 func TestTheBodyDeadlineDoesNotOutliveTheBody(t *testing.T) {
 	api := chi.NewRouter()
-	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody, BodyTimeout: bodyTimeout}))
+	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody}))
 	api.Post("/households/{household_id}/finance/rules/apply", func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-time.After(3 * bodyTimeout):
@@ -299,6 +299,7 @@ func TestTheBodyDeadlineDoesNotOutliveTheBody(t *testing.T) {
 		}
 	})
 	root := chi.NewRouter()
+	root.Use(httpx.BodyDeadline(bodyTimeout))
 	root.Mount(contract.BasePath, api)
 	srv := httptest.NewServer(root)
 	defer srv.Close()
@@ -414,7 +415,7 @@ func TestAMultipartUploadIsLeftToItsHandler(t *testing.T) {
 	upload := &counting{r: &body}
 
 	api := chi.NewRouter()
-	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody, BodyTimeout: bodyTimeout}))
+	api.Use(load(t).Middleware(api, contract.Limits{MaxBody: maxBody}))
 	readBefore, handled := -1, 0
 	api.Post("/households/{household_id}/notes/{note_id}/images", func(w http.ResponseWriter, r *http.Request) {
 		readBefore = upload.read
@@ -442,6 +443,9 @@ func TestParametersAreValidated(t *testing.T) {
 		problem.FieldError{Field: "query:limit", Code: "maximum"})
 	sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: harvests + "?season_year=soon"}.do(t, h)),
 		problem.FieldError{Field: "query:season_year", Code: "malformed"})
+	// An empty integer does not parse either; the schema has no length to fall short of.
+	sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: harvests + "?limit="}.do(t, h)),
+		problem.FieldError{Field: "query:limit", Code: "malformed"})
 	sameErrors(t, fieldErrors(t, call{method: http.MethodGet, path: "/households/not-a-uuid/garden/harvests"}.do(t, h)),
 		problem.FieldError{Field: "path:household_id", Code: "pattern"})
 	sameErrors(t, fieldErrors(t, call{
@@ -465,19 +469,22 @@ func TestParametersAreValidated(t *testing.T) {
 	}
 }
 
-// The body is refused by its length, unread: an operation that takes none has no cap to
-// read one under.
+// The body is refused by its framing, unread: an operation that takes none has no cap to
+// read one under. A chunked body, whose length is unknown (-1), is refused as surely as one
+// with a Content-Length.
 func TestABodyOnAnOperationThatTakesNoneIs422(t *testing.T) {
-	h, seen := router(t)
-	body := &counting{r: strings.NewReader(strings.Repeat("x", 64*maxBody))}
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, contract.BasePath+"/households/"+household+"/garden/harvests", body)
-	req.ContentLength = 64 * maxBody
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	sameErrors(t, fieldErrors(t, rec), problem.FieldError{Field: "", Code: "invalid"})
-	if seen.called || body.read != 0 {
-		t.Fatalf("the handler ran %t; the edge read %d bytes", seen.called, body.read)
+	for _, length := range []int64{64 * maxBody, -1} {
+		h, seen := router(t)
+		body := &counting{r: strings.NewReader(strings.Repeat("x", 64*maxBody))}
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, contract.BasePath+"/households/"+household+"/garden/harvests", body)
+		req.ContentLength = length
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		sameErrors(t, fieldErrors(t, rec), problem.FieldError{Field: "", Code: "invalid"})
+		if seen.called || body.read != 0 {
+			t.Fatalf("length %d: the handler ran %t; the edge read %d bytes", length, seen.called, body.read)
+		}
 	}
 }
 
@@ -601,6 +608,16 @@ func TestValidateResponse(t *testing.T) {
 	internal := []byte(`{"type":"urn:household:problem:internal","title":"Internal Server Error","status":500,"code":"internal"}`)
 	if err := c.ValidateResponse(get, "/healthz", nil, http.StatusInternalServerError, problemHeader, internal); err != nil {
 		t.Errorf("a protocol-level 500: %v", err)
+	}
+	// 413 and 415 refuse a body, which getHealthz does not take; postShoppingLists does.
+	unsupported := []byte(`{"type":"urn:household:problem:unsupported_media_type","title":"Unsupported Media Type","status":415,"code":"unsupported_media_type"}`)
+	if err := c.ValidateResponse(get, "/healthz", nil, http.StatusUnsupportedMediaType, problemHeader, unsupported); err == nil {
+		t.Error("a 415 from an operation that takes no body passed")
+	}
+	post := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1"+lists, nil)
+	if err := c.ValidateResponse(post, "/households/{household_id}/shopping/lists", map[string]string{"household_id": household},
+		http.StatusUnsupportedMediaType, problemHeader, unsupported); err != nil {
+		t.Errorf("a 415 from an operation that takes a body: %v", err)
 	}
 	if err := c.ValidateResponse(get, "", nil, http.StatusNotFound, problemHeader, []byte(`{"type":"x","title":"Not Found","status":404}`)); err == nil {
 		t.Error("a problem without a code passed")

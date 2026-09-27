@@ -82,6 +82,33 @@ func AccessLog(log *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
+// BodyDeadline bounds how long a request's body may take to arrive, zero for no bound: a
+// client still sending when timeout passes is disconnected. The server bounds only the
+// reading of headers (NewServer in internal/app says why), and net/http reads whatever body
+// a handler leaves unread before it answers, so without this a request that declares a body
+// and never sends it holds its connection for as long as the client likes, whatever it
+// asks for: a 404, a 405, a refusal at the edge.
+//
+// A request without a body gets no deadline: net/http is already reading its connection to
+// notice the client leaving, and a deadline reaching that read would cancel the request's
+// context mid-handler when it passed. For the same reason a handler that reads its body to
+// the end clears the deadline once it has, as the edge does for every JSON body it
+// validates; one that streams an upload sets its own through http.ResponseController.
+func BodyDeadline(timeout time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		if timeout <= 0 {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.ContentLength != 0 {
+				// A writer that cannot set a deadline, a test's recorder, reads without one.
+				_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(timeout))
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // Recover answers a handler's panic with a 500 problem, and logs it by the panic value's
 // type and the stack: the value itself can hold anything, content included.
 // http.ErrAbortHandler, the deliberate abort, is left to net/http.
@@ -214,12 +241,14 @@ func RoutePath(r *http.Request) string {
 	return r.URL.Path
 }
 
-// WriteJSON writes v as a JSON response with status.
+// WriteJSON writes v as a JSON response with status. A value that cannot be encoded, a NaN
+// or a channel, is a bug and not a request error: WriteJSON panics with the encoder's error
+// before anything is written, so Recover answers the 500 problem with the request's id and
+// logs the failure by its type and stack, as it does any other.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	body, err := json.Marshal(v)
 	if err != nil {
-		problem.Write(w, "", problem.Internal())
-		return
+		panic(err)
 	}
 	h := w.Header()
 	h.Set("Content-Type", "application/json")

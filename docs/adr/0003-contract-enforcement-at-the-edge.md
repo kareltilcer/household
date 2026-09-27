@@ -43,15 +43,23 @@ be enforced rather than intended:
   kin-openapi is handed each operation without its security requirements: to check one, it reads
   the whole body into memory first, whatever its media type, which would buffer every upload and
   every body sent to an operation that takes none, uncapped. A JSON body is capped
-  (`HOUSEHOLD_MAX_BODY_BYTES`, 1 MiB) and answers `413` above it, and must arrive within
-  `HOUSEHOLD_BODY_TIMEOUT` (60 s) or the connection is closed, since the server itself bounds
-  only the reading of headers; a body in a media type the operation does not declare answers
-  `415`, media types compared without regard to case or to the whitespace around their
-  parameters; a multipart upload is left to its handler to stream, under its own cap and
-  deadline. A query string pair that `net/url` cannot parse, which it would drop without a word,
-  answers `422 malformed`: a dropped cursor would otherwise be answered with page one. The
-  contract says that any operation can answer these `413`, `415` and `422` refusals, declared or
-  not.
+  (`HOUSEHOLD_MAX_BODY_BYTES`, 1 MiB) and answers `413` above it; a body on an operation that
+  takes none answers `422`, whether it comes with a `Content-Length` or chunked; a body in a
+  media type the operation does not declare answers `415`, media types compared without regard
+  to case or to the whitespace around their parameters; a multipart upload is left to its
+  handler to stream, under its own cap and deadline. A query string pair that `net/url` cannot
+  parse, which it would drop without a word, answers `422 malformed`: a dropped cursor would
+  otherwise be answered with page one. The contract says that any operation can answer the `422`
+  refusals, and any operation that takes a body the `413` and `415`, declared or not.
+- **Every request body must arrive within `HOUSEHOLD_BODY_TIMEOUT`** (60 s) or the connection
+  is closed, since the server itself bounds only the reading of headers. The deadline is set
+  for every request with a body before it is routed (`httpx.BodyDeadline`), not only for the
+  JSON bodies the edge reads: net/http reads the body a handler leaves unread before it
+  answers, so a request that declared a body and never sent it would otherwise hold its
+  connection through a `404`, a `405` or any refusal. The edge clears the deadline once a JSON
+  body has validated, since net/http then reads the connection to notice the client leaving and
+  a deadline passing would cancel the request's context mid-handler; a handler that streams an
+  upload extends it through `http.ResponseController`.
 - **A `readOnly` member the client sends is validated against its schema and left to the
   handler to ignore**, not refused. JSON Schema allows either; refusing breaks the GET-modify-PUT
   round trip (`putMeConsents` takes the `Consents` a GET returns, `updated_at` and all), and
@@ -60,9 +68,10 @@ be enforced rather than intended:
   for the whole body), **or `<in>:<name>` for a parameter** (`query:limit`,
   `header:If-Match`). A pointer is empty or starts with `/`, so the two forms cannot collide.
   **`errors[].code` is the failed JSON Schema keyword in snake_case** (`required`, `max_length`,
-  `one_of`), or `malformed` for a value that does not parse; a `null` the type does not admit is
-  `type`, although kin-openapi's built-in validator names it `nullable`, a 3.0 keyword the 3.1
-  contract never uses. An `allOf` failure is reported as the failures inside it, each at its
+  `one_of`), `malformed` for a value that does not parse (an empty `?limit=` included), or
+  `invalid` for a refusal no keyword names, such as a body on an operation that takes none; a
+  `null` the type does not admit is `type`, although kin-openapi's built-in validator names it
+  `nullable`, a 3.0 keyword the 3.1 contract never uses. An `allOf` failure is reported as the failures inside it, each at its
   own pointer, since `allOf` is how a Create composes its Update with a required list.
 - **`ProblemCode` gains `method_not_allowed` and `internal`**, the two codes any operation can
   answer with and none declares. The Go enum is generated from the contract (`pnpm run gen`),
@@ -83,6 +92,7 @@ be enforced rather than intended:
 | Read `openapi.yaml` from disk at run time | The binary then depends on a file beside it; a deploy that ships the wrong one validates against the wrong contract |
 | Refuse a `readOnly` member with a located `422` | kin-openapi's refusal is a bare error with no path, so locating it means a second walk of the body against the schema; and a client echoing an unchanged `updated_at` has not tried to modify anything |
 | A server-wide `ReadTimeout` against slow bodies | It bounds the whole request, so an upload (item 16) could not take the minutes it needs without every handler that reads a body extending it |
+| The body deadline set only by the edge, for the JSON bodies it reads | Every other body is then read by net/http with no deadline at all, before it answers a `404`, a `405`, a `415` or a body on an operation that takes none |
 | kin-openapi's JSON Schema 2020-12 path, as it chooses for 3.1 | A schema compiled per request, errors with no location, and a silent fallback to the built-in validator on every body that uses a `$ref` |
 | libopenapi-validator (pb33f) | Also validates 3.1, but PL-2 chose kin-openapi and kin's built-in validator covers every construct the contract uses; changing library would be a decision without a failing requirement behind it |
 | Validate with a second router (kin's `gorillamux`) matched against the document | Two routers can disagree on which template a path matches; a body would then be checked against an operation other than the one that serves it |

@@ -17,9 +17,10 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
 
-// ProtocolStatuses are the statuses any operation may answer with although none declares
-// them: 405 and 500 (the contract's two protocol-level ProblemCodes), and the three the
-// edge validator answers before a handler runs, 413, 415 and 422.
+// ProtocolStatuses are the statuses an operation may answer with although it does not
+// declare them: 405 and 500 (the contract's two protocol-level ProblemCodes), and the three
+// the edge validator answers before a handler runs, 413, 415 and 422. The contract admits
+// 413 and 415 only from an operation that takes a body (see protocolStatus).
 var ProtocolStatuses = []int{
 	http.StatusMethodNotAllowed,
 	http.StatusRequestEntityTooLarge,
@@ -28,12 +29,22 @@ var ProtocolStatuses = []int{
 	http.StatusInternalServerError,
 }
 
+// protocolStatus reports whether o may answer status without declaring it.
+func protocolStatus(o *Operation, status int) bool {
+	switch status {
+	case http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType:
+		return o.op.RequestBody != nil
+	}
+	return slices.Contains(ProtocolStatuses, status)
+}
+
 // ValidateResponse checks a response against the contract. pattern is the route the
 // request matched, in the contract's path form, or "" when none did; params are that
 // route's path parameters.
 //
 // A matched route's response must have a status its operation declares, or one of
-// ProtocolStatuses, and a body its declared schema accepts. A problem document, whatever
+// ProtocolStatuses the operation may answer undeclared, and a body its declared schema
+// accepts. A problem document, whatever
 // the status and whether or not a route matched, must be a valid Problem, and a
 // validation_failed one a valid ValidationProblem.
 func (c *Contract) ValidateResponse(req *http.Request, pattern string, params map[string]string, status int, header http.Header, body []byte) error {
@@ -50,7 +61,7 @@ func (c *Contract) ValidateResponse(req *http.Request, pattern string, params ma
 		return fmt.Errorf("%s %s is not in the contract", req.Method, pattern)
 	}
 	if o.op.Responses.Status(status) == nil && o.op.Responses.Default() == nil {
-		if slices.Contains(ProtocolStatuses, status) {
+		if protocolStatus(o, status) {
 			return nil
 		}
 		return fmt.Errorf("%s %s answered %d, which operation %s does not declare", req.Method, pattern, status, o.ID)

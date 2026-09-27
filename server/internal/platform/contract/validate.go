@@ -19,15 +19,11 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
 )
 
-// Limits bound what the edge reads of a JSON request body.
+// Limits bound what the edge reads of a JSON request body. How long the body may take to
+// arrive is httpx.BodyDeadline's, which bounds every request's body, read here or not.
 type Limits struct {
 	// MaxBody caps its size in bytes: a larger body is answered 413.
 	MaxBody int64
-	// BodyTimeout caps how long it may take to arrive, zero for no cap: a client still
-	// sending when it passes is disconnected. The server bounds only the reading of
-	// headers, since an upload its handler streams legitimately takes minutes, so without
-	// this a JSON body trickled a byte at a time would hold its connection indefinitely.
-	BodyTimeout time.Duration
 }
 
 // Middleware validates each request that router routes against the operation of the
@@ -50,8 +46,11 @@ type Limits struct {
 // ignore: JSON Schema allows either ignoring or refusing it, and kin-openapi's refusal names
 // no field.
 //
-// A body in a media type other than JSON, a multipart upload for instance, is not read
-// here: its handler streams it, and applies its own cap and deadline.
+// A JSON body is read here under the deadline httpx.BodyDeadline set, and a client that
+// does not send it in time is disconnected; once the body is in, the deadline is cleared,
+// since the handler's own work is not the body's to bound. A body in a media type other
+// than JSON, a multipart upload for instance, is not read here: its handler streams it, and
+// applies its own cap and deadline.
 func (c *Contract) Middleware(router chi.Routes, limits Limits) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -97,9 +96,12 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 	clearDeadline := func() {}
 	body := o.op.RequestBody
 	if body == nil || body.Value == nil {
-		// A body where the operation declares none. kin-openapi applies this option to
-		// every request with a Content-Length, declared body or not, so it is set only here.
-		options.RejectWhenRequestBodyNotSpecified = true
+		// A body where the operation declares none, framed by a Content-Length or chunked.
+		// kin-openapi's own refusal (RejectWhenRequestBodyNotSpecified) sees only a
+		// Content-Length, and would hand a chunked body to a handler that never reads it.
+		if r.ContentLength != 0 {
+			return problem.Validation(problem.FieldError{Field: "", Code: problem.FieldInvalid})
+		}
 	} else {
 		mediaType, declared, present := requestMediaType(r, body.Value)
 		switch {
@@ -112,15 +114,13 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 			options.ExcludeRequestBody = true
 		default:
 			r.Body = http.MaxBytesReader(w, r.Body, limits.MaxBody)
-			// Only a request with a body gets a deadline. Without one, net/http is already
-			// reading the connection to notice the client leaving, and a deadline reaching
-			// that read would cancel the request's context mid-handler when it passed.
-			if limits.BodyTimeout > 0 && r.ContentLength != 0 {
-				rc := http.NewResponseController(w)
-				// A writer that cannot set a deadline, a test's recorder, reads without one.
-				if rc.SetReadDeadline(time.Now().Add(limits.BodyTimeout)) == nil {
-					clearDeadline = func() { _ = rc.SetReadDeadline(time.Time{}) }
-				}
+			// The validator reads the body to its end, and net/http then reads the connection
+			// to notice the client leaving: the body's deadline (httpx.BodyDeadline) reaching
+			// that read would cancel the request's context mid-handler, so a body that
+			// validates takes its deadline with it. A writer that cannot set a deadline, a
+			// test's recorder, never had one.
+			if r.ContentLength != 0 {
+				clearDeadline = func() { _ = http.NewResponseController(w).SetReadDeadline(time.Time{}) }
 			}
 		}
 	}
@@ -132,17 +132,16 @@ func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation
 		Options:    options,
 	})
 	if err == nil {
-		// The deadline was the body's, and the handler's own reads are not the edge's to
-		// bound. A refused request keeps it: the unread rest of its body, which net/http
-		// drains before reusing the connection, stays bounded by it.
 		clearDeadline()
 		return nil
 	}
 	if errors.Is(err, os.ErrDeadlineExceeded) {
-		// The body did not arrive within limits.BodyTimeout. A client that slow is not
-		// reading a response either: net/http closes the connection without one.
+		// The body did not arrive within its deadline. A client that slow is not reading a
+		// response either: net/http closes the connection without one.
 		panic(http.ErrAbortHandler)
 	}
+	// A refused request keeps the deadline: the unread rest of its body, which net/http
+	// drains before answering, stays bounded by it.
 	return toProblem(err)
 }
 
@@ -241,8 +240,8 @@ func fieldErrors(err error) []problem.FieldError {
 		base = re.Parameter.In + ":" + re.Parameter.Name
 	}
 	if re.Err == nil {
-		// A refusal with no cause: a body in an undeclared media type, or a body on an
-		// operation that takes none.
+		// A refusal with no cause, such as kin-openapi's for a body in an undeclared media
+		// type, which the edge answers 415 before asking it.
 		return []problem.FieldError{{Field: base, Code: problem.FieldInvalid}}
 	}
 
@@ -258,12 +257,12 @@ func fieldErrors(err error) []problem.FieldError {
 				}
 				out = append(out, f)
 			}
-		case errors.As(cause, &parseErr):
+		case errors.As(cause, &parseErr), errors.Is(cause, openapi3filter.ErrInvalidEmptyValue):
+			// kin-openapi reports apart an empty value for a parameter whose type cannot be
+			// empty, `?limit=`: it does not parse either, and the schema has no length to name.
 			out = append(out, problem.FieldError{Field: base, Code: problem.FieldMalformed})
 		case errors.Is(cause, openapi3filter.ErrInvalidRequired):
 			out = append(out, problem.FieldError{Field: base, Code: "required"})
-		case errors.Is(cause, openapi3filter.ErrInvalidEmptyValue):
-			out = append(out, problem.FieldError{Field: base, Code: "min_length"})
 		default:
 			out = append(out, problem.FieldError{Field: base, Code: problem.FieldInvalid})
 		}
