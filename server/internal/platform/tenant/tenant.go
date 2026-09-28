@@ -98,6 +98,25 @@ func InWriteTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	return inTx(ctx, pgx.ReadWrite, fn)
 }
 
+// AccountTx runs fn in a transaction outside any household, with user as the caller (uuid.Nil for
+// none), and commits it when fn returns nil: the work of a request about an account rather than a
+// household, its credentials, its sessions and its profile, whose tables are global (PRD 01 §2.4).
+// It runs as the request role with no household set, so row-level security admits no household's
+// rows: a tenant table reads nothing and refuses every write, and households and memberships admit
+// only the caller's own, for reading.
+func AccountTx(ctx context.Context, pool Beginner, user uuid.UUID, fn func(pgx.Tx) error) error {
+	caller := ""
+	if user != uuid.Nil {
+		caller = user.String()
+	}
+	return pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		if err := enter(ctx, tx, "", caller); err != nil {
+			return err
+		}
+		return fn(tx)
+	})
+}
+
 func inTx(ctx context.Context, mode pgx.TxAccessMode, fn func(pgx.Tx) error) error {
 	s := From(ctx)
 	if s == nil {

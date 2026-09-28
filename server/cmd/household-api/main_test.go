@@ -8,10 +8,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kareltilcer/household/server/internal/platform/breach"
 	"github.com/kareltilcer/household/server/internal/platform/config"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
@@ -20,9 +22,18 @@ import (
 
 func TestMain(m *testing.M) { testsupport.Main(m) }
 
-// env is the environment of a deployed process pointed at this package's database.
+// env is the environment of a deployed process pointed at this package's database, with an
+// empty breached-password corpus and a mail server nothing answers at, since serving sends none.
 func env(t *testing.T) config.Getenv {
 	d := testsupport.Open(t)
+	corpus := filepath.Join(t.TempDir(), "breached.bin")
+	w, err := breach.Create(corpus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
 	vars := map[string]string{
 		config.EnvVar:                "staging",
 		config.HTTPAddrVar:           "127.0.0.1:0",
@@ -30,6 +41,10 @@ func env(t *testing.T) config.Getenv {
 		config.MigrateDatabaseURLVar: d.URL(db.RoleMigrate),
 		config.MeterDatabaseURLVar:   d.URL(db.RoleMeter),
 		config.AdminDatabaseURLVar:   testsupport.AdminURL(),
+		config.WebURLVar:             "https://app.household.test",
+		config.SMTPURLVar:            "smtp://127.0.0.1:1",
+		config.MailFromVar:           "Household <no-reply@household.test>",
+		config.BreachedPasswordsVar:  corpus,
 	}
 	return func(key string) (string, bool) {
 		v, ok := vars[key]

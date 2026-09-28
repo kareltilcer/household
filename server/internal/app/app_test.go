@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kareltilcer/household/server/internal/app"
+	"github.com/kareltilcer/household/server/internal/app/apptest"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
@@ -58,9 +59,11 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 	}
 	logs := &syncBuffer{}
 	log := logging.New(logs, slog.LevelDebug)
+	pool := testsupport.Open(t).Pool(t, db.RoleApp)
+	accounts, _ := apptest.Accounts(t, pool, log, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second, checks...),
-		Pool: testsupport.Open(t).Pool(t, db.RoleApp), MaxBodyBytes: 1 << 10,
+		Pool: pool, MaxBodyBytes: 1 << 10, Accounts: accounts,
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
@@ -325,9 +328,11 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 	}
 	const timeout = 300 * time.Millisecond
 	log := logging.New(io.Discard, slog.LevelError)
+	pool := testsupport.Open(t).Pool(t, db.RoleApp)
+	accounts, _ := apptest.Accounts(t, pool, log, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
-		Pool: testsupport.Open(t).Pool(t, db.RoleApp), MaxBodyBytes: 1 << 10, BodyTimeout: timeout,
+		Pool: pool, MaxBodyBytes: 1 << 10, BodyTimeout: timeout, Accounts: accounts,
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

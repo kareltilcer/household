@@ -24,6 +24,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
+	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
 )
@@ -247,10 +248,20 @@ func isJSON(mediaType string) bool {
 // holds a value to RFC 3339's grammar, which Go's parser reads more loosely (it takes a comma
 // before a fraction of a second), and the parser then holds it to the calendar. Go's parser
 // takes no leap second, so neither does the edge: 23:59:60 is refused.
+//
+// And it has kin-openapi hold `email` to an address, which it does not check at all by default:
+// mail.ValidAddress, a bare address no longer than SMTP carries, the one check the server makes of
+// an address wherever it takes one.
 func init() {
 	openapi3filter.RegisterBodyDecoder("application/json", strictJSON)
 	openapi3.DefineStringFormatValidator("date", onTheCalendar(openapi3.FormatOfStringDate, time.DateOnly))
 	openapi3.DefineStringFormatValidator("date-time", onTheCalendar(openapi3.FormatOfStringDateTime, time.RFC3339))
+	openapi3.DefineStringFormatValidator("email", openapi3.NewCallbackValidator(func(value string) error {
+		if !mail.ValidAddress(value) {
+			return errors.New("not an email address")
+		}
+		return nil
+	}))
 }
 
 // onTheCalendar validates a value that pattern matches and that time.Parse reads with layout.

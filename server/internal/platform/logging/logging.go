@@ -68,6 +68,10 @@ var allowed = map[string]bool{
 	"inserted": true,
 	"updated":  true,
 	"kept":     true,
+
+	// An email that was not sent (internal/platform/identity): the template's key, never the
+	// address or anything rendered into it.
+	"template": true,
 }
 
 // The correlation keys the logger adds from the request's scope.

@@ -34,12 +34,21 @@ info:
 
     Two credential presentations, one authorization path:
 
-    - **Web** — a `__Host-hh_session` cookie plus a double-submit CSRF token in `X-CSRF-Token`.
+    - **Web** — a `__Host-hh_session` cookie plus a double-submit CSRF token in `X-CSRF-Token`,
+      the value of the readable `__Host-hh_csrf` cookie. A session lasts 30 days from its last
+      use.
     - **Mobile** — `Authorization: Bearer <access token>`, 15-minute lifetime, refreshed via
       `POST /auth/token` with a rotating single-use refresh token.
 
     Access tokens carry **no roles and no grants**; authorization is resolved server-side per
     request, so a revoked grant takes effect immediately.
+
+    An unsafe request whose `Origin` (or, lacking one, `Referer`) names an origin that is not
+    Household's own web client's is refused `403` (`csrf_failed`), whatever it carries: a page on
+    another site sent it. So is an unsafe request the session cookie authenticates that names no
+    origin, or whose `X-CSRF-Token` is not its session's token and its `__Host-hh_csrf` cookie's
+    value. A request that names no origin and carries no session cookie, a native client's, is
+    not checked.
 
     ## Concurrency and idempotency
 
@@ -55,6 +64,13 @@ info:
       request answered with anything but `2xx` stores nothing, so repeating it runs it again,
       unless it took effect before it was answered: then a repeat answers `409` like one whose
       response was not kept.
+    - A request made before signing in has no caller whose key it could be. `/auth/register`,
+      `/auth/verify-email`, `/auth/verify-email/resend`, `/auth/login`, `/auth/password-reset`
+      and `/auth/password-reset/confirm` check the header and keep nothing, and a repeat runs
+      again, which each of them is safe to: the three that answer `202` send at most another
+      email, which their limits cap; a sign-in starts a new session, since a credential is never
+      kept to be answered with; and a spent link answers as spent, except a verification link,
+      whose repeat answers `204` while the address it confirmed stands.
     - Entities with a `version` return it as an `ETag`, and accept that entity-tag back in
       `If-Match`; a mismatch is `409` carrying the current representation.
 
@@ -67,8 +83,9 @@ info:
     is checked against this document before it is served, so any operation can also answer `422`
     (`validation_failed`) for a request the document does not admit, and any operation that takes
     a body `413` (`payload_too_large`) or `415` (`unsupported_media_type`). Any operation that
-    accepts `Idempotency-Key` can also answer `409` (`idempotency_in_progress`). None of these is
-    declared on each operation.
+    accepts `Idempotency-Key` can also answer `409` (`idempotency_in_progress`), and any unsafe
+    operation `403` (`csrf_failed`, see Authentication). None of these is declared on each
+    operation.
 
     In a `ValidationProblem`, each `errors[].field` is an RFC 6901 JSON Pointer into the request
     body (`/name`, `/items/0/amount_minor`, or an empty string for the body as a whole), or, for a
@@ -183,8 +200,12 @@ paths:
       summary: Register with email and password
       description: |
         Always answers `202` whether or not the address is already registered — the differing
-        outcome is in the email that is sent, not in the response. The account exists immediately
-        but is unverified and cannot invite, be invited, or become a billing payer until verified.
+        outcome is in the email that is sent, not in the response: a verification link to a new
+        address, and to one that already has an account a note that it does, with the way to sign
+        in. The account exists immediately but is unverified and cannot invite, be invited, or
+        become a billing payer until verified. A password found in the breached-password screen
+        is refused `422`, naming `/password` with the code `invalid`. A client's network may
+        register five times an hour.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -208,9 +229,9 @@ paths:
         required: true
         content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } }
       responses:
-        '204': { description: Verified }
+        '204': { description: 'Verified, or verified already by this link' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '410': { description: The token has expired, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '410': { description: 'The link has expired (`token_expired`) or has been used (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
   /auth/verify-email/resend:
     post:
@@ -218,9 +239,10 @@ paths:
       tags: [auth]
       summary: Resend the verification email
       description: |
-        Unauthenticated, because an unverified account cannot sign in and so could never reach an
-        authenticated form of this endpoint. Always answers `202` whether or not the address exists
-        or is already verified — the differing outcome is in the email, not in the response.
+        Unauthenticated, so that it serves whoever holds the address, signed in or not. Always
+        answers `202` whether or not the address exists or is already verified — the differing
+        outcome is whether an email is sent, never the response. An address may ask once a minute
+        and five times an hour.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -236,9 +258,12 @@ paths:
       tags: [auth]
       summary: Sign in
       description: |
-        Branches on `client_type`. `web` sets `__Host-hh_session` and a readable CSRF cookie;
-        `mobile` returns a token pair and registers or updates a device.
-        Failures are generic whatever the cause.
+        Branches on `client_type`. `web` sets `__Host-hh_session` and the readable `__Host-hh_csrf`
+        cookie, and `tokens` is null; `mobile` returns a token pair and registers or updates a
+        device. Failures are generic whatever the cause: a wrong password, an address with no
+        account and an account that may not sign in all answer `401` (`invalid_credentials`), in the
+        same time. Ten failures in fifteen minutes for an address, and sixty for a client's
+        network, answer `429` until a cooldown passes, which lengthens as the failures go on.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -250,8 +275,7 @@ paths:
           headers:
             Set-Cookie: { description: 'Session and CSRF cookies, for `client_type=web` only', schema: { type: string } }
           content: { application/json: { schema: { $ref: '#/components/schemas/LoginResult' } } }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: Account disabled or unverified where verification is required, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '401': { description: 'The address and password do not sign anyone in (`invalid_credentials`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '409':
           description: Multi-factor authentication is required; complete it at `/auth/mfa/verify`
           content: { application/json: { schema: { $ref: '#/components/schemas/MfaChallenge' } } }
@@ -307,7 +331,7 @@ paths:
       operationId: postAuthPasswordReset
       tags: [auth]
       summary: Request a password reset
-      description: Always answers `202`, whether or not the address exists.
+      description: 'Always answers `202`, whether or not the address exists; a link valid for one hour is emailed only where it does. An address may ask three times an hour.'
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -322,7 +346,11 @@ paths:
       operationId: postAuthPasswordResetConfirm
       tags: [auth]
       summary: Set a new password with a reset token
-      description: On success, invalidates every session and every refresh-token family.
+      description: |
+        On success, invalidates every session and every refresh-token family, and emails the
+        account's address to say so. The link proves the address, so an unverified one is verified
+        too. A password found in the breached-password screen is refused `422`, naming `/password`
+        with the code `invalid`.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -331,6 +359,7 @@ paths:
       responses:
         '204': { description: Password set }
         '404': { $ref: '#/components/responses/NotFound' }
+        '410': { description: 'The link has expired (`token_expired`) or has been used (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
 
   /auth/password:
@@ -338,13 +367,18 @@ paths:
       operationId: postAuthPassword
       tags: [auth]
       summary: Change the current password
+      description: |
+        Signs out every other session, and emails the account's address to say the password
+        changed. A wrong `current_password` answers `401` (`invalid_credentials`) and counts against
+        the account as a failed sign-in does. A new password found in the breached-password screen
+        is refused `422`, naming `/new_password` with the code `invalid`.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [current_password, new_password], properties: { current_password: { type: string }, new_password: { type: string, minLength: 12 } } } } }
       responses:
         '204': { description: Changed }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        '401': { description: 'No credential (`unauthenticated`), or `current_password` is not the account''s (`invalid_credentials`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -7884,8 +7918,11 @@ components:
       in: cookie
       name: __Host-hh_session
       description: |
-        Web clients. `HttpOnly; Secure; SameSite=Lax; Path=/`. State-changing requests additionally
-        require `X-CSRF-Token` matching the readable `csrf` cookie, plus an Origin allowlist check.
+        Web clients. `HttpOnly; Secure; SameSite=Lax; Path=/`, lasting 30 days from the session's
+        last use. State-changing requests additionally require `X-CSRF-Token` matching the readable
+        `__Host-hh_csrf` cookie, the token the session was given, and an `Origin` on the allowlist;
+        without them they answer `403` (`csrf_failed`). The CSRF cookie carries the `__Host-`
+        prefix as the session cookie does, so a sibling subdomain cannot set it.
 
   parameters:
     HouseholdId:
@@ -8015,7 +8052,9 @@ components:
         response was lost needs this to avoid creating the row twice — declaring it on the
         operation is what lets a generated client send it at all.
 
-        A key is the caller's own. Only a `2xx` response is stored: a repeat of a request that was
+        A key is the caller's own, so a request made before signing in, which has no caller, keeps
+        none, and a repeat of it runs again (see the description of the API). Only a `2xx`
+        response is stored: a repeat of a request that was
         refused before it took effect runs it again. A repeat while the first request is still
         running answers `409` (`idempotency_in_progress`). So does a repeat of a request that took
         effect but whose response was not kept, because the server stopped before storing it, the
@@ -8167,11 +8206,13 @@ components:
         Every value below corresponds to a condition this document describes on some response,
         except the protocol-level codes, which no operation declares: `method_not_allowed`
         (`405`, a method the path does not serve, with an `Allow` header) and `internal` (`500`,
-        a failure the caller cannot act on), which any operation can answer with, and
+        a failure the caller cannot act on), which any operation can answer with,
         `idempotency_in_progress` (`409`, a repeated `Idempotency-Key` whose first request is
         still running or whose response was not kept), which any operation that accepts
-        `Idempotency-Key` can. Adding a code is a contract change and belongs in the same review
-        as the endpoint that raises it.
+        `Idempotency-Key` can, and `csrf_failed` (`403`, an unsafe request from an origin that is
+        not Household's own, or one the session cookie authenticates without its CSRF token),
+        which any unsafe operation can. Adding a code is a contract change and belongs in the same
+        review as the endpoint that raises it.
       enum:
         # Cross-cutting — the reusable responses in `components.responses`
         - unauthenticated
@@ -8186,7 +8227,9 @@ components:
         - method_not_allowed
         - internal
         - idempotency_in_progress
+        - csrf_failed
         # Authentication and identity
+        - invalid_credentials
         - refresh_token_invalid
         - account_disabled
         - account_unverified
@@ -8458,10 +8501,10 @@ components:
       type: object
       required: [email, password, display_name]
       properties:
-        email: { type: string, format: email }
+        email: { type: string, format: email, maxLength: 254 }
         password: { type: string, minLength: 12, description: 'Length plus a breached-password screen against a local dataset. No composition rules — forced symbol classes produce worse passwords and more resets.' }
-        display_name: { type: string, maxLength: 80 }
-        locale: { type: string, examples: ['cs-CZ'] }
+        display_name: { type: string, minLength: 1, maxLength: 80, description: 'Leading and trailing white space is dropped, and a name of nothing else is refused.' }
+        locale: { type: string, examples: ['cs-CZ'], description: 'A BCP 47 language tag. Left out, the first language of `Accept-Language` that Household ships, else English.' }
 
     LoginRequest:
       type: object
@@ -8525,8 +8568,9 @@ components:
         email_verified: { type: boolean }
         display_name: { type: string }
         avatar_url: { type: [string, 'null'] }
-        locale: { type: string }
-        timezone: { type: string, description: IANA name. }
+        locale: { type: string, description: 'A BCP 47 language tag: the language the member reads, and the formatting of dates, numbers and money.' }
+        timezone: { type: [string, 'null'], description: 'The member''s own IANA timezone, overriding each household''s; null follows the household''s (PRD 03 §9).' }
+        first_day_of_week: { type: [integer, 'null'], minimum: 0, maximum: 6, description: 'The member''s own first day of the week, 0 for Sunday to 6 for Saturday; null follows their locale.' }
         is_child: { type: boolean }
         mfa_enabled: { type: boolean }
         credentials: { type: array, items: { type: string, enum: [password, google, apple, child_pin] } }
@@ -8534,11 +8578,13 @@ components:
 
     MeUpdate:
       type: object
+      description: 'A JSON merge: a member left out is unchanged, and null clears one that may be null.'
       properties:
-        display_name: { type: string, maxLength: 80 }
-        locale: { type: string }
-        timezone: { type: string }
-        avatar_url: { type: [string, 'null'] }
+        display_name: { type: string, minLength: 1, maxLength: 80, description: 'Leading and trailing white space is dropped, and a name of nothing else is refused.' }
+        locale: { type: string, description: 'A BCP 47 language tag.' }
+        timezone: { type: [string, 'null'], description: 'An IANA timezone name, or null to follow each household''s.' }
+        first_day_of_week: { type: [integer, 'null'], minimum: 0, maximum: 6, description: '0 for Sunday to 6 for Saturday, or null to follow the locale.' }
+        avatar_url: { type: [string, 'null'], description: 'Only null, which clears it, until avatars are uploaded as files; any other value is refused `422`.' }
 
     Session:
       type: object

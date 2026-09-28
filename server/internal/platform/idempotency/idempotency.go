@@ -24,6 +24,11 @@
 // retry after the reason had gone, a 402 after the payment, a 404 after the grant. A request
 // answered so after its effect committed, by a second mutation that failed for instance, keeps
 // its key committed, and a repeat is answered 409 as for a response that never arrived.
+//
+// A key is the caller's own, and lives where the request does: a member's in their household
+// (idempotency_keys, Middleware), and a signed-in user's, on a route about their account rather
+// than a household, on their account (account_idempotency_keys, AccountMiddleware). The two
+// answer alike. A request before sign-in has no caller to hold a key, and keeps none (ADR 0009).
 package idempotency
 
 import (
@@ -46,6 +51,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
@@ -84,9 +90,59 @@ type claimKey struct{}
 
 // claim is a request's hold on its key.
 type claim struct {
-	household, user uuid.UUID
-	key             string
-	token           uuid.UUID
+	keyStore
+	key   string
+	token uuid.UUID
+}
+
+// keyStore is where a caller's keys live: its table, the columns and values that name the caller's
+// keys there, the key itself last, and how to open a transaction that may write it.
+type keyStore struct {
+	table  string
+	cols   []string
+	values []any
+	inTx   func(ctx context.Context, fn func(pgx.Tx) error) error
+}
+
+// household is a member's store, in their household: s is the request's tenant scope.
+func household(s *tenant.Scope) keyStore {
+	return keyStore{
+		table:  "idempotency_keys",
+		cols:   []string{"household_id", "user_id", "key"},
+		values: []any{s.HouseholdID(), s.UserID()},
+		inTx:   tenant.InWriteTx,
+	}
+}
+
+// account is a signed-in user's store, outside any household.
+func account(pool tenant.Beginner, user uuid.UUID) keyStore {
+	return keyStore{
+		table:  "account_idempotency_keys",
+		cols:   []string{"user_id", "key"},
+		values: []any{user},
+		inTx: func(ctx context.Context, fn func(pgx.Tx) error) error {
+			return tenant.AccountTx(ctx, pool, user, fn)
+		},
+	}
+}
+
+// sql returns statement, in which {table} names c's table, {cols} its key columns, {values} their
+// placeholders and {key} the condition that picks c's row, with the placeholders numbered from
+// first and args followed by the key's values.
+func (c claim) sql(statement string, first int, args ...any) (string, []any) {
+	var placeholders, conditions []string
+	for i, col := range c.cols {
+		n := "$" + strconv.Itoa(first+i)
+		placeholders = append(placeholders, n)
+		conditions = append(conditions, c.table+"."+col+" = "+n)
+	}
+	statement = strings.NewReplacer(
+		"{table}", c.table,
+		"{cols}", strings.Join(c.cols, ", "),
+		"{values}", strings.Join(placeholders, ", "),
+		"{key}", strings.Join(conditions, " AND "),
+	).Replace(statement)
+	return statement, append(append(args, c.values...), c.key)
 }
 
 // Commit marks the key ctx's request holds as committed, in tx, the transaction that commits
@@ -98,10 +154,9 @@ func Commit(ctx context.Context, tx pgx.Tx) error {
 	if !ok {
 		return nil
 	}
-	tag, err := tx.Exec(ctx, `
-		UPDATE idempotency_keys SET state = 'committed'
-		WHERE household_id = $1 AND user_id = $2 AND key = $3 AND claim = $4 AND state <> 'completed'`,
-		c.household, c.user, c.key, c.token)
+	statement, args := c.sql(`
+		UPDATE {table} SET state = 'committed' WHERE {key} AND claim = $1 AND state <> 'completed'`, 2, c.token)
+	tag, err := tx.Exec(ctx, statement, args...)
 	if err != nil {
 		return fmt.Errorf("idempotency: mark the key committed: %w", err)
 	}
@@ -119,11 +174,41 @@ func Commit(ctx context.Context, tx pgx.Tx) error {
 // also serves the requests none does, which the router then refuses. For the same reason it
 // refuses a key the edge would, and answers a body that stops arriving as the edge does.
 func Middleware(log *slog.Logger, maxBody int64) func(http.Handler) http.Handler {
+	return middleware(log, maxBody, func(r *http.Request) (keyStore, bool) {
+		scope := tenant.From(r.Context())
+		if scope == nil {
+			return keyStore{}, false
+		}
+		return household(scope), true
+	})
+}
+
+// AccountMiddleware is Middleware for the routes a signed-in user calls about their own account,
+// outside any household, whose keys live on the account; pool opens their transactions. Install
+// it behind the authentication, so that a key is the caller's. A request with no caller passes
+// through, for the route to refuse.
+func AccountMiddleware(pool tenant.Beginner, log *slog.Logger, maxBody int64) func(http.Handler) http.Handler {
+	return middleware(log, maxBody, func(r *http.Request) (keyStore, bool) {
+		user, ok := auth.User(r.Context())
+		if !ok {
+			return keyStore{}, false
+		}
+		return account(pool, user), true
+	})
+}
+
+// middleware is the Idempotency-Key middleware over the store storeOf names for a request, and
+// false for one that has none.
+func middleware(log *slog.Logger, maxBody int64, storeOf func(*http.Request) (keyStore, bool)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := r.Header.Get(Header)
-			scope := tenant.From(r.Context())
-			if key == "" || safe(r.Method) || scope == nil {
+			if key == "" || safe(r.Method) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			st, ok := storeOf(r)
+			if !ok {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -147,7 +232,7 @@ func Middleware(log *slog.Logger, maxBody int64) func(http.Handler) http.Handler
 				problem.Write(w, requestID, problem.Validation(problem.FieldError{Field: "", Code: problem.FieldInvalid}))
 				return
 			}
-			c := claim{household: scope.HouseholdID(), user: scope.UserID(), key: key, token: idgen.New()}
+			c := claim{keyStore: st, key: key, token: idgen.New()}
 			held, found, err := take(r.Context(), c, fingerprint)
 			switch {
 			case err != nil:
@@ -257,27 +342,25 @@ func take(ctx context.Context, c claim, fingerprint []byte) (bool, found, error)
 		held bool
 		f    found
 	)
-	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `
-			INSERT INTO idempotency_keys (household_id, user_id, key, fingerprint, state, claim, claimed_at)
-			VALUES ($1, $2, $3, $4, 'in_flight', $5, now())
-			ON CONFLICT (household_id, user_id, key) DO UPDATE
+	err := c.inTx(ctx, func(tx pgx.Tx) error {
+		statement, args := c.sql(`
+			INSERT INTO {table} ({cols}, fingerprint, state, claim, claimed_at)
+			VALUES ({values}, $1, 'in_flight', $2, now())
+			ON CONFLICT ({cols}) DO UPDATE
 			  SET fingerprint = excluded.fingerprint, state = 'in_flight', claim = excluded.claim,
 			      claimed_at = now(), created_at = now(), status = NULL, header = NULL, body = NULL
-			  WHERE idempotency_keys.created_at <= now() - make_interval(secs => $6)
-			     OR (idempotency_keys.state = 'in_flight' AND idempotency_keys.claimed_at <= now() - make_interval(secs => $7)
-			         AND idempotency_keys.fingerprint = excluded.fingerprint)
-			RETURNING true`,
-			c.household, c.user, c.key, fingerprint, c.token, Retention.Seconds(), Lease.Seconds()).Scan(&held)
+			  WHERE {table}.created_at <= now() - make_interval(secs => $3)
+			     OR ({table}.state = 'in_flight' AND {table}.claimed_at <= now() - make_interval(secs => $4)
+			         AND {table}.fingerprint = excluded.fingerprint)
+			RETURNING true`, 5, fingerprint, c.token, Retention.Seconds(), Lease.Seconds())
+		err := tx.QueryRow(ctx, statement, args...).Scan(&held)
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		var status *int
 		var header []byte
-		err = tx.QueryRow(ctx, `
-			SELECT fingerprint, state::text, status, header, body FROM idempotency_keys
-			WHERE household_id = $1 AND user_id = $2 AND key = $3`,
-			c.household, c.user, c.key).Scan(&f.fingerprint, &f.state, &status, &header, &f.body)
+		statement, args = c.sql(`SELECT fingerprint, state::text, status, header, body FROM {table} WHERE {key}`, 1)
+		err = tx.QueryRow(ctx, statement, args...).Scan(&f.fingerprint, &f.state, &status, &header, &f.body)
 		if errors.Is(err, pgx.ErrNoRows) {
 			// The request that held the key released it since the claim was refused: this one is
 			// answered as though it were still running, and a repeat takes the key.
@@ -335,11 +418,11 @@ func store(ctx context.Context, c claim, rec *recorder) error {
 	if err != nil {
 		return err
 	}
-	return tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `
-			UPDATE idempotency_keys SET state = 'completed', status = $5, header = $6, body = $7
-			WHERE household_id = $1 AND user_id = $2 AND key = $3 AND claim = $4`,
-			c.household, c.user, c.key, c.token, rec.status(), headerJSON, rec.body.Bytes())
+	return c.inTx(ctx, func(tx pgx.Tx) error {
+		statement, args := c.sql(`
+			UPDATE {table} SET state = 'completed', status = $1, header = $2, body = $3 WHERE {key} AND claim = $4`,
+			5, rec.status(), headerJSON, rec.body.Bytes(), c.token)
+		tag, err := tx.Exec(ctx, statement, args...)
 		if err == nil && tag.RowsAffected() != 1 {
 			err = ErrClaimLost
 		}
@@ -350,11 +433,9 @@ func store(ctx context.Context, c claim, rec *recorder) error {
 // release gives up c's key, unless its effect committed, when it stays committed: a repeat of a
 // request whose effect committed must not run it again.
 func release(ctx context.Context, c claim) error {
-	return tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `
-			DELETE FROM idempotency_keys
-			WHERE household_id = $1 AND user_id = $2 AND key = $3 AND claim = $4 AND state = 'in_flight'`,
-			c.household, c.user, c.key, c.token)
+	return c.inTx(ctx, func(tx pgx.Tx) error {
+		statement, args := c.sql(`DELETE FROM {table} WHERE {key} AND claim = $1 AND state = 'in_flight'`, 2, c.token)
+		_, err := tx.Exec(ctx, statement, args...)
 		return err
 	})
 }

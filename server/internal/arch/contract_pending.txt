@@ -5,16 +5,8 @@
 # implements an operation removes its line, and at general availability it is empty.
 #
 # Seeded by item 2 with all 486 operations, less getHealthz and getReadyz, which it serves.
-postAuthRegister
-postAuthVerifyEmail
-postAuthVerifyEmailResend
-postAuthLogin
 postAuthChildLogin
-postAuthLogout
 postAuthToken
-postAuthPasswordReset
-postAuthPasswordResetConfirm
-postAuthPassword
 postAuthOauthByProviderStart
 postAuthOauthByProviderCallback
 postAuthOauthByProviderLink
@@ -26,13 +18,8 @@ postAuthMfaDisable
 getPushVapidKey
 postPushSubscriptions
 deletePushSubscriptions
-getMe
-patchMe
 postMeDeletion
 deleteMeDeletion
-getMeSessions
-deleteMeSessions
-deleteMeSessionsBySessionId
 getMeDevices
 patchMeDevicesByDeviceId
 deleteMeDevicesByDeviceId

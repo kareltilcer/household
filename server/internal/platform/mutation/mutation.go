@@ -89,8 +89,9 @@ func WithVia(ctx context.Context, via audit.Via) context.Context {
 // event and writes the changes fn reports, and commits: all of it or none of it. fn's error, a
 // problem for instance, is returned as it is, after the rollback.
 //
-// The actor is the caller in ctx's tenant scope, the system when it has none, and the audit
-// event records how the change arrived (WithVia) and the request it arrived in. The event's
+// The actor is the caller in ctx's tenant scope, labelled with their display name as it is when
+// the event is written, or the system when the scope has no caller, and the audit event records
+// how the change arrived (WithVia) and the request it arrived in. The event's
 // action must be one its module declares, and each change must name an entity of that module,
 // consistent with the entity's declared access (sync.Change.Check); an event with a private
 // change is private to that change's owner.
@@ -138,6 +139,14 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 		// removal taking their keys with their membership, and the two would deadlock.
 		if err := idempotency.Commit(ctx, tx); err != nil {
 			return err
+		}
+		// The actor's name as it is now, so that the log still reads after they leave or rename
+		// themselves (FR-AU3): read here, in the mutation's own transaction, whichever front door
+		// let the request in.
+		if actor.Type == audit.User {
+			if err := tx.QueryRow(ctx, "SELECT display_name FROM users WHERE id = $1", actor.ID).Scan(&actor.Label); err != nil {
+				return fmt.Errorf("mutation: the actor's name: %w", err)
+			}
 		}
 		household := scope.HouseholdID()
 		// The event before the changes, for the same reason: its foreign keys take the locks on

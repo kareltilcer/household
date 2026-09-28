@@ -49,7 +49,8 @@ func protocolStatus(o *Operation, status int) bool {
 // schema describes must be a problem document: the answer to a request no route matched,
 // and a status the operation answers undeclared. The 409 idempotency_in_progress, which the
 // contract admits from every operation that accepts Idempotency-Key, is held to Problem alone,
-// whatever 409 the operation declares for its own conflicts.
+// whatever 409 the operation declares for its own conflicts, and so is the 403 csrf_failed,
+// which it admits from every unsafe operation.
 func (c *Contract) ValidateResponse(req *http.Request, pattern string, params map[string]string, status int, header http.Header, body []byte) error {
 	problemDocument := isProblem(header)
 	var code problem.Code
@@ -69,9 +70,15 @@ func (c *Contract) ValidateResponse(req *http.Request, pattern string, params ma
 	if !ok {
 		return fmt.Errorf("%s %s is not in the contract", req.Method, pattern)
 	}
-	if code == problem.CodeIdempotencyInProgress {
+	switch code { //nolint:exhaustive // The other codes are held to what each operation declares, below.
+	case problem.CodeIdempotencyInProgress:
 		if status != http.StatusConflict || !o.acceptsIdempotencyKey() {
 			return fmt.Errorf("%s %s answered %d %s, which only a 409 from an operation that accepts Idempotency-Key may", req.Method, pattern, status, code)
+		}
+		return nil
+	case problem.CodeCsrfFailed:
+		if status != http.StatusForbidden || safeMethod(req.Method) {
+			return fmt.Errorf("%s %s answered %d %s, which only a 403 from an unsafe operation may", req.Method, pattern, status, code)
 		}
 		return nil
 	}
@@ -130,6 +137,15 @@ func (c *Contract) validateProblem(body []byte) (problem.Code, error) {
 		return "", fmt.Errorf("the problem document is not a valid %s: %w", name, err)
 	}
 	return code, nil
+}
+
+// safeMethod reports whether method is one RFC 9110 calls safe, which the CSRF defences leave be.
+func safeMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return true
+	}
+	return false
 }
 
 // acceptsIdempotencyKey reports whether o declares the Idempotency-Key header, on itself or on

@@ -95,6 +95,12 @@ var exemptions = map[string]exemption{
 	"public.goose_db_version": {why: "goose's record of the migrations applied"},
 	"public.modules":          {why: "the module ids: reference data, the same for every household"},
 	"public.users":            {why: "PRD 01 §2.4: a user exists independently of any household"},
+	// PRD 01 §2.4's identity tables, each a user's and none a household's (item 8).
+	"public.credentials":              {why: "PRD 01 §2.4: the ways a user signs in"},
+	"public.sessions":                 {why: "PRD 01 §2.4: a user's web sessions"},
+	"public.email_tokens":             {why: "a user's single-use verification and reset tokens"},
+	"public.auth_throttles":           {why: "PRD 02 §9: attempt counts on the sign-in surfaces, keyed by a hash"},
+	"public.account_idempotency_keys": {why: "a signed-in user's Idempotency-Keys on routes outside any household"},
 	// PRD 01 §2.4's global reference data, which the request role only reads (item 7).
 	"public.reference_datasets": {why: "the version of each reference dataset the loader has loaded"},
 	"public.country_profiles":   {why: "PRD 01 §2.4: reference data, the same for every household"},

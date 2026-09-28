@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kareltilcer/household/server/internal/app"
+	"github.com/kareltilcer/household/server/internal/app/apptest"
 	"github.com/kareltilcer/household/server/internal/app/testdata/probe"
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/audit"
@@ -71,9 +72,11 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pool := d.Pool(t, db.RoleApp)
+	accounts, _ := apptest.Accounts(t, pool, log, apptest.Options{})
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
-		Pool: d.Pool(t, db.RoleApp), Modules: registry, MaxBodyBytes: 1 << 10,
+		Pool: pool, Modules: registry, MaxBodyBytes: 1 << 10, Accounts: accounts,
 	}
 	for _, o := range options {
 		o(&deps)

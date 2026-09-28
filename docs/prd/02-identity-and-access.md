@@ -59,13 +59,17 @@ silently, because a silent link on an unverified email is an account-takeover pr
 
 | `client_type` | Returns |
 |---|---|
-| `web` | `Set-Cookie: __Host-hh_session` (`HttpOnly; Secure; SameSite=Lax; Path=/`) + a readable CSRF cookie |
+| `web` | `Set-Cookie: __Host-hh_session` (`HttpOnly; Secure; SameSite=Lax; Path=/`) + the readable CSRF cookie `__Host-hh_csrf` |
 | `mobile` | `{ access_token, expires_in, refresh_token }` and registers/updates a `Device` |
 
 Failures are generic (`invalid_credentials`) whatever the cause. Rate limited per IP and per
 account with exponential backoff; after 10 failures in 15 minutes the account requires a
 CAPTCHA-free cooldown rather than a lockout, because lockout is a denial-of-service against
 the real user.
+
+A web session lasts **30 days from its last use**, with no limit on how long it may be kept in use,
+until it is signed out, revoked from the session list, ended by signing out everywhere, or ended by
+a password reset. Signing in again from a browser ends the session it held. **D-95.**
 
 **FR-ID4 — Token refresh with reuse detection.**
 `POST /api/v1/auth/token` with a refresh token. Refresh tokens are **single-use and rotating**;
@@ -355,15 +359,20 @@ to the household as *"Household support extended your trial"*.
 
 | Surface | Limit |
 |---|---|
-| Login, per account | 10 / 15 min, then exponential backoff |
-| Login, per IP | 60 / 15 min |
+| Login, per account | 10 failures / 15 min, then a cooldown of 1 min that doubles with each further failure, up to 1 hour; a wrong current password when changing it counts as a failure |
+| Login, per IP | 60 failures / 15 min |
 | Register, per IP | 5 / hour |
 | Password reset, per account | 3 / hour |
+| Verification email resend, per account | 1 / min and 5 / hour |
 | Invitation send, per household | 20 / day |
 | Child PIN attempts | 10, then owner unlock |
 | Sync mutation batch | 500 mutations / batch, 60 batches / min / device |
 | File upload | Plan-dependent; see [04](04-billing-and-entitlements.md) |
 | API, authenticated, per user | 600 / min sustained, burst 100 |
+| API, per household | 3 000 / min sustained, burst 500, shared by its members |
 
 Every limit returns `429` with `Retry-After` and a problem document, and every limit is
-per-tenant as well as per-user so one household cannot degrade another.
+per-tenant as well as per-user so one household cannot degrade another. A limit per account counts
+the address asked for, whether or not an account has it, so that a refusal says nothing about
+which addresses do (D-13). The rows the table did not first give, the resend and the household's
+API budget, and the shape of the login backoff, are **D-96**.

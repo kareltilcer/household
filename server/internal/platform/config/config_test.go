@@ -60,15 +60,85 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		}
 	}
 
-	c, err := config.Load(config.Serve, env(map[string]string{
+	_, err := config.Load(config.Serve, env(map[string]string{
 		config.EnvVar:         "production",
 		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
 	}))
+	for _, key := range []string{config.WebURLVar, config.SMTPURLVar, config.MailFromVar, config.BreachedPasswordsVar} {
+		if err == nil || !strings.Contains(err.Error(), key) {
+			t.Errorf("serving in production without %s: %v", key, err)
+		}
+	}
+
+	c, err := config.Load(config.Serve, env(serving(map[string]string{
+		config.EnvVar:         "production",
+		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
+	})))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.HTTPAddr != ":8080" {
 		t.Errorf("production listens on %q, want :8080", c.HTTPAddr)
+	}
+}
+
+// serving adds to vars what serving needs outside development.
+func serving(vars map[string]string) map[string]string {
+	vars[config.WebURLVar] = "https://app.household.example"
+	vars[config.SMTPURLVar] = "smtps://mailer:" + "pw" + "@smtp.example:465"
+	vars[config.MailFromVar] = "Household <no-reply@household.example>"
+	vars[config.BreachedPasswordsVar] = "/var/lib/household/breached.bin"
+	return vars
+}
+
+// In development the account settings default to the web client's dev server and the compose mail
+// catcher, and the breached-password screen may be off.
+func TestServingInDevelopmentDefaultsTheAccountSettings(t *testing.T) {
+	c, err := config.Load(config.Serve, env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.WebURL.String() != "http://localhost:5173" || c.SMTPURL != "smtp://127.0.0.1:1025" ||
+		c.MailFrom != "Household <no-reply@household.localhost>" || c.BreachedPasswords != "" ||
+		len(c.TrustedProxies) != 0 || strings.Join(c.AllowedOrigins, ",") != "http://localhost:5173" {
+		t.Fatalf("%+v", c)
+	}
+}
+
+func TestTheAccountSettingsAreRead(t *testing.T) {
+	c, err := config.Load(config.Serve, env(serving(map[string]string{
+		config.AllowedOriginsVar: "https://preview.household.example, http://localhost:5173",
+		config.TrustedProxiesVar: "10.0.0.0/8,192.168.1.1",
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.WebURL.String() != "https://app.household.example" || c.BreachedPasswords != "/var/lib/household/breached.bin" ||
+		strings.Join(c.AllowedOrigins, ",") != "https://app.household.example,https://preview.household.example,http://localhost:5173" ||
+		len(c.TrustedProxies) != 2 {
+		t.Fatalf("%+v", c)
+	}
+}
+
+// Each malformed account setting is named, and the mail server's URL, which carries its password,
+// never appears in an error.
+func TestMalformedAccountSettingsAreReported(t *testing.T) {
+	_, err := config.Load(config.Serve, env(map[string]string{
+		config.WebURLVar:         "app.household.example",
+		config.AllowedOriginsVar: "https://ok.example, ftp://files.example",
+		config.TrustedProxiesVar: "10.0.0.0/8, somewhere",
+		config.SMTPURLVar:        "imap://mailer:" + "hunter2" + "@smtp.example:993",
+	}))
+	if err == nil {
+		t.Fatal("loaded")
+	}
+	for _, key := range []string{config.WebURLVar, config.AllowedOriginsVar, config.TrustedProxiesVar, config.SMTPURLVar} {
+		if !strings.Contains(err.Error(), key) {
+			t.Errorf("the error does not name %s: %v", key, err)
+		}
+	}
+	if strings.Contains(err.Error(), "hunter2") {
+		t.Errorf("the error quotes the mail server's password: %v", err)
 	}
 }
 
