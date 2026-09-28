@@ -13,21 +13,41 @@ export type ProblemCode = Schemas['ProblemCode']
 export { problemCodes }
 
 /**
- * Holds the generated list to the contract's union in both directions: the generator already
- * types each member as a ProblemCode, and a code the list leaves out makes the argument
- * `never` here, which fails the build.
+ * `values` as a set, held to the contract's union `U` in both directions: a value outside it
+ * fails the build, and so does a member the list leaves out, which makes the argument `never`.
+ * A list kept here cannot fall behind the contract the build regenerates `U` from.
  */
-function everyCode<const T extends readonly ProblemCode[]>(
-  codes: T & ([Exclude<ProblemCode, T[number]>] extends [never] ? unknown : never),
-): readonly ProblemCode[] {
-  return codes
+function every<U extends string>() {
+  return <const T extends readonly U[]>(
+    values: T & ([Exclude<U, T[number]>] extends [never] ? unknown : never),
+  ): ReadonlySet<string> => new Set(values)
 }
 
-const known: ReadonlySet<string> = new Set(everyCode(problemCodes))
+const known = every<ProblemCode>()(problemCodes)
+
+type EntitlementState = Schemas['EntitlementState']
+type Remedy = Schemas['EntitlementProblem']['remedy']
+
+const entitlementStates = every<EntitlementState>()([
+  'trialing',
+  'active',
+  'past_due',
+  'grace',
+  'read_only',
+  'restricted',
+  'canceled',
+  'suspended',
+])
+const remedies = every<Remedy>()([
+  'subscribe',
+  'update_payment_method',
+  'free_storage',
+  'contact_owner',
+])
 
 /** Whether `value` is a code this build of the client knows. */
 export function isProblemCode(value: unknown): value is ProblemCode {
-  return typeof value === 'string' && known.has(value)
+  return isMember(known, value)
 }
 
 /** The members every problem document carries, whatever its code. */
@@ -84,8 +104,9 @@ export type ApiProblem =
 /**
  * An error response that is not a problem document this build can read: a code added to the
  * contract after this build (an app in the field meets a newer server), a problem missing the
- * members its code promises, or a body that is no problem at all, such as a proxy's HTML
- * page. Its `code` is undefined, so a switch over ApiProblem's codes has a case for it.
+ * members its code promises or giving one a value this build does not know, or a body that is
+ * no problem at all, such as a proxy's HTML page. Its `code` is undefined, so a switch over
+ * ApiProblem's codes has a case for it.
  */
 export interface UnreadableProblem {
   readonly code: undefined
@@ -110,7 +131,9 @@ export function readProblem(status: number, body: unknown): ApiProblem | Unreada
         : unreadable
     case 'entitlement_read_only':
     case 'entitlement_restricted':
-      return typeof body.state === 'string' && typeof body.remedy === 'string'
+      // A state or remedy added after this build is unreadable too: typed as one of the
+      // contract's, it would reach a switch over them unhandled.
+      return isMember(entitlementStates, body.state) && isMember(remedies, body.remedy)
         ? (problem as EntitlementRefusal)
         : unreadable
     case 'validation_failed':
@@ -141,9 +164,13 @@ export function isEntitlementRefusal(
 
 /**
  * A `404`: absent, or not visible to the caller, which the contract makes indistinguishable
- * (a module held at `none`, a private item, a conversation the caller is not in).
+ * (a module held at `none`, a private item, a conversation the caller is not in). The guard
+ * names the status as well as the type: `problem is ApiProblem` alone would narrow a `false`
+ * to UnreadableProblem, though a `409` takes that branch too.
  */
-export function isAbsent(problem: ApiProblem | UnreadableProblem): problem is ApiProblem {
+export function isAbsent(
+  problem: ApiProblem | UnreadableProblem,
+): problem is ApiProblem & { readonly status: 404 } {
   return problem.code !== undefined && problem.status === 404
 }
 
@@ -154,9 +181,18 @@ export function isConcurrencyConflict(
   return problem.code === 'version_conflict' || problem.code === 'idempotency_in_progress'
 }
 
-/** A `410`: a token or link that has expired or been used, or a cursor past compaction. */
-export function isGone(problem: ApiProblem | UnreadableProblem): problem is ApiProblem {
+/**
+ * A `410`: a token or link that has expired or been used, or a cursor past compaction. Like
+ * isAbsent, it names the status, so a `false` leaves every other problem as it was.
+ */
+export function isGone(
+  problem: ApiProblem | UnreadableProblem,
+): problem is ApiProblem & { readonly status: 410 } {
   return problem.code !== undefined && problem.status === 410
+}
+
+function isMember(set: ReadonlySet<string>, value: unknown): value is string {
+  return typeof value === 'string' && set.has(value)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

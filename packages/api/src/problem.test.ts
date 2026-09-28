@@ -53,6 +53,16 @@ describe('a problem document', () => {
     expect(readProblem(402, problem('entitlement_read_only', 402)).code).toBeUndefined()
   })
 
+  it('from the entitlement gate with a state or remedy this build does not know is unreadable', () => {
+    const newer = [
+      { state: 'read_only', remedy: 'upgrade_plan' },
+      { state: 'frozen', remedy: 'subscribe' },
+    ]
+    for (const extra of newer) {
+      expect(readProblem(402, problem('entitlement_restricted', 402, extra)).code).toBeUndefined()
+    }
+  })
+
   it('with validation_failed names its failures', () => {
     const errors = [{ field: '/name', code: 'required' }]
     const read = readProblem(422, problem('validation_failed', 422, { errors }))
@@ -66,6 +76,18 @@ describe('a problem document', () => {
     expect(isGone(readProblem(410, problem('token_expired', 410)))).toBe(true)
     expect(isGone(readProblem(410, problem('resnapshot_required', 410)))).toBe(true)
     expect(isAbsent(readProblem(404, '<html>Not Found</html>'))).toBe(false)
+  })
+
+  it('that is not absent or gone keeps every type it might be', () => {
+    const read = readProblem(409, problem('idempotency_in_progress', 409))
+    if (isAbsent(read) || isGone(read)) throw new Error('a 409 read as absent or gone')
+    // A guard that named only the type would leave UnreadableProblem here, and the 409
+    // would be typed as having no code.
+    expectTypeOf(read).toEqualTypeOf<ApiProblem | UnreadableProblem>()
+    expect(isConcurrencyConflict(read)).toBe(true)
+    const absent = readProblem(404, problem('not_found', 404))
+    if (!isAbsent(absent)) throw new Error('a 404 not read as absent')
+    expectTypeOf(absent.code).toEqualTypeOf<ProblemCode>()
   })
 
   it('takes the status of the response it came with', () => {

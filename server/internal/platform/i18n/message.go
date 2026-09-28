@@ -3,6 +3,7 @@ package i18n
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -339,8 +340,12 @@ func (p *parser) argument(level int) (node, error) {
 			p.unsupported("{%s, %s} formats a date", name, typ)
 		}
 		if p.at(0) == ',' {
-			if err := p.style(name); err != nil {
+			style, err := p.style(name)
+			if err != nil {
 				return node{}, err
+			}
+			if skeleton, ok := strings.CutPrefix(style, "::"); ok && !wellFormedSkeleton(typ, skeleton) {
+				return node{}, p.malformed("{%s, %s, %s} is not a skeleton", name, typ, style)
 			}
 			p.unsupported("{%s, %s} has a style", name, typ)
 		}
@@ -358,11 +363,12 @@ func (p *parser) argument(level int) (node, error) {
 	}
 }
 
-// style skips a number, date or time style up to the brace that closes its argument, as
-// FormatJS's parser reads one: quoted text is passed over, a style that is empty or only
-// white space is malformed, and a brace that closes a nested one is read again as the
-// argument's own, so `{n, number, {x}}` closes at its first `}`.
-func (p *parser) style(name string) error {
+// style reads a number, date or time style up to the brace that closes its argument, as
+// FormatJS's parser reads one, and returns it without its trailing white space: quoted text is
+// passed over, a style that is empty or only white space is malformed, and a brace that
+// closes a nested one is read again as the argument's own, so `{n, number, {x}}` closes at
+// its first `}`.
+func (p *parser) style(name string) (string, error) {
 	p.pos++ // ,
 	p.skipSpace()
 	start := p.pos
@@ -375,27 +381,50 @@ func (p *parser) style(name string) error {
 				p.pos++
 			}
 			if p.eof() {
-				return p.malformed("{%s has an unclosed quote in its style", name)
+				return "", p.malformed("{%s has an unclosed quote in its style", name)
 			}
 		case '{':
 			depth++
 		case '}':
 			if depth == 0 {
-				if strings.TrimRightFunc(string(p.src[start:p.pos]), isJSSpace) == "" {
-					return p.malformed("{%s has an empty style", name)
+				style := strings.TrimRightFunc(string(p.src[start:p.pos]), isJSSpace)
+				if style == "" {
+					return "", p.malformed("{%s has an empty style", name)
 				}
-				return nil
+				return style, nil
 			}
 			depth--
 			continue
 		}
 		p.pos++
 	}
-	return p.malformed("{%s is not closed", name)
+	return "", p.malformed("{%s is not closed", name)
 }
 
-// isJSSpace is what JavaScript's trimEnd removes: its white space (the Zs category, tab,
-// vertical tab, form feed and the byte-order mark) and its line terminators.
+// wellFormedSkeleton reports whether FormatJS's parser accepts skeleton, a style's text after
+// its `::`, for an argument of type typ. The parser refuses one it does not as malformed,
+// rather than leaving it to the subset, which refuses every style, so the two sides refuse it
+// with the same code: a date or time skeleton that is empty, and a number skeleton that is
+// empty or has a token with an empty option (`currency/`).
+func wellFormedSkeleton(typ, skeleton string) bool {
+	skeleton = strings.TrimLeftFunc(skeleton, isJSSpace)
+	if skeleton == "" {
+		return false
+	}
+	if typ != "number" {
+		return true
+	}
+	for _, token := range strings.FieldsFunc(skeleton, isSpace) {
+		// A token is a stem and its options, each after a slash.
+		if slices.Contains(strings.Split(token, "/")[1:], "") {
+			return false
+		}
+	}
+	return true
+}
+
+// isJSSpace is what JavaScript's trimStart and trimEnd remove: its white space (the Zs
+// category, tab, vertical tab, form feed and the byte-order mark) and its line terminators.
 func isJSSpace(r rune) bool {
 	switch r {
 	case '\t', '\n', '\v', '\f', '\r', 0x2028, 0x2029, 0xfeff:

@@ -100,6 +100,15 @@ func TestRenderFallsBackToEnglish(t *testing.T) {
 	if _, err := c.Render("en", "module.nothing.name", nil); !errors.Is(err, i18n.ErrUnknownKey) {
 		t.Fatalf("an unknown key: %v", err)
 	}
+	// A message formatted directly for such a locale takes English's rules too, rather than
+	// failing with a code that blames the message.
+	m, err := i18n.Parse("{n, plural, one {# day} other {# days}}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := m.Format("fr", i18n.Args{"n": 1234}); err != nil || got != "1,234 days" {
+		t.Fatalf("got %q, %v", got, err)
+	}
 }
 
 func TestLoadRefusesCatalogsThatDisagree(t *testing.T) {

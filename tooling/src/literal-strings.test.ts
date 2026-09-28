@@ -35,6 +35,13 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
     ['a template child', 'export const a = <p>{`${String(n)} items`}</p>'],
     ['a branch of a conditional child', "export const a = <p>{n > 1 ? t('a.b') : 'one item'}</p>"],
     ['the fallback of a logical child', "export const a = <p>{t('a.b') || 'Nothing here'}</p>"],
+    ['a concatenated child', "export const a = <p>{'Total: ' + String(n)}</p>"],
+    [
+      'a branch a template interpolates',
+      "export const a = <p>{`${String(n)} ${n === 1 ? 'item' : 'items'}`}</p>",
+    ],
+    ['a child behind a type assertion', "export const a = <p>{'Shopping' as string}</p>"],
+    ['a concatenated title', "export const a = <img title={String(n) + ' photos'} />"],
     ['a title', 'export const a = <img title="Garden" />'],
     ['an alt text', "export const a = <img alt={'The garden'} />"],
     ['an aria-label', 'export const a = <button aria-label="Close" />'],
@@ -46,6 +53,10 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
     [
       "a navigator's options title",
       "export const a = <Stack.Screen options={{ title: 'Tasks' }} />",
+    ],
+    [
+      'a label of an item in an array prop',
+      "export const a = <Tabs items={[{ label: 'Home', value: 'home' }]} />",
     ],
     ['a native dialog', "export function f() { alert('Saved') }"],
     [
@@ -63,6 +74,12 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
   it.each([
     ['a translated child', "export const a = <p>{t('module.shopping.name')}</p>"],
     ['a number', 'export const a = <p>{n}</p>'],
+    ['a sum', 'export const a = <p>{n + 1}</p>'],
+    ['a concatenated class name', "export const a = <p className={'row ' + String(n)} />"],
+    [
+      'an array prop of data, not text',
+      "export const a = <Chart points={[{ x: 1, color: 'red' }]} />",
+    ],
     ['punctuation and space', "export const a = <p>{n} · {' '} — %</p>"],
     ['a class name', 'export const a = <p className="list-header" />'],
     ['an enum prop', 'export const a = <Button variant="primary" size="lg" />'],

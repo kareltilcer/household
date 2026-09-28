@@ -204,6 +204,13 @@ describe('If-Match', () => {
     expect(sent[0]?.headers.get('If-Match')).toBe('"7"')
   })
 
+  // A proxy that compresses a response may weaken its ETag, and If-Match compares strongly:
+  // the server would answer a weak tag with 409 on every edit.
+  it('makes a weak tag of a version strong', async () => {
+    const { sent } = await patch('W/"7"')
+    expect(sent[0]?.headers.get('If-Match')).toBe('"7"')
+  })
+
   it.each(['seven', '""'])('refuses %s, which is neither', async (value) => {
     await expect(patch(value)).rejects.toThrow(TypeError)
   })

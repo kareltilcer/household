@@ -22,13 +22,13 @@ Plan item 6 fills four packages the rest of the plan builds on. Several choices 
 - turbo runs it before every typecheck, lint and test. `turbo.json` names the contract as an input of `@household/api#gen`, so a contract change re-runs every task that depends on it instead of replaying a cached pass.
 - The client is openapi-fetch with two middlewares:
   - **`Idempotency-Key`**: every unsafe request that has no key gets a new UUIDv7.
-  - **`If-Match`**: a bare version is quoted into an entity-tag, and any other malformed value throws.
+  - **`If-Match`**: a bare version is quoted into an entity-tag, and a weak tag of a version, which the server's strong comparison never matches, is made strong. Any other malformed value throws.
 - A wrapping `fetch` resends a request only when its response was lost (`fetch` rejected and the caller did not abort). It resends only a request that is safe to repeat: a safe method, or one carrying a key. The resend is a copy taken before the first attempt, key included.
 - Problems are typed by `code`:
   - `version_conflict` carries `current` and `current_version`;
   - `entitlement_*` carries `state` and `remedy`;
   - `validation_failed` carries `errors`.
-- A code this build does not know reads as *unreadable* (`code: undefined`), so an app in the field survives a newer server. So does a known code missing the members it promises.
+- A code this build does not know reads as *unreadable* (`code: undefined`), so an app in the field survives a newer server. So does a known code missing the members it promises, or giving a `state` or `remedy` this build does not know.
 
 **The catalogs are one set of files, which both sides read.**
 - `packages/i18n/catalogs/<locale>.json` is a flat object of sorted keys, English the source.
@@ -45,7 +45,7 @@ Plan item 6 fills four packages the rest of the plan builds on. Several choices 
   - `plural` and `selectordinal`, with an offset, `=N`, the CLDR keywords and `#`;
   - `select`.
 - Every plural and select has `other`. Dates, times, number styles and skeletons, and tags are outside it.
-- `@household/i18n`'s `parseMessage` refuses anything outside the subset. The server's `internal/platform/i18n` parses exactly the subset, as FormatJS parses with tags ignored.
+- `@household/i18n`'s `parseMessage` refuses anything outside the subset. The server's `internal/platform/i18n` parses exactly the subset, as FormatJS parses with tags ignored, and refuses what FormatJS refuses with the same code: a malformed skeleton is `malformed_message` on both sides.
 - The Go renderer takes plural rules from `golang.org/x/text/feature/plural`. Its decimal symbols come from CLDR for the five languages, including Polish's minimum grouping of two.
 - Numbers round half away from zero to three places, as ICU's default decimal format does. Plural operands are read after that rounding.
 - `vectors/i18n.json` holds the two renderers to the same output. It covers Czech, Slovak and Polish plurals, quoting, offsets, grouping, each refusal code, and the edges of FormatJS's grammar: where a name, a style or an offset ends. It was verified against Node 24's ICU 78.
@@ -67,9 +67,9 @@ Plan item 6 fills four packages the rest of the plan builds on. Several choices 
 
 **Architecture test 7 is an ESLint rule.** `household/no-literal-strings` applies to `apps/**`, tests included. It reports a string that contains a letter wherever the UI shows it:
 - JSX text;
-- a string, template or conditional branch in a JSX child;
+- a string, a template or what it interpolates, a conditional branch or a concatenation's operand in a JSX child, also behind a type assertion;
 - a text-rendering prop: `title`, `alt`, `aria-label`, `placeholder`, `accessibilityLabel`, or a name such as `text` or one ending in `Label`, `Title`, `Text`, `Message` and similar, but not an enumerated one such as `enterKeyHint`;
-- such a property of an object passed to a prop, as a navigator's `options={{ title }}`;
+- such a property of an object passed to a prop, or of each object in an array passed to one, as a navigator's `options={{ title }}` or a tab bar's `items={[{ label }]}`;
 - the message of `alert`, `confirm` or `prompt`, and the title, message, button texts and default value of React Native's `Alert.alert` and `Alert.prompt`.
 
 ## Alternatives rejected

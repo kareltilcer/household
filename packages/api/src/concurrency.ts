@@ -36,17 +36,24 @@ const unsafe = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
  * Holds an outgoing `If-Match` to the contract's entity-tag. A bare version (`42`, from
  * `String(version)`) is quoted, since RFC 9110 defines `If-Match` over entity-tags and an
  * intermediary may drop the malformed header, turning an edit into an unconditional
- * overwrite. Anything else that is not an entity-tag is a programming error and throws.
+ * overwrite. A weak tag of a version (`W/"42"`, an `ETag` a compressing proxy weakened) is
+ * sent strong: `If-Match` compares strongly, so the server would refuse it on every edit,
+ * and versionOf reads it as the same version. Anything else that is not an entity-tag is a
+ * programming error and throws.
  */
 export const ifMatchMiddleware: Middleware = {
   onRequest({ request }) {
-    const value = request.headers.get('If-Match')
-    if (value === null || quoted.test(value.trim())) return undefined
-    if (!decimal.test(value.trim())) {
+    const value = request.headers.get('If-Match')?.trim()
+    if (value === undefined) return undefined
+    const tag = quoted.exec(value)
+    // A strong tag, or a weak one that names no version, is sent as it is.
+    if (tag !== null && (tag[1] === undefined || !decimal.test(tag[2] ?? ''))) return undefined
+    const digits = tag === null ? value : (tag[2] ?? '')
+    if (!decimal.test(digits)) {
       throw new TypeError(`If-Match: ${JSON.stringify(value)} is not an entity-tag`)
     }
     const headers = new Headers(request.headers)
-    headers.set('If-Match', `"${value.trim()}"`)
+    headers.set('If-Match', `"${digits}"`)
     return new Request(request, { headers })
   },
 }

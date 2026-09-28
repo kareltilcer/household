@@ -64,12 +64,14 @@ const linkedSuppressions = {
 /**
  * Architecture test 7 (PRD 01 §10, D-29): no user-visible string literal in client code, so
  * every word a member reads comes from @household/i18n's catalogs in their language. It
- * reports a string that holds a letter where the UI shows it: JSX text; a string, template or
- * a branch of a conditional in a JSX child or in a prop that renders text (a name from
- * `visibleProps`, or one that reads as text, such as `emptyText` or `headerTitle`); such a
- * property of an object passed to a prop (a navigator's `options={{ title }}`); the message
- * of a native dialog; and the title, message, button texts and default value of React
- * Native's `Alert`. A string with no letter (`·`, `—`, `%`) is not language.
+ * reports a string that holds a letter where the UI shows it: JSX text; a string, template, or
+ * a branch of a conditional or an operand of a concatenation, in a JSX child or in a prop
+ * that renders text (a name from `visibleProps`, or one that reads as text, such as
+ * `emptyText` or `headerTitle`); such a property of an object passed to a prop, or of each
+ * object in an array passed to one (a navigator's `options={{ title }}`, a tab bar's
+ * `items={[{ label }]}`); the message of a native dialog; and the title, message, button
+ * texts and default value of React Native's `Alert`. A type assertion around any of them
+ * hides nothing. A string with no letter (`·`, `—`, `%`) is not language.
  * @type {import('eslint').Rule.RuleModule}
  */
 const noLiteralStrings = {
@@ -108,6 +110,14 @@ const noLiteralStrings = {
     // Names that end like text but take an enumerated value, never words.
     const enumeratedProps = new Set(['enterKeyHint'])
     const dialogs = new Set(['alert', 'confirm', 'prompt'])
+    const assertions = new Set(['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullExpression'])
+
+    /** @param {any} node An expression, returned without the type assertions around it */
+    function unwrap(node) {
+      let inner = node
+      while (inner && assertions.has(inner.type)) inner = inner.expression
+      return inner
+    }
 
     /** @param {unknown} name A prop's or a property's name */
     function showsText(name) {
@@ -131,26 +141,52 @@ const noLiteralStrings = {
       }
     }
 
-    /** @param {any} node An expression shown as it is, or a branch that may be */
+    /**
+     * @param {any} node A prop's value: an object literal, or an array of them, whose text
+     *   properties are checked
+     */
+    function checkObjects(node) {
+      const value = unwrap(node)
+      if (value?.type === 'ObjectExpression') checkProperties(value)
+      else if (value?.type === 'ArrayExpression') {
+        for (const element of value.elements) {
+          const item = unwrap(element)
+          if (item?.type === 'ObjectExpression') checkProperties(item)
+        }
+      }
+    }
+
+    /** @param {any} node An expression shown as it is, or a part of it that may be */
     function check(node) {
-      if (!node) return
-      switch (node.type) {
+      const expression = unwrap(node)
+      if (!expression) return
+      switch (expression.type) {
         case 'Literal':
-          if (typeof node.value === 'string' && letter.test(node.value)) {
-            context.report({ node, messageId: 'literal' })
+          if (typeof expression.value === 'string' && letter.test(expression.value)) {
+            context.report({ node: expression, messageId: 'literal' })
           }
           return
         case 'TemplateLiteral':
-          if (node.quasis.some((q) => letter.test(q.value.cooked ?? q.value.raw))) {
-            context.report({ node, messageId: 'literal' })
+          if (expression.quasis.some((q) => letter.test(q.value.cooked ?? q.value.raw))) {
+            context.report({ node: expression, messageId: 'literal' })
+          } else {
+            // `${n} ${n === 1 ? 'item' : 'items'}`: the words are in what it interpolates.
+            for (const part of expression.expressions) check(part)
+          }
+          return
+        case 'BinaryExpression':
+          // A concatenation shows the text of each operand.
+          if (expression.operator === '+') {
+            check(expression.left)
+            check(expression.right)
           }
           return
         case 'ConditionalExpression':
-          check(node.consequent)
-          check(node.alternate)
+          check(expression.consequent)
+          check(expression.alternate)
           return
         case 'LogicalExpression':
-          check(node.right)
+          check(expression.right)
           return
         default:
       }
@@ -170,7 +206,7 @@ const noLiteralStrings = {
         const value =
           node.value?.type === 'JSXExpressionContainer' ? node.value.expression : node.value
         if (showsText(name)) check(value)
-        else if (value?.type === 'ObjectExpression') checkProperties(value)
+        else checkObjects(value)
       },
       /** @param {any} node */
       JSXExpressionContainer(node) {
@@ -198,11 +234,7 @@ const noLiteralStrings = {
           const [title, message, buttons, , defaultValue] = node.arguments
           check(title)
           check(message)
-          if (buttons?.type === 'ArrayExpression') {
-            for (const button of buttons.elements) {
-              if (button?.type === 'ObjectExpression') checkProperties(button)
-            }
-          }
+          checkObjects(buttons)
           if (name === 'prompt') check(defaultValue)
         } else if (name !== undefined && dialogs.has(name)) {
           for (const arg of node.arguments) check(arg)

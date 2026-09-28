@@ -243,11 +243,13 @@ var forms = map[plural.Form]string{
 
 // Format formats m in locale with args. Every argument m uses is checked first, whichever
 // branch the arguments choose: a missing one fails with MissingArgument, and one a plural or
-// number format needs that is not a finite number with NotANumber.
+// number format needs that is not a finite number with NotANumber. A locale Household does
+// not ship formats with English's rules, as Catalogs.Render renders it in English, rather than
+// failing with a Code, each of which blames the message or its arguments.
 func (m *Message) Format(locale Locale, args Args) (string, error) {
 	info, ok := localeInfo[locale]
 	if !ok {
-		return "", fail(MalformedMessage, "%q is not a locale Household ships", locale)
+		info = localeInfo[Source]
 	}
 	for _, a := range m.arguments {
 		v, ok := args[a.Name]

@@ -860,6 +860,50 @@
         "error": "malformed_message"
       },
       {
+        "name": "an empty date skeleton",
+        "input": {
+          "locale": "en",
+          "message": "{d, date, ::}",
+          "args": {
+            "d": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an empty number skeleton",
+        "input": {
+          "locale": "en",
+          "message": "{n, number, :: }",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a number skeleton with an empty option",
+        "input": {
+          "locale": "en",
+          "message": "{n, number, ::currency/}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a well-formed skeleton is outside the subset",
+        "input": {
+          "locale": "en",
+          "message": "{n, number, ::percent scale/100}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "unsupported_syntax"
+      },
+      {
         "name": "an offset without its colon",
         "input": {
           "locale": "en",

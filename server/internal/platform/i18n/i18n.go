@@ -45,13 +45,16 @@ type locale struct {
 	symbols symbols
 }
 
+// nbsp is the no-break space CLDR groups Czech, Slovak and Polish digits with.
+const nbsp = "\u00a0"
+
 // localeInfo holds each language's plural rules and CLDR decimal symbols.
 var localeInfo = map[Locale]locale{
 	English: {language.English, symbols{group: ",", decimal: ".", minGrouping: 1}},
-	Czech:   {language.Czech, symbols{group: " ", decimal: ",", minGrouping: 1}},
-	Slovak:  {language.Slovak, symbols{group: " ", decimal: ",", minGrouping: 1}},
+	Czech:   {language.Czech, symbols{group: nbsp, decimal: ",", minGrouping: 1}},
+	Slovak:  {language.Slovak, symbols{group: nbsp, decimal: ",", minGrouping: 1}},
 	German:  {language.German, symbols{group: ".", decimal: ",", minGrouping: 1}},
-	Polish:  {language.Polish, symbols{group: " ", decimal: ",", minGrouping: 2}},
+	Polish:  {language.Polish, symbols{group: nbsp, decimal: ",", minGrouping: 2}},
 }
 
 // Match returns the language to address someone who prefers preferences, most preferred
