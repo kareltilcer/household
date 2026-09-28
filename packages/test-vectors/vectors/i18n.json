@@ -814,6 +814,106 @@
           }
         },
         "error": "unsupported_syntax"
+      },
+      {
+        "name": "a no-break space ends a name, and is not skipped",
+        "input": {
+          "locale": "en",
+          "message": "{n\u00a0}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a left-to-right mark after a name belongs to it",
+        "input": {
+          "locale": "en",
+          "message": "{n\u200e}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "unsupported_syntax"
+      },
+      {
+        "name": "a left-to-right mark before a name is skipped",
+        "input": {
+          "locale": "en",
+          "message": "{\u200en}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "1"
+      },
+      {
+        "name": "an empty number style",
+        "input": {
+          "locale": "en",
+          "message": "{n, number, }",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an offset without its colon",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, offset {x} other {y}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an offset past 2^53 - 1",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, offset:9007199254740992 other {#}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an =N past 2^53 - 1",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, =9007199254740992 {x} other {y}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a brace nested in a style closes its argument at the first }",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, other {{m, number, {x}}}",
+          "args": {
+            "n": 1,
+            "m": 2
+          }
+        },
+        "error": "unsupported_syntax"
+      },
+      {
+        "name": "offset is an ordinary key in a select",
+        "input": {
+          "locale": "en",
+          "message": "{g, select, offset {y} other {z}}",
+          "args": {
+            "g": "offset"
+          }
+        },
+        "output": "y"
       }
     ],
     "match": [

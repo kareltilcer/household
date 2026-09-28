@@ -42,10 +42,19 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
     ['a placeholder', 'export const a = <input placeholder="Search" />'],
     ['a prop that reads as text', 'export const a = <List emptyText="No lists yet" />'],
     ['a header title', 'export const a = <Screen headerTitle="Tasks" />'],
+    ['a text prop', 'export const a = <Button text="Save" />'],
+    [
+      "a navigator's options title",
+      "export const a = <Stack.Screen options={{ title: 'Tasks' }} />",
+    ],
     ['a native dialog', "export function f() { alert('Saved') }"],
     [
       "React Native's Alert",
       "export function f() { Alert.alert('Delete?', 'This cannot be undone') }",
+    ],
+    [
+      "a React Native Alert's button",
+      "export function f() { Alert.alert(t('a.b'), t('a.c'), [{ text: 'Delete', style: 'destructive' }]) }",
     ],
   ])('fails %s', async (_, code) => {
     expect(await literals(app, t + code)).toBeGreaterThan(0)
@@ -62,6 +71,15 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
     ['a translation key', "export const k = t('module.shopping.name')"],
     ['a string outside JSX', "export const path = '/api/v1/households'"],
     ['a translated title', "export const a = <img title={t('module.garden.name')} />"],
+    ['an enter key hint, which is enumerated', 'export const a = <input enterKeyHint="next" />'],
+    [
+      'a style object',
+      "export const a = <View style={{ textAlign: 'center', fontFamily: 'Inter' }} />",
+    ],
+    [
+      "a React Native Alert's enumerated arguments",
+      "export function f() { Alert.prompt(t('a.b'), t('a.c'), [{ text: t('a.d'), style: 'cancel' }], 'secure-text') }",
+    ],
   ])('passes %s', async (_, code) => {
     expect(await literals(app, t + code)).toBe(0)
   })

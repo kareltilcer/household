@@ -66,8 +66,10 @@ const linkedSuppressions = {
  * every word a member reads comes from @household/i18n's catalogs in their language. It
  * reports a string that holds a letter where the UI shows it: JSX text; a string, template or
  * a branch of a conditional in a JSX child or in a prop that renders text (a name from
- * `visibleProps`, or one that reads as text, such as `emptyText` or `headerTitle`); and the
- * message of a native dialog. A string with no letter (`·`, `—`, `%`) is not language.
+ * `visibleProps`, or one that reads as text, such as `emptyText` or `headerTitle`); such a
+ * property of an object passed to a prop (a navigator's `options={{ title }}`); the message
+ * of a native dialog; and the title, message, button texts and default value of React
+ * Native's `Alert`. A string with no letter (`·`, `—`, `%`) is not language.
  * @type {import('eslint').Rule.RuleModule}
  */
 const noLiteralStrings = {
@@ -99,9 +101,35 @@ const noLiteralStrings = {
       'placeholder',
       'title',
     ])
+    // Matched against the name with its first letter capitalised, so `text` and `message`
+    // read as text as `emptyText` and `errorMessage` do.
     const textLikeProp =
       /(Label|Title|Text|Message|Placeholder|Caption|Description|Heading|Hint|Tooltip)$/
+    // Names that end like text but take an enumerated value, never words.
+    const enumeratedProps = new Set(['enterKeyHint'])
     const dialogs = new Set(['alert', 'confirm', 'prompt'])
+
+    /** @param {unknown} name A prop's or a property's name */
+    function showsText(name) {
+      if (typeof name !== 'string' || name === '' || enumeratedProps.has(name)) return false
+      return (
+        visibleProps.has(name) || textLikeProp.test(name.charAt(0).toUpperCase() + name.slice(1))
+      )
+    }
+
+    /** @param {any} object An object literal, whose text properties are checked */
+    function checkProperties(object) {
+      for (const property of object.properties) {
+        if (property.type !== 'Property' || property.computed) continue
+        const key =
+          property.key.type === 'Identifier'
+            ? property.key.name
+            : property.key.type === 'Literal'
+              ? String(property.key.value)
+              : undefined
+        if (showsText(key)) check(property.value)
+      }
+    }
 
     /** @param {any} node An expression shown as it is, or a branch that may be */
     function check(node) {
@@ -139,9 +167,10 @@ const noLiteralStrings = {
           node.name.type === 'JSXNamespacedName'
             ? `${node.name.namespace.name}:${node.name.name.name}`
             : node.name.name
-        if (!visibleProps.has(name) && !textLikeProp.test(name)) return
-        if (node.value?.type === 'JSXExpressionContainer') check(node.value.expression)
-        else check(node.value)
+        const value =
+          node.value?.type === 'JSXExpressionContainer' ? node.value.expression : node.value
+        if (showsText(name)) check(value)
+        else if (value?.type === 'ObjectExpression') checkProperties(value)
       },
       /** @param {any} node */
       JSXExpressionContainer(node) {
@@ -162,7 +191,20 @@ const noLiteralStrings = {
           callee.type === 'MemberExpression' &&
           callee.object.type === 'Identifier' &&
           callee.object.name === 'Alert'
-        if ((name !== undefined && dialogs.has(name)) || onAlert) {
+        if (onAlert) {
+          // React Native's Alert.alert(title, message, buttons, options) and
+          // Alert.prompt(title, message, buttons, type, defaultValue, keyboardType): each
+          // button shows its `text`; the type and the keyboard type are enumerated.
+          const [title, message, buttons, , defaultValue] = node.arguments
+          check(title)
+          check(message)
+          if (buttons?.type === 'ArrayExpression') {
+            for (const button of buttons.elements) {
+              if (button?.type === 'ObjectExpression') checkProperties(button)
+            }
+          }
+          if (name === 'prompt') check(defaultValue)
+        } else if (name !== undefined && dialogs.has(name)) {
           for (const arg of node.arguments) check(arg)
         }
       },

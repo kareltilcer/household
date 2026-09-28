@@ -3,13 +3,14 @@
 // catalogs stands out unaccented, and a cut-off end loses its bracket (PRD 03 §9, 06 §8). It
 // is derived from English when it is asked for, so it cannot fall out of step.
 import {
-  createLiteralElement,
+  isArgumentElement,
   isLiteralElement,
+  isNumberElement,
   isPluralElement,
+  isPoundElement,
   isSelectElement,
   type MessageFormatElement,
 } from '@formatjs/icu-messageformat-parser'
-import { printAST } from '@formatjs/icu-messageformat-parser/printer.js'
 import { parseMessage } from './message.ts'
 
 /** The pseudo-locale's tag: a private-use region of English, as Android and FormatJS use. */
@@ -70,31 +71,59 @@ const accented: Readonly<Record<string, string>> = {
   Z: 'Ž',
 }
 
-/** `message`, pseudo-localised: its text accented, its arguments and syntax untouched. */
+/**
+ * `message`, pseudo-localised: its text accented, its arguments and syntax untouched. It is
+ * printed here rather than by FormatJS's printAST, which turns a lone apostrophe between two
+ * arguments into `'''` and so quotes the argument after it: `''{name}''` would show `{name}`.
+ */
 export function pseudolocalize(message: string): string {
   let letters = 0
-  const accent = (elements: MessageFormatElement[]): MessageFormatElement[] =>
-    elements.map((el) => {
-      if (isLiteralElement(el)) {
-        letters += (el.value.match(/\p{L}/gu) ?? []).length
-        return { ...el, value: el.value.replace(/[A-Za-z]/g, (ch) => accented[ch] ?? ch) }
-      }
-      if (isPluralElement(el) || isSelectElement(el)) {
-        const options = Object.fromEntries(
-          Object.entries(el.options).map(([key, option]) => [
-            key,
-            { ...option, value: accent(option.value) },
-          ]),
-        )
-        return { ...el, options }
-      }
-      return el
-    })
-  const body = accent(parseMessage(message))
+  // inPlural: the elements are an option of a plural or selectordinal, where # is syntax.
+  const print = (elements: readonly MessageFormatElement[], inPlural: boolean): string =>
+    elements
+      .map((el) => {
+        if (isLiteralElement(el)) {
+          letters += (el.value.match(/\p{L}/gu) ?? []).length
+          return literal(
+            el.value.replace(/[A-Za-z]/g, (ch) => accented[ch] ?? ch),
+            inPlural,
+          )
+        }
+        if (isPoundElement(el)) return '#'
+        if (isArgumentElement(el)) return `{${el.value}}`
+        if (isNumberElement(el)) return `{${el.value}, number}`
+        if (isPluralElement(el) || isSelectElement(el)) {
+          const type = isSelectElement(el)
+            ? 'select'
+            : el.pluralType === 'ordinal'
+              ? 'selectordinal'
+              : 'plural'
+          const offset =
+            isPluralElement(el) && el.offset !== 0 ? ` offset:${String(el.offset)}` : ''
+          const options = Object.entries(el.options)
+            .map(([key, option]) => ` ${key} {${print(option.value, type !== 'select')}}`)
+            .join('')
+          return `{${el.value}, ${type},${offset}${options}}`
+        }
+        // parseMessage admits nothing else: dates, times and tags are outside the subset.
+        throw new TypeError(`pseudolocalize: element type ${String(el.type)} is not in the subset`)
+      })
+      .join('')
+  const body = print(parseMessage(message), false)
   const padding = '·'.repeat(Math.ceil(letters * 0.4))
-  return printAST([
-    createLiteralElement('⟦'),
-    ...body,
-    createLiteralElement(`${padding === '' ? '' : ` ${padding}`}⟧`),
-  ])
+  return `⟦${body}${padding === '' ? '' : ` ${padding}`}⟧`
+}
+
+/**
+ * `text` as ICU MessageFormat literal text: every apostrophe doubled, and the syntax
+ * characters (`{`, `}`, and `#` directly inside a plural) quoted. The quote opens at the first
+ * of them, since an apostrophe before anything else is itself, and runs to the end of the
+ * text, so a doubled apostrophe can never be read as a quote closing and reopening.
+ */
+function literal(text: string, inPlural: boolean): string {
+  const first = text.search(inPlural ? /[{}#]/ : /[{}]/)
+  const doubled = (s: string) => s.replaceAll("'", "''")
+  return first < 0
+    ? doubled(text)
+    : `${doubled(text.slice(0, first))}'${doubled(text.slice(first))}'`
 }

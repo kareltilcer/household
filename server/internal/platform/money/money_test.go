@@ -176,8 +176,13 @@ func TestRoundHalfUp(t *testing.T) {
 	for _, tc := range []struct{ n, d, want int64 }{
 		{5, 2, 3}, {-5, 2, -3}, {4, 3, 1}, {-4, 3, -1}, {5, 3, 2}, {-5, 3, -2}, {0, 7, 0},
 	} {
-		if got := money.RoundHalfUp(big.NewInt(tc.n), big.NewInt(tc.d)); got.Int64() != tc.want {
+		n, d := big.NewInt(tc.n), big.NewInt(tc.d)
+		if got := money.RoundHalfUp(n, d); got.Int64() != tc.want {
 			t.Errorf("%d / %d: got %s, want %d", tc.n, tc.d, got, tc.want)
+		}
+		// A caller may round a value it goes on using.
+		if n.Int64() != tc.n || d.Int64() != tc.d {
+			t.Errorf("%d / %d: the arguments became %s / %s", tc.n, tc.d, n, d)
 		}
 	}
 }

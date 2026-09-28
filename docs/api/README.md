@@ -36,8 +36,8 @@ it names the lenient `recommended` set instead.
 
 Both clients consume a generated, typed client — a contract change that breaks a client breaks the
 build ([06-clients.md](../prd/06-clients.md) §1). `@household/api`'s `gen` script writes it into
-`packages/api/src/generated/` with openapi-typescript, and turbo runs it before every typecheck,
-lint and test, with this document as its input, so nothing generated is committed. To refresh it
+`packages/api/src/generated/` with openapi-typescript. turbo runs it before every typecheck, lint
+and test, with `openapi.yaml` as its input, so nothing generated needs committing. To refresh it
 for an editor:
 
 ```bash

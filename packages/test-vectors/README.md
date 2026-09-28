@@ -46,4 +46,4 @@ runVectors(vectors.money, { split: ({ total, participants, order, weights }) => 
 vectors.Run(t, "money", map[string]vectors.Subject{"split": func(in json.RawMessage) (any, error) { /* … */ }}, code)
 ```
 
-A new file is added to `vectors` in `src/index.ts`, and to this table.
+A new file is added to `vectors` in `src/index.ts`, and to this table. A test fails while a file in `vectors/` is missing from `vectors`, and the Go suite checks the format of every file there.

@@ -107,14 +107,33 @@ describe('an unsafe request', () => {
         },
       },
     })
+    // The caller is told of its own abort, as fetch tells it, not of the lost response.
     await expect(
       api.POST('/households/{household_id}/shopping/lists', {
         params: { path: { household_id: household } },
         body: { id: list, name: 'Lidl' },
         signal: abort.signal,
       }),
-    ).rejects.toThrow('network')
+    ).rejects.toMatchObject({ name: 'AbortError' })
     expect(sent).toHaveLength(1)
+  })
+
+  it('stops waiting to be resent when the caller aborts', async () => {
+    const abort = new AbortController()
+    let attempts = 0
+    const lost = () => {
+      attempts++
+      setTimeout(() => {
+        abort.abort()
+      }, 10)
+      return Promise.reject(new TypeError('network'))
+    }
+    // The default wait, a minute long: the test times out unless the abort cuts it short.
+    const request = new Request('https://h.test/a', { signal: abort.signal })
+    await expect(retryingFetch(lost, { delays: [60_000] })(request)).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    expect(attempts).toBe(1)
   })
 
   it('is returned as it is when the server answers, whatever the status', async () => {
@@ -185,8 +204,8 @@ describe('If-Match', () => {
     expect(sent[0]?.headers.get('If-Match')).toBe('"7"')
   })
 
-  it('refuses a value that is neither', async () => {
-    await expect(patch('seven')).rejects.toThrow(TypeError)
+  it.each(['seven', '""'])('refuses %s, which is neither', async (value) => {
+    await expect(patch(value)).rejects.toThrow(TypeError)
   })
 })
 

@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // Code says why a message could not be parsed or formatted. The codes are @household/i18n's,
@@ -288,11 +289,13 @@ func isSyntax(r rune) bool {
 	return false
 }
 
-// identifier reads a run of what ICU accepts in a name: anything but white space and
-// syntax characters.
+// identifier reads a run of what FormatJS's parser accepts in a name: anything but Unicode's
+// White_Space and Pattern_Syntax. White_Space is not the Pattern_White_Space skipped between
+// an argument's parts, so a no-break space ends a name without being skipped (the argument is
+// malformed), and a left-to-right mark is skipped before a name but belongs to one after it.
 func (p *parser) identifier() string {
 	start := p.pos
-	for !p.eof() && !isSpace(p.at(0)) && !isSyntax(p.at(0)) {
+	for !p.eof() && !unicode.Is(unicode.White_Space, p.at(0)) && !isSyntax(p.at(0)) {
 		p.pos++
 	}
 	return string(p.src[start:p.pos])
@@ -355,9 +358,14 @@ func (p *parser) argument(level int) (node, error) {
 	}
 }
 
-// style skips a number, date or time style up to the brace that closes its argument.
+// style skips a number, date or time style up to the brace that closes its argument, as
+// FormatJS's parser reads one: quoted text is passed over, a style that is empty or only
+// white space is malformed, and a brace that closes a nested one is read again as the
+// argument's own, so `{n, number, {x}}` closes at its first `}`.
 func (p *parser) style(name string) error {
 	p.pos++ // ,
+	p.skipSpace()
+	start := p.pos
 	depth := 0
 	for !p.eof() {
 		switch p.at(0) {
@@ -373,13 +381,27 @@ func (p *parser) style(name string) error {
 			depth++
 		case '}':
 			if depth == 0 {
+				if strings.TrimRightFunc(string(p.src[start:p.pos]), isJSSpace) == "" {
+					return p.malformed("{%s has an empty style", name)
+				}
 				return nil
 			}
 			depth--
+			continue
 		}
 		p.pos++
 	}
 	return p.malformed("{%s is not closed", name)
+}
+
+// isJSSpace is what JavaScript's trimEnd removes: its white space (the Zs category, tab,
+// vertical tab, form feed and the byte-order mark) and its line terminators.
+func isJSSpace(r rune) bool {
+	switch r {
+	case '\t', '\n', '\v', '\f', '\r', 0x2028, 0x2029, 0xfeff:
+		return true
+	}
+	return unicode.Is(unicode.Zs, r)
 }
 
 // options parses a plural, selectordinal or select from after its type to its closing brace.
@@ -392,15 +414,22 @@ func (p *parser) options(level int, name, typ string) (node, error) {
 	n := node{kind: selectNode, arg: name}
 	if typ != "select" {
 		n.kind, n.ordinal = pluralNode, typ == "selectordinal"
-		if strings.HasPrefix(string(p.src[p.pos:min(p.pos+7, len(p.src))]), "offset:") {
-			p.pos += 7
+		// As FormatJS reads it: a first name of `offset` is the offset, whose colon must
+		// follow at once, and any other is the first option's key.
+		start := p.pos
+		if p.identifier() == "offset" {
+			if p.at(0) != ':' {
+				return node{}, p.malformed("{%s, %s: offset has no value", name, typ)
+			}
+			p.pos++
 			p.skipSpace()
 			offset, ok := p.integer()
 			if !ok {
 				return node{}, p.malformed("{%s, %s has a malformed offset", name, typ)
 			}
 			n.offset = offset
-			p.skipSpace()
+		} else {
+			p.pos = start
 		}
 	}
 	seen := map[string]bool{}
@@ -456,7 +485,11 @@ func (p *parser) options(level int, name, typ string) (node, error) {
 	return n, nil
 }
 
-// integer reads an optionally signed decimal integer.
+// maxSafeInteger is JavaScript's Number.MAX_SAFE_INTEGER, 2^53 − 1: FormatJS refuses an
+// offset or an =N past it.
+const maxSafeInteger = 1<<53 - 1
+
+// integer reads an optionally signed decimal integer, within ±maxSafeInteger.
 func (p *parser) integer() (int64, bool) {
 	start := p.pos
 	if r := p.at(0); r == '+' || r == '-' {
@@ -471,5 +504,5 @@ func (p *parser) integer() (int64, bool) {
 		return 0, false
 	}
 	v, err := strconv.ParseInt(string(p.src[start:p.pos]), 10, 64)
-	return v, err == nil
+	return v, err == nil && v >= -maxSafeInteger && v <= maxSafeInteger
 }

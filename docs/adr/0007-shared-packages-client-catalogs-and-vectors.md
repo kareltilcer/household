@@ -48,7 +48,7 @@ Plan item 6 fills four packages the rest of the plan builds on. Several choices 
 - `@household/i18n`'s `parseMessage` refuses anything outside the subset. The server's `internal/platform/i18n` parses exactly the subset, as FormatJS parses with tags ignored.
 - The Go renderer takes plural rules from `golang.org/x/text/feature/plural`. Its decimal symbols come from CLDR for the five languages, including Polish's minimum grouping of two.
 - Numbers round half away from zero to three places, as ICU's default decimal format does. Plural operands are read after that rounding.
-- `vectors/i18n.json` holds the two renderers to the same output. It covers Czech, Slovak and Polish plurals, quoting, offsets, grouping and each refusal code, and was verified against Node 24's ICU 78.
+- `vectors/i18n.json` holds the two renderers to the same output. It covers Czech, Slovak and Polish plurals, quoting, offsets, grouping, each refusal code, and the edges of FormatJS's grammar: where a name, a style or an offset ends. It was verified against Node 24's ICU 78.
 - The pseudo-locale `en-XA` is derived from English when it is asked for: accented, bracketed and padded about 40 %.
 
 **One vector format with two runners.**
@@ -68,8 +68,9 @@ Plan item 6 fills four packages the rest of the plan builds on. Several choices 
 **Architecture test 7 is an ESLint rule.** `household/no-literal-strings` applies to `apps/**`, tests included. It reports a string that contains a letter wherever the UI shows it:
 - JSX text;
 - a string, template or conditional branch in a JSX child;
-- a text-rendering prop: `title`, `alt`, `aria-label`, `placeholder`, `accessibilityLabel`, or a name ending in `Label`, `Title`, `Text`, `Message` and similar;
-- the message of `alert`, `confirm`, `prompt` or `Alert.alert`.
+- a text-rendering prop: `title`, `alt`, `aria-label`, `placeholder`, `accessibilityLabel`, or a name such as `text` or one ending in `Label`, `Title`, `Text`, `Message` and similar, but not an enumerated one such as `enterKeyHint`;
+- such a property of an object passed to a prop, as a navigator's `options={{ title }}`;
+- the message of `alert`, `confirm` or `prompt`, and the title, message, button texts and default value of React Native's `Alert.alert` and `Alert.prompt`.
 
 ## Alternatives rejected
 
@@ -98,5 +99,6 @@ Plan item 6 fills four packages the rest of the plan builds on. Several choices 
   - its CLDR decimal symbols in the Go renderer. Spanish, for one, has a minimum grouping of two.
 - `x/text`'s plural data is CLDR 32. The five languages' rules have not changed since, and the vectors pass against Node's ICU 78. A future CLDR change to them would show as a vector failure, not a silent disagreement.
 - React Native's Hermes has no `crypto.getRandomValues`, which `newId` needs. The mobile app installs a polyfill (plan item 28).
+- The translator selects plurals through the engine's `Intl.PluralRules`, which Hermes has not provided. Plan item 28 polyfills it where the engine still lacks it and runs the i18n vectors' plural cases on the device, since the vectors otherwise run only on Node's ICU.
 
 **Revisit this when** a server-rendered message needs a date or an amount of money, or when a language outside the five ships.

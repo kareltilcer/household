@@ -5,7 +5,8 @@
 import type { Middleware } from 'openapi-fetch'
 import { newId } from './ids.ts'
 
-const quoted = /^(W\/)?"([^"]*)"$/
+// An entity-tag as the contract's IfMatch pattern admits one: not empty.
+const quoted = /^(W\/)?"([^"]+)"$/
 const decimal = /^(0|[1-9][0-9]*)$/
 
 /** The entity-tag a representation of `version` carries: the version in decimal, quoted. */
@@ -73,8 +74,11 @@ export interface RetryOptions {
    * Defaults to two retries, after 250 ms and 1 s.
    */
   readonly delays?: readonly number[]
-  /** Waits `ms` milliseconds. Tests pass one that does not. */
-  readonly sleep?: (ms: number) => Promise<void>
+  /**
+   * Waits `ms` milliseconds, or until `signal` aborts if that is sooner. Tests pass one that
+   * does not wait.
+   */
+  readonly sleep?: (ms: number, signal: AbortSignal) => Promise<void>
 }
 
 /**
@@ -82,7 +86,9 @@ export interface RetryOptions {
  * did not abort it. Only a request that is safe to repeat is resent: a safe method, or an
  * unsafe one carrying an `Idempotency-Key`, which the server answers with the first
  * attempt's stored `2xx` instead of applying it again. A response, whatever its status, is
- * returned as it is: a `409 idempotency_in_progress` is the caller's to wait out.
+ * returned as it is: a `409 idempotency_in_progress` is the caller's to wait out. A caller
+ * that aborts, even while a retry waits, gets what `fetch` rejects an aborted request with:
+ * the signal's reason, not the network error before it.
  */
 export function retryingFetch(
   base: (request: Request) => Promise<Response>,
@@ -90,20 +96,21 @@ export function retryingFetch(
 ): (request: Request) => Promise<Response> {
   return async (request) => {
     const repeatable = !unsafe.has(request.method) || request.headers.has('Idempotency-Key')
-    // A body can be read once, so each attempt sends a copy taken before any was sent.
-    const original = repeatable ? request.clone() : request
+    // A body can be read once, so each attempt sends a copy. The request itself is never
+    // sent: it is what every copy is taken from, and the one body buffered for a retry.
+    let attempt = repeatable ? request.clone() : request
     // Read afresh each time: the caller may abort while a retry waits.
     const aborted = () => request.signal.aborted
-    let attempt = repeatable ? original.clone() : request
     for (let retry = 0; ; retry++) {
       try {
         return await base(attempt)
       } catch (error) {
+        if (aborted()) throw abortReason(request.signal)
         const delay = delays[retry]
-        if (!repeatable || delay === undefined || aborted() || isAbort(error)) throw error
-        await sleep(delay)
-        if (aborted()) throw error
-        attempt = original.clone()
+        if (!repeatable || delay === undefined || isAbort(error)) throw error
+        await sleep(delay, request.signal)
+        if (aborted()) throw abortReason(request.signal)
+        attempt = request.clone()
       }
     }
   }
@@ -113,6 +120,26 @@ function isAbort(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'
 }
 
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+/**
+ * What `fetch` rejects with once `signal` has aborted: its reason, or an AbortError where the
+ * platform's AbortSignal predates `reason`, as React Native's polyfill may.
+ */
+function abortReason(signal: AbortSignal): unknown {
+  const reason: unknown = signal.reason
+  if (reason !== undefined) return reason
+  const error = new Error('The request was aborted')
+  error.name = 'AbortError'
+  return error
+}
+
+function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(finish, ms)
+    signal.addEventListener('abort', finish, { once: true })
+    function finish() {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', finish)
+      resolve()
+    }
+  })
 }

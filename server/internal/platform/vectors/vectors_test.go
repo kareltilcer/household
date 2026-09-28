@@ -2,9 +2,12 @@ package vectors_test
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/kareltilcer/household/server/internal/platform/repo"
 	"github.com/kareltilcer/household/server/internal/platform/vectors"
 )
 
@@ -34,9 +37,19 @@ func TestProblemsNamesEachFault(t *testing.T) {
 	}
 }
 
+// Every file in the directory, not a list of them here, so a file added later is held to the
+// format even before a subject runs it.
 func TestEveryVectorFileLoads(t *testing.T) {
-	for _, name := range []string{"money", "i18n"} {
-		if _, err := vectors.Load(name); err != nil {
+	root, err := repo.Root()
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := filepath.Glob(filepath.Join(root, filepath.FromSlash(vectors.Dir), "*.json"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no vector files in %s: %v", vectors.Dir, err)
+	}
+	for _, file := range files {
+		if _, err := vectors.Load(strings.TrimSuffix(filepath.Base(file), ".json")); err != nil {
 			t.Error(err)
 		}
 	}

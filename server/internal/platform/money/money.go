@@ -234,11 +234,11 @@ func Split(total Money, participants, order []string, weights []int64) ([]Share,
 }
 
 // RoundHalfUp returns numerator / denominator rounded half-up to an integer, ties away from
-// zero: 2.5 → 3 and −2.5 → −3. The denominator is positive. numerator is not preserved.
+// zero: 2.5 → 3 and −2.5 → −3. The denominator is positive. Neither argument is changed.
 func RoundHalfUp(numerator, denominator *big.Int) *big.Int {
 	twice := new(big.Int).Lsh(denominator, 1)
 	negative := numerator.Sign() < 0
-	n := numerator.Abs(numerator)
+	n := new(big.Int).Abs(numerator)
 	n.Lsh(n, 1).Add(n, denominator).Quo(n, twice)
 	if negative {
 		n.Neg(n)

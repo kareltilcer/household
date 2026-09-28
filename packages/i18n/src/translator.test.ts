@@ -34,6 +34,23 @@ describe('the pseudo-locale', () => {
     )
   })
 
+  // Apostrophes beside arguments and quoted syntax: FormatJS's own printer re-quotes the
+  // argument after a lone apostrophe, which showed `{name}` instead of the name.
+  it.each([
+    ["''{name}'' was added", { name: 'Jana' }, "⟦'Jana' ŵáš áððéð ····⟧"],
+    ["{a}''{b}", { a: 1, b: 2 }, "⟦1'2⟧"],
+    ["Say ''{word}''", { word: 'hi' }, "⟦Šáý 'hi' ··⟧"],
+    ["a '{''}' b, it''s", {}, "⟦á {'} ƀ, íţ'š ··⟧"],
+    [
+      "{n, plural, offset:1 other {'#'# {g, select, a {# a} other {x}}}}",
+      { n: 5, g: 'a' },
+      '⟦#4 # á ·⟧',
+    ],
+    ['{n, selectordinal, other {#.}} {m, number}', { n: 2, m: 1000 }, '⟦2. 1,000⟧'],
+  ])('keeps %j meaning what it meant', (message, args, shown) => {
+    expect(formatMessage('en', pseudolocalize(message), args)).toBe(shown)
+  })
+
   it('renders every key of the catalogs', () => {
     const t = createTranslator(pseudoLocale)
     for (const key of Object.keys(catalogs.en) as (keyof typeof catalogs.en)[]) {

@@ -25,13 +25,19 @@ export interface VectorFile {
 /** Every vector file, by the name its file has in vectors/. */
 export const vectors = { i18n, money } satisfies Readonly<Record<string, VectorFile>>
 
+const fileFields: ReadonlySet<string> = new Set(['description', 'sources', 'groups'])
+const caseFields: ReadonlySet<string> = new Set(['name', 'input', 'output', 'error'])
+
 /**
- * What is wrong with `file` as a vector file, beyond its shape: a group with no cases, two
- * cases of one name in a group, or a case with both an output and an error, or neither. The
- * Go runner refuses the same.
+ * What is wrong with `file` as a vector file, beyond its shape: a field the format does not
+ * have, a group with no cases, two cases of one name in a group, or a case with both an
+ * output and an error, or neither. The Go runner refuses the same.
  */
 export function problems(file: VectorFile): string[] {
   const found: string[] = []
+  for (const field of Object.keys(file)) {
+    if (!fileFields.has(field)) found.push(`an unknown field ${JSON.stringify(field)}`)
+  }
   if (file.description.trim() === '') found.push('no description')
   if (file.sources.length === 0) found.push('no sources')
   const groups = Object.entries(file.groups)
@@ -40,6 +46,13 @@ export function problems(file: VectorFile): string[] {
     if (cases.length === 0) found.push(`${group}: no cases`)
     const names = new Set<string>()
     for (const c of cases) {
+      for (const field of Object.keys(c)) {
+        if (!caseFields.has(field)) {
+          found.push(
+            `${group}: ${JSON.stringify(c.name)} has an unknown field ${JSON.stringify(field)}`,
+          )
+        }
+      }
       if (c.name.trim() === '') found.push(`${group}: a case with no name`)
       if (names.has(c.name)) found.push(`${group}: two cases named ${JSON.stringify(c.name)}`)
       names.add(c.name)
