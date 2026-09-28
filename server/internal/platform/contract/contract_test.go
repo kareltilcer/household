@@ -707,6 +707,8 @@ func TestAnEmailIsAnAddress(t *testing.T) {
 		"jana@tilcerovi.cz\r\nBcc: x@y.z", "jana(home)@tilcerovi.cz", strings.Repeat("a", 250) + "@b.cz",
 		// 168 characters, but 268 octets, which is what SMTP counts.
 		strings.Repeat("a", 64) + "@" + strings.Repeat("ž", 100) + ".cz",
+		// A part before the @ longer than SMTP's 64 octets, in characters or in octets alone.
+		strings.Repeat("a", 65) + "@example.com", strings.Repeat("ž", 33) + "@example.cz",
 		// An address in brackets, which would have the relay deliver to a host the caller chose.
 		"jana@[192.0.2.1]", "jana@[IPv6:2001:db8::1]",
 	} {

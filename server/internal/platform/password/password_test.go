@@ -48,6 +48,27 @@ func TestAHashVerifiesItsPasswordAndNoOther(t *testing.T) {
 	}
 }
 
+// A password is one password however its accents are encoded: composed, as most keyboards type
+// them, or decomposed, as text pasted from a macOS file name arrives (NIST SP 800-63B §5.1.1.2).
+// Its length is counted as it is then hashed.
+func TestAPasswordIsCheckedInItsNormalForm(t *testing.T) {
+	h := hasher(t, cheap, 1)
+	composed := "Příliš žluťoučký kůň"
+	decomposed := "Příliš žluťoučký kůň"
+	if composed == decomposed || password.Normalize(decomposed) != composed {
+		t.Fatalf("the two forms: %q, %q", composed, password.Normalize(decomposed))
+	}
+	for _, pair := range [][2]string{{composed, decomposed}, {decomposed, composed}} {
+		encoded, err := h.Hash(t.Context(), pair[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok, _, err := h.Verify(t.Context(), pair[1], encoded); err != nil || !ok {
+			t.Fatalf("set as %q, typed as %q: ok %v, %v", pair[0], pair[1], ok, err)
+		}
+	}
+}
+
 // A hash made with other parameters still verifies, and asks to be replaced with one made with
 // the current ones; a wrong password never does.
 func TestAHashFromOtherParametersAsksToBeReplaced(t *testing.T) {

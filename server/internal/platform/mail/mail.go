@@ -29,14 +29,18 @@ import (
 )
 
 // maxAddress is the longest address SMTP carries, in octets (RFC 5321 §4.5.3.1.3, less the angle
-// brackets): an address in UTF-8 (RFC 6531) is as long as its bytes, not its characters.
-const maxAddress = 254
+// brackets), and maxLocalPart the longest part before its @ (§4.5.3.1.1): an address in UTF-8
+// (RFC 6531) is as long as its bytes, not its characters.
+const (
+	maxAddress   = 254
+	maxLocalPart = 64
+)
 
 // ValidAddress reports whether s is an email address and nothing else: an addr-spec, as RFC 5322
 // and RFC 6532 have it, with no display name, no comment and no surrounding space, at a domain
 // name, not an address in brackets (jana@[192.0.2.1]), which would have the relay deliver to
-// whichever host the caller named, and no longer than SMTP carries. The contract's
-// `format: email` is this check, at the edge.
+// whichever host the caller named, and no longer than SMTP carries, whole or before its @. The
+// contract's `format: email` is this check, at the edge.
 func ValidAddress(s string) bool {
 	if len(s) > maxAddress || strings.ContainsAny(s, "\r\n") {
 		return false
@@ -45,7 +49,8 @@ func ValidAddress(s string) bool {
 	if err != nil || a.Name != "" || a.Address != s {
 		return false
 	}
-	return !strings.HasPrefix(s[strings.LastIndexByte(s, '@')+1:], "[")
+	at := strings.LastIndexByte(s, '@')
+	return at <= maxLocalPart && !strings.HasPrefix(s[at+1:], "[")
 }
 
 // Message is one email to one recipient.
@@ -214,9 +219,9 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 	if err := w.Close(); err != nil {
 		return failed("DATA", err)
 	}
-	if err := c.Quit(); err != nil {
-		return failed("QUIT", err)
-	}
+	// The server took the message with its reply to the end of DATA: a QUIT it then refuses, or a
+	// connection it closes first, does not unsend it.
+	_ = c.Quit()
 	return nil
 }
 

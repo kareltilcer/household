@@ -1,13 +1,18 @@
 package ratelimit_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
@@ -328,6 +333,92 @@ func TestARefundTakesAnAttemptBack(t *testing.T) {
 	}
 	for range limit.Max {
 		attempt(t, th, limit, subject(t))
+	}
+}
+
+// hooked is a pool whose transactions call after once the statement that claims a subject's row
+// has run: the moment between an attempt's claim of its row and its read of it.
+type hooked struct {
+	ratelimit.Beginner
+	after func()
+}
+
+func (h hooked) BeginTx(ctx context.Context, options pgx.TxOptions) (pgx.Tx, error) {
+	tx, err := h.Beginner.BeginTx(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	return hookedTx{Tx: tx, after: h.after}, nil
+}
+
+type hookedTx struct {
+	pgx.Tx
+	after func()
+}
+
+// claims reports whether sql is the statement that claims a subject's row.
+func claims(sql string) bool { return strings.Contains(sql, "INSERT INTO auth_throttles") }
+
+func (t hookedTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	tag, err := t.Tx.Exec(ctx, sql, args...)
+	if claims(sql) {
+		t.after()
+	}
+	return tag, err
+}
+
+func (t hookedTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	row := t.Tx.QueryRow(ctx, sql, args...)
+	if !claims(sql) {
+		return row
+	}
+	return hookedRow{Row: row, after: t.after}
+}
+
+type hookedRow struct {
+	pgx.Row
+	after func()
+}
+
+func (r hookedRow) Scan(dest ...any) error {
+	err := r.Row.Scan(dest...)
+	r.after()
+	return err
+}
+
+// A success that clears a subject's count while another attempt at it is claiming its row, a
+// sign-in submitted twice for instance, fails neither: the attempt counts on a row of its own. A
+// row made with one statement and read with another could be gone by the read, and the attempt
+// answered 500.
+func TestAClearDuringAnAttemptFailsNeither(t *testing.T) {
+	c := newClock()
+	pool := testsupport.Open(t).Pool(t, db.RoleApp)
+	plain := ratelimit.NewThrottles(pool, c.now)
+	limit := ratelimit.Limit{Name: "test.cleared", Max: 5, Window: time.Hour, Backoff: time.Minute, MaxBackoff: time.Hour}
+	attempt(t, plain, limit, subject(t))
+
+	cleared := make(chan error, 1)
+	var once sync.Once
+	th := ratelimit.NewThrottles(hooked{Beginner: pool, after: func() {
+		once.Do(func() {
+			go func() { cleared <- plain.Clear(context.WithoutCancel(t.Context()), limit, subject(t)) }()
+			// A clear that nothing holds back lands at once; one the claimed row's lock holds waits
+			// for the attempt to commit.
+			select {
+			case err := <-cleared:
+				cleared <- err
+			case <-time.After(200 * time.Millisecond):
+			}
+		})
+	}}, c.now)
+	if wait, err := th.Attempt(t.Context(), count(limit, subject(t))); err != nil || wait != 0 {
+		t.Fatalf("an attempt beside a clear: %v, %v", wait, err)
+	}
+	if err := <-cleared; err != nil {
+		t.Fatal(err)
+	}
+	if kept, err := plain.Kept(t.Context(), limit, subject(t)); err != nil || kept {
+		t.Fatalf("the clear did not land after the attempt (%v)", err)
 	}
 }
 

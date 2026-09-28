@@ -27,7 +27,9 @@ them. The PRD fixes what each does and names the controls (Argon2id, a local bre
 
 **Passwords are Argon2id with RFC 9106's second recommended parameters**: 64 MiB, three passes,
 four lanes, a 16-byte salt and a 32-byte tag, stored as a PHC string, so a hash carries its
-parameters and one made with others is replaced at the owner's next sign-in. A process runs at most
+parameters and one made with others is replaced at the owner's next sign-in. A password is hashed,
+checked and screened in Unicode's NFKC form (NIST SP 800-63B §5.1.1.2), so that it is one password
+however the device it is typed on encodes its accents. A process runs at most
 one hash per CPU at once, so a burst of sign-ins queues instead of taking 64 MiB each. A sign-in for
 an address with no account, or an account with no password, checks the password against a hash
 nobody's matches, and costs what a wrong password costs. A hash is checked outside any transaction,

@@ -230,19 +230,18 @@ func (t *Throttles) update(ctx context.Context, counts []Count, step func(Limit,
 		}
 		for i := range rows {
 			r := &rows[i]
-			// A subject with no row has an ended window, which the step starts afresh.
-			if _, err := tx.Exec(ctx,
-				"INSERT INTO auth_throttles (key, count, window_ends_at) VALUES ($1, 0, $2) ON CONFLICT (key) DO NOTHING",
-				r.key, now); err != nil {
-				return err
-			}
+			// The row made, or the one there locked, in one statement: a subject with no row has an
+			// ended window, which the step starts afresh. Made and then read apart, a row a Clear
+			// deleted in between would be gone by the read, and the attempt would fail.
 			var (
 				s       state
 				blocked *time.Time
 			)
-			if err := tx.QueryRow(ctx,
-				"SELECT count, window_ends_at, blocked_until FROM auth_throttles WHERE key = $1 FOR UPDATE",
-				r.key).Scan(&s.count, &s.windowEnds, &blocked); err != nil {
+			if err := tx.QueryRow(ctx, `
+				INSERT INTO auth_throttles (key, count, window_ends_at) VALUES ($1, 0, $2)
+				ON CONFLICT (key) DO UPDATE SET count = auth_throttles.count
+				RETURNING count, window_ends_at, blocked_until`,
+				r.key, now).Scan(&s.count, &s.windowEnds, &blocked); err != nil {
 				return err
 			}
 			if blocked != nil {

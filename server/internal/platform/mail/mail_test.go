@@ -31,25 +31,36 @@ type received struct {
 	auth     string
 }
 
+// behaviour is how the fake server treats a client once it has greeted it.
+type behaviour int
+
+const (
+	// answers takes a message, and says goodbye when asked to.
+	answers behaviour = iota
+	// stalls says nothing more.
+	stalls
+	// hangsUp takes a message, and closes the connection rather than answer QUIT.
+	hangsUp
+)
+
 // server is a fake SMTP server on the loopback interface, enough of RFC 5321 to take a message:
-// EHLO, optionally STARTTLS and AUTH PLAIN, MAIL, RCPT, DATA and QUIT. stall makes it greet and
-// then say nothing more.
+// EHLO, optionally STARTTLS and AUTH PLAIN, MAIL, RCPT, DATA and QUIT.
 type server struct {
-	t        *testing.T
-	ln       net.Listener
-	tls      *tls.Config
-	stall    bool
-	mu       sync.Mutex
-	messages []received
+	t         *testing.T
+	ln        net.Listener
+	tls       *tls.Config
+	behaviour behaviour
+	mu        sync.Mutex
+	messages  []received
 }
 
-func newServer(t *testing.T, tlsConfig *tls.Config, stall bool) *server {
+func newServer(t *testing.T, tlsConfig *tls.Config, b behaviour) *server {
 	t.Helper()
 	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &server{t: t, ln: ln, tls: tlsConfig, stall: stall}
+	s := &server{t: t, ln: ln, tls: tlsConfig, behaviour: b}
 	go s.serve()
 	t.Cleanup(func() { _ = ln.Close() })
 	return s
@@ -72,7 +83,7 @@ func (s *server) session(conn net.Conn) {
 	tp := textproto.NewConn(conn)
 	reply := func(line string) { _ = tp.PrintfLine("%s", line) }
 	reply("220 fake ESMTP")
-	if s.stall {
+	if s.behaviour == stalls {
 		_, _ = io.Copy(io.Discard, conn)
 		return
 	}
@@ -128,6 +139,9 @@ func (s *server) session(conn net.Conn) {
 			s.messages = append(s.messages, msg)
 			s.mu.Unlock()
 			reply("250 queued")
+			if s.behaviour == hangsUp {
+				return
+			}
 		case "QUIT":
 			reply("221 bye")
 			return
@@ -162,7 +176,7 @@ func parse(t *testing.T, data string) (*mail.Message, string, string) {
 }
 
 func TestAMessageIsDeliveredAsPlainTextInItsLanguage(t *testing.T) {
-	srv := newServer(t, nil, false)
+	srv := newServer(t, nil, answers)
 	sender, err := hhmail.NewSMTP(srv.url(), "Household <no-reply@household.example>")
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +225,7 @@ func TestSTARTTLSIsUsedWhenOffered(t *testing.T) {
 	ts := httptest.NewUnstartedServer(nil)
 	ts.StartTLS()
 	defer ts.Close()
-	srv := newServer(t, &tls.Config{Certificates: ts.TLS.Certificates, MinVersion: tls.VersionTLS12}, false)
+	srv := newServer(t, &tls.Config{Certificates: ts.TLS.Certificates, MinVersion: tls.VersionTLS12}, answers)
 	sender, err := hhmail.NewSMTP("smtp://household:secret@"+srv.ln.Addr().String(), "no-reply@household.example")
 	if err != nil {
 		t.Fatal(err)
@@ -232,7 +246,7 @@ func TestSTARTTLSIsUsedWhenOffered(t *testing.T) {
 }
 
 func TestALineBreakInAHeaderIsRefused(t *testing.T) {
-	srv := newServer(t, nil, false)
+	srv := newServer(t, nil, answers)
 	sender, err := hhmail.NewSMTP(srv.url(), "no-reply@household.example")
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +267,7 @@ func TestALineBreakInAHeaderIsRefused(t *testing.T) {
 
 // A server that stops answering is given up on when the context ends.
 func TestAStalledServerIsGivenUpOn(t *testing.T) {
-	srv := newServer(t, nil, true)
+	srv := newServer(t, nil, stalls)
 	sender, err := hhmail.NewSMTP(srv.url(), "no-reply@household.example")
 	if err != nil {
 		t.Fatal(err)
@@ -272,7 +286,7 @@ func TestAStalledServerIsGivenUpOn(t *testing.T) {
 // A reply that refuses the message is reported by its code alone: its text quotes the recipient's
 // address, which the error is logged with.
 func TestARefusalIsReportedByItsCode(t *testing.T) {
-	srv := newServer(t, nil, false)
+	srv := newServer(t, nil, answers)
 	sender, err := hhmail.NewSMTP(srv.url(), "no-reply@household.example")
 	if err != nil {
 		t.Fatal(err)
@@ -280,6 +294,22 @@ func TestARefusalIsReportedByItsCode(t *testing.T) {
 	err = sender.Send(t.Context(), hhmail.Message{To: "rejected@example.com", Subject: "s", Body: "b"})
 	if err == nil || strings.Contains(err.Error(), "rejected@") || !strings.Contains(err.Error(), "RCPT TO: the server replied 550") {
 		t.Fatalf("%v", err)
+	}
+}
+
+// A message the server has taken is sent, though the server then hangs up rather than answer
+// QUIT: it was not refused, and a failure logged for it would say an email that arrives never went.
+func TestAMessageTakenIsSentWhateverQuitAnswers(t *testing.T) {
+	srv := newServer(t, nil, hangsUp)
+	sender, err := hhmail.NewSMTP(srv.url(), "no-reply@household.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sender.Send(t.Context(), hhmail.Message{To: "jana@example.com", Subject: "s", Body: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := srv.received(); len(got) != 1 {
+		t.Fatalf("%+v", got)
 	}
 }
 

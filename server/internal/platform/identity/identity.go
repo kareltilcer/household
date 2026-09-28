@@ -191,8 +191,10 @@ func (s *Service) email(ctx context.Context, to, locale string, t mail.Template,
 }
 
 // screen refuses a password shorter than password.MinLength characters, which the edge refuses
-// already, and one found in the breached-password corpus, naming field.
+// already, and one found in the breached-password corpus, naming field. Both see the password as
+// it is hashed, normalised.
 func (s *Service) screen(field, pw string) error {
+	pw = password.Normalize(pw)
 	if utf8.RuneCountInString(pw) < password.MinLength {
 		return invalid(field, "min_length")
 	}

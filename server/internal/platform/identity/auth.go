@@ -228,6 +228,31 @@ func (s *Service) resendVerification(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, refusal(wait, err))
 		return
 	}
+	s.sendLink(ctx, req.Email, verifyLink)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// emailLink is an email carrying a link a person asked for by their address: a token for purpose,
+// valid for ttl, in template, opening route.
+type emailLink struct {
+	purpose  string
+	ttl      time.Duration
+	template mail.Template
+	route    string
+	// unverified sends it only to an account whose address is not verified yet.
+	unverified bool
+}
+
+// The links a resend and a reset request send.
+var (
+	verifyLink = emailLink{purpose: "verify_email", ttl: VerifyFor, template: emailVerify, route: routeVerify, unverified: true}
+	resetLink  = emailLink{purpose: "reset_password", ttl: ResetFor, template: emailReset, route: routeSetPassword}
+)
+
+// sendLink looks email up after the response, and sends l to the account that has it, at the
+// address as the account keeps it and in its owner's language; an address with no account, or
+// with one l is not for, is sent nothing.
+func (s *Service) sendLink(ctx context.Context, email string, l emailLink) {
 	s.Later(ctx, func(ctx context.Context) {
 		var token, address, language string
 		err := tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
@@ -237,25 +262,24 @@ func (s *Service) resendVerification(w http.ResponseWriter, r *http.Request) {
 			)
 			err := tx.QueryRow(ctx, `
 				SELECT id, email, locale, email_verified_at IS NOT NULL FROM users WHERE lower(email) = lower($1)`,
-				req.Email).Scan(&id, &address, &language, &verified)
-			if errors.Is(err, pgx.ErrNoRows) || (err == nil && verified) {
+				email).Scan(&id, &address, &language, &verified)
+			if errors.Is(err, pgx.ErrNoRows) || (err == nil && verified && l.unverified) {
 				return nil
 			}
 			if err != nil {
 				return err
 			}
-			token, err = issueToken(ctx, tx, id, "verify_email", address, VerifyFor, s.Sessions.Now())
+			token, err = issueToken(ctx, tx, id, l.purpose, address, l.ttl, s.Sessions.Now())
 			return err
 		})
 		if err != nil {
-			s.Log.LogAttrs(ctx, slog.LevelError, "verification not resent", slog.Any("error", err))
+			s.Log.LogAttrs(ctx, slog.LevelError, "email not sent", slog.String("template", string(l.template)), slog.Any("error", err))
 			return
 		}
 		if token != "" {
-			s.deliver(ctx, address, language, emailVerify, s.link(routeVerify, token))
+			s.deliver(ctx, address, language, l.template, s.link(l.route, token))
 		}
 	})
-	w.WriteHeader(http.StatusAccepted)
 }
 
 // login is postAuthLogin (FR-ID3), for the web client: a session, in two cookies. Every failure
@@ -441,29 +465,7 @@ func (s *Service) requestReset(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, refusal(wait, err))
 		return
 	}
-	s.Later(ctx, func(ctx context.Context) {
-		var token, address, language string
-		err := tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
-			var id uuid.UUID
-			err := tx.QueryRow(ctx, "SELECT id, email, locale FROM users WHERE lower(email) = lower($1)", req.Email).
-				Scan(&id, &address, &language)
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			token, err = issueToken(ctx, tx, id, "reset_password", address, ResetFor, s.Sessions.Now())
-			return err
-		})
-		if err != nil {
-			s.Log.LogAttrs(ctx, slog.LevelError, "password reset not sent", slog.Any("error", err))
-			return
-		}
-		if token != "" {
-			s.deliver(ctx, address, language, emailReset, s.link(routeSetPassword, token))
-		}
-	})
+	s.sendLink(ctx, req.Email, resetLink)
 	w.WriteHeader(http.StatusAccepted)
 }
 

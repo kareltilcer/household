@@ -5,6 +5,9 @@
 // Argon2id is memory-hard by design, and each hash holds Params.Memory for as long as it runs, so
 // a Hasher runs a bounded number at once: a burst of sign-ins waits its turn rather than taking
 // the process's memory with it.
+//
+// A password is hashed and checked in its normalised form (Normalize), so that the same password
+// is one password however the device it is typed on encodes its accents.
 package password
 
 import (
@@ -18,11 +21,18 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/text/unicode/norm"
 )
 
-// MinLength is the shortest password accepted, in characters (FR-ID1). There are no composition
-// rules: length and the breached-password screen are the whole policy, per NIST SP 800-63B.
+// MinLength is the shortest password accepted, in characters of its normalised form (FR-ID1).
+// There are no composition rules: length and the breached-password screen are the whole policy,
+// per NIST SP 800-63B.
 const MinLength = 12
+
+// Normalize is password as it is hashed, checked and screened: in Unicode's NFKC form, as NIST SP
+// 800-63B §5.1.1.2 asks, so that a password typed where an accent arrives composed (ř) and where
+// it arrives decomposed (r and a combining caron) is one password, not two.
+func Normalize(password string) string { return norm.NFKC.String(password) }
 
 // Params are Argon2id's parameters.
 type Params struct {
@@ -91,7 +101,7 @@ func (h *Hasher) acquire(ctx context.Context) error {
 
 func (h *Hasher) release() { <-h.slots }
 
-// Hash returns password's Argon2id hash, with a fresh salt, as a PHC string:
+// Hash returns the Argon2id hash of password, normalised, with a fresh salt, as a PHC string:
 // $argon2id$v=19$m=65536,t=3,p=4$<salt>$<tag>.
 func (h *Hasher) Hash(ctx context.Context, password string) (string, error) {
 	salt := make([]byte, h.params.SaltLen)
@@ -103,13 +113,13 @@ func (h *Hasher) Hash(ctx context.Context, password string) (string, error) {
 	}
 	defer h.release()
 	p := h.params
-	tag := argon2.IDKey([]byte(password), salt, p.Time, p.Memory, p.Threads, p.KeyLen)
+	tag := argon2.IDKey([]byte(Normalize(password)), salt, p.Time, p.Memory, p.Threads, p.KeyLen)
 	return encode(p, salt, tag), nil
 }
 
-// Verify reports whether password is the one encoded hashes, and whether the hash should be
-// replaced by one made with the Hasher's parameters: it was made with others. The comparison
-// takes the same time wherever the two differ.
+// Verify reports whether password, normalised, is the one encoded hashes, and whether the hash
+// should be replaced by one made with the Hasher's parameters: it was made with others. The
+// comparison takes the same time wherever the two differ.
 func (h *Hasher) Verify(ctx context.Context, password, encoded string) (ok, rehash bool, err error) {
 	p, salt, tag, err := decode(encoded)
 	if err != nil {
@@ -119,7 +129,7 @@ func (h *Hasher) Verify(ctx context.Context, password, encoded string) (ok, reha
 		return false, false, err
 	}
 	defer h.release()
-	got := argon2.IDKey([]byte(password), salt, p.Time, p.Memory, p.Threads, p.KeyLen)
+	got := argon2.IDKey([]byte(Normalize(password)), salt, p.Time, p.Memory, p.Threads, p.KeyLen)
 	ok = subtle.ConstantTimeCompare(got, tag) == 1
 	return ok, ok && p != h.params, nil
 }
