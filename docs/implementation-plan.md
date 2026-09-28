@@ -375,7 +375,7 @@ Phase 0 · after 3, 6 · size M
 - **Done when**
   - CI rejects a record missing a language or a source.
   - The loader is idempotent.
-- **PR:** —
+- **PR:** [#10](https://github.com/kareltilcer/household/pull/10)
 
 ### 8 · Identity I — accounts, web sessions, email, rate limits · `planned`
 
