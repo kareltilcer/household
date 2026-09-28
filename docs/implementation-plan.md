@@ -351,7 +351,7 @@ Phase 0 · after 2 · size L
 - **Done when**
   - A missing key breaks the type check.
   - The €10 three-way split (3,34 / 3,33 / 3,33, in every participant order) passes in Go and TS from one JSON file.
-- **PR:** —
+- **PR:** [#9](https://github.com/kareltilcer/household/pull/9)
 
 ### 7 · Reference-data pipeline and country profiles · `planned`
 
