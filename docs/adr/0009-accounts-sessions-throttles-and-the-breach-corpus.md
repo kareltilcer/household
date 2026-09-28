@@ -70,7 +70,9 @@ addresses do. The account's sign-in limit backs off rather than locking (FR-ID3)
 in fifteen minutes blocks for a minute, each after it for twice as long, up to an hour, and the count
 restarts once the address has been quiet for fifteen minutes past its block. A client's network is
 its IPv4 address, or its IPv6 `/64`, found past the proxies the server is told to trust
-(`HOUSEHOLD_TRUSTED_PROXIES`) and never from an address a client claims for itself. The API's
+(`HOUSEHOLD_TRUSTED_PROXIES`) and never from an address a client claims for itself. Outside
+development that variable must name the proxies or say `none`: a server behind a load balancer it
+was not told of would count every client as the balancer, one network whose limits all share. The API's
 per-user and per-household limits (D-96) count every request, so they are token buckets in memory,
 one per process: with N processes a user may make up to N times the limit, which is a bound on
 abuse, not an accounting.
@@ -78,7 +80,10 @@ abuse, not an accounting.
 **A signed-in user's Idempotency-Key lives on their account** (`account_idempotency_keys`, keyed
 by user and key), with the same states, fingerprint, lease and stored `2xx` as a member's key in
 their household; `idempotency.AccountMiddleware` serves `/me` and the signed-in `/auth` routes, and
-each account write commits the key in its own transaction. **`POST /auth/password` keeps none**
+each account write commits the key in its own transaction. A request that ends the session it was
+made with, signing out, signing out everywhere or revoking the current session, keeps its key too,
+but a repeat of it arrives with that ended session and answers `401` like any other request from
+it: a session that still answered, if only from its keys, would not have ended. **`POST /auth/password` keeps none**
 (D-97): a key's fingerprint is a SHA-256 of the body, and its body is the current and the new
 password, which the fingerprint would keep for a week, a fast hash beside the slow one; anyone who
 knew the old password could read the new one out of a backup. A repeat of a change that was made

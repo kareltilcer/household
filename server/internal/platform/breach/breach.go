@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 // Magic starts every corpus file; its last digit is the format's version.
@@ -108,20 +109,29 @@ func (c *Corpus) Close() error { return c.f.Close() }
 type Writer struct {
 	f     *os.File
 	w     *bufio.Writer
+	path  string
 	count uint64
 	last  uint64
 }
 
-// Create starts a corpus at path, replacing any file there.
+// Create starts a corpus to replace any file at path once it is closed. Until then it is written
+// beside path under another name, so that a corpus already there, which a server may have open,
+// stays whole while the new one is built, and whatever happens to the build.
 func Create(path string) (*Writer, error) {
-	f, err := os.Create(path) //nolint:gosec // G304: the path is the operator's, on the command line.
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.partial")
 	if err != nil {
 		return nil, fmt.Errorf("breach: %w", err)
 	}
-	w := &Writer{f: f, w: bufio.NewWriterSize(f, 1<<20)}
+	w := &Writer{f: f, w: bufio.NewWriterSize(f, 1<<20), path: path}
+	// Readable as os.Create would leave it, not only by its builder: the server may run as another
+	// user, and the corpus is public data.
+	if err := f.Chmod(0o644); err != nil {
+		w.Abort()
+		return nil, fmt.Errorf("breach: %w", err)
+	}
 	// The count is written when the corpus is closed.
 	if _, err := w.w.Write(make([]byte, headerSize)); err != nil {
-		_ = f.Close()
+		w.Abort()
 		return nil, fmt.Errorf("breach: %w", err)
 	}
 	return w, nil
@@ -154,7 +164,8 @@ func (w *Writer) Add(prefix uint64) error {
 // Count is the number of records added.
 func (w *Writer) Count() uint64 { return w.count }
 
-// Close writes the header and closes the file. The file is a corpus only once Close succeeds.
+// Close writes the header, and moves the finished corpus to its path, replacing any file there.
+// A Close that fails leaves no new file behind, and the one at the path as it was.
 func (w *Writer) Close() error {
 	err := w.w.Flush()
 	if err == nil {
@@ -169,13 +180,17 @@ func (w *Writer) Close() error {
 	if cerr := w.f.Close(); err == nil {
 		err = cerr
 	}
+	if err == nil {
+		err = os.Rename(w.f.Name(), w.path)
+	}
 	if err != nil {
+		_ = os.Remove(w.f.Name())
 		return fmt.Errorf("breach: %w", err)
 	}
 	return nil
 }
 
-// Abort closes and removes an unfinished corpus.
+// Abort closes and removes an unfinished corpus, leaving any file at its path as it was.
 func (w *Writer) Abort() {
 	_ = w.f.Close()
 	_ = os.Remove(w.f.Name())

@@ -93,6 +93,51 @@ func TestAFileThatIsNotACorpusIsRefused(t *testing.T) {
 	}
 }
 
+// A new corpus replaces the one at its path only once it is closed: while it is written, and
+// when it is aborted, the one there stays whole, and nothing is left beside it.
+func TestACorpusReplacesItsFileOnlyOnceClosed(t *testing.T) {
+	path := filepath.Clean(write(t, "password123456"))
+	old, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unchanged := func(when string) {
+		t.Helper()
+		if now, err := os.ReadFile(path); err != nil || string(now) != string(old) {
+			t.Fatalf("%s, the corpus at the path changed: %v", when, err)
+		}
+	}
+	w, err := breach.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Add(1); err != nil {
+		t.Fatal(err)
+	}
+	unchanged("while a new one is written")
+	w.Abort()
+	unchanged("once the new one is aborted")
+	if entries, err := os.ReadDir(filepath.Dir(path)); err != nil || len(entries) != 1 {
+		t.Fatalf("beside the corpus: %v, %v", entries, err)
+	}
+
+	w, err = breach.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	c, err := breach.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if c.Len() != 0 {
+		t.Fatalf("the closed corpus did not replace the old one: %d records", c.Len())
+	}
+}
+
 func TestPrefixesOutOfOrderAreRefused(t *testing.T) {
 	w, err := breach.Create(filepath.Join(t.TempDir(), "corpus.bin"))
 	if err != nil {

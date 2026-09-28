@@ -114,9 +114,11 @@ func (l Limit) fail(s state, now time.Time) state {
 	}
 	s.count++
 	if l.Backoff > 0 && s.count >= l.Max {
+		// Doubled only while the double stays within MaxBackoff, which also keeps the shift from
+		// overflowing: a minute doubled 28 times is past what a Duration holds.
 		block := l.MaxBackoff
-		if doublings := s.count - l.Max; doublings < 32 {
-			block = min(l.Backoff<<doublings, l.MaxBackoff)
+		if doublings := s.count - l.Max; l.Backoff <= l.MaxBackoff>>doublings {
+			block = l.Backoff << doublings
 		}
 		s.blockedUntil = now.Add(block)
 	}
@@ -144,10 +146,10 @@ func (t *Throttles) Blocked(ctx context.Context, l Limit, subject string) (time.
 	return l.wait(s, t.now()), nil
 }
 
-// Take counts an attempt by subject, and refuses it, returning how long to wait, when subject has
-// made l's Max in the current window. A refused attempt is not counted.
-func (t *Throttles) Take(ctx context.Context, l Limit, subject string) (time.Duration, error) {
-	return t.update(ctx, []Count{{Limit: l, Subject: subject}}, func(l Limit, s state, now time.Time) (state, time.Duration) {
+// Take counts an attempt by each subject under its limit, and refuses it, counting nothing and
+// returning the longest wait, when any subject has made its limit's Max in the current window.
+func (t *Throttles) Take(ctx context.Context, counts ...Count) (time.Duration, error) {
+	return t.update(ctx, counts, func(l Limit, s state, now time.Time) (state, time.Duration) {
 		if !now.Before(s.windowEnds) {
 			s = state{windowEnds: now.Add(l.Window)}
 		}

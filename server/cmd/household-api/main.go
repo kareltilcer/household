@@ -134,9 +134,18 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 	if listening != nil {
 		listening <- ln.Addr()
 	}
+	// The grace starts when the shutdown does: the requests in flight finish, then the emails the
+	// last of them queued go out, and the process ends within one ShutdownTimeout, not two.
+	began := make(chan time.Time, 1)
+	stop := context.AfterFunc(ctx, func() { began <- time.Now() })
+	defer stop()
 	served := app.Serve(ctx, log, app.NewServer(router, log), ln, cfg.ShutdownTimeout)
-	// The emails the last requests queued go out before the process ends, within the same grace.
-	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.ShutdownTimeout)
+	// Serving that failed before any shutdown began gives the emails a grace of their own.
+	deadline := time.Now().Add(cfg.ShutdownTimeout)
+	if ctx.Err() != nil {
+		deadline = (<-began).Add(cfg.ShutdownTimeout)
+	}
+	closeCtx, cancel := context.WithDeadline(context.WithoutCancel(ctx), deadline)
 	defer cancel()
 	return errors.Join(served, background.Close(closeCtx))
 }

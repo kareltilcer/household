@@ -77,7 +77,8 @@ func run(ctx context.Context, args []string, stderr io.Writer) int {
 }
 
 // build writes the corpus and returns how many prefixes it holds. A build that fails leaves no
-// file behind, so a half-written corpus is never taken for a whole one.
+// new file behind, so a half-written corpus is never taken for a whole one, and leaves a corpus
+// already at o.out as it was.
 func build(ctx context.Context, o options, progress io.Writer) (uint64, error) {
 	w, err := breach.Create(o.out)
 	if err != nil {

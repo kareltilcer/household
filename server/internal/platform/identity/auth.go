@@ -60,7 +60,7 @@ func (s *Service) register(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if wait, err := s.Throttles.Take(ctx, ratelimit.RegisterNetwork, s.network(r)); err != nil || wait > 0 {
+	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.RegisterNetwork, Subject: s.network(r)}); err != nil || wait > 0 {
 		s.fail(w, r, refusal(wait, err))
 		return
 	}
@@ -203,11 +203,12 @@ func (s *Service) resendVerification(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	for _, limit := range []ratelimit.Limit{ratelimit.ResendMinute, ratelimit.ResendHour} {
-		if wait, err := s.Throttles.Take(ctx, limit, subject(req.Email)); err != nil || wait > 0 {
-			s.fail(w, r, refusal(wait, err))
-			return
-		}
+	// Both limits in one step, so that a resend the hour refuses is not counted by the minute.
+	asked := subject(req.Email)
+	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.ResendMinute, Subject: asked},
+		ratelimit.Count{Limit: ratelimit.ResendHour, Subject: asked}); err != nil || wait > 0 {
+		s.fail(w, r, refusal(wait, err))
+		return
 	}
 	s.Later(ctx, func(ctx context.Context) {
 		var token, address, language string
@@ -388,7 +389,7 @@ func (s *Service) requestReset(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if wait, err := s.Throttles.Take(ctx, ratelimit.ResetAccount, subject(req.Email)); err != nil || wait > 0 {
+	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.ResetAccount, Subject: subject(req.Email)}); err != nil || wait > 0 {
 		s.fail(w, r, refusal(wait, err))
 		return
 	}
@@ -501,8 +502,9 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 }
 
 // changePassword is postAuthPassword: the current password, checked as a sign-in checks it and
-// counted against the account as a failed sign-in is, sets a new one and ends every other session.
-// It keeps no Idempotency-Key, whose fingerprint would be a fast hash of both passwords (D-97).
+// counted against the account as a failed sign-in is, sets a new one and ends every other session
+// and every link to reset it. It keeps no Idempotency-Key, whose fingerprint would be a fast hash of
+// both passwords (D-97).
 func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -567,6 +569,12 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "UPDATE credentials SET secret = $2, updated_at = now() WHERE user_id = $1 AND type = 'password'",
 			user, newSecret); err != nil {
+			return err
+		}
+		// A reset link sent before the change would set the password over it: each one ends.
+		if _, err := tx.Exec(ctx, `
+			UPDATE email_tokens SET used_at = $2 WHERE user_id = $1 AND purpose = 'reset_password' AND used_at IS NULL`,
+			user, s.Sessions.Now()); err != nil {
 			return err
 		}
 		return s.Sessions.RevokeAll(ctx, tx, user, current)

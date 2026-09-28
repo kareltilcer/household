@@ -26,8 +26,9 @@ go run ./cmd/breach-dataset -out /tmp/breached.bin
 
 It downloads all 1 048 576 ranges of `https://api.pwnedpasswords.com/range/{prefix}`, 32 at a
 time, retrying a range the API refuses for a while, and reports every 16 384 ranges. It writes the
-file only when every range has arrived: a build that fails or is stopped leaves no file behind, so
-run it again.
+file only when every range has arrived, building it beside `-out` under another name until then: a
+build that fails or is stopped leaves no new file behind, and any file already at `-out` as it was,
+so run it again.
 
 - **To build from a corpus already on disk**, the single text file of `SHA1:COUNT` lines in
   ascending order that the official *PwnedPasswordsDownloader* writes:

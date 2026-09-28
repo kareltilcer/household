@@ -3,6 +3,7 @@ package app_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -82,6 +83,16 @@ func TestASessionsChangeArrivesViaTheWebUnderTheMembersName(t *testing.T) {
 	// Without its CSRF token the same request is refused before it reaches the household.
 	delete(cookies, session.CSRFCookie)
 	expect(t, w.webRequest(http.MethodPost, items(h), itemBody(idgen.New(), h), cookies), http.StatusForbidden, problem.CodeCsrfFailed)
+}
+
+// The server holds a new password to its minimum length itself, not only through the contract's
+// edge: the probe's contract, unlike the real one, declares no minimum.
+func TestAPasswordIsHeldToItsMinimumLength(t *testing.T) {
+	w := newWorld(t)
+	rec := w.webRequest(http.MethodPost, "/api/v1/auth/register", `{"email":"short@via.test","password":"eleven char","display_name":"S"}`, nil)
+	if got := fieldErrorsOf(t, rec); !slices.Equal(got, []problem.FieldError{{Field: "/password", Code: "min_length"}}) {
+		t.Fatalf("%v", got)
+	}
 }
 
 // A household's members share its API budget; a caller who is not a member spends none of it, and

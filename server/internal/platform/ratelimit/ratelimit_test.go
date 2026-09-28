@@ -43,17 +43,22 @@ func throttles(t *testing.T, c *clock) *ratelimit.Throttles {
 // subject is a subject no other test counts under.
 func subject(t *testing.T) string { return t.Name() }
 
+// count is subject as l counts it.
+func count(l ratelimit.Limit, subject string) ratelimit.Count {
+	return ratelimit.Count{Limit: l, Subject: subject}
+}
+
 func TestTakeAdmitsMaxAttemptsAWindow(t *testing.T) {
 	c := newClock()
 	th := throttles(t, c)
 	limit := ratelimit.Limit{Name: "test.take", Max: 3, Window: time.Hour}
 	for i := range 3 {
-		if wait, err := th.Take(t.Context(), limit, subject(t)); err != nil || wait != 0 {
+		if wait, err := th.Take(t.Context(), count(limit, subject(t))); err != nil || wait != 0 {
 			t.Fatalf("attempt %d: %v, %v", i+1, wait, err)
 		}
 		c.advance(time.Minute)
 	}
-	wait, err := th.Take(t.Context(), limit, subject(t))
+	wait, err := th.Take(t.Context(), count(limit, subject(t)))
 	if err != nil || wait != 57*time.Minute {
 		t.Fatalf("the fourth attempt waits %v, %v; want the 57 minutes left of the window", wait, err)
 	}
@@ -61,15 +66,44 @@ func TestTakeAdmitsMaxAttemptsAWindow(t *testing.T) {
 		t.Fatalf("blocked for %v, %v", wait, err)
 	}
 	// Another subject, and another limit, count apart.
-	if wait, err := th.Take(t.Context(), limit, subject(t)+" else"); err != nil || wait != 0 {
+	if wait, err := th.Take(t.Context(), count(limit, subject(t)+" else")); err != nil || wait != 0 {
 		t.Fatalf("another subject: %v, %v", wait, err)
 	}
-	if wait, err := th.Take(t.Context(), ratelimit.Limit{Name: "test.other", Max: 1, Window: time.Hour}, subject(t)); err != nil || wait != 0 {
+	if wait, err := th.Take(t.Context(), count(ratelimit.Limit{Name: "test.other", Max: 1, Window: time.Hour}, subject(t))); err != nil || wait != 0 {
 		t.Fatalf("another limit: %v, %v", wait, err)
 	}
 	c.advance(57 * time.Minute)
-	if wait, err := th.Take(t.Context(), limit, subject(t)); err != nil || wait != 0 {
+	if wait, err := th.Take(t.Context(), count(limit, subject(t))); err != nil || wait != 0 {
 		t.Fatalf("a new window: %v, %v", wait, err)
+	}
+}
+
+// A take one of its limits refuses is counted by none of them, and the wait is the longest: a
+// resend the hour refuses leaves the minute's count as it was.
+func TestATakeIsCountedByAllItsLimitsOrNone(t *testing.T) {
+	c := newClock()
+	th := throttles(t, c)
+	minute := ratelimit.Limit{Name: "test.take_minute", Max: 1, Window: time.Minute}
+	hour := ratelimit.Limit{Name: "test.take_hour", Max: 2, Window: time.Hour}
+	take := func() time.Duration {
+		t.Helper()
+		wait, err := th.Take(t.Context(), count(minute, subject(t)), count(hour, subject(t)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return wait
+	}
+	for range hour.Max {
+		if wait := take(); wait != 0 {
+			t.Fatalf("refused within both limits: %v", wait)
+		}
+		c.advance(time.Minute)
+	}
+	if wait := take(); wait != 58*time.Minute {
+		t.Fatalf("waits %v; want the 58 minutes left of the hour", wait)
+	}
+	if wait, _ := th.Blocked(t.Context(), minute, subject(t)); wait != 0 {
+		t.Fatalf("the refused take was counted by the minute: blocked for %v", wait)
 	}
 }
 
@@ -81,7 +115,7 @@ func TestTakeCountsConcurrentAttemptsOnce(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 20 {
 		wg.Go(func() {
-			wait, err := th.Take(t.Context(), limit, subject(t))
+			wait, err := th.Take(t.Context(), count(limit, subject(t)))
 			if err != nil {
 				t.Error(err)
 				return
@@ -179,6 +213,26 @@ func TestAccountFailuresBackOff(t *testing.T) {
 	fail()
 	if wait := blocked(); wait != 0 {
 		t.Fatalf("blocked after a clear and one failure: %v", wait)
+	}
+}
+
+// However long the failures go on, each past the Max blocks, for no longer than MaxBackoff: a
+// minute doubled 28 times overflowed, and the 38th failure in a row blocked for nothing.
+func TestFailuresLongPastTheMaxStillBlock(t *testing.T) {
+	c := newClock()
+	th := throttles(t, c)
+	limit := ratelimit.LoginAccount
+	for i := range limit.Max + 70 {
+		attempt(t, th, limit, subject(t))
+		wait, err := th.Blocked(t.Context(), limit, subject(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i+1 >= limit.Max && (wait <= 0 || wait > limit.MaxBackoff) {
+			t.Fatalf("failure %d blocks for %v", i+1, wait)
+		}
+		// The next failure comes the moment the block ends, never quiet for long enough to restart.
+		c.advance(wait)
 	}
 }
 

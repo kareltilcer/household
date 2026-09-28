@@ -80,7 +80,9 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
   it took effect stores nothing, so a repeat runs it again. A request made before signing in
   (`/auth/register`, `/auth/login` and the other routes a signed-out person reaches) has no caller
   to hold a key, and keeps none, nor does `POST /auth/password`, whose body carries passwords that
-  a key's fingerprint would hash fast (D-97).
+  a key's fingerprint would hash fast (D-97). A repeat of a request that ended the session it was
+  made with (signing out, signing out everywhere, revoking the current session) answers `401`,
+  since that session makes no further request.
 - **`402` is declared on every household-scoped unsafe method**, because the entitlement gate is
   middleware and can refuse any of them ([04](../prd/04-billing-and-entitlements.md) FR-BI1). The
   exceptions are the operations that must keep working in a non-writing state: billing, export,

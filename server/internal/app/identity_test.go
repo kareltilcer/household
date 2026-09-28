@@ -714,17 +714,21 @@ func TestASessionSlidesWithUse(t *testing.T) {
 	expect(t, b.get("/me"), http.StatusUnauthorized, problem.CodeUnauthenticated)
 }
 
-// Signing out ends the session and drops its cookies.
+// Signing out ends the session and drops its cookies. A repeat whose first answer was lost comes
+// from the ended session, and answers 401 as everything from it does.
 func TestSigningOut(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	b := s.signUp(s.a("jana@tilcerovi.cz"), "correct horse battery")
-	token := b.cookies[session.Cookie]
-	rec := b.post("/auth/logout", "")
-	expect(t, rec, http.StatusNoContent, "")
+	token, csrf := b.cookies[session.Cookie], b.cookies[session.CSRFCookie]
+	logout := func() *httptest.ResponseRecorder {
+		return b.send(request{method: http.MethodPost, path: "/auth/logout", header: http.Header{"Idempotency-Key": {"logout-1"}}})
+	}
+	expect(t, logout(), http.StatusNoContent, "")
 	if _, ok := b.cookies[session.Cookie]; ok {
 		t.Fatal("the session cookie was not dropped")
 	}
-	b.cookies[session.Cookie] = token
+	b.cookies[session.Cookie], b.cookies[session.CSRFCookie] = token, csrf
+	expect(t, logout(), http.StatusUnauthorized, problem.CodeUnauthenticated)
 	expect(t, b.get("/me"), http.StatusUnauthorized, problem.CodeUnauthenticated)
 	expect(t, s.browser().post("/auth/logout", ""), http.StatusUnauthorized, problem.CodeUnauthenticated)
 }
@@ -789,8 +793,8 @@ func TestAPasswordReset(t *testing.T) {
 }
 
 // A change takes the current password, which a wrong guess counts against as a sign-in does, and
-// ends every other session. It keeps no Idempotency-Key, whose fingerprint would hash the
-// passwords, so a repeat runs again, and finds the current password changed.
+// ends every other session and every reset link. It keeps no Idempotency-Key, whose fingerprint
+// would hash the passwords, so a repeat runs again, and finds the current password changed.
 func TestChangingThePassword(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	b := s.signUp(s.a("jana@tilcerovi.cz"), "correct horse battery")
@@ -803,6 +807,9 @@ func TestChangingThePassword(t *testing.T) {
 	if got := fieldErrorsOf(t, change("correct horse battery", breached)); !slices.Equal(got, []problem.FieldError{{Field: "/new_password", Code: problem.FieldInvalid}}) {
 		t.Fatalf("%v", got)
 	}
+	// A reset link sent before the change is spent by it.
+	expect(t, s.browser().post("/auth/password-reset", jsonBody(t, map[string]string{"email": s.a("jana@tilcerovi.cz")})), http.StatusAccepted, "")
+	reset, _ := s.token(s.a("jana@tilcerovi.cz"))
 	keyed := func() *httptest.ResponseRecorder {
 		return b.send(request{method: http.MethodPost, path: "/auth/password", header: http.Header{"Idempotency-Key": {"change-1"}},
 			body: jsonBody(t, map[string]string{"current_password": "correct horse battery", "new_password": "a new long password"})})
@@ -811,6 +818,8 @@ func TestChangingThePassword(t *testing.T) {
 	if n := s.count("SELECT count(*) FROM account_idempotency_keys WHERE key = 'change-1'"); n != 0 {
 		t.Fatalf("a password change kept %d keys", n)
 	}
+	expect(t, s.browser().post("/auth/password-reset/confirm", jsonBody(t, map[string]string{"token": reset, "password": "yet another password"})),
+		http.StatusGone, problem.CodeTokenAlreadyUsed)
 	expect(t, keyed(), http.StatusUnauthorized, problem.CodeInvalidCredentials)
 	expect(t, b.get("/me"), http.StatusOK, "")
 	expect(t, other.get("/me"), http.StatusUnauthorized, problem.CodeUnauthenticated)

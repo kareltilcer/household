@@ -6,12 +6,12 @@
 // In development, and only there, the connection strings default to the services
 // docker-compose.yml starts, so a fresh clone runs with nothing set. Everywhere else, each
 // connection string a command needs must be set explicitly, and so must what serving the
-// accounts needs: where the web client is, the mail server and its sender, and the
-// breached-password corpus, which development may run without. The other settings, which
-// carry no secret and name no database, default everywhere; only the listen address
-// differs, loopback in development and :8080 elsewhere. HOUSEHOLD_ENV itself defaults to
-// development, so bootstrap, which sets the roles' passwords, sets a defaulted one only on a
-// cluster on this machine.
+// accounts needs: where the web client is, the proxies in front of the server (or none), the
+// mail server and its sender, and the breached-password corpus, which development may run
+// without. The other settings, which carry no secret and name no database, default
+// everywhere; only the listen address differs, loopback in development and :8080 elsewhere.
+// HOUSEHOLD_ENV itself defaults to development, so bootstrap, which sets the roles'
+// passwords, sets a defaulted one only on a cluster on this machine.
 package config
 
 import (
@@ -80,6 +80,10 @@ const (
 	BreachedPasswordsVar  = "HOUSEHOLD_BREACHED_PASSWORDS"
 )
 
+// NoProxies is TrustedProxiesVar's value for a server its clients reach directly, with no proxy
+// in front of it: outside development the variable must name the proxies or say this.
+const NoProxies = "none"
+
 // The development defaults: the compose services, and the role passwords .env.example
 // documents. Local-only values, public by design.
 //
@@ -126,7 +130,8 @@ type Config struct {
 	// AllowedOrigins are the origins an unsafe request from a browser may come from: WebURL's,
 	// and any HOUSEHOLD_ALLOWED_ORIGINS adds.
 	AllowedOrigins []string
-	// TrustedProxies are the proxies whose X-Forwarded-For names the client (clientip).
+	// TrustedProxies are the proxies whose X-Forwarded-For names the client (clientip), none when
+	// HOUSEHOLD_TRUSTED_PROXIES is NoProxies, as development defaults it.
 	TrustedProxies []netip.Prefix
 	// SMTPURL is the mail server, smtp:// or smtps://, with its credentials; MailFrom the sender.
 	SMTPURL, MailFrom string
@@ -250,11 +255,16 @@ func (l *loader) serving(c *Config, dev bool) {
 		l.fail("%s: %v", AllowedOriginsVar, err)
 	}
 
-	proxies, err := clientip.ParsePrefixes(l.str(TrustedProxiesVar, ""))
-	if err != nil {
-		l.fail("%s: %v", TrustedProxiesVar, err)
+	// Named outside development, or `none` said: behind a load balancer the server was not told
+	// of, every client would be the balancer, and share one network's sign-in and registration
+	// limits with every other.
+	if proxies := required(TrustedProxiesVar, NoProxies); proxies != NoProxies {
+		parsed, err := clientip.ParsePrefixes(proxies)
+		if err != nil {
+			l.fail("%s: %v", TrustedProxiesVar, err)
+		}
+		c.TrustedProxies = parsed
 	}
-	c.TrustedProxies = proxies
 
 	// The mail server's URL carries its credentials: it is a secret, and is never named in an
 	// error.

@@ -25,6 +25,7 @@ import (
 	"time"
 	_ "time/tzdata" // An IANA name is checked against the zones the binary carries, wherever it runs.
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -189,8 +190,12 @@ func (s *Service) email(ctx context.Context, to, locale string, t mail.Template,
 	s.Later(ctx, func(ctx context.Context) { s.deliver(ctx, to, locale, t, link) })
 }
 
-// screen refuses a password found in the breached-password corpus, naming field.
+// screen refuses a password shorter than password.MinLength characters, which the edge refuses
+// already, and one found in the breached-password corpus, naming field.
 func (s *Service) screen(field, pw string) error {
+	if utf8.RuneCountInString(pw) < password.MinLength {
+		return invalid(field, "min_length")
+	}
 	if s.Breached == nil {
 		return nil
 	}

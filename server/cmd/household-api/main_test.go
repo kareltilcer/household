@@ -42,6 +42,7 @@ func env(t *testing.T) config.Getenv {
 		config.MeterDatabaseURLVar:   d.URL(db.RoleMeter),
 		config.AdminDatabaseURLVar:   testsupport.AdminURL(),
 		config.WebURLVar:             "https://app.household.test",
+		config.TrustedProxiesVar:     config.NoProxies,
 		config.SMTPURLVar:            "smtp://127.0.0.1:1",
 		config.MailFromVar:           "Household <no-reply@household.test>",
 		config.BreachedPasswordsVar:  corpus,

@@ -64,7 +64,7 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		config.EnvVar:         "production",
 		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
 	}))
-	for _, key := range []string{config.WebURLVar, config.SMTPURLVar, config.MailFromVar, config.BreachedPasswordsVar} {
+	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachedPasswordsVar} {
 		if err == nil || !strings.Contains(err.Error(), key) {
 			t.Errorf("serving in production without %s: %v", key, err)
 		}
@@ -77,17 +77,24 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.HTTPAddr != ":8080" {
-		t.Errorf("production listens on %q, want :8080", c.HTTPAddr)
+	if c.HTTPAddr != ":8080" || len(c.TrustedProxies) != 0 {
+		t.Errorf("production listens on %q, want :8080, behind %v, want no proxy", c.HTTPAddr, c.TrustedProxies)
 	}
 }
 
-// serving adds to vars what serving needs outside development.
+// serving adds to vars what serving needs outside development, where vars does not set it.
 func serving(vars map[string]string) map[string]string {
-	vars[config.WebURLVar] = "https://app.household.example"
-	vars[config.SMTPURLVar] = "smtps://mailer:" + "pw" + "@smtp.example:465"
-	vars[config.MailFromVar] = "Household <no-reply@household.example>"
-	vars[config.BreachedPasswordsVar] = "/var/lib/household/breached.bin"
+	for key, value := range map[string]string{
+		config.WebURLVar:            "https://app.household.example",
+		config.TrustedProxiesVar:    config.NoProxies,
+		config.SMTPURLVar:           "smtps://mailer:" + "pw" + "@smtp.example:465",
+		config.MailFromVar:          "Household <no-reply@household.example>",
+		config.BreachedPasswordsVar: "/var/lib/household/breached.bin",
+	} {
+		if _, ok := vars[key]; !ok {
+			vars[key] = value
+		}
+	}
 	return vars
 }
 
