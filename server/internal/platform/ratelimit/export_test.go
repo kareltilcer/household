@@ -28,3 +28,12 @@ func (t *Throttles) Blocked(ctx context.Context, l Limit, subject string) (time.
 	}
 	return l.wait(s, t.now()), nil
 }
+
+// Kept reports whether l keeps a row for subject.
+func (t *Throttles) Kept(ctx context.Context, l Limit, subject string) (bool, error) {
+	var kept bool
+	err := pgx.BeginTxFunc(ctx, t.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM auth_throttles WHERE key = $1)", key(l, subject)).Scan(&kept)
+	})
+	return kept, err
+}

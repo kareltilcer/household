@@ -511,6 +511,16 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 	var t linkToken
 	var language string
 	err = tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
+		// The account's row before the link's: a confirmation spends every other link of the
+		// account, so two links confirmed at once, each holding its own while it waited for the
+		// other's, would deadlock. Holding the account first, the second waits here, holding
+		// nothing, and then finds its link spent. FOR NO KEY UPDATE leaves the rows that refer to
+		// the user, a new session or link, free to be written meanwhile.
+		if _, err := tx.Exec(ctx, `
+			SELECT FROM users WHERE id = (SELECT user_id FROM email_tokens WHERE token_hash = $1 AND purpose = 'reset_password')
+			FOR NO KEY UPDATE`, session.Hash(req.Token)); err != nil {
+			return err
+		}
 		var err error
 		// Again, under the row's lock: two confirmations of one link set one password.
 		if t, err = check(ctx, tx); err != nil {

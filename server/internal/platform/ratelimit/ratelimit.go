@@ -183,8 +183,11 @@ func (t *Throttles) Clear(ctx context.Context, l Limit, subject string) error {
 
 // update applies step to each of counts' rows, under a row lock, in one transaction, and writes
 // what it returns for each when it admits the attempt on all of them; when any refuses, update
-// changes no count, leaving only the empty rows it made for subjects it had not seen, and returns
-// the longest wait they give.
+// changes no count and returns the longest wait they give. A refusal the rows already give is
+// found before any row is locked or made, so that an attempt refused anyway writes nothing, and a
+// client past one of its limits adds no row for each new subject it names; only a refusal that
+// an attempt running beside it brought about leaves the empty rows made for subjects not seen
+// before.
 func (t *Throttles) update(ctx context.Context, counts []Count, step func(Limit, state, time.Time) (state, time.Duration)) (time.Duration, error) {
 	type row struct {
 		limit Limit
@@ -192,8 +195,11 @@ func (t *Throttles) update(ctx context.Context, counts []Count, step func(Limit,
 		next  state
 	}
 	rows := make([]row, 0, len(counts))
+	keys := make([][]byte, 0, len(counts))
 	for _, c := range counts {
-		rows = append(rows, row{limit: c.Limit, key: key(c.Limit, c.Subject)})
+		k := key(c.Limit, c.Subject)
+		rows = append(rows, row{limit: c.Limit, key: k})
+		keys = append(keys, k)
 	}
 	// Locked in the order of their keys, whichever attempt asks, so that two attempts counting the
 	// same rows never wait on each other in a cycle.
@@ -202,6 +208,21 @@ func (t *Throttles) update(ctx context.Context, counts []Count, step func(Limit,
 	err := pgx.BeginTxFunc(ctx, t.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		wait = 0
 		now := t.now()
+		// The rows as they stand, unlocked. A subject with none has an ended window, which no limit
+		// refuses; the rows read again under their locks, below, decide an attempt they admit.
+		standing, err := read(ctx, tx, keys)
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			if s, ok := standing[string(r.key)]; ok {
+				_, refused := step(r.limit, s, now)
+				wait = max(wait, refused)
+			}
+		}
+		if wait > 0 {
+			return nil
+		}
 		for i := range rows {
 			r := &rows[i]
 			// A subject with no row has an ended window, which the step starts afresh.
@@ -243,6 +264,29 @@ func (t *Throttles) update(ctx context.Context, counts []Count, step func(Limit,
 		return nil
 	})
 	return wait, err
+}
+
+// read returns the rows of keys that exist, by key, as they stand, without locking them.
+func read(ctx context.Context, tx pgx.Tx, keys [][]byte) (map[string]state, error) {
+	rows, err := tx.Query(ctx, "SELECT key, count, window_ends_at, blocked_until FROM auth_throttles WHERE key = ANY($1)", keys)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]state, len(keys))
+	var (
+		k       []byte
+		s       state
+		blocked *time.Time
+	)
+	_, err = pgx.ForEachRow(rows, []any{&k, &s.count, &s.windowEnds, &blocked}, func() error {
+		row := state{count: s.count, windowEnds: s.windowEnds}
+		if blocked != nil {
+			row.blockedUntil = *blocked
+		}
+		out[string(k)] = row
+		return nil
+	})
+	return out, err
 }
 
 // Rate is a bucket's size and how fast it refills.
@@ -302,7 +346,9 @@ func (b *Buckets) Take(key string) time.Duration {
 		k.tokens--
 		return 0
 	}
-	return time.Duration((1 - k.tokens) / b.perSecond() * float64(time.Second))
+	// Rounded up, and never zero, which is a token taken: a bucket a nanosecond short of its next
+	// token waits a fraction of one, which truncating would make none.
+	return max(time.Duration(math.Ceil((1-k.tokens)/b.perSecond()*float64(time.Second))), 1)
 }
 
 // sweep drops, at most once a minute, the buckets that have filled up again: a full bucket is what

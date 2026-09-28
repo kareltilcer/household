@@ -795,6 +795,44 @@ func TestAPasswordReset(t *testing.T) {
 	expect(t, ask(s.a("JANA@tilcerovi.cz")), http.StatusTooManyRequests, problem.CodeRateLimited)
 }
 
+// Two reset links of one account confirmed at once set one password, and the other answers as
+// the spent link it is, never as a failure of the server's: each confirmation spends the other's
+// link, so neither may hold its own while it waits for the other's.
+func TestTwoResetLinksConfirmedAtOnceSetOnePassword(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	address := s.a("jana@tilcerovi.cz")
+	s.signUp(address, "correct horse battery")
+	for round := range 10 {
+		// A new hour each round, for the address's three reset requests an hour.
+		s.clock.advance(time.Hour)
+		var links [2]string
+		for i := range links {
+			expect(t, s.browser().post("/auth/password-reset", jsonBody(t, map[string]string{"email": address})), http.StatusAccepted, "")
+			links[i], _ = s.token(address)
+		}
+		var set, spent atomic.Int32
+		var wg sync.WaitGroup
+		for i, link := range links {
+			b := s.browser()
+			wg.Go(func() {
+				rec := b.post("/auth/password-reset/confirm", jsonBody(t, map[string]string{"token": link, "password": fmt.Sprintf("round %d password %d", round, i)}))
+				switch rec.Code {
+				case http.StatusNoContent:
+					set.Add(1)
+				case http.StatusGone:
+					spent.Add(1)
+				default:
+					t.Errorf("round %d: %d %s", round, rec.Code, rec.Body)
+				}
+			})
+		}
+		wg.Wait()
+		if set.Load() != 1 || spent.Load() != 1 {
+			t.Fatalf("round %d: %d set and %d spent, want one of each", round, set.Load(), spent.Load())
+		}
+	}
+}
+
 // A change takes the current password, which a wrong guess counts against as a sign-in does, and
 // ends every other session. It keeps no Idempotency-Key, whose fingerprint would hash the
 // passwords, so a repeat runs again, and finds the current password changed. A reset link sent

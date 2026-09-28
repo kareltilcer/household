@@ -1,6 +1,7 @@
 package ratelimit_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -283,6 +284,29 @@ func TestAnAttemptIsCountedByAllItsLimitsOrNone(t *testing.T) {
 	}
 }
 
+// An attempt a limit already refuses writes nothing: a client past its network's limit adds no row
+// for each new address it names, whether its surface takes or counts failures.
+func TestARefusedAttemptKeepsNoNewSubject(t *testing.T) {
+	th := throttles(t, newClock())
+	full := ratelimit.Limit{Name: "test.full_network", Max: 1, Window: time.Hour}
+	open := ratelimit.Limit{Name: "test.open_address", Max: 10, Window: time.Hour}
+	attempt(t, th, full, subject(t))
+	for name, try := range map[string]func(...ratelimit.Count) (time.Duration, error){
+		"attempt": func(c ...ratelimit.Count) (time.Duration, error) { return th.Attempt(t.Context(), c...) },
+		"take":    func(c ...ratelimit.Count) (time.Duration, error) { return th.Take(t.Context(), c...) },
+	} {
+		for i := range 3 {
+			fresh := fmt.Sprintf("%s %s %d", subject(t), name, i)
+			if wait, err := try(count(full, subject(t)), count(open, fresh)); err != nil || wait != time.Hour {
+				t.Fatalf("%s %d: waits %v, %v; want the hour of the full limit", name, i, wait, err)
+			}
+			if kept, err := th.Kept(t.Context(), open, fresh); err != nil || kept {
+				t.Fatalf("%s %d: the refused attempt kept a row for its new subject (%v)", name, i, err)
+			}
+		}
+	}
+}
+
 // A refund takes back an attempt that succeeded, and never counts below none.
 func TestARefundTakesAnAttemptBack(t *testing.T) {
 	th := throttles(t, newClock())
@@ -338,6 +362,26 @@ func TestABucketAllowsItsBurstThenRefills(t *testing.T) {
 	}
 	if wait := b.Take("jana"); wait == 0 {
 		t.Fatal("an idle bucket filled past its burst")
+	}
+}
+
+// A bucket a nanosecond short of its next token has none to give: at 600 a minute its wait comes
+// to a fraction of a nanosecond, which is still a wait, not a token taken.
+func TestABucketJustShortOfATokenWaits(t *testing.T) {
+	c := newClock()
+	b := ratelimit.NewBuckets(ratelimit.PerUser, c.now)
+	for range int(ratelimit.PerUser.Burst) {
+		if wait := b.Take("jana"); wait != 0 {
+			t.Fatalf("within the burst: waits %v", wait)
+		}
+	}
+	c.advance(100*time.Millisecond - time.Nanosecond)
+	if wait := b.Take("jana"); wait <= 0 {
+		t.Fatalf("a token taken a nanosecond before the bucket had one: waits %v", wait)
+	}
+	c.advance(time.Microsecond)
+	if wait := b.Take("jana"); wait != 0 {
+		t.Fatalf("the token that arrived: waits %v", wait)
 	}
 }
 
