@@ -259,6 +259,16 @@ var methods = []string{
 	http.MethodDelete, http.MethodOptions, http.MethodTrace, http.MethodConnect,
 }
 
+// Safe reports whether method is one RFC 9110 calls safe, a request for nothing to change: one
+// the CSRF defences leave be, and whose repeat needs no Idempotency-Key.
+func Safe(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return true
+	}
+	return false
+}
+
 // RoutePath is the path a router routes the request by: what remains below the mount
 // point when the router is mounted, the whole path otherwise.
 func RoutePath(r *http.Request) string {

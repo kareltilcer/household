@@ -150,7 +150,9 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 	if err != nil {
 		return app.Accounts{}, closeAll, err
 	}
-	hasher, err := password.New(password.Default, runtime.NumCPU())
+	// One hash at once per CPU the process may use: GOMAXPROCS follows a container's CPU limit,
+	// where NumCPU counts the host's, each hash holding 64 MiB.
+	hasher, err := password.New(password.Default, runtime.GOMAXPROCS(0))
 	if err != nil {
 		return app.Accounts{}, closeAll, err
 	}

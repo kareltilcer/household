@@ -36,6 +36,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/auth"
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
@@ -76,8 +77,9 @@ type Tokens struct {
 	Session, CSRF string
 }
 
-// newToken returns 256 random bits, URL-safe.
-func newToken() string {
+// NewToken returns 256 random bits, URL-safe: a session's token, its CSRF token, or an email's
+// link.
+func NewToken() string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b) // It never fails: the process ends first.
 	return base64.RawURLEncoding.EncodeToString(b)
@@ -113,7 +115,7 @@ func (s *Store) Now() time.Time { return s.now() }
 // Create starts a session for user in tx, from a browser whose user agent is userAgent, and
 // returns its id and its tokens.
 func (s *Store) Create(ctx context.Context, tx pgx.Tx, user uuid.UUID, userAgent string) (uuid.UUID, Tokens, error) {
-	id, tokens, now := idgen.New(), Tokens{Session: newToken(), CSRF: newToken()}, s.now()
+	id, tokens, now := idgen.New(), Tokens{Session: NewToken(), CSRF: NewToken()}, s.now()
 	_, err := tx.Exec(ctx, `
 		INSERT INTO sessions (id, user_id, token_hash, csrf_hash, user_agent, created_at, last_seen_at, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $6, $7)`,
@@ -239,7 +241,7 @@ func (s *Store) Authenticate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if unsafe(r.Method) && (!s.origins.fromAllowed(r) || !csrfMatches(r, sess)) {
+		if !httpx.Safe(r.Method) && (!s.origins.fromAllowed(r) || !csrfMatches(r, sess)) {
 			problem.Write(w, reqctx.RequestID(ctx), Refusal())
 			return
 		}
@@ -278,15 +280,6 @@ func cookieValue(r *http.Request, name string) string {
 		return ""
 	}
 	return c.Value
-}
-
-// unsafe reports whether method is one RFC 9110 does not call safe.
-func unsafe(method string) bool {
-	switch method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
-		return false
-	}
-	return true
 }
 
 // SetCookies sets the session's two cookies on w, each lasting IdleTimeout. A CSRF token of "" is
@@ -329,14 +322,19 @@ func NewOrigins(origins ...string) (*Origins, error) {
 	return o, nil
 }
 
-// normalise returns raw as an origin compares, and false when it is not one.
+// normalise returns raw as an origin compares, and false when it is not one. A scheme's default
+// port is dropped, as a browser drops it from the Origin it sends.
 func normalise(raw string) (string, bool) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil ||
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil ||
 		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
 		return "", false
 	}
-	return strings.ToLower(u.Scheme + "://" + u.Host), true
+	host := strings.TrimSuffix(u.Host, ":")
+	if port := u.Port(); (u.Scheme == "https" && port == "443") || (u.Scheme == "http" && port == "80") {
+		host = strings.TrimSuffix(host, ":"+port)
+	}
+	return strings.ToLower(u.Scheme + "://" + host), true
 }
 
 // origin returns the origin r says it comes from: its Origin header, or failing that its Referer's,
@@ -362,7 +360,7 @@ func (o *Origins) fromAllowed(r *http.Request) bool {
 // browser's, passes, and the credential it carries decides.
 func (o *Origins) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if unsafe(r.Method) && origin(r) != "" && !o.fromAllowed(r) {
+		if !httpx.Safe(r.Method) && origin(r) != "" && !o.fromAllowed(r) {
 			problem.Write(w, reqctx.RequestID(r.Context()), Refusal())
 			return
 		}

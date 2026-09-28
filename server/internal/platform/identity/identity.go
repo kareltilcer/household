@@ -15,9 +15,6 @@ package identity
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +33,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
+	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
@@ -112,12 +110,19 @@ func (s *Service) PublicRoutes(r chi.Router) {
 // Idempotency-Key.
 func (s *Service) AccountRoutes(r chi.Router) {
 	r.Post("/auth/logout", s.logout)
-	r.Post("/auth/password", s.changePassword)
 	r.Get("/me", s.me)
 	r.Patch("/me", s.updateMe)
 	r.Get("/me/sessions", s.sessions)
 	r.Delete("/me/sessions", s.signOutEverywhere)
 	r.Delete("/me/sessions/{session_id}", s.revokeSession)
+}
+
+// PasswordRoutes registers the account routes whose body carries a password, on the API's router,
+// behind the authentication and a check that there is a caller, but not the account's
+// Idempotency-Key: a key's fingerprint is a fast hash of the body, and so of the password, which
+// is kept for no request (D-97).
+func (s *Service) PasswordRoutes(r chi.Router) {
+	r.Post("/auth/password", s.changePassword)
 }
 
 // fail answers err's problem, or 500 for an error that is not one, which it logs.
@@ -146,19 +151,6 @@ func invalid(field, code string) *problem.Problem {
 // invalidCredentials is every sign-in's one failure (FR-ID3).
 func invalidCredentials() *problem.Problem {
 	return problem.New(http.StatusUnauthorized, problem.CodeInvalidCredentials)
-}
-
-// newToken returns 256 random bits, URL-safe: an email's link token.
-func newToken() string {
-	b := make([]byte, 32)
-	_, _ = rand.Read(b) // It never fails: the process ends first.
-	return base64.RawURLEncoding.EncodeToString(b)
-}
-
-// hashToken is what a row keeps of a token.
-func hashToken(token string) []byte {
-	sum := sha256.Sum256([]byte(token))
-	return sum[:]
 }
 
 // subject is an address as a throttle counts it: the same however it is cased.
@@ -212,34 +204,41 @@ func (s *Service) screen(field, pw string) error {
 	return nil
 }
 
-// issueToken writes a token for purpose to user's address email, valid for ttl, and returns it.
+// issueToken writes a token for purpose to user's address email, valid for ttl, and returns it: a
+// session's kind of token, kept as a session's is, by its hash.
 func issueToken(ctx context.Context, tx pgx.Tx, user uuid.UUID, purpose, email string, ttl time.Duration, now time.Time) (string, error) {
-	token := newToken()
+	token := session.NewToken()
 	_, err := tx.Exec(ctx, `
 		INSERT INTO email_tokens (id, user_id, purpose, token_hash, email, created_at, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		uuid.Must(uuid.NewV7()), user, purpose, hashToken(token), email, now, now.Add(ttl))
+		idgen.New(), user, purpose, session.Hash(token), email, now, now.Add(ttl))
 	return token, err
 }
 
 // displayName is name as an account keeps it, trimmed, and false when nothing is left or it
-// holds a control character, a line break among them.
+// holds a control character or a line break, U+2028 and U+2029 among them.
 func displayName(name string) (string, bool) {
 	name = strings.TrimSpace(name)
-	return name, name != "" && strings.IndexFunc(name, unicode.IsControl) < 0
+	return name, name != "" && strings.IndexFunc(name, func(r rune) bool {
+		return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp)
+	}) < 0
 }
 
 // maxLocale is the longest language tag kept, in characters.
 const maxLocale = 64
 
-// locale is tag in its canonical form, and false when it is not a BCP 47 tag or names no
-// language.
+// locale is tag in its canonical form, and false when it is not a BCP 47 tag or does not name its
+// language: und, a private-use tag such as x-home, and one whose language is only guessed from its
+// region or script, und-CZ.
 func locale(tag string) (string, bool) {
 	if len(tag) > maxLocale {
 		return "", false
 	}
 	t, err := language.Parse(tag)
-	if err != nil || t == language.Und {
+	if err != nil {
+		return "", false
+	}
+	if _, confidence := t.Base(); confidence != language.Exact {
 		return "", false
 	}
 	return t.String(), true

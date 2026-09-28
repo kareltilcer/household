@@ -70,7 +70,9 @@ info:
       again, which each of them is safe to: the three that answer `202` send at most another
       email, which their limits cap; a sign-in starts a new session, since a credential is never
       kept to be answered with; and a spent link answers as spent, except a verification link,
-      whose repeat answers `204` while the address it confirmed stands.
+      whose repeat answers `204` while the address it confirmed stands. `/auth/password` keeps
+      none either, since a key's fingerprint of its body would be a fast hash of two passwords; a
+      repeat of a change that was made answers `401`, the current password being the new one.
     - Entities with a `version` return it as an `ETag`, and accept that entity-tag back in
       `If-Match`; a mismatch is `409` carrying the current representation.
 
@@ -371,7 +373,8 @@ paths:
         Signs out every other session, and emails the account's address to say the password
         changed. A wrong `current_password` answers `401` (`invalid_credentials`) and counts against
         the account as a failed sign-in does. A new password found in the breached-password screen
-        is refused `422`, naming `/new_password` with the code `invalid`.
+        is refused `422`, naming `/new_password` with the code `invalid`. No `Idempotency-Key` is
+        kept, since its fingerprint would be a fast hash of the passwords: a repeat runs again.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -8053,10 +8056,11 @@ components:
         operation is what lets a generated client send it at all.
 
         A key is the caller's own, so a request made before signing in, which has no caller, keeps
-        none, and a repeat of it runs again (see the description of the API). Only a `2xx`
-        response is stored: a repeat of a request that was
-        refused before it took effect runs it again. A repeat while the first request is still
-        running answers `409` (`idempotency_in_progress`). So does a repeat of a request that took
+        none, and a repeat of it runs again (see the description of the API); nor does a request
+        whose body carries a password, `/auth/password`. Only a `2xx` response is stored: a repeat
+        of a request that was refused before it took effect runs it again. A repeat while the first
+        request is still running answers `409` (`idempotency_in_progress`). So does a repeat of a
+        request that took
         effect but whose response was not kept, because the server stopped before storing it, the
         body was larger than 1 MiB, or the request was answered with anything but `2xx` after it
         took effect, until the key expires: running it again would repeat the effect. A first

@@ -70,7 +70,7 @@ type Deps struct {
 // (session.Origins). The routes a person reaches before signing in are served as they arrive; every
 // other route is behind the session cookie's authentication and the signed-in user's API limit,
 // and one about the caller's own account, under /me and the rest of /auth, keeps its
-// Idempotency-Key on the account.
+// Idempotency-Key on the account, except the one whose body carries a password (D-97).
 //
 // The reference reads under /reference answer any authenticated caller, with no household.
 //
@@ -120,8 +120,12 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		signedIn.Use(a.Sessions.Authenticate, perUser)
 		signedIn.Route("/reference", reference.Routes(d.Pool, d.Logger))
 		signedIn.Group(func(account chi.Router) {
-			account.Use(auth.Required, idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes))
-			a.Identity.AccountRoutes(account)
+			account.Use(auth.Required)
+			a.Identity.PasswordRoutes(account)
+			account.Group(func(keyed chi.Router) {
+				keyed.Use(idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes))
+				a.Identity.AccountRoutes(keyed)
+			})
 		})
 		signedIn.Route("/households/{"+tenant.Param+"}", func(household chi.Router) {
 			household.Use(tenancy, perHousehold, mutation.Catalog(d.Modules))

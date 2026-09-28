@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"net/url"
 	"strings"
 	"time"
@@ -171,13 +172,13 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 
 	c, err := smtp.NewClient(conn, s.host)
 	if err != nil {
-		return fmt.Errorf("mail: greeting: %w", err)
+		return failed("greeting", err)
 	}
 	defer func() { _ = c.Close() }()
 	if !s.implicitTLS {
 		if ok, _ := c.Extension("STARTTLS"); ok {
 			if err := c.StartTLS(s.tls()); err != nil {
-				return fmt.Errorf("mail: STARTTLS: %w", err)
+				return failed("STARTTLS", err)
 			}
 		} else if !loopback(s.host) {
 			return errors.New("mail: the server does not offer STARTTLS, and mail leaves this machine only over TLS")
@@ -185,26 +186,39 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 	}
 	if s.auth != nil {
 		if err := c.Auth(s.auth); err != nil {
-			return fmt.Errorf("mail: authenticate: %w", err)
+			return failed("authenticate", err)
 		}
 	}
 	if err := c.Mail(s.from.Address); err != nil {
-		return fmt.Errorf("mail: MAIL FROM: %w", err)
+		return failed("MAIL FROM", err)
 	}
 	if err := c.Rcpt(to.Address); err != nil {
-		return fmt.Errorf("mail: RCPT TO: %w", err)
+		return failed("RCPT TO", err)
 	}
 	w, err := c.Data()
 	if err != nil {
-		return fmt.Errorf("mail: DATA: %w", err)
+		return failed("DATA", err)
 	}
 	if _, err := w.Write(data); err != nil {
-		return fmt.Errorf("mail: DATA: %w", err)
+		return failed("DATA", err)
 	}
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("mail: DATA: %w", err)
+		return failed("DATA", err)
 	}
-	return c.Quit()
+	if err := c.Quit(); err != nil {
+		return failed("QUIT", err)
+	}
+	return nil
+}
+
+// failed is the error of an SMTP exchange that failed at step. A reply from the server is reduced
+// to its code: its text often quotes the recipient's address, which is logged nowhere.
+func failed(step string, err error) error {
+	var reply *textproto.Error
+	if errors.As(err, &reply) {
+		return fmt.Errorf("mail: %s: the server replied %d", step, reply.Code)
+	}
+	return fmt.Errorf("mail: %s: %w", step, err)
 }
 
 // format is m as the bytes of an RFC 5322 message.

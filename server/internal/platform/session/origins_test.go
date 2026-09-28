@@ -10,7 +10,7 @@ import (
 
 func TestAnOriginIsSchemeHostAndPort(t *testing.T) {
 	for _, bad := range []string{"app.household.example", "ftp://app.household.example", "https://", "https://app.household.example/app",
-		"https://user@app.household.example", "https://app.household.example?x=1", "null"} {
+		"https://user@app.household.example", "https://app.household.example?x=1", "null", "https://:443"} {
 		if _, err := session.NewOrigins(bad); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
@@ -23,7 +23,7 @@ func TestAnOriginIsSchemeHostAndPort(t *testing.T) {
 // An unsafe request that names an origin not on the list is refused, whatever else it carries; a
 // safe one, and one that names no origin, pass.
 func TestTheOriginMiddleware(t *testing.T) {
-	origins, err := session.NewOrigins("https://app.household.example", "http://localhost:5173")
+	origins, err := session.NewOrigins("https://app.household.example", "http://localhost:5173", "https://shop.household.example:443")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +42,10 @@ func TestTheOriginMiddleware(t *testing.T) {
 		"an allowed referrer":     {http.MethodPatch, map[string]string{"Referer": "https://app.household.example/account"}, http.StatusNoContent},
 		"a native client":         {http.MethodPost, nil, http.StatusNoContent},
 		"a safe request":          {http.MethodGet, map[string]string{"Origin": "https://evil.example"}, http.StatusNoContent},
+		// A browser leaves a scheme's default port out of Origin; a list may name it.
+		"a listed default port":      {http.MethodPost, map[string]string{"Origin": "https://shop.household.example"}, http.StatusNoContent},
+		"a default port named":       {http.MethodPost, map[string]string{"Origin": "https://app.household.example:443"}, http.StatusNoContent},
+		"the other scheme's default": {http.MethodPost, map[string]string{"Origin": "http://app.household.example:443"}, http.StatusForbidden},
 	} {
 		req := httptest.NewRequestWithContext(t.Context(), tc.method, "/", nil)
 		for k, v := range tc.header {

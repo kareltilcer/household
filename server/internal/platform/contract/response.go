@@ -14,6 +14,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
 
@@ -77,7 +78,7 @@ func (c *Contract) ValidateResponse(req *http.Request, pattern string, params ma
 		}
 		return nil
 	case problem.CodeCsrfFailed:
-		if status != http.StatusForbidden || safeMethod(req.Method) {
+		if status != http.StatusForbidden || httpx.Safe(req.Method) {
 			return fmt.Errorf("%s %s answered %d %s, which only a 403 from an unsafe operation may", req.Method, pattern, status, code)
 		}
 		return nil
@@ -137,15 +138,6 @@ func (c *Contract) validateProblem(body []byte) (problem.Code, error) {
 		return "", fmt.Errorf("the problem document is not a valid %s: %w", name, err)
 	}
 	return code, nil
-}
-
-// safeMethod reports whether method is one RFC 9110 calls safe, which the CSRF defences leave be.
-func safeMethod(method string) bool {
-	switch method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
-		return true
-	}
-	return false
 }
 
 // acceptsIdempotencyKey reports whether o declares the Idempotency-Key header, on itself or on

@@ -108,6 +108,11 @@ func (s *server) session(conn net.Conn) {
 			msg.from = arg
 			reply("250 ok")
 		case "RCPT":
+			// A mailbox named rejected does not exist, and the reply says which, as Postfix's does.
+			if strings.Contains(arg, "rejected@") {
+				reply("550 5.1.1 " + strings.TrimPrefix(arg, "TO:") + ": Recipient address rejected: User unknown")
+				continue
+			}
 			msg.to = arg
 			reply("250 ok")
 		case "DATA":
@@ -257,6 +262,20 @@ func TestAStalledServerIsGivenUpOn(t *testing.T) {
 	}
 	if time.Since(started) > 5*time.Second {
 		t.Fatalf("gave up after %v", time.Since(started))
+	}
+}
+
+// A reply that refuses the message is reported by its code alone: its text quotes the recipient's
+// address, which the error is logged with.
+func TestARefusalIsReportedByItsCode(t *testing.T) {
+	srv := newServer(t, nil, false)
+	sender, err := hhmail.NewSMTP(srv.url(), "no-reply@household.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = sender.Send(t.Context(), hhmail.Message{To: "rejected@example.com", Subject: "s", Body: "b"})
+	if err == nil || strings.Contains(err.Error(), "rejected@") || !strings.Contains(err.Error(), "RCPT TO: the server replied 550") {
+		t.Fatalf("%v", err)
 	}
 }
 

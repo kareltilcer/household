@@ -61,7 +61,10 @@ write; signing in again from a browser ends the session it held.
 (`internal/platform/ratelimit`). A throttle guards a surface that takes a password or an address:
 few requests, each worth an attacker's while, which every process must count together and a
 restart must not forget. It is a row per surface and subject in `auth_throttles`, keyed by the
-SHA-256 of the two so the table names nobody, updated under a row lock. An address's throttle
+SHA-256 of the two so the table names nobody, updated under a row lock. A sign-in counts as a
+failure against its network and its address, in one transaction, *before* its password is checked,
+and a success takes it back: counted only once each had failed, a burst of attempts sent at once
+would all read the counts as they stood before any, and all be checked. An address's throttle
 counts the address typed, whether or not an account has it, so a `429` says nothing about which
 addresses do. The account's sign-in limit backs off rather than locking (FR-ID3): the tenth failure
 in fifteen minutes blocks for a minute, each after it for twice as long, up to an hour, and the count
@@ -75,7 +78,12 @@ abuse, not an accounting.
 **A signed-in user's Idempotency-Key lives on their account** (`account_idempotency_keys`, keyed
 by user and key), with the same states, fingerprint, lease and stored `2xx` as a member's key in
 their household; `idempotency.AccountMiddleware` serves `/me` and the signed-in `/auth` routes, and
-each account write commits the key in its own transaction. **A request made before signing in keeps
+each account write commits the key in its own transaction. **`POST /auth/password` keeps none**
+(D-97): a key's fingerprint is a SHA-256 of the body, and its body is the current and the new
+password, which the fingerprint would keep for a week, a fast hash beside the slow one; anyone who
+knew the old password could read the new one out of a backup. A repeat of a change that was made
+answers `401`, the current password being the new one. Item 20's `POST /me/deletion`, whose body
+carries the password, keeps none for the same reason. **A request made before signing in keeps
 no key** (D-97): it has no caller whose key it could be, and each such operation is safe to repeat
 as it stands. The three that answer `202` send at most another email, which their limits cap; a
 sign-in mints a new session each time, and a stored response could not carry the `Set-Cookie` it
@@ -122,6 +130,8 @@ gone; and the descriptions say what the limits and the pre-sign-in keys do.
 | All limits in PostgreSQL | A write on every signed-in request, for a limit that bounds abuse rather than accounts for anything |
 | An address's throttle keyed by account | A `429` for an address with an account and none for one without is the oracle D-13 forbids |
 | Anonymous Idempotency-Keys before sign-in, keyed by the key alone | A stored sign-in would be a stored credential or a response without its cookie; a fingerprint of a registration or a reset is a fast hash of its password |
+| A password change keeping its key on the account, as every other account request does | The same fast hash, of the new password and the old, kept seven days |
+| Checking a sign-in's throttle, and counting it only once the password failed | Every attempt already sent passes the check before the first failure is counted: a burst is checked whole |
 | A durable email outbox | The outbox would hold every verification and reset token in the clear until sent. Item 17's notification transport owns durability, and a lost email is asked for again |
 | Sending the email before answering | The time an SMTP server takes to answer would tell an address that gets mail from one that does not |
 | The token in the link's query string | It would be in the web server's access log and every `Referer` the page sends |

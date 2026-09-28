@@ -52,6 +52,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/auth"
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
@@ -203,7 +204,8 @@ func middleware(log *slog.Logger, maxBody int64, storeOf func(*http.Request) (ke
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := r.Header.Get(Header)
-			if key == "" || safe(r.Method) {
+			// A safe method repeats harmlessly anyway.
+			if key == "" || httpx.Safe(r.Method) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -286,15 +288,6 @@ func unstorable(key string) (string, bool) {
 		return "max_length", true
 	}
 	return "", false
-}
-
-// safe reports whether method is one RFC 9110 calls safe, which repeats harmlessly anyway.
-func safe(method string) bool {
-	switch method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
-		return true
-	}
-	return false
 }
 
 // fingerprintOf is what makes two requests the same request: the method, the path and query,

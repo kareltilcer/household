@@ -97,22 +97,29 @@ func TestTakeCountsConcurrentAttemptsOnce(t *testing.T) {
 	}
 }
 
+// attempt counts an attempt by subject under l, and expects it admitted.
+func attempt(t *testing.T, th *ratelimit.Throttles, l ratelimit.Limit, subject string) {
+	t.Helper()
+	if wait, err := th.Attempt(t.Context(), ratelimit.Count{Limit: l, Subject: subject}); err != nil || wait != 0 {
+		t.Fatalf("an attempt was refused: %v, %v", wait, err)
+	}
+}
+
 // A limit that does not back off blocks while its window's failures are used up.
 func TestFailuresBlockForTheRestOfTheWindow(t *testing.T) {
 	c := newClock()
 	th := throttles(t, c)
 	limit := ratelimit.LoginNetwork
 	for range limit.Max - 1 {
-		if err := th.Fail(t.Context(), limit, subject(t)); err != nil {
-			t.Fatal(err)
-		}
+		attempt(t, th, limit, subject(t))
 	}
 	if wait, _ := th.Blocked(t.Context(), limit, subject(t)); wait != 0 {
 		t.Fatalf("blocked after %d of %d failures", limit.Max-1, limit.Max)
 	}
 	c.advance(5 * time.Minute)
-	if err := th.Fail(t.Context(), limit, subject(t)); err != nil {
-		t.Fatal(err)
+	attempt(t, th, limit, subject(t))
+	if wait, err := th.Attempt(t.Context(), ratelimit.Count{Limit: limit, Subject: subject(t)}); err != nil || wait != 10*time.Minute {
+		t.Fatalf("an attempt past the limit waits %v, %v; want the 10 minutes left of the window", wait, err)
 	}
 	if wait, _ := th.Blocked(t.Context(), limit, subject(t)); wait != 10*time.Minute {
 		t.Fatalf("blocked for %v, want the 10 minutes left of the window", wait)
@@ -140,9 +147,7 @@ func TestAccountFailuresBackOff(t *testing.T) {
 	}
 	fail := func() {
 		t.Helper()
-		if err := th.Fail(t.Context(), limit, subject(t)); err != nil {
-			t.Fatal(err)
-		}
+		attempt(t, th, limit, subject(t))
 	}
 	for range 9 {
 		fail()
@@ -174,6 +179,77 @@ func TestAccountFailuresBackOff(t *testing.T) {
 	fail()
 	if wait := blocked(); wait != 0 {
 		t.Fatalf("blocked after a clear and one failure: %v", wait)
+	}
+}
+
+// Attempts sent at once are counted as they arrive, before any is checked: exactly Max are let
+// through, whether or not the limit backs off.
+func TestConcurrentAttemptsAreCountedBeforeTheyAreChecked(t *testing.T) {
+	th := throttles(t, newClock())
+	for _, limit := range []ratelimit.Limit{
+		{Name: "test.attempt", Max: 5, Window: time.Hour},
+		{Name: "test.attempt_backoff", Max: 5, Window: time.Hour, Backoff: time.Minute, MaxBackoff: time.Hour},
+	} {
+		var admitted atomic.Int32
+		var wg sync.WaitGroup
+		for range 20 {
+			wg.Go(func() {
+				wait, err := th.Attempt(t.Context(), ratelimit.Count{Limit: limit, Subject: subject(t)})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if wait == 0 {
+					admitted.Add(1)
+				}
+			})
+		}
+		wg.Wait()
+		if admitted.Load() != 5 {
+			t.Fatalf("%s: %d admitted, want 5", limit.Name, admitted.Load())
+		}
+	}
+}
+
+// An attempt one of its limits refuses is counted by none of them, and the wait is the longest.
+func TestAnAttemptIsCountedByAllItsLimitsOrNone(t *testing.T) {
+	th := throttles(t, newClock())
+	open := ratelimit.Limit{Name: "test.open", Max: 3, Window: time.Hour}
+	full := ratelimit.Limit{Name: "test.full", Max: 1, Window: 30 * time.Minute}
+	attempt(t, th, full, subject(t))
+	wait, err := th.Attempt(t.Context(), ratelimit.Count{Limit: open, Subject: subject(t)}, ratelimit.Count{Limit: full, Subject: subject(t)})
+	if err != nil || wait != 30*time.Minute {
+		t.Fatalf("waits %v, %v; want the 30 minutes left of the full limit's window", wait, err)
+	}
+	for range open.Max {
+		attempt(t, th, open, subject(t))
+	}
+	if wait, _ := th.Blocked(t.Context(), open, subject(t)); wait != time.Hour {
+		t.Fatalf("the refused attempt was counted: blocked for %v after %d more", wait, open.Max)
+	}
+}
+
+// A refund takes back an attempt that succeeded, and never counts below none.
+func TestARefundTakesAnAttemptBack(t *testing.T) {
+	th := throttles(t, newClock())
+	limit := ratelimit.Limit{Name: "test.refund", Max: 2, Window: time.Hour}
+	for range limit.Max {
+		attempt(t, th, limit, subject(t))
+	}
+	if err := th.Refund(t.Context(), limit, subject(t)); err != nil {
+		t.Fatal(err)
+	}
+	attempt(t, th, limit, subject(t))
+	if wait, _ := th.Blocked(t.Context(), limit, subject(t)); wait != time.Hour {
+		t.Fatalf("blocked for %v, want an hour", wait)
+	}
+	for range limit.Max + 1 {
+		if err := th.Refund(t.Context(), limit, subject(t)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range limit.Max {
+		attempt(t, th, limit, subject(t))
 	}
 }
 

@@ -10,11 +10,13 @@
 package ratelimit
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"math"
 	"net/http"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -145,22 +147,45 @@ func (t *Throttles) Blocked(ctx context.Context, l Limit, subject string) (time.
 // Take counts an attempt by subject, and refuses it, returning how long to wait, when subject has
 // made l's Max in the current window. A refused attempt is not counted.
 func (t *Throttles) Take(ctx context.Context, l Limit, subject string) (time.Duration, error) {
-	return t.update(ctx, l, subject, func(s state, now time.Time) (state, bool) {
+	return t.update(ctx, []Count{{Limit: l, Subject: subject}}, func(l Limit, s state, now time.Time) (state, time.Duration) {
 		if !now.Before(s.windowEnds) {
 			s = state{windowEnds: now.Add(l.Window)}
 		}
 		if s.count >= l.Max {
-			return s, false
+			return s, max(s.windowEnds.Sub(now), time.Second)
 		}
 		s.count++
-		return s, true
+		return s, 0
 	})
 }
 
-// Fail counts a failed attempt by subject.
-func (t *Throttles) Fail(ctx context.Context, l Limit, subject string) error {
-	_, err := t.update(ctx, l, subject, func(s state, now time.Time) (state, bool) { return l.fail(s, now), true })
-	return err
+// Count is a subject as a limit counts it.
+type Count struct {
+	Limit   Limit
+	Subject string
+}
+
+// Attempt counts an attempt by each subject under its limit as a failure, before the attempt is
+// checked, and refuses it, counting nothing and returning the longest wait, when any of them must
+// wait. Counting first is what holds attempts sent at once to their limits: counted only once each
+// had failed, every one of them would find the counts as they were before any. An attempt that
+// then succeeds is taken back, by Clear or Refund.
+func (t *Throttles) Attempt(ctx context.Context, counts ...Count) (time.Duration, error) {
+	return t.update(ctx, counts, func(l Limit, s state, now time.Time) (state, time.Duration) {
+		if wait := l.wait(s, now); wait > 0 {
+			return s, wait
+		}
+		return l.fail(s, now), 0
+	})
+}
+
+// Refund takes back one attempt Attempt counted against subject under l, which succeeded: a limit
+// that counts failures alone, and does not back off, is left as though it had not been made.
+func (t *Throttles) Refund(ctx context.Context, l Limit, subject string) error {
+	return pgx.BeginTxFunc(ctx, t.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, "UPDATE auth_throttles SET count = count - 1 WHERE key = $1 AND count > 0", key(l, subject))
+		return err
+	})
 }
 
 // Clear forgets subject's attempts under l, after it succeeded.
@@ -171,44 +196,65 @@ func (t *Throttles) Clear(ctx context.Context, l Limit, subject string) error {
 	})
 }
 
-// update applies step to subject's row under a row lock, and writes what it returns when it
-// admits the attempt; when it refuses, update returns how long the row makes subject wait.
-func (t *Throttles) update(ctx context.Context, l Limit, subject string, step func(state, time.Time) (state, bool)) (time.Duration, error) {
-	k := key(l, subject)
+// update applies step to each of counts' rows, under a row lock, in one transaction, and writes
+// what it returns for each when it admits the attempt on all of them; when any refuses, update
+// writes nothing and returns the longest wait they give.
+func (t *Throttles) update(ctx context.Context, counts []Count, step func(Limit, state, time.Time) (state, time.Duration)) (time.Duration, error) {
+	type row struct {
+		limit Limit
+		key   []byte
+		next  state
+	}
+	rows := make([]row, 0, len(counts))
+	for _, c := range counts {
+		rows = append(rows, row{limit: c.Limit, key: key(c.Limit, c.Subject)})
+	}
+	// Locked in the order of their keys, whichever attempt asks, so that two attempts counting the
+	// same rows never wait on each other in a cycle.
+	slices.SortFunc(rows, func(a, b row) int { return bytes.Compare(a.key, b.key) })
 	var wait time.Duration
 	err := pgx.BeginTxFunc(ctx, t.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		wait = 0
 		now := t.now()
-		// A subject with no row has an ended window, which the step starts afresh.
-		if _, err := tx.Exec(ctx,
-			"INSERT INTO auth_throttles (key, count, window_ends_at) VALUES ($1, 0, $2) ON CONFLICT (key) DO NOTHING",
-			k, now); err != nil {
-			return err
+		for i := range rows {
+			r := &rows[i]
+			// A subject with no row has an ended window, which the step starts afresh.
+			if _, err := tx.Exec(ctx,
+				"INSERT INTO auth_throttles (key, count, window_ends_at) VALUES ($1, 0, $2) ON CONFLICT (key) DO NOTHING",
+				r.key, now); err != nil {
+				return err
+			}
+			var (
+				s       state
+				blocked *time.Time
+			)
+			if err := tx.QueryRow(ctx,
+				"SELECT count, window_ends_at, blocked_until FROM auth_throttles WHERE key = $1 FOR UPDATE",
+				r.key).Scan(&s.count, &s.windowEnds, &blocked); err != nil {
+				return err
+			}
+			if blocked != nil {
+				s.blockedUntil = *blocked
+			}
+			var refused time.Duration
+			r.next, refused = step(r.limit, s, now)
+			wait = max(wait, refused)
 		}
-		var (
-			s       state
-			blocked *time.Time
-		)
-		if err := tx.QueryRow(ctx,
-			"SELECT count, window_ends_at, blocked_until FROM auth_throttles WHERE key = $1 FOR UPDATE",
-			k).Scan(&s.count, &s.windowEnds, &blocked); err != nil {
-			return err
-		}
-		if blocked != nil {
-			s.blockedUntil = *blocked
-		}
-		next, admitted := step(s, now)
-		if !admitted {
-			wait = max(next.windowEnds.Sub(now), time.Second)
+		if wait > 0 {
 			return nil
 		}
-		var blockedUntil *time.Time
-		if !next.blockedUntil.IsZero() {
-			blockedUntil = &next.blockedUntil
+		for _, r := range rows {
+			var blockedUntil *time.Time
+			if !r.next.blockedUntil.IsZero() {
+				blockedUntil = &r.next.blockedUntil
+			}
+			if _, err := tx.Exec(ctx,
+				"UPDATE auth_throttles SET count = $2, window_ends_at = $3, blocked_until = $4 WHERE key = $1",
+				r.key, r.next.count, r.next.windowEnds, blockedUntil); err != nil {
+				return err
+			}
 		}
-		_, err := tx.Exec(ctx,
-			"UPDATE auth_throttles SET count = $2, window_ends_at = $3, blocked_until = $4 WHERE key = $1",
-			k, next.count, next.windowEnds, blockedUntil)
-		return err
+		return nil
 	})
 	return wait, err
 }

@@ -53,8 +53,9 @@ func (r *Resolver) trusts(a netip.Addr) bool {
 
 // Addr returns the address req came from: its peer, or, while the peer is a trusted proxy, the
 // last address in X-Forwarded-For that is not one, read from the right, the end the proxies
-// appended to. An entry that is not an address stops the reading at the proxy before it. The zero
-// Addr is a peer that is not an IP address at all, a test's.
+// appended to. An entry may carry a port, as some proxies append one, which is dropped; an entry
+// that is not an address stops the reading at the proxy before it. The zero Addr is a peer that is
+// not an IP address at all, a test's.
 func (r *Resolver) Addr(req *http.Request) netip.Addr {
 	host, _, err := net.SplitHostPort(req.RemoteAddr)
 	if err != nil {
@@ -73,8 +74,8 @@ func (r *Resolver) Addr(req *http.Request) netip.Addr {
 		hops = append(hops, strings.Split(header, ",")...)
 	}
 	for i := len(hops) - 1; i >= 0; i-- {
-		hop, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
-		if err != nil {
+		hop, ok := hopAddr(strings.TrimSpace(hops[i]))
+		if !ok {
 			break
 		}
 		addr = hop.Unmap()
@@ -83,6 +84,18 @@ func (r *Resolver) Addr(req *http.Request) netip.Addr {
 		}
 	}
 	return addr
+}
+
+// hopAddr is an X-Forwarded-For entry's address: an address, or one with a port, 203.0.113.7:51234
+// or [2001:db8::1]:51234.
+func hopAddr(entry string) (netip.Addr, bool) {
+	if a, err := netip.ParseAddr(entry); err == nil {
+		return a, true
+	}
+	if ap, err := netip.ParseAddrPort(entry); err == nil {
+		return ap.Addr(), true
+	}
+	return netip.Addr{}, false
 }
 
 // Network is the part of addr a limit counts: an IPv4 address whole, and an IPv6 address's /64,

@@ -38,6 +38,8 @@ func TestTheClientIsThePeerUnlessThePeerIsATrustedProxy(t *testing.T) {
 		"only proxies":                 {request(t, "10.1.2.3:443", "10.4.4.4"), "10.4.4.4"},
 		"IPv6":                         {request(t, "[fd00::1]:443", "2001:db8::5"), "2001:db8::5"},
 		"a mapped IPv4 peer":           {request(t, "[::ffff:203.0.113.7]:5000"), "203.0.113.7"},
+		"an entry with a port":         {request(t, "10.1.2.3:443", "198.51.100.1:51234"), "198.51.100.1"},
+		"an IPv6 entry with a port":    {request(t, "10.1.2.3:443", "[2001:db8::5]:51234, 10.9.9.9:443"), "2001:db8::5"},
 	} {
 		if got := r.Addr(c.req); got.String() != c.want {
 			t.Errorf("%s: %s, want %s", name, got, c.want)

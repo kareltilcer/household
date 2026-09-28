@@ -55,12 +55,13 @@ func (s *Service) register(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, problem.Validation(errs...))
 		return
 	}
-	if wait, err := s.Throttles.Take(ctx, ratelimit.RegisterNetwork, s.network(r)); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
-		return
-	}
+	// A registration refused for its password registers nothing, and is not counted either.
 	if err := s.screen("/password", req.Password); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if wait, err := s.Throttles.Take(ctx, ratelimit.RegisterNetwork, s.network(r)); err != nil || wait > 0 {
+		s.fail(w, r, refusal(wait, err))
 		return
 	}
 	secret, err := s.Hasher.Hash(ctx, req.Password)
@@ -132,7 +133,7 @@ func findToken(ctx context.Context, tx pgx.Tx, token, purpose string) (linkToken
 		SELECT t.id, t.user_id, t.email, t.expires_at, t.used_at, u.email, u.email_verified_at IS NOT NULL
 		FROM email_tokens t JOIN users u ON u.id = t.user_id
 		WHERE t.token_hash = $1 AND t.purpose = $2
-		FOR UPDATE OF t`, hashToken(token), purpose).
+		FOR UPDATE OF t`, session.Hash(token), purpose).
 		Scan(&t.id, &t.user, &t.email, &t.expires, &t.used, &t.account, &t.accountVerified)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return linkToken{}, false, nil
@@ -241,6 +242,9 @@ func (s *Service) resendVerification(w http.ResponseWriter, r *http.Request) {
 // login is postAuthLogin (FR-ID3), for the web client: a session, in two cookies. Every failure
 // is one 401, and an address with no account costs the same hash as a wrong password. The mobile
 // client's token pair is item 9's.
+//
+// The attempt counts as a failure against the network and the address before the password is
+// checked, so that attempts sent at once meet the limits one by one, and a success takes it back.
 func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -257,20 +261,9 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	network, account := s.network(r), subject(req.Email)
-	var wait time.Duration
-	for _, c := range []struct {
-		limit   ratelimit.Limit
-		subject string
-	}{{ratelimit.LoginNetwork, network}, {ratelimit.LoginAccount, account}} {
-		blocked, err := s.Throttles.Blocked(ctx, c.limit, c.subject)
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		wait = max(wait, blocked)
-	}
-	if wait > 0 {
-		s.fail(w, r, ratelimit.Refusal(wait))
+	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.LoginNetwork, Subject: network},
+		ratelimit.Count{Limit: ratelimit.LoginAccount, Subject: account}); err != nil || wait > 0 {
+		s.fail(w, r, refusal(wait, err))
 		return
 	}
 
@@ -299,19 +292,15 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		for _, c := range []struct {
-			limit   ratelimit.Limit
-			subject string
-		}{{ratelimit.LoginNetwork, network}, {ratelimit.LoginAccount, account}} {
-			if err := s.Throttles.Fail(ctx, c.limit, c.subject); err != nil {
-				s.fail(w, r, err)
-				return
-			}
-		}
 		s.fail(w, r, invalidCredentials())
 		return
 	}
+	// The attempt succeeded: the address's failures end, and the network's count takes it back.
 	if err := s.Throttles.Clear(ctx, ratelimit.LoginAccount, account); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.Throttles.Refund(ctx, ratelimit.LoginNetwork, network); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -513,6 +502,7 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 
 // changePassword is postAuthPassword: the current password, checked as a sign-in checks it and
 // counted against the account as a failed sign-in is, sets a new one and ends every other session.
+// It keeps no Idempotency-Key, whose fingerprint would be a fast hash of both passwords (D-97).
 func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -546,7 +536,8 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	address = *email
-	if wait, err := s.Throttles.Blocked(ctx, ratelimit.LoginAccount, subject(address)); err != nil || wait > 0 {
+	// Counted before it is checked, as a sign-in is, and taken back when it is right.
+	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.LoginAccount, Subject: subject(address)}); err != nil || wait > 0 {
 		s.fail(w, r, refusal(wait, err))
 		return
 	}
@@ -556,11 +547,11 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		if err := s.Throttles.Fail(ctx, ratelimit.LoginAccount, subject(address)); err != nil {
-			s.fail(w, r, err)
-			return
-		}
 		s.fail(w, r, invalidCredentials())
+		return
+	}
+	if err := s.Throttles.Clear(ctx, ratelimit.LoginAccount, subject(address)); err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	if err := s.screen("/new_password", req.New); err != nil {
@@ -578,17 +569,11 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 			user, newSecret); err != nil {
 			return err
 		}
-		if err := s.Sessions.RevokeAll(ctx, tx, user, current); err != nil {
-			return err
-		}
-		return idempotency.Commit(ctx, tx)
+		return s.Sessions.RevokeAll(ctx, tx, user, current)
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
-	}
-	if err := s.Throttles.Clear(ctx, ratelimit.LoginAccount, subject(address)); err != nil {
-		s.Log.LogAttrs(ctx, slog.LevelWarn, "sign-in throttle not cleared", slog.Any("error", err))
 	}
 	s.email(ctx, address, language, emailPasswordChanged, s.link(routeReset, ""))
 	w.WriteHeader(http.StatusNoContent)

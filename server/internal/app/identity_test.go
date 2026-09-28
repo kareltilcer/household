@@ -371,7 +371,13 @@ func TestARegistrationIsChecked(t *testing.T) {
 			[]problem.FieldError{{Field: "/display_name", Code: problem.FieldInvalid}}},
 		"a name with a line break": {map[string]any{"email": s.a("a@example.com"), "password": "correct horse battery", "display_name": "A\nB"},
 			[]problem.FieldError{{Field: "/display_name", Code: problem.FieldInvalid}}},
+		"a name with a line separator": {map[string]any{"email": s.a("a@example.com"), "password": "correct horse battery", "display_name": "A B"},
+			[]problem.FieldError{{Field: "/display_name", Code: problem.FieldInvalid}}},
 		"no language": {map[string]any{"email": s.a("a@example.com"), "password": "correct horse battery", "display_name": "A", "locale": "not a tag"},
+			[]problem.FieldError{{Field: "/locale", Code: problem.FieldMalformed}}},
+		"a private-use tag": {map[string]any{"email": s.a("a@example.com"), "password": "correct horse battery", "display_name": "A", "locale": "x-home"},
+			[]problem.FieldError{{Field: "/locale", Code: problem.FieldMalformed}}},
+		"a language only guessed": {map[string]any{"email": s.a("a@example.com"), "password": "correct horse battery", "display_name": "A", "locale": "und-CZ"},
 			[]problem.FieldError{{Field: "/locale", Code: problem.FieldMalformed}}},
 		"no address": {map[string]any{"email": "Jana <a@example.com>", "password": "correct horse battery", "display_name": "A"},
 			[]problem.FieldError{{Field: "/email", Code: "format"}}},
@@ -571,16 +577,51 @@ func TestSignInFailuresCoolAnAddressDown(t *testing.T) {
 	expect(t, attempt(s.a("jana@tilcerovi.cz"), "wrong password here"), http.StatusUnauthorized, problem.CodeInvalidCredentials)
 }
 
+// Sign-ins sent at once meet the limit one by one: of twenty-five wrong guesses at an address sent
+// together, ten have their password checked, and the rest wait out the cooldown the tenth began.
+func TestSignInsSentAtOnceAreCountedOneByOne(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	s.browser().register(s.a("jana@tilcerovi.cz"), "correct horse battery")
+	body := jsonBody(t, map[string]string{"email": s.a("jana@tilcerovi.cz"), "password": "wrong password here", "client_type": "web"})
+	var checked, refused atomic.Int32
+	var wg sync.WaitGroup
+	for range 25 {
+		b := s.browser()
+		wg.Go(func() {
+			switch rec := b.post("/auth/login", body); rec.Code {
+			case http.StatusUnauthorized:
+				checked.Add(1)
+			case http.StatusTooManyRequests:
+				refused.Add(1)
+			default:
+				t.Errorf("%d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+	wg.Wait()
+	if int(checked.Load()) != ratelimit.LoginAccount.Max || int(refused.Load()) != 25-ratelimit.LoginAccount.Max {
+		t.Fatalf("%d checked and %d refused, want %d checked", checked.Load(), refused.Load(), ratelimit.LoginAccount.Max)
+	}
+}
+
 // Sixty failures from one network in fifteen minutes stop its sign-ins, whichever addresses they
-// named; another network signs in.
+// named, and a sign-in that succeeds is not one of them; another network signs in.
 func TestSignInFailuresCoolANetworkDown(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	s.browser().register(s.a("jana@tilcerovi.cz"), "correct horse battery")
 	b := s.browser()
-	for i := range ratelimit.LoginNetwork.Max {
+	guess := func(i int) {
+		t.Helper()
 		rec := b.post("/auth/login", jsonBody(t, map[string]string{"email": s.a(fmt.Sprintf("guess%d@example.com", i)), "password": "wrong password here", "client_type": "web"}))
 		expect(t, rec, http.StatusUnauthorized, problem.CodeInvalidCredentials)
 	}
+	for i := range ratelimit.LoginNetwork.Max - 1 {
+		guess(i)
+	}
+	for range 3 {
+		b.login(s.a("jana@tilcerovi.cz"), "correct horse battery")
+	}
+	guess(ratelimit.LoginNetwork.Max - 1)
 	expect(t, b.post("/auth/login", jsonBody(t, map[string]string{
 		"email": s.a("jana@tilcerovi.cz"), "password": "correct horse battery", "client_type": "web",
 	})), http.StatusTooManyRequests, problem.CodeRateLimited)
@@ -589,10 +630,13 @@ func TestSignInFailuresCoolANetworkDown(t *testing.T) {
 	other.login(s.a("jana@tilcerovi.cz"), "correct horse battery")
 }
 
-// A network registers five times an hour.
+// A network registers five times an hour; a registration refused for its password is not one.
 func TestRegistrationsFromANetworkAreLimited(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	b := s.browser()
+	for range 3 {
+		fieldErrorsOf(t, b.post("/auth/register", jsonBody(t, map[string]string{"email": s.a("user@example.com"), "password": breached, "display_name": "U"})))
+	}
 	for i := range 5 {
 		b.register(s.a(fmt.Sprintf("user%d@example.com", i)), "correct horse battery")
 	}
@@ -745,7 +789,8 @@ func TestAPasswordReset(t *testing.T) {
 }
 
 // A change takes the current password, which a wrong guess counts against as a sign-in does, and
-// ends every other session.
+// ends every other session. It keeps no Idempotency-Key, whose fingerprint would hash the
+// passwords, so a repeat runs again, and finds the current password changed.
 func TestChangingThePassword(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	b := s.signUp(s.a("jana@tilcerovi.cz"), "correct horse battery")
@@ -758,7 +803,15 @@ func TestChangingThePassword(t *testing.T) {
 	if got := fieldErrorsOf(t, change("correct horse battery", breached)); !slices.Equal(got, []problem.FieldError{{Field: "/new_password", Code: problem.FieldInvalid}}) {
 		t.Fatalf("%v", got)
 	}
-	expect(t, change("correct horse battery", "a new long password"), http.StatusNoContent, "")
+	keyed := func() *httptest.ResponseRecorder {
+		return b.send(request{method: http.MethodPost, path: "/auth/password", header: http.Header{"Idempotency-Key": {"change-1"}},
+			body: jsonBody(t, map[string]string{"current_password": "correct horse battery", "new_password": "a new long password"})})
+	}
+	expect(t, keyed(), http.StatusNoContent, "")
+	if n := s.count("SELECT count(*) FROM account_idempotency_keys WHERE key = 'change-1'"); n != 0 {
+		t.Fatalf("a password change kept %d keys", n)
+	}
+	expect(t, keyed(), http.StatusUnauthorized, problem.CodeInvalidCredentials)
 	expect(t, b.get("/me"), http.StatusOK, "")
 	expect(t, other.get("/me"), http.StatusUnauthorized, problem.CodeUnauthenticated)
 	s.browser().login(s.a("jana@tilcerovi.cz"), "a new long password")
@@ -804,7 +857,7 @@ func TestTheProfile(t *testing.T) {
 	}) {
 		t.Fatalf("%v", got)
 	}
-	for _, bad := range []string{`{"first_day_of_week":7}`, `{"timezone":"Local"}`, `{"timezone":""}`} {
+	for _, bad := range []string{`{"first_day_of_week":7}`, `{"timezone":"Local"}`, `{"timezone":""}`, `{"locale":"x-home"}`, `{"display_name":"J T"}`} {
 		if rec := patch(bad); rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s: %d", bad, rec.Code)
 		}
