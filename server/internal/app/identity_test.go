@@ -650,6 +650,34 @@ func TestRegistrationsFromANetworkAreLimited(t *testing.T) {
 	}
 }
 
+// A network asks for twenty resets and twenty resends an hour, whichever addresses it names, so
+// that one client naming a new address each time cannot fill the queue every email waits in
+// (D-96); another network has a budget of its own.
+func TestResetsAndResendsFromANetworkAreLimited(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	for _, surface := range []struct {
+		path  string
+		limit ratelimit.Limit
+	}{{"/auth/password-reset", ratelimit.ResetNetwork}, {"/auth/verify-email/resend", ratelimit.ResendNetwork}} {
+		ask := func(b *browser, i int) *httptest.ResponseRecorder {
+			t.Helper()
+			return b.post(surface.path, jsonBody(t, map[string]string{"email": s.a(fmt.Sprintf("user%d@example.com", i))}))
+		}
+		b := s.browser()
+		for i := range surface.limit.Max {
+			expect(t, ask(b, i), http.StatusAccepted, "")
+		}
+		rec := ask(b, surface.limit.Max)
+		expect(t, rec, http.StatusTooManyRequests, problem.CodeRateLimited)
+		if rec.Header().Get("Retry-After") != "3600" {
+			t.Errorf("%s: Retry-After %q", surface.path, rec.Header().Get("Retry-After"))
+		}
+		other := s.browser()
+		other.peer = "203.0.113.9:5000"
+		expect(t, ask(other, surface.limit.Max), http.StatusAccepted, "")
+	}
+}
+
 // An unsafe request the session cookie authenticates needs its session's CSRF token, in the
 // header and the cookie alike, from the web client's origin; a safe one needs neither. An unsafe
 // request from another origin is refused whatever it carries, and one that names no origin and

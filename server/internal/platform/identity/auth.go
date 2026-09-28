@@ -220,10 +220,11 @@ func (s *Service) resendVerification(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	// Both limits in one step, so that a resend the hour refuses is not counted by the minute.
+	// Every limit in one step, so that a resend one refuses is not counted by the others.
 	asked := subject(req.Email)
 	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.ResendMinute, Subject: asked},
-		ratelimit.Count{Limit: ratelimit.ResendHour, Subject: asked}); err != nil || wait > 0 {
+		ratelimit.Count{Limit: ratelimit.ResendHour, Subject: asked},
+		ratelimit.Count{Limit: ratelimit.ResendNetwork, Subject: s.network(r)}); err != nil || wait > 0 {
 		s.fail(w, r, refusal(wait, err))
 		return
 	}
@@ -434,7 +435,9 @@ func (s *Service) requestReset(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.ResetAccount, Subject: subject(req.Email)}); err != nil || wait > 0 {
+	// Both limits in one step, so that a reset one refuses is not counted by the other.
+	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.ResetAccount, Subject: subject(req.Email)},
+		ratelimit.Count{Limit: ratelimit.ResetNetwork, Subject: s.network(r)}); err != nil || wait > 0 {
 		s.fail(w, r, refusal(wait, err))
 		return
 	}

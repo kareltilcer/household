@@ -705,6 +705,10 @@ func TestAnEmailIsAnAddress(t *testing.T) {
 	for _, bad := range []string{
 		"", "jana", "jana@", "@tilcerovi.cz", "Jana <jana@tilcerovi.cz>", " jana@tilcerovi.cz", "jana@tilcerovi.cz ",
 		"jana@tilcerovi.cz\r\nBcc: x@y.z", "jana(home)@tilcerovi.cz", strings.Repeat("a", 250) + "@b.cz",
+		// 168 characters, but 268 octets, which is what SMTP counts.
+		strings.Repeat("a", 64) + "@" + strings.Repeat("ž", 100) + ".cz",
+		// An address in brackets, which would have the relay deliver to a host the caller chose.
+		"jana@[192.0.2.1]", "jana@[IPv6:2001:db8::1]",
 	} {
 		sameErrors(t, fieldErrors(t, reset(bad).do(t, h)), problem.FieldError{Field: "/email", Code: "format"})
 	}

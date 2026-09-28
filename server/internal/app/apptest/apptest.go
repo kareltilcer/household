@@ -24,7 +24,6 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/session"
-	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
 // WebURL is where the tests' web client is served; WebOrigin is its origin, which the router
@@ -88,7 +87,7 @@ var Cheap = password.Params{Memory: 1024, Time: 1, Threads: 1, SaltLen: 16, KeyL
 
 // Accounts returns the account surfaces for a router over pool, logging to log, and the outbox
 // their mail goes to.
-func Accounts(t testing.TB, pool tenant.Beginner, log *slog.Logger, o Options) (app.Accounts, *Outbox) {
+func Accounts(t testing.TB, pool session.Pool, log *slog.Logger, o Options) (app.Accounts, *Outbox) {
 	t.Helper()
 	hasher, err := password.New(Cheap, 4)
 	if err != nil {

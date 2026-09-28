@@ -250,8 +250,8 @@ func isJSON(mediaType string) bool {
 // takes no leap second, so neither does the edge: 23:59:60 is refused.
 //
 // And it has kin-openapi hold `email` to an address, which it does not check at all by default:
-// mail.ValidAddress, a bare address no longer than SMTP carries, the one check the server makes of
-// an address wherever it takes one.
+// mail.ValidAddress, a bare address at a domain name, no longer than SMTP carries, the one check
+// the server makes of an address wherever it takes one.
 func init() {
 	openapi3filter.RegisterBodyDecoder("application/json", strictJSON)
 	openapi3.DefineStringFormatValidator("date", onTheCalendar(openapi3.FormatOfStringDate, time.DateOnly))

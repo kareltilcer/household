@@ -24,24 +24,28 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 )
 
-// maxAddress is the longest address SMTP carries, in characters (RFC 5321 §4.5.3.1.3, less the
-// angle brackets).
+// maxAddress is the longest address SMTP carries, in octets (RFC 5321 §4.5.3.1.3, less the angle
+// brackets): an address in UTF-8 (RFC 6531) is as long as its bytes, not its characters.
 const maxAddress = 254
 
 // ValidAddress reports whether s is an email address and nothing else: an addr-spec, as RFC 5322
-// and RFC 6532 have it, with no display name, no comment and no surrounding space, and no longer
-// than SMTP carries. The contract's `format: email` is this check, at the edge.
+// and RFC 6532 have it, with no display name, no comment and no surrounding space, at a domain
+// name, not an address in brackets (jana@[192.0.2.1]), which would have the relay deliver to
+// whichever host the caller named, and no longer than SMTP carries. The contract's
+// `format: email` is this check, at the edge.
 func ValidAddress(s string) bool {
-	if utf8.RuneCountInString(s) > maxAddress || strings.ContainsAny(s, "\r\n") {
+	if len(s) > maxAddress || strings.ContainsAny(s, "\r\n") {
 		return false
 	}
 	a, err := mail.ParseAddress(s)
-	return err == nil && a.Name == "" && a.Address == s
+	if err != nil || a.Name != "" || a.Address != s {
+		return false
+	}
+	return !strings.HasPrefix(s[strings.LastIndexByte(s, '@')+1:], "[")
 }
 
 // Message is one email to one recipient.

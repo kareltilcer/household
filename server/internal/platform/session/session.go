@@ -91,9 +91,16 @@ func Hash(token string) []byte {
 	return sum[:]
 }
 
+// Pool is the database a Store keeps sessions in, connected as the request role: it opens
+// transactions, and reads a row outside one.
+type Pool interface {
+	tenant.Beginner
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // Store reads and writes sessions.
 type Store struct {
-	pool    tenant.Beginner
+	pool    Pool
 	origins *Origins
 	log     *slog.Logger
 	now     func() time.Time
@@ -102,7 +109,7 @@ type Store struct {
 // NewStore returns the sessions in pool's database. origins are those an unsafe request the
 // session cookie authenticates may come from; log records a session that could not be read; now is
 // the clock, time.Now when nil.
-func NewStore(pool tenant.Beginner, origins *Origins, log *slog.Logger, now func() time.Time) *Store {
+func NewStore(pool Pool, origins *Origins, log *slog.Logger, now func() time.Time) *Store {
 	if now == nil {
 		now = time.Now
 	}
@@ -142,16 +149,16 @@ func cleanUserAgent(ua string) string {
 }
 
 // lookup returns the live session token opens, and false for none: no such session, or one that
-// has been revoked or has expired.
+// has been revoked or has expired. Every request a cookie signs in reads it, one row of a table
+// that no row-level security guards, so it is one statement on the pool rather than a transaction,
+// which would cost three more round trips.
 func (s *Store) lookup(ctx context.Context, token string) (Session, bool, error) {
 	var sess Session
-	err := tenant.AccountTx(ctx, s.pool, uuid.Nil, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `
-			SELECT id, user_id, user_agent, created_at, last_seen_at, expires_at, csrf_hash FROM sessions
-			WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > $2`,
-			Hash(token), s.now()).Scan(&sess.ID, &sess.UserID, &sess.UserAgent, &sess.CreatedAt, &sess.LastSeenAt,
-			&sess.ExpiresAt, &sess.csrfHash)
-	})
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, user_id, user_agent, created_at, last_seen_at, expires_at, csrf_hash FROM sessions
+		WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > $2`,
+		Hash(token), s.now()).Scan(&sess.ID, &sess.UserID, &sess.UserAgent, &sess.CreatedAt, &sess.LastSeenAt,
+		&sess.ExpiresAt, &sess.csrfHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Session{}, false, nil
 	}

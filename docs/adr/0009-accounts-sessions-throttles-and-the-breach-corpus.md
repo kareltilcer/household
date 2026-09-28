@@ -76,7 +76,10 @@ one transaction, *before* its password is checked, and a success takes it back: 
 each had failed, a burst of attempts sent at once would all read the counts as they stood before
 any, and all be checked. An address's throttle
 counts the address typed, whether or not an account has it, so a `429` says nothing about which
-addresses do. The account's sign-in limit backs off rather than locking (FR-ID3): the tenth failure
+addresses do. A reset and a resend count the client's network too, twenty an hour each (D-96):
+each queues a lookup that runs after the response (below), and counted by the address alone, one
+client naming a new address each time would fill the queue every other email waits in. The
+account's sign-in limit backs off rather than locking (FR-ID3): the tenth failure
 in fifteen minutes blocks for a minute, each after it for twice as long, up to an hour, and the count
 restarts once the address has been quiet for fifteen minutes past its block. A client's network is
 its IPv4 address, or its IPv6 `/64`, found past the proxies the server is told to trust
@@ -147,6 +150,7 @@ gone; and the descriptions say what the limits and the pre-sign-in keys do.
 | All limits in memory | Each process would count on its own: with three processes an address gets thirty guesses in fifteen minutes, not ten |
 | All limits in PostgreSQL | A write on every signed-in request, for a limit that bounds abuse rather than accounts for anything |
 | An address's throttle keyed by account | A `429` for an address with an account and none for one without is the oracle D-13 forbids |
+| A reset and a resend limited by the address alone, as PRD 02 §9 first gave them | One client naming a new address each time is never held back: its lookups take the queue, and the emails other people asked for are dropped from it |
 | Anonymous Idempotency-Keys before sign-in, keyed by the key alone | A stored sign-in would be a stored credential or a response without its cookie; a fingerprint of a registration or a reset is a fast hash of its password |
 | A password change keeping its key on the account, as every other account request does | The same fast hash, of the new password and the old, kept seven days |
 | A password change ending every reset link already sent | Someone who knows the password could change it again as each link arrived, and the owner would never finish a reset. Whoever holds a link holds the mailbox, which can ask for a new one anyway |

@@ -1,5 +1,5 @@
 # Every violation architecture test 4 must report for this directory, file by file in walk order.
-modules/chores/chores.go:3: module chores dot-imports the tenant package, which hides tenant.InWriteTx from this test
+modules/chores/chores.go:3: module chores dot-imports the tenant package, which hides tenant.InWriteTx and tenant.AccountTx from this test
 modules/garden/garden_test.go:6: module garden opens a write transaction of its own; a module writes through mutation.Apply, which records the audit event and the sync change
 modules/notes/notes.go:13: module notes opens a write transaction of its own; a module writes through mutation.Apply, which records the audit event and the sync change
 modules/pets/account.go:14: module pets opens a write transaction of its own; a module writes through mutation.Apply, which records the audit event and the sync change

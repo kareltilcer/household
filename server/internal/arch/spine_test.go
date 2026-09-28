@@ -94,7 +94,7 @@ func spineViolations(t *testing.T, root fs.FS) []string {
 			case spec.Name == nil:
 				names = append(names, "tenant")
 			case spec.Name.Name == ".":
-				out = append(out, fmt.Sprintf("%s:%d: module %s dot-imports the tenant package, which hides tenant.InWriteTx from this test",
+				out = append(out, fmt.Sprintf("%s:%d: module %s dot-imports the tenant package, which hides tenant.InWriteTx and tenant.AccountTx from this test",
 					p, fset.Position(spec.Pos()).Line, mod))
 			case spec.Name.Name != "_":
 				names = append(names, spec.Name.Name)

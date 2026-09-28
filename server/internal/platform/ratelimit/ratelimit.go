@@ -62,6 +62,11 @@ var (
 	// A verification email is sent again at most once a minute and five times an hour (D-96).
 	ResendMinute = Limit{Name: "verify_resend.minute", Max: 1, Window: time.Minute}
 	ResendHour   = Limit{Name: "verify_resend.hour", Max: 5, Window: time.Hour}
+	// A client's network asks for at most twenty resets and twenty resends an hour, whichever
+	// addresses it names (D-96): each queues a lookup, and counted by the address alone, one client
+	// naming a new address each time would fill the queue every email waits in.
+	ResetNetwork  = Limit{Name: "password_reset.network", Max: 20, Window: time.Hour}
+	ResendNetwork = Limit{Name: "verify_resend.network", Max: 20, Window: time.Hour}
 )
 
 // Beginner opens transactions.

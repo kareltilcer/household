@@ -250,7 +250,7 @@ paths:
         Unauthenticated, so that it serves whoever holds the address, signed in or not. Always
         answers `202` whether or not the address exists or is already verified — the differing
         outcome is whether an email is sent, never the response. An address may ask once a minute
-        and five times an hour.
+        and five times an hour, and a client's network twenty times an hour.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -340,7 +340,7 @@ paths:
       operationId: postAuthPasswordReset
       tags: [auth]
       summary: Request a password reset
-      description: 'Always answers `202`, whether or not the address exists; a link valid for one hour is emailed only where it does. An address may ask three times an hour.'
+      description: 'Always answers `202`, whether or not the address exists; a link valid for one hour is emailed only where it does. An address may ask three times an hour, and a client''s network twenty times an hour.'
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:

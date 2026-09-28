@@ -364,7 +364,9 @@ to the household as *"Household support extended your trial"*.
 | Register, per IP | 5 / hour |
 | Register, the note to an address that already has an account, per account | 3 / hour; a registration past it answers `202` as ever, and no note is sent |
 | Password reset, per account | 3 / hour |
+| Password reset, per IP | 20 / hour |
 | Verification email resend, per account | 1 / min and 5 / hour |
+| Verification email resend, per IP | 20 / hour |
 | Invitation send, per household | 20 / day |
 | Child PIN attempts | 10, then owner unlock |
 | Sync mutation batch | 500 mutations / batch, 60 batches / min / device |
@@ -375,5 +377,6 @@ to the household as *"Household support extended your trial"*.
 Every limit returns `429` with `Retry-After` and a problem document, and every limit is
 per-tenant as well as per-user so one household cannot degrade another. A limit per account counts
 the address asked for, whether or not an account has it, so that a refusal says nothing about
-which addresses do (D-13). The rows the table did not first give, the registration note, the resend
-and the household's API budget, and the shape of the login backoff, are **D-96**.
+which addresses do (D-13). The rows the table did not first give (the registration note, the resend
+per account, the reset and the resend per IP, and the household's API budget) and the shape of the
+login backoff are **D-96**.
