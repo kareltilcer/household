@@ -93,11 +93,13 @@ The flow resolves each of the user's households first, and states plainly what w
 | Billing payer | Must transfer billing or cancel first |
 
 **FR-PR4 — Deletion is a 30-day soft window then irreversible.** The account is disabled
-immediately, sessions and tokens are revoked, and the user is emailed a cancellation link. After
-30 days a nightly job executes: `EraseSource` on every module for the affected scope, object-store
-prefix deletion, and replacement of the identity row with a tombstone carrying only the id and the
-deletion timestamp. **Authorship references become an opaque id with a translated label**
-("Former member") — dangling foreign keys and rewritten history are both worse than a tombstone.
+immediately, sessions and tokens are revoked (under D-93 a sync token already issued runs until it
+expires, as [02](02-identity-and-access.md) FR-ID7 says), and the user is emailed a cancellation
+link. After 30 days a nightly job executes: `EraseSource` on every module for the affected scope,
+object-store prefix deletion, and replacement of the identity row with a tombstone carrying only
+the id and the deletion timestamp. **Authorship references become an opaque id with a translated
+label** ("Former member") — dangling foreign keys and rewritten history are both worse than a
+tombstone.
 
 **FR-PR5 — Backups are excluded from the 30-day guarantee and the policy says so.** Encrypted
 backups are retained 35 days and are not selectively editable. Deleted data ages out of backups
@@ -133,6 +135,18 @@ What that means concretely:
 | **The debugging path** | The member-initiated diagnostic bundle ([02](02-identity-and-access.md) FR-PS1): the member chooses to send, sees exactly what is in it before sending, can redact, and it expires in 30 days |
 | **The cost, stated** | Some bugs will be slower to diagnose. That is the trade, and it is made deliberately |
 | **The test** | An integration test connects as `household_app` and as every staff-facing service role and asserts that a content query for a household the connection has no membership in returns zero rows. It runs in CI on every commit |
+
+> **Under D-93 one database credential does bypass row-level security: PowerSync's replication
+> role** ([01](01-architecture.md) §2.3, [ADR 0001](../adr/0001-sync-engine.md)). The sync
+> service replicates from the write-ahead log, which row-level security does not filter, and sets
+> no tenant, so it could read no table's initial snapshot otherwise. The credential is the service's
+> own; no staff member, staff tool or support system connects with it, so it is not a staff-facing
+> role and the test above leaves it out. What it reads reaches a member only through the stream
+> definitions generated from the entity registry, and a read-path isolation test holds them to one
+> household. PowerSync's bucket storage holds the replicated rows outside row-level security, so it
+> is household content under this section, kept in the EU and encrypted at rest like the database,
+> and the credential to its database is the service's own as well. For these two credentials the
+> guarantee rests on who holds them rather than on their absence, and the privacy policy says so.
 
 **FR-PR8 — Lawful access requests** are handled by `platform_admin` and can compel disclosure that
 the architecture makes technically difficult. The honest statement — which belongs in the privacy

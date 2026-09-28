@@ -21,6 +21,10 @@ imprecision is what makes it feel unmanageable. There are two distinct things:
 | **The sync-ready schema** | **Catastrophic** — every table, every module, a data migration across live households | `household_id` on every row · `version` on every row · **client-generated UUIDv7 primary keys** · soft-delete tombstones · the denormalised access fields on the change row (`module`, `visibility`, `owner_id`, `audience_id`) · a declared merge policy per entity |
 | **The sync engine** | **Contained** — one package, one protocol version, no data migration | The change feed, the mutation queue, conflict resolution, retraction, compaction, the client replica |
 
+> **Under D-93** the replicated path reads no change row: PowerSync's streams read the access fields
+> on each entity's own row, and plan item 14 decides how a row that a private item or an audience
+> bounds carries them ([ADR 0001](../adr/0001-sync-engine.md)).
+
 The schema half is **cheap to get right and must be right on day one**. It is four columns, an id
 strategy and a registry. None of it requires the engine to exist. All of it is enforceable by the
 architecture tests already specified ([01-architecture.md](01-architecture.md) §10, checks 2 and 5)
@@ -60,6 +64,16 @@ service in the request path is a sub-processor and an EU-residency question
 and the shopping-list scenario (§4, scenarios 7 and 3) against each candidate. If neither fits, the
 build proceeds — but it proceeds having learnt from two designs and knowing exactly which
 requirement forced the decision.
+
+**The verdict (D-93, [ADR 0001](../adr/0001-sync-engine.md)): adopt PowerSync, self-hosted, for
+replication, and keep the write path.** Both scenarios passed on PowerSync with every member's
+write going through the mutation spine. Electric passed only with client code its own client lacks;
+Zero has no offline writes; Replicache is in maintenance mode. Two axes of the predicate needed a
+workaround each: the floor became a reader set on the row, and a redacted projection reaches its
+owner as well. The requirement that decided it was retraction, which PowerSync met for every cause
+with no client code. The requirement that came closest to forcing a build was keeping row-level
+security under the read path, which stream definitions generated from the entity registry and an
+isolation test now hold instead.
 
 ## 3. Tier the promise by merge policy
 
@@ -115,6 +129,18 @@ It models N clients, a server, scripted network partitions, message reordering, 
 and clock skew — in process, with no devices and no network. It is days of work, not weeks, and it
 is the single most valuable artefact produced in Phase 0.
 
+> **Under D-93 the suite runs against the adopted engine** rather than an in-process one: N
+> PowerSync clients, the real service and the real API in containers, partitions scripted by
+> disconnecting clients and by a network that refuses requests and loses responses, duplicate
+> delivery by replaying an upload, skew through `client_time`. Reordering becomes the order in
+> which clients reconnect and upload, scripted per scenario. One client's connector drains
+> PowerSync's queue in order, one batch at a time, so its uploads reorder only where it replays a
+> held `deferred` or `entitlement` mutation after writes queued later; the suite scripts that too,
+> with a later write to the same row. It is slower and less deterministic than an in-process
+> simulator, so the fuzz run on each change is short and the long one nightly. The scenarios and
+> the invariants below stand. Where one names a mechanism of the replaced feed, its D-93 form is
+> given beside it (scenarios 6 and 18, and invariant 5).
+
 ### The scenarios it must cover
 
 | # | Scenario | Expected |
@@ -124,7 +150,7 @@ is the single most valuable artefact produced in Phase 0.
 | 3 | Two clients offline check the **same** shopping item | One check; idempotent; no conflict dialog |
 | 4 | Client A creates X offline and edits it twice before syncing | One entity, final state, no id remapping |
 | 5 | Client A creates X, edits X, deletes X — all offline | Server sees three mutations for an id it never had; net effect is a tombstone and **no error storm** |
-| 6 | Client offline past the compaction horizon | `410` → resnapshot → converges |
+| 6 | Client offline past the compaction horizon | `410` → resnapshot → converges. Under D-93: the client catches up from PowerSync's compacted buckets, downloading again any bucket whose checksum no longer matches, and converges with its queue intact |
 | 7 | **Grant revoked while the client is offline** | On reconnect, retractions delete the local rows; queued mutations against them are `rejected`, surfaced once, and not retried forever |
 | 8 | Batch where mutation 3 fails | 1–2 apply, 3 rejected, 4+ `deferred`; retry resolves |
 | 9 | Whole batch delivered twice (network retry) | Identical result; no duplicates |
@@ -136,7 +162,7 @@ is the single most valuable artefact produced in Phase 0.
 | 15 | Two devices of the **same** member, both offline | Converge; no self-echo loops |
 | 16 | Member removed from a conversation while offline | Messages retracted; the floor still holds for everyone else |
 | 17 | **Offline `additive` create that violates a cross-row invariant on arrival** — a meter reading back-filled below a neighbour the replica did not hold | `rejected` with `monotonicity_violation`, surfaced once with the offending neighbour named, never retried in a loop, and the member's typed value preserved so they can correct it rather than re-read the meter |
-| 18 | **Member added to an existing conversation, then pulls** | Nothing before their `floor_seq` is delivered, on the feed as well as the API (**D-90**). The assertion is on the *count* of message rows received, not on their content, because a leak here is a row that should not have been sent at all |
+| 18 | **Member added to an existing conversation, then pulls** | Nothing before their `floor_seq` is delivered, on the feed as well as the API (**D-90**). Under D-93: nothing before their floor reaches their replica, because they are not among the readers of any earlier message. The assertion is on the *count* of message rows received, not on their content, because a leak here is a row that should not have been sent at all |
 
 ### The invariants it asserts after every scenario
 
@@ -144,7 +170,8 @@ is the single most valuable artefact produced in Phase 0.
 2. **No acknowledged write is lost.**
 3. **Idempotency** — replaying any batch produces identical state.
 4. **Retraction completeness** — no client retains a row it was retracted from.
-5. **Monotonicity** — sequence numbers and read markers never move backwards.
+5. **Monotonicity** — sequence numbers and read markers never move backwards. Under D-93 a client
+   sees no feed sequence number: what never moves backwards is its replica's checkpoint.
 6. **Terminality** — every mutation reaches exactly one of `applied`/`merged`/`conflict`/`rejected`.
 
 Then **fuzz it**: randomised operation schedules and partition timing over the same invariants.
@@ -171,6 +198,14 @@ a periodic check alongside the pull rather than a per-pull cost.
 The response is a forced resnapshot for that device plus a telemetry event. **Divergence rate is an
 alerting metric** ([07-nonfunctional.md](07-nonfunctional.md) §5), not a support ticket.
 
+> **Under D-93** PowerSync verifies a checksum per bucket at every checkpoint and downloads a
+> bucket again when it does not match, which holds a replica to PowerSync's buckets. It does not
+> hold the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an
+> entity's declared access, passes every checksum. The digest, computed from PostgreSQL, remains
+> the check on that, but it is evaluated above at the client's cursor, and a PowerSync client holds
+> no feed cursor. Plan item 14 decides whether it keeps an endpoint of its own and, if it does, the
+> point it is computed at.
+
 ## 6. The interaction with the no-content-access guarantee
 
 **Worth stating explicitly because it is a genuine collision between two decisions.**
@@ -186,8 +221,10 @@ Three consequences, all requirements rather than observations:
    for the purposes of building the engine it must exist as soon as the engine does. It is the only
    view anyone gets of what went wrong.
 2. **The diagnostic bundle carries sync state** — cursor, queue depth, per-entity digest mismatch,
-   the last N mutation outcomes and their reasons, with **no field values**. That makes it
-   metadata, which means it can be sent without the member having to expose content.
+   the last N mutation outcomes and their reasons, with **no field values**. Under D-93 the cursor
+   is the replica's last checkpoint, and the mismatches are its bucket-checksum failures and any
+   digest item 14 keeps. That makes it metadata, which means it can be sent without the member
+   having to expose content.
 3. **Mutation outcomes carry a machine-readable `code`, always.** "Rejected" with no reason is
    undebuggable by anyone, and here there is no second route to the answer.
 
@@ -199,12 +236,12 @@ Three points where the plan stops rather than continues on optimism.
 |---|---|---|---|
 | **G-A** | End of Phase 0, week 1 | The sync-ready schema is enforced by architecture tests, and the buy-vs-build verdict is written down | Do not start any module |
 | **G-B** | End of Phase 0 | The conformance suite is green, including all 18 scenarios, plus a fuzz run | Do not start Phase 1 |
-| **G-C** | End of Phase 1 | The Shopping acceptance criterion passes **on two physical phones in aeroplane mode**, and the sync-health screen shows what happened | **Stop and adopt a vendor.** Do not proceed to Phase 2 on an engine that is not trusted |
+| **G-C** | End of Phase 1 | The Shopping acceptance criterion passes **on two physical phones in aeroplane mode**, and the sync-health screen shows what happened | **Stop and build [03](03-platform-strands.md) §2's engine** on the schema and the write path, which are already ours. Do not proceed to Phase 2 on an engine that is not trusted. (The fallback was *adopt a vendor* until D-93 adopted one at G-A) |
 
 **G-C is the one that matters and it is named in the roadmap already.** Writing the fallback down
-now — *adopt a vendor* — is what makes it a gate rather than a wish, because the decision at that
-point will be made under schedule pressure by people who have just spent a quarter on the thing
-they would be abandoning.
+now — *build the engine*, since D-93 adopted the vendor — is what makes it a gate rather than a
+wish, because the decision at that point will be made under schedule pressure by people who have
+just spent a quarter on the thing they would be abandoning.
 
 ## 8. Two smaller things that pay for themselves
 
@@ -215,14 +252,14 @@ they would be abandoning.
 - **Dogfood the throwaway module for a month.** [08-roadmap.md](08-roadmap.md) already specifies a
   three-entity module exercising every merge policy. Use it as the team's own shopping list, on
   real phones, on real networks — then delete it. A month of genuine irritation surfaces things no
-  simulator will.
+  conformance suite will.
 
 ## 9. What this changes in the plan
 
 | Was | Now |
 |---|---|
-| Phase 0 builds the engine, then modules follow | Phase 0 **week 1**: schema mandate + buy-vs-build spike (G-A). Then the conformance simulator. Then the engine |
+| Phase 0 builds the engine, then modules follow | Phase 0 **week 1**: schema mandate + buy-vs-build spike (G-A). Then the conformance suite. Then the engine, which since D-93 is PowerSync plus Household's push, streams and client library |
 | Offline writes ship complete | Offline writes ship **per merge policy**: `additive` and `state_set` in Phase 1, the rest gated on the suite |
 | Sync-health screen in Phase 4 with the admin module | Sync-health screen in **Phase 0** |
-| "If sync is not solid, everything stops" | A named gate (G-C) with a named fallback (adopt a vendor) |
-| Divergence found by users | Divergence found by **replica digests**, alerted on, resnapshot automatically |
+| "If sync is not solid, everything stops" | A named gate (G-C) with a named fallback: adopt a vendor, and since D-93 adopted one at G-A, build the engine |
+| Divergence found by users | Divergence found by **replica digests**, alerted on, resnapshot automatically; since D-93, by PowerSync's bucket checksums first (§5) |

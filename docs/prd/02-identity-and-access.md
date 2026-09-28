@@ -19,7 +19,7 @@ User ──┬─< Credential        (password | google | apple | child_pin)
 | **User** | Global | A person. Exists without any household. Identified by `id`; addressed by email where one exists |
 | **Credential** | Per user | A user may hold several: a password *and* Google *and* Apple. A child holds exactly one, of type `child_pin` |
 | **Session** | Per user | A web session. Sliding expiry, revocable individually or all-at-once |
-| **Device** | Per user | A mobile installation. Holds a refresh-token family, a push token and the sync cursor |
+| **Device** | Per user | A mobile installation. Holds a refresh-token family, a push token and the sync cursor (under D-93, the right to a sync token) |
 | **Household** | Tenant root | Has a name, a timezone, a base currency, a country profile, a locale and an owner-set module enablement |
 | **Membership** | (user, household) | Carries the role and the module grants. **A user may hold several memberships with different roles** |
 | **Invitation** | Per household | A pending membership. Email or link. Expires |
@@ -88,7 +88,10 @@ and sends a confirmation email to the old address.
 **FR-ID7 — Session and device management.** `GET /api/v1/me/sessions` lists active sessions and
 devices with last-seen, approximate location from IP and user agent. Any can be revoked
 individually; "sign out everywhere" revokes all. Revoking a device also invalidates its offline
-sync cursor, so its local replica is discarded on next contact rather than being resumed.
+sync cursor, so its local replica is discarded on next contact rather than being resumed. Under
+D-93 the device is refused any further sync token, and its client discards the replica when it is
+refused. A sync token already issued keeps the device replicating until it expires, so that
+token's lifetime is how long a revoked device can still receive new rows; plan item 13 sets it.
 
 **FR-ID8 — Account deletion.** Self-service, from the app. See
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §4 for what happens to households
@@ -309,6 +312,15 @@ Every read path resolves all four. Every write path resolves all four plus the l
 sync feed row carries the fields needed to evaluate all four without joining back to the
 module's tables — see [03-platform-strands.md](03-platform-strands.md) §2.2.
 
+> **Under D-93 the replicated path reads no feed row.** Stream definitions generated from the
+> entity registry read each entity's own table and the grant through subqueries, and an audience
+> through the readers the server keeps on each row it bounds
+> ([03-platform-strands.md](03-platform-strands.md) §2, [modules/15-chat.md](modules/15-chat.md)
+> and [modules/04-calendar.md](modules/04-calendar.md) Sync, where plan item 14 may resolve a
+> `member_shared` calendar, which has no floor, through its member list instead). The check still
+> lives in one place, the generator. The membership axis stays an interval on both paths: the API
+> evaluates the floor, and a member is a reader of nothing before theirs.
+
 ## 8. Platform staff
 
 Two platform-level roles. Neither is a household role and neither appears in any household's
@@ -323,7 +335,10 @@ member list.
 impersonation feature, no "view as", no support session, no content-reading endpoint and — the
 part that makes it structural rather than aspirational — **no database role that bypasses RLS
 for content tables**. See [01-architecture.md](01-architecture.md) §2.3 and
-[05-privacy-and-compliance.md](05-privacy-and-compliance.md) §6. **D-3.**
+[05-privacy-and-compliance.md](05-privacy-and-compliance.md) §6. **D-3.** Under D-93 one role does
+bypass it, PowerSync's replication role, and PowerSync's bucket storage holds the replicated rows
+outside it; both credentials are the sync service's own, and neither platform role holds either
+(01 §2.3).
 
 **FR-PS1 — The diagnostic bundle** is how content bugs are debugged without content access. A
 member hits a problem and taps *"send diagnostics"*; the client assembles a bundle scoped to the

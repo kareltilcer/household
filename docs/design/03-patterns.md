@@ -84,8 +84,10 @@ sees the row on every device before the bytes have moved.
 The one screen that exists because nobody at the platform can look at a member's data
 ([D-3](../prd/09-decisions.md)). Per device: last sync, cursor position, pending mutation count,
 conflicts awaiting resolution, replica-digest state, and **force re-snapshot**
-([FR-HA19](../prd/modules/17-household-admin.md)). **It ships in Phase 0**, before any feature
-module, because it is the only view anyone gets of a sync failure.
+([FR-HA19](../prd/modules/17-household-admin.md)); under D-93 the cursor position is the
+replica's last checkpoint, the digest state its bucket-checksum state (with the digest's, if plan
+item 14 keeps that endpoint), and the re-snapshot a re-download. **It ships in Phase 0**, before
+any feature module, because it is the only view anyone gets of a sync failure.
 
 ## 2. Absence, not disabling
 
@@ -126,9 +128,11 @@ member discovers by finding something missing is a bug"* ([D-78](../prd/modules/
 Absence is the steady state; **retraction is the transition into it**, and it has its own design.
 When a member loses access to data they already hold locally, the server emits `op: retract` rows
 and the client **deletes them from the local store on receipt**
-([03-strands §2.6](../prd/03-platform-strands.md), FR-SY7). Five ordinary events cause it: a grant
-lowered to `none`, removal from a conversation or a `member_shared` calendar, an item moved from
-shared to private, removal from the household, and a module disabled household-wide.
+([03-strands §2.6](../prd/03-platform-strands.md), FR-SY7); under D-93 there are no `retract`
+rows, and the rows leave the member's PowerSync buckets, which removes them from the replica. Five
+ordinary events cause it: a grant lowered to `none`, removal from a conversation or a
+`member_shared` calendar, an item moved from shared to private, removal from the household, and a
+module disabled household-wide.
 
 It can land **while the member is looking at the row**. So:
 

@@ -75,8 +75,8 @@ An item may overturn one by recording why in the Change log.
 | **PL-2** | **Server libraries follow `home` where it had one**: chi v5, goose v3, coder/websocket, aws-sdk-go-v2 (S3), golang-jwt (EdDSA), webpush-go. New for Household: pgx v5 + sqlc on PostgreSQL 17, kin-openapi (edge validation), x/crypto argon2id, pquerna/otp, coreos/go-oidc, stripe-go | Proven in `home`. The new ones are the standard choice for each job |
 | **PL-3** | **Tests hit real PostgreSQL**: compose locally and a service container in CI. No database mocks. TS unit tests use Vitest; web E2E uses Playwright + axe; mobile uses Jest + React Native Testing Library, with Maestro for E2E | RLS, the change feed and `SET LOCAL` cannot be tested against a mock |
 | **PL-4** | **Web**: React 19, Vite, React Router 7, TanStack Query persisted to IndexedDB, Radix primitives for behaviour, CSS Modules over token custom properties, dnd-kit, Milkdown for Notes, Stripe Payment Element | Carries `home`'s proven stack. CSS variables make "semantic tokens only" a lint rule |
-| **PL-5** | **Mobile**: Expo managed workflow (current SDK), expo-router, expo-sqlite (replica), expo-secure-store, expo-notifications, react-native-svg, native Apple and Google sign-in. **Tablet is a layout of the mobile app**, not a third codebase (design/v1 draws 24 tablet rows) | [06-clients](prd/06-clients.md) and [D-36](prd/09-decisions.md). The prototype's tablet rows are two-pane layouts of the same app |
-| **PL-6** | **Sync is built to [03 §2](prd/03-platform-strands.md)**, unless item 5's verdict says adopt. The conformance simulator is written in Go against the real engine. The TS client is validated by replaying golden traces the simulator exports | [10-sync-risk](prd/10-sync-risk.md). One harness, two implementations kept honest |
+| **PL-5** | **Mobile**: Expo managed workflow (current SDK), expo-router, PowerSync's React Native SDK on op-sqlite (the replica, [D-93](prd/09-decisions.md); a dev build, not Expo Go), expo-secure-store, expo-notifications, react-native-svg, native Apple and Google sign-in. **Tablet is a layout of the mobile app**, not a third codebase (design/v1 draws 24 tablet rows) | [06-clients](prd/06-clients.md) and [D-36](prd/09-decisions.md). The prototype's tablet rows are two-pane layouts of the same app |
+| **PL-6** | **Sync replicates through PowerSync, self-hosted, and pushes through Household's own API** (item 5's verdict, [D-93](prd/09-decisions.md), [ADR 0001](adr/0001-sync-engine.md)). The streams are generated from the entity registry. The conformance suite drives PowerSync clients against the real stack | [10-sync-risk](prd/10-sync-risk.md). The spike found PowerSync retracting for every cause of access loss with writes still through the spine; the suite tests Household's half, which is where the rules live |
 | **PL-7** | **Contract tooling**: the TS client is generated with openapi-typescript + openapi-fetch; Go validates request bodies against the same document at the edge. A `contract_pending` list names operations not yet built. It only ever shrinks and is empty at GA | [G12](prd/00-overview.md), architecture test 6 |
 | **PL-8** | **Environments**: dev is docker compose (Postgres 17, RustFS for S3, Mailpit). **Staging is DigitalOcean + Coolify from Phase 0**, synthetic data only ([D-10](prd/09-decisions.md)). **Dogfooding runs on a separate environment from item 30**: it holds the team's real data, so it is on an EU-established provider ([D-5](prd/09-decisions.md)) and under production's data rules. **Production is an EU provider chosen in item 88** | Phones need a reachable server for gate G-C. Real dogfood data may not sit on staging. Production's multi-AZ requirements are a Phase 5 decision |
 | **PL-9** | **Translations**: every UI PR ships English plus Claude-drafted `cs`, `sk`, `de` and `pl`. Drafted keys are listed in `packages/i18n/review/`. Native review clears them before GA (item 95) | A missing catalog is a build break ([03 §9](prd/03-platform-strands.md)). Drafting inline costs less than a translation phase |
@@ -136,7 +136,7 @@ Follow the [module model](prd/modules/00-module-model.md):
 | Phase | Items | Exit |
 |---|---|---|
 | **0 — Platform** | 1–30 | **G-A** after 4 and 5: the sync-ready schema is enforced and the buy-vs-build verdict is written. **G-B** after 14: 18 scenarios plus fuzz are green. Item 30 closes [08-roadmap](prd/08-roadmap.md)'s Phase 0 deliverable |
-| **1 — Shopping** | 31–34 | **G-C** at 34: the Shopping acceptance test passes on two physical phones in aeroplane mode. **If it fails, adopt a vendor** ([10 §7](prd/10-sync-risk.md)) |
+| **1 — Shopping** | 31–34 | **G-C** at 34: the Shopping acceptance test passes on two physical phones in aeroplane mode. **If it fails, build the engine** ([10 §7](prd/10-sync-risk.md); the vendor was adopted at G-A, D-93) |
 | **2 — Daily core** | 35–54 | A real family can use it daily. **At least a month of internal dogfooding** before Phase 3 ships (not before it starts) |
 | **3 — Differentiators** | 55–74 | Utilities, Finance and Garden reproduce their worked examples; `strict_version` offline writes are enabled |
 | **4 — Breadth** | 75–87 | Feature-complete: all 17 modules on both clients |
@@ -156,7 +156,7 @@ you**, not from the implementing session.
 | # | Question | Source | Settle in |
 |---|---|---|---|
 | Q1 ★ | **CZK and PLN prices.** [04 §1](prd/04-billing-and-entitlements.md) says local prices are set "on the same basis" but names no figures. The prototype assumed EUR everywhere, which contradicts the PRD | 04 §1; design/v1 `household.js` | 19 |
-| Q2 | **Sync engine: build or adopt.** A verdict of *adopt* rewrites items 12–15 | 10-sync-risk §2 | 5 |
+| Q2 | **Sync engine: build or adopt.** A verdict of *adopt* rewrites items 12–15. **Settled by item 5: adopt PowerSync for replication, keep the write path ([D-93](prd/09-decisions.md))** | 10-sync-risk §2 | 5 |
 | Q3 | **FR-CT1 against grants.** The general conversation should contain every member, but two of the five fixture members (Petr and Miloš) hold `none` on Chat. The prototype lets the grant win | 15-chat; design/v1 `chat.js` | 85 |
 | Q4 | **Finance shares.** The prototype settled that a share may only name a member who holds Finance. Confirm it and write it into FR-FI11. **The Finance fixture breaks this rule**: only Jana holds Finance, yet its shares and balances name Petr and Miloš. If the rule is confirmed, either the seed grants them Finance (which moves other personas' vectors) or the Finance fixture is re-cut. Record the choice under Q16 | 09-finance, D-59; design/v1 `finance.js`, `fixtures.js` | 63 |
 | Q5 | **Search while offline.** The prototype says *"search needs a connection"*; [03-patterns](design/03-patterns.md) says offline reads are indistinguishable from online ones | design/v1 `spine.js` | 36, 38 |
@@ -177,7 +177,7 @@ you**, not from the implementing session.
 
 ## Phase 0 — Platform
 
-No user-visible product. It is the riskiest phase, and it has no demo. The conformance simulator
+No user-visible product. It is the riskiest phase, and it has no demo. The conformance suite
 (item 12) replaces the feedback loop that a UI would otherwise give.
 
 ### 1 · Monorepo, toolchain and CI · `done`
@@ -304,7 +304,7 @@ Phase 0 · after 3 · size L · **gate G-A (schema half)**
   - A spine test proves the row, the audit event and the change commit and roll back together.
 - **PR:** [#7](https://github.com/kareltilcer/household/pull/7)
 
-### 5 · Sync engine spike and written verdict · `planned`
+### 5 · Sync engine spike and written verdict · `done`
 
 Phase 0 · after 4 · size M (timeboxed) · **gate G-A**
 
@@ -323,7 +323,7 @@ Phase 0 · after 4 · size M (timeboxed) · **gate G-A**
 - **Done when**
   - `docs/adr/0001-sync-engine.md` records the verdict and the requirement that forced it.
   - If the verdict is *adopt*, items 12–15 are rewritten in the same PR (Q2).
-- **PR:** —
+- **PR:** [#8](https://github.com/kareltilcer/household/pull/8)
 
 ### 6 · Shared packages: API client, i18n, vectors and money · `planned`
 
@@ -415,7 +415,7 @@ Phase 0 · after 8 · size L
   - **Mobile token pair** (FR-ID3 mobile, FR-ID4):
     - An access token signed EdDSA, valid 15 minutes, carrying only `sub`, `sid`, `iat`, `exp` and `client` ([D-15](prd/09-decisions.md)).
     - A rotating, single-use refresh token. Reusing one revokes its whole family and sends an email ([D-14](prd/09-decisions.md)).
-  - **Devices**: registration; a push-token slot; revoking a device invalidates its sync cursor (hook for item 14).
+  - **Devices**: registration; a push-token slot; revoking a device ends its sync, and its replica is discarded on next contact (FR-ID7; hook for item 13: it is issued no further PowerSync token, and item 15's client discards the replica on that refusal).
   - **MFA** (FR-ID5): TOTP plus recovery codes, required on a new device.
   - **Federated sign-in** (FR-ID2): Google and Apple via OIDC with PKCE. `sub` is the stable identifier, and linking to an existing account needs an explicit confirmation.
   - **Account-takeover notice.**
@@ -486,35 +486,52 @@ Phase 0 · after 9, 10 · size M
   - Graduation keeps the child's content.
 - **PR:** —
 
-### 12 · Conformance simulator · `planned`
+### 12 · Conformance suite · `planned`
 
 Phase 0 · after 4, 10 · size L · **gate G-B (harness)**
 
 - **Scope**
-  - **Harness**: a deterministic multi-client harness in Go (`internal/platform/sync/sim`):
-    - N reference clients speaking the protocol;
-    - the real engine interfaces and real Postgres;
-    - scripted partitions, reordering, duplicate delivery and clock skew;
-    - a seeded random-number generator.
-  - **Scenarios**: all **18 scenarios** of [10 §4](prd/10-sync-risk.md) as executable specifications, with the six invariants checked after each.
-  - **Fuzzing**: a fuzz driver with reproducible seeds.
-  - **Golden traces**: exported as JSON for item 15.
-  - **Before the engine**: scenarios start skipped, and items 13–14 switch them on.
+  - **Harness**: a multi-client conformance suite in TypeScript (`packages/sync`, its `conformance/` directory) against the real stack in containers: PostgreSQL with logical replication, PowerSync and the API ([ADR 0001](adr/0001-sync-engine.md); the spike's harness is the starting point). It has:
+    - N clients on `@powersync/node`, each with its own SQLite file;
+    - partitions scripted two ways: disconnecting a client, and a network that refuses requests and loses responses in flight;
+    - reordering as the order in which clients reconnect and upload, scripted per scenario, and within one client, whose connector drains its queue in order, a held `deferred` or `entitlement` mutation replayed after a later write to the same row ([10 §4](prd/10-sync-risk.md));
+    - duplicate delivery by replaying an upload batch;
+    - clock skew through the mutation's `client_time`;
+    - a seeded random-number generator for every schedule.
+  - **Scenarios**: all **18 scenarios** of [10 §4](prd/10-sync-risk.md) as executable specifications, with the six invariants checked after each. Convergence compares every replica with the server's rows.
+  - **Fuzzing**: seeded random operation schedules over the same invariants; a short run on each change, a long one nightly.
+  - **CI**: a job that brings the stack up, with PowerSync's image pinned beside PostgreSQL's.
+  - **Before the engine**: scenarios start skipped, and items 13, 14 and 18 switch them on.
+  - **Stand-ins**: until items 13 and 14 land, the suite runs against stand-ins of its own, as the spike's harness did: a hand-written sync configuration, a test signing key PowerSync is configured with, a replication role and publication over test tables, and a stand-in push endpoint (the spike's was its Go `backend/`, which wrote through the real spine). Items 13 and 14 replace each with the real one.
+  - **Its own connector**, as the spike's harness had, doing what item 15's will: completing every answered mutation, and holding and replaying an `entitlement` rejection (scenario 14) and a `deferred` one (scenario 8). Items 18 and 13 turn those scenarios green before item 15 exists, and item 14 keeps them so; item 15's connector then replaces it.
 - **Inputs**
-  - PRD: [10 §4, §7](prd/10-sync-risk.md); [03 §2](prd/03-platform-strands.md)
+  - PRD: [10 §4, §7](prd/10-sync-risk.md); [03 §2](prd/03-platform-strands.md); D-93
+  - ADR: [0001](adr/0001-sync-engine.md), and the spike's `spikes/sync-engine` in the commit that added it: `harness/`, and the `sql/`, `powersync/` and `backend/` its stand-ins came from
   - Design: `sync.js`, `conformance.js`
 - **Done when**
   - All 18 scenarios are encoded with explicit expected outcomes.
-  - A deliberately broken toy engine is caught by the invariants, proving the harness can fail.
+  - A deliberately broken connector and a deliberately broken stream are caught against the stand-ins: one that retries a rejection forever, and one that leaks another household's rows. This proves the suite can fail.
 - **PR:** —
 
-### 13 · Sync engine I — feed, pull, snapshot, push · `planned`
+### 13 · Sync engine I — PowerSync, generated streams and the push · `planned`
 
-Phase 0 · after 12 · size XL
+Phase 0 · after 9, 12 · size XL
 
 - **Scope**
-  - **Pull** (`GET …/sync/changes`): the full visibility predicate in one indexed scan — grant, private/redacted, audience + `floor_seq`, and `for_user_id`.
-  - **Snapshot** (`POST …/sync/snapshot`): a consistent NDJSON stream at a stated `seq`.
+  - **Deployment** of PowerSync ([ADR 0001](adr/0001-sync-engine.md)):
+    - The Open Edition service, its image pinned, in docker compose beside a PostgreSQL with `wal_level=logical`. Item 30 carries it to staging and item 88 to production.
+    - Its bucket storage in a PostgreSQL database of its own, whose credential only the service holds: it keeps every household's replicated rows outside row-level security ([05 §6](prd/05-privacy-and-compliance.md)).
+    - A replication role with `REPLICATION` and `BYPASSRLS`, created by `bootstrap`, and the `powersync` publication. PostgreSQL lets only an administrator holding both grant them ([ADR 0004](adr/0004-database-roles-migration-blocks-and-test-databases.md)), so under one that lacks them `bootstrap` fails and names what is missing. `BYPASSRLS` grants no privilege, so the role reads through a `SELECT` grant on each table in the publication and on no other, since it reads past row-level security. The role and the bucket storage's credential are the one exception to [D-3](prd/09-decisions.md) ([01 §2.3](prd/01-architecture.md)): item 21's no-content-access test leaves the role out, and the read-path isolation test below holds it.
+    - `REPLICA IDENTITY FULL` on each replicated table, as the spike ran them, unless the suite shows PowerSync correct without it.
+    - Telemetry sharing off, and the replication connection's `debug_api` off, since it opens the admin API's `execute-sql`, which reads the database through the replication role; both held by a test on the configuration.
+    - A runbook for the replication slot: lag, and the bound set by `max_slot_wal_keep_size`.
+    - Its failure behaviour ([07](prd/07-nonfunctional.md) FR-NF3), recorded in the PRD: what a client shows and keeps while PowerSync is unreachable and the API is not, and how replication recovers a lost slot, after a restore or past `max_slot_wal_keep_size`. Item 89 tests it.
+  - **Credentials**: a contract operation hands a client PowerSync's URL and a token of its own, including for a web session, and refuses a revoked device (item 9's hook). The token is signed with item 9's EdDSA keys, which the API publishes as a JWKS for PowerSync; the spike signed HS256, so this is the first proof. It carries `sub` and the `aud` PowerSync checks against its configured audience, which item 9's access token, carrying only the claims item 9 lists, does not, and the API accepts no token with that audience. The token's lifetime bounds how long a revoked device keeps syncing ([FR-ID7](prd/02-identity-and-access.md)), so it is set here and kept short. The contract change is deliberate and cites D-93.
+  - **Streams generated from the registry**: each sync entity's declared access (item 4's `sync.Entity`) becomes its stream definitions, generated by `go generate` into the committed sync configuration. An architecture test holds the committed configuration equal to the generated one, and every table a stream reads in the `powersync` publication, at the replica identity above and readable by the replication role, so a later module's table cannot be left out.
+    - The grant is two streams: an owner of an enabled module, and a member whose grant on an enabled module is above `none`.
+    - The household is a subscription parameter, so there is one replica per household (D-4).
+    - Item 15's withdrawn state needs a client to tell a row it lost access to from one another member deleted, which a stream that drops tombstones, as the spike's did, does not allow.
+  - **Tenant isolation on the read path**: a test connects a member of two households to one of them and asserts that none of the other's rows arrive, nor any row of a household they are not in. The spike's members each belonged to one household, so its runs could not show that the subscription parameter bounds a replica ([ADR 0001](adr/0001-sync-engine.md)). This is FR-NF4's read-path twin, since the replication role bypasses row-level security.
   - **Push** (`POST …/sync/mutations`):
     - An ordered batch, one transaction per mutation.
     - Outcomes `applied`/`merged`/`conflict`/`rejected`/`deferred`, each always carrying a `code`.
@@ -527,42 +544,53 @@ Phase 0 · after 12 · size XL
     - `state_set`, keyed, resolving by `latest_client_time` or `monotonic`;
     - `lww_field`, by server receipt.
   - **One service layer** shared by REST and sync: each applied mutation goes through `mutation.Apply`, recording `via: sync`.
+  - **Contract**: `getSyncChanges` and `postSyncSnapshot`, which PowerSync's protocol replaces, are removed from `openapi.yaml` and from `contract_pending`, citing D-93. PRD 03 §2.3 is amended to match, as is the contract's opening description, which names both paths as the offline-first data path. So are `Device.sync_cursor` and the descriptions of `deleteMeSessions` and `deleteMeDevicesByDeviceId`, which invalidate a device's sync cursor the server no longer holds. The `/platform/households` description, which says no database role bypasses row-level security, names the replication role as the exception, as PRD 05 §6 does.
 - **Inputs**
-  - PRD: [03 §2.3–2.5, §2.8](prd/03-platform-strands.md); [10 §3](prd/10-sync-risk.md); D-22–D-26, D-84, D-90
+  - PRD: [03 §2.3–2.5, §2.8](prd/03-platform-strands.md); [10 §3](prd/10-sync-risk.md); [07 §3](prd/07-nonfunctional.md) (FR-NF3); [01 §2.3](prd/01-architecture.md); [02 FR-ID7](prd/02-identity-and-access.md); [05 §6](prd/05-privacy-and-compliance.md); D-3, D-22–D-26, D-84, D-90, D-93
+  - ADR: [0001](adr/0001-sync-engine.md)
   - API: tag `sync`
-- **Done when** the simulator passes scenarios 1, 3, 4, 5, 8, 9, 10, 15 and 17, plus the `state_set` half of 13.
+- **Done when** the suite passes scenarios 1, 3, 4, 5, 8, 9, 10, 15 and 17, plus the `state_set` half of 13.
 - **PR:** —
 
-### 14 · Sync engine II — conflicts, retraction, compaction, digest, realtime · `planned`
+### 14 · Sync engine II — conflicts, retraction, visibility, audiences, observability · `planned`
 
 Phase 0 · after 13, 16, 18 · size XL · **gate G-B**
 
 - **Scope**
-  - **Remaining merge policies**: `lww_row` with the loser preserved; `strict_version` conflicts carrying the server's row.
-  - **Retractions** for all five causes of access loss, wired to item 10's hooks:
+  - **Remaining merge policies**: `lww_row` with the loser preserved; `strict_version` conflicts carrying the server's row, against the base version the client sends.
+  - **Retractions** for all five causes of access loss, each a row leaving every bucket the member holds, wired to item 10's hooks, proven in the suite, and written into FR-SY7 ([03 §2.6](prd/03-platform-strands.md)) in place of its `retract` rows:
     - a grant lowered to `none`;
     - removal from an audience;
     - an item moved from shared to private;
     - removal from the household;
     - a module disabled.
     - **Not** a lapsed entitlement.
-  - **[D-88](prd/09-decisions.md) two-row emission**: private and redacted feed rows, each entity supplying its own projection.
-  - **Compaction and resnapshot**:
-    - A compaction job with a 90-day horizon; `410 {action: resnapshot}` below it. The horizon is the greatest `seq` a dropped partition held: a row's `occurred_at` is its transaction's start and its `seq` is drawn at its commit, so neighbouring months' partitions overlap in `seq` (item 4).
-    - Monthly partition maintenance (`sync_changes_add_partitions`), moving any rows that reached the default partition into their month's before creating it.
-    - Revoking a device invalidates its cursor.
-  - **Digest** (`POST …/sync/digest`, [D-85](prd/09-decisions.md)): evaluated at the client's cursor.
-  - **Stream** (`…/stream` WebSocket):
-    - Carries a nudge, not a payload ([D-8](prd/09-decisions.md)).
-    - Authenticated by cookie or JWT.
-    - Works across instances via Postgres LISTEN/NOTIFY.
-    - Reserves the hook for Chat's payload exception.
-  - **Metrics hooks**: queue depth, conflict rate, divergence.
+  - **[D-88](prd/09-decisions.md) visibility**:
+    - Private rows reach their owner, and so does every row a private item or private root bounds, such as a private note's body or a private event's overrides. A stream reads each entity's own table, not the feed row on which the module set the visibility and owner it took from the parent, so each such row carries them itself, rewritten when the parent moves between shared and private, or its stream reaches them through the parent in a subquery the suite shows correct beside the grant's. A rewrite of those two fields alone is not an edit of the row, for the reason given for an audience's readers below.
+    - Each entity's redacted projection is declared on its `sync.Entity` as a column list, replacing item 4's `Redact` function. It is generated into a stream that writes a client table of its own.
+    - That stream reaches every member with the grant, the owner included, and where an audience bounds the row, only its readers; the client shows the owner's full row over it.
+  - **[D-90](prd/09-decisions.md) audiences**:
+    - Each audience row keeps its readers on the row: the members whose floor it is at or above. That is every row the audience bounds, each with a stream of its own (in Chat the message, its body, its reactions and its attachments' metadata), since a row resolved through the audience's membership instead would reach the whole audience, below the floor included.
+    - The mutation that writes the row writes them, and the one that changes the audience rewrites them. The streams test the caller against them: `auth.user_id() IN readers` on the row, or a subquery on a reader table.
+    - Removal from the household (item 10's hook) takes the member out of the readers of every audience they were in: readers left behind would reach them again if they were re-added with the grant.
+    - A rewrite of the readers alone is not an edit of the row. Item 4's `touch_entity` bumps `version` and sets `updated_by` on every update, so as an ordinary update it would turn each queued or `If-Match` edit to a row of the audience into a conflict (a `strict_version` event) or a preserved loser (an `lww_row` body). Keep the readers out of the version, which changes the trigger ADR 0006 decided and is therefore recorded in a new ADR (ADR 0006 is accepted, so it is not rewritten), or in a reader table of their own, if the suite shows its subquery correct beside the grant's (the probes accepted it only alone, [ADR 0001](adr/0001-sync-engine.md)). [PRD 01 §3](prd/01-architecture.md) already notes that such a rewrite does not count as an update.
+    - Scenarios 16 and 18 hold it.
+    - An audience with no floor, a `member_shared` calendar, may be resolved through its member list in the stream instead, if the suite shows that subquery correct beside the grant's (no probe tried the two together). Record the choice and amend [04-calendar](prd/modules/04-calendar.md) Sync to match.
+  - **The feed**: `sync_changes` has no reader under D-93, but the spine writes it until this item decides, and item 4 made its monthly partitions only three months ahead. Either:
+    - name a consumer, and schedule the table's partition maintenance (`sync_changes_add_partitions`, moving any rows that reached the default partition into their month's before creating it) and its retention; or
+    - stop the spine writing it (and taking its per-household lock), and drop it through an expand/contract migration.
+    - Either way, record the choice in a new ADR (ADR 0006 is accepted, so it is not rewritten), and amend PRD 03 §2.2, 07 §1 and CLAUDE.md, and PRD 01 §3 and §10's check 4 if the write stops. Stopping the write before gate G-C passes (item 34) removes a write that G-C's fallback, building [03 §2](prd/03-platform-strands.md)'s engine, builds on, so the ADR weighs that.
+    - The push's response requires `seq`, the feed sequence after the batch (`SyncMutationBatchResult`). It has no reader under D-93 and no source once the feed stops, so the contract drops or redefines it, citing D-93.
+  - **Compaction**: PowerSync's compact job, scheduled nightly. Until it runs, bucket storage keeps the operations a row's later ones superseded, its earlier data among them, so once item 20 builds the nightly erasure job (FR-PR4) it runs compaction after that job, and a row erased under [05 §4](prd/05-privacy-and-compliance.md) leaves bucket storage the night it leaves the database, not at a later compaction.
+  - **Divergence** ([D-85](prd/09-decisions.md)): PowerSync verifies bucket checksums at every checkpoint, which holds a replica to its buckets but not the buckets to PostgreSQL ([10 §5](prd/10-sync-risk.md)). Decide whether `postSyncDigest` stays for that, and if it does, the point in PostgreSQL's history it is computed at, since 10 §5 evaluates it at the client's feed cursor and a PowerSync client has none; what `postSyncReset` becomes, and what `getSyncState` reports now that the server holds no device's cursor or pending count. Amend the contract for each.
+  - **Realtime**: PowerSync's connection carries synced data, so the socket's nudge has no reader. Its other frames still need a way to the client: Chat's payloads ([D-8](prd/09-decisions.md)), and the contract's `entitlement_changed` and `access_changed`, the second being how grants reach a client as derived capability state ([17 Sync](prd/modules/17-household-admin.md)). Decide for each whether `…/stream` keeps it or a synced table carries it, and amend the contract, PRD 01 §7 and PRD 07 §1's connection target, which names only the socket (40 000 at Year 3) and so none for PowerSync's connections. A socket that stays is built here as first planned: authenticated by cookie or JWT, and working across instances through PostgreSQL LISTEN/NOTIFY.
+  - **Metrics hooks**: queue depth, conflict rate, divergence (checksum failures, and the digest's mismatches if it stays) and replication lag.
 - **Inputs**
-  - PRD: [03 §2.3, §2.5–2.7](prd/03-platform-strands.md); [10 §5–7](prd/10-sync-risk.md); D-8, D-85, D-88, D-90
+  - PRD: [03 §2.3, §2.5–2.7](prd/03-platform-strands.md); [10 §5–7](prd/10-sync-risk.md); D-8, D-85, D-88, D-90, D-93
+  - ADR: [0001](adr/0001-sync-engine.md)
 - **Done when** — this is **G-B**:
-  - All 18 scenarios and a fuzz run are green; CI runs N seeds per PR and a long run nightly.
-  - The PR asks for a second-engineer review of the protocol and the retraction path ([10 §8](prd/10-sync-risk.md)).
+  - All 18 scenarios and a fuzz run are green; CI runs a short fuzz run per PR and a long run nightly.
+  - The PR asks for a second-engineer review of the generated streams, the push and the retraction path ([10 §8](prd/10-sync-risk.md)).
 - **PR:** —
 
 ### 15 · `@household/sync` client library · `planned`
@@ -570,22 +598,31 @@ Phase 0 · after 13, 16, 18 · size XL · **gate G-B**
 Phase 0 · after 14, 6 · size L
 
 - **Scope**
-  - **Cursor and bootstrap**: cursor management; streaming snapshot bootstrap; resnapshot on `410`.
-  - **Mutation queue**: persistent (it survives the app being killed), with edits coalesced into queued mutations.
-  - **Per-row state**: synced, pending, syncing, conflict, rejected or withdrawn.
-  - **Surfacing API** for the conflict inbox and for rejections ([DD-4](design/08-decisions.md)).
-  - **Keeping the replica right**: retractions applied; digests computed and posted periodically.
+  - **Replica**: PowerSync's SDKs behind one interface: `@powersync/react-native` on op-sqlite (PL-5), `@powersync/web` on wa-sqlite over IndexedDB for the web's queued writes and cache ([06 §1](prd/06-clients.md)), and `@powersync/node` in tests.
+    - The client schema is generated from the registry.
+    - One database per household ([D-4](prd/09-decisions.md)), subscribed to its household's streams.
+  - **Connector**:
+    - Credentials from item 13's operation. A device refused as revoked discards its replica ([FR-ID7](prd/02-identity-and-access.md)).
+    - Each local write records what its mutation needs and a row write does not: a stable `mutation_id`, the `client_time` it was made at, its `base_version`, and any `action`. The spike carried a check's time in the `checked_at` column the check wrote, which serves one entity only, and stamped every other write with its upload time, which neither `state_set` resolution nor D-26's clamp can use.
+    - The upload queue sent in order as `POST …/sync/mutations` batches, several queued transactions to a batch up to the 500-mutation ceiling: a device may send 60 batches a minute ([02 §9](prd/02-identity-and-access.md)), and one back from days offline can hold more transactions than that while PowerSync applies no checkpoint. One `Idempotency-Key` per batch, whose mutations stay fixed until it is answered: a retry sends the same batch under the same key, since a different body under a key already in use is refused `422` on the header, which locates no mutation. The batches a `413` splits it into are new batches with keys of their own, and a key is renewed only by the `409` rule below. An edit to a row still pending merges into its queued mutation ([06 §5](prd/06-clients.md)), and never changes a mutation a retry may already have sent.
+    - Every answered mutation completed. Outcomes other than `applied` are recorded in a local-only table with the mutation each answers, since the next checkpoint replaces the local write: the conflict inbox shows the member's change from it ([06 §5](prd/06-clients.md)), and a rejection keeps what they typed (scenario 17).
+    - A response that answers no mutation is not an answer. A `401` renews the API credential the push was sent with (not item 13's token, which the API refuses) and a `429` waits, both then throwing; a `413` splits the batch; a `422` rejects the mutation it locates ([ADR 0003](adr/0003-contract-enforcement-at-the-edge.md)) and sends the rest again; a `402` or a `404` answers every mutation in it alike, `entitlement` or `not_found`.
+    - A `409 idempotency_in_progress` ([D-92](prd/09-decisions.md)) is thrown, so the batch is sent again; once D-92's five minutes have passed it is sent under a fresh key, and per-mutation idempotency (FR-SY5) answers each mutation from its stored result.
+    - It throws only on a transport failure, a `5xx`, a `401`, a `409` or a `429`, since PowerSync applies no checkpoint while the queue holds anything.
+  - **Per-row state**: synced, pending (the upload queue, or a `deferred` mutation held to replay, whose change the client shows over the row the next checkpoint writes), syncing (its batch in flight), conflict or rejected (the outcomes table), and withdrawn: a row that left the replica because access changed, which the client tells from one another member deleted ([03-patterns](design/03-patterns.md), *When access is withdrawn*). PowerSync removes both alike when a stream drops tombstones, as the spike's did, so this item and item 13 settle how the client tells them apart.
+  - **Surfacing API** for the conflict inbox and for rejections ([DD-4](design/08-decisions.md)). Held mutations are kept and replayed: scenario 14's entitlement, and scenario 8's `deferred`.
   - **Connectivity and files**:
-    - The stream nudge consumer, with backoff.
+    - The client half of whatever item 14 kept: the socket's consumer, with backoff, and the digest, computed and posted periodically ([10 §5](prd/10-sync-risk.md)).
     - The attachment pending queue ([D-25](prd/09-decisions.md)).
-    - Offline-write flags respected: a row that cannot be written offline shows *needs a connection*.
-  - **Storage**:
-    - One store per household ([D-4](prd/09-decisions.md)).
-    - A storage-adapter interface with two adapters: expo-sqlite and IndexedDB.
+    - Offline-write flags respected before a local write: a row that cannot be written offline shows *needs a connection*.
 - **Inputs**
-  - PRD: [03 §2](prd/03-platform-strands.md); [06 §1, §5](prd/06-clients.md); [10 §5](prd/10-sync-risk.md)
+  - PRD: [03 §2](prd/03-platform-strands.md); [06 §1, §5](prd/06-clients.md); [10 §5](prd/10-sync-risk.md); D-93
+  - ADR: [0001](adr/0001-sync-engine.md)
   - Design: `sync.js` (the 7-step ladder, 4 visible shapes, 4 rejection reasons, 7 honesty situations); `Sync and Honesty.dc.html`
-- **Done when** replaying the golden traces reproduces all 18 scenarios on both adapters (Node SQLite and fake-indexeddb).
+- **Done when**
+  - The conformance suite's 18 scenarios pass through `@household/sync` on Node.
+  - A queued write and the replica survive the database being closed and reopened before the queue drains ([03 §2.1](prd/03-platform-strands.md), *nothing is lost*). The spike never restarted a client, so this is the first proof.
+  - The web build's replica and connector pass a smoke test in a real browser, and the React Native build typechecks against it.
 - **PR:** —
 
 ### 16 · Files and storage metering · `planned`
@@ -661,10 +698,11 @@ Phase 0 · after 10, 13 · size M
   - **Hourly transitions**: trial, dunning and grace, plus the [DD-9](design/08-decisions.md) trial-notice stages.
   - **Retention**: a 12-month countdown with three warnings, then deletion handed to item 20.
   - **Queued mutations** (FR-BI2): `entitlement` rejections are held and replayed if the subscription resumes (scenario 14).
+  - **`suspended` on the replicated path** ([D-93](prd/09-decisions.md)): PowerSync's reads pass no tenant middleware, so the Sync ✗ of [04 §3](prd/04-billing-and-entitlements.md) is held on item 13's credentials and streams as well, and a suspended household replicates nothing further to any device, a new one included. Whether its replicas are also emptied, which [03 §2.6](prd/03-platform-strands.md) does not list as access loss, is decided here and recorded in the PRD.
   - **Fair-use ceilings** ([04 §5](prd/04-billing-and-entitlements.md)): a warning at 80 %, then `429`.
   - **Banner API.**
 - **Inputs**
-  - PRD: [04 §1, §3, §5](prd/04-billing-and-entitlements.md); D-30–D-32, D-87
+  - PRD: [04 §1, §3, §5](prd/04-billing-and-entitlements.md); D-30–D-32, D-87, D-93
   - Design: DD-9, DD-15; A-30, A-31; `household.js` (the eight-state table)
 - **Done when**
   - A table-driven test over state × method × path proves the exemption list exactly.
@@ -713,16 +751,17 @@ Phase 0 · after 14, 16, 17 · size L
     - Each household is resolved first.
     - A 30-day window: the account is disabled and revoked immediately, and an email carries a cancel link.
     - A nightly job then runs `EraseSource` everywhere, deletes object prefixes, writes an identity tombstone, and relabels authorship as *Former member*.
+    - PowerSync's compaction (item 14) runs after that job each night, so an erased row's superseded data leaves bucket storage with it ([05 §6](prd/05-privacy-and-compliance.md), [D-93](prd/09-decisions.md)).
   - **Household deletion** (FR-PR6): the owner types the household name, every member is notified, and the same 30-day window applies.
   - **Private roots** when a member leaves (FR-PR7).
   - **Lapsed deletion**: households past item 18's retention window.
   - **Diagnostic bundle** (FR-PS1):
     - The client assembles it; preview and redaction happen on the client.
-    - It carries **sync metadata only**: cursor, queue depth, digest mismatches, and the last N outcome codes.
+    - It carries **sync metadata only**: the last checkpoint, queue depth, checksum or digest mismatches, and the last N outcome codes.
     - It expires after 30 days.
   - **Analytics consent** (FR-PR9): stored per member; children excluded.
 - **Inputs**
-  - PRD: [05 §3–5, §9](prd/05-privacy-and-compliance.md); [02 FR-ID8, FR-PS1](prd/02-identity-and-access.md); [10 §6](prd/10-sync-risk.md); D-6, D-35
+  - PRD: [05 §3–5, §9](prd/05-privacy-and-compliance.md); [02 FR-ID8, FR-PS1](prd/02-identity-and-access.md); [10 §6](prd/10-sync-risk.md); D-6, D-35, D-93
   - Design: A-20, A-33–A-35, C-56
 - **Done when**
   - Each archive's structure validates against its manifest.
@@ -740,9 +779,9 @@ Phase 0 · after 10, 7 · size M
   - **Double logging** into the household's own activity ([D-75](prd/09-decisions.md), FR-PS2).
   - **Feature flags** per household and per platform, so a module can ship dark.
   - **Reference-data admin**: preset and catalog versioning, and the moderation queue for catalog suggestions (FR-GA4). Delivered as the API plus a minimal admin page in the web app.
-  - **No-content-access test** ([05 §6](prd/05-privacy-and-compliance.md)): connects as every role and expects zero rows from an unrelated household.
+  - **No-content-access test** ([05 §6](prd/05-privacy-and-compliance.md)): connects as every role and expects zero rows from an unrelated household. PowerSync's replication role (item 13), which with its bucket storage's credential is the one exception to [D-3](prd/09-decisions.md), is left out; item 13's read-path isolation test holds it instead.
 - **Inputs**
-  - PRD: [02 §8](prd/02-identity-and-access.md); [05 §6](prd/05-privacy-and-compliance.md); D-3, D-75
+  - PRD: [02 §8](prd/02-identity-and-access.md); [05 §6](prd/05-privacy-and-compliance.md); D-3, D-75, D-93
   - API: tag `platform`
   - home: `platform/statusreport`
 - **Done when**
@@ -920,10 +959,10 @@ Phase 0 · after 26, 18, 19, 20 · size L
     - transfer.
   - **Privacy centre** (A-34): rights, analytics consent, and the supervisory authority by country (the ICO for the UK).
   - **Diagnostic bundle** (A-33): rendered in full before it is sent, with redaction.
-  - **Sync health** (A-32): per device, the last sync, cursor, pending count, conflicts, digest state, and a forced resnapshot.
+  - **Sync health** (A-32): per device, the last sync, the last checkpoint (FR-HA19's cursor position under D-93), pending count, conflicts, checksum or digest state (item 14), and a forced re-download.
   - **Clients and versions** (C-57).
 - **Inputs**
-  - PRD: [04](prd/04-billing-and-entitlements.md); [05 §3–4, §9](prd/05-privacy-and-compliance.md); [17 HA14–16, HA18–20](prd/modules/17-household-admin.md); [10 §6](prd/10-sync-risk.md)
+  - PRD: [04](prd/04-billing-and-entitlements.md); [05 §3–4, §9](prd/05-privacy-and-compliance.md); [17 HA14–16, HA18–20](prd/modules/17-household-admin.md); [10 §6](prd/10-sync-risk.md); D-93
   - Design: `household.js`
 - **Done when** critical path 3 passes E2E: subscribe (Stripe test mode) → lapse (clock advanced) → read-only → export.
 - **PR:** —
@@ -937,7 +976,7 @@ Phase 0 · after 23, 6, 15, 9, 17 · size XL
   - **Primitives**: RN versions of item 24's. Hold-to-complete exposes an accessibility action.
   - **Display**: an i18n runtime, themes, and dynamic type to 200 %.
   - **Data and session**:
-    - an expo-sqlite replica per household;
+    - a PowerSync replica per household, through `@household/sync` (PL-5);
     - the token pair in SecureStore;
     - the version header.
   - **Navigation**:
@@ -1001,6 +1040,7 @@ Phase 0 · after 27, 29, 20 · size L · **Phase 0 exit**
     - the server image;
     - the web build on nginx with strict CSP and HSTS;
     - Postgres 17 and S3-compatible storage;
+    - PowerSync with its bucket storage, the Postgres at `wal_level=logical` (item 13);
     - EU SMTP (Q14) and Stripe test mode;
     - migrations run as `household_migrate`;
     - secrets in Coolify environment variables;
@@ -1012,7 +1052,7 @@ Phase 0 · after 27, 29, 20 · size L · **Phase 0 exit**
     - offline capture → reconnect → converge, on `proof`;
     - subscribe → lapse → read-only → export.
   - **Observability baseline**: OpenTelemetry traces, Prometheus RED metrics, and scrubbed error aggregation, all EU-hosted (Q14).
-  - **Dogfood environment and checklist** ([10 §8](prd/10-sync-risk.md)): a separate environment for the team's real use, per PL-8, never staging (D-10). The month of `proof` dogfooding starts here.
+  - **Dogfood environment and checklist** ([10 §8](prd/10-sync-risk.md)): a separate environment for the team's real use, per PL-8, never staging (D-10), with the same services, PowerSync among them. The month of `proof` dogfooding starts here.
 - **Inputs**
   - PRD: [08-roadmap](prd/08-roadmap.md) Phase 0 (*Proof it works*); [10 §8](prd/10-sync-risk.md); [01 §9](prd/01-architecture.md); D-10
   - Design: `fixtures.js`; `conformance.js` `WALKS`
@@ -1054,7 +1094,7 @@ Phase 1 · after 30 · size L
   - API: `…/shopping/*` (16 operations)
   - Design: `shopping.js` (parser table, categories, staple rule, two-trolley log)
   - home: `platform/lexorank`
-- **Done when** scenario 3 and acceptance cases A, B and C pass in the simulator on real Shopping entities.
+- **Done when** scenario 3 and acceptance cases A, B and C pass in the conformance suite on real Shopping entities.
 - **PR:** —
 
 ### 32 · Shopping — web · `planned`
@@ -1104,10 +1144,10 @@ Phase 1 · after 32, 33 · size M · **gate G-C**
   - **Verdict**: written in `docs/adr/0002-gate-g-c.md`.
   - **Remove the `proof` module** (its tables, routes and screens) only once the dogfood log shows a month of use since item 30 ([10 §8](prd/10-sync-risk.md)). If the gate passes sooner, `proof` stays, and the first Phase 2 item to merge after the month is up removes it. Start the Phase 2 dogfood log.
 - **Inputs**
-  - PRD: [10 §7](prd/10-sync-risk.md); [05-shopping](prd/modules/05-shopping.md) (acceptance); [17 FR-HA19](prd/modules/17-household-admin.md)
+  - PRD: [10 §7](prd/10-sync-risk.md); [05-shopping](prd/modules/05-shopping.md) (acceptance); [17 FR-HA19](prd/modules/17-household-admin.md); D-93
 - **Done when**
   - The gate passes, **or** it fails.
-  - On a fail, the ADR adopts a vendor per ADR 0001, and this plan is rewritten before any Phase 2 item starts.
+  - On a fail, the ADR takes the fallback [10 §7](prd/10-sync-risk.md) names since D-93, building [03 §2](prd/03-platform-strands.md)'s engine on the schema and the write path ([ADR 0001](adr/0001-sync-engine.md)), and this plan is rewritten before any Phase 2 item starts.
 - **PR:** —
 
 ---
@@ -1316,10 +1356,10 @@ Phase 2 · after 34 · size L
   - **Sync**:
     - Folders are `strict_version`; metadata is `lww_field`.
     - The body is `lww_row` with the loser preserved, and a 30-day sweep.
-    - Moving a note from shared to private emits retractions.
+    - Moving a note from shared to private retracts it: its rows leave the buckets of everyone but its owner (item 14, [D-93](prd/09-decisions.md)).
   - **Catalogs**: the widget and metrics. **Export** as `notes/*.md`.
 - **Inputs**
-  - PRD: [07-notes](prd/modules/07-notes.md); D-19
+  - PRD: [07-notes](prd/modules/07-notes.md); D-19, D-93
   - API: `…/notes/*` (15 operations)
   - Design: `notes.js` (the sibling index, the 404 resolver, the preserved loser)
   - home: `modules/notes`, `platform/{slug,slugpath}`
@@ -1961,7 +2001,7 @@ Phase 4 · after 35 · size XL
   - **Calendars** in four scopes:
     - household;
     - personal, as a private root ([D-44](prd/09-decisions.md));
-    - `member_shared`, an audience with `floor_seq = 0`;
+    - `member_shared`, an audience with no floor: every member of the calendar is a reader of each of its rows, and a join or a departure rewrites the readers, unless item 14 chose to resolve it through its member list ([04-calendar](prd/modules/04-calendar.md) Sync, D-93);
     - external.
   - **Events**:
     - Each has its own IANA timezone ([D-45](prd/09-decisions.md)).
@@ -1969,12 +2009,12 @@ Phase 4 · after 35 · size XL
   - **Recurrence**: RFC 5545 with RDATE and EXDATE, extending the domain library in TS and Go.
   - **Editing a series** ([D-46](prd/09-decisions.md)): overrides and the three-way edit (this, this and following, all). Following creates `continues_series_id`; orphaned overrides are surfaced.
   - **Participants and RSVP** (`state_set`).
-  - **Privacy** ([D-88](prd/09-decisions.md)): a private event on a shared calendar emits **two feed rows**; the redacted busy row carries its own projection and test.
+  - **Privacy** ([D-88](prd/09-decisions.md) as [D-93](prd/09-decisions.md) carries it): a private event on a shared calendar reaches its owner whole, and declares its redacted busy projection as the column list item 14 generates into a client table of its own, which reaches the owner as well; the projection carries its own test.
   - **Availability** data for the who overlay.
   - **Catalogs**: the `calendar.event` kind, 2 widgets, 3 metrics, search.
   - **Export**: `calendar.ics`.
 - **Inputs**
-  - PRD: [04-calendar](prd/modules/04-calendar.md); D-44–D-46, D-88
+  - PRD: [04-calendar](prd/modules/04-calendar.md); D-44–D-46, D-88, D-93
   - API: `…/calendar/*` (21 operations, shared with items 76–77)
   - Design: `calendar.js`
 - **Done when** these vectors pass:
@@ -2147,7 +2187,7 @@ Phase 4 · after 46, 14 · size XL
 
 - **Scope**
   - **Conversations**: general, group and direct. Q3: the grant wins.
-  - **Membership**: a message-id floor and `floor_seq`, written **in one transaction** ([D-90](prd/09-decisions.md)).
+  - **Membership**: a message-id floor, and readers on every row the floor bounds (the message, its body, its reactions and its attachments' metadata): the members whose floor its message is at or above. The write that creates such a row sets its readers, and a change of membership rewrites them **in the same transaction** ([D-90](prd/09-decisions.md) as D-93 carries it; item 14's mechanism). There is no `floor_seq`, since nothing pulls the feed.
   - **Messages**:
     - the envelope is `additive`, and the body is `lww_row` with the loser preserved;
     - editing within a window;
@@ -2166,7 +2206,7 @@ Phase 4 · after 46, 14 · size XL
   - **Per-country switch** (Q15).
   - **Export**: `chat.html`.
 - **Inputs**
-  - PRD: [15-chat](prd/modules/15-chat.md); D-74, D-89, D-90
+  - PRD: [15-chat](prd/modules/15-chat.md); D-74, D-89, D-90, D-93
   - API: `…/chat/*` (21 operations)
   - Design: `chat.js`
   - home: `modules/chat` (v10/v10.1)
@@ -2214,8 +2254,9 @@ Phase 5 · after 1–87 (the Phase 4 exit, crop catalog included) · size L
   - **Database**:
     - multi-AZ Postgres 17 with a read replica;
     - WAL archiving (RPO ≤ 5 min);
-    - encrypted backups kept 35 days, with separately managed keys.
-  - **Compute**: at least two API instances behind a load balancer.
+    - encrypted backups kept 35 days, with separately managed keys;
+    - logical replication for PowerSync ([D-93](prd/09-decisions.md)): a provider whose administrator can create a role with `REPLICATION` and `BYPASSRLS` (item 13), and a replication slot that survives a failover.
+  - **Compute**: at least two API instances behind a load balancer, and PowerSync, its image pinned, with its bucket storage (item 13).
   - **Object storage**: versioning plus cross-account EU replication.
   - **Secrets and edge**:
     - A managed secret store.
@@ -2228,7 +2269,8 @@ Phase 5 · after 1–87 (the Phase 4 exit, crop catalog included) · size L
     - Live Stripe.
     - Expo push credentials.
 - **Inputs**
-  - PRD: [01 §1, §9](prd/01-architecture.md); [07 §3–4](prd/07-nonfunctional.md); D-5, D-11
+  - PRD: [01 §1, §9](prd/01-architecture.md); [07 §3–4](prd/07-nonfunctional.md); D-5, D-11, D-93
+  - ADR: [0001](adr/0001-sync-engine.md)
 - **PR:** —
 
 ### 89 · Observability, alerting and resilience drills · `planned`
@@ -2239,15 +2281,16 @@ Phase 5 · after 88 · size L
   - **Signals** from [07 §5](prd/07-nonfunctional.md):
     - RED per endpoint and per-module error rates;
     - sync queue depth and conflict rate, and **divergence rate as an alert** ([D-85](prd/09-decisions.md));
+    - PowerSync's replication lag and the write-ahead log its slot retains, alerting before `max_slot_wal_keep_size` is reached (item 13's runbook, [ADR 0001](adr/0001-sync-engine.md));
     - push outcomes;
     - storage per household;
     - the entitlement distribution;
     - job lag.
   - **Logs**: an EU-hosted store kept 12 months.
   - **Availability**: external uptime monitoring against 99.9 %.
-  - **Failure behaviour** (FR-NF3): tested for object storage, push, Stripe and weather outages.
-  - **Drills**: a **monthly automated restore drill** into an isolated environment, and a failover drill.
-  - **Runbooks**: incident response, breach notification (72 hours, to the EU authority and the ICO), restore and failover.
+  - **Failure behaviour** (FR-NF3): tested for object storage, push, Stripe, weather and PowerSync outages (item 13).
+  - **Drills**: a **monthly automated restore drill** into an isolated environment, and a failover drill, each ending with PowerSync replicating again.
+  - **Runbooks**: incident response, breach notification (72 hours, to the EU authority and the ICO), restore and failover, PowerSync's replication slot among them.
   - **Cost per household** (FR-NF6).
 - **PR:** —
 
@@ -2256,9 +2299,9 @@ Phase 5 · after 88 · size L
 Phase 5 · after 88 · size M
 
 - **Scope**
-  - **Load tests**: k6 scenarios to the Year-3 targets (4 000 rps and 40 000 WebSockets).
+  - **Load tests**: k6 scenarios to the Year-3 targets (4 000 rps, and 40 000 WebSockets if item 14 keeps the socket).
   - **Server budgets**: the p50, p95 and p99 budgets of [07 §2](prd/07-nonfunctional.md), and **query-count budgets** on every endpoint (FR-NF1).
-  - **Sync at volume**: `sync_changes` partitioning and compaction; snapshot bootstrap for a median household.
+  - **Sync at volume**: PowerSync's concurrent client connections at the Year-3 target item 14 restates for them in [07 §1](prd/07-nonfunctional.md) (one API process serves at most 200, [ADR 0001](adr/0001-sync-engine.md)); its bucket storage, compaction and replication lag; the initial sync of a median household; rewriting an audience's readers; and `sync_changes`' partitioning and retention if item 14 kept the feed.
   - **Client budgets**: mobile cold start under 1.2 s from cache; web LCP and INP.
   - **Fixes** for what the tests find.
 - **PR:** —
@@ -2315,7 +2358,7 @@ Phase 5 · after 88 · size L
   - **Pricing** per currency, and sign-up leading into the web purchase flow.
   - **Legal pages**:
     - terms;
-    - the privacy notice, with a children's section, the sub-processor list, the calendar-connection disclosure, and the UK Art. 27 representative and ICO;
+    - the privacy notice, with a children's section, the sub-processor list, the calendar-connection disclosure, the sync service's database credentials as the one place the no-content-access guarantee rests on who holds them ([05 §6](prd/05-privacy-and-compliance.md), D-93), and the UK Art. 27 representative and ICO;
     - cookie posture;
     - the DPA page.
   - **Drafts for counsel**: the legal text is drafted here for counsel's review, which is off the PR list.
@@ -2378,3 +2421,4 @@ Tracked here so they are not forgotten. None of them takes a numbered slot.
 | 2026-09-26 | PL-1, PL-8, 1, 16 | Item 1: MinIO replaced by RustFS as the dev S3 store, because MinIO's repository is archived and its images are no longer published. PL-1 gains `tooling/`, a workspace package for guards over the workspace itself (strict flags, catalog pins, local/CI parity) |
 | 2026-09-27 | 3 | Item 3: the tenant middleware resolves the caller in a transaction of its own, and each unit of work opens its own transaction with the tenant settings, committed before the handler answers, instead of one transaction held for the request, which would commit after the response ([ADR 0005](adr/0005-tenancy-registry-and-row-level-security.md), PRD 01 §2.2 amended). A tenant table added later also adds its rows to the isolation fixture (`server/internal/arch/testdata/isolation/fixture.sql`) |
 | 2026-09-27 | 4, 6, 8, 9, 10, 13, 14, Q11 | Item 4: `tenant.InTx` is read-only and `mutation.Apply` is the only write, committing only what it records; the feed takes a per-household lock so a household's rows commit in `seq` order, and is keyed `(household_id, seq, occurred_at)` because it is partitioned by month (PRD 03 §2.2 amended); the contract gains `idempotency_in_progress`, and a key stores only a `2xx` response (D-92, [ADR 0006](adr/0006-sync-ready-schema-and-the-mutation-spine.md)); item 6's typed `409` admits it beside `version_conflict`. Items 8, 9 and 13 set the audit `via`, item 8 the actor label, item 14's partition maintenance handles the default partition, and its compaction horizon is the greatest `seq` it dropped, since monthly partitions overlap in `seq`. `Idempotency-Key` covers module routes; item 10 mounts it on its household routes, and item 8 decides where the keys of routes outside a household live. Q11 records three creates that do not require the client's id |
+| 2026-09-27 | 5, 9, 12–15, 18, 20, 21, 27, 28, 30, 31, 34, 43, 75, 85, 88–90, 94, PL-5, PL-6, Q2 | Item 5: the spike's verdict is to adopt PowerSync, self-hosted, for replication and keep the write path, every push going through the mutation spine (D-93, [ADR 0001](adr/0001-sync-engine.md)). Items 12–15 are rewritten around it. The conformance suite drives PowerSync clients against the real stack instead of an in-process engine. Item 13 deploys PowerSync, generates its streams from the entity registry, and gains item 9 as a dependency, for the tokens PowerSync validates. Item 14 adds the visibility and audience streams and decides what becomes of `sync_changes`, the digest, the reset and the stream. Item 15 wraps PowerSync's SDKs. PL-5's replica is op-sqlite in a dev build, PL-6 and G-C's fallback (now: build the engine) follow, and items 9, 20, 27, 28, 31 and 90 drop the replaced cursor, snapshot and simulator. Items 75 and 85 keep an audience's readers on each row instead of `floor_seq`. Item 12 runs against stand-ins of its own until items 13–14 land; item 13's PowerSync token carries an audience item 9's access token does not; item 14 keeps `sync_changes`' partitions while the spine still writes it; item 15's connector records each write's `client_time`, handles a refusal of the whole batch, and proves the queue survives a restart, which the spike did not test. PowerSync's replication role, with its bucket storage's credential, is the one exception to D-3 (PRD 01 §2.3, 05 §6), so item 21's no-content-access test leaves it out and item 13 amends the contract's statement that no role bypasses row-level security. Items 30 and 88 deploy PowerSync to staging, the dogfood environment and production, whose provider must let an administrator create that role. Item 34's failed gate takes the new fallback, not a vendor. Item 12 scripts reordering as the order in which clients reconnect. Items 14 and 85 put readers on every row an audience bounds, not only on messages, and item 14 may resolve a `member_shared` calendar, which has no floor, through its member list. Item 14 also settles the push response's `seq` and every frame the socket carries, not only Chat's, and weighs the digest against what bucket checksums cannot see: the buckets against PostgreSQL. Item 15's connector handles a `409 idempotency_in_progress` and a `422`. Item 12 carries a connector of its own that holds and replays scenario 14's and scenario 8's mutations, since items 13, 14 and 18 need those scenarios green before item 15 exists. Item 15's connector sends several queued transactions to a batch, since a device may send 60 a minute, and its withdrawn state is a row that left the replica, which items 13 and 15 must tell from a deletion by another member. Item 13 holds the bucket storage's credential to the service alone, item 27 shows the last checkpoint that FR-HA19 still asks for, item 75 leaves item 14 its choice for a `member_shared` calendar, and item 94's privacy notice states the sync service's credentials as PRD 05 §6 requires. Item 13's isolation test connects a member of two households, since the spike's members each belonged to one; item 14 schedules PowerSync's compaction nightly, since bucket storage keeps superseded data until it runs, and builds a socket it keeps; item 15 carries the client half of the socket and the digest if item 14 keeps them; item 89 alerts on PowerSync's replication lag, which the ADR says is monitored. Item 18 holds a `suspended` household's Sync ✗ on PowerSync's read path, which passes no tenant middleware. Item 75 declares its busy projection as item 14's column list rather than two feed rows, and item 43 retracts a note made private through its streams rather than by emitting retractions. Item 14's redacted stream keeps an audience's readers, its metrics keep the divergence item 89 alerts on, its feed decision amends PRD 07 §1 and weighs G-C's fallback, and item 15 shows a held `deferred` mutation as pending. Item 20, whose nightly erasure job item 14 precedes, runs item 14's compaction after it; item 14's feed decision also amends PRD 01 §3 and §10 if the write stops. Item 13 defines PowerSync's failure behaviour under FR-NF3, keeps its `debug_api` off, and holds every streamed table in the publication; item 89 tests PowerSync's outages and drills its recovery, and item 90 measures its concurrent connections, which one API process caps at 200, and `sync_changes` at volume if item 14 kept it. Item 14 keeps a rewrite of an audience's readers from counting as an edit, since item 4's `touch_entity` would bump every row's version and turn queued edits into conflicts, and takes a member removed from the household out of every audience's readers; item 13 amends the contract's device sync cursor; item 15 keeps a batch's mutations fixed under its key and gives a split batch keys of its own; item 12 names item 18 among the items that switch scenarios on. Item 13's member stream checks the module's enablement as the owner's does, and its Inputs name the D-3 exception, the bucket storage and the sync token it builds; item 14 records keeping an audience's readers out of the version in a new ADR, since ADR 0006's trigger bumps it on every update, and its streams test a reader table as well as readers on the row. Item 14 takes a reader table, which the probes accepted only alone, only once the suite shows it beside the grant, as it does the calendar's member list, and restates PRD 07 §1's connection target for PowerSync, which item 90 measures; item 15's connector renews the API's credential on a `401`, not PowerSync's token; items 13 and 21 count the bucket storage's credential in D-3's one exception, as D-3 does. Item 12 scripts a held `deferred` or `entitlement` mutation replayed after a later write to the same row, the one reorder within a client; item 14 holds every row a private item or root bounds to its owner, since a stream reads no feed row, and settles the point a kept digest is computed at, since a PowerSync client has no feed cursor. Item 14 keeps a rewrite of the visibility and owner such a row carries from counting as an edit, as it does an audience's readers, and writes the row leaving the buckets into FR-SY7; item 13's replication role reads the tables later modules create through a `SELECT` grant, which `BYPASSRLS` does not give; item 12's stand-ins include the replication role and publication, and its Inputs name the spike's SQL, configuration and backend as well as its harness; item 90 load-tests the socket only if item 14 keeps it; items 20, 21, 27, 34, 43 and 85 name D-93 among their Inputs. Item 13's replication role reads only the tables in the publication, not every table by default privileges, since it reads past row-level security, and its contract change amends the contract's description of the offline data path; item 15's connector keeps each outcome other than `applied` with its mutation, since the next checkpoint replaces the local write that the conflict inbox and scenario 17 need; items 13–15 name ADR 0001 among their Inputs |

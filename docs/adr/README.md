@@ -19,11 +19,11 @@ old one's status becomes *Superseded by NNNN*.
 
 ## Index
 
-Numbers 0001 and 0002 are reserved by the plan for item 5 (`0001-sync-engine.md`) and item 34
-(`0002-gate-g-c.md`).
+Number 0002 is reserved by the plan for item 34 (`0002-gate-g-c.md`).
 
 | # | Decision | Status |
 |---|---|---|
+| [0001](0001-sync-engine.md) | PowerSync, self-hosted, replicates; the write path stays Household's | Accepted |
 | [0003](0003-contract-enforcement-at-the-edge.md) | The server validates against the committed contract, and says what failed where | Accepted |
 | [0004](0004-database-roles-migration-blocks-and-test-databases.md) | Database roles, migration blocks, and one database per test package | Accepted |
 | [0005](0005-tenancy-registry-and-row-level-security.md) | A transaction per unit of work carries the tenant, and row-level security is one template | Accepted |

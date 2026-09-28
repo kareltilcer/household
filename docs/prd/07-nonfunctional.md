@@ -40,6 +40,9 @@ Budgets, measured at the stated percentile in production, per environment region
 | Garden plan check, full season | 300 ms | 800 ms | 2 000 ms |
 | Pre-signed URL issue | 20 ms | 60 ms | 150 ms |
 
+Under D-93 the pull and the bootstrap are PowerSync's: the pull's budget applies to a checkpoint of
+500 changes reaching a connected client, and the bootstrap's to a replica's initial sync.
+
 Client-side:
 
 | | Target |
@@ -53,7 +56,8 @@ Client-side:
 
 **FR-NF1 — No N+1 anywhere.** The dashboard fan-out, the sync pull, the tree reads and the
 search are all single-query-set operations. A test asserts the query count per endpoint against a
-recorded budget and fails when it grows.
+recorded budget and fails when it grows. Under D-93 the pull is PowerSync's and no endpoint of
+ours, so this test does not hold it; the note under the budgets above says what its budget covers.
 
 **FR-NF2 — Computed views are computed, not cached, unless proven otherwise.** `home` established
 this for the Utilities summary and the Garden check, and it was right: a cache of a derived figure
@@ -90,7 +94,7 @@ provider unavailable ⇒ Garden renders from cache with no error the member can 
 | Tokens | Access JWT 15 min, EdDSA; refresh tokens rotating and single-use with family reuse detection |
 | Session | `__Host-` prefixed, `HttpOnly`, `Secure`, `SameSite=Lax`; double-submit CSRF plus an Origin allowlist |
 | Authorization | Resolved server-side from the membership on every request. **Never from a client-supplied field, never from a JWT claim** |
-| Tenant isolation | Application scoping **and** RLS with `FORCE`. Tested in CI |
+| Tenant isolation | Application scoping **and** RLS with `FORCE`. Tested in CI. Under D-93 the replicated path has the generated stream definitions alone, held by a read-path isolation test ([01](01-architecture.md) §2.3) |
 | Input | Every request body validated against the OpenAPI schema at the edge |
 | Uploads | Type sniffed from bytes; size capped; active types download-only; `nosniff` everywhere |
 | Output | The web app sets a strict CSP with no `unsafe-inline`; user content is rendered through sanitising renderers only |

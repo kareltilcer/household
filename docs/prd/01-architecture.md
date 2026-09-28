@@ -37,6 +37,12 @@ EU one (**D-89**): a UK household's data is EU-resident like everyone else's, wh
 because the UK treats the EEA as adequate. The market list does not change the deployment; it
 changes the paperwork ([05-privacy-and-compliance.md](05-privacy-and-compliance.md) §11).
 
+> **Under D-93 a second service runs beside the binary in every environment**: PowerSync,
+> self-hosted in the same EU region, which clients reach over a connection of their own to
+> replicate, with its bucket storage in a PostgreSQL database of its own and the cluster at
+> `wal_level=logical` (§2.3, §7, [ADR 0001](../adr/0001-sync-engine.md)). Writes still go through
+> the binary's API.
+
 ### Why a monolith, still
 
 `home` is a modular monolith and it is the right shape here too, for reasons that got
@@ -127,6 +133,18 @@ credential that can read household content, which is how [G8](00-overview.md) is
 property of the system rather than a policy (**D-3**, and see
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md)).
 
+> **Under D-93 a fourth role replicates, and it bypasses row-level security.** PowerSync reads the
+> write-ahead log and sets no tenant, so its replication role holds `REPLICATION`, whose stream of
+> changes row-level security does not filter, and `BYPASSRLS`, without which it could read no
+> table's initial snapshot, since every tenant table forces row-level security. It is the PowerSync
+> service's own credential, and no staff member or tool connects with it. On its path the tenant
+> boundary is the stream definitions generated from the entity registry, which a read-path isolation
+> test holds to one household. It is the one exception to the paragraph above, and the one path
+> on which §2.1's rule constrains a query once rather than twice (**D-2**,
+> [ADR 0001](../adr/0001-sync-engine.md)). What it replicates lands in PowerSync's bucket storage,
+> a database of its own with no row-level security, whose credential is likewise the service's
+> alone ([05](05-privacy-and-compliance.md) §6).
+
 ### 2.4 What is *not* tenant-scoped
 
 | Table group | Scope | Notes |
@@ -152,7 +170,7 @@ Applied by every module without exception; stated once here.
 |---|---|
 | **Primary keys** | `uuid` holding a **UUIDv7**. Clients generate them (the sync engine requires client-side id generation so an offline create has a stable identity) |
 | **Tenant key** | `household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE` on every tenant row |
-| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token |
+| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token. Under D-93 a rewrite alone of the access fields a row carries for its stream does not count as an update: an audience's readers ([modules/15-chat.md](modules/15-chat.md) Sync), or the visibility and owner a row takes from the private item that bounds it. Plan item 14 keeps such a rewrite out of the version, or keeps those fields off the row |
 | **Audit columns** | `created_by`, `created_at`, `updated_by`, `updated_at` — `timestamptz`, never local time |
 | **Soft delete** | `deleted_at timestamptz NULL`. Hard delete is reserved for the destructive-operation gate and for erasure |
 | **Ordering** | Lexorank `position text` where users order things by hand |
@@ -277,6 +295,12 @@ Household has **one** realtime channel and it exists to serve the sync engine.
   payload never rides the socket, the socket never needs to know who may see it. **D-8.**
 - **Chat is the single exception.** Message payloads ride the socket to resolved conversation
   members, because a pull round-trip is visible latency in a chat and nowhere else.
+
+> **Under D-93 replication is PowerSync's**, over its own connection from each client to the
+> PowerSync service, so a client neither pulls `GET …/sync/changes` nor needs a nudge to learn that
+> the feed advanced. Whether this socket stays, for Chat's payload exception and for the
+> entitlement and access changes the contract also sends on it, is plan item 14's decision, and
+> this section is amended with it ([ADR 0001](../adr/0001-sync-engine.md)).
 
 The full design of the change feed, the mutation queue, retractions and conflict policy is in
 [03-platform-strands.md](03-platform-strands.md) §2. It is the largest single piece of new

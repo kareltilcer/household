@@ -9,7 +9,7 @@ Two client applications, one contract, one design system, one set of translation
 | **Platforms** | iOS 16+, Android 10+ | Evergreen Chrome, Safari, Firefox, Edge; last two majors |
 | **Primary role** | Daily use, capture, notifications, everything offline | Setup, configuration, planning, long-form reading, admin, billing |
 | **Offline** | Full local replica, queued writes | Reads from cache, queued writes; a browser is not the offline-first surface |
-| **Data layer** | SQLite (expo-sqlite) as the replica + sync engine | TanStack Query with a persisted cache |
+| **Data layer** | SQLite as the replica, kept by the sync engine: PowerSync's React Native SDK on op-sqlite, in a dev build (D-93) | TanStack Query with a persisted cache |
 
 **D-36: two codebases, not React Native Web.** The shared surface is the *contract, the tokens
 and the strings* — not the components. RN Web produces desktop layouts that are worse than the
@@ -24,7 +24,7 @@ presentation, which is where the two platforms genuinely differ; nothing else is
 | **`@household/api`** | Generated from `openapi.yaml` on every build | Both clients. A contract change that breaks a client breaks the build |
 | **`@household/i18n`** | The translation catalogs, ICU MessageFormat, typed keys | Both clients and the server's render path |
 | **`@household/tokens`** | The design tokens (see §3) | Both clients, as CSS custom properties and as a JS object |
-| **`@household/sync`** | The sync protocol client: cursor management, mutation queue, conflict surfacing | Both clients; the storage adapter differs |
+| **`@household/sync`** | The sync client over PowerSync's SDKs (D-93): the replica, the connector that pushes the mutation queue, conflict surfacing | Both clients; the SDK differs (React Native on op-sqlite, web on wa-sqlite) |
 | **`@household/domain`** | Pure functions with no I/O: money arithmetic, tariff evaluation for preview, allocation preview, recurrence expansion, unit conversion | Both clients — and **the same rules are implemented server-side and cross-checked by a shared test-vector file**, so a preview never disagrees with the saved result |
 
 **D-37: shared test vectors, not shared implementations, for anything computed on both sides.**
@@ -133,7 +133,7 @@ The engine is in [03-platform-strands.md](03-platform-strands.md) §2. What the 
 | **Syncing** | A progress indication only when it takes longer than a moment |
 | **Conflict** | The row is flagged and tappable, opening a plain comparison: *"You set the amount to 450. Petr set it to 500 at 18:40. Which is right?"* — with both values, both authors, both times, and no jargon |
 | **Rejected** | Flagged with the actual reason in a sentence, and an action: retry, edit, or discard |
-| **Re-snapshot needed** | Handled silently unless it takes long enough to notice |
+| **Re-snapshot needed** (under D-93, a re-download) | Handled silently unless it takes long enough to notice |
 
 **D-39: conflicts are surfaced, never hidden and never auto-resolved silently where a human would
 care.** For `lww_field` entities the merge is invisible because nothing was lost. For

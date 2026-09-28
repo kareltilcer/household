@@ -37,16 +37,19 @@ Everything after that is genuinely parallelisable, because modules do not import
    client-generated UUIDv7 keys, tombstones, the denormalised access fields, and a declared merge
    policy per entity), enforced by architecture tests — **plus** the timeboxed buy-vs-build spike
    against off-the-shelf sync engines. Gate **G-A**. See [10-sync-risk.md](10-sync-risk.md) §1–2.
-2. **The conformance simulator** — a deterministic multi-client harness with scripted partitions,
-   reordering and clock skew, written **before** the engine, covering 18 named scenarios and six
-   invariants, then fuzzed. Gate **G-B**.
-3. **The engine**, satisfying it.
+2. **The conformance suite** — a multi-client harness with scripted partitions, reordering and
+   clock skew, written **before** the engine, covering 18 named scenarios and six invariants, then
+   fuzzed. Gate **G-B**. Since the spike adopted PowerSync (D-93) it drives PowerSync clients
+   against the real stack, so its schedules are seeded rather than deterministic
+   ([10-sync-risk.md](10-sync-risk.md) §4).
+3. **The engine**, satisfying it: PowerSync's replication, and the push, streams and client library
+   that are Household's.
 4. Everything else listed above — plus the **sync-health screen**, which moves here from the admin
    module, because with no-content-access it is the only view anyone gets of a sync failure.
 
 **Phase 0 is the riskiest part of the whole programme** and it has no demo. That is worth saying out
 loud, because the pressure to start a feature module early will be constant and yielding to it is how
-`household_id` ends up missing from four tables. The simulator in step 2 exists precisely to replace
+`household_id` ends up missing from four tables. The suite in step 2 exists precisely to replace
 the feedback loop that a phase with no UI otherwise lacks.
 
 ## Phase 1 — The first module, all the way
@@ -67,10 +70,12 @@ against a list nobody can add to without a signal.
 **Exit criterion — gate G-C:** the shopping acceptance test passes on two physical phones in
 aeroplane mode, and the sync-health screen
 ([modules/17-household-admin.md](modules/17-household-admin.md) FR-HA19) shows what happened.
-**If it does not pass, the fallback is already written down: stop and adopt one of the engines
-spiked in Phase 0.** Naming the fallback in advance is what makes this a gate rather than a wish,
-because the decision will otherwise be taken under schedule pressure by the people who built the
-thing they would be abandoning.
+**If it does not pass, the fallback is already written down: stop and build
+[03](03-platform-strands.md) §2's engine on the schema and the write path, which are already
+ours.** (It was to adopt one of the engines spiked in Phase 0 until D-93 adopted PowerSync at gate
+G-A; [10-sync-risk.md](10-sync-risk.md) §7.) Naming the fallback in advance is what makes this a
+gate rather than a wish, because the decision will otherwise be taken under schedule pressure by
+the people who built the thing they would be abandoning.
 
 ## Phase 2 — The daily core
 
@@ -159,8 +164,8 @@ Stated so that changing it is a decision rather than a drift:
 - **If beta research says Calendar is the acquisition driver**, it moves to Phase 2 and Chat moves
   after Phase 5.
 - **If the sync engine is not solid at the end of Phase 1**, gate G-C fires and the fallback is to
-  adopt one of the engines spiked in Phase 0 rather than to carry on building. There is no version
-  of this product that ships on a sync engine nobody trusts.
+  build [03](03-platform-strands.md) §2's engine rather than to carry on with the adopted one
+  (D-93). There is no version of this product that ships on a sync engine nobody trusts.
 - **If the crop catalog cannot be sourced at acceptable quality**, Garden ships at `pots` and `beds`
   tiers only, with `plot` deferred — the tier model makes that a supported outcome rather than a
   crisis.

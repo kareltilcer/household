@@ -105,6 +105,20 @@ replicate every message in it still inside the 90-day horizon: the back catalogu
 withhold, delivered by the path nobody was looking at. The two floors are written in one transaction
 from one event, so they cannot drift.
 
+> **Under D-93 the replicated path is PowerSync's streams, and the floor is not a term of them**,
+> because a stream cannot compare a row with a member's floor ([09](../09-decisions.md) D-93). The
+> server keeps **readers** on each row the floor bounds instead: the conversation's members whose
+> floor its message is at or above. That is the message, and equally its body, its reactions and its
+> attachments' metadata, since each is an entity with a stream of its own, and a row resolved
+> through the conversation's membership instead would reach every member of it, whatever their
+> floor. The write that creates such a row sets them, and a change of membership rewrites them in
+> the transaction that makes it, removal from the household included: readers left behind would
+> reach a member re-added later with the grant, in conversations they are no longer in. A rewrite
+> of the readers alone is not an edit of the row, so a queued or `If-Match` edit to it still
+> applies against the version it was made at. A member added with a floor is a reader of nothing
+> before it, so FR-CT2's floor holds on the replicated path as well. `floor_seq`, a position in a
+> feed nothing now pulls, has no reader under D-93 and is not stored.
+
 ## Catalog contributions
 
 Widget `chat.unread`; metrics `chat.unread_total` and `chat.unread_conversations` (both per
