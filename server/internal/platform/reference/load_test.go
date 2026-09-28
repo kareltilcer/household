@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"slices"
 	"testing"
 	"testing/fstest"
 
@@ -45,12 +46,19 @@ func snapshot(t *testing.T, tx pgx.Tx) string {
 	return s
 }
 
-// load runs Load on fsys in tx and returns its reports by dataset.
+// load runs Load on fsys in tx and returns its reports by dataset. Load's own transaction is a
+// savepoint of tx, which is rolled back, and the deferred constraints are checked only when a
+// transaction commits, so load checks them itself, as a deploy's commit would, and defers them
+// again for the next load (every deferrable constraint is the reference tables', each initially
+// deferred).
 func load(t *testing.T, tx pgx.Tx, fsys fs.FS) map[string]reference.Report {
 	t.Helper()
 	reports, err := reference.Load(t.Context(), tx, fsys)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := tx.Exec(t.Context(), "SET CONSTRAINTS ALL IMMEDIATE; SET CONSTRAINTS ALL DEFERRED"); err != nil {
+		t.Fatalf("the load breaks a constraint a commit checks: %v", err)
 	}
 	byDataset := map[string]reference.Report{}
 	for _, r := range reports {
@@ -249,6 +257,47 @@ func TestLoadingKeepsARecordTheFilesDrop(t *testing.T) {
 	}
 	if after := snapshot(t, tx); after != before {
 		t.Fatal("keeping the rows wrote")
+	}
+}
+
+// A unit renamed is a new unit, and the row under its old key is kept beside it, still carrying
+// the CLDR identifier the new one takes over: an app in the field may still name the old key
+// (D-11), and the load must not fail when it commits.
+func TestLoadingARenamedUnitKeepsTheOldKey(t *testing.T) {
+	tx := rolledBack(t)
+	fsys := edited(t, "units/volume.json", func(record map[string]any) {
+		field(t, record, "base_unit")["value"] = "litre"
+		units, ok := record["units"].([]any)
+		if !ok {
+			t.Fatal("volume has no units")
+		}
+		for _, u := range units {
+			unit, ok := u.(map[string]any)
+			if !ok {
+				t.Fatal("a unit of volume is not an object")
+			}
+			if unit["key"] == "l" {
+				unit["key"] = "litre"
+			}
+			if counterpart, ok := unit["counterpart"].(map[string]any); ok && counterpart["value"] == "l" {
+				counterpart["value"] = "litre"
+			}
+		}
+	})
+
+	// The litre inserted under its new key; the dimension, the pint and the gallon pointed at it;
+	// the row under the old key kept.
+	r := load(t, tx, fsys)[reference.Units]
+	if want := (reference.Report{Dataset: reference.Units, Version: 2, Inserted: 1, Updated: 3,
+		Unchanged: shipped(t)[reference.Units] - 4, Kept: 1}); r != want {
+		t.Errorf("%+v, want %+v", r, want)
+	}
+	var keys []string
+	if err := tx.QueryRow(t.Context(), "SELECT array_agg(key ORDER BY key) FROM units WHERE cldr = 'liter'").Scan(&keys); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"l", "litre"}; !slices.Equal(keys, want) {
+		t.Errorf("the units in CLDR's liter are %v, want %v", keys, want)
 	}
 }
 

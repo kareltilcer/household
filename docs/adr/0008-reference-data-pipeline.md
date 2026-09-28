@@ -50,7 +50,9 @@ tables, in one transaction under an advisory lock. The test template is built th
 - `reference_datasets` holds each dataset's version, incremented by a load that changed any of its
   rows.
 - **A row is never deleted.** One the files no longer hold is kept and logged, since an app in the
-  field may still name it (D-11).
+  field may still name it (D-11). A record renamed is a new row beside the old one, so a table
+  holds only its key unique; what else is unique among the records the files hold, such as a
+  unit's CLDR identifier, `Read` checks.
 
 **The tables are typed and global**: `country_profiles`, `unit_dimensions`, `units` and
 `reference_datasets`, in the platform's migration block. They have no `household_id` and no
@@ -66,10 +68,13 @@ language offline and after a language switch without asking again. A list carrie
 
 **The content** is five country profiles, CZ, SK, DE, PL and GB, and five dimensions (length,
 area, mass, temperature, volume) with 25 units. It is all drafted and flagged. The United Kingdom is
-`GB`, its ISO 3166-1 code, not `UK`, which ISO only reserves. GB defaults to imperial units: PRD 05
-D-89 serves the UK with imperial and mpg, and an odometer reads miles there. `first_day_of_week` is
-0 for Sunday, as JavaScript's `Date#getDay` and Go's `time.Weekday` count, which the contract now
-says of the household's field too.
+`GB`, its ISO 3166-1 code, not `UK`, which ISO only reserves. Every profile, GB's too, defaults to
+metric units, as PRD 03 §9 makes metric every household's default; imperial, which PRD 05 §11
+counts among what already serves the UK, is a household's choice. Starting GB in imperial, for the
+miles a UK odometer reads at the cost of °F, would take a decision that amends PRD 03 §9.
+`first_day_of_week` is 0 for Sunday, as JavaScript's `Date#getDay` and Go's `time.Weekday` count,
+which the contract now says of the household's field too. A household created without units or a
+first day takes its country's, so the contract's household states no default of its own.
 
 ## Alternatives rejected
 

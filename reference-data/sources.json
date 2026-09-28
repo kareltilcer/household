@@ -73,10 +73,6 @@
       "title": "Household PRD, 03 §9 — Internationalisation and localisation: metric by default, imperial available for length, area, mass, temperature and volume",
       "path": "docs/prd/03-platform-strands.md"
     },
-    "prd-uk-launch-market": {
-      "title": "Household PRD, 05 — Privacy and compliance, D-89: the UK is a launch market, served by imperial units and mpg",
-      "path": "docs/prd/05-privacy-and-compliance.md"
-    },
     "si-brochure": {
       "title": "BIPM, The International System of Units (SI Brochure), 9th edition: units, prefixes, and the non-SI units accepted for use with the SI (litre, hectare)",
       "url": "https://www.bipm.org/en/publications/si-brochure"

@@ -4914,7 +4914,7 @@ paths:
         types in the right order and empty values, labelled with the words that appear on that
         country's bill.
       parameters:
-        - { name: country, in: query, required: false, schema: { type: string, pattern: '^[A-Z]{2}$' } }
+        - { name: country, in: query, required: false, schema: { $ref: '#/components/schemas/CountryCode' } }
         - { name: commodity, in: query, required: false, schema: { $ref: '#/components/schemas/Commodity' } }
       responses:
         '200': { description: Presets, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/UtilityPreset' } } } } } } }
@@ -8671,12 +8671,12 @@ components:
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         name: { type: string, maxLength: 80 }
-        country: { type: string, pattern: '^[A-Z]{2}$', description: 'Drives tariff presets, document types, statutory vehicle schedules, holidays and default VAT.' }
+        country: { $ref: '#/components/schemas/CountryCode', description: 'A country Household has a profile of (`getReferenceCountries`). Drives tariff presets, document types, statutory vehicle schedules, holidays and default VAT.' }
         timezone: { type: string }
         base_currency: { type: string, pattern: '^[A-Z]{3}$' }
         locale: { type: string }
-        units: { $ref: '#/components/schemas/UnitSystem', default: metric }
-        first_day_of_week: { type: integer, minimum: 0, maximum: 6, description: '0 for Sunday to 6 for Saturday, as JavaScript''s Date#getDay and Go''s time.Weekday count.' }
+        units: { $ref: '#/components/schemas/UnitSystem', description: 'When omitted, the `default_units` of the country''s profile.' }
+        first_day_of_week: { type: integer, minimum: 0, maximum: 6, description: '0 for Sunday to 6 for Saturday, as JavaScript''s Date#getDay and Go''s time.Weekday count. When omitted, the `first_day_of_week` of the country''s profile.' }
 
     Household:
       allOf:
@@ -8694,7 +8694,7 @@ components:
       type: object
       properties:
         name: { type: string }
-        country: { type: string, pattern: '^[A-Z]{2}$' }
+        country: { $ref: '#/components/schemas/CountryCode' }
         timezone: { type: string }
         base_currency: { type: string, pattern: '^[A-Z]{3}$', description: 'Recomputes totals from each row''s stored rate. Warned in the client and audited — silently redenominating a household''s history would be the worst bug the product could ship.' }
         locale: { type: string }

@@ -8,11 +8,12 @@
 -- +goose Up
 
 -- Each dataset's version, which the loader increments when a load changes any of its rows, for a
--- client that caches a dataset whole.
+-- client that caches a dataset whole, and when that load ran. A load that changes nothing writes
+-- neither.
 CREATE TABLE reference_datasets (
   name text PRIMARY KEY CHECK (name ~ '^[a-z][a-z0-9_]*$'),
   version bigint NOT NULL CHECK (version > 0),
-  loaded_at timestamptz NOT NULL
+  changed_at timestamptz NOT NULL
 );
 
 -- PRD 03 §9: metric by default, imperial available. A household's own setting is item 10's.
@@ -52,7 +53,9 @@ CREATE TABLE unit_dimensions (
 
 -- A unit, and its exact conversion to its dimension's base unit: base = (value + offset) ×
 -- numerator ÷ denominator. numeric holds each factor as written, 0.45359237, or as a fraction
--- where it has no finite decimal, 5/9 for °F.
+-- where it has no finite decimal, 5/9 for °F. A CLDR identifier is unique among the units the
+-- files hold, which the loader checks, but not here: a unit the files rename is kept under its
+-- old key beside its successor, and both name the same CLDR unit.
 CREATE TABLE units (
   key text PRIMARY KEY CHECK (key ~ '^[a-z][a-z0-9_]*$'),
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
@@ -65,7 +68,6 @@ CREATE TABLE units (
   to_base_numerator numeric NOT NULL CHECK (to_base_numerator > 0),
   to_base_denominator numeric NOT NULL CHECK (to_base_denominator > 0),
   counterpart text REFERENCES units (key) DEFERRABLE INITIALLY DEFERRED,
-  CONSTRAINT units_cldr_key UNIQUE (cldr) DEFERRABLE INITIALLY DEFERRED,
   CHECK (counterpart <> key)
 );
 

@@ -16,10 +16,10 @@
   "currency": { "value": "GBP", "source": "iso-4217", "drafted": true },
   "vat_standard_percent": { "value": "20", "source": "gov-uk-vat-rates", "drafted": true },
   "default_units": {
-    "value": "imperial",
-    "source": "prd-uk-launch-market",
+    "value": "metric",
+    "source": "prd-localisation",
     "drafted": true,
-    "note": "UK law is metric for trade (Weights and Measures Act 1985) but keeps miles for road distances, and everyday life keeps feet, pounds and stones. Imperial gives an odometer in miles, as a UK car reads, at the cost of °F, which a UK household may switch away from."
+    "note": "PRD 03 §9 makes metric every household's default, and UK law is metric for trade (Weights and Measures Act 1985). Road distances stay in miles and everyday life keeps feet, pounds, stones and pints, which PRD 05 §11 (D-89) counts among what already serves the UK, so a UK household may switch to imperial, at the cost of °F. Starting GB in imperial would take a decision that amends PRD 03 §9."
   },
   "first_day_of_week": { "value": 1, "source": "cldr-week-data", "drafted": true },
   "holiday_set": {

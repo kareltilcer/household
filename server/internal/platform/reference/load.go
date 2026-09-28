@@ -115,8 +115,8 @@ func finish(ctx context.Context, tx pgx.Tx, r *Report, tables ...held) error {
 		return err
 	}
 	return tx.QueryRow(ctx, `
-		INSERT INTO reference_datasets AS d (name, version, loaded_at) VALUES ($1, 1, now())
-		ON CONFLICT (name) DO UPDATE SET version = d.version + 1, loaded_at = now()
+		INSERT INTO reference_datasets AS d (name, version, changed_at) VALUES ($1, 1, now())
+		ON CONFLICT (name) DO UPDATE SET version = d.version + 1, changed_at = now()
 		RETURNING version`, r.Dataset).Scan(&r.Version)
 }
 

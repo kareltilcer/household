@@ -191,9 +191,13 @@ func datasetVersion(ctx context.Context, tx pgx.Tx, name string) (int64, error) 
 
 // read runs fn in a read-only transaction as the request role. The tables are global, so the
 // transaction carries no household; setting the role holds it to the request role's privileges
-// even on a pool that connected as a role above it, as tenant.InTx does.
+// even on a pool that connected as a role above it, as tenant.InTx does. The transaction is
+// repeatable read, so that its statements share one snapshot: a load that commits between them
+// cannot pair a dataset's version with rows of another, or a unit with a dimension the answer
+// does not list.
 func (h handler) read(ctx context.Context, fn func(pgx.Tx) error) error {
-	return pgx.BeginTxFunc(ctx, h.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	options := pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}
+	return pgx.BeginTxFunc(ctx, h.pool, options, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT set_config('role', $1, true)", db.RoleApp); err != nil {
 			return err
 		}

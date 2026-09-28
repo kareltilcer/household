@@ -92,7 +92,7 @@ func TestReferenceCountry(t *testing.T) {
 	}
 	var gb country
 	decode(t, rec, &gb)
-	if gb.Code != "GB" || gb.Currency != "GBP" || gb.DefaultUnits != "imperial" || gb.InspectionLabel != "MOT" || gb.Name["en"] != "United Kingdom" {
+	if gb.Code != "GB" || gb.Currency != "GBP" || gb.DefaultUnits != "metric" || gb.InspectionLabel != "MOT" || gb.Name["en"] != "United Kingdom" {
 		t.Errorf("GB is %+v", gb)
 	}
 

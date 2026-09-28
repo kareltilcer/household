@@ -61,7 +61,8 @@ in one transaction:
 - A dataset's version is incremented by a load that changes any of its records. The read
   endpoints (`/api/v1/reference/…`) return it, so that a client can cache a dataset whole.
 - **A record is never deleted.** One the files no longer hold stays in the database, since an app
-  in the field may still name it (D-11), and the load logs it as kept.
+  in the field may still name it (D-11), and the load logs it as kept. A record renamed is a new
+  record, and the old one stays beside it.
 
 The crop catalog (plan items 22 and 54) and each module's own sets follow, each with its schema,
 its directory and its tables.
