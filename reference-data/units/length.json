@@ -1,0 +1,166 @@
+{
+  "$schema": "../schemas/dimension.schema.json",
+  "key": "length",
+  "name": {
+    "value": { "en": "Length", "cs": "Délka", "sk": "Dĺžka", "de": "Länge", "pl": "Długość" },
+    "source": "prd-localisation",
+    "drafted": true
+  },
+  "base_unit": { "value": "m", "source": "si-brochure", "drafted": true },
+  "units": [
+    {
+      "key": "mm",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "mm", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "millimeter", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Millimetre",
+          "cs": "Milimetr",
+          "sk": "Milimeter",
+          "de": "Millimeter",
+          "pl": "Milimetr"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.001", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "in", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "cm",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "cm", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "centimeter", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Centimetre",
+          "cs": "Centimetr",
+          "sk": "Centimeter",
+          "de": "Zentimeter",
+          "pl": "Centymetr"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.01", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "in", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "m",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "m", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "meter", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Metre", "cs": "Metr", "sk": "Meter", "de": "Meter", "pl": "Metr" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "1", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "ft", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "km",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "km", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "kilometer", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Kilometre",
+          "cs": "Kilometr",
+          "sk": "Kilometer",
+          "de": "Kilometer",
+          "pl": "Kilometr"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "1000", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "mi", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "in",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "in", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "inch", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Inch", "cs": "Palec", "sk": "Palec", "de": "Zoll", "pl": "Cal" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.0254", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "cm", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "ft",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "ft", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "foot", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Foot", "cs": "Stopa", "sk": "Stopa", "de": "Fuß", "pl": "Stopa" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.3048", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "m", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "yd",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "yd", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "yard", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Yard", "cs": "Yard", "sk": "Yard", "de": "Yard", "pl": "Jard" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.9144", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "m", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "mi",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "mi", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "mile", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Mile", "cs": "Míle", "sk": "Míľa", "de": "Meile", "pl": "Mila" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "1609.344", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "km", "source": "prd-localisation", "drafted": true }
+    }
+  ]
+}

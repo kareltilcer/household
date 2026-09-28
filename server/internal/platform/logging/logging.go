@@ -60,6 +60,14 @@ var allowed = map[string]bool{
 	"check":     true,
 	"migration": true,
 	"role":      true,
+
+	// A reference-data load (internal/platform/reference): the dataset's name, its version, and
+	// how many of its records the load inserted, updated, and kept that the files no longer hold.
+	"dataset":  true,
+	"version":  true,
+	"inserted": true,
+	"updated":  true,
+	"kept":     true,
 }
 
 // The correlation keys the logger adds from the request's scope.

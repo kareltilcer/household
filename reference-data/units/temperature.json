@@ -1,0 +1,69 @@
+{
+  "$schema": "../schemas/dimension.schema.json",
+  "key": "temperature",
+  "name": {
+    "value": {
+      "en": "Temperature",
+      "cs": "Teplota",
+      "sk": "Teplota",
+      "de": "Temperatur",
+      "pl": "Temperatura"
+    },
+    "source": "prd-localisation",
+    "drafted": true
+  },
+  "base_unit": { "value": "celsius", "source": "si-brochure", "drafted": true },
+  "units": [
+    {
+      "key": "celsius",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "°C", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "celsius", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Degree Celsius",
+          "cs": "Stupeň Celsia",
+          "sk": "Stupeň Celzia",
+          "de": "Grad Celsius",
+          "pl": "Stopień Celsjusza"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "1", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "fahrenheit", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "fahrenheit",
+      "system": {
+        "value": "imperial",
+        "source": "prd-localisation",
+        "drafted": true,
+        "note": "The Weights and Measures Act defines no temperature; the PRD makes imperial's temperature °F."
+      },
+      "symbol": { "value": "°F", "source": "nist-sp811", "drafted": true },
+      "cldr": { "value": "fahrenheit", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Degree Fahrenheit",
+          "cs": "Stupeň Fahrenheita",
+          "sk": "Stupeň Fahrenheita",
+          "de": "Grad Fahrenheit",
+          "pl": "Stopień Fahrenheita"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "-32", "numerator": "5", "denominator": "9" },
+        "source": "nist-sp811",
+        "drafted": true
+      },
+      "counterpart": { "value": "celsius", "source": "prd-localisation", "drafted": true }
+    }
+  ]
+}

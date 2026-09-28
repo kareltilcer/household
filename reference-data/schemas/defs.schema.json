@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "What every reference dataset shares",
+  "description": "A field of a record is a value with the source it comes from (PL-10). A value people read carries one text per language Household ships (PRD 03 §9).",
+  "$defs": {
+    "key": {
+      "description": "A record's identifier: lower-case ASCII words joined by underscores.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+    },
+    "sourceId": {
+      "description": "The id of a source in sources.json.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "text": {
+      "description": "Text that is not empty and neither starts nor ends with a space.",
+      "type": "string",
+      "pattern": "^\\S(.*\\S)?$"
+    },
+    "localized": {
+      "description": "One text per language Household ships. A test holds this list to the server's i18n.Locales, so a language added there fails until every record is translated into it.",
+      "type": "object",
+      "required": ["en", "cs", "sk", "de", "pl"],
+      "properties": {
+        "en": { "$ref": "#/$defs/text" },
+        "cs": { "$ref": "#/$defs/text" },
+        "sk": { "$ref": "#/$defs/text" },
+        "de": { "$ref": "#/$defs/text" },
+        "pl": { "$ref": "#/$defs/text" }
+      },
+      "additionalProperties": false
+    },
+    "decimal": {
+      "description": "An exact decimal as a string, written without a trailing zero after the point.",
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]*[1-9])?$"
+    },
+    "positiveDecimal": {
+      "description": "A decimal greater than zero.",
+      "type": "string",
+      "pattern": "^([1-9][0-9]*(\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$"
+    },
+    "field": {
+      "description": "A value and where it comes from. `drafted` marks a value drafted without an expert (PL-10): a reviewer who has checked it against its source removes the flag. `note` tells the reviewer what the source alone does not.",
+      "type": "object",
+      "required": ["value", "source"],
+      "properties": {
+        "value": true,
+        "source": { "$ref": "#/$defs/sourceId" },
+        "drafted": { "const": true },
+        "note": { "$ref": "#/$defs/text" }
+      },
+      "additionalProperties": false
+    },
+    "localizedField": {
+      "description": "A field whose value people read, in each language.",
+      "$ref": "#/$defs/field",
+      "properties": { "value": { "$ref": "#/$defs/localized" } }
+    },
+    "keyField": {
+      "description": "A field whose value is another record's key.",
+      "$ref": "#/$defs/field",
+      "properties": { "value": { "$ref": "#/$defs/key" } }
+    },
+    "textField": {
+      "description": "A field whose value is the same text in every language.",
+      "$ref": "#/$defs/field",
+      "properties": { "value": { "$ref": "#/$defs/text" } }
+    },
+    "unitSystemField": {
+      "description": "A field whose value is a system of units (PRD 03 §9: metric by default, imperial available).",
+      "$ref": "#/$defs/field",
+      "properties": { "value": { "enum": ["metric", "imperial"] } }
+    }
+  }
+}

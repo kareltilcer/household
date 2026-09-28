@@ -1,0 +1,93 @@
+{
+  "$schema": "schemas/sources.schema.json",
+  "sources": {
+    "cldr-territories": {
+      "title": "Unicode CLDR: territory display names (localeDisplayNames/territories), per language",
+      "url": "https://github.com/unicode-org/cldr-json/tree/main/cldr-json/cldr-localenames-full/main"
+    },
+    "cldr-units": {
+      "title": "Unicode CLDR: unit identifiers and unit display names, per language (UTS #35, Part 6, Unit Elements)",
+      "url": "https://www.unicode.org/reports/tr35/tr35-general.html#Unit_Elements"
+    },
+    "cldr-week-data": {
+      "title": "Unicode CLDR: supplemental week data (weekData, firstDay by territory)",
+      "url": "https://github.com/unicode-org/cldr-json/blob/main/cldr-json/cldr-core/supplemental/weekData.json"
+    },
+    "cz-holidays-act": {
+      "title": "Zákon č. 245/2000 Sb., o státních svátcích, o ostatních svátcích, o významných dnech a o dnech pracovního klidu",
+      "url": "https://www.zakonyprolidi.cz/cs/2000-245"
+    },
+    "cz-vehicle-operation-act": {
+      "title": "Zákon č. 56/2001 Sb., o podmínkách provozu vozidel na pozemních komunikacích: technical inspection (technická prohlídka) at a stanice technické kontroly, and emission measurement",
+      "url": "https://www.zakonyprolidi.cz/cs/2001-56"
+    },
+    "de-holidays": {
+      "title": "Bundesministerium des Innern: Nationale Feiertage. Public holidays in Germany are set by each Land's Feiertagsgesetz, except the Day of German Unity (Einigungsvertrag, Art. 2 Abs. 2)",
+      "url": "https://www.bmi.bund.de/DE/themen/verfassung/staatliche-symbole/nationale-feiertage/nationale-feiertage-node.html"
+    },
+    "de-stvzo": {
+      "title": "Straßenverkehrs-Zulassungs-Ordnung (StVZO), § 29: Untersuchung der Kraftfahrzeuge und Anhänger (Hauptuntersuchung, with the Abgasuntersuchung part of it)",
+      "url": "https://www.gesetze-im-internet.de/stvzo_2012/__29.html"
+    },
+    "ec-vat-rates": {
+      "title": "European Commission, Taxation and Customs Union: VAT rates applied in the Member States of the European Union",
+      "url": "https://taxation-customs.ec.europa.eu/taxation/vat/vat-directive/vat-rates_en"
+    },
+    "eu-units-directive": {
+      "title": "Council Directive 80/181/EEC on the approximation of the laws of the Member States relating to units of measurement: the legal units are the SI's",
+      "url": "https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:31980L0181"
+    },
+    "gov-uk-bank-holidays": {
+      "title": "GOV.UK: UK bank holidays, for England and Wales, Scotland, and Northern Ireland (Banking and Financial Dealings Act 1971, Schedule 1, and royal proclamations)",
+      "url": "https://www.gov.uk/bank-holidays"
+    },
+    "gov-uk-mot": {
+      "title": "GOV.UK: Getting an MOT (Road Traffic Act 1988, s. 45)",
+      "url": "https://www.gov.uk/getting-an-mot"
+    },
+    "gov-uk-vat-rates": {
+      "title": "GOV.UK: VAT rates (Value Added Tax Act 1994, s. 2)",
+      "url": "https://www.gov.uk/vat-rates"
+    },
+    "iso-4217": {
+      "title": "ISO 4217 List One, currency codes, as SIX Group publishes it; the copy in this repository",
+      "path": "packages/domain/src/iso4217.json"
+    },
+    "nist-sp811": {
+      "title": "NIST Special Publication 811, Guide for the Use of the International System of Units (SI), Appendix B: conversion factors",
+      "url": "https://www.nist.gov/pml/special-publication-811"
+    },
+    "pl-holidays-act": {
+      "title": "Ustawa z dnia 18 stycznia 1951 r. o dniach wolnych od pracy",
+      "url": "https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19510040028"
+    },
+    "pl-road-traffic-act": {
+      "title": "Ustawa z dnia 20 czerwca 1997 r. Prawo o ruchu drogowym, art. 81: badanie techniczne pojazdu",
+      "url": "https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19970980602"
+    },
+    "prd-documents": {
+      "title": "Household PRD, modules/08 — Documents: document types per country, with a lead time per type (D-53)",
+      "path": "docs/prd/modules/08-documents.md"
+    },
+    "prd-localisation": {
+      "title": "Household PRD, 03 §9 — Internationalisation and localisation: metric by default, imperial available for length, area, mass, temperature and volume",
+      "path": "docs/prd/03-platform-strands.md"
+    },
+    "si-brochure": {
+      "title": "BIPM, The International System of Units (SI Brochure), 9th edition: units, prefixes, and the non-SI units accepted for use with the SI (litre, hectare)",
+      "url": "https://www.bipm.org/en/publications/si-brochure"
+    },
+    "sk-holidays-act": {
+      "title": "Zákon č. 241/1993 Z. z. o štátnych sviatkoch, dňoch pracovného pokoja a pamätných dňoch",
+      "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/1993/241/"
+    },
+    "sk-vehicle-operation-act": {
+      "title": "Zákon č. 106/2018 Z. z. o prevádzke vozidiel v cestnej premávke: technická kontrola (TK) and emisná kontrola (EK)",
+      "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2018/106/"
+    },
+    "uk-weights-measures-act": {
+      "title": "Weights and Measures Act 1985, Schedule 1: definitions of the imperial units by the metric ones (yard, pound, gallon)",
+      "url": "https://www.legislation.gov.uk/ukpga/1985/72/schedule/1"
+    }
+  }
+}

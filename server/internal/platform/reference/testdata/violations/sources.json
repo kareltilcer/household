@@ -1,0 +1,5 @@
+{
+  "sources": {
+    "a-source": { "title": "A source", "url": "https://example.com/a" }
+  }
+}

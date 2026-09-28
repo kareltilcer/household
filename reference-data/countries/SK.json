@@ -1,0 +1,32 @@
+{
+  "$schema": "../schemas/country.schema.json",
+  "code": "SK",
+  "name": {
+    "value": {
+      "en": "Slovakia",
+      "cs": "Slovensko",
+      "sk": "Slovensko",
+      "de": "Slowakei",
+      "pl": "Słowacja"
+    },
+    "source": "cldr-territories",
+    "drafted": true
+  },
+  "currency": { "value": "EUR", "source": "iso-4217", "drafted": true },
+  "vat_standard_percent": {
+    "value": "23",
+    "source": "ec-vat-rates",
+    "drafted": true,
+    "note": "Raised from 20 % to 23 % on 1 January 2025 (Act No. 278/2024 Z. z., amending Act No. 222/2004 Z. z.)."
+  },
+  "default_units": { "value": "metric", "source": "eu-units-directive", "drafted": true },
+  "first_day_of_week": { "value": 1, "source": "cldr-week-data", "drafted": true },
+  "holiday_set": { "value": "sk", "source": "sk-holidays-act", "drafted": true },
+  "inspection_label": {
+    "value": "TK",
+    "source": "sk-vehicle-operation-act",
+    "drafted": true,
+    "note": "The emission check (EK) is a separate inspection on the same cadence; PRD 13 writes the pair TK + EK, and Vehicles (plan item 81) schedules both."
+  },
+  "document_type_set": { "value": "sk", "source": "prd-documents", "drafted": true }
+}

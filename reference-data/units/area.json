@@ -1,0 +1,98 @@
+{
+  "$schema": "../schemas/dimension.schema.json",
+  "key": "area",
+  "name": {
+    "value": { "en": "Area", "cs": "Plocha", "sk": "Plocha", "de": "Fläche", "pl": "Powierzchnia" },
+    "source": "prd-localisation",
+    "drafted": true
+  },
+  "base_unit": { "value": "m2", "source": "si-brochure", "drafted": true },
+  "units": [
+    {
+      "key": "m2",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "m²", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "square-meter", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Square metre",
+          "cs": "Metr čtvereční",
+          "sk": "Štvorcový meter",
+          "de": "Quadratmeter",
+          "pl": "Metr kwadratowy"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "1", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "ft2", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "ha",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "ha", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "hectare", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Hectare",
+          "cs": "Hektar",
+          "sk": "Hektár",
+          "de": "Hektar",
+          "pl": "Hektar"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "10000", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "ac", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "ft2",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "ft²", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "square-foot", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Square foot",
+          "cs": "Čtvereční stopa",
+          "sk": "Štvorcová stopa",
+          "de": "Quadratfuß",
+          "pl": "Stopa kwadratowa"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.09290304", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "m2", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "ac",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "ac", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "acre", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Acre", "cs": "Akr", "sk": "Aker", "de": "Acre", "pl": "Akr" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "4046.8564224", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "ha", "source": "prd-localisation", "drafted": true }
+    }
+  ]
+}

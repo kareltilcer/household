@@ -44,8 +44,8 @@ var migrations embed.FS
 //go:embed openapi.yaml
 var contract []byte
 
-// Contract returns the probe's contract: the health probes the router always serves, and the
-// probe's own routes.
+// Contract returns the probe's contract: the health probes and the reference reads the router
+// always serves, and the probe's own routes.
 func Contract() []byte { return contract }
 
 // Module is the probe.

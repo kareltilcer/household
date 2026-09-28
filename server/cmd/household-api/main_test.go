@@ -68,6 +68,13 @@ func TestBootstrapThenMigrate(t *testing.T) {
 	if !strings.Contains(stdout.String(), `"msg":"migrations up to date"`) {
 		t.Fatalf("migrate did not report:\n%s", stdout.String())
 	}
+	// The package's database holds the reference data already, so the load writes nothing.
+	for _, dataset := range []string{"countries", "units"} {
+		line := `"msg":"reference data loaded","dataset":"` + dataset + `","version":1,"inserted":0,"updated":0,"kept":0`
+		if !strings.Contains(stdout.String(), line) {
+			t.Fatalf("migrate did not report loading %s:\n%s", dataset, stdout.String())
+		}
+	}
 }
 
 func TestAFailingCommandExits1(t *testing.T) {

@@ -9,11 +9,12 @@ info:
 
     ## Scoping
 
-    Three scopes, distinguishable by path prefix:
+    Four scopes, distinguishable by path prefix:
 
     | Prefix | Scope | Notes |
     |---|---|---|
     | `/api/v1/auth/**`, `/api/v1/me/**` | The authenticated user | Independent of any household |
+    | `/api/v1/reference/**` | Reference data | Global and read-only: the same for every authenticated user |
     | `/api/v1/households/{household_id}/**` | One household | The tenant is **always** in the path, never in a header or session |
     | `/api/v1/platform/**` | Platform staff | **Metadata only.** No endpoint here returns household content |
 
@@ -110,6 +111,8 @@ tags:
     description: Registration, sign-in, tokens, MFA, password reset
   - name: me
     description: The authenticated user's own profile, sessions, devices and preferences
+  - name: reference
+    description: Global reference data — country profiles and units, the same for every user
   - name: households
     description: Households, members, invitations, child profiles, module enablement
   - name: billing
@@ -817,6 +820,54 @@ paths:
         '201': { description: Attached, content: { application/json: { schema: { type: object, properties: { id: { $ref: '#/components/schemas/Uuid' }, expires_at: { type: string, format: date-time } } } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reference/countries:
+    get:
+      operationId: getReferenceCountries
+      tags: [reference]
+      summary: Every country profile
+      description: |
+        What a household in each country Household serves is offered (PRD 03 §9): the country's
+        currency and standard rate of VAT, the units and first day of the week a household there
+        starts with, its own word for the statutory vehicle inspection, and the keys of its sets of
+        public holidays and document types. Global reference data, the same for every caller, which
+        changes by data rather than by a release (D-61, D-70). Every name carries every language
+        Household ships, so a client renders it in its member's language, offline too, however often
+        that changes. `version` is the dataset's, for a client that caches the list.
+      responses:
+        '200': { description: The country profiles in the order of their codes, content: { application/json: { schema: { $ref: '#/components/schemas/CountryList' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /reference/countries/{country}:
+    parameters: [{ name: country, in: path, required: true, schema: { $ref: '#/components/schemas/CountryCode' } }]
+    get:
+      operationId: getReferenceCountriesByCountry
+      tags: [reference]
+      summary: One country's profile
+      description: A household's country, by its code, with the profile's version as its `ETag`.
+      responses:
+        '200': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: The profile, content: { application/json: { schema: { $ref: '#/components/schemas/Country' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /reference/units:
+    get:
+      operationId: getReferenceUnits
+      tags: [reference]
+      summary: Every unit, by dimension
+      description: |
+        The units a household measures in (PRD 03 §9): metric by default, and imperial available
+        for length, area, mass, temperature and volume. Each unit carries its exact conversion to its
+        dimension's base unit and the unit of the other system a quantity in it is shown in. The
+        dimensions are in the order of their keys; the units by dimension, metric first, and each
+        system's from the smallest. `version` is the dataset's, for a client that caches it.
+      responses:
+        '200': { description: The dimensions and their units, content: { application/json: { schema: { $ref: '#/components/schemas/UnitList' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /households:
     get:
       operationId: getHouseholds
@@ -4863,7 +4914,7 @@ paths:
         types in the right order and empty values, labelled with the words that appear on that
         country's bill.
       parameters:
-        - { name: country, in: query, required: false, schema: { type: string, pattern: '^[A-Z]{2}$' } }
+        - { name: country, in: query, required: false, schema: { $ref: '#/components/schemas/CountryCode' } }
         - { name: commodity, in: query, required: false, schema: { $ref: '#/components/schemas/Commodity' } }
       responses:
         '200': { description: Presets, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/UtilityPreset' } } } } } } }
@@ -8299,6 +8350,102 @@ components:
           type: object
           additionalProperties: { type: string, enum: [ok, down] }
 
+    LocalizedText:
+      type: object
+      description: |
+        One text in each language Household ships (PRD 03 §9): reference data is translated as
+        data, not as strings. A client shows its member's language. A language added later arrives
+        as a further member, which a client that does not know it ignores.
+      required: [en, cs, sk, de, pl]
+      properties:
+        en: { type: string }
+        cs: { type: string }
+        sk: { type: string }
+        de: { type: string }
+        pl: { type: string }
+      additionalProperties: { type: string }
+
+    CountryCode:
+      type: string
+      pattern: '^[A-Z]{2}$'
+      description: ISO 3166-1 alpha-2. The United Kingdom is `GB`.
+      examples: ['CZ']
+
+    UnitSystem:
+      type: string
+      enum: [metric, imperial]
+      description: Metric by default, imperial available for length, area, mass, temperature and volume (PRD 03 §9).
+
+    Country:
+      type: object
+      description: |
+        What a household in the country is offered: the defaults it starts from, and the keys of
+        the country's own sets, which the modules that offer them define. Changing a household's
+        country changes what it is offered from then on, never what it has recorded (FR-HA1).
+      required: [code, version, name, currency, vat_standard_percent, default_units, first_day_of_week, holiday_set, inspection_label, document_type_set]
+      properties:
+        code: { $ref: '#/components/schemas/CountryCode' }
+        version: { type: integer, format: int64, description: Incremented each time the profile changes. }
+        name: { $ref: '#/components/schemas/LocalizedText' }
+        currency: { type: string, pattern: '^[A-Z]{3}$', description: 'The country''s currency, ISO 4217: the base currency a household created there starts with.' }
+        vat_standard_percent: { type: string, examples: ['21'], description: 'The standard rate of VAT, a decimal percent as a string: the rate a tariff or an expense in the country starts from.' }
+        default_units: { $ref: '#/components/schemas/UnitSystem' }
+        first_day_of_week: { type: integer, minimum: 0, maximum: 6, description: 'The day a week starts on in the country, 0 for Sunday to 6 for Saturday, as JavaScript''s Date#getDay and Go''s time.Weekday count. A household and each member may override it.' }
+        holiday_set: { type: string, examples: ['cz'], description: 'The key of the country''s set of public holidays, which Calendar offers.' }
+        inspection_label: { type: string, examples: ['STK'], description: 'The country''s own word for the statutory vehicle inspection (STK, TK, HU/AU, Przegląd techniczny, MOT), shown as it is in every language.' }
+        document_type_set: { type: string, examples: ['cz'], description: 'The key of the country''s set of document types, which Documents offers.' }
+
+    CountryList:
+      type: object
+      required: [version, items]
+      properties:
+        version: { type: integer, format: int64, description: 'The dataset''s version: incremented whenever a profile changes, 0 before any is loaded.' }
+        items: { type: array, items: { $ref: '#/components/schemas/Country' } }
+
+    UnitDimension:
+      type: object
+      description: A kind of quantity, and the unit its units convert to.
+      required: [key, version, name, base_unit]
+      properties:
+        key: { type: string, examples: ['length'] }
+        version: { type: integer, format: int64, description: Incremented each time the dimension changes. }
+        name: { $ref: '#/components/schemas/LocalizedText' }
+        base_unit: { type: string, examples: ['m'], description: The key of the unit every unit of the dimension converts to. }
+
+    Unit:
+      type: object
+      required: [key, version, dimension, system, symbol, cldr, name, to_base, counterpart]
+      properties:
+        key: { type: string, examples: ['km'] }
+        version: { type: integer, format: int64, description: Incremented each time the unit changes. }
+        dimension: { type: string, examples: ['length'] }
+        system: { $ref: '#/components/schemas/UnitSystem' }
+        symbol: { type: string, examples: ['km'], description: The same in every language. }
+        cldr: { type: string, examples: ['kilometer'], description: 'The unit''s Unicode CLDR identifier, which ICU formats a quantity in: Intl.NumberFormat''s unit style, where the platform supports the unit.' }
+        name: { $ref: '#/components/schemas/LocalizedText' }
+        to_base: { $ref: '#/components/schemas/UnitConversion' }
+        counterpart: { type: [string, 'null'], description: 'The key of the unit of the other system a quantity in this unit is shown in when the household uses that system; null where it is shown as it is.' }
+
+    UnitConversion:
+      type: object
+      description: |
+        The exact conversion of a quantity to its dimension's base unit: base = (value + offset) ×
+        numerator ÷ denominator. Each is a decimal as a string, to keep floats out of the
+        arithmetic, and the two are a fraction where the factor has no finite decimal, 5/9 for °F.
+      required: [offset, numerator, denominator]
+      properties:
+        offset: { type: string, examples: ['-32'] }
+        numerator: { type: string, examples: ['0.3048'] }
+        denominator: { type: string, examples: ['1'] }
+
+    UnitList:
+      type: object
+      required: [version, dimensions, units]
+      properties:
+        version: { type: integer, format: int64, description: 'The dataset''s version: incremented whenever a dimension or a unit changes, 0 before any is loaded.' }
+        dimensions: { type: array, items: { $ref: '#/components/schemas/UnitDimension' } }
+        units: { type: array, items: { $ref: '#/components/schemas/Unit' } }
+
     ActorRef:
       type: object
       description: A denormalised label so a record still renders after the member has left the household.
@@ -8524,12 +8671,12 @@ components:
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         name: { type: string, maxLength: 80 }
-        country: { type: string, pattern: '^[A-Z]{2}$', description: 'Drives tariff presets, document types, statutory vehicle schedules, holidays and default VAT.' }
+        country: { $ref: '#/components/schemas/CountryCode', description: 'A country Household has a profile of (`getReferenceCountries`). Drives tariff presets, document types, statutory vehicle schedules, holidays and default VAT.' }
         timezone: { type: string }
         base_currency: { type: string, pattern: '^[A-Z]{3}$' }
         locale: { type: string }
-        units: { type: string, enum: [metric, imperial], default: metric }
-        first_day_of_week: { type: integer, minimum: 0, maximum: 6 }
+        units: { $ref: '#/components/schemas/UnitSystem', description: 'When omitted, the `default_units` of the country''s profile.' }
+        first_day_of_week: { type: integer, minimum: 0, maximum: 6, description: '0 for Sunday to 6 for Saturday, as JavaScript''s Date#getDay and Go''s time.Weekday count. When omitted, the `first_day_of_week` of the country''s profile.' }
 
     Household:
       allOf:
@@ -8547,12 +8694,12 @@ components:
       type: object
       properties:
         name: { type: string }
-        country: { type: string, pattern: '^[A-Z]{2}$' }
+        country: { $ref: '#/components/schemas/CountryCode' }
         timezone: { type: string }
         base_currency: { type: string, pattern: '^[A-Z]{3}$', description: 'Recomputes totals from each row''s stored rate. Warned in the client and audited — silently redenominating a household''s history would be the worst bug the product could ship.' }
         locale: { type: string }
-        units: { type: string, enum: [metric, imperial] }
-        first_day_of_week: { type: integer, minimum: 0, maximum: 6 }
+        units: { $ref: '#/components/schemas/UnitSystem' }
+        first_day_of_week: { type: integer, minimum: 0, maximum: 6, description: '0 for Sunday to 6 for Saturday, as JavaScript''s Date#getDay and Go''s time.Weekday count.' }
 
     HouseholdSummary:
       type: object

@@ -29,3 +29,4 @@ Number 0002 is reserved by the plan for item 34 (`0002-gate-g-c.md`).
 | [0005](0005-tenancy-registry-and-row-level-security.md) | A transaction per unit of work carries the tenant, and row-level security is one template | Accepted |
 | [0006](0006-sync-ready-schema-and-the-mutation-spine.md) | The sync-ready schema is enforced, and every write goes through one spine | Accepted |
 | [0007](0007-shared-packages-client-catalogs-and-vectors.md) | The client is generated on every build, the server reads the clients' catalogs, and one vector format holds both sides | Accepted |
+| [0008](0008-reference-data-pipeline.md) | Reference data is sourced JSON the server embeds, validates and loads as it migrates, and serves in every language | Accepted |

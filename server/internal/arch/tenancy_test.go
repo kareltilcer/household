@@ -95,6 +95,11 @@ var exemptions = map[string]exemption{
 	"public.goose_db_version": {why: "goose's record of the migrations applied"},
 	"public.modules":          {why: "the module ids: reference data, the same for every household"},
 	"public.users":            {why: "PRD 01 §2.4: a user exists independently of any household"},
+	// PRD 01 §2.4's global reference data, which the request role only reads (item 7).
+	"public.reference_datasets": {why: "the version of each reference dataset the loader has loaded"},
+	"public.country_profiles":   {why: "PRD 01 §2.4: reference data, the same for every household"},
+	"public.unit_dimensions":    {why: "PRD 03 §9: reference data, the same for every household"},
+	"public.units":              {why: "PRD 03 §9: reference data, the same for every household"},
 	"public.households": {ownPolicy: true, key: "id", why: "the tenant root, keyed on id; its members read it " +
 		"before a household context exists, to list their households"},
 	"public.memberships": {ownPolicy: true, why: "PRD 01 §2.4: how tenancy is resolved, read before a " +

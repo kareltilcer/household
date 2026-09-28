@@ -1,0 +1,23 @@
+{
+  "key": "weight",
+  "name": { "value": { "en": "Weight", "cs": "Hmotnost", "sk": "Hmotnosť", "de": "Gewicht", "pl": "Waga" }, "source": "a-source" },
+  "base_unit": { "value": "kg", "source": "a-source" },
+  "units": [
+    {
+      "key": "kg",
+      "system": { "value": "metric", "source": "a-source" },
+      "symbol": { "value": "kg", "source": "a-source" },
+      "cldr": { "value": "kilogram", "source": "a-source" },
+      "name": { "value": { "en": "Kilogram", "cs": "Kilogram", "sk": "Kilogram", "de": "Kilogramm", "pl": "Kilogram" }, "source": "a-source" },
+      "to_base": { "value": { "offset": "0", "numerator": "1", "denominator": "1" }, "source": "a-source" }
+    },
+    {
+      "key": "m",
+      "system": { "value": "metric", "source": "a-source" },
+      "symbol": { "value": "m", "source": "a-source" },
+      "cldr": { "value": "metric-ton", "source": "a-source" },
+      "name": { "value": { "en": "Tonne", "cs": "Tuna", "sk": "Tona", "de": "Tonne", "pl": "Tona" }, "source": "a-source" },
+      "to_base": { "value": { "offset": "0", "numerator": "1000", "denominator": "1" }, "source": "a-source" }
+    }
+  ]
+}

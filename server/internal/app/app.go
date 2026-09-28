@@ -21,6 +21,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/reference"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
@@ -48,6 +49,8 @@ type Deps struct {
 // contract.BasePath the contract's edge validation and every implemented route. It refuses
 // to build with a route the contract does not declare, so the server never serves one.
 //
+// The reference reads under /reference answer any authenticated caller, with no household.
+//
 // Everything under /households/{household_id} passes the tenant middleware, which answers a
 // caller who is not a member of the household before any route does, and carries the module
 // registry the mutation spine checks each mutation against. Each module's routes are mounted
@@ -72,6 +75,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 
 	api.Get("/healthz", d.Health.Liveness)
 	api.Get("/readyz", d.Health.Readiness)
+	api.Route("/reference", reference.Routes(d.Pool, d.Logger))
 
 	api.Route("/households/{"+tenant.Param+"}", func(household chi.Router) {
 		household.Use(tenancy, mutation.Catalog(d.Modules))

@@ -1,0 +1,21 @@
+{
+  "$schema": "../schemas/country.schema.json",
+  "code": "PL",
+  "name": {
+    "value": { "en": "Poland", "cs": "Polsko", "sk": "Poľsko", "de": "Polen", "pl": "Polska" },
+    "source": "cldr-territories",
+    "drafted": true
+  },
+  "currency": { "value": "PLN", "source": "iso-4217", "drafted": true },
+  "vat_standard_percent": { "value": "23", "source": "ec-vat-rates", "drafted": true },
+  "default_units": { "value": "metric", "source": "eu-units-directive", "drafted": true },
+  "first_day_of_week": { "value": 1, "source": "cldr-week-data", "drafted": true },
+  "holiday_set": { "value": "pl", "source": "pl-holidays-act", "drafted": true },
+  "inspection_label": {
+    "value": "Przegląd techniczny",
+    "source": "pl-road-traffic-act",
+    "drafted": true,
+    "note": "The act calls it badanie techniczne pojazdu; everyday Polish, and PRD 13, call it przegląd techniczny."
+  },
+  "document_type_set": { "value": "pl", "source": "prd-documents", "drafted": true }
+}

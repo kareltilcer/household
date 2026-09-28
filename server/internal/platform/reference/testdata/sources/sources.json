@@ -1,0 +1,7 @@
+{
+  "sources": {
+    "both": { "title": "A source named by both a URL and a path", "url": "https://example.com/b", "path": "docs/b.md" },
+    "neither": { "title": "A source named by neither" },
+    "Not-An-Id": { "title": "A source whose id is not lower-case", "url": "https://example.com/c" }
+  }
+}
