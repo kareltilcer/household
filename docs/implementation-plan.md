@@ -323,7 +323,7 @@ Phase 0 · after 4 · size M (timeboxed) · **gate G-A**
 - **Done when**
   - `docs/adr/0001-sync-engine.md` records the verdict and the requirement that forced it.
   - If the verdict is *adopt*, items 12–15 are rewritten in the same PR (Q2).
-- **PR:** —
+- **PR:** [#8](https://github.com/kareltilcer/household/pull/8)
 
 ### 6 · Shared packages: API client, i18n, vectors and money · `planned`
 
