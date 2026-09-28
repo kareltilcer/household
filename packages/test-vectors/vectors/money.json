@@ -285,6 +285,48 @@
         ]
       },
       {
+        "name": "the same, listed in a fourth order",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["jana", "milos", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 333],
+          ["milos", 333]
+        ]
+      },
+      {
+        "name": "the same, listed in a fifth order",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["petr", "jana", "milos"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 333],
+          ["milos", 333]
+        ]
+      },
+      {
+        "name": "the same, listed in the sixth and last order",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["milos", "jana", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 333],
+          ["milos", 333]
+        ]
+      },
+      {
         "name": "the unit goes to the first in the household's order, not the first listed",
         "input": {
           "total": { "amount_minor": 1001, "currency": "EUR" },
