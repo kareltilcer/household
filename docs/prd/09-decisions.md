@@ -106,6 +106,7 @@ Referenced throughout as **D-n**.
 | **D-57** | Deterministic assignment of the last minor unit in a split | Random or floating assignment | A balance that changes when you refresh it is not a balance |
 | **D-58** | Renewal reminders fire at the **notice period**, not at expiry | Reminding on the renewal date | The moment cancelling is still possible is the only moment the reminder is worth anything. Applied identically in Finance, Utilities and Vehicles |
 | **D-81** | Transactions carry a `source` discriminator from day one | Adding it with bank import | Lets open banking arrive later without a migration, and keeps imported and typed rows distinguishable forever |
+| **D-94** | **Signed amounts round and split symmetrically.** Half-up rounds a tie away from zero, so −2.5 minor units is −3 as 2.5 is 3. A negative total, a refund, splits as its positive total negated, so each member is returned what they paid (D-57) | Half-up toward positive infinity (−2.5 → −2); and splitting a negative total with the same round-down-then-distribute steps as a positive one, which hands the extra unit of a refund to the last member in order | A refund that rounds or splits differently from its charge leaves a member a minor unit up or down every time, and a charge and its refund no longer net to zero. `design/v1` rounds ties away from zero (`roundMinor`), and both implementations are held to it by `packages/test-vectors/vectors/money.json` ([ADR 0007](../adr/0007-shared-packages-client-catalogs-and-vectors.md)) |
 
 ## Utilities
 

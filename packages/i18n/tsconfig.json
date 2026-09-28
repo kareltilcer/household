@@ -1,4 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"]
+  "compilerOptions": {
+    // scripts/gen.ts runs on Node, and the tests read the contract and compile probes.
+    "types": ["node"]
+  },
+  "include": ["src", "scripts"]
 }

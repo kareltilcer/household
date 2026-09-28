@@ -61,10 +61,121 @@ const linkedSuppressions = {
   },
 }
 
+/**
+ * Architecture test 7 (PRD 01 §10, D-29): no user-visible string literal in client code, so
+ * every word a member reads comes from @household/i18n's catalogs in their language. It
+ * reports a string that holds a letter where the UI shows it: JSX text; a string, template or
+ * a branch of a conditional in a JSX child or in a prop that renders text (a name from
+ * `visibleProps`, or one that reads as text, such as `emptyText` or `headerTitle`); and the
+ * message of a native dialog. A string with no letter (`·`, `—`, `%`) is not language.
+ * @type {import('eslint').Rule.RuleModule}
+ */
+const noLiteralStrings = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Forbid user-visible string literals in client code (architecture test 7)',
+    },
+    schema: [],
+    messages: {
+      literal:
+        'A user-visible string is a translation key (D-29): render it with the translator from ' +
+        '@household/i18n and add the key to all five catalogs.',
+    },
+  },
+  create(context) {
+    const letter = /\p{L}/u
+    const visibleProps = new Set([
+      'alt',
+      'aria-description',
+      'aria-label',
+      'aria-placeholder',
+      'aria-roledescription',
+      'aria-valuetext',
+      'accessibilityHint',
+      'accessibilityLabel',
+      'children',
+      'label',
+      'placeholder',
+      'title',
+    ])
+    const textLikeProp =
+      /(Label|Title|Text|Message|Placeholder|Caption|Description|Heading|Hint|Tooltip)$/
+    const dialogs = new Set(['alert', 'confirm', 'prompt'])
+
+    /** @param {any} node An expression shown as it is, or a branch that may be */
+    function check(node) {
+      if (!node) return
+      switch (node.type) {
+        case 'Literal':
+          if (typeof node.value === 'string' && letter.test(node.value)) {
+            context.report({ node, messageId: 'literal' })
+          }
+          return
+        case 'TemplateLiteral':
+          if (node.quasis.some((q) => letter.test(q.value.cooked ?? q.value.raw))) {
+            context.report({ node, messageId: 'literal' })
+          }
+          return
+        case 'ConditionalExpression':
+          check(node.consequent)
+          check(node.alternate)
+          return
+        case 'LogicalExpression':
+          check(node.right)
+          return
+        default:
+      }
+    }
+
+    return {
+      /** @param {any} node */
+      JSXText(node) {
+        if (letter.test(node.value)) context.report({ node, messageId: 'literal' })
+      },
+      /** @param {any} node */
+      JSXAttribute(node) {
+        const name =
+          node.name.type === 'JSXNamespacedName'
+            ? `${node.name.namespace.name}:${node.name.name.name}`
+            : node.name.name
+        if (!visibleProps.has(name) && !textLikeProp.test(name)) return
+        if (node.value?.type === 'JSXExpressionContainer') check(node.value.expression)
+        else check(node.value)
+      },
+      /** @param {any} node */
+      JSXExpressionContainer(node) {
+        if (node.parent.type === 'JSXElement' || node.parent.type === 'JSXFragment') {
+          check(node.expression)
+        }
+      },
+      /** @param {any} node */
+      CallExpression(node) {
+        const callee = node.callee
+        const name =
+          callee.type === 'Identifier'
+            ? callee.name
+            : callee.type === 'MemberExpression' && callee.property.type === 'Identifier'
+              ? callee.property.name
+              : undefined
+        const onAlert =
+          callee.type === 'MemberExpression' &&
+          callee.object.type === 'Identifier' &&
+          callee.object.name === 'Alert'
+        if ((name !== undefined && dialogs.has(name)) || onAlert) {
+          for (const arg of node.arguments) check(arg)
+        }
+      },
+    }
+  },
+}
+
 export default defineConfig(
   // design/ holds the clickable ES5 prototype, a reference that never ships; Prettier and
   // CodeQL skip it too. An editor that lints it with this file would flag every script.
-  globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/', 'design/']),
+  // src/generated/ is written by each package's `gen` script from a committed source (the
+  // contract, the English catalog) and is never edited by hand.
+  globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/', 'design/', 'packages/*/src/generated/']),
   {
     linterOptions: {
       // A suppression that suppresses nothing is an error, so a rule cannot be switched
@@ -82,7 +193,12 @@ export default defineConfig(
       },
     },
     plugins: {
-      household: { rules: { 'linked-suppressions': linkedSuppressions } },
+      household: {
+        rules: {
+          'linked-suppressions': linkedSuppressions,
+          'no-literal-strings': noLiteralStrings,
+        },
+      },
     },
     rules: {
       // 06-clients: "No `any`, no non-null assertions — both are lint errors, not
@@ -104,7 +220,12 @@ export default defineConfig(
     },
   },
   {
-    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
+    // Architecture test 7: the clients render words from the catalogs, never literals.
+    files: ['apps/**'],
+    rules: { 'household/no-literal-strings': 'error' },
+  },
+  {
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs', '**/*.jsx'],
     extends: [tseslint.configs.disableTypeChecked],
   },
 )

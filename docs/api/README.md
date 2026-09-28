@@ -35,14 +35,17 @@ it names the lenient `recommended` set instead.
 ## Generate clients
 
 Both clients consume a generated, typed client — a contract change that breaks a client breaks the
-build ([06-clients.md](../prd/06-clients.md) §1).
+build ([06-clients.md](../prd/06-clients.md) §1). `@household/api`'s `gen` script writes it into
+`packages/api/src/generated/` with openapi-typescript, and turbo runs it before every typecheck,
+lint and test, with this document as its input, so nothing generated is committed. To refresh it
+for an editor:
 
 ```bash
-pnpm dlx openapi-typescript docs/api/openapi.yaml -o packages/api/src/schema.d.ts
+pnpm run gen
 ```
 
-It prints a warning for each finding in `.redocly.lint-ignore.yaml`, a file openapi-typescript
-does not read, and generates the client all the same.
+The findings kept in `.redocly.lint-ignore.yaml`, a file openapi-typescript does not read, are
+judged by `pnpm run lint:api`; the generator runs silently past them.
 
 ## Read
 

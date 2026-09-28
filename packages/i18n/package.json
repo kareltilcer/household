@@ -7,11 +7,22 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "gen": "node scripts/gen.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@formatjs/icu-messageformat-parser": "^3.5.20",
+    "intl-messageformat": "^12.1.2"
   },
   "devDependencies": {
+    "@household/test-vectors": "workspace:*",
+    "@types/node": "catalog:",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "yaml": "catalog:"
   }
 }

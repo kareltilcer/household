@@ -1,0 +1,19 @@
+{
+  "module.activity.name": "Historia zmian",
+  "module.admin.name": "Ustawienia gospodarstwa domowego",
+  "module.calendar.name": "Kalendarz",
+  "module.chat.name": "Rozmowy",
+  "module.chores.name": "Obowiązki domowe",
+  "module.dashboard.name": "Przegląd",
+  "module.documents.name": "Dokumenty",
+  "module.finance.name": "Finanse",
+  "module.garden.name": "Ogród",
+  "module.notes.name": "Notatki",
+  "module.pets.name": "Zwierzęta",
+  "module.property.name": "Nieruchomość",
+  "module.reminders.name": "Przypomnienia",
+  "module.shopping.name": "Zakupy",
+  "module.tasks.name": "Zadania",
+  "module.utilities.name": "Media",
+  "module.vehicles.name": "Pojazdy"
+}

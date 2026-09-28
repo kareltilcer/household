@@ -1,4 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"]
+  "compilerOptions": {
+    // The fetch API (Request, Response, Headers), which browsers and React Native both provide.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // scripts/gen.ts runs on Node.
+    "types": ["node"]
+  },
+  "include": ["src", "scripts"]
 }
