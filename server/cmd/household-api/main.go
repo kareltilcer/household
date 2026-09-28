@@ -1,7 +1,7 @@
 // Command household-api is the Household server (PRD 01 §1). It has three commands:
 //
 //	household-api [serve]     serve the API as the request role (the default)
-//	household-api migrate     apply pending migrations as the migrate role, at deploy time
+//	household-api migrate     apply pending migrations and load the reference data as the migrate role, at deploy time
 //	household-api bootstrap   create the roles and prepare the database, as an administrator
 //
 // Configuration comes from the environment; internal/platform/config lists it, and
@@ -30,6 +30,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/reference"
 )
 
 func main() {
@@ -119,7 +120,8 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 }
 
 // migrate applies every pending migration, the platform's and each module's, logging each one
-// it applies.
+// it applies, and then loads the reference data the binary carries into the tables they made,
+// logging what the load did to each dataset.
 func migrate(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	registry, err := module.NewRegistry(modules.All()...)
 	if err != nil {
@@ -139,6 +141,26 @@ func migrate(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 		return err
 	}
 	log.LogAttrs(ctx, slog.LevelInfo, "migrations up to date", slog.String("env", string(cfg.Env)))
+
+	conn, err := pgx.ConnectConfig(ctx, connConfig)
+	if err != nil {
+		return fmt.Errorf("connect as the migrate role: %w", err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	reports, err := reference.Load(ctx, conn, reference.Files())
+	if err != nil {
+		return err
+	}
+	for _, r := range reports {
+		level := slog.LevelInfo
+		if r.Kept > 0 {
+			// A record the files dropped stays served; a data change that meant to withdraw it did not.
+			level = slog.LevelWarn
+		}
+		log.LogAttrs(ctx, level, "reference data loaded", slog.String("dataset", r.Dataset),
+			slog.Int64("version", r.Version), slog.Int("inserted", r.Inserted), slog.Int("updated", r.Updated),
+			slog.Int("kept", r.Kept))
+	}
 	return nil
 }
 

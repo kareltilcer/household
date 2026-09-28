@@ -1,0 +1,21 @@
+{
+  "$schema": "../schemas/country.schema.json",
+  "code": "CZ",
+  "name": {
+    "value": { "en": "Czechia", "cs": "Česko", "sk": "Česko", "de": "Tschechien", "pl": "Czechy" },
+    "source": "cldr-territories",
+    "drafted": true
+  },
+  "currency": { "value": "CZK", "source": "iso-4217", "drafted": true },
+  "vat_standard_percent": { "value": "21", "source": "ec-vat-rates", "drafted": true },
+  "default_units": { "value": "metric", "source": "eu-units-directive", "drafted": true },
+  "first_day_of_week": { "value": 1, "source": "cldr-week-data", "drafted": true },
+  "holiday_set": { "value": "cz", "source": "cz-holidays-act", "drafted": true },
+  "inspection_label": {
+    "value": "STK",
+    "source": "cz-vehicle-operation-act",
+    "drafted": true,
+    "note": "The station's initials name the whole inspection in everyday Czech. Emission measurement is done at the same visit; PRD 13 writes it STK + emissions, and Vehicles (plan item 81) schedules both."
+  },
+  "document_type_set": { "value": "cz", "source": "prd-documents", "drafted": true }
+}

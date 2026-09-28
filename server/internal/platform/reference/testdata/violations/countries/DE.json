@@ -1,0 +1,11 @@
+{
+  "code": "DE",
+  "name": { "value": { "en": "Germany", "cs": "Německo", "sk": "Nemecko", "de": "Deutschland", "pl": "Niemcy" }, "source": "a-source" },
+  "currency": { "value": "EUR" },
+  "vat_standard_percent": { "value": "19", "source": "a-source" },
+  "default_units": { "value": "metric", "source": "a-source" },
+  "first_day_of_week": { "value": 1, "source": "a-source" },
+  "holiday_set": { "value": "de", "source": "a-source" },
+  "inspection_label": { "value": "HU/AU", "source": "a-source" },
+  "document_type_set": { "value": "de", "source": "a-source" }
+}

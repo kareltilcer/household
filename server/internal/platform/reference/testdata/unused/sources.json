@@ -1,0 +1,6 @@
+{
+  "sources": {
+    "cited": { "title": "A source every field cites", "url": "https://example.com/cited" },
+    "unused": { "title": "A source no field cites", "path": "docs/unused.md" }
+  }
+}

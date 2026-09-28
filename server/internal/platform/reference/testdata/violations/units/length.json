@@ -1,0 +1,52 @@
+{
+  "key": "length",
+  "name": { "value": { "en": "Length", "cs": "Délka", "sk": "Dĺžka", "de": "Länge", "pl": "Długość" }, "source": "a-source" },
+  "base_unit": { "value": "m", "source": "a-source" },
+  "units": [
+    {
+      "key": "m",
+      "system": { "value": "metric", "source": "a-source" },
+      "symbol": { "value": "m", "source": "a-source" },
+      "cldr": { "value": "meter", "source": "a-source" },
+      "name": { "value": { "en": "Metre", "cs": "Metr", "sk": "Meter", "de": "Meter", "pl": "Metr" }, "source": "a-source" },
+      "to_base": { "value": { "offset": "0", "numerator": "1000", "denominator": "1" }, "source": "a-source" },
+      "counterpart": { "value": "ft", "source": "a-source" }
+    },
+    {
+      "key": "km",
+      "system": { "value": "metric", "source": "a-source" },
+      "symbol": { "value": "km", "source": "a-source" },
+      "cldr": { "value": "kilometer", "source": "a-source" },
+      "name": { "value": { "en": "Kilometre", "cs": "Kilometr", "sk": "Kilometer", "de": "Kilometer", "pl": "Kilometr" }, "source": "a-source" },
+      "to_base": { "value": { "offset": "0", "numerator": "1000", "denominator": "1" }, "source": "a-source" },
+      "counterpart": { "value": "kg", "source": "a-source" }
+    },
+    {
+      "key": "ft",
+      "system": { "value": "imperial", "source": "a-source" },
+      "symbol": { "value": "ft", "source": "a-source" },
+      "cldr": { "value": "foot", "source": "a-source" },
+      "name": { "value": { "en": "Foot", "cs": "Stopa", "sk": "Stopa", "de": "Fuß", "pl": "Stopa" }, "source": "a-source" },
+      "to_base": { "value": { "offset": "0", "numerator": "0.3048", "denominator": "1" }, "source": "a-source" },
+      "counterpart": { "value": "in", "source": "a-source" }
+    },
+    {
+      "key": "in",
+      "system": { "value": "imperial", "source": "a-source" },
+      "symbol": { "value": "in", "source": "a-source" },
+      "cldr": { "value": "inch", "source": "a-source" },
+      "name": { "value": { "en": "Inch", "cs": "Palec", "sk": "Palec", "de": "Zoll", "pl": "Cal" }, "source": "a-source" },
+      "to_base": { "value": { "offset": "0", "numerator": "0.0254", "denominator": "1" }, "source": "a-source" },
+      "counterpart": { "value": "zz", "source": "a-source" }
+    },
+    {
+      "key": "yd",
+      "system": { "value": "imperial", "source": "a-source" },
+      "symbol": { "value": "yd", "source": "a-source" },
+      "cldr": { "value": "foot", "source": "a-source" },
+      "name": { "value": { "en": "Yard", "cs": "Yard", "sk": "Yard", "de": "Yard", "pl": "Jard" }, "source": "a-source" },
+      "to_base": { "value": { "offset": "0", "numerator": "0.9144", "denominator": "1" }, "source": "a-source" },
+      "counterpart": { "value": "m", "source": "a-source" }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "code": "CZ",
+  "name": { "value": { "en": "Czechia", "cs": "Česko", "sk": "Česko", "de": "Tschechien" }, "source": "a-source" },
+  "currency": { "value": "CZK", "source": "a-source" },
+  "vat_standard_percent": { "value": "21", "source": "a-source" },
+  "default_units": { "value": "metric", "source": "a-source" },
+  "first_day_of_week": { "value": 1, "source": "a-source" },
+  "holiday_set": { "value": "cz", "source": "a-source" },
+  "inspection_label": { "value": "STK", "source": "a-source" },
+  "document_type_set": { "value": "cz", "source": "a-source" }
+}

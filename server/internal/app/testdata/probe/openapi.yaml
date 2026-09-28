@@ -5,6 +5,13 @@ paths:
     get: { operationId: getHealthz, security: [], responses: { '200': { description: Alive } } }
   /readyz:
     get: { operationId: getReadyz, security: [], responses: { '200': { description: Ready }, '503': { description: Not ready } } }
+  /reference/countries:
+    get: { operationId: getReferenceCountries, responses: { '200': { description: Listed }, '401': { $ref: '#/components/responses/Problem' } } }
+  /reference/countries/{country}:
+    parameters: [{ name: country, in: path, required: true, schema: { type: string, pattern: '^[A-Z]{2}$' } }]
+    get: { operationId: getReferenceCountriesByCountry, responses: { '200': { description: Found }, '401': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' } } }
+  /reference/units:
+    get: { operationId: getReferenceUnits, responses: { '200': { description: Listed }, '401': { $ref: '#/components/responses/Problem' } } }
   /households/{household_id}/probe/items:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get:

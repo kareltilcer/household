@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/reference"
 )
 
 // Passwords are the role passwords the tests log in with, which they set on the cluster's
@@ -38,8 +39,8 @@ var Passwords = db.Passwords{
 var Blocks = []db.Block{db.Platform()}
 
 // templateFormat changes when the way a template is prepared changes, so that templates
-// built the old way are rebuilt rather than reused.
-const templateFormat = "1"
+// built the old way are rebuilt rather than reused. 2: the reference data is loaded.
+const templateFormat = "2"
 
 // staleAfter is how old a test database must be before a later run drops it as left over
 // by a run that was killed before it could clean up.
@@ -51,7 +52,7 @@ const (
 )
 
 // Database is one test package's database: a clone of a template built by migrating an
-// empty database with Blocks.
+// empty database with Blocks and loading the reference data into it, as a deploy does.
 type Database struct {
 	Name string
 }
@@ -197,26 +198,32 @@ func create(ctx context.Context) (*Database, error) {
 	return &Database{Name: name}, nil
 }
 
-// templateName names the template after what built it, so a change to any migration
-// builds a new one and a template is never reused for a schema it does not have.
+// templateName names the template after what built it, so a change to any migration or to the
+// reference data builds a new one, and a template is never reused for a schema or data it does
+// not have.
 func templateName() (string, error) {
-	fsys, err := db.Assemble(Blocks...)
-	if err != nil {
-		return "", err
-	}
-	entries, err := fs.ReadDir(fsys, ".")
+	migrations, err := db.Assemble(Blocks...)
 	if err != nil {
 		return "", err
 	}
 	h := sha256.New()
 	h.Write([]byte(templateFormat))
-	for _, e := range entries {
-		data, err := fs.ReadFile(fsys, e.Name())
+	for _, fsys := range []fs.FS{migrations, reference.Files()} {
+		err := fs.WalkDir(fsys, ".", func(name string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			data, err := fs.ReadFile(fsys, name)
+			if err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(h, "\x00%s\x00%d\x00", name, len(data))
+			h.Write(data)
+			return nil
+		})
 		if err != nil {
 			return "", err
 		}
-		_, _ = fmt.Fprintf(h, "\x00%s\x00%d\x00", e.Name(), len(data))
-		h.Write(data)
 	}
 	return templatePrefix + hex.EncodeToString(h.Sum(nil))[:16], nil
 }
@@ -250,7 +257,8 @@ func ensureTemplate(ctx context.Context, admin *pgx.Conn, template string) error
 	return exec(ctx, admin, "ALTER DATABASE %I RENAME TO %I", build, template)
 }
 
-// migrate applies blocks to database as the migrate role, as a deploy does.
+// migrate applies blocks to database as the migrate role, and then loads the reference data, as
+// a deploy does.
 func migrate(ctx context.Context, database string, blocks []db.Block) error {
 	u, err := databaseURL(database, db.RoleMigrate)
 	if err != nil {
@@ -260,10 +268,18 @@ func migrate(ctx context.Context, database string, blocks []db.Block) error {
 	if err != nil {
 		return err
 	}
-	// Closed before the rename that follows, which fails while any session is connected.
+	// Both closed before the rename that follows, which fails while any session is connected.
 	sqlDB := stdlib.OpenDB(*cfg)
 	defer func() { _ = sqlDB.Close() }()
-	_, err = db.Migrate(ctx, sqlDB, blocks...)
+	if _, err := db.Migrate(ctx, sqlDB, blocks...); err != nil {
+		return err
+	}
+	conn, err := pgx.ConnectConfig(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	_, err = reference.Load(ctx, conn, reference.Files())
 	return err
 }
 

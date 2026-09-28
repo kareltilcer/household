@@ -1,0 +1,9 @@
+# Every problem Read must report for the sources.json beside this one, the only file there: a
+# source names a document by exactly one of a URL and a path, and its id is lower-case; and the
+# datasets' directories must exist.
+countries#: open countries: file does not exist
+sources.json#/sources/both: 'oneOf' failed, subschemas 0, 1 matched
+sources.json#/sources/neither: missing property 'path'
+sources.json#/sources/neither: missing property 'url'
+sources.json#: 'Not-An-Id' does not match pattern '^[a-z0-9]+(-[a-z0-9]+)*$'
+units#: open units: file does not exist

@@ -6,8 +6,12 @@ package auth
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/google/uuid"
+
+	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/reqctx"
 )
 
 type userKey struct{}
@@ -21,4 +25,17 @@ func WithUser(ctx context.Context, id uuid.UUID) context.Context {
 func User(ctx context.Context) (uuid.UUID, bool) {
 	id, ok := ctx.Value(userKey{}).(uuid.UUID)
 	return id, ok && id != uuid.Nil
+}
+
+// Required answers 401 unauthenticated to a request that carries no caller, before the handler
+// sees it, for the routes any authenticated user may call. The tenant middleware makes the same
+// check for the routes under a household.
+func Required(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := User(r.Context()); !ok {
+			problem.Write(w, reqctx.RequestID(r.Context()), problem.New(http.StatusUnauthorized, problem.CodeUnauthenticated))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A country profile",
+  "description": "What a household in the country is offered (PRD 03 §9): the defaults it starts from, and the pointers to the country's own sets of public holidays and document types, which Calendar and Documents define. One file per country, countries/<code>.json. Changing a household's country changes what it is offered from then on, never what it has recorded (FR-HA1).",
+  "type": "object",
+  "required": [
+    "code",
+    "name",
+    "currency",
+    "vat_standard_percent",
+    "default_units",
+    "first_day_of_week",
+    "holiday_set",
+    "inspection_label",
+    "document_type_set"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "code": {
+      "description": "ISO 3166-1 alpha-2, and the file's name: the record's key, the one field without a source. The United Kingdom is GB.",
+      "type": "string",
+      "pattern": "^[A-Z]{2}$"
+    },
+    "name": { "$ref": "defs.schema.json#/$defs/localizedField" },
+    "currency": {
+      "description": "The country's currency, ISO 4217: the base currency a household created there starts with.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "type": "string", "pattern": "^[A-Z]{3}$" } }
+    },
+    "vat_standard_percent": {
+      "description": "The standard rate of VAT, a decimal percent: the rate a tariff or an expense in the country starts from.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": {
+        "value": { "type": "string", "pattern": "^(0|[1-9][0-9]?)(\\.[0-9]*[1-9])?$" }
+      }
+    },
+    "default_units": {
+      "description": "The system of units a household created in the country starts with.",
+      "$ref": "defs.schema.json#/$defs/unitSystemField"
+    },
+    "first_day_of_week": {
+      "description": "The day a week starts on in the country, 0 for Sunday to 6 for Saturday, as JavaScript's Date#getDay and Go's time.Weekday count. A household and each member may override it.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "type": "integer", "minimum": 0, "maximum": 6 } }
+    },
+    "holiday_set": {
+      "description": "The key of the country's set of public holidays, which Calendar offers (plan item 75).",
+      "$ref": "defs.schema.json#/$defs/keyField"
+    },
+    "inspection_label": {
+      "description": "The country's own word for the statutory vehicle inspection, shown as it is in every language: the vocabulary changes with the country, not only with the translation.",
+      "$ref": "defs.schema.json#/$defs/textField"
+    },
+    "document_type_set": {
+      "description": "The key of the country's set of document types, which Documents offers (plan item 46).",
+      "$ref": "defs.schema.json#/$defs/keyField"
+    }
+  },
+  "additionalProperties": false
+}

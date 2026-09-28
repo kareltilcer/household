@@ -1,0 +1,25 @@
+{
+  "key": "length",
+  "name": { "value": { "en": "Length", "cs": "Délka", "sk": "Dĺžka", "de": "Länge", "pl": "Długość" }, "source": "cited" },
+  "base_unit": { "value": "m", "source": "cited" },
+  "units": [
+    {
+      "key": "m",
+      "system": { "value": "metric", "source": "cited" },
+      "symbol": { "value": "m", "source": "cited" },
+      "cldr": { "value": "meter", "source": "cited" },
+      "name": { "value": { "en": "Metre", "cs": "Metr", "sk": "Meter", "de": "Meter", "pl": "Metr" }, "source": "cited" },
+      "to_base": { "value": { "offset": "0", "numerator": "1", "denominator": "1" }, "source": "cited" },
+      "counterpart": { "value": "ft", "source": "cited" }
+    },
+    {
+      "key": "ft",
+      "system": { "value": "imperial", "source": "cited" },
+      "symbol": { "value": "ft", "source": "cited" },
+      "cldr": { "value": "foot", "source": "cited" },
+      "name": { "value": { "en": "Foot", "cs": "Stopa", "sk": "Stopa", "de": "Fuß", "pl": "Stopa" }, "source": "cited" },
+      "to_base": { "value": { "offset": "0", "numerator": "0.3048", "denominator": "1" }, "source": "cited" },
+      "counterpart": { "value": "m", "source": "cited" }
+    }
+  ]
+}

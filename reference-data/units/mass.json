@@ -1,0 +1,104 @@
+{
+  "$schema": "../schemas/dimension.schema.json",
+  "key": "mass",
+  "name": {
+    "value": { "en": "Weight", "cs": "Hmotnost", "sk": "Hmotnosť", "de": "Gewicht", "pl": "Waga" },
+    "source": "prd-localisation",
+    "drafted": true,
+    "note": "The PRD's dimension is mass; each language's everyday word is the one a member reads."
+  },
+  "base_unit": { "value": "kg", "source": "si-brochure", "drafted": true },
+  "units": [
+    {
+      "key": "g",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "g", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "gram", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Gram", "cs": "Gram", "sk": "Gram", "de": "Gramm", "pl": "Gram" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.001", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "oz", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "kg",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "kg", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "kilogram", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Kilogram",
+          "cs": "Kilogram",
+          "sk": "Kilogram",
+          "de": "Kilogramm",
+          "pl": "Kilogram"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "1", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "lb", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "oz",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "oz", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "ounce", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Ounce", "cs": "Unce", "sk": "Unca", "de": "Unze", "pl": "Uncja" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.028349523125", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "g", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "lb",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "lb", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "pound", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Pound", "cs": "Libra", "sk": "Libra", "de": "Pfund", "pl": "Funt" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.45359237", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "kg", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "st",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "st", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "stone", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Stone", "cs": "Kámen", "sk": "Kameň", "de": "Stone", "pl": "Kamień" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "6.35029318", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "kg", "source": "prd-localisation", "drafted": true }
+    }
+  ]
+}

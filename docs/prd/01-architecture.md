@@ -152,7 +152,7 @@ property of the system rather than a policy (**D-3**, and see
 | `users`, `credentials`, `sessions`, `devices` | Global | A user exists independently of any household and may be in several |
 | `households`, `memberships`, `invitations` | Household-keyed but not RLS-isolated the same way | The membership table is how tenancy is *resolved*, so it is read before a tenant context exists; it has its own policy keyed on `user_id` |
 | `plans`, `subscriptions`, `invoices`, `usage_samples` | Household-keyed, billing schema | Readable by the billing service role; contains no content |
-| `crop_catalog`, `tariff_presets`, `locales`, `country_profiles` | Global reference data | Curated by the platform, read-only to tenants, versioned |
+| `country_profiles`, `unit_dimensions`, `units`, `crop_catalog`, `tariff_presets` | Global reference data | Curated by the platform, read-only to tenants, versioned. Loaded from sourced files in `reference-data/` as the server migrates ([ADR 0008](../adr/0008-reference-data-pipeline.md)). The languages are not a table: they ship with the catalogs (§9 of [03](03-platform-strands.md)) |
 | `platform_audit` | Global | Append-only record of platform-staff actions |
 
 ### 2.5 Users across households

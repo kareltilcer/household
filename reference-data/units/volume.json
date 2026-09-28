@@ -1,0 +1,141 @@
+{
+  "$schema": "../schemas/dimension.schema.json",
+  "key": "volume",
+  "name": {
+    "value": { "en": "Volume", "cs": "Objem", "sk": "Objem", "de": "Volumen", "pl": "Objętość" },
+    "source": "prd-localisation",
+    "drafted": true
+  },
+  "base_unit": {
+    "value": "l",
+    "source": "si-brochure",
+    "drafted": true,
+    "note": "The litre, accepted for use with the SI, rather than the cubic metre: the imperial units are defined in litres, so their factors stay short and exact."
+  },
+  "units": [
+    {
+      "key": "ml",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "ml", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "milliliter", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Millilitre",
+          "cs": "Mililitr",
+          "sk": "Mililiter",
+          "de": "Milliliter",
+          "pl": "Mililitr"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.001", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": { "value": "fl_oz", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "l",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "l", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "liter", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Litre", "cs": "Litr", "sk": "Liter", "de": "Liter", "pl": "Litr" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "1", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      },
+      "counterpart": {
+        "value": "pt",
+        "source": "prd-localisation",
+        "drafted": true,
+        "note": "Pints for the everyday liquid; a module that shows larger volumes, a water butt or a fuel tank, may choose gallons itself."
+      }
+    },
+    {
+      "key": "m3",
+      "system": { "value": "metric", "source": "si-brochure", "drafted": true },
+      "symbol": { "value": "m³", "source": "si-brochure", "drafted": true },
+      "cldr": { "value": "cubic-meter", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Cubic metre",
+          "cs": "Metr krychlový",
+          "sk": "Kubický meter",
+          "de": "Kubikmeter",
+          "pl": "Metr sześcienny"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "1000", "denominator": "1" },
+        "source": "si-brochure",
+        "drafted": true
+      }
+    },
+    {
+      "key": "fl_oz",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "fl oz", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "fluid-ounce-imperial", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": {
+          "en": "Fluid ounce",
+          "cs": "Kapalinová unce",
+          "sk": "Tekutá unca",
+          "de": "Flüssigunze",
+          "pl": "Uncja płynu"
+        },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.0284130625", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "ml", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "pt",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "pt", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "pint-imperial", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Pint", "cs": "Pinta", "sk": "Pinta", "de": "Pint", "pl": "Pinta" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "0.56826125", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "l", "source": "prd-localisation", "drafted": true }
+    },
+    {
+      "key": "gal",
+      "system": { "value": "imperial", "source": "uk-weights-measures-act", "drafted": true },
+      "symbol": { "value": "gal", "source": "uk-weights-measures-act", "drafted": true },
+      "cldr": { "value": "gallon-imperial", "source": "cldr-units", "drafted": true },
+      "name": {
+        "value": { "en": "Gallon", "cs": "Galon", "sk": "Galón", "de": "Gallone", "pl": "Galon" },
+        "source": "cldr-units",
+        "drafted": true
+      },
+      "to_base": {
+        "value": { "offset": "0", "numerator": "4.54609", "denominator": "1" },
+        "source": "uk-weights-measures-act",
+        "drafted": true
+      },
+      "counterpart": { "value": "l", "source": "prd-localisation", "drafted": true }
+    }
+  ]
+}

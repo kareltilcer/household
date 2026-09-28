@@ -1,0 +1,11 @@
+{
+  "code": "PX",
+  "name": { "value": { "en": "Poland", "cs": "Polsko", "sk": "Poľsko", "de": "Polen", "pl": "Polska" }, "source": "a-source" },
+  "currency": { "value": "XYZ", "source": "a-source" },
+  "vat_standard_percent": { "value": "23", "source": "nowhere" },
+  "default_units": { "value": "metric", "source": "a-source" },
+  "first_day_of_week": { "value": 1, "source": "a-source" },
+  "holiday_set": { "value": "pl", "source": "a-source" },
+  "inspection_label": { "value": "Przegląd techniczny", "source": "a-source" },
+  "document_type_set": { "value": "pl", "source": "a-source" }
+}

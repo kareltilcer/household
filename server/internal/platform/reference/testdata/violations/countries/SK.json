@@ -1,0 +1,12 @@
+{
+  "code": "SK",
+  "motto": { "value": "Hore", "source": "a-source" },
+  "name": { "value": { "en": " Slovakia", "cs": "Slovensko", "sk": "Slovensko", "de": "Slowakei", "pl": "Słowacja" }, "source": "a-source" },
+  "currency": { "value": "EUR", "source": "a-source", "drafted": false },
+  "vat_standard_percent": { "value": "23", "source": "a-source" },
+  "default_units": { "value": "furlongs", "source": "a-source" },
+  "first_day_of_week": { "value": 7, "source": "a-source" },
+  "holiday_set": { "value": "sk", "source": "a-source" },
+  "inspection_label": { "value": "TK", "source": "a-source" },
+  "document_type_set": { "value": "sk", "source": "a-source" }
+}

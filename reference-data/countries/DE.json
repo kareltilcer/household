@@ -1,0 +1,32 @@
+{
+  "$schema": "../schemas/country.schema.json",
+  "code": "DE",
+  "name": {
+    "value": {
+      "en": "Germany",
+      "cs": "Německo",
+      "sk": "Nemecko",
+      "de": "Deutschland",
+      "pl": "Niemcy"
+    },
+    "source": "cldr-territories",
+    "drafted": true
+  },
+  "currency": { "value": "EUR", "source": "iso-4217", "drafted": true },
+  "vat_standard_percent": { "value": "19", "source": "ec-vat-rates", "drafted": true },
+  "default_units": { "value": "metric", "source": "eu-units-directive", "drafted": true },
+  "first_day_of_week": { "value": 1, "source": "cldr-week-data", "drafted": true },
+  "holiday_set": {
+    "value": "de",
+    "source": "de-holidays",
+    "drafted": true,
+    "note": "Only the Day of German Unity is federal; every other public holiday is set by the Land, so Calendar needs the household's Land to offer the set in full."
+  },
+  "inspection_label": {
+    "value": "HU/AU",
+    "source": "de-stvzo",
+    "drafted": true,
+    "note": "The Abgasuntersuchung has been part of the Hauptuntersuchung since 2010, but HU/AU is still how it is named, and colloquially TÜV after one of the testing organisations; PRD 13 writes HU/AU (TÜV)."
+  },
+  "document_type_set": { "value": "de", "source": "prd-documents", "drafted": true }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "../schemas/country.schema.json",
+  "code": "GB",
+  "name": {
+    "value": {
+      "en": "United Kingdom",
+      "cs": "Spojené království",
+      "sk": "Spojené kráľovstvo",
+      "de": "Vereinigtes Königreich",
+      "pl": "Wielka Brytania"
+    },
+    "source": "cldr-territories",
+    "drafted": true,
+    "note": "ISO 3166-1 codes the United Kingdom GB; UK is only reserved. The plan and design/v1 write UK."
+  },
+  "currency": { "value": "GBP", "source": "iso-4217", "drafted": true },
+  "vat_standard_percent": { "value": "20", "source": "gov-uk-vat-rates", "drafted": true },
+  "default_units": {
+    "value": "imperial",
+    "source": "prd-uk-launch-market",
+    "drafted": true,
+    "note": "UK law is metric for trade (Weights and Measures Act 1985) but keeps miles for road distances, and everyday life keeps feet, pounds and stones. Imperial gives an odometer in miles, as a UK car reads, at the cost of °F, which a UK household may switch away from."
+  },
+  "first_day_of_week": { "value": 1, "source": "cldr-week-data", "drafted": true },
+  "holiday_set": {
+    "value": "gb",
+    "source": "gov-uk-bank-holidays",
+    "drafted": true,
+    "note": "England and Wales, Scotland, and Northern Ireland each have their own bank holidays, so Calendar needs the household's nation to offer the set in full."
+  },
+  "inspection_label": {
+    "value": "MOT",
+    "source": "gov-uk-mot",
+    "drafted": true,
+    "note": "Northern Ireland's MOT is the DVA's, and first falls due later; Vehicles (plan item 81) holds the cadence."
+  },
+  "document_type_set": { "value": "gb", "source": "prd-documents", "drafted": true }
+}
