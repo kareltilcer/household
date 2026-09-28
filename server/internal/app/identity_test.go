@@ -27,6 +27,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
+	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/session"
@@ -873,6 +874,82 @@ func TestAResetLandingDuringAChangeWins(t *testing.T) {
 	if n := s.count("SELECT count(*) FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.email = $1 AND s.revoked_at IS NULL", address()); n != 1 {
 		t.Fatalf("%d live sessions, want the one the reset's password signed in", n)
 	}
+}
+
+// A hash made with other parameters is replaced at the next sign-in with one of the server's, and
+// replacing it changes no password: a change that checked the current password against the old
+// hash while a sign-in replaced it still lands.
+func TestASignInRehashesWithoutChangingThePassword(t *testing.T) {
+	const pw, changed = "correct horse battery", "the change's new password"
+	var s *site
+	address := func() string { return s.a("jana@tilcerovi.cz") }
+	s = newSite(t, apptest.Options{Screening: func(next string) {
+		// The change has checked the current password against the old hash: a sign-in replaces it now.
+		if next == changed {
+			s.browser().login(address(), pw)
+		}
+	}})
+	b := s.signUp(address(), pw)
+	older, err := password.New(password.Params{Memory: 2 * apptest.Cheap.Memory, Time: 1, Threads: 1, SaltLen: 16, KeyLen: 32}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// olden stores the password as an earlier release hashed it, set when it was.
+	olden := func() {
+		t.Helper()
+		old, err := older.Hash(t.Context(), pw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.admin.Exec(t.Context(), `
+			UPDATE credentials c SET secret = $1 FROM users u WHERE u.id = c.user_id AND u.email = $2 AND c.type = 'password'`,
+			old, address()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored := func() string {
+		t.Helper()
+		var secret string
+		if err := s.admin.QueryRow(t.Context(), `
+			SELECT c.secret FROM credentials c JOIN users u ON u.id = c.user_id WHERE u.email = $1 AND c.type = 'password'`,
+			address()).Scan(&secret); err != nil {
+			t.Fatal(err)
+		}
+		return secret
+	}
+
+	olden()
+	s.browser().login(address(), pw)
+	if current := fmt.Sprintf("$m=%d,t=%d,p=%d$", apptest.Cheap.Memory, apptest.Cheap.Time, apptest.Cheap.Threads); !strings.Contains(stored(), current) {
+		t.Fatalf("a sign-in kept the old hash %s", stored())
+	}
+
+	olden()
+	expect(t, b.post("/auth/password", jsonBody(t, map[string]string{"current_password": pw, "new_password": changed})),
+		http.StatusNoContent, "")
+	s.browser().login(address(), changed)
+	expect(t, s.browser().post("/auth/login", jsonBody(t, map[string]string{"email": address(), "password": pw, "client_type": "web"})),
+		http.StatusUnauthorized, problem.CodeInvalidCredentials)
+}
+
+// Behind a trusted proxy a limit counts the client the proxy forwarded for, not the proxy, and never
+// an address a client claims for itself (HOUSEHOLD_TRUSTED_PROXIES).
+func TestALimitCountsTheClientBehindATrustedProxy(t *testing.T) {
+	s := newSite(t, apptest.Options{TrustedProxies: []string{"10.0.0.0/8"}})
+	register := func(i int, forwarded string) *httptest.ResponseRecorder {
+		t.Helper()
+		b := s.browser()
+		b.peer = "10.0.0.7:4000"
+		return b.send(request{method: http.MethodPost, path: "/auth/register", header: http.Header{"X-Forwarded-For": {forwarded}},
+			body: jsonBody(t, map[string]string{"email": s.a(fmt.Sprintf("user%d@example.com", i)), "password": "correct horse battery", "display_name": "U"})})
+	}
+	// One client, claiming another address of its own each time.
+	for i := range ratelimit.RegisterNetwork.Max {
+		expect(t, register(i, fmt.Sprintf("192.0.2.%d, 203.0.113.50", i)), http.StatusAccepted, "")
+	}
+	expect(t, register(ratelimit.RegisterNetwork.Max, "192.0.2.99, 203.0.113.50"), http.StatusTooManyRequests, problem.CodeRateLimited)
+	// Another client, through the same proxy, has a budget of its own.
+	expect(t, register(ratelimit.RegisterNetwork.Max+1, "203.0.113.51"), http.StatusAccepted, "")
 }
 
 // The note to an address that has an account goes out three times an hour, and the registrations

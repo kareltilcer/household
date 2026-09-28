@@ -24,6 +24,7 @@ import (
 
 // received is a message the fake server took.
 type received struct {
+	hello    string
 	from, to string
 	data     string
 	tls      bool
@@ -84,6 +85,7 @@ func (s *server) session(conn net.Conn) {
 		verb, arg, _ := strings.Cut(line, " ")
 		switch strings.ToUpper(verb) {
 		case "EHLO":
+			msg.hello = arg
 			lines := []string{"250-fake"}
 			if s.tls != nil && !msg.tls {
 				lines = append(lines, "250-STARTTLS")
@@ -178,7 +180,9 @@ func TestAMessageIsDeliveredAsPlainTextInItsLanguage(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := srv.received()
-	if len(got) != 1 || got[0].from != "FROM:<no-reply@household.example>" || got[0].to != "TO:<jana@tilcerovi.cz>" {
+	// It greets the relay with the sender's domain, a name a relay can resolve, not localhost.
+	if len(got) != 1 || got[0].hello != "household.example" || got[0].from != "FROM:<no-reply@household.example>" ||
+		got[0].to != "TO:<jana@tilcerovi.cz>" {
 		t.Fatalf("%+v", got)
 	}
 	msg, subject, body := parse(t, got[0].data)

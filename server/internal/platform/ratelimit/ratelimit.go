@@ -83,7 +83,9 @@ func NewThrottles(pool Beginner, now func() time.Time) *Throttles {
 	return &Throttles{pool: pool, now: now}
 }
 
-// key is where l counts subject: the SHA-256 of the two, so that the table names nobody.
+// key is where l counts subject: the SHA-256 of the two, so that no address is kept in the clear.
+// It is not keyed, so it hides an address only from someone who does not guess it: a row is still
+// personal data.
 func key(l Limit, subject string) []byte {
 	sum := sha256.Sum256([]byte(l.Name + "\x00" + subject))
 	return sum[:]
@@ -181,7 +183,8 @@ func (t *Throttles) Clear(ctx context.Context, l Limit, subject string) error {
 
 // update applies step to each of counts' rows, under a row lock, in one transaction, and writes
 // what it returns for each when it admits the attempt on all of them; when any refuses, update
-// writes nothing and returns the longest wait they give.
+// changes no count, leaving only the empty rows it made for subjects it had not seen, and returns
+// the longest wait they give.
 func (t *Throttles) update(ctx context.Context, counts []Count, step func(Limit, state, time.Time) (state, time.Duration)) (time.Duration, error) {
 	type row struct {
 		limit Limit

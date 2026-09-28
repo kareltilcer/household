@@ -288,12 +288,13 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	var (
 		user   uuid.UUID
 		secret *string
+		set    *time.Time
 	)
 	err := tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
-			SELECT u.id, c.secret FROM users u
+			SELECT u.id, c.secret, c.updated_at FROM users u
 			LEFT JOIN credentials c ON c.user_id = u.id AND c.type = 'password'
-			WHERE lower(u.email) = lower($1)`, req.Email).Scan(&user, &secret)
+			WHERE lower(u.email) = lower($1)`, req.Email).Scan(&user, &secret, &set)
 	})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		s.fail(w, r, err)
@@ -336,11 +337,13 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	)
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		// The password was checked before this transaction: a reset or a change since then wins.
-		if err := unchanged(ctx, tx, user, *secret); err != nil {
+		if err := unchanged(ctx, tx, user, *set); err != nil {
 			return err
 		}
+		// The same password, hashed again: no change of it, so its updated_at stays, and a sign-in or
+		// a change that checked it against the old hash still finds it unchanged.
 		if newSecret != "" {
-			if _, err := tx.Exec(ctx, "UPDATE credentials SET secret = $2, updated_at = now() WHERE user_id = $1 AND type = 'password'",
+			if _, err := tx.Exec(ctx, "UPDATE credentials SET secret = $2 WHERE user_id = $1 AND type = 'password'",
 				user, newSecret); err != nil {
 				return err
 			}
@@ -366,21 +369,22 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, loginResult{User: me})
 }
 
-// unchanged locks user's password in tx, and answers invalidCredentials when it is no longer
-// verified, the hash a check made before tx began: a reset or a change that landed since has ended
-// what that check proved, so nothing signs in with it, and nothing writes over the new password.
-// The lock holds a reset or a change that has not landed yet until tx ends, when it ends whatever
-// tx began.
-func unchanged(ctx context.Context, tx pgx.Tx, user uuid.UUID, verified string) error {
-	var secret *string
-	err := tx.QueryRow(ctx, "SELECT secret FROM credentials WHERE user_id = $1 AND type = 'password' FOR UPDATE", user).
-		Scan(&secret)
+// unchanged locks user's password in tx, and answers invalidCredentials when it is no longer the
+// one a check made before tx began verified: when its updated_at, the moment it was set, is no
+// longer set, as that check read it. A reset or a change that landed since has ended what the check
+// proved, so nothing signs in with it, and nothing writes over the new password; a rehash of the
+// same password is no change, and leaves updated_at as it was. The lock holds a reset or a change
+// that has not landed yet until tx ends, when it ends whatever tx began.
+func unchanged(ctx context.Context, tx pgx.Tx, user uuid.UUID, set time.Time) error {
+	var at time.Time
+	err := tx.QueryRow(ctx, "SELECT updated_at FROM credentials WHERE user_id = $1 AND type = 'password' FOR UPDATE", user).
+		Scan(&at)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return invalidCredentials()
 	case err != nil:
 		return err
-	case secret == nil || *secret != verified:
+	case !at.Equal(set):
 		return invalidCredentials()
 	}
 	return nil
@@ -513,9 +517,11 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		now := s.Sessions.Now()
+		// updated_at is the moment it is written, under the row's lock, so that no two passwords
+		// set one after the other share one (unchanged).
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO credentials (user_id, type, secret) VALUES ($1, 'password', $2)
-			ON CONFLICT (user_id, type) DO UPDATE SET secret = excluded.secret, updated_at = now()`, t.user, secret); err != nil {
+			ON CONFLICT (user_id, type) DO UPDATE SET secret = excluded.secret, updated_at = clock_timestamp()`, t.user, secret); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `
@@ -563,12 +569,13 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 		address, language string
 		email             *string
 		secret            *string
+		set               *time.Time
 	)
 	err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
-			SELECT u.email, u.locale, c.secret FROM users u
+			SELECT u.email, u.locale, c.secret, c.updated_at FROM users u
 			LEFT JOIN credentials c ON c.user_id = u.id AND c.type = 'password'
-			WHERE u.id = $1`, user).Scan(&email, &language, &secret)
+			WHERE u.id = $1`, user).Scan(&email, &language, &secret, &set)
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -612,10 +619,10 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		// The current password was checked before this transaction: a reset or another change
 		// since then wins, and this one answers as a wrong current password does.
-		if err := unchanged(ctx, tx, user, *secret); err != nil {
+		if err := unchanged(ctx, tx, user, *set); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, "UPDATE credentials SET secret = $2, updated_at = now() WHERE user_id = $1 AND type = 'password'",
+		if _, err := tx.Exec(ctx, "UPDATE credentials SET secret = $2, updated_at = clock_timestamp() WHERE user_id = $1 AND type = 'password'",
 			user, newSecret); err != nil {
 			return err
 		}

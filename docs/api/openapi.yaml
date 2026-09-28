@@ -8069,19 +8069,18 @@ components:
         none, and a repeat of it runs again (see the description of the API); nor does a request
         whose body carries a password, `/auth/password`. A repeat of a request that ended the
         session it was made with, signing out for instance, answers `401`: that session makes no
-        further request. Only a `2xx` response is stored: a repeat
-        of a request that was refused before it took effect runs it again. A repeat while the first
-        request is still running answers `409` (`idempotency_in_progress`). So does a repeat of a
-        request that took
-        effect but whose response was not kept, because the server stopped before storing it, the
-        body was larger than 1 MiB, or the request was answered with anything but `2xx` after it
-        took effect, until the key expires: running it again would repeat the effect. A first
-        request that has not taken effect five minutes after it arrived is taken to have failed: a
-        repeat then runs it, and the first, if it is still running, can no longer take effect and
-        answers `409` (`idempotency_in_progress`) itself. A key reused
-        for a request with a different method, path, query, `If-Match`, `Content-Type` or JSON body
-        answers `422` naming `header:Idempotency-Key`; a body in another media type, an upload, is
-        compared by its length alone.
+        further request. Only a `2xx` response is stored: a repeat of a request that was refused
+        before it took effect runs it again. A repeat while the first request is still running
+        answers `409` (`idempotency_in_progress`). So does a repeat of a request that took effect
+        but whose response was not kept, because the server stopped before storing it, the body was
+        larger than 1 MiB, or the request was answered with anything but `2xx` after it took
+        effect, until the key expires: running it again would repeat the effect. A first request
+        that has not taken effect five minutes after it arrived is taken to have failed: a repeat
+        then runs it, and the first, if it is still running, can no longer take effect and answers
+        `409` (`idempotency_in_progress`) itself. A key reused for a request with a different
+        method, path, query, `If-Match`, `Content-Type` or JSON body answers `422` naming
+        `header:Idempotency-Key`; a body in another media type, an upload, is compared by its
+        length alone.
       schema: { type: string, minLength: 1, maxLength: 128 }
     IdempotencyKeyRequired:
       name: Idempotency-Key

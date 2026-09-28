@@ -22,6 +22,8 @@ type Resolver struct {
 func New(trusted []netip.Prefix) *Resolver { return &Resolver{trusted: trusted} }
 
 // ParsePrefixes reads a comma-separated list of addresses and CIDR prefixes, "10.0.0.0/8, ::1".
+// An IPv4-mapped IPv6 address or prefix, ::ffff:10.0.0.0/104, is read as the IPv4 one it maps,
+// since Addr compares addresses unmapped.
 func ParsePrefixes(list string) ([]netip.Prefix, error) {
 	var out []netip.Prefix
 	for _, item := range strings.Split(list, ",") {
@@ -30,6 +32,9 @@ func ParsePrefixes(list string) ([]netip.Prefix, error) {
 			continue
 		}
 		if p, err := netip.ParsePrefix(item); err == nil {
+			if a := p.Addr(); a.Is4In6() && p.Bits() >= 96 {
+				p = netip.PrefixFrom(a.Unmap(), p.Bits()-96)
+			}
 			out = append(out, p.Masked())
 			continue
 		}

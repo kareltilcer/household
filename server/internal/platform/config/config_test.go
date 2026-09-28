@@ -149,6 +149,22 @@ func TestMalformedAccountSettingsAreReported(t *testing.T) {
 	}
 }
 
+// Outside development the web client is served over https, where its Secure cookies are kept and
+// the emails' links travel encrypted; development's dev server is plain http.
+func TestOutsideDevelopmentTheWebClientIsServedOverHTTPS(t *testing.T) {
+	_, err := config.Load(config.Serve, env(serving(map[string]string{
+		config.EnvVar:         "production",
+		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
+		config.WebURLVar:      "http://app.household.example",
+	})))
+	if err == nil || !strings.Contains(err.Error(), config.WebURLVar) {
+		t.Fatalf("an http web client in production: %v", err)
+	}
+	if _, err := config.Load(config.Serve, env(map[string]string{config.WebURLVar: "http://localhost:3000"})); err != nil {
+		t.Fatalf("an http web client in development: %v", err)
+	}
+}
+
 // Serving as any role but the request role would serve with that role's privileges; as a
 // superuser or the table owner, past row-level security.
 func TestEachConnectionMustLogInAsItsRole(t *testing.T) {

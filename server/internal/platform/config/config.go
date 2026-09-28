@@ -124,8 +124,8 @@ type Config struct {
 	// full-size JSON body a slow mobile connection's time; an upload's handler extends it.
 	BodyTimeout time.Duration
 
-	// WebURL is where the web client is served, which the emails link to. Its origin is always
-	// allowed.
+	// WebURL is where the web client is served, which the emails link to: https outside
+	// development. Its origin is always allowed.
 	WebURL *url.URL
 	// AllowedOrigins are the origins an unsafe request from a browser may come from: WebURL's,
 	// and any HOUSEHOLD_ALLOWED_ORIGINS adds.
@@ -238,10 +238,15 @@ func (l *loader) serving(c *Config, dev bool) {
 
 	if web := required(WebURLVar, devWebURL); web != "" {
 		u, err := url.Parse(web)
-		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
-			u.RawQuery != "" || u.Fragment != "" {
+		switch {
+		case err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
+			u.RawQuery != "" || u.Fragment != "":
 			l.fail("%s is %q; want the web client's absolute http(s) URL", WebURLVar, web)
-		} else {
+		// Over plain HTTP a browser keeps none of the session's Secure cookies, and the emails'
+		// links would carry their tokens where anyone on the way reads them.
+		case !dev && u.Scheme != "https":
+			l.fail("%s is %q; outside development the web client is served over https", WebURLVar, web)
+		default:
 			c.WebURL = u
 			c.AllowedOrigins = append(c.AllowedOrigins, u.Scheme+"://"+u.Host)
 		}

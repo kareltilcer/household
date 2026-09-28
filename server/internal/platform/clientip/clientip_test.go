@@ -50,6 +50,20 @@ func TestTheClientIsThePeerUnlessThePeerIsATrustedProxy(t *testing.T) {
 	}
 }
 
+// A proxy named in its IPv4-mapped IPv6 form, as a dual-stack listener reports it, is trusted as
+// the IPv4 address it is.
+func TestAMappedProxyIsTrusted(t *testing.T) {
+	for _, list := range []string{"::ffff:10.0.0.0/104", "::ffff:10.1.2.3/128", "::ffff:10.1.2.3"} {
+		trusted, err := clientip.ParsePrefixes(list)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := clientip.New(trusted).Addr(request(t, "10.1.2.3:443", "198.51.100.1")); got.String() != "198.51.100.1" {
+			t.Errorf("%s: %s, want the client behind it", list, got)
+		}
+	}
+}
+
 func TestAPrefixListIsChecked(t *testing.T) {
 	if _, err := clientip.ParsePrefixes("10.0.0.0/8, not-an-address"); err == nil {
 		t.Fatal("garbage accepted")

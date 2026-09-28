@@ -26,7 +26,9 @@ CREATE UNIQUE INDEX users_email ON users (lower(email));
 
 -- The ways a user signs in (PRD 02 §1): at most one of each type. secret is the PHC string of a
 -- password's or a PIN's Argon2id hash (internal/platform/password), never the secret itself; an
--- identity provider's credential (item 9) holds none.
+-- identity provider's credential (item 9) holds none. updated_at is when the secret was last set,
+-- which hashing the same one again with new parameters does not move: a sign-in or a change
+-- compares it to find a password replaced since it was checked (internal/platform/identity).
 CREATE TYPE credential_type AS ENUM ('password', 'google', 'apple', 'child_pin');
 
 CREATE TABLE credentials (
@@ -81,8 +83,10 @@ CREATE INDEX email_tokens_expires_at ON email_tokens (expires_at);
 
 -- The count of attempts on a throttled surface (PRD 02 §9, internal/platform/ratelimit), one row
 -- per surface and what it counts: an address, an account or a client's network. The key is the
--- SHA-256 of the two, so that the table names nobody. A row counts attempts until window_ends_at;
--- a surface that backs off also blocks until blocked_until.
+-- SHA-256 of the two, so that no address is kept in the clear; the hash is not keyed, so anyone
+-- who guesses an address finds its row, and the rows are still personal data, which the expiry
+-- sweep deletes. A row counts attempts until window_ends_at; a surface that backs off also blocks
+-- until blocked_until.
 CREATE TABLE auth_throttles (
   key bytea PRIMARY KEY CHECK (octet_length(key) = 32),
   count integer NOT NULL CHECK (count >= 0),

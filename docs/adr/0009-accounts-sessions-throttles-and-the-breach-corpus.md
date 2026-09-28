@@ -34,8 +34,11 @@ nobody's matches, and costs what a wrong password costs. A hash is checked outsi
 since it takes a CPU and 64 MiB for a tenth of a second or more, so the transaction that then acts
 on it, starting a session, rehashing or setting a new password, locks the credential and finds it
 unchanged or answers as a wrong password does: a reset that lands meanwhile wins, and the session
-it ended stays ended. A change leaves the reset links already sent working, since a reset is how
-the address's owner takes the account back from someone who knows the password.
+it ended stays ended. Unchanged is the credential's `updated_at`, the moment its password was set,
+as the check read it: another sign-in's rehash of the same password leaves it, so a sign-in or a
+change running beside that rehash is not refused. A change leaves the reset links already sent
+working, since a reset is how the address's owner takes the account back from someone who knows
+the password.
 
 **The breach corpus is Have I Been Pwned's Pwned Passwords (CC BY 4.0), kept as the first 8 bytes of
 each SHA-1, sorted, after a 16-byte header** (`internal/platform/breach`). The server opens it once
@@ -66,10 +69,12 @@ write; signing in again from a browser ends the session it held.
 (`internal/platform/ratelimit`). A throttle guards a surface that takes a password or an address:
 few requests, each worth an attacker's while, which every process must count together and a
 restart must not forget. It is a row per surface and subject in `auth_throttles`, keyed by the
-SHA-256 of the two so the table names nobody, updated under a row lock. A sign-in counts as a
-failure against its network and its address, in one transaction, *before* its password is checked,
-and a success takes it back: counted only once each had failed, a burst of attempts sent at once
-would all read the counts as they stood before any, and all be checked. An address's throttle
+SHA-256 of the two so that no address is kept in the clear, updated under a row lock. The hash is
+not keyed, so anyone who guesses an address finds its rows: they are still personal data, and the
+expiry sweep deletes them. A sign-in counts as a failure against its network and its address, in
+one transaction, *before* its password is checked, and a success takes it back: counted only once
+each had failed, a burst of attempts sent at once would all read the counts as they stood before
+any, and all be checked. An address's throttle
 counts the address typed, whether or not an account has it, so a `429` says nothing about which
 addresses do. The account's sign-in limit backs off rather than locking (FR-ID3): the tenth failure
 in fifteen minutes blocks for a minute, each after it for twice as long, up to an hour, and the count

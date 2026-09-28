@@ -175,6 +175,11 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 		return failed("greeting", err)
 	}
 	defer func() { _ = c.Close() }()
+	// A name the relay can resolve, not net/smtp's default of localhost, which a relay that
+	// holds its clients to a fully qualified name refuses: the sender's domain.
+	if err := c.Hello(s.domain()); err != nil {
+		return failed("EHLO", err)
+	}
 	if !s.implicitTLS {
 		if ok, _ := c.Extension("STARTTLS"); ok {
 			if err := c.StartTLS(s.tls()); err != nil {
@@ -221,6 +226,11 @@ func failed(step string, err error) error {
 	return fmt.Errorf("mail: %s: %w", step, err)
 }
 
+// domain is the sender's domain: the name s greets a relay with, and its messages' ids end in.
+func (s *SMTP) domain() string {
+	return s.from.Address[strings.LastIndexByte(s.from.Address, '@')+1:]
+}
+
 // format is m as the bytes of an RFC 5322 message.
 func (s *SMTP) format(m Message, to *mail.Address) ([]byte, error) {
 	if strings.ContainsAny(m.Subject, "\r\n") {
@@ -228,14 +238,13 @@ func (s *SMTP) format(m Message, to *mail.Address) ([]byte, error) {
 	}
 	id := make([]byte, 16)
 	_, _ = rand.Read(id)
-	domain := s.from.Address[strings.LastIndexByte(s.from.Address, '@')+1:]
 	var b bytes.Buffer
 	for _, h := range [][2]string{
 		{"From", s.from.String()},
 		{"To", to.String()},
 		{"Subject", mime.QEncoding.Encode("utf-8", m.Subject)},
 		{"Date", time.Now().UTC().Format(time.RFC1123Z)},
-		{"Message-ID", "<" + hex.EncodeToString(id) + "@" + domain + ">"},
+		{"Message-ID", "<" + hex.EncodeToString(id) + "@" + s.domain() + ">"},
 		{"MIME-Version", "1.0"},
 		{"Content-Type", "text/plain; charset=utf-8"},
 		{"Content-Transfer-Encoding", "quoted-printable"},
