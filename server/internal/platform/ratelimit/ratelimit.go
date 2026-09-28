@@ -13,7 +13,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"errors"
 	"math"
 	"net/http"
 	"slices"
@@ -56,7 +55,10 @@ var (
 	LoginAccount    = Limit{Name: "login.account", Max: 10, Window: 15 * time.Minute, Backoff: time.Minute, MaxBackoff: time.Hour}
 	LoginNetwork    = Limit{Name: "login.network", Max: 60, Window: 15 * time.Minute}
 	RegisterNetwork = Limit{Name: "register.network", Max: 5, Window: time.Hour}
-	ResetAccount    = Limit{Name: "password_reset.account", Max: 3, Window: time.Hour}
+	// The note a registration sends an address that has an account goes out at most three times
+	// an hour, however many networks ask; a registration past it still answers 202 (D-96).
+	RegisterNote = Limit{Name: "register.note", Max: 3, Window: time.Hour}
+	ResetAccount = Limit{Name: "password_reset.account", Max: 3, Window: time.Hour}
 	// A verification email is sent again at most once a minute and five times an hour (D-96).
 	ResendMinute = Limit{Name: "verify_resend.minute", Max: 1, Window: time.Minute}
 	ResendHour   = Limit{Name: "verify_resend.hour", Max: 5, Window: time.Hour}
@@ -123,27 +125,6 @@ func (l Limit) fail(s state, now time.Time) state {
 		s.blockedUntil = now.Add(block)
 	}
 	return s
-}
-
-// Blocked returns how long subject must wait before l lets it try again, zero when it may now.
-func (t *Throttles) Blocked(ctx context.Context, l Limit, subject string) (time.Duration, error) {
-	var s state
-	err := pgx.BeginTxFunc(ctx, t.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		var blocked *time.Time
-		err := tx.QueryRow(ctx, "SELECT count, window_ends_at, blocked_until FROM auth_throttles WHERE key = $1",
-			key(l, subject)).Scan(&s.count, &s.windowEnds, &blocked)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		if blocked != nil {
-			s.blockedUntil = *blocked
-		}
-		return err
-	})
-	if err != nil {
-		return 0, err
-	}
-	return l.wait(s, t.now()), nil
 }
 
 // Take counts an attempt by each subject under its limit, and refuses it, counting nothing and

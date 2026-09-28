@@ -99,7 +99,8 @@ func build(ctx context.Context, o options, progress io.Writer) (uint64, error) {
 	return w.Count(), nil
 }
 
-// fromFile adds the hashes of o.from, one SHA1:COUNT line each, in ascending order.
+// fromFile adds the hashes of o.from, one SHA1:COUNT line each, in ascending order. A blank line
+// is passed over, as it is in a range the API sends.
 func fromFile(o options, w *breach.Writer) error {
 	f, err := os.Open(o.from)
 	if err != nil {
@@ -108,6 +109,9 @@ func fromFile(o options, w *breach.Writer) error {
 	defer func() { _ = f.Close() }()
 	s := bufio.NewScanner(f)
 	for n := 1; s.Scan(); n++ {
+		if strings.TrimSpace(s.Text()) == "" {
+			continue
+		}
 		prefix, count, err := parseLine("", s.Text())
 		if err != nil {
 			return fmt.Errorf("%s:%d: %w", o.from, n, err)

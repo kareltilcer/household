@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 )
 
 // Background runs work after a response has gone, on a fixed number of goroutines, each job with
@@ -49,7 +51,7 @@ func (b *Background) run(j job) {
 	defer cancel()
 	defer func() {
 		if v := recover(); v != nil {
-			b.log.LogAttrs(ctx, slog.LevelError, "background job panicked", slog.String("panic", typeName(v)))
+			b.log.LogAttrs(ctx, slog.LevelError, "background job panicked", slog.String("panic", httpx.TypeName(v)))
 		}
 	}()
 	j.fn(ctx)

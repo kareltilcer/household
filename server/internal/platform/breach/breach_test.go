@@ -1,6 +1,7 @@
 package breach_test
 
 import (
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -73,11 +74,15 @@ func TestAFileThatIsNotACorpusIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
+	// A count of 2^61 and two, which multiplied by a record's 8 bytes wraps around to two records'.
+	wrapped := append([]byte{}, good...)
+	binary.BigEndian.PutUint64(wrapped[8:16], 1<<61+2)
 	for name, data := range map[string][]byte{
 		"short":     good[:10],
 		"magic":     append([]byte("NOTMAGIC"), good[8:]...),
 		"truncated": good[:len(good)-3],
 		"longer":    append(append([]byte{}, good...), 0, 0, 0, 0, 0, 0, 0, 0),
+		"wrapped":   wrapped,
 	} {
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, data, 0o600); err != nil {

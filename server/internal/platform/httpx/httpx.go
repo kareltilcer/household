@@ -135,7 +135,7 @@ func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 					panic(http.ErrAbortHandler)
 				}
 				log.LogAttrs(r.Context(), slog.LevelError, "panic",
-					slog.String("panic", typeName(v)),
+					slog.String("panic", TypeName(v)),
 					slog.String("stack", logging.Stack()),
 				)
 				if ww.sent() != 0 {
@@ -201,8 +201,8 @@ func (w *responseWriter) sent() int {
 	return 0
 }
 
-// typeName is the panic value's type, which is safe to log where the value is not.
-func typeName(v any) string { return fmt.Sprintf("%T", v) }
+// TypeName is a panic value's type, which is safe to log where the value is not.
+func TypeName(v any) string { return fmt.Sprintf("%T", v) }
 
 // NotFound answers a request no route matches with the not_found problem.
 func NotFound(w http.ResponseWriter, r *http.Request) {

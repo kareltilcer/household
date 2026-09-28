@@ -373,6 +373,8 @@ func TestARegistrationIsChecked(t *testing.T) {
 			[]problem.FieldError{{Field: "/display_name", Code: problem.FieldInvalid}}},
 		"a name with a line separator": {map[string]any{"email": s.a("a@example.com"), "password": "correct horse battery", "display_name": "A B"},
 			[]problem.FieldError{{Field: "/display_name", Code: problem.FieldInvalid}}},
+		"a name turned around": {map[string]any{"email": s.a("a@example.com"), "password": "correct horse battery", "display_name": string(rune(0x202e)) + "anaJ"},
+			[]problem.FieldError{{Field: "/display_name", Code: problem.FieldInvalid}}},
 		"no language": {map[string]any{"email": s.a("a@example.com"), "password": "correct horse battery", "display_name": "A", "locale": "not a tag"},
 			[]problem.FieldError{{Field: "/locale", Code: problem.FieldMalformed}}},
 		"a private-use tag": {map[string]any{"email": s.a("a@example.com"), "password": "correct horse battery", "display_name": "A", "locale": "x-home"},
@@ -793,8 +795,9 @@ func TestAPasswordReset(t *testing.T) {
 }
 
 // A change takes the current password, which a wrong guess counts against as a sign-in does, and
-// ends every other session and every reset link. It keeps no Idempotency-Key, whose fingerprint
-// would hash the passwords, so a repeat runs again, and finds the current password changed.
+// ends every other session. It keeps no Idempotency-Key, whose fingerprint would hash the
+// passwords, so a repeat runs again, and finds the current password changed. A reset link sent
+// before it still works: the address's owner takes the account back with it.
 func TestChangingThePassword(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	b := s.signUp(s.a("jana@tilcerovi.cz"), "correct horse battery")
@@ -807,7 +810,7 @@ func TestChangingThePassword(t *testing.T) {
 	if got := fieldErrorsOf(t, change("correct horse battery", breached)); !slices.Equal(got, []problem.FieldError{{Field: "/new_password", Code: problem.FieldInvalid}}) {
 		t.Fatalf("%v", got)
 	}
-	// A reset link sent before the change is spent by it.
+	// A reset link sent before the change, which outlives it.
 	expect(t, s.browser().post("/auth/password-reset", jsonBody(t, map[string]string{"email": s.a("jana@tilcerovi.cz")})), http.StatusAccepted, "")
 	reset, _ := s.token(s.a("jana@tilcerovi.cz"))
 	keyed := func() *httptest.ResponseRecorder {
@@ -818,8 +821,6 @@ func TestChangingThePassword(t *testing.T) {
 	if n := s.count("SELECT count(*) FROM account_idempotency_keys WHERE key = 'change-1'"); n != 0 {
 		t.Fatalf("a password change kept %d keys", n)
 	}
-	expect(t, s.browser().post("/auth/password-reset/confirm", jsonBody(t, map[string]string{"token": reset, "password": "yet another password"})),
-		http.StatusGone, problem.CodeTokenAlreadyUsed)
 	expect(t, keyed(), http.StatusUnauthorized, problem.CodeInvalidCredentials)
 	expect(t, b.get("/me"), http.StatusOK, "")
 	expect(t, other.get("/me"), http.StatusUnauthorized, problem.CodeUnauthenticated)
@@ -834,6 +835,72 @@ func TestChangingThePassword(t *testing.T) {
 	expect(t, s.browser().post("/auth/login", jsonBody(t, map[string]string{
 		"email": s.a("jana@tilcerovi.cz"), "password": "a new long password", "client_type": "web",
 	})), http.StatusTooManyRequests, problem.CodeRateLimited)
+
+	// The link sent before the change takes the account back from whoever made it.
+	expect(t, s.browser().post("/auth/password-reset/confirm", jsonBody(t, map[string]string{"token": reset, "password": "the owner's own password"})),
+		http.StatusNoContent, "")
+	expect(t, b.get("/me"), http.StatusUnauthorized, problem.CodeUnauthenticated)
+	s.browser().login(s.a("jana@tilcerovi.cz"), "the owner's own password")
+}
+
+// A reset that lands while a change is running wins: the change checked a current password the
+// reset has since replaced, so it answers as a wrong one does, its new password never works, and
+// the session it came with stays ended.
+func TestAResetLandingDuringAChangeWins(t *testing.T) {
+	var (
+		s     *site
+		reset string
+	)
+	changed, restored := "the change's new password", "the reset's new password"
+	address := func() string { return s.a("jana@tilcerovi.cz") }
+	s = newSite(t, apptest.Options{Screening: func(pw string) {
+		// The change has checked the current password and screens its new one: the reset lands now.
+		if pw == changed {
+			expect(t, s.browser().post("/auth/password-reset/confirm", jsonBody(t, map[string]string{"token": reset, "password": restored})),
+				http.StatusNoContent, "")
+		}
+	}})
+	b := s.signUp(address(), "correct horse battery")
+	expect(t, s.browser().post("/auth/password-reset", jsonBody(t, map[string]string{"email": address()})), http.StatusAccepted, "")
+	reset, _ = s.token(address())
+
+	expect(t, b.post("/auth/password", jsonBody(t, map[string]string{"current_password": "correct horse battery", "new_password": changed})),
+		http.StatusUnauthorized, problem.CodeInvalidCredentials)
+	expect(t, s.browser().post("/auth/login", jsonBody(t, map[string]string{
+		"email": address(), "password": changed, "client_type": "web",
+	})), http.StatusUnauthorized, problem.CodeInvalidCredentials)
+	s.browser().login(address(), restored)
+	if n := s.count("SELECT count(*) FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.email = $1 AND s.revoked_at IS NULL", address()); n != 1 {
+		t.Fatalf("%d live sessions, want the one the reset's password signed in", n)
+	}
+}
+
+// The note to an address that has an account goes out three times an hour, and the registrations
+// past that answer 202 as ever, sending nothing (D-96).
+func TestAnAddressIsSentFewRegistrationNotes(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	b := s.browser()
+	notes := func() int {
+		n := 0
+		for _, m := range s.outbox.To(s.a("jana@tilcerovi.cz")) {
+			if m.Subject == "You already have a Household account" {
+				n++
+			}
+		}
+		return n
+	}
+	b.register(s.a("jana@tilcerovi.cz"), "correct horse battery")
+	for range ratelimit.RegisterNote.Max + 1 {
+		b.register(s.a("jana@tilcerovi.cz"), "correct horse battery")
+	}
+	if n := notes(); n != ratelimit.RegisterNote.Max {
+		t.Fatalf("%d notes, want %d", n, ratelimit.RegisterNote.Max)
+	}
+	s.clock.advance(time.Hour)
+	b.register(s.a("JANA@tilcerovi.cz"), "correct horse battery")
+	if n := notes(); n != ratelimit.RegisterNote.Max+1 {
+		t.Fatalf("%d notes an hour on, want %d", n, ratelimit.RegisterNote.Max+1)
+	}
 }
 
 // The profile is a merge: a member left out stays, null clears one that may be empty, and each

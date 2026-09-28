@@ -23,8 +23,9 @@ import (
 )
 
 // register is postAuthRegister (FR-ID1). A new address gets an account, unverified, and a link
-// to verify it; an address that has one already gets a note saying so, and the account is left
-// as it is. Both answer 202 alike, after the same work: the password is hashed either way.
+// to verify it; an address that has one already gets a note saying so, a few an hour (note), and
+// the account is left as it is. Both answer 202 alike, after the same work: the password is hashed
+// either way.
 func (s *Service) register(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -103,9 +104,25 @@ func (s *Service) register(w http.ResponseWriter, r *http.Request) {
 	if created {
 		s.email(ctx, address, language, emailVerify, s.link(routeVerify, token))
 	} else {
-		s.email(ctx, address, language, emailRegisterExisting, s.link(routeSignIn, ""))
+		s.note(ctx, address, language)
 	}
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// note sends the owner of address, which has an account, the note that someone tried to register
+// with it, at most ratelimit.RegisterNote's Max an hour, however many networks try: the network's
+// limit alone would let registrations from many of them fill the mailbox. It is counted after the
+// response, where whether the address has an account shows in nothing the caller sees.
+func (s *Service) note(ctx context.Context, address, language string) {
+	s.Later(ctx, func(ctx context.Context) {
+		wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.RegisterNote, Subject: subject(address)})
+		switch {
+		case err != nil:
+			s.Log.LogAttrs(ctx, slog.LevelError, "registration note not sent", slog.Any("error", err))
+		case wait == 0:
+			s.deliver(ctx, address, language, emailRegisterExisting, s.link(routeSignIn, ""))
+		}
+	})
 }
 
 // refusal is the answer to a throttle's verdict: err as it is, or the 429 for a wait.
@@ -318,6 +335,10 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		me     meJSON
 	)
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+		// The password was checked before this transaction: a reset or a change since then wins.
+		if err := unchanged(ctx, tx, user, *secret); err != nil {
+			return err
+		}
 		if newSecret != "" {
 			if _, err := tx.Exec(ctx, "UPDATE credentials SET secret = $2, updated_at = now() WHERE user_id = $1 AND type = 'password'",
 				user, newSecret); err != nil {
@@ -343,6 +364,26 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	}
 	session.SetCookies(w, tokens)
 	httpx.WriteJSON(w, http.StatusOK, loginResult{User: me})
+}
+
+// unchanged locks user's password in tx, and answers invalidCredentials when it is no longer
+// verified, the hash a check made before tx began: a reset or a change that landed since has ended
+// what that check proved, so nothing signs in with it, and nothing writes over the new password.
+// The lock holds a reset or a change that has not landed yet until tx ends, when it ends whatever
+// tx began.
+func unchanged(ctx context.Context, tx pgx.Tx, user uuid.UUID, verified string) error {
+	var secret *string
+	err := tx.QueryRow(ctx, "SELECT secret FROM credentials WHERE user_id = $1 AND type = 'password' FOR UPDATE", user).
+		Scan(&secret)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return invalidCredentials()
+	case err != nil:
+		return err
+	case secret == nil || *secret != verified:
+		return invalidCredentials()
+	}
+	return nil
 }
 
 // loginResult is the contract's LoginResult: the web client's has no tokens.
@@ -502,9 +543,11 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 }
 
 // changePassword is postAuthPassword: the current password, checked as a sign-in checks it and
-// counted against the account as a failed sign-in is, sets a new one and ends every other session
-// and every link to reset it. It keeps no Idempotency-Key, whose fingerprint would be a fast hash of
-// both passwords (D-97).
+// counted against the account as a failed sign-in is, sets a new one and ends every other session.
+// A reset link already sent still works: it is how the address's owner takes the account back from
+// someone who knows the password, who could otherwise spend every link as it arrived by changing
+// the password again, and the reset, which ends every session, wins over a change still running.
+// It keeps no Idempotency-Key, whose fingerprint would be a fast hash of both passwords (D-97).
 func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -567,14 +610,13 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	current, _ := session.Current(ctx)
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "UPDATE credentials SET secret = $2, updated_at = now() WHERE user_id = $1 AND type = 'password'",
-			user, newSecret); err != nil {
+		// The current password was checked before this transaction: a reset or another change
+		// since then wins, and this one answers as a wrong current password does.
+		if err := unchanged(ctx, tx, user, *secret); err != nil {
 			return err
 		}
-		// A reset link sent before the change would set the password over it: each one ends.
-		if _, err := tx.Exec(ctx, `
-			UPDATE email_tokens SET used_at = $2 WHERE user_id = $1 AND purpose = 'reset_password' AND used_at IS NULL`,
-			user, s.Sessions.Now()); err != nil {
+		if _, err := tx.Exec(ctx, "UPDATE credentials SET secret = $2, updated_at = now() WHERE user_id = $1 AND type = 'password'",
+			user, newSecret); err != nil {
 			return err
 		}
 		return s.Sessions.RevokeAll(ctx, tx, user, current)

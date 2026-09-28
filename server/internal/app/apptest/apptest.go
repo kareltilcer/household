@@ -78,6 +78,9 @@ type Options struct {
 	TrustedProxies []string
 	// UserLimit and HouseholdLimit are the API's limits, no limit a test would meet when zero.
 	UserLimit, HouseholdLimit ratelimit.Rate
+	// Screening, when set, is called with each password the server screens, before the corpus is
+	// read: the moment between a current password's check and the new one's write.
+	Screening func(password string)
 }
 
 // Cheap are password parameters cheap enough for a test to hash with often.
@@ -133,8 +136,14 @@ func Accounts(t testing.TB, pool tenant.Beginner, log *slog.Logger, o Options) (
 	}
 	sessions := session.NewStore(pool, origins, log, o.Now)
 	outbox := &Outbox{}
+	breached := func(pw string) (bool, error) {
+		if o.Screening != nil {
+			o.Screening(pw)
+		}
+		return corpus.Contains(pw)
+	}
 	id, err := identity.New(identity.Config{
-		Pool: pool, Log: log, Hasher: hasher, Breached: corpus.Contains,
+		Pool: pool, Log: log, Hasher: hasher, Breached: breached,
 		Throttles: ratelimit.NewThrottles(pool, o.Now), Sessions: sessions, Mail: outbox, Catalogs: catalogs,
 		WebURL: web, ClientIP: clientip.New(proxies),
 		Later: func(ctx context.Context, fn func(context.Context)) { fn(context.WithoutCancel(ctx)) },

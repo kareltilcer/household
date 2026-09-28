@@ -70,11 +70,13 @@ func open(f *os.File) (*Corpus, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The records the file holds, compared with the count rather than the count multiplied out,
+	// which a count past 2^61 would wrap around to any size.
 	size := info.Size()
-	if size < headerSize || uint64(size-headerSize) != count*recordSize || (size-headerSize)%recordSize != 0 {
-		return nil, fmt.Errorf("a corpus of %d records is %d bytes, not %d", count, size, headerSize+count*recordSize)
+	if size < headerSize || (size-headerSize)%recordSize != 0 || uint64((size-headerSize)/recordSize) != count {
+		return nil, fmt.Errorf("a corpus of %d records is %d bytes, not %d records", count, size, (size-headerSize)/recordSize)
 	}
-	return &Corpus{f: f, count: int64(count)}, nil //nolint:gosec // G115: count*8 fits the file's int64 size, checked above.
+	return &Corpus{f: f, count: int64(count)}, nil //nolint:gosec // G115: count is the file's records, which its int64 size bounds, checked above.
 }
 
 // Len is the number of prefixes the corpus holds.

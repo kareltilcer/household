@@ -211,7 +211,9 @@ paths:
         in. The account exists immediately but is unverified and cannot invite, be invited, or
         become a billing payer until verified. A password found in the breached-password screen
         is refused `422`, naming `/password` with the code `invalid`. A client's network may
-        register five times an hour.
+        register five times an hour, and an address that already has an account is sent the note
+        at most three times an hour, however many networks ask; a registration past that still
+        answers `202`.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -375,12 +377,14 @@ paths:
       tags: [auth]
       summary: Change the current password
       description: |
-        Signs out every other session, ends every password-reset link already sent, and emails the
-        account's address to say the password changed. A wrong `current_password` answers `401`
-        (`invalid_credentials`) and counts against
-        the account as a failed sign-in does. A new password found in the breached-password screen
-        is refused `422`, naming `/new_password` with the code `invalid`. No `Idempotency-Key` is
-        kept, since its fingerprint would be a fast hash of the passwords: a repeat runs again.
+        Signs out every other session and emails the account's address to say the password changed.
+        A password-reset link already sent still works, so that the address's owner can take the
+        account back from someone who knows the password; a reset that lands while a change is
+        running wins, and the change answers as a wrong `current_password` does. A wrong
+        `current_password` answers `401` (`invalid_credentials`) and counts against the account as a
+        failed sign-in does. A new password found in the breached-password screen is refused `422`,
+        naming `/new_password` with the code `invalid`. No `Idempotency-Key` is kept, since its
+        fingerprint would be a fast hash of the passwords: a repeat runs again.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true

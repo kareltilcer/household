@@ -154,7 +154,8 @@ func TestACorpusBuildsFromAFileInOrder(t *testing.T) {
 	sort.Strings(lines)
 	dir := t.TempDir()
 	from := filepath.Join(dir, "pwned.txt")
-	if err := os.WriteFile(from, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+	// With Windows line ends and a blank line at the end, as a file an editor saved may have.
+	if err := os.WriteFile(from, []byte(strings.Join(lines, "\r\n")+"\r\n\r\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	out := filepath.Join(dir, "corpus.bin")

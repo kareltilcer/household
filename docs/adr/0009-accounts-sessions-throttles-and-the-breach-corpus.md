@@ -30,7 +30,12 @@ four lanes, a 16-byte salt and a 32-byte tag, stored as a PHC string, so a hash 
 parameters and one made with others is replaced at the owner's next sign-in. A process runs at most
 one hash per CPU at once, so a burst of sign-ins queues instead of taking 64 MiB each. A sign-in for
 an address with no account, or an account with no password, checks the password against a hash
-nobody's matches, and costs what a wrong password costs.
+nobody's matches, and costs what a wrong password costs. A hash is checked outside any transaction,
+since it takes a CPU and 64 MiB for a tenth of a second or more, so the transaction that then acts
+on it, starting a session, rehashing or setting a new password, locks the credential and finds it
+unchanged or answers as a wrong password does: a reset that lands meanwhile wins, and the session
+it ended stays ended. A change leaves the reset links already sent working, since a reset is how
+the address's owner takes the account back from someone who knows the password.
 
 **The breach corpus is Have I Been Pwned's Pwned Passwords (CC BY 4.0), kept as the first 8 bytes of
 each SHA-1, sorted, after a 16-byte header** (`internal/platform/breach`). The server opens it once
@@ -99,7 +104,10 @@ password.
 
 **What would tell an address with an account from one without runs after the response.** A
 registration hashes the password either way and answers `202` either way; which email it sends is
-decided in its transaction, and the email is sent later. A resend and a reset request answer `202`
+decided in its transaction, and the email is sent later. The note to an address that has an account
+is counted later too, three an hour per address however many networks register it (D-96), so that
+a mailbox cannot be filled from many networks and a note left unsent shows in no response. A
+resend and a reset request answer `202`
 at once, and the lookup that decides whether an email goes out runs later. The later work runs on
 `identity.Background`, a few goroutines with a queue, each job with its own deadline: not durable,
 so a job queued when the process stops is lost, and the person asks again. An email's link carries
@@ -136,6 +144,7 @@ gone; and the descriptions say what the limits and the pre-sign-in keys do.
 | An address's throttle keyed by account | A `429` for an address with an account and none for one without is the oracle D-13 forbids |
 | Anonymous Idempotency-Keys before sign-in, keyed by the key alone | A stored sign-in would be a stored credential or a response without its cookie; a fingerprint of a registration or a reset is a fast hash of its password |
 | A password change keeping its key on the account, as every other account request does | The same fast hash, of the new password and the old, kept seven days |
+| A password change ending every reset link already sent | Someone who knows the password could change it again as each link arrived, and the owner would never finish a reset. Whoever holds a link holds the mailbox, which can ask for a new one anyway |
 | Checking a sign-in's throttle, and counting it only once the password failed | Every attempt already sent passes the check before the first failure is counted: a burst is checked whole |
 | A durable email outbox | The outbox would hold every verification and reset token in the clear until sent. Item 17's notification transport owns durability, and a lost email is asked for again |
 | Sending the email before answering | The time an SMTP server takes to answer would tell an address that gets mail from one that does not |

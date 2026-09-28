@@ -221,11 +221,12 @@ func issueToken(ctx context.Context, tx pgx.Tx, user uuid.UUID, purpose, email s
 }
 
 // displayName is name as an account keeps it, trimmed, and false when nothing is left or it
-// holds a control character or a line break, U+2028 and U+2029 among them.
+// holds a control character, a line break, U+2028 and U+2029 among them, or a bidirectional
+// control, U+202E among them, which would turn the name, and the text shown after it, around.
 func displayName(name string) (string, bool) {
 	name = strings.TrimSpace(name)
 	return name, name != "" && strings.IndexFunc(name, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp)
+		return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control)
 	}) < 0
 }
 
@@ -268,6 +269,3 @@ func timezone(name string) bool {
 	_, err := time.LoadLocation(name)
 	return err == nil
 }
-
-// typeName is a panic value's type, which is safe to log where the value is not.
-func typeName(v any) string { return fmt.Sprintf("%T", v) }
