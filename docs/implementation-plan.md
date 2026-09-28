@@ -406,7 +406,7 @@ Phase 0 · after 3, 6 · size L
   - Enumeration tests assert identical response shapes.
   - Limits are tested.
   - The implemented operations are off `contract_pending`.
-- **PR:** —
+- **PR:** [#11](https://github.com/kareltilcer/household/pull/11)
 
 ### 9 · Identity II — mobile tokens, MFA, Google and Apple, client versions · `planned`
 
