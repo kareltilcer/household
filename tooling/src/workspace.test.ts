@@ -293,6 +293,22 @@ describe.each(packages)('%s', (dir) => {
   })
 })
 
+// Architecture test 7 (PRD 01 §10): the clients render no user-visible literal. The rule's
+// cases are in literal-strings.test.ts; this holds every file shape of both apps to it.
+describe.each(packages.filter((dir) => dir.startsWith('apps/')))('%s', (dir) => {
+  it('lints user-visible string literals as errors, in tests too', async () => {
+    const settings = await Promise.all(
+      lintProbes.map(async (probe) => {
+        const config: unknown = await eslint.calculateConfigForFile(join(root, dir, probe))
+        return [probe, field(config, 'rules', 'household/no-literal-strings')] as const
+      }),
+    )
+    expect(Object.fromEntries(settings)).toEqual(
+      Object.fromEntries(lintProbes.map((probe) => [probe, [2]])),
+    )
+  })
+})
+
 describe('a developer machine and CI', () => {
   // Every job of every workflow, named `<file>#<job>`. A job added later (a nightly
   // conformance run, an end-to-end suite) is held to the same pins as the go job.

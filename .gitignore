@@ -19,6 +19,9 @@ dist/
 .env
 .env.local
 
+# Generated on every build from committed sources (each package's `gen` script)
+packages/*/src/generated/
+
 # Turborepo and test output
 .turbo/
 coverage/

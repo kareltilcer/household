@@ -18,3 +18,9 @@ catalog:
   vite: ^8.3.1
   vitest: ^5.0.2
   yaml: ^2.9.1
+
+peerDependencyRules:
+  allowedVersions:
+    # openapi-typescript 7 declares TypeScript ^5, and the workspace is on 6, whose compiler API
+    # it uses unchanged: @household/api's generator runs on it and its output typechecks.
+    openapi-typescript>typescript: '6'

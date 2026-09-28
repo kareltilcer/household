@@ -53,6 +53,12 @@ pnpm run down         # stop the services; volumes are kept
   contract disagree; `server/internal/arch/contract_pending.txt` lists the operations not
   built yet, and the PR that builds one deletes its line. `pnpm run gen` regenerates the Go
   `ProblemCode` enum after a contract change, and a test fails until it has.
+- **Generated, never committed:** `packages/api/src/generated/` (the typed client, from
+  `openapi.yaml`) and `packages/i18n/src/generated/` (message keys and arguments, from
+  `catalogs/en.json`). turbo writes them before every typecheck, lint and test; after a
+  contract or catalog change, `pnpm run gen` refreshes them for an editor. The Go ISO 4217
+  table (`internal/platform/money/iso4217_gen.go`) is committed and generated from
+  `packages/domain/src/iso4217.json`, and a test fails until it is regenerated.
 - CI ([`.github/workflows/`](.github/workflows/)) runs the checks above (typecheck, lint,
   format check and test), plus openapi-spec-validator, govulncheck, pnpm audit, gitleaks
   and CodeQL. Typecheck, lint and test depend on each package's `gen` in turbo, so CI
@@ -80,7 +86,13 @@ pnpm run down         # stop the services; volumes are kept
   days** are `date` (`YYYY-MM-DD`) in the household's timezone, which is never assumed.
 - **English is the source language** of every identifier, enum value, log message and
   comment. No user-visible string is a literal: it is a translation key, present in all five
-  catalogs (`en`, `cs`, `sk`, `de`, `pl`).
+  catalogs (`en`, `cs`, `sk`, `de`, `pl`) in `packages/i18n/catalogs/`, and architecture test 7
+  (an ESLint rule on `apps/**`) fails a literal. A drafted translation is listed in
+  `packages/i18n/review/<locale>.json` with the English it translates. Messages use the ICU
+  subset both renderers share ([ADR 0007](docs/adr/0007-shared-packages-client-catalogs-and-vectors.md)).
+- **Computed on both sides, tested from one file**: a rule the clients preview and the server
+  saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
+  by the Vitest and the Go runner alike (D-37).
 - **The tenant is in the path**: `/api/v1/households/{household_id}/…`. Every tenant table
   has `household_id`, row-level security enabled **and** forced: its migration calls
   `enable_tenant_isolation`, and the PR adds its rows to the isolation fixture

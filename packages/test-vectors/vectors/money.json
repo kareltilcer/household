@@ -1,0 +1,519 @@
+{
+  "description": "Money in minor units: ISO 4217 exponents, half-up rounding applied once, and the deterministic split of D-57. Run by @household/domain (money.test.ts) and by the server's twin (internal/platform/money).",
+  "sources": [
+    "PRD modules/09-finance, 'Money, once': minor units, ISO 4217 exponents, half-up once",
+    "PRD modules/09-finance FR-FI12 and D-57: the last minor unit in the household's order",
+    "PRD 09-decisions D-94: ties away from zero; a negative total splits as its positive, negated",
+    "design/v1 finance.js tenEuroRun (the ten-euro split three ways) and the 8 386,67 remainder note"
+  ],
+  "groups": {
+    "exponent": [
+      { "name": "EUR has two decimal places", "input": "EUR", "output": 2 },
+      { "name": "CZK has two", "input": "CZK", "output": 2 },
+      { "name": "JPY has none", "input": "JPY", "output": 0 },
+      { "name": "ISK has none", "input": "ISK", "output": 0 },
+      { "name": "BHD has three", "input": "BHD", "output": 3 },
+      { "name": "CLF has four", "input": "CLF", "output": 4 },
+      { "name": "a lower-case code is not ISO 4217", "input": "eur", "error": "unknown_currency" },
+      {
+        "name": "gold has no minor unit and is not money",
+        "input": "XAU",
+        "error": "unknown_currency"
+      },
+      { "name": "an empty code", "input": "", "error": "unknown_currency" }
+    ],
+    "money": [
+      {
+        "name": "a whole number of minor units",
+        "input": { "amount_minor": 145050, "currency": "CZK" },
+        "output": { "amount_minor": 145050, "currency": "CZK" }
+      },
+      {
+        "name": "a fraction of a minor unit",
+        "input": { "amount_minor": 1.5, "currency": "EUR" },
+        "error": "not_minor_units"
+      },
+      {
+        "name": "the largest amount both sides hold exactly",
+        "input": { "amount_minor": 9007199254740991, "currency": "EUR" },
+        "output": { "amount_minor": 9007199254740991, "currency": "EUR" }
+      },
+      {
+        "name": "one more than that",
+        "input": { "amount_minor": 9007199254740992, "currency": "EUR" },
+        "error": "out_of_range"
+      },
+      {
+        "name": "one less than its negative",
+        "input": { "amount_minor": -9007199254740992, "currency": "EUR" },
+        "error": "out_of_range"
+      },
+      {
+        "name": "an unknown currency",
+        "input": { "amount_minor": 100, "currency": "EURO" },
+        "error": "unknown_currency"
+      }
+    ],
+    "add": [
+      {
+        "name": "two amounts of one currency",
+        "input": {
+          "a": { "amount_minor": 100, "currency": "EUR" },
+          "b": { "amount_minor": 250, "currency": "EUR" }
+        },
+        "output": { "amount_minor": 350, "currency": "EUR" }
+      },
+      {
+        "name": "a negative amount",
+        "input": {
+          "a": { "amount_minor": 100, "currency": "EUR" },
+          "b": { "amount_minor": -250, "currency": "EUR" }
+        },
+        "output": { "amount_minor": -150, "currency": "EUR" }
+      },
+      {
+        "name": "two currencies do not add",
+        "input": {
+          "a": { "amount_minor": 100, "currency": "EUR" },
+          "b": { "amount_minor": 100, "currency": "CZK" }
+        },
+        "error": "currency_mismatch"
+      },
+      {
+        "name": "past the largest amount",
+        "input": {
+          "a": { "amount_minor": 9007199254740991, "currency": "EUR" },
+          "b": { "amount_minor": 1, "currency": "EUR" }
+        },
+        "error": "out_of_range"
+      }
+    ],
+    "subtract": [
+      {
+        "name": "into the negative",
+        "input": {
+          "a": { "amount_minor": 100, "currency": "CZK" },
+          "b": { "amount_minor": 250, "currency": "CZK" }
+        },
+        "output": { "amount_minor": -150, "currency": "CZK" }
+      },
+      {
+        "name": "two currencies do not subtract",
+        "input": {
+          "a": { "amount_minor": 100, "currency": "EUR" },
+          "b": { "amount_minor": 100, "currency": "GBP" }
+        },
+        "error": "currency_mismatch"
+      }
+    ],
+    "multiply": [
+      {
+        "name": "20 % of 41 933,33 Kč is 8 386,67 after rounding half-up",
+        "input": { "amount": { "amount_minor": 4193333, "currency": "CZK" }, "factor": "0.2" },
+        "output": { "amount_minor": 838667, "currency": "CZK" }
+      },
+      {
+        "name": "a tie rounds up",
+        "input": { "amount": { "amount_minor": 5, "currency": "EUR" }, "factor": "0.5" },
+        "output": { "amount_minor": 3, "currency": "EUR" }
+      },
+      {
+        "name": "a negative tie rounds away from zero",
+        "input": { "amount": { "amount_minor": -5, "currency": "EUR" }, "factor": "0.5" },
+        "output": { "amount_minor": -3, "currency": "EUR" }
+      },
+      {
+        "name": "a negative factor rounds as its positive, negated",
+        "input": { "amount": { "amount_minor": 3, "currency": "EUR" }, "factor": "-0.5" },
+        "output": { "amount_minor": -2, "currency": "EUR" }
+      },
+      {
+        "name": "below a half rounds down",
+        "input": { "amount": { "amount_minor": 1, "currency": "JPY" }, "factor": "0.4" },
+        "output": { "amount_minor": 0, "currency": "JPY" }
+      },
+      {
+        "name": "exactly, where a float's 100 × 1.005 is 100.49999999999999",
+        "input": { "amount": { "amount_minor": 100, "currency": "EUR" }, "factor": "1.005" },
+        "output": { "amount_minor": 101, "currency": "EUR" }
+      },
+      {
+        "name": "by zero",
+        "input": { "amount": { "amount_minor": 12345, "currency": "EUR" }, "factor": "0" },
+        "output": { "amount_minor": 0, "currency": "EUR" }
+      },
+      {
+        "name": "a decimal comma is not a decimal",
+        "input": { "amount": { "amount_minor": 100, "currency": "EUR" }, "factor": "1,5" },
+        "error": "malformed_decimal"
+      },
+      {
+        "name": "nor is an exponent",
+        "input": { "amount": { "amount_minor": 100, "currency": "EUR" }, "factor": "1e3" },
+        "error": "malformed_decimal"
+      },
+      {
+        "name": "nor a bare fraction",
+        "input": { "amount": { "amount_minor": 100, "currency": "EUR" }, "factor": ".5" },
+        "error": "malformed_decimal"
+      },
+      {
+        "name": "past the largest amount",
+        "input": {
+          "amount": { "amount_minor": 9007199254740991, "currency": "EUR" },
+          "factor": "2"
+        },
+        "error": "out_of_range"
+      }
+    ],
+    "convert": [
+      {
+        "name": "¥1 000 at 0.0062 EUR per yen is €6.20",
+        "input": {
+          "amount": { "amount_minor": 1000, "currency": "JPY" },
+          "rate": "0.0062",
+          "to": "EUR"
+        },
+        "output": { "amount_minor": 620, "currency": "EUR" }
+      },
+      {
+        "name": "1 000,00 Kč at 0.0398 EUR per koruna is €39.80",
+        "input": {
+          "amount": { "amount_minor": 100000, "currency": "CZK" },
+          "rate": "0.0398",
+          "to": "EUR"
+        },
+        "output": { "amount_minor": 3980, "currency": "EUR" }
+      },
+      {
+        "name": "a three-place currency: 1.000 BHD at 2.4312 is €2.43",
+        "input": {
+          "amount": { "amount_minor": 1000, "currency": "BHD" },
+          "rate": "2.4312",
+          "to": "EUR"
+        },
+        "output": { "amount_minor": 243, "currency": "EUR" }
+      },
+      {
+        "name": "a tie into a zero-place currency rounds up",
+        "input": {
+          "amount": { "amount_minor": 1, "currency": "EUR" },
+          "rate": "150",
+          "to": "JPY"
+        },
+        "output": { "amount_minor": 2, "currency": "JPY" }
+      },
+      {
+        "name": "a negative tie rounds away from zero",
+        "input": {
+          "amount": { "amount_minor": -1, "currency": "EUR" },
+          "rate": "150",
+          "to": "JPY"
+        },
+        "output": { "amount_minor": -2, "currency": "JPY" }
+      },
+      {
+        "name": "a zero rate",
+        "input": { "amount": { "amount_minor": 100, "currency": "EUR" }, "rate": "0", "to": "CZK" },
+        "error": "invalid_rate"
+      },
+      {
+        "name": "a negative rate",
+        "input": {
+          "amount": { "amount_minor": 100, "currency": "EUR" },
+          "rate": "-25.1",
+          "to": "CZK"
+        },
+        "error": "invalid_rate"
+      },
+      {
+        "name": "a rate that is not a decimal",
+        "input": {
+          "amount": { "amount_minor": 100, "currency": "EUR" },
+          "rate": "twenty-five",
+          "to": "CZK"
+        },
+        "error": "malformed_decimal"
+      },
+      {
+        "name": "into an unknown currency",
+        "input": { "amount": { "amount_minor": 100, "currency": "EUR" }, "rate": "1", "to": "XYZ" },
+        "error": "unknown_currency"
+      }
+    ],
+    "split": [
+      {
+        "name": "€10 three ways is 3,34 / 3,33 / 3,33, the 3,34 Jana's as first in the household",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["jana", "petr", "milos"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 333],
+          ["milos", 333]
+        ]
+      },
+      {
+        "name": "the same, the participants listed last to first",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["milos", "petr", "jana"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 333],
+          ["milos", 333]
+        ]
+      },
+      {
+        "name": "the same, listed in a third order",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["petr", "milos", "jana"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 333],
+          ["milos", 333]
+        ]
+      },
+      {
+        "name": "the same, listed in a fourth order",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["jana", "milos", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 333],
+          ["milos", 333]
+        ]
+      },
+      {
+        "name": "the same, listed in a fifth order",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["petr", "jana", "milos"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 333],
+          ["milos", 333]
+        ]
+      },
+      {
+        "name": "the same, listed in the sixth and last order",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["milos", "jana", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 333],
+          ["milos", 333]
+        ]
+      },
+      {
+        "name": "the unit goes to the first in the household's order, not the first listed",
+        "input": {
+          "total": { "amount_minor": 1001, "currency": "EUR" },
+          "participants": ["milos", "adam"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["adam", 501],
+          ["milos", 500]
+        ]
+      },
+      {
+        "name": "two units left go one each, in order",
+        "input": {
+          "total": { "amount_minor": 2, "currency": "EUR" },
+          "participants": ["jana", "petr", "milos"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 1],
+          ["petr", 1],
+          ["milos", 0]
+        ]
+      },
+      {
+        "name": "an exact division leaves nothing over",
+        "input": {
+          "total": { "amount_minor": 900, "currency": "EUR" },
+          "participants": ["jana", "petr", "milos"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 300],
+          ["petr", 300],
+          ["milos", 300]
+        ]
+      },
+      {
+        "name": "in a zero-place currency",
+        "input": {
+          "total": { "amount_minor": 100, "currency": "JPY" },
+          "participants": ["jana", "petr", "milos"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 34],
+          ["petr", 33],
+          ["milos", 33]
+        ]
+      },
+      {
+        "name": "2 shares and 1: the part rounded down, the unit left over to the first in order",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["petr", "jana"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": [2, 1]
+        },
+        "output": [
+          ["jana", 334],
+          ["petr", 666]
+        ]
+      },
+      {
+        "name": "weighted, the first in order is also the heavier",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["jana", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": [2, 1]
+        },
+        "output": [
+          ["jana", 667],
+          ["petr", 333]
+        ]
+      },
+      {
+        "name": "a refund of €10 returns what each paid",
+        "input": {
+          "total": { "amount_minor": -1000, "currency": "EUR" },
+          "participants": ["milos", "petr", "jana"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", -334],
+          ["petr", -333],
+          ["milos", -333]
+        ]
+      },
+      {
+        "name": "nothing to split",
+        "input": {
+          "total": { "amount_minor": 0, "currency": "EUR" },
+          "participants": ["jana", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [
+          ["jana", 0],
+          ["petr", 0]
+        ]
+      },
+      {
+        "name": "one participant takes it all",
+        "input": {
+          "total": { "amount_minor": 999, "currency": "CZK" },
+          "participants": ["klara"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "output": [["klara", 999]]
+      },
+      {
+        "name": "no participants",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": [],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "error": "no_participants"
+      },
+      {
+        "name": "a participant listed twice",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["jana", "petr", "jana"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "error": "duplicate_participant"
+      },
+      {
+        "name": "a participant the household's order does not name",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["jana", "eva"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "error": "not_in_order"
+      },
+      {
+        "name": "a weight of zero",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["jana", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": [1, 0]
+        },
+        "error": "invalid_weight"
+      },
+      {
+        "name": "a fractional weight",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["jana", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": [1.5, 1]
+        },
+        "error": "invalid_weight"
+      },
+      {
+        "name": "a weight missing",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "EUR" },
+          "participants": ["jana", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": [1]
+        },
+        "error": "invalid_weight"
+      },
+      {
+        "name": "a total in an unknown currency",
+        "input": {
+          "total": { "amount_minor": 1000, "currency": "ECU" },
+          "participants": ["jana", "petr"],
+          "order": ["jana", "petr", "adam", "klara", "milos"],
+          "weights": null
+        },
+        "error": "unknown_currency"
+      }
+    ]
+  }
+}

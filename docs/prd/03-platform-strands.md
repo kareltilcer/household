@@ -498,7 +498,9 @@ source file — the architecture test enforces it.
   a `if (n === 1)` in a component. Czech, Slovak and Polish all have three-plus plural forms and
   four-form Slavic plurals are the single most common bug in naively translated apps.
 - **One catalog per language, shared by both clients**, generated into typed accessors so a missing
-  key is a compile error.
+  key is a compile error. The server renders the same files, and both renderers implement one
+  subset of ICU MessageFormat: plurals, ordinals, selects and plain numbers, with no date, time or
+  styled number formats yet ([ADR 0007](../adr/0007-shared-packages-client-catalogs-and-vectors.md)).
 - **Server-side strings** — push bodies, emails, audit summaries, exported documents — are rendered
   from keys against the *recipient's* language, which is why the audit spine stores keys (FR-AU3).
 - **Reference data is translated as data, not as strings**: the crop catalog, tariff presets,

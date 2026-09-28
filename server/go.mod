@@ -30,7 +30,10 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/kareltilcer/household/docs/api v0.0.0-00010101000000-000000000000
+	github.com/kareltilcer/household/packages/i18n v0.0.0-00010101000000-000000000000
 	golang.org/x/text v0.42.0
 )
 
 replace github.com/kareltilcer/household/docs/api => ../docs/api
+
+replace github.com/kareltilcer/household/packages/i18n => ../packages/i18n

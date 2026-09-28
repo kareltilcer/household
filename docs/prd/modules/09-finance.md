@@ -31,7 +31,7 @@ data migration a consumer must not be asked to perform.
 | **Multi-currency entries** | Any transaction may be in another currency. It carries `original_amount_minor`, `original_currency`, `fx_rate` and `fx_source` |
 | **The rate is captured at entry and stored on the row** | **D-55.** Re-converting history with live rates means last month's total changes every time it is looked at, which destroys the one property a ledger must have. The member may correct a rate; correcting it is an audited edit of that row |
 | **Rate source** | The member enters it, or accepts a suggested reference rate fetched daily from the European Central Bank reference set (EUR-based, cross-computed). No live per-transaction lookup, no paid FX provider |
-| **Rounding** | Half-up to the currency's minor unit, once, at the point a value is materialised — never on intermediates |
+| **Rounding** | Half-up to the currency's minor unit, once, at the point a value is materialised — never on intermediates. A tie rounds away from zero, so a negative amount rounds as its positive does (**D-94**) |
 | **Zero-decimal currencies** | Handled from ISO 4217 exponent data, not assumed to be 2 |
 
 ## Setup
@@ -147,7 +147,8 @@ members with amounts), `participants[]`, a `split_method`, an optional `category
 **The last minor unit is assigned deterministically** — to participants in a stable order, one unit
 each until the remainder is exhausted — so a three-way split of €10.00 is 3.34 / 3.33 / 3.33 and is
 the *same* 3.34 every time the row is read. A non-deterministic rounding assignment is a balance
-that changes when you refresh it. **D-57.**
+that changes when you refresh it. **D-57.** A negative total, a refund, splits as its positive total
+negated, so each member is returned exactly what they paid. **D-94.**
 
 **FR-FI13 — Balances.** A running net balance per member pair, and a net position per member, in
 the household base currency, converted at each transaction's stored rate.

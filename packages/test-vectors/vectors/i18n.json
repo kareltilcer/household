@@ -1,0 +1,1006 @@
+{
+  "description": "ICU MessageFormat within the catalogs' subset, rendered alike by @household/i18n (intl-messageformat over Node's ICU) and the server's Go renderer (internal/platform/i18n), and the language a member is shown. The Slavic plural forms are the most common bug in naively translated apps (PRD 03 §9).",
+  "sources": [
+    "PRD 03 §9, Mechanics: ICU MessageFormat; three-plus plural forms in cs, sk and pl",
+    "Unicode CLDR plural rules and decimal symbols for en, cs, sk, de and pl, as Node 24's ICU 78 applies them",
+    "FormatJS intl-messageformat: apostrophe quoting, # only directly inside a plural, a plain argument's String(value)"
+  ],
+  "groups": {
+    "format": [
+      {
+        "name": "cs: 1 is one",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# úkol} few {# úkoly} many {# úkolu} other {# úkolů}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "1 úkol"
+      },
+      {
+        "name": "cs: 2 is few",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# úkol} few {# úkoly} many {# úkolu} other {# úkolů}}",
+          "args": {
+            "n": 2
+          }
+        },
+        "output": "2 úkoly"
+      },
+      {
+        "name": "cs: 4 is few, to four",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# úkol} few {# úkoly} many {# úkolu} other {# úkolů}}",
+          "args": {
+            "n": 4
+          }
+        },
+        "output": "4 úkoly"
+      },
+      {
+        "name": "cs: 5 is other, from five",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# úkol} few {# úkoly} many {# úkolu} other {# úkolů}}",
+          "args": {
+            "n": 5
+          }
+        },
+        "output": "5 úkolů"
+      },
+      {
+        "name": "cs: 0 is other at zero",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# úkol} few {# úkoly} many {# úkolu} other {# úkolů}}",
+          "args": {
+            "n": 0
+          }
+        },
+        "output": "0 úkolů"
+      },
+      {
+        "name": "cs: 22 is other at 22: Czech's few is 2–4 alone",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# úkol} few {# úkoly} many {# úkolu} other {# úkolů}}",
+          "args": {
+            "n": 22
+          }
+        },
+        "output": "22 úkolů"
+      },
+      {
+        "name": "cs: 1.5 is many, for a fraction",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# úkol} few {# úkoly} many {# úkolu} other {# úkolů}}",
+          "args": {
+            "n": 1.5
+          }
+        },
+        "output": "1,5 úkolu"
+      },
+      {
+        "name": "cs: 1000 is other, grouped by a no-break space",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# úkol} few {# úkoly} many {# úkolu} other {# úkolů}}",
+          "args": {
+            "n": 1000
+          }
+        },
+        "output": "1\u00a0000 úkolů"
+      },
+      {
+        "name": "sk: 1 is one",
+        "input": {
+          "locale": "sk",
+          "message": "{n, plural, one {# deň} few {# dni} many {# dňa} other {# dní}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "1 deň"
+      },
+      {
+        "name": "sk: 3 is few",
+        "input": {
+          "locale": "sk",
+          "message": "{n, plural, one {# deň} few {# dni} many {# dňa} other {# dní}}",
+          "args": {
+            "n": 3
+          }
+        },
+        "output": "3 dni"
+      },
+      {
+        "name": "sk: 5 is other",
+        "input": {
+          "locale": "sk",
+          "message": "{n, plural, one {# deň} few {# dni} many {# dňa} other {# dní}}",
+          "args": {
+            "n": 5
+          }
+        },
+        "output": "5 dní"
+      },
+      {
+        "name": "sk: 2.5 is many, for a fraction",
+        "input": {
+          "locale": "sk",
+          "message": "{n, plural, one {# deň} few {# dni} many {# dňa} other {# dní}}",
+          "args": {
+            "n": 2.5
+          }
+        },
+        "output": "2,5 dňa"
+      },
+      {
+        "name": "pl: 1 is one",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "1 plik"
+      },
+      {
+        "name": "pl: 2 is few",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 2
+          }
+        },
+        "output": "2 pliki"
+      },
+      {
+        "name": "pl: 5 is many",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 5
+          }
+        },
+        "output": "5 plików"
+      },
+      {
+        "name": "pl: 12 is many: 12–14 are not few",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 12
+          }
+        },
+        "output": "12 plików"
+      },
+      {
+        "name": "pl: 22 is few again at 22",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 22
+          }
+        },
+        "output": "22 pliki"
+      },
+      {
+        "name": "pl: 112 is many at 112",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 112
+          }
+        },
+        "output": "112 plików"
+      },
+      {
+        "name": "pl: 0 is many at zero",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 0
+          }
+        },
+        "output": "0 plików"
+      },
+      {
+        "name": "pl: 1.5 is other, for a fraction",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 1.5
+          }
+        },
+        "output": "1,5 pliku"
+      },
+      {
+        "name": "pl: 1000 is many, and four digits are not grouped",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 1000
+          }
+        },
+        "output": "1000 plików"
+      },
+      {
+        "name": "pl: 10000 is five digits are",
+        "input": {
+          "locale": "pl",
+          "message": "{n, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
+          "args": {
+            "n": 10000
+          }
+        },
+        "output": "10\u00a0000 plików"
+      },
+      {
+        "name": "de: 1 is one",
+        "input": {
+          "locale": "de",
+          "message": "{n, plural, one {# Aufgabe} other {# Aufgaben}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "1 Aufgabe"
+      },
+      {
+        "name": "de: 0 is other",
+        "input": {
+          "locale": "de",
+          "message": "{n, plural, one {# Aufgabe} other {# Aufgaben}}",
+          "args": {
+            "n": 0
+          }
+        },
+        "output": "0 Aufgaben"
+      },
+      {
+        "name": "de: 1000 is grouped by a point",
+        "input": {
+          "locale": "de",
+          "message": "{n, plural, one {# Aufgabe} other {# Aufgaben}}",
+          "args": {
+            "n": 1000
+          }
+        },
+        "output": "1.000 Aufgaben"
+      },
+      {
+        "name": "de: 1.5 is a decimal comma",
+        "input": {
+          "locale": "de",
+          "message": "{n, plural, one {# Aufgabe} other {# Aufgaben}}",
+          "args": {
+            "n": 1.5
+          }
+        },
+        "output": "1,5 Aufgaben"
+      },
+      {
+        "name": "en: 0 is =0 before the keyword",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, =0 {no tasks} one {# task} other {# tasks}}",
+          "args": {
+            "n": 0
+          }
+        },
+        "output": "no tasks"
+      },
+      {
+        "name": "en: 1 is one",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, =0 {no tasks} one {# task} other {# tasks}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "1 task"
+      },
+      {
+        "name": "en: 1234 is grouped by a comma",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, =0 {no tasks} one {# task} other {# tasks}}",
+          "args": {
+            "n": 1234
+          }
+        },
+        "output": "1,234 tasks"
+      },
+      {
+        "name": "an offset matches =N on the value itself",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, offset:1 =0 {Nobody} =1 {{name}} one {{name} and # other} other {{name} and # others}}",
+          "args": {
+            "n": 1,
+            "name": "Jana"
+          }
+        },
+        "output": "Jana"
+      },
+      {
+        "name": "an offset takes the plural and # from the value less it",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, offset:1 =0 {Nobody} =1 {{name}} one {{name} and # other} other {{name} and # others}}",
+          "args": {
+            "n": 2,
+            "name": "Jana"
+          }
+        },
+        "output": "Jana and 1 other"
+      },
+      {
+        "name": "an offset, other",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, offset:1 =0 {Nobody} =1 {{name}} one {{name} and # other} other {{name} and # others}}",
+          "args": {
+            "n": 3,
+            "name": "Jana"
+          }
+        },
+        "output": "Jana and 2 others"
+      },
+      {
+        "name": "en ordinal 1",
+        "input": {
+          "locale": "en",
+          "message": "{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "1st"
+      },
+      {
+        "name": "en ordinal 2",
+        "input": {
+          "locale": "en",
+          "message": "{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
+          "args": {
+            "n": 2
+          }
+        },
+        "output": "2nd"
+      },
+      {
+        "name": "en ordinal 3",
+        "input": {
+          "locale": "en",
+          "message": "{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
+          "args": {
+            "n": 3
+          }
+        },
+        "output": "3rd"
+      },
+      {
+        "name": "en ordinal 11",
+        "input": {
+          "locale": "en",
+          "message": "{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
+          "args": {
+            "n": 11
+          }
+        },
+        "output": "11th"
+      },
+      {
+        "name": "en ordinal 22",
+        "input": {
+          "locale": "en",
+          "message": "{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
+          "args": {
+            "n": 22
+          }
+        },
+        "output": "22nd"
+      },
+      {
+        "name": "en ordinal 113",
+        "input": {
+          "locale": "en",
+          "message": "{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
+          "args": {
+            "n": 113
+          }
+        },
+        "output": "113th"
+      },
+      {
+        "name": "cs has one ordinal form",
+        "input": {
+          "locale": "cs",
+          "message": "{n, selectordinal, other {#.}} den",
+          "args": {
+            "n": 2
+          }
+        },
+        "output": "2. den"
+      },
+      {
+        "name": "select picks its key",
+        "input": {
+          "locale": "en",
+          "message": "{role, select, owner {Owner} child {Child} other {Member}}",
+          "args": {
+            "role": "child"
+          }
+        },
+        "output": "Child"
+      },
+      {
+        "name": "select falls back to other",
+        "input": {
+          "locale": "en",
+          "message": "{role, select, owner {Owner} child {Child} other {Member}}",
+          "args": {
+            "role": "member"
+          }
+        },
+        "output": "Member"
+      },
+      {
+        "name": "select keys on a number's decimal form",
+        "input": {
+          "locale": "en",
+          "message": "{n, select, 1 {one} other {many}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "one"
+      },
+      {
+        "name": "a # inside a select nested in a plural is text",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, other {{g, select, a {# a} other {x}}}}",
+          "args": {
+            "n": 5,
+            "g": "a"
+          }
+        },
+        "output": "# a"
+      },
+      {
+        "name": "a # outside a plural is text",
+        "input": {
+          "locale": "en",
+          "message": "# {n}",
+          "args": {
+            "n": 5
+          }
+        },
+        "output": "# 5"
+      },
+      {
+        "name": "two apostrophes are one",
+        "input": {
+          "locale": "en",
+          "message": "It''s {name}''s turn",
+          "args": {
+            "name": "Jana"
+          }
+        },
+        "output": "It's Jana's turn"
+      },
+      {
+        "name": "an apostrophe before a brace quotes it",
+        "input": {
+          "locale": "en",
+          "message": "'{name}' is literal",
+          "args": {
+            "name": "Jana"
+          }
+        },
+        "output": "{name} is literal"
+      },
+      {
+        "name": "a lone apostrophe is text",
+        "input": {
+          "locale": "en",
+          "message": "it's {name}",
+          "args": {
+            "name": "Jana"
+          }
+        },
+        "output": "it's Jana"
+      },
+      {
+        "name": "a quoted # is text in a plural",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, one {'#' # item} other {'#' # items}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "# 1 item"
+      },
+      {
+        "name": "a quote left open runs to the end",
+        "input": {
+          "locale": "en",
+          "message": "x'{y}",
+          "args": {}
+        },
+        "output": "x{y}"
+      },
+      {
+        "name": "a brace closing nothing is text",
+        "input": {
+          "locale": "en",
+          "message": "a}b",
+          "args": {}
+        },
+        "output": "a}b"
+      },
+      {
+        "name": "< is text",
+        "input": {
+          "locale": "en",
+          "message": "a < b and c > d",
+          "args": {}
+        },
+        "output": "a < b and c > d"
+      },
+      {
+        "name": "an argument may have spaces around its name",
+        "input": {
+          "locale": "en",
+          "message": "{ name }!",
+          "args": {
+            "name": "Jana"
+          }
+        },
+        "output": "Jana!"
+      },
+      {
+        "name": "a number format rounds to three places",
+        "input": {
+          "locale": "en",
+          "message": "{n, number} kWh",
+          "args": {
+            "n": 1234.5678
+          }
+        },
+        "output": "1,234.568 kWh"
+      },
+      {
+        "name": "a number format in Czech",
+        "input": {
+          "locale": "cs",
+          "message": "{n, number} kWh",
+          "args": {
+            "n": 1234.5678
+          }
+        },
+        "output": "1\u00a0234,568 kWh"
+      },
+      {
+        "name": "a number format in Polish leaves four digits ungrouped",
+        "input": {
+          "locale": "pl",
+          "message": "{n, number} kWh",
+          "args": {
+            "n": 1234.5
+          }
+        },
+        "output": "1234,5 kWh"
+      },
+      {
+        "name": "a number format rounds a half up",
+        "input": {
+          "locale": "de",
+          "message": "{n, number} kWh",
+          "args": {
+            "n": 2.0005
+          }
+        },
+        "output": "2,001 kWh"
+      },
+      {
+        "name": "a number format keeps the minus",
+        "input": {
+          "locale": "en",
+          "message": "{n, number} kWh",
+          "args": {
+            "n": -1234.5
+          }
+        },
+        "output": "-1,234.5 kWh"
+      },
+      {
+        "name": "a large number format",
+        "input": {
+          "locale": "sk",
+          "message": "{n, number}",
+          "args": {
+            "n": 1234567
+          }
+        },
+        "output": "1\u00a0234\u00a0567"
+      },
+      {
+        "name": "a plain argument is not localised",
+        "input": {
+          "locale": "cs",
+          "message": "{n} kWh",
+          "args": {
+            "n": 1234.5
+          }
+        },
+        "output": "1234.5 kWh"
+      },
+      {
+        "name": "a plural rounds to three places before it chooses",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# den} few {# dny} many {# dne} other {# dní}}",
+          "args": {
+            "n": 1.00001
+          }
+        },
+        "output": "1 den"
+      },
+      {
+        "name": "and after, a fraction stays many",
+        "input": {
+          "locale": "cs",
+          "message": "{n, plural, one {# den} few {# dny} many {# dne} other {# dní}}",
+          "args": {
+            "n": 2.0005
+          }
+        },
+        "output": "2,001 dne"
+      },
+      {
+        "name": "a string argument",
+        "input": {
+          "locale": "de",
+          "message": "Hallo {name}",
+          "args": {
+            "name": "Miloš"
+          }
+        },
+        "output": "Hallo Miloš"
+      },
+      {
+        "name": "an argument's text is not a message",
+        "input": {
+          "locale": "en",
+          "message": "{s}",
+          "args": {
+            "s": "{x} it''s"
+          }
+        },
+        "output": "{x} it''s"
+      },
+      {
+        "name": "a missing argument",
+        "input": {
+          "locale": "en",
+          "message": "Hello {name}",
+          "args": {}
+        },
+        "error": "missing_argument"
+      },
+      {
+        "name": "a missing plural argument",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, =0 {no tasks} one {# task} other {# tasks}}",
+          "args": {}
+        },
+        "error": "missing_argument"
+      },
+      {
+        "name": "a plural of a string",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, =0 {no tasks} one {# task} other {# tasks}}",
+          "args": {
+            "n": "three"
+          }
+        },
+        "error": "not_a_number"
+      },
+      {
+        "name": "a number format of a string",
+        "input": {
+          "locale": "en",
+          "message": "{n, number}",
+          "args": {
+            "n": "3"
+          }
+        },
+        "error": "not_a_number"
+      },
+      {
+        "name": "a plural without other",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, one {x}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an argument left open",
+        "input": {
+          "locale": "en",
+          "message": "Hello {name",
+          "args": {
+            "name": "Jana"
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an unknown format",
+        "input": {
+          "locale": "en",
+          "message": "{n, currency}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a duplicated plural keyword",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, one {a} one {b} other {c}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a date is outside the subset",
+        "input": {
+          "locale": "en",
+          "message": "{d, date, short}",
+          "args": {
+            "d": 0
+          }
+        },
+        "error": "unsupported_syntax"
+      },
+      {
+        "name": "a number style is outside it",
+        "input": {
+          "locale": "en",
+          "message": "{n, number, percent}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "unsupported_syntax"
+      },
+      {
+        "name": "a plural keyword CLDR does not have",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, several {x} other {y}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "unsupported_syntax"
+      },
+      {
+        "name": "a no-break space ends a name, and is not skipped",
+        "input": {
+          "locale": "en",
+          "message": "{n\u00a0}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a left-to-right mark after a name belongs to it",
+        "input": {
+          "locale": "en",
+          "message": "{n\u200e}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "unsupported_syntax"
+      },
+      {
+        "name": "a left-to-right mark before a name is skipped",
+        "input": {
+          "locale": "en",
+          "message": "{\u200en}",
+          "args": {
+            "n": 1
+          }
+        },
+        "output": "1"
+      },
+      {
+        "name": "an empty number style",
+        "input": {
+          "locale": "en",
+          "message": "{n, number, }",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an empty date skeleton",
+        "input": {
+          "locale": "en",
+          "message": "{d, date, ::}",
+          "args": {
+            "d": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an empty number skeleton",
+        "input": {
+          "locale": "en",
+          "message": "{n, number, :: }",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a number skeleton with an empty option",
+        "input": {
+          "locale": "en",
+          "message": "{n, number, ::currency/}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a well-formed skeleton is outside the subset",
+        "input": {
+          "locale": "en",
+          "message": "{n, number, ::percent scale/100}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "unsupported_syntax"
+      },
+      {
+        "name": "an offset without its colon",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, offset {x} other {y}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an offset past 2^53 - 1",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, offset:9007199254740992 other {#}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "an =N past 2^53 - 1",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, =9007199254740992 {x} other {y}}",
+          "args": {
+            "n": 1
+          }
+        },
+        "error": "malformed_message"
+      },
+      {
+        "name": "a brace nested in a style closes its argument at the first }",
+        "input": {
+          "locale": "en",
+          "message": "{n, plural, other {{m, number, {x}}}",
+          "args": {
+            "n": 1,
+            "m": 2
+          }
+        },
+        "error": "unsupported_syntax"
+      },
+      {
+        "name": "offset is an ordinary key in a select",
+        "input": {
+          "locale": "en",
+          "message": "{g, select, offset {y} other {z}}",
+          "args": {
+            "g": "offset"
+          }
+        },
+        "output": "y"
+      }
+    ],
+    "match": [
+      {
+        "name": "a shipped language",
+        "input": ["cs"],
+        "output": "cs"
+      },
+      {
+        "name": "a region does not matter",
+        "input": ["de-AT"],
+        "output": "de"
+      },
+      {
+        "name": "case does not matter",
+        "input": ["SK-sk"],
+        "output": "sk"
+      },
+      {
+        "name": "the first shipped language wins",
+        "input": ["fr-FR", "pl-PL", "cs"],
+        "output": "pl"
+      },
+      {
+        "name": "a script and region",
+        "input": ["zh-Hant-TW", "de"],
+        "output": "de"
+      },
+      {
+        "name": "none shipped falls back to English",
+        "input": ["fr", "it"],
+        "output": "en"
+      },
+      {
+        "name": "no preference is English",
+        "input": [],
+        "output": "en"
+      },
+      {
+        "name": "English itself",
+        "input": ["en-GB", "cs"],
+        "output": "en"
+      }
+    ]
+  }
+}

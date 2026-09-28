@@ -1,0 +1,19 @@
+{
+  "module.activity.name": "Aktivitätsprotokoll",
+  "module.admin.name": "Haushaltseinstellungen",
+  "module.calendar.name": "Kalender",
+  "module.chat.name": "Unterhaltungen",
+  "module.chores.name": "Hausarbeiten",
+  "module.dashboard.name": "Übersicht",
+  "module.documents.name": "Dokumente",
+  "module.finance.name": "Finanzen",
+  "module.garden.name": "Garten",
+  "module.notes.name": "Notizen",
+  "module.pets.name": "Haustiere",
+  "module.property.name": "Immobilie",
+  "module.reminders.name": "Erinnerungen",
+  "module.shopping.name": "Einkaufen",
+  "module.tasks.name": "Aufgaben",
+  "module.utilities.name": "Energie und Dienste",
+  "module.vehicles.name": "Fahrzeuge"
+}

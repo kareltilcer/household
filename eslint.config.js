@@ -61,10 +61,195 @@ const linkedSuppressions = {
   },
 }
 
+/**
+ * Architecture test 7 (PRD 01 §10, D-29): no user-visible string literal in client code, so
+ * every word a member reads comes from @household/i18n's catalogs in their language. It
+ * reports a string that holds a letter where the UI shows it: JSX text; a string, template, or
+ * a branch of a conditional or an operand of a concatenation, in a JSX child or in a prop
+ * that renders text (a name from `visibleProps`, or one that reads as text, such as
+ * `emptyText` or `headerTitle`); such a property of an object passed to a prop, or of each
+ * object in an array passed to one (a navigator's `options={{ title }}`, a tab bar's
+ * `items={[{ label }]}`); the message of a native dialog; and the title, message, button
+ * texts and default value of React Native's `Alert`. A type assertion around any of them
+ * hides nothing. A string with no letter (`·`, `—`, `%`) is not language.
+ * @type {import('eslint').Rule.RuleModule}
+ */
+const noLiteralStrings = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Forbid user-visible string literals in client code (architecture test 7)',
+    },
+    schema: [],
+    messages: {
+      literal:
+        'A user-visible string is a translation key (D-29): render it with the translator from ' +
+        '@household/i18n and add the key to all five catalogs.',
+    },
+  },
+  create(context) {
+    const letter = /\p{L}/u
+    const visibleProps = new Set([
+      'alt',
+      'aria-description',
+      'aria-label',
+      'aria-placeholder',
+      'aria-roledescription',
+      'aria-valuetext',
+      'accessibilityHint',
+      'accessibilityLabel',
+      'children',
+      'label',
+      'placeholder',
+      'title',
+    ])
+    // Matched against the name with its first letter capitalised, so `text` and `message`
+    // read as text as `emptyText` and `errorMessage` do.
+    const textLikeProp =
+      /(Label|Title|Text|Message|Placeholder|Caption|Description|Heading|Hint|Tooltip)$/
+    // Names that end like text but take an enumerated value, never words.
+    const enumeratedProps = new Set(['enterKeyHint'])
+    const dialogs = new Set(['alert', 'confirm', 'prompt'])
+    const assertions = new Set(['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullExpression'])
+
+    /** @param {any} node An expression, returned without the type assertions around it */
+    function unwrap(node) {
+      let inner = node
+      while (inner && assertions.has(inner.type)) inner = inner.expression
+      return inner
+    }
+
+    /** @param {unknown} name A prop's or a property's name */
+    function showsText(name) {
+      if (typeof name !== 'string' || name === '' || enumeratedProps.has(name)) return false
+      return (
+        visibleProps.has(name) || textLikeProp.test(name.charAt(0).toUpperCase() + name.slice(1))
+      )
+    }
+
+    /** @param {any} object An object literal, whose text properties are checked */
+    function checkProperties(object) {
+      for (const property of object.properties) {
+        if (property.type !== 'Property' || property.computed) continue
+        const key =
+          property.key.type === 'Identifier'
+            ? property.key.name
+            : property.key.type === 'Literal'
+              ? String(property.key.value)
+              : undefined
+        if (showsText(key)) check(property.value)
+      }
+    }
+
+    /**
+     * @param {any} node A prop's value: an object literal, or an array of them, whose text
+     *   properties are checked
+     */
+    function checkObjects(node) {
+      const value = unwrap(node)
+      if (value?.type === 'ObjectExpression') checkProperties(value)
+      else if (value?.type === 'ArrayExpression') {
+        for (const element of value.elements) {
+          const item = unwrap(element)
+          if (item?.type === 'ObjectExpression') checkProperties(item)
+        }
+      }
+    }
+
+    /** @param {any} node An expression shown as it is, or a part of it that may be */
+    function check(node) {
+      const expression = unwrap(node)
+      if (!expression) return
+      switch (expression.type) {
+        case 'Literal':
+          if (typeof expression.value === 'string' && letter.test(expression.value)) {
+            context.report({ node: expression, messageId: 'literal' })
+          }
+          return
+        case 'TemplateLiteral':
+          if (expression.quasis.some((q) => letter.test(q.value.cooked ?? q.value.raw))) {
+            context.report({ node: expression, messageId: 'literal' })
+          } else {
+            // `${n} ${n === 1 ? 'item' : 'items'}`: the words are in what it interpolates.
+            for (const part of expression.expressions) check(part)
+          }
+          return
+        case 'BinaryExpression':
+          // A concatenation shows the text of each operand.
+          if (expression.operator === '+') {
+            check(expression.left)
+            check(expression.right)
+          }
+          return
+        case 'ConditionalExpression':
+          check(expression.consequent)
+          check(expression.alternate)
+          return
+        case 'LogicalExpression':
+          check(expression.right)
+          return
+        default:
+      }
+    }
+
+    return {
+      /** @param {any} node */
+      JSXText(node) {
+        if (letter.test(node.value)) context.report({ node, messageId: 'literal' })
+      },
+      /** @param {any} node */
+      JSXAttribute(node) {
+        const name =
+          node.name.type === 'JSXNamespacedName'
+            ? `${node.name.namespace.name}:${node.name.name.name}`
+            : node.name.name
+        const value =
+          node.value?.type === 'JSXExpressionContainer' ? node.value.expression : node.value
+        if (showsText(name)) check(value)
+        else checkObjects(value)
+      },
+      /** @param {any} node */
+      JSXExpressionContainer(node) {
+        if (node.parent.type === 'JSXElement' || node.parent.type === 'JSXFragment') {
+          check(node.expression)
+        }
+      },
+      /** @param {any} node */
+      CallExpression(node) {
+        const callee = node.callee
+        const name =
+          callee.type === 'Identifier'
+            ? callee.name
+            : callee.type === 'MemberExpression' && callee.property.type === 'Identifier'
+              ? callee.property.name
+              : undefined
+        const onAlert =
+          callee.type === 'MemberExpression' &&
+          callee.object.type === 'Identifier' &&
+          callee.object.name === 'Alert'
+        if (onAlert) {
+          // React Native's Alert.alert(title, message, buttons, options) and
+          // Alert.prompt(title, message, buttons, type, defaultValue, keyboardType): each
+          // button shows its `text`; the type and the keyboard type are enumerated.
+          const [title, message, buttons, , defaultValue] = node.arguments
+          check(title)
+          check(message)
+          checkObjects(buttons)
+          if (name === 'prompt') check(defaultValue)
+        } else if (name !== undefined && dialogs.has(name)) {
+          for (const arg of node.arguments) check(arg)
+        }
+      },
+    }
+  },
+}
+
 export default defineConfig(
   // design/ holds the clickable ES5 prototype, a reference that never ships; Prettier and
   // CodeQL skip it too. An editor that lints it with this file would flag every script.
-  globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/', 'design/']),
+  // src/generated/ is written by each package's `gen` script from a committed source (the
+  // contract, the English catalog) and is never edited by hand.
+  globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/', 'design/', 'packages/*/src/generated/']),
   {
     linterOptions: {
       // A suppression that suppresses nothing is an error, so a rule cannot be switched
@@ -82,7 +267,12 @@ export default defineConfig(
       },
     },
     plugins: {
-      household: { rules: { 'linked-suppressions': linkedSuppressions } },
+      household: {
+        rules: {
+          'linked-suppressions': linkedSuppressions,
+          'no-literal-strings': noLiteralStrings,
+        },
+      },
     },
     rules: {
       // 06-clients: "No `any`, no non-null assertions — both are lint errors, not
@@ -104,7 +294,12 @@ export default defineConfig(
     },
   },
   {
-    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
+    // Architecture test 7: the clients render words from the catalogs, never literals.
+    files: ['apps/**'],
+    rules: { 'household/no-literal-strings': 'error' },
+  },
+  {
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs', '**/*.jsx'],
     extends: [tseslint.configs.disableTypeChecked],
   },
 )

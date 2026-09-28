@@ -1,0 +1,19 @@
+{
+  "module.activity.name": "Historie změn",
+  "module.admin.name": "Nastavení domácnosti",
+  "module.calendar.name": "Kalendář",
+  "module.chat.name": "Konverzace",
+  "module.chores.name": "Domácí práce",
+  "module.dashboard.name": "Přehled",
+  "module.documents.name": "Dokumenty",
+  "module.finance.name": "Finance",
+  "module.garden.name": "Zahrada",
+  "module.notes.name": "Poznámky",
+  "module.pets.name": "Zvířata",
+  "module.property.name": "Nemovitost",
+  "module.reminders.name": "Připomínky",
+  "module.shopping.name": "Nákupy",
+  "module.tasks.name": "Úkoly",
+  "module.utilities.name": "Energie a služby",
+  "module.vehicles.name": "Vozidla"
+}

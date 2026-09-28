@@ -20,6 +20,20 @@
     "test": {
       "dependsOn": ["gen"]
     },
+    // The generated client is a function of the contract, which lives outside the package,
+    // so the contract is one of its inputs: every task that depends on this one (the client's
+    // typecheck, and each app's through ^gen) re-runs when openapi.yaml changes, instead of
+    // replaying a pass against the old one.
+    "@household/api#gen": {
+      "dependsOn": ["^gen"],
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/api/openapi.yaml"]
+    },
+    // The catalogs' test holds the module names to the contract's ModuleKeyValue.
+    "@household/i18n#test": {
+      "dependsOn": ["gen"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/api/openapi.yaml"]
+    },
     // The workspace guards read files outside tooling/ (docker-compose.yml, the CI
     // workflow, every package's manifest and tsconfig), none of which are in this task's
     // hash. A cached result would pass a guard over files it never re-read.

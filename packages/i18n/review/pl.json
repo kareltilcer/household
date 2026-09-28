@@ -1,0 +1,19 @@
+{
+  "module.activity.name": "Activity log",
+  "module.admin.name": "Household settings",
+  "module.calendar.name": "Calendar",
+  "module.chat.name": "Chat",
+  "module.chores.name": "Chores",
+  "module.dashboard.name": "Dashboard",
+  "module.documents.name": "Documents",
+  "module.finance.name": "Finance",
+  "module.garden.name": "Garden",
+  "module.notes.name": "Notes",
+  "module.pets.name": "Pets",
+  "module.property.name": "Property",
+  "module.reminders.name": "Reminders",
+  "module.shopping.name": "Shopping",
+  "module.tasks.name": "Tasks",
+  "module.utilities.name": "Utilities",
+  "module.vehicles.name": "Vehicles"
+}

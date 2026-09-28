@@ -7,11 +7,22 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "gen": "node scripts/gen.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.17.0",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "openapi-typescript": "^7.13.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "yaml": "catalog:"
   }
 }
