@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
@@ -46,8 +47,16 @@ func throttles(t *testing.T, c *clock) *ratelimit.Throttles {
 	return ratelimit.NewThrottles(testsupport.Open(t).Pool(t, db.RoleApp), c.now)
 }
 
-// subject is a subject no other test counts under.
-func subject(t *testing.T) string { return t.Name() }
+// subjects are the tests' subjects, each made the first time its test asks for it.
+var subjects sync.Map
+
+// subject is a subject no other test counts under, nor an earlier run of this one: the runs of a
+// process share its database, and the rows a run leaves behind stay there.
+func subject(t *testing.T) string {
+	s, _ := subjects.LoadOrStore(t, t.Name()+" "+idgen.New().String())
+	name, _ := s.(string)
+	return name
+}
 
 // count is subject as l counts it.
 func count(l ratelimit.Limit, subject string) ratelimit.Count {

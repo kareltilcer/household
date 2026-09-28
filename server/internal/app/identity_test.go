@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -66,9 +67,9 @@ type site struct {
 	admin  *pgxpool.Pool
 	outbox *apptest.Outbox
 	clock  *clock
-	// domain and peer are this test's own: its addresses end in the one, and its browsers come
-	// from the other.
-	domain, peer string
+	// domain, peer and other are this test's own: its addresses end in the first, its browsers come
+	// from the second, and the third is another network, for a limit one network has used up.
+	domain, peer, other string
 }
 
 func newSite(t *testing.T, o apptest.Options) *site {
@@ -93,13 +94,20 @@ func newSite(t *testing.T, o apptest.Options) *site {
 	}
 	n := sites.Add(1)
 	return &site{t: t, router: r, admin: d.Pool(t, ""), outbox: outbox, clock: clk,
-		domain: fmt.Sprintf("site%d.test", n), peer: fmt.Sprintf("198.51.%d.%d:4000", n/256, n%256)}
+		domain: fmt.Sprintf("site%d.test", n), peer: fmt.Sprintf("198.51.%d.%d:4000", n/256, n%256),
+		other: fmt.Sprintf("198.18.%d.%d:5000", n/256, n%256)}
 }
 
-// sites counts the sites the package's tests made, so that each has addresses and a network of
-// its own: the tests share one database, where the accounts and the throttles of one test would
-// otherwise meet the next one's.
+// sites counts the sites the package's tests made, so that each has addresses and networks of
+// its own: the tests share one database, where the accounts and the throttles of one test, or of
+// an earlier run of it, would otherwise meet the next one's.
 var sites atomic.Int64
+
+// host is addr, host:port, without its port.
+func host(addr string) string {
+	h, _, _ := net.SplitHostPort(addr)
+	return h
+}
 
 // a is address as this test's own: the same mailbox, at a domain no other test uses.
 func (s *site) a(address string) string { return address + "." + s.domain }
@@ -629,7 +637,7 @@ func TestSignInFailuresCoolANetworkDown(t *testing.T) {
 		"email": s.a("jana@tilcerovi.cz"), "password": "correct horse battery", "client_type": "web",
 	})), http.StatusTooManyRequests, problem.CodeRateLimited)
 	other := s.browser()
-	other.peer = "203.0.113.9:5000"
+	other.peer = s.other
 	other.login(s.a("jana@tilcerovi.cz"), "correct horse battery")
 }
 
@@ -673,7 +681,7 @@ func TestResetsAndResendsFromANetworkAreLimited(t *testing.T) {
 			t.Errorf("%s: Retry-After %q", surface.path, rec.Header().Get("Retry-After"))
 		}
 		other := s.browser()
-		other.peer = "203.0.113.9:5000"
+		other.peer = s.other
 		expect(t, ask(other, surface.limit.Max), http.StatusAccepted, "")
 	}
 }
@@ -861,6 +869,43 @@ func TestTwoResetLinksConfirmedAtOnceSetOnePassword(t *testing.T) {
 	}
 }
 
+// Confirmations of one link sent at once take turns: the first sets its password, and the rest find
+// the link spent before they screen or hash theirs, so that a burst of them hashes one password,
+// not one each.
+func TestConfirmationsOfOneLinkSentAtOnceHashOnePassword(t *testing.T) {
+	var screened atomic.Int32
+	s := newSite(t, apptest.Options{Screening: func(string) {
+		screened.Add(1)
+		// Long enough for the confirmations sent beside the first to reach the link while it works.
+		time.Sleep(20 * time.Millisecond)
+	}})
+	address := s.a("jana@tilcerovi.cz")
+	s.signUp(address, "correct horse battery")
+	expect(t, s.browser().post("/auth/password-reset", jsonBody(t, map[string]string{"email": address})), http.StatusAccepted, "")
+	link, _ := s.token(address)
+	screened.Store(0)
+	var set, spent atomic.Int32
+	var wg sync.WaitGroup
+	for i := range 10 {
+		b := s.browser()
+		wg.Go(func() {
+			rec := b.post("/auth/password-reset/confirm", jsonBody(t, map[string]string{"token": link, "password": fmt.Sprintf("burst password %d", i)}))
+			switch {
+			case rec.Code == http.StatusNoContent:
+				set.Add(1)
+			case rec.Code == http.StatusGone && strings.Contains(rec.Body.String(), string(problem.CodeTokenAlreadyUsed)):
+				spent.Add(1)
+			default:
+				t.Errorf("%d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+	wg.Wait()
+	if set.Load() != 1 || spent.Load() != 9 || screened.Load() != 1 {
+		t.Fatalf("%d set, %d spent and %d passwords screened; want 1, 9 and 1", set.Load(), spent.Load(), screened.Load())
+	}
+}
+
 // A change takes the current password, which a wrong guess counts against as a sign-in does, and
 // ends every other session. It keeps no Idempotency-Key, whose fingerprint would hash the
 // passwords, so a repeat runs again, and finds the current password changed. A reset link sent
@@ -1010,12 +1055,13 @@ func TestALimitCountsTheClientBehindATrustedProxy(t *testing.T) {
 			body: jsonBody(t, map[string]string{"email": s.a(fmt.Sprintf("user%d@example.com", i)), "password": "correct horse battery", "display_name": "U"})})
 	}
 	// One client, claiming another address of its own each time.
+	client, another := host(s.peer), host(s.other)
 	for i := range ratelimit.RegisterNetwork.Max {
-		expect(t, register(i, fmt.Sprintf("192.0.2.%d, 203.0.113.50", i)), http.StatusAccepted, "")
+		expect(t, register(i, fmt.Sprintf("192.0.2.%d, %s", i, client)), http.StatusAccepted, "")
 	}
-	expect(t, register(ratelimit.RegisterNetwork.Max, "192.0.2.99, 203.0.113.50"), http.StatusTooManyRequests, problem.CodeRateLimited)
+	expect(t, register(ratelimit.RegisterNetwork.Max, "192.0.2.99, "+client), http.StatusTooManyRequests, problem.CodeRateLimited)
 	// Another client, through the same proxy, has a budget of its own.
-	expect(t, register(ratelimit.RegisterNetwork.Max+1, "203.0.113.51"), http.StatusAccepted, "")
+	expect(t, register(ratelimit.RegisterNetwork.Max+1, another), http.StatusAccepted, "")
 }
 
 // The note to an address that has an account goes out three times an hour, and the registrations
@@ -1169,7 +1215,9 @@ func TestAnAccountRequestIsRepeatable(t *testing.T) {
 	if got := fieldErrorsOf(t, rename("Someone else", "rename-1")); !slices.Equal(got, []problem.FieldError{{Field: "header:Idempotency-Key", Code: problem.FieldInvalid}}) {
 		t.Fatalf("%v", got)
 	}
-	if n := s.count("SELECT count(*) FROM account_idempotency_keys WHERE key = 'rename-1' AND state = 'completed'"); n != 1 {
+	if n := s.count(`
+		SELECT count(*) FROM account_idempotency_keys k JOIN users u ON u.id = k.user_id
+		WHERE k.key = 'rename-1' AND k.state = 'completed' AND u.email = $1`, s.a("jana@tilcerovi.cz")); n != 1 {
 		t.Fatalf("%d completed keys", n)
 	}
 }

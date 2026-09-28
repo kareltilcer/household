@@ -262,11 +262,15 @@ func (l *loader) serving(c *Config, dev bool) {
 
 	// Named outside development, or `none` said: behind a load balancer the server was not told
 	// of, every client would be the balancer, and share one network's sign-in and registration
-	// limits with every other.
-	if proxies := required(TrustedProxiesVar, NoProxies); proxies != NoProxies {
+	// limits with every other. A list that names nothing, a template's empty variables joined by a
+	// comma, says neither.
+	if proxies := required(TrustedProxiesVar, NoProxies); proxies != NoProxies && proxies != "" {
 		parsed, err := clientip.ParsePrefixes(proxies)
-		if err != nil {
+		switch {
+		case err != nil:
 			l.fail("%s: %v", TrustedProxiesVar, err)
+		case len(parsed) == 0:
+			l.fail("%s is %q, which names no proxy; want the proxies' addresses or %q", TrustedProxiesVar, proxies, NoProxies)
 		}
 		c.TrustedProxies = parsed
 	}

@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 	_ "time/tzdata" // An IANA name is checked against the zones the binary carries, wherever it runs.
 	"unicode"
@@ -84,7 +85,11 @@ type Config struct {
 }
 
 // Service serves the routes.
-type Service struct{ Config }
+type Service struct {
+	Config
+	// confirming are the reset links a confirmation is at work on in this process.
+	confirming turns
+}
 
 // New returns the service.
 func New(cfg Config) (*Service, error) {
@@ -92,7 +97,7 @@ func New(cfg Config) (*Service, error) {
 		cfg.Mail == nil || cfg.Catalogs == nil || cfg.WebURL == nil || cfg.ClientIP == nil || cfg.Later == nil {
 		return nil, errors.New("identity: the service is missing a dependency")
 	}
-	return &Service{cfg}, nil
+	return &Service{Config: cfg}, nil
 }
 
 // PublicRoutes registers the routes a person reaches before signing in, on the API's router. None
@@ -261,6 +266,55 @@ func preferredLocale(r *http.Request) string {
 		preferences = append(preferences, t.String())
 	}
 	return string(i18n.Match(preferences...))
+}
+
+// turns lets the requests that name one key act on it one at a time, in this process, a waiting
+// request holding nothing else meanwhile. The zero value is ready to use.
+type turns struct {
+	mu   sync.Mutex
+	keys map[string]*turn
+}
+
+// turn is one key's: a slot its holder fills, and how many requests hold or wait for it.
+type turn struct {
+	slot    chan struct{}
+	waiting int
+}
+
+// take waits for key's turn, or for ctx to end, and returns what ends the turn. A request whose
+// context has already ended takes no turn, even one that is free.
+func (t *turns) take(ctx context.Context, key string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	t.mu.Lock()
+	if t.keys == nil {
+		t.keys = map[string]*turn{}
+	}
+	k := t.keys[key]
+	if k == nil {
+		k = &turn{slot: make(chan struct{}, 1)}
+		t.keys[key] = k
+	}
+	k.waiting++
+	t.mu.Unlock()
+	leave := func() {
+		t.mu.Lock()
+		if k.waiting--; k.waiting == 0 {
+			delete(t.keys, key)
+		}
+		t.mu.Unlock()
+	}
+	select {
+	case k.slot <- struct{}{}:
+		return func() {
+			<-k.slot
+			leave()
+		}, nil
+	case <-ctx.Done():
+		leave()
+		return nil, ctx.Err()
+	}
 }
 
 // timezone reports whether name is an IANA timezone the binary knows.

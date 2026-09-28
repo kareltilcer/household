@@ -482,6 +482,16 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// One confirmation of a link at a time: the others wait here, holding no connection and no
+	// hasher's slot, and then find the link spent. Each would otherwise pass the check below and
+	// hash its password before the first spent the link, and nothing else limits how many a client
+	// holding one link sends at once. Another process of the server takes turns of its own.
+	done, err := s.confirming.take(ctx, string(session.Hash(req.Token)))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer done()
 	// The link first: a dead one makes the password moot, and hashing is the costly part.
 	check := func(ctx context.Context, tx pgx.Tx) (linkToken, error) {
 		t, ok, err := findToken(ctx, tx, req.Token, "reset_password")

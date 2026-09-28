@@ -149,6 +149,21 @@ func TestMalformedAccountSettingsAreReported(t *testing.T) {
 	}
 }
 
+// A list of proxies that names none, empty variables a template joined, is neither the proxies nor
+// `none`, and is refused rather than taken for no proxy.
+func TestTrustedProxiesNameAProxyOrNone(t *testing.T) {
+	for _, proxies := range []string{",", " , ,"} {
+		_, err := config.Load(config.Serve, env(serving(map[string]string{
+			config.EnvVar:            "production",
+			config.DatabaseURLVar:    dsn("household_app", "s3cret", "db.internal:5432", "household"),
+			config.TrustedProxiesVar: proxies,
+		})))
+		if err == nil || !strings.Contains(err.Error(), config.TrustedProxiesVar) {
+			t.Errorf("%q: %v", proxies, err)
+		}
+	}
+}
+
 // Outside development the web client is served over https, where its Secure cookies are kept and
 // the emails' links travel encrypted; development's dev server is plain http.
 func TestOutsideDevelopmentTheWebClientIsServedOverHTTPS(t *testing.T) {

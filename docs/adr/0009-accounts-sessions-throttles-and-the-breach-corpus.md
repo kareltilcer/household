@@ -38,9 +38,11 @@ on it, starting a session, rehashing or setting a new password, locks the creden
 unchanged or answers as a wrong password does: a reset that lands meanwhile wins, and the session
 it ended stays ended. Unchanged is the credential's `updated_at`, the moment its password was set,
 as the check read it: another sign-in's rehash of the same password leaves it, so a sign-in or a
-change running beside that rehash is not refused. A change leaves the reset links already sent
-working, since a reset is how the address's owner takes the account back from someone who knows
-the password.
+change running beside that rehash is not refused. Confirmations of one reset link, which no limit
+counts, take turns within a process before the link is checked, so that a burst of them hashes one
+password rather than one each while the first has yet to spend it. A change leaves the reset links
+already sent working, since a reset is how the address's owner takes the account back from someone
+who knows the password.
 
 **The breach corpus is Have I Been Pwned's Pwned Passwords (CC BY 4.0), kept as the first 8 bytes of
 each SHA-1, sorted, after a 16-byte header** (`internal/platform/breach`). The server opens it once
