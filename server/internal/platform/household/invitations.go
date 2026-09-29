@@ -444,6 +444,15 @@ func memberAddress(ctx context.Context, tx pgx.Tx, household uuid.UUID, address 
 	return member, err
 }
 
+// joined reports whether user is a member of household already, whom an invitation into it asks
+// into nothing.
+func joined(ctx context.Context, tx pgx.Tx, household, user uuid.UUID) (bool, error) {
+	var in bool
+	err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM memberships WHERE household_id = $1 AND user_id = $2)",
+		household, user).Scan(&in)
+	return in, err
+}
+
 // invitationArgs are the summary arguments of an event about i: its kind, and its address, "" for a
 // link.
 func invitationArgs(i invitation) map[string]any {
@@ -913,7 +922,10 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 
 // declineInvitation records that the caller declines an invitation (FR-HH3), and tells the owner who
 // sent it (A-25). It closes the invitation, a link's too. An email invitation is declined only from
-// an account with its address; one that no longer works is not found.
+// an account with its address; one that no longer works is not found, and neither is one into a
+// household the caller is in already, which asks them into nothing, as accepting it and sending it
+// again treat it: closing it would close a link for those it may still bring in, and tell its
+// inviter of a refusal that is not one.
 func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -935,12 +947,24 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 		args       i18n.Args
 	}
 	_, err = mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
+		// Under the household's lock, which accepting takes too, so that whether the caller is a
+		// member already is read after any acceptance of theirs that was committing meanwhile.
+		if _, err := lockHousehold(ctx, tx, held.household); err != nil {
+			return mutation.Record{}, err
+		}
 		i, err := readInvitation(ctx, tx, held.id)
 		if err == nil && usable(i, now) != nil {
 			err = problem.NotFound()
 		}
 		if err != nil {
 			return mutation.Record{}, err
+		}
+		in, err := joined(ctx, tx, i.household, user)
+		switch {
+		case err != nil:
+			return mutation.Record{}, err
+		case in:
+			return mutation.Record{}, problem.NotFound()
 		}
 		if i, err = setStatus(ctx, tx, i, statusDeclined); err != nil {
 			return mutation.Record{}, err

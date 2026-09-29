@@ -994,7 +994,8 @@ paths:
       description: |
         Recorded, and the inviter is told. It closes the invitation, a link's too. An `email`
         invitation is declined only from the account with its address; an invitation that no longer
-        works is not found.
+        works is not found, and neither is one into a household the caller is already a member of,
+        which asks them into nothing.
       parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Declined }

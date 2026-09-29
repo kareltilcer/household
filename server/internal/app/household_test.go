@@ -710,8 +710,9 @@ func TestTheInvitationsAddressedToMe(t *testing.T) {
 }
 
 // An email invitation to someone who has joined since, by another invitation, asks them into a
-// household they are in: it is not sent again, as inviting their address anew is refused, and it is
-// not listed to them.
+// household they are in: it is not sent again, as inviting their address anew is refused, it is not
+// listed to them, and they do not decline it, nor the link they joined by, whose closing would shut
+// out those it may still bring in and tell its inviter of a refusal that is not one.
 func TestAnInvitationToSomeoneWhoJoinedIsNotSentAgain(t *testing.T) {
 	s, _ := newHouseholdSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
@@ -740,11 +741,21 @@ func TestAnInvitationToSomeoneWhoJoinedIsNotSentAgain(t *testing.T) {
 	if n := listed(); n != 1 {
 		t.Fatalf("%d invitations listed after the declined one was sent again", n)
 	}
-	link := jana.invite(h.ID, map[string]any{"kind": "link", "role": "member"})
-	expect(t, petrs.post("/me/invitations/"+invitationLink.FindStringSubmatch(*link.URL)[1]+"/accept", ""), http.StatusOK, "")
+	link := jana.invite(h.ID, map[string]any{"kind": "link", "role": "member", "max_uses": 2})
+	token := invitationLink.FindStringSubmatch(*link.URL)[1]
+	expect(t, petrs.post("/me/invitations/"+token+"/accept", ""), http.StatusOK, "")
 	if n := listed(); n != 0 {
 		t.Errorf("%d invitations listed to a member", n)
 	}
+
+	told := len(s.outbox.To(s.a("jana@tilcerovi.cz")))
+	expect(t, petrs.post("/me/invitations/"+waiting.ID.String()+"/decline", ""), http.StatusNotFound, problem.CodeNotFound)
+	expect(t, petrs.post("/me/invitations/"+token+"/decline", ""), http.StatusNotFound, problem.CodeNotFound)
+	if n := len(s.outbox.To(s.a("jana@tilcerovi.cz"))); n != told {
+		t.Errorf("the inviter was told of %d refusals by a member", n-told)
+	}
+	klara := s.person("Klára", s.a("klara@tilcerovi.cz"))
+	expect(t, klara.post("/me/invitations/"+token+"/accept", ""), http.StatusOK, "")
 
 	sent := len(s.outbox.To(petr))
 	for _, i := range []invitationDoc{declined, waiting} {

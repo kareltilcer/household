@@ -513,7 +513,7 @@ func changedGrants(old, next map[string]access.Level, modules []string) map[stri
 }
 
 // memberDiffs are a membership's changes as the audit event's diffs (FR-AU2: every permission and
-// membership change): its role, and each module's level as grants/<module>.
+// membership change): its role, and each module's level as grants.<module>.
 func memberDiffs(role, nextRole access.Role, grants, next map[string]access.Level, modules []string) []audit.Change {
 	var out []audit.Change
 	if role != nextRole {

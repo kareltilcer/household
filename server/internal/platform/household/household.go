@@ -172,10 +172,11 @@ func pathUUID(r *http.Request, name string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// escapePointer is name as a JSON Pointer's reference token (RFC 6901): ~ as ~0 and / as ~1.
-func escapePointer(name string) string {
-	return strings.NewReplacer("~", "~0", "/", "~1").Replace(name)
-}
+// pointerEscaper spells a name as a JSON Pointer's reference token (RFC 6901): ~ as ~0 and / as ~1.
+var pointerEscaper = strings.NewReplacer("~", "~0", "/", "~1")
+
+// escapePointer is name as a JSON Pointer's reference token (pointerEscaper).
+func escapePointer(name string) string { return pointerEscaper.Replace(name) }
 
 // uniqueViolationCode is PostgreSQL's SQLSTATE for unique_violation.
 const uniqueViolationCode = "23505"
