@@ -32,6 +32,8 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/config"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/device"
+	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
@@ -150,7 +152,7 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 	return errors.Join(served, background.Close(closeCtx))
 }
 
-// newAccounts builds the account surfaces (item 8) from cfg, and returns what closes them.
+// newAccounts builds the account surfaces (items 8 and 9) from cfg, and returns what closes them.
 func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool,
 	background *identity.Background,
 ) (app.Accounts, func(), error) {
@@ -186,16 +188,27 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 		return app.Accounts{}, closeAll, err
 	}
 	sessions := session.NewStore(pool, origins, log, nil)
+	devices := device.NewStore(pool, cfg.TokenKeys, log, nil)
+	providers := map[string]*federation.Provider{}
+	for name, p := range map[string]*federation.Config{federation.Google: cfg.Google, federation.Apple: cfg.Apple} {
+		if p == nil {
+			continue
+		}
+		if providers[name], err = federation.New(name, *p); err != nil {
+			return app.Accounts{}, closeAll, err
+		}
+	}
 	id, err := identity.New(identity.Config{
 		Pool: pool, Log: log, Hasher: hasher, Breached: breached,
 		Throttles: ratelimit.NewThrottles(pool, nil), Sessions: sessions, Mail: sender, Catalogs: catalogs,
 		WebURL: cfg.WebURL, ClientIP: clientip.New(cfg.TrustedProxies), Later: background.Run,
+		Devices: devices, MFA: cfg.MFAKeys, Providers: providers, RedirectURIs: cfg.RedirectURIs,
 	})
 	if err != nil {
 		return app.Accounts{}, closeAll, err
 	}
 	return app.Accounts{
-		Identity: id, Sessions: sessions, Origins: origins,
+		Identity: id, Sessions: sessions, Devices: devices, Origins: origins, MinClients: cfg.MinClients,
 		UserLimit:      ratelimit.NewBuckets(ratelimit.PerUser, nil),
 		HouseholdLimit: ratelimit.NewBuckets(ratelimit.PerHousehold, nil),
 	}, closeAll, nil

@@ -6,23 +6,11 @@
 #
 # Seeded by item 2 with all 486 operations, less getHealthz and getReadyz, which it serves.
 postAuthChildLogin
-postAuthToken
-postAuthOauthByProviderStart
-postAuthOauthByProviderCallback
-postAuthOauthByProviderLink
-deleteAuthOauthByProvider
-postAuthMfaEnroll
-postAuthMfaActivate
-postAuthMfaVerify
-postAuthMfaDisable
 getPushVapidKey
 postPushSubscriptions
 deletePushSubscriptions
 postMeDeletion
 deleteMeDeletion
-getMeDevices
-patchMeDevicesByDeviceId
-deleteMeDevicesByDeviceId
 getMeNotificationPreferences
 patchMeNotificationPreferences
 getMeConsents

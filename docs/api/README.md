@@ -6,9 +6,9 @@ clients. It is not a description of the implementation — the implementation is
 | | |
 |---|---|
 | Specification | OpenAPI 3.1.0 |
-| Paths | 323 |
-| Operations | 489 |
-| Schemas | 442 |
+| Paths | 324 |
+| Operations | 490 |
+| Schemas | 446 |
 | `operationId` | Present and unique on every operation |
 
 ## Validate
@@ -80,7 +80,8 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
   it took effect stores nothing, so a repeat runs it again. A request made before signing in
   (`/auth/register`, `/auth/login` and the other routes a signed-out person reaches) has no caller
   to hold a key, and keeps none, nor does `POST /auth/password`, whose body carries passwords that
-  a key's fingerprint would hash fast (D-97). A repeat of a request that ended the session it was
+  a key's fingerprint would hash fast (D-97), nor the second step's operations that take the
+  password. A response carrying recovery codes is never kept: a repeat of it answers `409`. A repeat of a request that ended the session it was
   made with (signing out, signing out everywhere, revoking the current session) answers `401`,
   since that session makes no further request.
 - **`402` is declared on every household-scoped unsafe method**, because the entitlement gate is
@@ -93,8 +94,9 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
   Any operation can also answer `405 method_not_allowed`, `500 internal`, and
   `422 validation_failed` for a request the document does not admit, and one that takes a body
   `413 payload_too_large` or `415 unsupported_media_type`, one that accepts
-  `Idempotency-Key` `409 idempotency_in_progress`, and any unsafe one `403 csrf_failed`, for a
-  browser's request from another origin or a session's without its CSRF token, whether or not it
+  `Idempotency-Key` `409 idempotency_in_progress`, any unsafe one `403 csrf_failed`, for a
+  browser's request from another origin or a session's without its CSRF token, and any at all
+  `400 update_required`, for a client older than the oldest the server serves, whether or not it
   declares them. A
   `422 validation_failed` names each failure in `errors[]`: `field` is a JSON Pointer into the
   body (`/name`) or `<in>:<name>` for a parameter (`query:limit`), and `code` is the check that

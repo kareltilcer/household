@@ -20,6 +20,7 @@ const (
 	CodeInternal                 Code = "internal"
 	CodeIdempotencyInProgress    Code = "idempotency_in_progress"
 	CodeCsrfFailed               Code = "csrf_failed"
+	CodeUpdateRequired           Code = "update_required"
 	CodeInvalidCredentials       Code = "invalid_credentials"
 	CodeRefreshTokenInvalid      Code = "refresh_token_invalid"
 	CodeAccountDisabled          Code = "account_disabled"
@@ -80,6 +81,7 @@ var Codes = []Code{
 	CodeInternal,
 	CodeIdempotencyInProgress,
 	CodeCsrfFailed,
+	CodeUpdateRequired,
 	CodeInvalidCredentials,
 	CodeRefreshTokenInvalid,
 	CodeAccountDisabled,

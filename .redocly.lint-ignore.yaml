@@ -29,3 +29,8 @@ docs/api/openapi.yaml:
   # The realtime stream upgrades to a WebSocket: its success is 101, not a 2XX.
   operation-2xx-response:
     - '#/paths/~1households~1{household_id}~1stream/get/responses'
+  # The 400 update_required any operation answers a client below the minimum version, declared
+  # on none of them, as the other protocol-level codes are not: the response check and the
+  # clients read it by name.
+  no-unused-components:
+    - '#/components/schemas/UpdateRequiredProblem'

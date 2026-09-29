@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/auth"
-	"github.com/kareltilcer/household/server/internal/platform/httpx"
+	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
@@ -282,25 +282,29 @@ func (s *Service) sendLink(ctx context.Context, email string, l emailLink) {
 	})
 }
 
-// login is postAuthLogin (FR-ID3), for the web client: a session, in two cookies. Every failure
-// is one 401, and an address with no account costs the same hash as a wrong password. The mobile
-// client's token pair is item 9's.
+// login is postAuthLogin (FR-ID3): for the web client a session, in two cookies, and for the
+// mobile client a token pair for its device; or, for an account with the second step on, a
+// challenge (admit). Every failure is one 401, and an address with no account costs the same hash
+// as a wrong password.
 //
 // The attempt counts as a failure against the network and the address before the password is
 // checked, so that attempts sent at once meet the limits one by one, and a success takes it back.
 func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
-		Email      string `json:"email"`
-		Password   string `json:"password"`
-		ClientType string `json:"client_type"`
+		Email      string      `json:"email"`
+		Password   string      `json:"password"`
+		ClientType string      `json:"client_type"`
+		Device     *deviceJSON `json:"device"`
+		TrustToken string      `json:"trust_token"`
 	}
 	if err := decode(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if req.ClientType != "web" {
-		s.fail(w, r, invalid("/client_type", problem.FieldInvalid))
+	a, err := attemptOf(r, req.ClientType, req.Device, req.TrustToken)
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	network, account := s.network(r), subject(req.Email)
@@ -315,7 +319,7 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		secret *string
 		set    *time.Time
 	)
-	err := tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
+	err = tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
 			SELECT u.id, c.secret, c.updated_at FROM users u
 			LEFT JOIN credentials c ON c.user_id = u.id AND c.type = 'password'
@@ -356,10 +360,7 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var (
-		tokens session.Tokens
-		me     meJSON
-	)
+	var adm admission
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		// The password was checked before this transaction: a reset or a change since then wins.
 		if err := unchanged(ctx, tx, user, *set); err != nil {
@@ -373,25 +374,15 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
-		// The session this browser held, if any, ends: the cookie that named it is replaced.
-		if c, err := r.Cookie(session.Cookie); err == nil && c.Value != "" {
-			if _, err := s.Sessions.RevokeToken(ctx, tx, c.Value); err != nil {
-				return err
-			}
-		}
 		var err error
-		if _, tokens, err = s.Sessions.Create(ctx, tx, user, r.UserAgent()); err != nil {
-			return err
-		}
-		me, err = loadMe(ctx, tx, user)
+		adm, err = s.admit(ctx, tx, r, user, a)
 		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	session.SetCookies(w, tokens)
-	httpx.WriteJSON(w, http.StatusOK, loginResult{User: me})
+	admitted(w, adm)
 }
 
 // unchanged locks user's password in tx, and answers invalidCredentials when it is no longer the
@@ -415,24 +406,21 @@ func unchanged(ctx context.Context, tx pgx.Tx, user uuid.UUID, set time.Time) er
 	return nil
 }
 
-// loginResult is the contract's LoginResult: the web client's has no tokens.
-type loginResult struct {
-	User   meJSON `json:"user"`
-	Tokens *struct {
-		AccessToken  string `json:"access_token"`
-		ExpiresIn    int    `json:"expires_in"`
-		RefreshToken string `json:"refresh_token"`
-	} `json:"tokens"`
-}
-
-// logout is postAuthLogout: the session the request came with ends, and its cookies go.
+// logout is postAuthLogout: the session the request came with ends, and its cookies go; or the
+// sign-in of the device whose access token it carried, whose tokens then open nothing.
 func (s *Service) logout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
 	current, ok := session.Current(ctx)
+	onDevice, fromDevice := device.From(ctx)
 	err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		if ok {
 			if _, err := s.Sessions.Revoke(ctx, tx, user, current); err != nil {
+				return err
+			}
+		}
+		if fromDevice {
+			if _, err := s.Devices.End(ctx, tx, user, onDevice.Session); err != nil {
 				return err
 			}
 		}
@@ -471,7 +459,7 @@ func (s *Service) requestReset(w http.ResponseWriter, r *http.Request) {
 
 // confirmReset is postAuthPasswordResetConfirm (FR-ID6): a link, once, within its hour, sets the
 // password, ends every session and every other link to reset it, verifies the address it was sent
-// to, and says so by email.
+// to, unlinking the providers linked before when it was not verified yet, and says so by email.
 func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -554,12 +542,35 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 			t.user, now); err != nil {
 			return err
 		}
+		// A reset that proves an address nobody had proven unlinks every provider the account held
+		// before it: whoever linked one had not shown the address was theirs, and may have
+		// registered with it before its owner came, to keep signing in once the owner took the
+		// account back (D-102).
+		var proven bool
+		if err := tx.QueryRow(ctx, "SELECT email_verified_at IS NOT NULL FROM users WHERE id = $1", t.user).Scan(&proven); err != nil {
+			return err
+		}
+		if !proven {
+			if _, err := tx.Exec(ctx, "DELETE FROM credentials WHERE user_id = $1 AND type IN ('google', 'apple')", t.user); err != nil {
+				return err
+			}
+		}
 		if err := tx.QueryRow(ctx, `
 			UPDATE users SET email_verified_at = coalesce(email_verified_at, $2) WHERE id = $1 RETURNING locale`,
 			t.user, now).Scan(&language); err != nil {
 			return err
 		}
-		return s.Sessions.RevokeAll(ctx, tx, t.user, uuid.Nil)
+		// No browser or device is trusted to skip the second step any longer, and every session and
+		// every device's sign-in ends: whoever held them no longer holds the account. The
+		// challenges end first, as a second step's answer takes its challenge before the session
+		// or the device's sign-in it replaces, so that the two never wait on each other (endTrust).
+		if err := s.endTrust(ctx, tx, t.user); err != nil {
+			return err
+		}
+		if err := s.Sessions.RevokeAll(ctx, tx, t.user, uuid.Nil); err != nil {
+			return err
+		}
+		return s.Devices.RevokeAll(ctx, tx, t.user, uuid.Nil)
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -574,11 +585,13 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 }
 
 // changePassword is postAuthPassword: the current password, checked as a sign-in checks it and
-// counted against the account as a failed sign-in is, sets a new one and ends every other session.
-// A reset link already sent still works: it is how the address's owner takes the account back from
-// someone who knows the password, who could otherwise spend every link as it arrived by changing
-// the password again, and the reset, which ends every session, wins over a change still running.
-// It keeps no Idempotency-Key, whose fingerprint would be a fast hash of both passwords (D-97).
+// counted against the account as a failed sign-in is, sets a new one and ends every other session
+// and every other device's sign-in, and every challenge waiting for a second step, which the old
+// password began. A reset link already sent still works: it is how the address's owner takes the
+// account back from someone who knows the password, who could otherwise spend every link as it
+// arrived by changing the password again, and the reset, which ends every session, wins over a
+// change still running. It keeps no Idempotency-Key, whose fingerprint would be a fast hash of both
+// passwords (D-97).
 func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -590,44 +603,8 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var (
-		address, language string
-		email             *string
-		secret            *string
-		set               *time.Time
-	)
-	err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `
-			SELECT u.email, u.locale, c.secret, c.updated_at FROM users u
-			LEFT JOIN credentials c ON c.user_id = u.id AND c.type = 'password'
-			WHERE u.id = $1`, user).Scan(&email, &language, &secret, &set)
-	})
+	acct, err := s.reauthenticate(ctx, user, req.Current)
 	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if email == nil || secret == nil {
-		// An account without a password has none to change: a child's PIN (item 11), or an
-		// identity provider's (item 9).
-		s.fail(w, r, invalidCredentials())
-		return
-	}
-	address = *email
-	// Counted before it is checked, as a sign-in is, and taken back when it is right.
-	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.LoginAccount, Subject: subject(address)}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
-		return
-	}
-	ok, _, err := s.Hasher.Verify(ctx, req.Current, *secret)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !ok {
-		s.fail(w, r, invalidCredentials())
-		return
-	}
-	if err := s.Throttles.Clear(ctx, ratelimit.LoginAccount, subject(address)); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -641,22 +618,77 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	current, _ := session.Current(ctx)
+	onDevice, _ := device.From(ctx)
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		// The current password was checked before this transaction: a reset or another change
 		// since then wins, and this one answers as a wrong current password does.
-		if err := unchanged(ctx, tx, user, *set); err != nil {
+		if err := unchanged(ctx, tx, user, acct.set); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "UPDATE credentials SET secret = $2, updated_at = clock_timestamp() WHERE user_id = $1 AND type = 'password'",
 			user, newSecret); err != nil {
 			return err
 		}
-		return s.Sessions.RevokeAll(ctx, tx, user, current)
+		// The challenges first, then the sessions and the devices' sign-ins (endTrust).
+		if err := s.endChallenges(ctx, tx, user); err != nil {
+			return err
+		}
+		if err := s.Sessions.RevokeAll(ctx, tx, user, current); err != nil {
+			return err
+		}
+		return s.Devices.RevokeAll(ctx, tx, user, onDevice.Session)
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.email(ctx, address, language, emailPasswordChanged, s.link(routeReset, ""))
+	s.email(ctx, acct.address, acct.language, emailPasswordChanged, s.link(routeReset, ""))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// credential is a signed-in account's password as reauthenticate found it: the account's address
+// and language, and when the password was set, which the transaction acting on the check holds it
+// to (unchanged).
+type credential struct {
+	address, language string
+	set               time.Time
+}
+
+// reauthenticate checks that pw is user's current password, as a sign-in checks it, counted against
+// the account as a failed sign-in is and taken back when it is right: what a signed-in request
+// that changes how the account signs in asks for, since a stolen session alone must not. An account
+// without a password, a child's (item 11) or one that signs in only with a provider, has none to
+// give, and is answered as a wrong password is.
+func (s *Service) reauthenticate(ctx context.Context, user uuid.UUID, pw string) (credential, error) {
+	var (
+		c      credential
+		email  *string
+		secret *string
+		set    *time.Time
+	)
+	err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT u.email, u.locale, c.secret, c.updated_at FROM users u
+			LEFT JOIN credentials c ON c.user_id = u.id AND c.type = 'password'
+			WHERE u.id = $1`, user).Scan(&email, &c.language, &secret, &set)
+	})
+	if err != nil {
+		return c, err
+	}
+	if email == nil || secret == nil {
+		return c, invalidCredentials()
+	}
+	c.address, c.set = *email, *set
+	// Counted before it is checked, as a sign-in is, and taken back when it is right.
+	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.LoginAccount, Subject: subject(c.address)}); err != nil || wait > 0 {
+		return c, refusal(wait, err)
+	}
+	ok, _, err := s.Hasher.Verify(ctx, pw, *secret)
+	if err != nil {
+		return c, err
+	}
+	if !ok {
+		return c, invalidCredentials()
+	}
+	return c, s.Throttles.Clear(ctx, ratelimit.LoginAccount, subject(c.address))
 }

@@ -7,14 +7,16 @@
 // docker-compose.yml starts, so a fresh clone runs with nothing set. Everywhere else, each
 // connection string a command needs must be set explicitly, and so must what serving the
 // accounts needs: where the web client is, the proxies in front of the server (or none), the
-// mail server and its sender, and the breached-password corpus, which development may run
-// without. The other settings, which carry no secret and name no database, default
+// mail server and its sender, the breached-password corpus, which development may run without,
+// and the keys that sign access tokens and seal the second step's secrets, which development
+// defaults to published ones. Google and Apple are each configured whole or not at all. The other settings, which carry no secret and name no database, default
 // everywhere; only the listen address differs, loopback in development and :8080 elsewhere.
 // HOUSEHOLD_ENV itself defaults to development, so bootstrap, which sets the roles'
 // passwords, sets a defaulted one only on a cluster on this machine.
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -29,9 +31,13 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
+	"github.com/kareltilcer/household/server/internal/platform/clientversion"
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
+	"github.com/kareltilcer/household/server/internal/platform/mfa"
 	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/token"
 )
 
 // Env is the deployment environment.
@@ -78,6 +84,17 @@ const (
 	SMTPURLVar            = "HOUSEHOLD_SMTP_URL"
 	MailFromVar           = "HOUSEHOLD_MAIL_FROM"
 	BreachCorpusVar       = "HOUSEHOLD_BREACH_CORPUS"
+	TokenKeysVar          = "HOUSEHOLD_TOKEN_KEYS"
+	MFAKeysVar            = "HOUSEHOLD_MFA_KEYS"
+	MinMobileVersionVar   = "HOUSEHOLD_MIN_MOBILE_VERSION"
+	MinWebVersionVar      = "HOUSEHOLD_MIN_WEB_VERSION"
+	RedirectURIsVar       = "HOUSEHOLD_OAUTH_REDIRECT_URIS"
+	GoogleClientIDVar     = "HOUSEHOLD_GOOGLE_CLIENT_ID"
+	GoogleClientSecretVar = "HOUSEHOLD_GOOGLE_CLIENT_SECRET"
+	AppleClientIDVar      = "HOUSEHOLD_APPLE_CLIENT_ID"
+	AppleTeamIDVar        = "HOUSEHOLD_APPLE_TEAM_ID"
+	AppleKeyIDVar         = "HOUSEHOLD_APPLE_KEY_ID"
+	ApplePrivateKeyVar    = "HOUSEHOLD_APPLE_PRIVATE_KEY"
 )
 
 // NoProxies is TrustedProxiesVar's value for a server its clients reach directly, with no proxy
@@ -97,6 +114,13 @@ const (
 	devWebURL   = "http://localhost:5173"
 	devSMTPURL  = "smtp://127.0.0.1:1025"
 	devMailFrom = "Household <no-reply@household.localhost>"
+)
+
+// The keys development signs access tokens and seals the second step's secrets with: 32 published
+// bytes each, in base64, which nothing outside development may use.
+var (
+	devTokenKeys = base64.StdEncoding.EncodeToString([]byte("household development access key"))
+	devMFAKeys   = base64.StdEncoding.EncodeToString([]byte("household development mfa secret"))
 )
 
 // Config is the validated configuration. A connection string a command does not use is
@@ -138,6 +162,16 @@ type Config struct {
 	// BreachCorpus is the path of the breached-password corpus file (internal/platform/breach),
 	// "" for none, which only development may serve with.
 	BreachCorpus string
+	// TokenKeys sign and verify access tokens (internal/platform/token), the first signing.
+	TokenKeys *token.Keys
+	// MFAKeys seal the second step's secrets (internal/platform/mfa), the first sealing.
+	MFAKeys *mfa.Keys
+	// MinClients are the oldest client of each type served (internal/platform/clientversion).
+	MinClients clientversion.Minimums
+	// RedirectURIs are those a provider may send a person back to; Google and Apple are the
+	// providers configured, nil for one that is not.
+	RedirectURIs  []string
+	Google, Apple *federation.Config
 }
 
 // Getenv looks a variable up, reporting whether it is set.
@@ -286,6 +320,87 @@ func (l *loader) serving(c *Config, dev bool) {
 	}
 
 	c.BreachCorpus = required(BreachCorpusVar, "")
+
+	// The keys are secrets: an error names the variable, never its value, and outside development
+	// no published key is taken for one left unset.
+	if keys := required(TokenKeysVar, devTokenKeys); keys != "" {
+		k, err := token.ParseKeys(keys)
+		switch {
+		case err != nil:
+			l.fail("%s: %v", TokenKeysVar, err)
+		case !dev && strings.Contains(keys, strings.TrimRight(devTokenKeys, "=")):
+			l.fail("%s holds the published development key, which only development may use", TokenKeysVar)
+		}
+		c.TokenKeys = k
+	}
+	if keys := required(MFAKeysVar, devMFAKeys); keys != "" {
+		k, err := mfa.ParseKeys(keys)
+		switch {
+		case err != nil:
+			l.fail("%s: %v", MFAKeysVar, err)
+		case !dev && strings.Contains(keys, strings.TrimRight(devMFAKeys, "=")):
+			l.fail("%s holds the published development key, which only development may use", MFAKeysVar)
+		}
+		c.MFAKeys = k
+	}
+
+	c.MinClients = clientversion.Minimums{}
+	for _, m := range []struct{ key, client string }{
+		{MinMobileVersionVar, clientversion.Mobile}, {MinWebVersionVar, clientversion.Web},
+	} {
+		if v := l.str(m.key, ""); v != "" {
+			version, ok := clientversion.ParseVersion(v)
+			if !ok {
+				l.fail("%s is %q; want a version such as 1.4.2", m.key, v)
+			}
+			c.MinClients[m.client] = version
+		}
+	}
+
+	l.providers(c)
+}
+
+// providers reads the identity providers (item 9): each configured whole or not at all, and none
+// without a redirect URI to send a person back to.
+func (l *loader) providers(c *Config) {
+	for _, raw := range strings.Split(l.str(RedirectURIsVar, ""), ",") {
+		if raw = strings.TrimSpace(raw); raw == "" {
+			continue
+		}
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme == "" || u.Fragment != "" || u.User != nil || (u.Host == "" && u.Opaque == "" && u.Path == "") {
+			l.fail("%s: %q is not an absolute URI without a fragment", RedirectURIsVar, raw)
+			continue
+		}
+		c.RedirectURIs = append(c.RedirectURIs, raw)
+	}
+	// set reports whether every one of keys is set, and fails when only some are.
+	set := func(name string, keys ...string) bool {
+		var given []string
+		for _, k := range keys {
+			if l.str(k, "") != "" {
+				given = append(given, k)
+			}
+		}
+		if len(given) > 0 && len(given) < len(keys) {
+			l.fail("%s is configured by %s together; only %s is set", name, strings.Join(keys, ", "), strings.Join(given, ", "))
+		}
+		return len(given) == len(keys)
+	}
+	if set("Google", GoogleClientIDVar, GoogleClientSecretVar) {
+		c.Google = &federation.Config{ClientID: l.str(GoogleClientIDVar, ""), ClientSecret: l.str(GoogleClientSecretVar, "")}
+	}
+	if set("Apple", AppleClientIDVar, AppleTeamIDVar, AppleKeyIDVar, ApplePrivateKeyVar) {
+		key, err := federation.ParseAppleKey(l.str(ApplePrivateKeyVar, ""))
+		if err != nil {
+			l.fail("%s: %v", ApplePrivateKeyVar, err)
+		}
+		c.Apple = &federation.Config{ClientID: l.str(AppleClientIDVar, ""),
+			Apple: &federation.AppleKey{TeamID: l.str(AppleTeamIDVar, ""), KeyID: l.str(AppleKeyIDVar, ""), Key: key}}
+	}
+	if (c.Google != nil || c.Apple != nil) && len(c.RedirectURIs) == 0 {
+		l.fail("%s names no redirect URI, which a configured provider needs", RedirectURIsVar)
+	}
 }
 
 // Database returns the name of the database a connection string connects to.

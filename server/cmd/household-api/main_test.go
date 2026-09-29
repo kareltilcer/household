@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"io"
 	"log/slog"
 	"net"
@@ -46,6 +47,8 @@ func env(t *testing.T) config.Getenv {
 		config.SMTPURLVar:            "smtp://127.0.0.1:1",
 		config.MailFromVar:           "Household <no-reply@household.test>",
 		config.BreachCorpusVar:       corpus,
+		config.TokenKeysVar:          base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
+		config.MFAKeysVar:            base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
 	}
 	return func(key string) (string, bool) {
 		v, ok := vars[key]

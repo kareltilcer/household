@@ -1,6 +1,8 @@
-// Package identity is the account half of PRD 02 (plan item 8): registering with an address and a
-// password, verifying the address, signing in on the web and out again, resetting and changing a
-// password, and the signed-in user's own profile and sessions, under /auth and /me.
+// Package identity is the account half of PRD 02 (plan items 8 and 9): registering with an address
+// and a password, verifying the address, signing in on the web or on a device and out again,
+// refreshing a device's tokens, resetting and changing a password, the second step, signing in
+// with Google or Apple, and the signed-in user's own profile, sessions and devices, under /auth
+// and /me.
 //
 // Every surface a person reaches before signing in answers alike whether or not an account has
 // the address it names (D-13): registering and the two email requests always answer 202, a
@@ -19,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -34,9 +37,12 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
+	"github.com/kareltilcer/household/server/internal/platform/device"
+	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
+	"github.com/kareltilcer/household/server/internal/platform/mfa"
 	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
@@ -57,6 +63,10 @@ const (
 	emailRegisterExisting mail.Template = "email.register_existing"
 	emailReset            mail.Template = "email.password_reset"
 	emailPasswordChanged  mail.Template = "email.password_changed"
+	emailTokenReuse       mail.Template = "email.token_reuse" //nolint:gosec // G101: a template's name, not a credential.
+	emailRecoveryCodeUsed mail.Template = "email.recovery_code_used"
+	emailMFADisabled      mail.Template = "email.mfa_disabled"
+	emailIdentityLinked   mail.Template = "email.identity_linked"
 
 	routeVerify      = "verify-email"
 	routeSignIn      = "sign-in"
@@ -82,6 +92,15 @@ type Config struct {
 	ClientIP *clientip.Resolver
 	// Later runs fn after the response, with ctx's values: Background.Run.
 	Later func(ctx context.Context, fn func(context.Context))
+	// Devices are the mobile devices' sign-ins (item 9).
+	Devices *device.Store
+	// MFA seals the second step's secrets and hashes its recovery codes.
+	MFA *mfa.Keys
+	// Providers are the identity providers the server is configured for, by name; one left out
+	// answers 404.
+	Providers map[string]*federation.Provider
+	// RedirectURIs are the URIs a provider may send a person back to, each matched exactly.
+	RedirectURIs []string
 }
 
 // Service serves the routes.
@@ -94,21 +113,32 @@ type Service struct {
 // New returns the service.
 func New(cfg Config) (*Service, error) {
 	if cfg.Pool == nil || cfg.Log == nil || cfg.Hasher == nil || cfg.Throttles == nil || cfg.Sessions == nil ||
-		cfg.Mail == nil || cfg.Catalogs == nil || cfg.WebURL == nil || cfg.ClientIP == nil || cfg.Later == nil {
+		cfg.Mail == nil || cfg.Catalogs == nil || cfg.WebURL == nil || cfg.ClientIP == nil || cfg.Later == nil ||
+		cfg.Devices == nil || cfg.MFA == nil {
 		return nil, errors.New("identity: the service is missing a dependency")
 	}
 	return &Service{Config: cfg}, nil
 }
 
 // PublicRoutes registers the routes a person reaches before signing in, on the API's router. None
-// reads a session, and none keeps an Idempotency-Key (ADR 0009).
+// reads a session or an access token, and none keeps an Idempotency-Key (ADR 0009).
 func (s *Service) PublicRoutes(r chi.Router) {
 	r.Post("/auth/register", s.register)
 	r.Post("/auth/verify-email", s.verifyEmail)
 	r.Post("/auth/verify-email/resend", s.resendVerification)
 	r.Post("/auth/login", s.login)
+	r.Post("/auth/token", s.refresh)
 	r.Post("/auth/password-reset", s.requestReset)
 	r.Post("/auth/password-reset/confirm", s.confirmReset)
+	r.Post("/auth/mfa/verify", s.verifyMFA)
+	r.Post("/auth/oauth/{provider}/callback", s.oauthCallback)
+}
+
+// OptionalRoutes registers the routes a person reaches signed in or not, on the API's router, behind
+// the authentication but no check that there is a caller, and keeping no Idempotency-Key: beginning
+// a sign-in with a provider, which a signed-in user begins in order to link one.
+func (s *Service) OptionalRoutes(r chi.Router) {
+	r.Post("/auth/oauth/{provider}/start", s.oauthStart)
 }
 
 // AccountRoutes registers the routes a signed-in user calls about their own account, on the API's
@@ -121,6 +151,12 @@ func (s *Service) AccountRoutes(r chi.Router) {
 	r.Get("/me/sessions", s.sessions)
 	r.Delete("/me/sessions", s.signOutEverywhere)
 	r.Delete("/me/sessions/{session_id}", s.revokeSession)
+	r.Get("/me/devices", s.devices)
+	r.Patch("/me/devices/{device_id}", s.renameDevice)
+	r.Delete("/me/devices/{device_id}", s.revokeDevice)
+	r.Post("/auth/mfa/activate", s.activateMFA)
+	r.Post("/auth/oauth/{provider}/link", s.oauthLink)
+	r.Delete("/auth/oauth/{provider}", s.oauthUnlink)
 }
 
 // PasswordRoutes registers the account routes whose body carries a password, on the API's router,
@@ -129,6 +165,9 @@ func (s *Service) AccountRoutes(r chi.Router) {
 // is kept for no request (D-97).
 func (s *Service) PasswordRoutes(r chi.Router) {
 	r.Post("/auth/password", s.changePassword)
+	r.Post("/auth/mfa/enroll", s.enrollMFA)
+	r.Post("/auth/mfa/disable", s.disableMFA)
+	r.Post("/auth/mfa/recovery-codes", s.newRecoveryCodes)
 }
 
 // fail answers err's problem, or 500 for an error that is not one, which it logs.
@@ -178,10 +217,14 @@ func (s *Service) link(route, token string) string {
 	return u.String()
 }
 
-// deliver renders t in the language of locale, with its link, and sends it to to. A failure is
-// logged: the person asks again.
-func (s *Service) deliver(ctx context.Context, to, locale string, t mail.Template, link string) {
-	m, err := mail.Render(s.Catalogs, i18n.Match(locale), t, i18n.Args{"link": link}, to)
+// deliver renders t in the language of locale, with its link and any further args, and sends it to
+// to. A failure is logged: the person asks again.
+func (s *Service) deliver(ctx context.Context, to, locale string, t mail.Template, link string, args ...i18n.Args) {
+	all := i18n.Args{"link": link}
+	for _, a := range args {
+		maps.Copy(all, a)
+	}
+	m, err := mail.Render(s.Catalogs, i18n.Match(locale), t, all, to)
 	if err == nil {
 		err = s.Mail.Send(ctx, m)
 	}
@@ -191,8 +234,31 @@ func (s *Service) deliver(ctx context.Context, to, locale string, t mail.Templat
 }
 
 // email sends t after the response.
-func (s *Service) email(ctx context.Context, to, locale string, t mail.Template, link string) {
-	s.Later(ctx, func(ctx context.Context) { s.deliver(ctx, to, locale, t, link) })
+func (s *Service) email(ctx context.Context, to, locale string, t mail.Template, link string, args ...i18n.Args) {
+	s.Later(ctx, func(ctx context.Context) { s.deliver(ctx, to, locale, t, link, args...) })
+}
+
+// notice sends user t after the response, at their address and in their language as they stand
+// then; an account with no address, a child's, is sent nothing. Each is a notice that something
+// was done to the account, whose link asks for a password reset: the way back for an owner who did
+// not do it.
+func (s *Service) notice(ctx context.Context, user uuid.UUID, t mail.Template, args ...i18n.Args) {
+	s.Later(ctx, func(ctx context.Context) {
+		var (
+			address  *string
+			language string
+		)
+		err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, "SELECT email, locale FROM users WHERE id = $1", user).Scan(&address, &language)
+		})
+		if err != nil {
+			s.Log.LogAttrs(ctx, slog.LevelError, "email not sent", slog.String("template", string(t)), slog.Any("error", err))
+			return
+		}
+		if address != nil {
+			s.deliver(ctx, *address, language, t, s.link(routeReset, ""), args...)
+		}
+	})
 }
 
 // screen refuses a password shorter than password.MinLength characters, which the edge refuses
@@ -235,6 +301,17 @@ func displayName(name string) (string, bool) {
 	return name, name != "" && strings.IndexFunc(name, func(r rune) bool {
 		return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control)
 	}) < 0
+}
+
+// maxDisplayName is the longest name an account keeps, in characters: the contract's maxLength.
+const maxDisplayName = 80
+
+// cut is s cut to at most n characters, and trimmed again where it was cut.
+func cut(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return strings.TrimSpace(string([]rune(s)[:n]))
 }
 
 // maxLocale is the longest language tag kept, in characters.
