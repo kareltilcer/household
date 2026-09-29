@@ -266,7 +266,8 @@ func admitted(w http.ResponseWriter, adm admission) {
 }
 
 // endTrust ends every trust and every challenge of user's in tx: the second step was turned off or
-// on again, the password was reset, or the account signed out everywhere.
+// on again, the password was reset, the account signed out everywhere or signed a device or a
+// session out from its list, or a device's refresh token was reused.
 //
 // A transaction that ends challenges and sessions or devices' sign-ins alike ends the challenges
 // first. A second step's answer holds its challenge's row while admit replaces the session its

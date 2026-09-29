@@ -359,7 +359,7 @@ paths:
         content: { application/json: { schema: { type: object, required: [refresh_token], properties: { refresh_token: { type: string, maxLength: 128 } } } } }
       responses:
         '200': { description: A new token pair, content: { application/json: { schema: { $ref: '#/components/schemas/TokenPair' } } } }
-        '401': { description: 'The token opens no live sign-in (`refresh_token_invalid`): unknown, its device signed out or revoked, or a reuse that has just revoked it. The device''s sign-in has ended, so the client discards its replica and signs in again.', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '401': { description: 'The token opens no live sign-in (`refresh_token_invalid`): unknown, its device signed out or revoked, or a reuse that has just revoked it, which also ends every trust to skip the second step. The device''s sign-in has ended, so the client discards its replica and signs in again.', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
   /auth/password-reset:
     post:
@@ -808,6 +808,7 @@ paths:
       operationId: deleteMeSessionsBySessionId
       tags: [me]
       summary: Revoke one session
+      description: 'Since the browser may be lost with a trust to skip the second step in it, no browser or device stays trusted.'
       parameters: [{ $ref: '#/components/parameters/SessionId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Revoked }
@@ -845,7 +846,7 @@ paths:
       operationId: deleteMeDevicesByDeviceId
       tags: [me]
       summary: Revoke a device
-      description: 'Invalidates its refresh-token family and its sync cursor, so its local replica is discarded rather than resumed: its access tokens stop at once, and its next refresh answers `401` (`refresh_token_invalid`). A device the account is not signed in on is not found.'
+      description: 'Invalidates its refresh-token family and its sync cursor, so its local replica is discarded rather than resumed: its access tokens stop at once, and its next refresh answers `401` (`refresh_token_invalid`). Since it may be lost with a trust to skip the second step in it, no browser or device stays trusted. A device the account is not signed in on is not found.'
       parameters: [{ $ref: '#/components/parameters/DeviceId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Revoked }

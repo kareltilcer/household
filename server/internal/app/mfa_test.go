@@ -390,3 +390,56 @@ func TestAResetKeepsTheSecondStepAndEndsItsTrust(t *testing.T) {
 	expect(t, b.verify(waiting, s.nextCode(secret), false), http.StatusUnauthorized, problem.CodeUnauthenticated)
 	challenged(t, b.signIn(address, reset))
 }
+
+// Signing a device or a browser out from the account's lists, and a reused refresh token, end every
+// trust: what was signed out may be lost, with its trust in it (D-100).
+func TestSigningADeviceOrABrowserOutFromItsListEndsEveryTrust(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	address, pw := s.a("jana@tilcerovi.cz"), "correct horse battery"
+	owner := s.signUp(address, pw)
+	secret, _ := owner.enrol(pw)
+	trusted := func() (*phone, string) {
+		t.Helper()
+		p := s.phone("iPhone")
+		c := challenged(t, p.login(address, pw))
+		rec := p.send(http.MethodPost, "/auth/mfa/verify", jsonBody(t, map[string]any{"challenge_token": c.ChallengeToken,
+			"code": s.nextCode(secret), "remember_device": true}), nil)
+		expect(t, rec, http.StatusOK, "")
+		var result struct {
+			TrustToken *string `json:"trust_token"`
+		}
+		decode(t, rec, &result)
+		p.keep(rec)
+		return p, *result.TrustToken
+	}
+
+	p, trust := trusted()
+	expect(t, owner.send(request{method: http.MethodDelete, path: "/me/devices/" + p.id.String()}), http.StatusNoContent, "")
+	challenged(t, p.login(address, pw, map[string]any{"trust_token": trust}))
+
+	b := s.browser()
+	expect(t, b.verify(challenged(t, b.signIn(address, pw)), s.nextCode(secret), true), http.StatusOK, "")
+	var sessions struct {
+		Items []struct {
+			ID        string `json:"id"`
+			IsCurrent bool   `json:"is_current"`
+		} `json:"items"`
+	}
+	decode(t, b.get("/me/sessions"), &sessions)
+	var current string
+	for _, sess := range sessions.Items {
+		if sess.IsCurrent {
+			current = sess.ID
+		}
+	}
+	expect(t, owner.send(request{method: http.MethodDelete, path: "/me/sessions/" + current}), http.StatusNoContent, "")
+	challenged(t, b.signIn(address, pw))
+
+	q, trust := trusted()
+	stolen := q.refresh
+	q.renew()
+	s.clock.advance(time.Minute)
+	rec, _ := q.exchange(stolen)
+	expect(t, rec, http.StatusUnauthorized, problem.CodeRefreshTokenInvalid)
+	challenged(t, s.phone("").login(address, pw, map[string]any{"trust_token": trust}))
+}

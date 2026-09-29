@@ -76,6 +76,9 @@ outlive the reset that proves the address and hands the account to its owner (D-
 names no secret, so trusting it by id would let anyone with the password and the id skip the step.
 A browser holds its trust in `__Host-hh_trust` (HttpOnly, Secure, Lax), a device in `trust_token`,
 which the sign-in's body sends back; each is 256 random bits kept by its hash, for 30 days (D-100).
+A trust is the account's, not a device's: signing a device or a session out from its list, or a
+reused refresh token, ends every one, since what was signed out may be lost with its trust in it,
+and a trust tied to the device or the session that made it would need rebinding at each sign-in.
 A sign-in whose first factor passes, with a password or with a provider, goes through one path
 (`identity.admit`): a challenge, a row whose token `/auth/mfa/verify` takes with the code, when the
 second step is on and the attempt is not trusted; the credential otherwise. The challenge keeps what

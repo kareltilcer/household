@@ -114,7 +114,9 @@ codes, each used once in place of a code; a new set, with the password, retires 
 and every recovery code spent is emailed (A-8). Ten wrong codes since the last right one lock the
 authenticator and end the account's pending sign-ins; a locked one takes only a recovery code,
 which unlocks it, or support's unlock. A password reset keeps the second step on; it, turning the
-second step off, and signing out everywhere end every trust. **D-100.**
+second step off or on again, signing out everywhere, signing a device or a session out from its
+list, and a reused refresh token end every trust, since what was signed out may be lost with its
+trust in it. **D-100.**
 
 **FR-ID6 — Password reset.** `POST /api/v1/auth/password-reset` always returns `202`.
 Single-use token, **1 hour**, invalidates every session and every refresh-token family on use,

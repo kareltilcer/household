@@ -262,6 +262,11 @@ func (s *Service) revokeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+		// A browser signed out from the list may be lost, with a trust to skip the second step in
+		// it: every trust ends (D-100), before its session does, as endTrust's order asks.
+		if err := s.endTrust(ctx, tx, user); err != nil {
+			return err
+		}
 		revoked, err := s.Sessions.Revoke(ctx, tx, user, id)
 		if err != nil {
 			return err

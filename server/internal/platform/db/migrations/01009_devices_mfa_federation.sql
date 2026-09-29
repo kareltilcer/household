@@ -120,7 +120,8 @@ CREATE INDEX mfa_challenges_expires_at ON mfa_challenges (expires_at);
 -- A browser or a device a user chose to trust for thirty days (A-7), which signs in without the
 -- second step until then: its token, kept as its SHA-256, is in the browser's __Host-hh_trust
 -- cookie or in the device's keeping. Ended by turning the second step off or on again, a password
--- reset, and signing out everywhere.
+-- reset, signing out everywhere, signing a device or a session out from its list, and a reused
+-- refresh token.
 CREATE TABLE mfa_trusts (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,

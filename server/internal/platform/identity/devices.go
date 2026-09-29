@@ -2,6 +2,7 @@ package identity
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -47,6 +48,13 @@ func (s *Service) refresh(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, tokenPair(res.Tokens))
 		return
 	case device.Reused:
+		// Someone holds a copy of the device's sign-in: no browser or device skips the second step
+		// on the strength of a trust it may also hold (D-100).
+		if err := tenant.AccountTx(ctx, s.Pool, res.User, func(tx pgx.Tx) error {
+			return s.endTrust(ctx, tx, res.User)
+		}); err != nil {
+			s.Log.LogAttrs(ctx, slog.LevelError, "trusts not ended after a reuse", slog.Any("error", err))
+		}
 		s.notice(ctx, res.User, emailTokenReuse, deviceArgs(res.Device))
 	case device.Invalid:
 	}
@@ -172,6 +180,11 @@ func (s *Service) revokeDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+		// A device signed out from the list may be lost, with a trust to skip the second step in
+		// it: every trust ends (D-100), before its sign-in does, as endTrust's order asks.
+		if err := s.endTrust(ctx, tx, user); err != nil {
+			return err
+		}
 		revoked, err := s.Devices.Revoke(ctx, tx, user, id)
 		if err != nil {
 			return err
