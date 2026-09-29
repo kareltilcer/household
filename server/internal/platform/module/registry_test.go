@@ -155,3 +155,52 @@ func TestTheRegistryRefusesWhatAModuleDeclaresWrongly(t *testing.T) {
 		})
 	}
 }
+
+// A module the platform serves itself is held to a module's rules, declares its actions and
+// entities beside the modules', and is not among the modules mounted under /<name>.
+func TestAPlatformModuleIsDeclaredBesideTheModules(t *testing.T) {
+	garden := &fake{"garden", nil}
+	r, err := module.NewRegistry(garden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := module.PlatformModule{
+		Name:     "admin",
+		Actions:  []module.AuditAction{{Key: "admin.member.join", SummaryKey: "admin.member.join"}},
+		Entities: []sync.Entity{{Name: "admin.membership", Table: "memberships", Policy: sync.StrictVersion, Access: sync.Grant}},
+	}
+	withAdmin, err := r.WithPlatform(admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := withAdmin.All(); !slices.Equal(got, []module.Module{garden}) {
+		t.Errorf("All: %v", got)
+	}
+	if got := withAdmin.Platform(); len(got) != 1 || got[0].Name != "admin" {
+		t.Errorf("Platform: %+v", got)
+	}
+	if _, ok := withAdmin.Action("admin.member.join"); !ok {
+		t.Error("the platform module's action is not declared")
+	}
+	if _, ok := withAdmin.Entity("admin.membership"); !ok {
+		t.Error("the platform module's entity is not declared")
+	}
+	if _, ok := r.Action("admin.member.join"); ok {
+		t.Error("the registry it was made from changed")
+	}
+
+	for name, p := range map[string]module.PlatformModule{
+		"a module's name":           {Name: "garden"},
+		"a name that is no id":      {Name: "Admin"},
+		"another module's action":   {Name: "admin", Actions: []module.AuditAction{{Key: "garden.bed.create", SummaryKey: "k"}}},
+		"an action with no summary": {Name: "admin", Actions: []module.AuditAction{{Key: "admin.x"}}},
+		"an entity with no policy":  {Name: "admin", Entities: []sync.Entity{{Name: "admin.x", Table: "x", Access: sync.Grant}}},
+	} {
+		if _, err := r.WithPlatform(p); err == nil {
+			t.Errorf("%s was taken", name)
+		}
+	}
+	if _, err := withAdmin.WithPlatform(admin); err == nil || !strings.Contains(err.Error(), "two modules are named admin") {
+		t.Errorf("admin twice: %v", err)
+	}
+}

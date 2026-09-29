@@ -74,6 +74,9 @@ var (
 	// A client's network begins sixty sign-ins with a provider an hour (D-101): each writes a row
 	// that waits ten minutes for its callback.
 	OAuthStartNetwork = Limit{Name: "oauth_start.network", Max: 60, Window: time.Hour}
+	// A household sends twenty invitations a day, counted by the household, a resend among them:
+	// each is an email to an address its owners chose.
+	InvitationHousehold = Limit{Name: "invitation.household", Max: 20, Window: 24 * time.Hour}
 )
 
 // Beginner opens transactions.
@@ -177,7 +180,9 @@ func (t *Throttles) Attempt(ctx context.Context, counts ...Count) (time.Duration
 }
 
 // Refund takes back one attempt Attempt counted against subject under l, which succeeded: a limit
-// that counts failures alone, and does not back off, is left as though it had not been made.
+// that counts failures alone, and does not back off, is left as though it had not been made. It
+// takes back one Take counted as well, for an attempt that turned out to do nothing the limit
+// counts.
 func (t *Throttles) Refund(ctx context.Context, l Limit, subject string) error {
 	return pgx.BeginTxFunc(ctx, t.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, "UPDATE auth_throttles SET count = count - 1 WHERE key = $1 AND count > 0", key(l, subject))

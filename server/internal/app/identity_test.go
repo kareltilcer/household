@@ -72,7 +72,8 @@ type site struct {
 	domain, peer, other string
 }
 
-func newSite(t *testing.T, o apptest.Options) *site {
+// newSite is a site whose surfaces o adjusts, and whose router each of options adjusts further.
+func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site {
 	t.Helper()
 	c, err := contract.Load()
 	if err != nil {
@@ -85,10 +86,15 @@ func newSite(t *testing.T, o apptest.Options) *site {
 	o.Now = clk.now
 	o.Breached = append(o.Breached, breached)
 	accounts, outbox := apptest.Accounts(t, pool, log, o)
-	r, err := app.NewRouter(app.Deps{
+	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, MaxBodyBytes: 1 << 16, Accounts: accounts,
-	})
+		Households: apptest.Households(t, pool, log, outbox, o),
+	}
+	for _, option := range options {
+		option(&deps)
+	}
+	r, err := app.NewRouter(deps)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,11 +8,13 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	apispec "github.com/kareltilcer/household/docs/api"
+	"github.com/kareltilcer/household/server/internal/platform/household"
 )
 
 // The module ids are the contract's (PRD modules/00 §6): the modules table, which enablement
-// and grants reference, holds exactly the members of ModuleKeyValue, and every module the
-// server registers is one of them.
+// and grants reference, holds exactly the members of ModuleKeyValue, every module the server
+// registers is one of them, the platform's own among them, and the household surface enables and
+// grants them all, in the contract's order.
 func TestModuleIDsAreTheContracts(t *testing.T) {
 	doc, err := openapi3.NewLoader().LoadFromData(apispec.OpenAPI)
 	if err != nil {
@@ -47,6 +49,14 @@ func TestModuleIDsAreTheContracts(t *testing.T) {
 		if !slices.Contains(contract, m.Name()) {
 			t.Errorf("module %s is registered, but the contract's ModuleKeyValue does not name it", m.Name())
 		}
+	}
+	for _, p := range registry(t).Platform() {
+		if !slices.Contains(contract, p.Name) {
+			t.Errorf("the platform serves module %s, but the contract's ModuleKeyValue does not name it", p.Name)
+		}
+	}
+	if !slices.Equal(household.Modules, contract) {
+		t.Errorf("the household surface serves %v; the contract's ModuleKeyValue is %v", household.Modules, contract)
 	}
 }
 

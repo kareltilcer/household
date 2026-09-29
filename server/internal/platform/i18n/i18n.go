@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
+	_ "time/tzdata" // An IANA name is checked against the zones the binary carries, wherever it runs.
 
 	"golang.org/x/text/language"
 
@@ -69,6 +71,37 @@ func Match(preferences ...string) Locale {
 		}
 	}
 	return Source
+}
+
+// maxTag is the longest language tag kept, in characters.
+const maxTag = 64
+
+// Canonical is tag, a person's or a household's language as a BCP 47 tag, in its canonical form,
+// and false when it is not a BCP 47 tag or does not name its language: und, a private-use tag
+// such as x-home, and one whose language is only guessed from its region or script, und-CZ. A
+// language Household does not ship is kept as it is: Match addresses it in English.
+func Canonical(tag string) (string, bool) {
+	if len(tag) > maxTag {
+		return "", false
+	}
+	t, err := language.Parse(tag)
+	if err != nil {
+		return "", false
+	}
+	if _, confidence := t.Base(); confidence != language.Exact {
+		return "", false
+	}
+	return t.String(), true
+}
+
+// Timezone reports whether name is an IANA timezone the binary knows, a person's or a household's,
+// in which their calendar days are counted: not Local, which is the server's own.
+func Timezone(name string) bool {
+	if name == "" || name == "Local" {
+		return false
+	}
+	_, err := time.LoadLocation(name)
+	return err == nil
 }
 
 // ErrUnknownKey is a key the catalogs do not have.

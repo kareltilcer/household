@@ -27,8 +27,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	_ "time/tzdata" // An IANA name is checked against the zones the binary carries, wherever it runs.
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
@@ -49,6 +47,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
+	"github.com/kareltilcer/household/server/internal/platform/text"
 )
 
 // How long an email's link works (FR-ID1, FR-ID6).
@@ -293,15 +292,8 @@ func issueToken(ctx context.Context, tx pgx.Tx, user uuid.UUID, purpose, email s
 	return token, err
 }
 
-// displayName is name as an account keeps it, trimmed, and false when nothing is left or it
-// holds a control character, a line break, U+2028 and U+2029 among them, or a bidirectional
-// control, U+202E among them, which would turn the name, and the text shown after it, around.
-func displayName(name string) (string, bool) {
-	name = strings.TrimSpace(name)
-	return name, name != "" && strings.IndexFunc(name, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control)
-	}) < 0
-}
+// displayName is name as an account keeps it, and false when it is not one (text.Name).
+func displayName(name string) (string, bool) { return text.Name(name) }
 
 // maxDisplayName is the longest name an account keeps, in characters: the contract's maxLength.
 const maxDisplayName = 80
@@ -314,25 +306,8 @@ func cut(s string, n int) string {
 	return strings.TrimSpace(string([]rune(s)[:n]))
 }
 
-// maxLocale is the longest language tag kept, in characters.
-const maxLocale = 64
-
-// locale is tag in its canonical form, and false when it is not a BCP 47 tag or does not name its
-// language: und, a private-use tag such as x-home, and one whose language is only guessed from its
-// region or script, und-CZ.
-func locale(tag string) (string, bool) {
-	if len(tag) > maxLocale {
-		return "", false
-	}
-	t, err := language.Parse(tag)
-	if err != nil {
-		return "", false
-	}
-	if _, confidence := t.Base(); confidence != language.Exact {
-		return "", false
-	}
-	return t.String(), true
-}
+// locale is tag in its canonical form, and false when it is not one (i18n.Canonical).
+func locale(tag string) (string, bool) { return i18n.Canonical(tag) }
 
 // preferredLocale is the language of r's Accept-Language that Household ships, else English: a
 // new account's, when the request names none.
@@ -394,11 +369,5 @@ func (t *turns) take(ctx context.Context, key string) (func(), error) {
 	}
 }
 
-// timezone reports whether name is an IANA timezone the binary knows.
-func timezone(name string) bool {
-	if name == "" || name == "Local" {
-		return false
-	}
-	_, err := time.LoadLocation(name)
-	return err == nil
-}
+// timezone reports whether name is an IANA timezone the binary knows (i18n.Timezone).
+func timezone(name string) bool { return i18n.Timezone(name) }

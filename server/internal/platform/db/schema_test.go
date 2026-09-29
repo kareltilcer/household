@@ -71,7 +71,7 @@ func TestTheFeedIsPartitionedByMonth(t *testing.T) {
 	if _, err := tx.Exec(ctx, "SELECT set_config('app.household_id', $1, true)", household); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(ctx, "INSERT INTO households (id) VALUES ($1)", household); err != nil {
+	if _, err := tx.Exec(ctx, testsupport.InsertHousehold, household); err != nil {
 		t.Fatal(err)
 	}
 	for _, occurred := range []string{"now()", "now() + interval '10 years'"} {

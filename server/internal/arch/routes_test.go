@@ -17,10 +17,12 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/app/apptest"
+	"github.com/kareltilcer/household/server/internal/modules"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
+	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
@@ -36,10 +38,16 @@ func TestRoutesMatchTheContract(t *testing.T) {
 	}
 	log := logging.New(io.Discard, slog.LevelError)
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
-	accounts, _ := apptest.Accounts(t, pool, log, apptest.Options{})
+	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
+	// The modules, as the server's composition passes them: the router adds the platform's own.
+	mods, err := module.NewRegistry(modules.All()...)
+	if err != nil {
+		t.Fatal(err)
+	}
 	router, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
-		Pool: pool, Modules: registry(t), MaxBodyBytes: 1, Accounts: accounts,
+		Pool: pool, Modules: mods, MaxBodyBytes: 1, Accounts: accounts,
+		Households: apptest.Households(t, pool, log, outbox, apptest.Options{}),
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

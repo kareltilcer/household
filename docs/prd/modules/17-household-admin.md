@@ -128,8 +128,9 @@ a sync failure, and it has to exist as soon as the engine does.
 
 ## Data model
 
-`households` (carrying the `household_code`, unique, regenerable), `household_settings`,
-`memberships`, `module_grants`, `module_enablement`, `invitations`, `notification_rules`,
+`households` (carrying the household's settings, the `household_code`, unique and regenerable,
+and the billing payer), `memberships`, `module_grants`, `module_enablement`, `invitations`,
+`notification_rules`,
 `notification_schedules`, `notification_deliveries`, `export_jobs`, `deletion_requests`. Billing
 tables live in the billing schema.
 
@@ -146,9 +147,15 @@ the owning module keeps on each row of the audience, derived from these membersh
 
 | Entity | Policy | Notes |
 |---|---|---|
-| `admin.household_settings` | `strict_version` | |
-| `admin.membership`, `admin.module_grant` | **not synced as editable** | Grants are pushed to clients as **derived capability state**, not as an editable entity. A client must never believe it can change its own permissions offline |
+| `admin.household_settings` | `strict_version`, never written offline | The household's settings, on `households` |
+| `admin.membership` | `strict_version`, **never written offline** | A member's role **and their grants**, which travel on the membership row as **derived capability state**, never as an editable entity: a grant's change is its membership's change, and moves its version. A client must never believe it can change its own permissions offline |
+| `admin.module_enablement` | `strict_version`, never written offline | Whether the household enables each module |
+| `admin.invitation` | `strict_version`, never written offline | An invitation, without its token |
 | `admin.notification_rule`, `admin.notification_schedule` | `strict_version` | |
+
+The settings, the memberships and the enablement reach every member of the household, whatever
+their grant on this module, since every member's app works from them; the invitations reach the
+members granted `view` on it ([ADR 0011](../../adr/0011-households-as-the-platforms-own-module.md)).
 
 **D-80: permissions are never client-authoritative, offline or otherwise.** The client caches its
 resolved grants so the offline UI can hide what it should hide, and the server re-resolves them on
@@ -166,7 +173,10 @@ None — this module is a consumer of every catalog and a contributor to none.
 |---|---|
 | View the member list **and every member's grants** | Any member — the comparison is the point of the screen (FR-HA3), and a household is not an org chart. It also means "can Petr see this?" is answerable without asking an owner |
 | View household profile settings | Any member |
+| View the modules the household enables, and one's own level on each | Any member |
+| View the household's invitations | `view` on the admin module |
 | View the storage picture | `view` on the admin module |
+| Leave the household | Any member (FR-HH4) |
 | Billing | The payer; other owners see state only |
 | Personal notification categories and quiet hours | Any member — these are personal preferences |
 

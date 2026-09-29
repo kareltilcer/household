@@ -32,3 +32,4 @@ Number 0002 is reserved by the plan for item 34 (`0002-gate-g-c.md`).
 | [0008](0008-reference-data-pipeline.md) | Reference data is sourced JSON the server embeds, validates and loads as it migrates, and serves in every language | Accepted |
 | [0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md) | Web sessions are bound to their CSRF token, sign-in throttles live in PostgreSQL, and the breach corpus is a sorted file on the server's disk | Accepted |
 | [0010](0010-mobile-tokens-second-step-providers-and-client-versions.md) | A device's access token is checked against its live sign-in, second-step secrets are sealed under a key the database does not hold, the provider flow is checked end to end on the server, and please-update comes before the contract | Accepted |
+| [0011](0011-households-as-the-platforms-own-module.md) | The household surface is admin, a module the platform serves itself, whose every write goes through the spine | Accepted |
