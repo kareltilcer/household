@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -466,6 +467,11 @@ func TestABearerTokenAloneDecides(t *testing.T) {
 	if b.get("/me").Code != http.StatusOK {
 		t.Fatal("the cookie alone does not sign the browser in")
 	}
+	// A header in another scheme is not the API's, such as the Basic credentials a browser resends
+	// to a proxy that asked for them: the cookie decides.
+	basic := "Basic " + base64.StdEncoding.EncodeToString([]byte("staging:"+s.domain))
+	rec = b.send(request{method: http.MethodGet, path: "/me", header: http.Header{"Authorization": {basic}}})
+	expect(t, rec, http.StatusOK, "")
 }
 
 // A change made with an access token arrives via mobile (item 4's hook, filled in by item 9).

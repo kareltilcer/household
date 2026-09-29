@@ -211,7 +211,8 @@ type Identity struct {
 }
 
 // ErrRefused is Exchange's answer when the provider does not vouch for the sign-in: it refused the
-// code, or its ID token does not verify or carries another nonce.
+// code, or its ID token does not verify or carries another nonce. A provider that refuses the
+// server's own credentials is another error, the server's.
 var ErrRefused = errors.New("federation: the provider did not vouch for the sign-in")
 
 // Exchange redeems code, which the provider sent to redirectURI, with verifier, and returns what
@@ -229,8 +230,12 @@ func (p *Provider) Exchange(ctx context.Context, code, redirectURI, verifier, no
 	ctx = oidc.ClientContext(ctx, p.cfg.HTTP)
 	tok, err := cfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
+		// The provider refusing the code refuses the sign-in; the provider refusing the server
+		// itself, its client id or its secret, Apple's signed one included, is the server's
+		// misconfiguration, which no one signs in past until it is mended (RFC 6749 §5.2).
 		var refused *oauth2.RetrieveError
-		if errors.As(err, &refused) && refused.Response != nil && refused.Response.StatusCode < http.StatusInternalServerError {
+		if errors.As(err, &refused) && refused.Response != nil && refused.Response.StatusCode < http.StatusInternalServerError &&
+			refused.ErrorCode != "invalid_client" && refused.ErrorCode != "unauthorized_client" {
 			return Identity{}, ErrRefused
 		}
 		return Identity{}, fmt.Errorf("federation: redeem a %s code: %w", p.name, err)

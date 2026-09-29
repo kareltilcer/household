@@ -42,8 +42,10 @@ info:
       it is revoked, and an access token authenticates only while it lasts.
 
     Access tokens carry **no roles and no grants**; authorization is resolved server-side per
-    request, so a revoked grant takes effect immediately. A request that carries an
-    `Authorization` header is authenticated by it alone, and the session cookie is not read.
+    request, so a revoked grant takes effect immediately. A request whose `Authorization` header
+    carries a bearer token is authenticated by it alone, and the session cookie is not read. An
+    `Authorization` header in another scheme, such as the Basic credentials a browser resends to a
+    proxy that asked for them, is not read, and the session cookie decides.
 
     ## Clients
 
@@ -583,8 +585,10 @@ paths:
         A code from the enrolled authenticator turns it on, in place of any authenticator on before,
         and answers with ten new recovery codes, which replace any earlier set. Every browser and
         device trusted to skip the second step is trusted no longer. With no enrolment waiting, or
-        a code that is not the authenticator's, it answers `422` naming `/code`. The answer is never
-        kept by an `Idempotency-Key`, since it carries the codes: a repeat answers `409`
+        a code that is not the authenticator's, it answers `422` naming `/code`. Wrong codes count
+        against the account as the second step's do: five in five minutes answer `429`, so that a
+        session alone cannot guess its way to the recovery codes. The answer is never kept by an
+        `Idempotency-Key`, since it carries the codes: a repeat answers `409`
         (`idempotency_in_progress`).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:

@@ -35,8 +35,10 @@ its `sid` among the live sign-ins, as a web session's cookie is looked up: a rev
 password reset and signing out everywhere end its requests at once. Grants are still read per
 request from the membership (D-15). A token carrying an audience or an issuer is refused, so that
 no token minted for PowerSync, which carries PowerSync's audience, signs anyone in to the API. A
-request with an `Authorization` header is decided by it alone: the session cookie it may also carry
-is not read.
+request with a bearer token in `Authorization` is decided by it alone: the session cookie it may
+also carry is not read. A header in another scheme is left to whoever asked for it, such as a proxy
+guarding a staging site with Basic credentials, which a browser then sends on every request, and the
+cookie decides.
 
 **A device's sign-in is a row, `device_sessions`, and its refresh tokens hang off it.** A device is
 the client's installation id, unique per user rather than globally, since a shared tablet signs
@@ -77,7 +79,8 @@ A sign-in whose first factor passes, with a password or with a provider, goes th
 second step is on and the attempt is not trusted; the credential otherwise. The challenge keeps what
 the sign-in was for, a browser or a device and which, so its answer signs in exactly as the sign-in
 would have. Wrong codes are counted per account, five in five minutes (D-101) through item 8's
-throttles, and ten since the last right one lock the authenticator on its row.
+throttles, and ten since the last right one lock the authenticator on its row. The first code, which
+turns an enrolment on and is answered with the recovery codes, counts against the same limit.
 
 **The provider flow is checked on the server end to end** (`internal/platform/federation`). The
 client sends its S256 challenge to `/start`; the server keeps it with a state and a nonce of its

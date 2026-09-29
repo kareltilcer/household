@@ -303,6 +303,17 @@ func displayName(name string) (string, bool) {
 	}) < 0
 }
 
+// maxDisplayName is the longest name an account keeps, in characters: the contract's maxLength.
+const maxDisplayName = 80
+
+// cut is s cut to at most n characters, and trimmed again where it was cut.
+func cut(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return strings.TrimSpace(string([]rune(s)[:n]))
+}
+
 // maxLocale is the longest language tag kept, in characters.
 const maxLocale = 64
 

@@ -141,8 +141,9 @@ func (st oauthState) verifies(verifier string) bool {
 // account has.
 var errLinkRequired = problem.New(http.StatusConflict, problem.CodeLinkRequired)
 
-// errSubjectTaken rolls back a new account whose subject a sign-in running beside it gave an
-// account first: the sign-in is tried again, and finds that account.
+// errSubjectTaken rolls back a new account whose subject a sign-in running beside it, with
+// another address or none, gave an account first: the sign-in is tried again, and finds that
+// account.
 var errSubjectTaken = errors.New("identity: the subject was given an account meanwhile")
 
 // oauthCallback is postAuthOauthByProviderCallback (FR-ID2): the code the provider sent back,
@@ -199,12 +200,14 @@ func (s *Service) oauthCallback(w http.ResponseWriter, r *http.Request) {
 			lang = tag
 		}
 	}
-	// The provider's name for the person, or failing that the one the client was given by Apple.
+	// The provider's name for the person, cut to the longest an account keeps, which the provider
+	// does not hold to; or failing that the one the client was given by Apple, which the contract
+	// holds to it.
 	called, ok := displayName(id.Name)
-	if !ok {
-		if called, ok = displayName(req.DisplayName); !ok {
-			called = ""
-		}
+	if ok {
+		called = cut(called, maxDisplayName)
+	} else if called, ok = displayName(req.DisplayName); !ok {
+		called = ""
 	}
 	var adm admission
 	for range 2 {
@@ -253,7 +256,18 @@ func (s *Service) federatedAccount(ctx context.Context, tx pgx.Tx, provider stri
 		ON CONFLICT ((lower(email))) DO NOTHING RETURNING true`,
 		user, address, verified, name, lang, now).Scan(&created)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return uuid.Nil, errLinkRequired
+		// An account has the address. It may be the one a sign-in with this subject running beside
+		// this one has just made, whose row the insert waited for: read again, now that it has
+		// committed, the subject is that account's, which this sign-in signs in as well.
+		var holder uuid.UUID
+		switch err := tx.QueryRow(ctx, "SELECT user_id FROM credentials WHERE type = $1 AND subject = $2", provider, id.Subject).
+			Scan(&holder); {
+		case errors.Is(err, pgx.ErrNoRows):
+			return uuid.Nil, errLinkRequired
+		case err != nil:
+			return uuid.Nil, err
+		}
+		return holder, nil
 	}
 	if err != nil {
 		return uuid.Nil, err

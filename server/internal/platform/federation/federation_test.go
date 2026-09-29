@@ -107,6 +107,18 @@ func TestASignInTheProviderDoesNotVouchForIsRefused(t *testing.T) {
 	if _, err := other.Exchange(t.Context(), code, redirect, verifier, "n"); err == nil {
 		t.Fatal("a token for another client was taken")
 	}
+	// A provider that refuses the server itself, its secret wrong, is the server's error to mend,
+	// not a sign-in the provider refused.
+	misconfigured, err := federation.New(federation.Google, federation.Config{Issuer: idp.Issuer(), ClientID: "household-web",
+		ClientSecret: "not-" + idp.ClientSecret})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authURL, _ = misconfigured.AuthURL(t.Context(), redirect, "s", "n", federation.Challenge(verifier))
+	code, _ = idp.Authorize(authURL, federationtest.Person{Subject: "g-1"})
+	if _, err := misconfigured.Exchange(t.Context(), code, redirect, verifier, "n"); err == nil || errors.Is(err, federation.ErrRefused) {
+		t.Fatalf("a wrong client secret: %v", err)
+	}
 }
 
 func TestAppleIsAskedForAFormPostAndSentASignedSecret(t *testing.T) {

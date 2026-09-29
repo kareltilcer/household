@@ -401,7 +401,7 @@ to the household as *"Household support extended your trial"*.
 | Verification email resend, per account | 1 / min and 5 / hour |
 | Verification email resend, per IP | 20 / hour |
 | Invitation send, per household | 20 / day |
-| Second-step codes, per account | 5 wrong / 5 min; the tenth wrong since the last right one locks the authenticator (FR-ID5) |
+| Second-step codes, per account | 5 wrong / 5 min, the first code that turns it on included; the tenth wrong since the last right one locks the authenticator (FR-ID5) |
 | Sign-in begun with Google or Apple, per IP | 60 / hour |
 | Child PIN attempts | 10, then owner unlock |
 | Sync mutation batch | 500 mutations / batch, 60 batches / min / device |

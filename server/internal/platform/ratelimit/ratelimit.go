@@ -68,8 +68,8 @@ var (
 	ResetNetwork  = Limit{Name: "password_reset.network", Max: 20, Window: time.Hour}
 	ResendNetwork = Limit{Name: "verify_resend.network", Max: 20, Window: time.Hour}
 	// An account's second step takes five wrong codes in five minutes, counted by the account,
-	// which bounds every challenge it has (D-101); the tenth since the last right one locks it
-	// (identity.LockAfter).
+	// which bounds every challenge it has and the first code that turns it on (D-101); the tenth
+	// since the last right one locks it (identity.LockAfter).
 	MFAAccount = Limit{Name: "mfa.account", Max: 5, Window: 5 * time.Minute}
 	// A client's network begins sixty sign-ins with a provider an hour (D-101): each writes a row
 	// that waits ten minutes for its callback.

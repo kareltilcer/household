@@ -262,6 +262,11 @@ func admitted(w http.ResponseWriter, adm admission) {
 
 // endTrust ends every trust and every challenge of user's in tx: the second step was turned off or
 // on again, the password was reset, or the account signed out everywhere.
+//
+// A transaction that ends challenges and sessions or devices' sign-ins alike ends the challenges
+// first. A second step's answer holds its challenge's row while admit replaces the session its
+// browser held or the sign-in its device held, so one that locked those first and then waited on
+// the challenge would deadlock with it.
 func (s *Service) endTrust(ctx context.Context, tx pgx.Tx, user uuid.UUID) error {
 	if _, err := tx.Exec(ctx, "DELETE FROM mfa_trusts WHERE user_id = $1", user); err != nil {
 		return err

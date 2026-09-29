@@ -228,13 +228,15 @@ func (s *Service) signOutEverywhere(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
 	err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+		// The trusts and the challenges first, then the sessions and the devices' sign-ins
+		// (endTrust).
+		if err := s.endTrust(ctx, tx, user); err != nil {
+			return err
+		}
 		if err := s.Sessions.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
 			return err
 		}
 		if err := s.Devices.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
-			return err
-		}
-		if err := s.endTrust(ctx, tx, user); err != nil {
 			return err
 		}
 		return idempotency.Commit(ctx, tx)

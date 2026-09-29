@@ -168,14 +168,16 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	return root, nil
 }
 
-// authenticate signs a request in by its access token when it carries an Authorization header,
-// which alone then decides, and by its session cookie when it does not (D-7): a request with a
-// bearer token that authenticates no one is not signed in by a cookie it also carries.
+// authenticate signs a request in by its access token when its Authorization header carries a
+// bearer token, which alone then decides, and by its session cookie when it does not (D-7): a
+// request with a bearer token that authenticates no one is not signed in by a cookie it also
+// carries. An Authorization header in another scheme is not the API's, such as the Basic
+// credentials a browser resends to a proxy that asked for them, and leaves the cookie to decide.
 func authenticate(bearer, cookie func(http.Handler) http.Handler) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		byBearer, byCookie := bearer(next), cookie(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("Authorization") != "" {
+			if _, ok := device.Bearer(r); ok {
 				byBearer.ServeHTTP(w, r)
 				return
 			}

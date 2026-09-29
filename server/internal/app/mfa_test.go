@@ -142,6 +142,41 @@ func TestTurningOnTheSecondStep(t *testing.T) {
 	}
 }
 
+// Wrong first codes count against the account as a second step's do (D-101): the answer carries
+// the recovery codes, and a session alone must not guess its way to them through an enrolment its
+// owner left waiting. The right code starts the count again.
+func TestTheFirstCodeIsLimitedAsTheSecondStepIs(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	b := s.signUp(s.a("jana@tilcerovi.cz"), "correct horse battery")
+	enrolment := func() string {
+		t.Helper()
+		rec := b.post("/auth/mfa/enroll", jsonBody(t, map[string]string{"password": "correct horse battery"}))
+		expect(t, rec, http.StatusOK, "")
+		var e struct {
+			Secret string `json:"secret"`
+		}
+		decode(t, rec, &e)
+		return e.Secret
+	}
+	activate := func(code string) *httptest.ResponseRecorder {
+		t.Helper()
+		return b.post("/auth/mfa/activate", jsonBody(t, map[string]string{"code": code}))
+	}
+	secret := enrolment()
+	for range ratelimit.MFAAccount.Max - 1 {
+		expect(t, activate("000000"), http.StatusUnprocessableEntity, problem.CodeValidationFailed)
+	}
+	expect(t, activate(s.code(secret)), http.StatusOK, "")
+
+	secret = enrolment()
+	for range ratelimit.MFAAccount.Max {
+		expect(t, activate("000000"), http.StatusUnprocessableEntity, problem.CodeValidationFailed)
+	}
+	expect(t, activate(s.code(secret)), http.StatusTooManyRequests, problem.CodeRateLimited)
+	s.clock.advance(ratelimit.MFAAccount.Window)
+	expect(t, activate(s.code(secret)), http.StatusOK, "")
+}
+
 // Done when (plan item 9): the MFA new-device rule. With the second step on, a sign-in from a
 // browser or a device that is not trusted is challenged, and signs in only once the challenge is
 // answered; answered to remember it, that browser, or that device, is trusted for thirty days.

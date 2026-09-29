@@ -87,3 +87,8 @@ the server sees it.
 A provider is configured whole or not at all: a client id without its secret, or Apple without its
 key, stops the server at start, naming what is missing. A provider not configured answers `404`, and
 the clients do not offer it.
+
+A provider that refuses the server itself, `invalid_client` or `unauthorized_client`, because the
+Google secret was rotated at Google or the Apple key was revoked, fails every sign-in with it `500`,
+and each is logged as `identity request failed` with the provider's error. Mend the setting and
+redeploy; a person's own refused sign-in answers `401` and is not logged.

@@ -82,6 +82,10 @@ func (s *Service) enrollMFA(w http.ResponseWriter, r *http.Request) {
 // authenticator on before, with ten new recovery codes. No browser or device stays trusted, since
 // the factor they skipped is not this one. The codes are in the answer, which the account's
 // Idempotency-Key never keeps: a repeat answers 409.
+//
+// Wrong codes count against the account as a second step's do, five in five minutes (D-101):
+// the answer carries the recovery codes, and a session alone, which cannot enrol without the
+// password, must not guess its way to them through an enrolment its owner left waiting.
 func (s *Service) activateMFA(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -90,6 +94,11 @@ func (s *Service) activateMFA(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decode(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	account := user.String()
+	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.MFAAccount, Subject: account}); err != nil || wait > 0 {
+		s.fail(w, r, refusal(wait, err))
 		return
 	}
 	var codes []string
@@ -128,6 +137,11 @@ func (s *Service) activateMFA(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// The right code: the account's count of wrong ones starts again. The second step is on, so a
+	// failure here is logged, not answered.
+	if err := s.Throttles.Clear(ctx, ratelimit.MFAAccount, account); err != nil {
+		s.Log.LogAttrs(ctx, slog.LevelWarn, "second-step throttle not cleared", slog.Any("error", err))
+	}
 	idempotency.Unstorable(ctx)
 	httpx.WriteJSON(w, http.StatusOK, recoveryCodesJSON{RecoveryCodes: codes})
 }
@@ -139,13 +153,14 @@ func (s *Service) replaceRecoveryCodes(ctx context.Context, tx pgx.Tx, user uuid
 		return nil, err
 	}
 	codes := mfa.NewRecoveryCodes()
-	now := s.Sessions.Now()
+	hashes := make([][]byte, 0, len(codes))
 	for _, c := range codes {
 		norm, _ := mfa.RecoveryCode(c)
-		if _, err := tx.Exec(ctx, "INSERT INTO mfa_recovery_codes (user_id, code_hash, created_at) VALUES ($1, $2, $3)",
-			user, s.MFA.HashRecovery(user, norm), now); err != nil {
-			return nil, err
-		}
+		hashes = append(hashes, s.MFA.HashRecovery(user, norm))
+	}
+	if _, err := tx.Exec(ctx, "INSERT INTO mfa_recovery_codes (user_id, code_hash, created_at) SELECT $1, h, $3 FROM unnest($2::bytea[]) AS h",
+		user, hashes, s.Sessions.Now()); err != nil {
+		return nil, err
 	}
 	return codes, nil
 }

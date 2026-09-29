@@ -560,15 +560,17 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 			t.user, now).Scan(&language); err != nil {
 			return err
 		}
-		// Every session and every device's sign-in ends, and no browser or device is trusted to
-		// skip the second step any longer: whoever held them no longer holds the account.
+		// No browser or device is trusted to skip the second step any longer, and every session and
+		// every device's sign-in ends: whoever held them no longer holds the account. The
+		// challenges end first, as a second step's answer takes its challenge before the session
+		// or the device's sign-in it replaces, so that the two never wait on each other (endTrust).
+		if err := s.endTrust(ctx, tx, t.user); err != nil {
+			return err
+		}
 		if err := s.Sessions.RevokeAll(ctx, tx, t.user, uuid.Nil); err != nil {
 			return err
 		}
-		if err := s.Devices.RevokeAll(ctx, tx, t.user, uuid.Nil); err != nil {
-			return err
-		}
-		return s.endTrust(ctx, tx, t.user)
+		return s.Devices.RevokeAll(ctx, tx, t.user, uuid.Nil)
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -627,13 +629,14 @@ func (s *Service) changePassword(w http.ResponseWriter, r *http.Request) {
 			user, newSecret); err != nil {
 			return err
 		}
+		// The challenges first, then the sessions and the devices' sign-ins (endTrust).
+		if err := s.endChallenges(ctx, tx, user); err != nil {
+			return err
+		}
 		if err := s.Sessions.RevokeAll(ctx, tx, user, current); err != nil {
 			return err
 		}
-		if err := s.Devices.RevokeAll(ctx, tx, user, onDevice.Session); err != nil {
-			return err
-		}
-		return s.endChallenges(ctx, tx, user)
+		return s.Devices.RevokeAll(ctx, tx, user, onDevice.Session)
 	})
 	if err != nil {
 		s.fail(w, r, err)

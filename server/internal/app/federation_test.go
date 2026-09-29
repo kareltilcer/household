@@ -1,16 +1,19 @@
 package app_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/kareltilcer/household/server/internal/app/apptest"
 	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/federation/federationtest"
+	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
 
@@ -86,6 +89,67 @@ func TestSigningInWithGoogleMakesAnAccountAndKeepsIt(t *testing.T) {
 	expect(t, other.google(idp, federationtest.Person{Subject: s.a("g-petr"), Email: s.a("petr@gmail.test")}), http.StatusOK, "")
 	if m := other.me(); m.EmailVerified || m.DisplayName != "" {
 		t.Fatalf("%+v", m)
+	}
+	// A name longer than an account keeps, which a provider does not hold to, is cut to it.
+	long := s.browser()
+	expect(t, long.google(idp, federationtest.Person{Subject: s.a("g-long"), Email: s.a("long@gmail.test"), EmailVerified: true,
+		Name: strings.Repeat("Ř", 100)}), http.StatusOK, "")
+	if m := long.me(); m.DisplayName != strings.Repeat("Ř", 80) {
+		t.Fatalf("%+v", m)
+	}
+}
+
+// Two first sign-ins with one subject at once make one account, and both sign in to it: the one
+// that waited for the other's address finds the subject the other gave it, and is not told to link
+// an account that is its own.
+func TestTwoFirstSignInsWithOneSubjectAtOnceMakeOneAccount(t *testing.T) {
+	s, idp := federated(t, apptest.Options{})
+	address := s.a("jana@gmail.test")
+	person := federationtest.Person{Subject: s.a("g-jana"), Email: address, EmailVerified: true}
+	authURL, state := s.browser().start("web")
+	code, _ := idp.Authorize(authURL, person)
+
+	// The other sign-in's account, made and not yet committed.
+	ctx := t.Context()
+	hold, err := s.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = hold.Rollback(context.WithoutCancel(ctx)) }()
+	first := idgen.New()
+	if _, err := hold.Exec(ctx, "INSERT INTO users (id, email, email_verified_at) VALUES ($1, $2, now())", first, address); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hold.Exec(ctx, "INSERT INTO credentials (user_id, type, subject) VALUES ($1, 'google', $2)", first, person.Subject); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	r := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/google/callback",
+		strings.NewReader(jsonBody(t, map[string]string{"code": code, "state": state, "code_verifier": verifier})))
+	r.RemoteAddr = s.peer
+	r.Header.Set("Content-Type", "application/json")
+	var wg sync.WaitGroup
+	wg.Go(func() { s.router.ServeHTTP(rec, r) })
+	for deadline := time.Now().Add(10 * time.Second); s.count(`
+		SELECT count(*) FROM pg_stat_activity
+		WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%INSERT INTO users%'`) < 1; {
+		if time.Now().After(deadline) {
+			t.Fatal("the sign-in never waited for the other's account")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := hold.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	expect(t, rec, http.StatusOK, "")
+	var result struct {
+		User meBody `json:"user"`
+	}
+	decode(t, rec, &result)
+	if result.User.ID != first {
+		t.Fatalf("signed in as %s, not the subject's account %s", result.User.ID, first)
 	}
 }
 
