@@ -129,9 +129,6 @@ func New(name string, cfg Config) (*Provider, error) {
 	return &Provider{name: name, cfg: cfg}, nil
 }
 
-// Name is the provider's name.
-func (p *Provider) Name() string { return p.name }
-
 // discover returns the provider's endpoints and its ID token verifier, fetching its discovery
 // document the first time it is asked, and again after a failure. The fetch is made outside the
 // lock, so that sign-ins begun while the provider is slow or down each wait for their own fetch,

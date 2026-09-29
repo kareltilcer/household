@@ -33,8 +33,9 @@ CREATE TABLE devices (
 
 -- A device's sign-in, which holds a refresh-token family (FR-ID4, D-14): an access token names it as
 -- its sid. It lasts until it is revoked (D-99): by signing out on the device, revoking the device,
--- signing out everywhere, a password reset, the device signing in again, or a refresh token of the
--- family presented after it was used. A device holds at most one live sign-in.
+-- signing out everywhere, a password reset, a password change made on another client, the device
+-- signing in again, or a refresh token of the family presented after it was used. A device holds at
+-- most one live sign-in.
 CREATE TABLE device_sessions (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL,

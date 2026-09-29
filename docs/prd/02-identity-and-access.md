@@ -81,8 +81,8 @@ A mobile sign-in names its `device`: the installation's own id, which the client
 platform and an app version. A device holds one sign-in at a time, so signing in again on it ends
 the one it held; the id is unique per user, so a shared tablet signs several profiles in, each with
 a sign-in of its own. The sign-in lasts **until it is revoked**, with no idle expiry: by signing
-out on the device, revoking it from the device list, signing out everywhere, a password reset, or a
-reused refresh token (FR-ID4). **D-99.**
+out on the device, revoking it from the device list, signing out everywhere, a password reset, a
+password change made on another client, or a reused refresh token (FR-ID4). **D-99.**
 
 **FR-ID4 — Token refresh with reuse detection.**
 `POST /api/v1/auth/token` with a refresh token. Refresh tokens are **single-use and rotating**;

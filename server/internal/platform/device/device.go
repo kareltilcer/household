@@ -115,12 +115,6 @@ func NewStore(pool Pool, keys *token.Keys, log *slog.Logger, now func() time.Tim
 	return &Store{pool: pool, keys: keys, log: log, now: now}
 }
 
-// Now is the store's clock.
-func (s *Store) Now() time.Time { return s.now() }
-
-// Keys are the keys the store's access tokens are signed with.
-func (s *Store) Keys() *token.Keys { return s.keys }
-
 // SignIn signs d in for user in tx: the device's row made, or brought up to date, whatever sign-in
 // it held ended, and a new one begun, with its first token pair. It returns the new sign-in's id.
 func (s *Store) SignIn(ctx context.Context, tx pgx.Tx, user uuid.UUID, d Info) (uuid.UUID, Tokens, error) {
