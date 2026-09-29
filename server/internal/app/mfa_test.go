@@ -1,17 +1,22 @@
 package app_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/kareltilcer/household/server/internal/app/apptest"
+	"github.com/kareltilcer/household/server/internal/platform/identity"
+	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/mfa"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
+	"github.com/kareltilcer/household/server/internal/platform/session"
 )
 
 // The tests in this file serve item 9's second step (FR-ID5) through the whole router.
@@ -442,4 +447,61 @@ func TestSigningADeviceOrABrowserOutFromItsListEndsEveryTrust(t *testing.T) {
 	rec, _ := q.exchange(stolen)
 	expect(t, rec, http.StatusUnauthorized, problem.CodeRefreshTokenInvalid)
 	challenged(t, s.phone("").login(address, pw, map[string]any{"trust_token": trust}))
+}
+
+// Ending every trust takes its turn with a second step answered meanwhile (D-100). The answer holds
+// its challenge until it commits, and writes its trust last, so signing out everywhere, which ends
+// that challenge, waits for it and then ends the trust it wrote too, rather than leaving whoever
+// answered it to skip the second step for thirty days. Here the answer is held, its challenge
+// locked and its trust written, while the account signs out everywhere.
+func TestSigningOutEverywhereEndsATrustWrittenMeanwhile(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	address, pw := s.a("jana@tilcerovi.cz"), "correct horse battery"
+	owner := s.signUp(address, pw)
+	owner.enrol(pw)
+	account := owner.me().ID
+	challenged(t, s.browser().signIn(address, pw))
+
+	ctx := t.Context()
+	hold, err := s.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = hold.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := hold.Exec(ctx, "SELECT FROM mfa_challenges WHERE user_id = $1 AND ended_at IS NULL FOR UPDATE", account); err != nil {
+		t.Fatal(err)
+	}
+	const trust = "answered-meanwhile"
+	now := s.clock.now()
+	if _, err := hold.Exec(ctx, "INSERT INTO mfa_trusts (id, user_id, token_hash, created_at, expires_at) VALUES ($1, $2, $3, $4, $5)",
+		idgen.New(), account, session.Hash(trust), now, now.Add(identity.TrustFor)); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/me/sessions", nil)
+	r.RemoteAddr = s.peer
+	r.Header.Set("Origin", apptest.WebOrigin)
+	for name, value := range owner.cookies {
+		r.AddCookie(&http.Cookie{Name: name, Value: value}) //nolint:gosec // G124: a request's cookie is a name and a value; attributes are the response's.
+	}
+	r.Header.Set(session.CSRFHeader, owner.cookies[session.CSRFCookie])
+	rec := httptest.NewRecorder()
+	var wg sync.WaitGroup
+	wg.Go(func() { s.router.ServeHTTP(rec, r) })
+	for deadline := time.Now().Add(10 * time.Second); s.count(`
+		SELECT count(*) FROM pg_stat_activity
+		WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%UPDATE mfa_challenges SET ended_at%'`) < 1; {
+		if time.Now().After(deadline) {
+			t.Fatal("signing out everywhere never waited for the second step answered meanwhile")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := hold.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	expect(t, rec, http.StatusNoContent, "")
+	b := s.browser()
+	b.cookies[identity.TrustCookie] = trust
+	challenged(t, b.signIn(address, pw))
 }

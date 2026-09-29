@@ -273,11 +273,18 @@ func admitted(w http.ResponseWriter, adm admission) {
 // first. A second step's answer holds its challenge's row while admit replaces the session its
 // browser held or the sign-in its device held, so one that locked those first and then waited on
 // the challenge would deadlock with it.
+//
+// The trusts go after the challenges for the same reason: an answer writes its trust last, before
+// it commits and lets its challenge go, so ending the challenges waits for an answer running
+// meanwhile, and the trusts are then read with the one it wrote among them. Deleted first, they
+// would miss it, and whoever answered would skip the second step for TrustFor after the account
+// ended every trust.
 func (s *Service) endTrust(ctx context.Context, tx pgx.Tx, user uuid.UUID) error {
-	if _, err := tx.Exec(ctx, "DELETE FROM mfa_trusts WHERE user_id = $1", user); err != nil {
+	if err := s.endChallenges(ctx, tx, user); err != nil {
 		return err
 	}
-	return s.endChallenges(ctx, tx, user)
+	_, err := tx.Exec(ctx, "DELETE FROM mfa_trusts WHERE user_id = $1", user)
+	return err
 }
 
 // endChallenges ends every live challenge of user's in tx.
