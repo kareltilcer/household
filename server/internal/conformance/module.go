@@ -136,8 +136,8 @@ type Note struct {
 	Version    int64      `json:"version"`
 }
 
-// RedactedNote is what a private note shows everyone but its owner: that it exists, and whose it
-// is.
+// RedactedNote is what a private note shows everyone with the grant: that it exists, and whose it
+// is. Under D-93 it reaches the owner as well, whose client shows the full note over it (ADR 0001).
 type RedactedNote struct {
 	ID      uuid.UUID  `json:"id"`
 	OwnerID *uuid.UUID `json:"owner_id"`

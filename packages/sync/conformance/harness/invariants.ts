@@ -6,18 +6,19 @@
 //      (Admin.visible), never with a stream's, so a stream that disagrees with it is caught.
 //   2. No acknowledged write is lost: the row an `applied` or `merged` answer names is on the
 //      server at the version it answered, or later.
-//   3. Idempotency: a batch delivered again changes nothing and is answered alike (replay).
+//   3. Idempotency: a batch delivered again changes nothing and is answered alike (World.replay).
 //   4. Retraction completeness: no replica holds a row its member may not see. A row of another
 //      household is reported as `isolation`, FR-NF4's read-path twin (D-4).
 //   5. Monotonicity: no replica's checkpoint moves backwards, bucket by bucket (Recorder.sampled).
 //   6. Terminality: every mutation a client wrote ends in exactly one of applied, merged,
 //      conflict and rejected, surfaced once; none is left queued, held or retried without end;
-//      and every answer is one the contract allows, every outcome but `applied` with a code.
+//      and every answer is one the contract allows, every outcome but `applied` with a code. An
+//      entitlement rejection holds a mutation rather than ending it, as `deferred` does (ends).
 
 import type { Admin } from './admin.ts'
 import type { Client } from './client.ts'
 import type { HoldReason } from './connector.ts'
-import { terminal } from './mutation.ts'
+import { ends } from './mutation.ts'
 import type { Recorder } from './recorder.ts'
 import {
   canonicalRow,
@@ -171,10 +172,14 @@ export interface TerminalityOptions {
   readonly allowHeld?: readonly HoldReason[]
 }
 
-/** Invariant 6: every mutation ended once; none left queued, held or unanswered; every answer well formed. */
+/**
+ * Invariant 6: every mutation ended once; none left queued, held or unanswered; every answer well
+ * formed. A mutation held for its entitlement and then replayed was answered twice, a rejection
+ * that held it and the answer that ended it, and ended once.
+ */
 export async function terminality(
   recorder: Recorder,
-  clients: readonly Client[],
+  clients: readonly Pick<Client, 'name' | 'held' | 'pending'>[],
   options: TerminalityOptions = {},
 ): Promise<Violation[]> {
   const out: Violation[] = []
@@ -191,7 +196,7 @@ export async function terminality(
       })
   }
   for (const [id, w] of recorder.written) {
-    const ended = recorder.answersTo(id).filter((a) => terminal.has(a.result.outcome))
+    const ended = recorder.answersTo(id).filter((a) => ends(a.result))
     const outcomes = [...new Set(ended.map((a) => a.result.outcome))]
     if (ended.length === 0) {
       const reason = held.get(id)

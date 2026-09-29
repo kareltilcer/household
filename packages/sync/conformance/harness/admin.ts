@@ -32,6 +32,8 @@ export interface MemberSpec {
 export interface Household {
   readonly id: string
   readonly name: string
+  /** The IANA timezone its calendar days are in. */
+  readonly timezone: string
 }
 
 const joinCodeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -65,7 +67,7 @@ export class Admin {
   async household(rng: Rng, name: string, members: readonly MemberSpec[]): Promise<Household> {
     const owner = members.find((m) => m.role === 'owner')
     if (owner === undefined) throw new Error('a household has an owner')
-    const household = { id: rng.uuid(), name }
+    const household: Household = { id: rng.uuid(), name, timezone: 'Europe/Prague' }
     // Unseeded: codes are unique across runs on one database, and no schedule depends on one.
     const code = Array.from({ length: 8 }, () =>
       joinCodeAlphabet.charAt(randomInt(joinCodeAlphabet.length)),
@@ -75,8 +77,8 @@ export class Admin {
       await c.query('BEGIN')
       await c.query(
         `INSERT INTO households (id, name, country, timezone, base_currency, locale, units, first_day_of_week, join_code, billing_payer_id)
-         VALUES ($1, $2, 'CZ', 'Europe/Prague', 'CZK', 'cs', 'metric', 1, $3, $4)`,
-        [household.id, name, code, owner.member.id],
+         VALUES ($1, $2, 'CZ', $3, 'CZK', 'cs', 'metric', 1, $4, $5)`,
+        [household.id, name, household.timezone, code, owner.member.id],
       )
       for (const m of members) {
         await c.query(

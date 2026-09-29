@@ -1,7 +1,9 @@
 // The suite's one source of randomness (PRD 10 §4): every schedule, every fault and every
 // generated value is drawn from a seeded generator, so that a failing run is replayed from its
 // seed. PowerSync's own timing is not the suite's to seed, so a replayed schedule may interleave
-// differently with replication; the seed fixes what the clients do and when they do it.
+// differently with replication; the seed fixes what the clients do and when they do it, because
+// what draws as often as that timing decides draws from a generator forked from the schedule's
+// (Rng.fork).
 
 /** A seeded pseudo-random generator: sfc32, whose whole state is four 32-bit words. */
 export class Rng {
@@ -39,6 +41,16 @@ export class Rng {
     this.c = ((this.c << 21) | (this.c >>> 11)) >>> 0
     this.c = (this.c + t) >>> 0
     return t
+  }
+
+  /**
+   * A generator of its own, seeded from this one's next draw: what draws from it, however often,
+   * leaves this one's sequence where it was. A schedule forks one for each thing whose draws
+   * PowerSync's timing decides (a client's ids and keys, a flaky network's rolls), so that the
+   * schedule itself stays the seed's.
+   */
+  fork(): Rng {
+    return new Rng(this.u32())
   }
 
   /** A number in [0, 1). */

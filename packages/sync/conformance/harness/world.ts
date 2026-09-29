@@ -16,7 +16,7 @@ import {
 } from './invariants.ts'
 import { Recorder } from './recorder.ts'
 import { Rng } from './rng.ts'
-import type { SyncMutationResult } from './mutation.ts'
+import { ends, type SyncMutationResult } from './mutation.ts'
 import type { Target } from './target.ts'
 import { until } from './wait.ts'
 
@@ -34,16 +34,20 @@ export class World {
   readonly target: Target
   readonly admin: Admin
   readonly name: string
+  /** The run's schedule: what its scenario or its fuzzer draws, and nothing PowerSync's timing does. */
   readonly rng: Rng
   readonly recorder = new Recorder()
   readonly clients: Client[] = []
   private readonly dir: string
+  /** The fresh keys a batch delivered again is sent under, drawn apart from the schedule. */
+  private readonly keys: Rng
 
   constructor(target: Target, admin: Admin, seed: number, name: string) {
     this.target = target
     this.admin = admin
     this.name = name
     this.rng = new Rng(seed)
+    this.keys = this.rng.fork()
     this.dir = mkdtempSync(join(tmpdir(), 'household-conformance-'))
   }
 
@@ -55,9 +59,13 @@ export class World {
     return this.admin.household(this.rng, name, members)
   }
 
+  /**
+   * A client, drawing its ids and its connector's keys from a generator forked from the schedule's:
+   * how many it draws is PowerSync's timing, which must not move the schedule.
+   */
   client(options: ClientOptions): Client {
     const c = new Client(
-      { target: this.target, recorder: this.recorder, rng: this.rng, dir: this.dir },
+      { target: this.target, recorder: this.recorder, rng: this.rng.fork(), dir: this.dir },
       options,
     )
     this.clients.push(c)
@@ -71,8 +79,10 @@ export class World {
 
   /**
    * Waits until clients, the online ones by default, are quiet: nothing queued, nothing deferred
-   * left to replay, and each replica equal to what its member may see. It reports whether they got
-   * there within timeoutMs; the invariants then judge whatever state they are in.
+   * left to replay, and each replica equal to what its member may see. A client holding mutations
+   * whose cause has cleared, with nothing queued that would make PowerSync upload, is flushed
+   * (Client.replayHeld). It reports whether they got there within timeoutMs; the invariants then
+   * judge whatever state they are in.
    */
   async settle(
     options: { readonly clients?: readonly Client[]; readonly timeoutMs?: number } = {},
@@ -81,6 +91,7 @@ export class World {
     const took = await until(async () => {
       await this.sample(clients)
       for (const c of clients) {
+        await c.replayHeld()
         if ((await c.pending()) > 0 || (await c.held('deferred')).length > 0) return false
         if ((await compareReplica(c, this.target, this.admin)).length > 0) return false
       }
@@ -89,7 +100,10 @@ export class World {
     return took !== null
   }
 
-  /** Everything the invariants find wrong with the run as it stands (all but idempotency; see replay). */
+  /**
+   * Everything the invariants find wrong with the run as it stands, but idempotency, which
+   * delivers batches again and so is asked for apart (idempotency, replay).
+   */
   async violations(options: CheckOptions = {}): Promise<Violation[]> {
     const clients = options.clients ?? this.clients
     await this.sample(clients)
@@ -115,16 +129,32 @@ export class World {
   }
 
   /**
+   * Invariant 3 at the end of a run: every batch each of clients (every client of the run by
+   * default) had answered is delivered again (replay). Nothing else may write meanwhile.
+   */
+  async idempotency(clients: readonly Client[] = this.clients): Promise<Violation[]> {
+    const out: Violation[] = []
+    for (const c of clients) {
+      const attempts = this.answered(c)
+      if (attempts.length > 0) out.push(...(await this.replay(c, attempts)))
+    }
+    return out
+  }
+
+  /**
    * Delivers attempt again, as a network retry would, under its own key or under a fresh one
-   * (mode, as far as the target allows by default), and reports it answered otherwise than the
-   * first time (invariant 3).
+   * (mode, as far as the target allows by default), and reports it answered otherwise than it
+   * should be (invariant 3). Under its own key the batch's stored answer comes back whole. Under a
+   * fresh one each mutation is answered from its own stored result (FR-SY5): the answer that ended
+   * it, which for one the batch held (deferred, or rejected for its entitlement) is the answer its
+   * replay got.
    */
   async deliverAgain(
     client: Client,
     attempt: Attempt,
     mode: Target['replay'] = this.target.replay,
   ): Promise<Violation[]> {
-    const key = mode === 'fresh-key' ? this.rng.uuid() : attempt.key
+    const key = mode === 'fresh-key' ? this.keys.uuid() : attempt.key
     const response = await fetch(this.target.pushUrl(client.household.id), {
       method: 'POST',
       headers: {
@@ -143,13 +173,22 @@ export class World {
         `batch ${attempt.key} sent again was answered ${String(response.status)}: ${text}`,
       )
     const first = outcomes(attempt.response)
+    const want = mode === 'fresh-key' ? first.map((r) => this.endOf(r)) : first
     const again = outcomes(text)
-    if (JSON.stringify(first) !== JSON.stringify(again)) {
+    if (JSON.stringify(want) !== JSON.stringify(again)) {
       return report(
-        `batch ${attempt.key} sent again was answered ${JSON.stringify(again)}, first ${JSON.stringify(first)}`,
+        `batch ${attempt.key} sent again under ${mode === 'fresh-key' ? 'a fresh key' : 'its key'} was answered ${JSON.stringify(again)}, for ${JSON.stringify(want)}`,
       )
     }
     return []
+  }
+
+  /** The answer that ended the mutation r answers, or r when none has. */
+  private endOf(r: Answered): Answered {
+    const end = this.recorder.answersTo(r.id).find((a) => ends(a.result))
+    return end === undefined
+      ? r
+      : { id: r.id, outcome: end.result.outcome, version: end.result.version ?? null }
   }
 
   /**
@@ -197,8 +236,15 @@ export class World {
   }
 }
 
+/** A mutation's outcome and version, as a push answered it. */
+interface Answered {
+  readonly id: string
+  readonly outcome: string
+  readonly version: number | null
+}
+
 /** Each mutation's outcome and version in a push's answer, in order. */
-function outcomes(text: string | null): { id: string; outcome: string; version: number | null }[] {
+function outcomes(text: string | null): Answered[] {
   if (text === null) return []
   const results = (JSON.parse(text) as { results?: SyncMutationResult[] }).results ?? []
   return results.map((r) => ({ id: r.mutation_id, outcome: r.outcome, version: r.version ?? null }))

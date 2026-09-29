@@ -62,6 +62,17 @@ export async function family(w: World): Promise<Family> {
   return { jana, petr, eva, home, milk, bread, eggs }
 }
 
+/** Today's calendar day in household's timezone, as YYYY-MM-DD: a day is never taken in UTC. */
+export function today(household: Household): string {
+  // en-CA writes a date as YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: household.timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
 /** Brings clients online and waits until the run settles, which it must. */
 export async function online(w: World, ...clients: Client[]): Promise<void> {
   await Promise.all(clients.map((c) => c.online()))

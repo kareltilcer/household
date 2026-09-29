@@ -1,7 +1,15 @@
 import { isUuid } from '@household/api'
 import { UpdateType } from '@powersync/common'
 import { describe, expect, it } from 'vitest'
-import { encodeMetadata, isEntitlement, toMutation } from './mutation.ts'
+import { terminality } from './invariants.ts'
+import {
+  encodeMetadata,
+  ends,
+  isEntitlement,
+  toMutation,
+  type SyncMutation,
+  type SyncMutationResult,
+} from './mutation.ts'
 import { Network, NetworkFault, push } from './network.ts'
 import { Recorder } from './recorder.ts'
 import { Rng } from './rng.ts'
@@ -32,6 +40,16 @@ describe('the seeded generator', () => {
       ]),
     ).toBe('always')
     expect(rng.shuffle([1, 2, 3, 4]).sort()).toEqual([1, 2, 3, 4])
+  })
+
+  it('forks a generator whose draws, however many, leave its own sequence where it was', () => {
+    const drawn = new Rng(5)
+    const forked = drawn.fork()
+    const untouched = new Rng(5)
+    untouched.fork()
+    for (let i = 0; i < 10; i++) forked.u32()
+    expect(drawn.u32()).toBe(untouched.u32())
+    expect(new Rng(5).fork().u32()).toBe(new Rng(5).fork().u32())
   })
 
   it('mints UUIDv7s that sort by the time they carry', () => {
@@ -184,6 +202,67 @@ describe('a queued write', () => {
       ['entitlement', 'entitlement_read_only', 'entitlement_restricted'].every(isEntitlement),
     ).toBe(true)
     expect([null, undefined, 'not_found', 'forbidden'].some(isEntitlement)).toBe(false)
+  })
+
+  it('ends on a terminal answer, and is held by a deferral or an entitlement rejection', () => {
+    expect(ends({ outcome: 'applied', code: null })).toBe(true)
+    expect(ends({ outcome: 'rejected', code: 'not_found' })).toBe(true)
+    expect(ends({ outcome: 'conflict', code: 'version_mismatch' })).toBe(true)
+    expect(ends({ outcome: 'rejected', code: 'entitlement_read_only' })).toBe(false)
+    expect(ends({ outcome: 'deferred', code: 'dependency_failed' })).toBe(false)
+  })
+})
+
+describe('terminality', () => {
+  const quiet = {
+    name: 'petr',
+    held: () => Promise.resolve([]),
+    pending: () => Promise.resolve(0),
+  }
+  const mutation = (id: string): SyncMutation => ({
+    mutation_id: id,
+    entity_type: 'conformance.item',
+    entity_id: 'x',
+    op: 'update',
+    base_version: 1,
+    action: null,
+    fields: {},
+    client_time: '2026-09-29T10:00:00Z',
+  })
+  const answer = (
+    id: string,
+    outcome: SyncMutationResult['outcome'],
+    code: string | null = null,
+  ): SyncMutationResult => ({
+    mutation_id: id,
+    outcome,
+    code,
+    message: null,
+    version: outcome === 'applied' ? 2 : null,
+  })
+  const recorder = (...ids: string[]): Recorder => {
+    const r = new Recorder()
+    for (const id of ids)
+      r.wrote('petr', { mutationId: id, table: 'conformance_items', entityId: 'x', op: 'update' })
+    return r
+  }
+
+  it('ends a mutation held for its entitlement once, with the answer its replay got', async () => {
+    const r = recorder('m-1')
+    r.answered('petr', mutation('m-1'), answer('m-1', 'rejected', 'entitlement_read_only'))
+    r.answered('petr', mutation('m-1'), answer('m-1', 'applied'))
+    expect(await terminality(r, [quiet])).toEqual([])
+  })
+
+  it('reports a mutation ended twice, and one only held', async () => {
+    const r = recorder('m-1', 'm-2')
+    r.answered('petr', mutation('m-1'), answer('m-1', 'rejected', 'not_found'))
+    r.answered('petr', mutation('m-1'), answer('m-1', 'applied'))
+    r.answered('petr', mutation('m-2'), answer('m-2', 'rejected', 'entitlement'))
+    expect((await terminality(r, [quiet])).map((v) => v.detail)).toEqual([
+      'm-1 ended rejected and applied',
+      expect.stringContaining('(m-2) never ended'),
+    ])
   })
 })
 

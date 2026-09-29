@@ -245,6 +245,45 @@ describe('the connector', () => {
     expect(q.entries).toEqual([])
   })
 
+  it('rejects a mutation too large to send alone, rather than retrying it forever', async () => {
+    const q = new Queue()
+    q.write('Milk')
+    q.write('Bread')
+    const tooLarge = (): Response => json(413, { code: 'payload_too_large' })
+    const journal = new Memory()
+    const { fetch, sent } = server(tooLarge(), tooLarge())
+    await connector(fetch, journal).c.upload(q)
+    expect(sent.map((s) => s.ids)).toEqual([['m-1', 'm-2'], ['m-1'], ['m-2']])
+    expect(journal.recorded.map(([m, r]) => [m.mutation_id, r.outcome, r.code])).toEqual([
+      ['m-1', 'rejected', 'payload_too_large'],
+    ])
+    expect(q.entries).toEqual([])
+  })
+
+  it('rejects every mutation a 422 points at, and sends the rest again as a new batch', async () => {
+    const q = new Queue()
+    for (const t of ['Milk', 'Bread', 'Eggs', 'Tea']) q.write(t)
+    const refusal = json(422, {
+      code: 'validation_failed',
+      errors: [
+        { field: '/mutations/3/entity_id', code: 'pattern' },
+        { field: '/mutations/1/entity_id', code: 'pattern' },
+      ],
+    })
+    const journal = new Memory()
+    const { fetch, sent } = server(refusal)
+    await connector(fetch, journal).c.upload(q)
+    expect(sent.map((s) => [s.key, s.ids])).toEqual([
+      ['key-1', ['m-1', 'm-2', 'm-3', 'm-4']],
+      ['key-2', ['m-1', 'm-3']],
+    ])
+    expect(journal.recorded.map(([m, r]) => [m.mutation_id, r.outcome])).toEqual([
+      ['m-2', 'rejected'],
+      ['m-4', 'rejected'],
+    ])
+    expect(q.entries).toEqual([])
+  })
+
   it('rejects the mutation a 422 points at, and sends the rest again as a new batch', async () => {
     const q = new Queue()
     for (const t of ['Milk', 'Bread', 'Eggs']) q.write(t)
@@ -313,19 +352,68 @@ describe('the connector', () => {
     expect(journal.holding).toEqual([])
   })
 
+  it('replays the entitlement holds at a later upload when the replay resume() let through fails', async () => {
+    const q = new Queue()
+    q.write('Honey')
+    const journal = new Memory()
+    const { fetch, sent } = server(
+      results([['rejected', 'entitlement_read_only']]),
+      new TypeError('network: refused'),
+    )
+    const { c } = connector(fetch, journal)
+    await c.upload(q)
+    c.resume()
+    expect(c.resuming).toBe(true)
+    await expect(c.upload(q)).rejects.toThrow('refused')
+    expect(c.resuming).toBe(true)
+    await c.upload(q)
+    expect(c.resuming).toBe(false)
+    expect(sent.map((s) => [s.key, s.ids])).toEqual([
+      ['key-1', ['m-1']],
+      ['key-2', ['m-1']],
+      ['key-2', ['m-1']],
+    ])
+    expect(journal.holding).toEqual([])
+  })
+
+  it('keeps a held batch its key while the queue is sent before it', async () => {
+    const q = new Queue()
+    for (const t of ['Rice', 'Brown rice']) q.write(t, UpdateType.PATCH)
+    const journal = new Memory()
+    const { fetch, sent } = server(
+      results(['applied', ['deferred', 'dependency_failed']]),
+      new TypeError('network: the response was lost'),
+    )
+    const { c } = connector(fetch, journal)
+    await expect(c.upload(q)).rejects.toThrow('lost')
+    expect(journal.holding.map((h) => h.mutation.mutation_id)).toEqual(['m-2'])
+    q.write('Basmati', UpdateType.PATCH)
+    await c.upload(q)
+    expect(sent.map((s) => [s.key, s.ids])).toEqual([
+      ['key-1', ['m-1', 'm-2']],
+      ['key-2', ['m-2']],
+      ['key-3', ['m-3']],
+      ['key-2', ['m-2']],
+    ])
+    expect(journal.holding).toEqual([])
+  })
+
   it("throws on a 409, and sends the batch under a fresh key once D-92's five minutes have passed", async () => {
     const q = new Queue()
     q.write('Milk')
     let now = 0
     const inProgress = (): Response => json(409, { code: 'idempotency_in_progress' })
-    const { fetch, sent } = server(inProgress(), inProgress())
+    const { fetch, sent } = server(inProgress(), inProgress(), inProgress())
     const { c } = connector(fetch, new Memory(), { now: () => now })
     await expect(c.upload(q)).rejects.toThrow()
     now = inProgressWindowMs / 2
     await expect(c.upload(q)).rejects.toThrow()
     now = inProgressWindowMs + 1
+    await expect(c.upload(q)).rejects.toThrow()
+    // The fresh key has a window of its own.
+    now = inProgressWindowMs + 2
     await c.upload(q)
-    expect(sent.map((s) => s.key)).toEqual(['key-1', 'key-1', 'key-2'])
+    expect(sent.map((s) => s.key)).toEqual(['key-1', 'key-1', 'key-2', 'key-2'])
   })
 
   it('throws on an answer the contract does not allow, and reports it', async () => {
@@ -367,13 +455,15 @@ describe('the connector', () => {
 })
 
 describe('a 422', () => {
-  it('locates the one mutation its errors all point into', () => {
+  it('locates the mutations its errors all point into', () => {
     const body = (fields: string[]): string =>
       JSON.stringify({ errors: fields.map((field) => ({ field, code: 'pattern' })) })
-    expect(locate(body(['/mutations/2/entity_id', '/mutations/2/op']), 3)).toBe(2)
-    expect(locate(body(['/mutations/0/entity_id', '/mutations/1/op']), 3)).toBeNull()
+    expect(locate(body(['/mutations/2/entity_id', '/mutations/2/op']), 3)).toEqual([2])
+    expect(locate(body(['/mutations/1/op', '/mutations/0/entity_id']), 3)).toEqual([0, 1])
+    expect(locate(body(['/mutations/0/op', 'header:Idempotency-Key']), 3)).toBeNull()
     expect(locate(body(['header:Idempotency-Key']), 3)).toBeNull()
     expect(locate(body(['/mutations/5']), 3)).toBeNull()
+    expect(locate(body([]), 3)).toBeNull()
     expect(locate('not json', 3)).toBeNull()
   })
 })

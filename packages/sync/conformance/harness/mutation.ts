@@ -94,3 +94,14 @@ export const terminal: ReadonlySet<Outcome> = new Set(['applied', 'merged', 'con
 export function isEntitlement(code: string | null | undefined): boolean {
   return code === 'entitlement' || (code?.startsWith('entitlement_') ?? false)
 }
+
+/**
+ * Whether an answer ends its mutation (invariant 6): a terminal outcome, but not an entitlement
+ * rejection, which holds the mutation to replay once the household may write again (scenario 14),
+ * as `deferred` holds one until its batch is answered.
+ */
+export function ends(result: Pick<SyncMutationResult, 'outcome' | 'code'>): boolean {
+  return (
+    terminal.has(result.outcome) && !(result.outcome === 'rejected' && isEntitlement(result.code))
+  )
+}

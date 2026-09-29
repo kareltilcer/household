@@ -1,5 +1,6 @@
-// PRD 10 §4's scenarios, each held to its own expectations and to the six invariants. A scenario
-// not yet switched on (scenarios/index.ts) is skipped, named with the item that switches it on;
+// PRD 10 §4's scenarios, each held to its own expectations and to the six invariants, idempotency
+// by delivering again every batch its clients had answered, once the rest have been judged. A
+// scenario not yet switched on (scenarios/index.ts) is skipped, named with the item that switches it on;
 // CONFORMANCE_SCENARIOS=all runs every one the target can, switched on or not, for the item
 // building its engine.
 
@@ -47,9 +48,11 @@ describe(`PRD 10 §4, against the ${target.name}`, () => {
       const w = new World(target, admin, 10_000 + i, `scenario-${s.key}`)
       try {
         await s.run(w)
-        expect(
-          await w.violations(s.allowHeld === undefined ? {} : { allowHeld: s.allowHeld }),
-        ).toEqual([])
+        const found = await w.violations(
+          s.allowHeld === undefined ? {} : { allowHeld: s.allowHeld },
+        )
+        found.push(...(await w.idempotency()))
+        expect(found).toEqual([])
       } finally {
         await w.close()
       }

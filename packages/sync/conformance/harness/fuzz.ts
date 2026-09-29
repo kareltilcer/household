@@ -2,8 +2,11 @@
 // offline and on, over a network that refuses and loses, with skewed clocks, a batch delivered
 // again, and a member's grant changing under them, judged at the end by the same six invariants
 // as every scenario. Scenarios find the bugs someone thought of; the fuzzer finds the others,
-// with the same harness. A failing seed replays its schedule (Rng); PowerSync's timing is not the
-// seed's, so a replay may interleave differently with replication.
+// with the same harness. A failing seed replays its schedule (Rng): every step draws the same
+// number of times whatever the replicas hold, and whatever draws as often as PowerSync's timing
+// decides (a client's ids and keys, a flaky network's rolls) draws from a generator of its own
+// (Rng.fork). PowerSync's timing is not the seed's, so a replay may interleave differently with
+// replication, and an update may land on another of the rows a replica holds.
 
 import type { Admin, Level } from './admin.ts'
 import type { Client } from './client.ts'
@@ -25,6 +28,14 @@ export interface FuzzResult {
   /** What the schedule did, step by step: the report of a failing seed. */
   readonly log: string[]
   readonly settled: boolean
+}
+
+/**
+ * The item at the place in items a draw u in [0, 1) names, or undefined when there are none. The
+ * draw is made whether or not there are, so that what a replica holds does not move the schedule.
+ */
+function at<T>(items: readonly T[], u: number): T | undefined {
+  return items[Math.floor(u * items.length)]
 }
 
 const titles = [
@@ -74,8 +85,9 @@ export async function fuzz(run: FuzzRun): Promise<FuzzResult> {
     }
 
     const writes = target.writes
+    // In id order, so that one draw names the same row of the same rows.
     const holds = async (c: Client, table: 'conformance_items'): Promise<string[]> =>
-      (await c.rows(table)).map((r) => String(r['id']))
+      (await c.rows(table)).map((r) => String(r['id'])).sort()
 
     for (let step = 0; step < run.steps; step++) {
       const c = rng.pick(clients)
@@ -105,31 +117,31 @@ export async function fuzz(run: FuzzRun): Promise<FuzzResult> {
           break
         }
         case 'update': {
-          const ids = await holds(c, 'conformance_items')
-          if (ids.length === 0) break
-          const id = rng.pick(ids)
+          const u = rng.float()
           const fields = rng.pick([
             { title: rng.pick(titles) },
             { note: `note ${String(rng.int(0, 99))}` },
             { quantity: rng.int(1, 12) },
           ])
+          const id = at(await holds(c, 'conformance_items'), u)
+          if (id === undefined) break
           await c.update('conformance_items', id, fields)
           say(step, `${c.name} sets ${JSON.stringify(fields)} on ${id}`)
           break
         }
         case 'delete': {
-          const ids = await holds(c, 'conformance_items')
-          if (ids.length === 0) break
-          const id = rng.pick(ids)
+          const u = rng.float()
+          const id = at(await holds(c, 'conformance_items'), u)
+          if (id === undefined) break
           await c.remove('conformance_items', id)
           say(step, `${c.name} deletes ${id}`)
           break
         }
         case 'check': {
-          const ids = await holds(c, 'conformance_items')
-          if (ids.length === 0) break
-          const id = rng.pick(ids)
+          const u = rng.float()
           const checked = rng.chance(0.7)
+          const id = at(await holds(c, 'conformance_items'), u)
+          if (id === undefined) break
           await c.check(id, checked)
           say(step, `${c.name} ${checked ? 'checks' : 'unchecks'} ${id}`)
           break
@@ -137,7 +149,8 @@ export async function fuzz(run: FuzzRun): Promise<FuzzResult> {
         case 'flaky': {
           const refuse = rng.float() * 0.3
           const lose = rng.float() * 0.3
-          c.network.flaky(rng, refuse, lose)
+          // Its rolls are as many as the requests PowerSync's timing makes: a generator of its own.
+          c.network.flaky(rng.fork(), refuse, lose)
           say(step, `${c.name}'s network refuses ${refuse.toFixed(2)} and loses ${lose.toFixed(2)}`)
           break
         }
@@ -161,9 +174,8 @@ export async function fuzz(run: FuzzRun): Promise<FuzzResult> {
         }
         case 'again': {
           const s = rng.pick(steady)
-          const sent = w.answered(s)
-          if (sent.length === 0) break
-          const batch = rng.pick(sent)
+          const batch = at(w.answered(s), rng.float())
+          if (batch === undefined) break
           violations.push(...(await w.deliverAgain(s, batch)))
           say(step, `${s.name}'s batch ${batch.key} is delivered again`)
           break

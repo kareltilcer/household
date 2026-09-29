@@ -93,14 +93,17 @@ rather than throwing, so that a negative control can assert which one failed:
 2. No acknowledged write is lost: the row an `applied` or `merged` answer names is on the server at the
    version it answered, or later.
 3. Idempotency: a batch delivered again, under its own key or, where the target has per-mutation
-   idempotency (FR-SY5), under a fresh one, is answered alike and changes nothing.
+   idempotency (FR-SY5), under a fresh one, is answered alike and changes nothing: after every
+   scenario, every batch its clients had answered. Under a fresh key a mutation the batch held
+   (`deferred`, or rejected for its entitlement) is answered as its replay ended it.
 4. Retraction completeness: no replica holds a row its member may not see.
 5. Monotonicity: no bucket's applied op moves backwards. A bucket at op 0 has applied no checkpoint
    since it was made, as one a member's access brought back, or one downloaded again after its
    checksum failed, starts again from nothing; the long fuzz run found the first case.
 6. Terminality: every mutation a client wrote ends in exactly one of applied, merged, conflict and
    rejected, once; none is left queued, held without cause or retried without end; every outcome but
-   `applied` carries a code; every answer is the contract's.
+   `applied` carries a code; every answer is the contract's. A rejection for the entitlement holds
+   its mutation to replay, as `deferred` does, and ends nothing.
 
 **A scenario waits for the engine it tests.** Each names the item that switches it on (13, 14 or 18),
 the entities its target's push must write, the tables its streams must replicate, and any capability
@@ -147,6 +150,8 @@ and a stream that leaks another household's rows (`isolation`).
 - **Item 15's connector replaces the suite's**, and may take its `_metadata` convention; the suite's
   unit tests are the connector's behaviour as ADR 0001 states it.
 - **The fuzzer's schedule is the seed's, not PowerSync's timing**: a failing seed replays what the
-  clients did and when, and may interleave differently with replication.
+  clients did and when, and may interleave differently with replication. Every step draws as often
+  whatever the replicas hold, and what draws as often as PowerSync's timing decides (a client's ids
+  and keys, a flaky network's rolls) draws from a generator forked from the schedule's.
 - **The stand-in serves a route at the contract's path outside the server's router**, which
   architecture test 6 does not see: it is never deployed, and item 13's route replaces it.

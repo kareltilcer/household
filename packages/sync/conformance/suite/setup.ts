@@ -5,6 +5,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 import pg from 'pg'
 import { adminDatabaseUrl, powerSyncUrl, standInUrl, startStandIn } from '../harness/env.ts'
 import { until } from '../harness/wait.ts'
@@ -58,8 +59,16 @@ export default async function setup(): Promise<() => Promise<void>> {
       CONFORMANCE_STANDIN_ADDR: listen.host,
       CONFORMANCE_POWERSYNC_URL: powerSyncUrl,
     },
-    stdio: ['ignore', 'ignore', 'inherit'],
+    stdio: ['ignore', 'pipe', 'inherit'],
   })
+  // The stand-in logs to stdout, a line for every request and the error behind every 500 its push
+  // answers: the requests answered well are left out, and what went wrong is passed on.
+  if (child.stdout !== null) {
+    createInterface({ input: child.stdout }).on('line', (line) => {
+      if (/"level":"(?:WARN|ERROR)"/.test(line))
+        process.stderr.write(`conformance-standin: ${line}\n`)
+    })
+  }
   const exited = new Promise<void>((resolve) => {
     child.once('exit', () => {
       resolve()

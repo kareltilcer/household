@@ -5,8 +5,8 @@
 // transport failure, a 5xx, a 401, a 409 or a 429.
 //
 // It sends the queue in order, several queued transactions to a batch up to maxBatch, under one
-// Idempotency-Key per batch that stays with the batch until it is answered. What it does with each
-// answer:
+// Idempotency-Key per batch that stays with the batch until it is answered, a held batch's as
+// well as the queue's. What it does with each answer:
 //   - applied: ended.
 //   - merged, conflict, and a rejection: ended, and recorded in the local-only outcomes table with
 //     the mutation, since the next checkpoint replaces the local write.
@@ -16,10 +16,11 @@
 //     mutation replays after the writes queued behind it, the one reordering a client's own
 //     uploads have (PRD 10 §4).
 // And to a response that answers no mutation: a 401 renews the API credential and throws; a 429
-// waits out its Retry-After and throws; a 413 halves the batch; a 422 rejects the mutation it
-// locates and sends the rest again; a 402 or a 404 answers every mutation of the batch alike,
-// `entitlement` or `not_found`; a 409 idempotency_in_progress throws, and past D-92's five minutes
-// the batch is sent under a fresh key, which per-mutation idempotency answers (FR-SY5).
+// waits out its Retry-After and throws; a 413 halves the batch, and rejects a mutation too large
+// to send alone; a 422 rejects the mutations it locates and sends the rest again; a 402 or a 404
+// answers every mutation of the batch alike, `entitlement` or `not_found`; a 409
+// idempotency_in_progress throws, and past D-92's five minutes the batch is sent under a fresh
+// key, which per-mutation idempotency answers (FR-SY5).
 
 import {
   isEntitlement,
@@ -116,15 +117,20 @@ interface InFlight {
   readonly source: Attempt['source']
   readonly ids: readonly string[]
   key: string
-  readonly firstSentAt: number
-  /** Mutations a 422 answered, which the batch no longer carries. */
+  /** When the batch was first sent under key. */
+  firstSentAt: number
+  /** Mutations a 422 or a 413 answered, which the batch no longer carries. */
   readonly settled: Map<string, SyncMutationResult>
 }
 
 export class ConformanceConnector {
   private readonly o: Required<Omit<ConnectorOptions, 'observer' | 'retryRejections'>> &
     Pick<ConnectorOptions, 'observer' | 'retryRejections'>
-  private inflight: InFlight | null = null
+  /**
+   * The batch of each source not yet answered: the queue's and each hold's apart, so that a held
+   * batch whose answer was lost keeps its key while the queue is sent before it.
+   */
+  private readonly inflight = new Map<Attempt['source'], InFlight>()
   private maxBatch: number
   private entitlementResumed = false
   private lock: Promise<void> = Promise.resolve()
@@ -140,9 +146,17 @@ export class ConformanceConnector {
     this.maxBatch = this.o.maxBatch
   }
 
-  /** Lets the mutations held for the household's entitlement replay at the next upload. */
+  /**
+   * Lets the mutations held for the household's entitlement replay at the next upload, and at
+   * every one after it until a replay of them is answered.
+   */
   resume(): void {
     this.entitlementResumed = true
+  }
+
+  /** Whether resume() was called and the entitlement holds have not replayed since. */
+  get resuming(): boolean {
+    return this.entitlementResumed
   }
 
   /**
@@ -166,14 +180,16 @@ export class ConformanceConnector {
     }
     await this.replay('deferred')
     if (this.entitlementResumed) {
-      this.entitlementResumed = false
+      // Cleared once the replay is answered: one the network or the server failed is tried again
+      // at the next upload.
       await this.replay('entitlement')
+      this.entitlementResumed = false
     }
   }
 
   /** How many mutations the next batch from source takes: a batch not yet answered is sent again whole. */
   private limit(source: Attempt['source']): number {
-    return this.inflight?.source === source ? this.inflight.ids.length : this.maxBatch
+    return this.inflight.get(source)?.ids.length ?? this.maxBatch
   }
 
   /** Sends the held mutations of reason, oldest first, a batch at a time, until none is left or none moves. */
@@ -206,21 +222,23 @@ export class ConformanceConnector {
     answered: () => Promise<void>,
   ): Promise<boolean> {
     const ids = all.map((m) => m.mutation_id)
-    let flight = this.inflight
-    if (flight === null || flight.source !== source || !sameIds(flight, ids)) {
+    let flight = this.inflight.get(source)
+    if (flight === undefined || !sameIds(flight, ids)) {
       flight = { source, ids, key: this.o.newKey(), firstSentAt: this.o.now(), settled: new Map() }
-      this.inflight = flight
+      this.inflight.set(source, flight)
     } else if (this.o.now() - flight.firstSentAt > inProgressWindowMs) {
       // D-92: the first request under this key never answered in five minutes; per-mutation
-      // idempotency answers each mutation that took effect from its stored result.
+      // idempotency answers each mutation that took effect from its stored result. The fresh key
+      // starts a window of its own.
       flight.key = this.o.newKey()
+      flight.firstSentAt = this.o.now()
     }
     for (;;) {
       const mutations = all.filter((m) => !flight.settled.has(m.mutation_id))
       if (mutations.length === 0) {
         await answered()
         await this.settle(all, flight)
-        this.inflight = null
+        this.inflight.delete(source)
         return true
       }
       const body = JSON.stringify({ mutations })
@@ -275,31 +293,47 @@ export class ConformanceConnector {
           )
           throw new Error('the push is rate limited; to be sent again')
         }
-        case 413:
-          if (mutations.length === 1)
-            throw new Error('one mutation alone is too large for the push')
+        case 413: {
+          const [alone] = mutations
+          if (mutations.length === 1 && alone !== undefined) {
+            // Nothing smaller can be sent: a refusal, which retrying would never end (ADR 0001).
+            flight.settled.set(alone.mutation_id, {
+              mutation_id: alone.mutation_id,
+              outcome: 'rejected',
+              code: problemCode(text) ?? 'payload_too_large',
+              message: 'the push refused this mutation as too large',
+              version: null,
+            })
+            flight.key = this.o.newKey()
+            continue
+          }
           this.maxBatch = Math.max(1, Math.ceil(all.length / 2))
-          this.inflight = null
+          this.inflight.delete(source)
           return false
+        }
         case 422: {
-          const index = locate(text, mutations.length)
-          const located = index === null ? undefined : mutations[index]
-          if (located === undefined) {
+          const located = (locate(text, mutations.length) ?? []).flatMap((i) => {
+            const m = mutations[i]
+            return m === undefined ? [] : [m]
+          })
+          if (located.length === 0) {
             if (tooMany(text) && mutations.length > 1) {
               this.maxBatch = Math.max(1, Math.ceil(all.length / 2))
-              this.inflight = null
+              this.inflight.delete(source)
               return false
             }
             this.o.observer?.malformed?.(sent, `a 422 that locates no mutation: ${text}`)
             throw new Error(`the push refused the batch as a whole: ${text}`)
           }
-          flight.settled.set(located.mutation_id, {
-            mutation_id: located.mutation_id,
-            outcome: 'rejected',
-            code: problemCode(text) ?? 'validation_failed',
-            message: 'the edge refused this mutation',
-            version: null,
-          })
+          for (const m of located) {
+            flight.settled.set(m.mutation_id, {
+              mutation_id: m.mutation_id,
+              outcome: 'rejected',
+              code: problemCode(text) ?? 'validation_failed',
+              message: 'the edge refused this mutation',
+              version: null,
+            })
+          }
           // The rest are a new batch.
           flight.key = this.o.newKey()
           continue
@@ -420,16 +454,21 @@ function fieldErrors(text: string): { field: string; code: string }[] {
   }
 }
 
-/** The index of the mutation a 422's field errors point into (ADR 0003), when they all point into one. */
-export function locate(text: string, count: number): number | null {
+/**
+ * The indexes of the mutations a 422's field errors point into (ADR 0003), in order, when every
+ * error points into a mutation of the batch: the edge reports each error it finds, so a batch with
+ * two refused mutations names both. Null when any error points elsewhere, or there are none.
+ */
+export function locate(text: string, count: number): number[] | null {
   const indexes = new Set<number>()
   for (const e of fieldErrors(text)) {
     const match = /^\/mutations\/(\d+)(?:\/|$)/.exec(e.field)
     if (match?.[1] === undefined) return null
-    indexes.add(Number(match[1]))
+    const index = Number(match[1])
+    if (index >= count) return null
+    indexes.add(index)
   }
-  const [index] = [...indexes]
-  return indexes.size === 1 && index !== undefined && index < count ? index : null
+  return indexes.size === 0 ? null : [...indexes].sort((a, b) => a - b)
 }
 
 /** Whether a 422 refuses the batch for holding more mutations than the contract's ceiling. */

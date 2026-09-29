@@ -73,6 +73,8 @@ export class Client {
   private credential: string | null = null
   private subscriptions: SyncStreamSubscription[] | null = null
   private onlineNow = false
+  /** A flush replayHeld started and that has not finished. */
+  private replaying: Promise<void> | null = null
 
   constructor(ctx: ClientContext, options: ClientOptions) {
     this.ctx = ctx
@@ -188,6 +190,25 @@ export class Client {
     })
   }
 
+  /**
+   * Starts a flush when the queue is empty and the connector holds mutations whose cause has
+   * cleared: PowerSync calls uploadData only while its queue holds a write, so a replay the network
+   * or the server failed after the queue drained would otherwise wait for the next local write.
+   * It does not wait for the flush, whose failure the next call tries again.
+   */
+  async replayHeld(): Promise<void> {
+    if (!this.onlineNow || this.replaying !== null || (await this.pending()) > 0) return
+    const waiting =
+      (await this.held('deferred')).length > 0 ||
+      (this.connector.resuming && (await this.held('entitlement')).length > 0)
+    if (!waiting) return
+    this.replaying = this.flush()
+      .catch(() => undefined)
+      .finally(() => {
+        this.replaying = null
+      })
+  }
+
   /** Disconnects from PowerSync: the client goes offline, its replica and its queue kept. */
   async offline(): Promise<void> {
     this.onlineNow = false
@@ -201,6 +222,7 @@ export class Client {
 
   async close(): Promise<void> {
     for (const s of this.subscriptions ?? []) s.unsubscribe()
+    await this.replaying
     await this.db.close()
   }
 
@@ -248,7 +270,9 @@ export class Client {
 
   /**
    * Sets fields of table's row id, against the version the replica holds, and reports whether the
-   * replica held the row: a write to a row it does not hold queues nothing.
+   * replica held the row: a write to a row it does not hold queues nothing, and is not recorded.
+   * The row is read and written in one transaction, which no checkpoint can land inside: one that
+   * retracted the row between the two would leave a write recorded that was never queued.
    */
   async update(
     table: TableName,
@@ -256,21 +280,25 @@ export class Client {
     fields: Readonly<Record<string, unknown>>,
     options: { readonly action?: string; readonly carry?: Readonly<Record<string, unknown>> } = {},
   ): Promise<boolean> {
-    const current = await this.db.getOptional<{ version: number | null }>(
-      `SELECT version FROM ${table} WHERE id = ?`,
-      [id],
-    )
-    if (current === null) return false
-    const { meta, encoded } = this.metadata({
-      ...(current.version === null ? {} : { base_version: current.version }),
-      ...(options.action === undefined ? {} : { action: options.action }),
-      ...(options.carry === undefined ? {} : { fields: options.carry }),
-    })
     const names = Object.keys(fields)
-    await this.db.execute(
-      `UPDATE ${table} SET ${names.map((n) => `${n} = ?`).join(', ')}, _metadata = ? WHERE id = ?`,
-      [...names.map((n) => this.toClient(table, n, fields[n])), encoded, id],
-    )
+    const meta = await this.db.writeTransaction(async (tx) => {
+      const current = await tx.getOptional<{ version: number | null }>(
+        `SELECT version FROM ${table} WHERE id = ?`,
+        [id],
+      )
+      if (current === null) return null
+      const { meta, encoded } = this.metadata({
+        ...(current.version === null ? {} : { base_version: current.version }),
+        ...(options.action === undefined ? {} : { action: options.action }),
+        ...(options.carry === undefined ? {} : { fields: options.carry }),
+      })
+      await tx.execute(
+        `UPDATE ${table} SET ${names.map((n) => `${n} = ?`).join(', ')}, _metadata = ? WHERE id = ?`,
+        [...names.map((n) => this.toClient(table, n, fields[n])), encoded, id],
+      )
+      return meta
+    })
+    if (meta === null) return false
     this.ctx.recorder.wrote(this.name, {
       mutationId: meta.mutation_id,
       table,
@@ -280,21 +308,28 @@ export class Client {
     return true
   }
 
-  /** Deletes table's row id, with its mutation's metadata, and reports whether the replica held it. */
+  /**
+   * Deletes table's row id, with its mutation's metadata, and reports whether the replica held it;
+   * read and written in one transaction, as update is.
+   */
   async remove(table: TableName, id: string): Promise<boolean> {
-    const current = await this.db.getOptional<{ version: number | null }>(
-      `SELECT version FROM ${table} WHERE id = ?`,
-      [id],
-    )
-    if (current === null) return false
-    const { meta, encoded } = this.metadata(
-      current.version === null ? {} : { base_version: current.version },
-    )
-    // A delete that carries metadata is written as an update of _deleted (trackMetadata).
-    await this.db.execute(`UPDATE ${table} SET _deleted = 1, _metadata = ? WHERE id = ?`, [
-      encoded,
-      id,
-    ])
+    const meta = await this.db.writeTransaction(async (tx) => {
+      const current = await tx.getOptional<{ version: number | null }>(
+        `SELECT version FROM ${table} WHERE id = ?`,
+        [id],
+      )
+      if (current === null) return null
+      const { meta, encoded } = this.metadata(
+        current.version === null ? {} : { base_version: current.version },
+      )
+      // A delete that carries metadata is written as an update of _deleted (trackMetadata).
+      await tx.execute(`UPDATE ${table} SET _deleted = 1, _metadata = ? WHERE id = ?`, [
+        encoded,
+        id,
+      ])
+      return meta
+    })
+    if (meta === null) return false
     this.ctx.recorder.wrote(this.name, {
       mutationId: meta.mutation_id,
       table,

@@ -8,6 +8,7 @@ import {
   offline,
   online,
   staysQuiet,
+  today,
   type Scenario,
 } from './scenario.ts'
 
@@ -212,11 +213,11 @@ export const merge: readonly Scenario[] = [
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
       await online(w, petr, eva)
       await offline(petr, eva)
-      const today = new Date().toISOString().slice(0, 10)
+      const day = today(f.home)
       for (const c of [petr, eva]) {
         await c.create('conformance_completions', {
           chore_id: dishes,
-          occurrence: today,
+          occurrence: day,
           done: true,
           done_at: c.now().toISOString(),
         })
@@ -227,7 +228,7 @@ export const merge: readonly Scenario[] = [
         (c) => c['chore_id'] === dishes,
       )
       expect(done).toHaveLength(1)
-      expect(done[0]).toMatchObject({ occurrence: today, done: true })
+      expect(done[0]).toMatchObject({ occurrence: day, done: true })
       expect(await eventsAbout(w, f.home, done[0]?.id ?? '')).toHaveLength(1)
     },
   },
@@ -247,11 +248,11 @@ export const merge: readonly Scenario[] = [
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
       await online(w, petr, eva)
       await offline(petr, eva)
-      const today = new Date().toISOString().slice(0, 10)
+      const day = today(f.home)
       for (const c of [petr, eva]) {
         await c.create('conformance_completions', {
           chore_id: dishes,
-          occurrence: today,
+          occurrence: day,
           done: true,
           done_at: c.now().toISOString(),
         })
