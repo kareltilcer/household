@@ -515,7 +515,7 @@ Phase 0 · after 4, 10 · size L · **gate G-B (harness)**
 - **Done when**
   - All 18 scenarios are encoded with explicit expected outcomes.
   - A deliberately broken connector and a deliberately broken stream are caught against the stand-ins: one that retries a rejection forever, and one that leaks another household's rows. This proves the suite can fail.
-- **PR:** —
+- **PR:** [#15](https://github.com/kareltilcer/household/pull/15)
 
 ### 13 · Sync engine I — PowerSync, generated streams and the push · `planned`
 
