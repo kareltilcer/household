@@ -10,12 +10,14 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/app/apptest"
 	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
@@ -1047,6 +1049,49 @@ func TestAnOwnersInvitationsLapseWithTheirOwnership(t *testing.T) {
 	expect(t, stranger.post("/me/invitations/"+janasLink+"/accept", ""), http.StatusOK, "")
 }
 
+// An owner removed, or made a member, while their request is on its way is an owner no longer when
+// it writes: the role the tenant middleware read is read again under the household's lock, which the
+// removal and the demotion take as well, so that no invitation outlives the withdrawal that ended its
+// sender's ownership (D-103), and a demoted owner does not promote themself back.
+func TestAnOwnershipEndedMidRequestEndsItsWrite(t *testing.T) {
+	// meanwhile runs once, in the next request whose household the tenant middleware resolves: after
+	// the caller's role is read, and before the handler runs.
+	var meanwhile atomic.Pointer[func()]
+	s := newSite(t, apptest.Options{}, func(d *app.Deps) {
+		d.Entitlement = func(*http.Request) error {
+			if f := meanwhile.Swap(nil); f != nil {
+				(*f)()
+			}
+			return nil
+		}
+	})
+	then := func(f func()) { meanwhile.Store(&f) }
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	petr, petrID := s.joined(jana, h.ID, "Petr", s.a("petr@tilcerovi.cz"), "owner", nil)
+	milos, milosID := s.joined(jana, h.ID, "Miloš", s.a("milos@tilcerovi.cz"), "owner", nil)
+
+	// Removed while his link is on its way, Petr sends none.
+	then(func() {
+		expect(t, jana.delete(householdPath(h.ID, "/members/"+petrID.String())), http.StatusNoContent, "")
+	})
+	link := jsonBody(t, map[string]any{"id": idgen.New(), "kind": "link", "role": "owner"})
+	expect(t, petr.post(householdPath(h.ID, "/invitations"), link), http.StatusNotFound, problem.CodeNotFound)
+	if n := s.count(`SELECT count(*) FROM invitations WHERE household_id = $1 AND invited_by = $2`, h.ID, petrID); n != 0 {
+		t.Errorf("Petr sent %d invitations once removed", n)
+	}
+
+	// Made a member while his promotion of himself is on its way, Miloš stays one.
+	then(func() {
+		expect(t, jana.patch(householdPath(h.ID, "/members/"+milosID.String()), `{"role":"member"}`, nil), http.StatusOK, "")
+	})
+	promotion := jsonBody(t, map[string]any{"user_id": milosID})
+	expect(t, milos.post(householdPath(h.ID, "/ownership/transfer"), promotion), http.StatusForbidden, problem.CodeForbidden)
+	if role := jana.members(h.ID)["Miloš"].Role; role != "member" {
+		t.Errorf("Miloš is %s", role)
+	}
+}
+
 // An owner turns a module off for everyone and on again (FR-HA8): off, it is none for every member,
 // and retracted from whoever could see it; its data stays. Household settings stays on.
 func TestTurningAModuleOffAndOn(t *testing.T) {
@@ -1059,13 +1104,21 @@ func TestTurningAModuleOffAndOn(t *testing.T) {
 	garden := householdPath(h.ID, "/modules/garden")
 
 	expect(t, milos.patch(garden, `{"enabled":false}`, nil), http.StatusForbidden, problem.CodeForbidden)
-	expect(t, jana.patch(householdPath(h.ID, "/modules/admin"), `{"enabled":false}`, nil), http.StatusForbidden, problem.CodeForbidden)
-	rec := jana.patch(garden, `{"enabled":false}`, nil)
+	// Household settings is never turned off; turned on, which it is, it stays as it is.
+	admin := householdPath(h.ID, "/modules/admin")
+	expect(t, jana.patch(admin, `{"enabled":false}`, nil), http.StatusForbidden, problem.CodeForbidden)
+	rec := jana.patch(admin, `{"enabled":true}`, nil)
 	expect(t, rec, http.StatusOK, "")
 	var state struct {
 		Enabled bool   `json:"enabled"`
 		MyLevel string `json:"my_level"`
 	}
+	decode(t, rec, &state)
+	if !state.Enabled || state.MyLevel != "manage" {
+		t.Errorf("admin turned on: %+v", state)
+	}
+	rec = jana.patch(garden, `{"enabled":false}`, nil)
+	expect(t, rec, http.StatusOK, "")
 	decode(t, rec, &state)
 	if state.Enabled || state.MyLevel != "none" {
 		t.Errorf("turned off: %+v", state)

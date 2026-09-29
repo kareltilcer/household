@@ -2,6 +2,7 @@ package household
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"net/http"
 	"slices"
@@ -113,6 +114,37 @@ func lockHousehold(ctx context.Context, tx pgx.Tx, household uuid.UUID) (*uuid.U
 	var payer *uuid.UUID
 	err := tx.QueryRow(ctx, "SELECT billing_payer_id FROM households WHERE id = $1 FOR NO KEY UPDATE", household).Scan(&payer)
 	return payer, err
+}
+
+// lockAsOwner locks ctx's household as lockHousehold does, returns its payer, and refuses the caller
+// unless they are still one of its owners once the lock is held. owner read the role the tenant
+// middleware resolved, in a transaction before this one; an owner removed or made a member while
+// their request was on its way would otherwise finish it as one, writing an invitation the
+// withdrawal that ended their ownership has already passed (D-103), or promoting themself back.
+// Every change of a member's role or membership takes the same lock, so the role read under it is
+// the one that change committed. A caller who is no longer a member is answered 404, as their next
+// request would be, and one who is no longer an owner 403.
+func lockAsOwner(ctx context.Context, tx pgx.Tx) (*uuid.UUID, error) {
+	scope := tenant.From(ctx)
+	if scope == nil {
+		return nil, tenant.ErrNoTenant
+	}
+	payer, err := lockHousehold(ctx, tx, scope.HouseholdID())
+	if err != nil {
+		return nil, err
+	}
+	var role string
+	err = tx.QueryRow(ctx, "SELECT role::text FROM memberships WHERE household_id = $1 AND user_id = $2",
+		scope.HouseholdID(), scope.UserID()).Scan(&role)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil, problem.NotFound()
+	case err != nil:
+		return nil, err
+	case access.Role(role) != access.Owner:
+		return nil, forbidden()
+	}
+	return payer, nil
 }
 
 // grantsOf are the levels role and stored give on each of modules, as the member list shows them: an
@@ -284,7 +316,7 @@ func (s *Service) listMembers(w http.ResponseWriter, r *http.Request) {
 	var items []memberBody
 	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
 		modules := Modules
-		h, err := readSettings(ctx, tx, scope.HouseholdID(), false)
+		h, err := readSettings(ctx, tx, scope.HouseholdID())
 		if err != nil {
 			return err
 		}
@@ -317,7 +349,7 @@ func (s *Service) getMember(w http.ResponseWriter, r *http.Request) {
 	var body memberBody
 	err = tenant.InTx(ctx, func(tx pgx.Tx) error {
 		modules := Modules
-		h, err := readSettings(ctx, tx, scope.HouseholdID(), false)
+		h, err := readSettings(ctx, tx, scope.HouseholdID())
 		if err != nil {
 			return err
 		}
@@ -414,7 +446,7 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 	)
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		var err error
-		if payer, err = lockHousehold(ctx, tx, household); err != nil {
+		if payer, err = lockAsOwner(ctx, tx); err != nil {
 			return mutation.Record{}, err
 		}
 		old, err := readMembership(ctx, tx, household, user, true)
@@ -570,7 +602,7 @@ func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 	household := scope.HouseholdID()
 	removed := false
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
-		payer, err := lockHousehold(ctx, tx, household)
+		payer, err := lockAsOwner(ctx, tx)
 		if err != nil {
 			return mutation.Record{}, err
 		}
@@ -698,7 +730,7 @@ func (s *Service) promote(w http.ResponseWriter, r *http.Request) {
 	)
 	_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		var err error
-		if payer, err = lockHousehold(ctx, tx, household); err != nil {
+		if payer, err = lockAsOwner(ctx, tx); err != nil {
 			return mutation.Record{}, err
 		}
 		old, err := readMembership(ctx, tx, household, req.UserID, true)

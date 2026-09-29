@@ -151,7 +151,9 @@ func invalid(field, code string) *problem.Problem {
 func forbidden() *problem.Problem { return problem.New(http.StatusForbidden, problem.CodeForbidden) }
 
 // owner refuses a caller who is not an owner of ctx's household, as every write of the household's
-// but leaving is an owner's (PRD 02 §4). Every member can see what the write would change.
+// but leaving is an owner's (PRD 02 §4). Every member can see what the write would change. It reads
+// the role the tenant middleware resolved, before the request's body is read; the write reads it
+// again in its own transaction, under the household's lock (lockAsOwner).
 func owner(ctx context.Context) error {
 	s := tenant.From(ctx)
 	if s == nil {

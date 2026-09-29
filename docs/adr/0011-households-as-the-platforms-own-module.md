@@ -79,9 +79,13 @@ names its household by.
 **The rules that hold across members are checked under a lock on the household's row**, `FOR NO KEY
 UPDATE`, which does not hold up another mutation's audit event: the last owner and the payer (FR-HH4),
 so that two owners leaving at once cannot each find the other still an owner; who lost access to
-a change of a member's grants or of the household's modules, which depends on both; and that an
-address has one email invitation waiting, which inviting it and sending another again both check. A
-change of the settings takes the same lock.
+a change of a member's grants or of the household's modules, which depends on both; that an
+address has one email invitation waiting, which inviting it and sending another again both check; and
+that the caller of an owner's write is an owner still. The tenant middleware read their role in a
+transaction before the write's, so every owner's write reads it again under the lock
+(`lockAsOwner`): an owner removed or made a member while their request was on its way would
+otherwise finish it as one, sending an invitation their withdrawal has already passed, or promoting
+themself back. A change of the settings takes the same lock.
 
 **The household surface enables and grants the contract's seventeen modules**, from the household's
 creation, whether or not a module's package is built yet: `household.Modules`, which a test holds to

@@ -96,7 +96,8 @@ type moduleUpdate struct {
 // updateModule enables or disables a module for the whole household (FR-HA8), an owner's to do.
 // Disabling answers its routes 404 from the next request and retracts it from every replica that held
 // it (Hooks.Lost), and keeps its data, which enabling it again restores. Household settings is
-// granted and never disabled: an owner who disabled it could not enable it again.
+// granted and never disabled, since an owner who disabled it could not enable it again; enabling it,
+// which it is, changes nothing.
 func (s *Service) updateModule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -105,13 +106,13 @@ func (s *Service) updateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	module := chi.URLParam(r, "module")
-	if module == Name {
-		s.fail(w, r, forbidden())
-		return
-	}
 	var req moduleUpdate
 	if err := decode(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if module == Name && !req.Enabled {
+		s.fail(w, r, forbidden())
 		return
 	}
 	household := scope.HouseholdID()
@@ -125,7 +126,7 @@ func (s *Service) updateModule(w http.ResponseWriter, r *http.Request) {
 		// on both the grants and the modules, and under one lock the second of two such changes reads
 		// the first once it has committed, so that a module enabled while a grant on it is lowered
 		// cannot leave each change reading the other's old state and neither retracting.
-		if _, err := lockHousehold(ctx, tx, household); err != nil {
+		if _, err := lockAsOwner(ctx, tx); err != nil {
 			return mutation.Record{}, err
 		}
 		err := tx.QueryRow(ctx, `

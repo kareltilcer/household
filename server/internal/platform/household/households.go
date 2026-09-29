@@ -53,16 +53,12 @@ func scanSettings(row pgx.Row) (settings, error) {
 	return h, err
 }
 
-// readSettings reads the household of tx's context, locked when lock is set as lockHousehold locks it,
-// FOR NO KEY UPDATE: a change of the settings writes no key of the row, and so need not hold up
-// another mutation of the household, whose audit event's foreign key locks the row FOR KEY SHARE, as
-// FOR UPDATE would.
-func readSettings(ctx context.Context, tx pgx.Tx, household uuid.UUID, lock bool) (settings, error) {
-	statement := "SELECT " + settingsColumns + " FROM households WHERE id = $1"
-	if lock {
-		statement += " FOR NO KEY UPDATE"
-	}
-	return scanSettings(tx.QueryRow(ctx, statement, household))
+// readSettings reads household, the household of tx's context. A change of the settings locks it first
+// (lockAsOwner), FOR NO KEY UPDATE: it writes no key of the row, and so need not hold up another
+// mutation of the household, whose audit event's foreign key locks the row FOR KEY SHARE, as FOR
+// UPDATE would.
+func readSettings(ctx context.Context, tx pgx.Tx, household uuid.UUID) (settings, error) {
+	return scanSettings(tx.QueryRow(ctx, "SELECT "+settingsColumns+" FROM households WHERE id = $1", household))
 }
 
 // householdBody is the contract's Household. The household code, and the caller's role and levels,
@@ -361,7 +357,7 @@ func (s *Service) getHousehold(w http.ResponseWriter, r *http.Request) {
 	var h settings
 	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		h, err = readSettings(ctx, tx, scope.HouseholdID(), false)
+		h, err = readSettings(ctx, tx, scope.HouseholdID())
 		return err
 	})
 	if err != nil {
@@ -398,7 +394,10 @@ func (s *Service) updateHousehold(w http.ResponseWriter, r *http.Request) {
 		modules = Modules
 	)
 	_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
-		old, err := readSettings(ctx, tx, scope.HouseholdID(), true)
+		if _, err := lockAsOwner(ctx, tx); err != nil {
+			return mutation.Record{}, err
+		}
+		old, err := readSettings(ctx, tx, scope.HouseholdID())
 		if err != nil {
 			return mutation.Record{}, err
 		}
@@ -490,6 +489,9 @@ func (s *Service) regenerateJoinCode(w http.ResponseWriter, r *http.Request) {
 		modules = Modules
 	)
 	_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		if _, err := lockAsOwner(ctx, tx); err != nil {
+			return mutation.Record{}, err
+		}
 		var err error
 		if h, err = setJoinCode(ctx, tx, scope.HouseholdID()); err != nil {
 			return mutation.Record{}, err

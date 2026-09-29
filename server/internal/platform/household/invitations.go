@@ -8,9 +8,7 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
-	"strings"
 	"time"
-	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -30,6 +28,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
+	"github.com/kareltilcer/household/server/internal/platform/text"
 )
 
 // How long an invitation works (FR-HH2), and how many accounts a link may bring in: the members'
@@ -180,8 +179,8 @@ type inviteRequest struct {
 // check refuses what the edge cannot: a child's role, since a child profile is made by an owner and
 // never invited (D-17); an email invitation without its address or a link with one; a number of uses
 // on an email invitation, which one account accepts; and a message with a control character other
-// than a line break or a tab, or a bidirectional control. It trims the message, and drops one with
-// nothing in it.
+// than a line break or a tab, or a bidirectional control (text.Message). It trims the message, and
+// drops one with nothing in it.
 func (req *inviteRequest) check() error {
 	var errs []problem.FieldError
 	if req.Role == access.Child {
@@ -197,14 +196,12 @@ func (req *inviteRequest) check() error {
 		errs = append(errs, problem.FieldError{Field: "/max_uses", Code: problem.FieldInvalid})
 	}
 	if req.Message != nil {
-		text := strings.TrimSpace(*req.Message)
-		if strings.IndexFunc(text, func(r rune) bool {
-			return (unicode.IsControl(r) && r != '\n' && r != '\t') || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control)
-		}) >= 0 {
+		message, ok := text.Message(*req.Message)
+		if !ok {
 			errs = append(errs, problem.FieldError{Field: "/message", Code: problem.FieldInvalid})
 		}
-		req.Message = &text
-		if text == "" {
+		req.Message = &message
+		if message == "" {
 			req.Message = nil
 		}
 	}
@@ -237,9 +234,10 @@ func proposed(role access.Role, requested map[string]access.Level, modules []str
 	return grants
 }
 
-// sendInvitation is what an email invitation's message needs, read in the transaction that writes
-// it and sent once it commits.
-type sendInvitation struct {
+// outgoing is an email about an invitation, its own or the notice of its decline: its address, the
+// language it is written in and its arguments, read in the transaction that writes the invitation
+// and sent once it commits.
+type outgoing struct {
 	to, locale string
 	args       i18n.Args
 }
@@ -247,19 +245,19 @@ type sendInvitation struct {
 // letter reads what the email of invitation i, whose token is token, needs: the language of the
 // account with its address, else the household's, the inviter's and the household's names, and the
 // message.
-func (s *Service) letter(ctx context.Context, tx pgx.Tx, i invitation, token string) (sendInvitation, error) {
+func (s *Service) letter(ctx context.Context, tx pgx.Tx, i invitation, token string) (outgoing, error) {
 	var household, locale string
 	if err := tx.QueryRow(ctx, `
 		SELECT h.name, coalesce((SELECT u.locale FROM users u WHERE lower(u.email) = lower($2)), h.locale)
 		FROM households h WHERE h.id = $1`, i.household, *i.email).Scan(&household, &locale); err != nil {
-		return sendInvitation{}, err
+		return outgoing{}, err
 	}
 	args := i18n.Args{"inviter": i.inviterName, "household": household, "link": s.link(routeInvitation, token),
 		"hasMessage": "no", "message": ""}
 	if i.message != nil {
 		args["hasMessage"], args["message"] = "yes", *i.message
 	}
-	return sendInvitation{to: *i.email, locale: locale, args: args}, nil
+	return outgoing{to: *i.email, locale: locale, args: args}, nil
 }
 
 // throttle counts an invitation household sends, and refuses one past its twenty a day (PRD 02 §9).
@@ -341,13 +339,15 @@ func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 	token, hash := newToken()
 	var (
 		i      invitation
-		letter sendInvitation
+		letter outgoing
 	)
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		// Under the household's lock whatever the kind: an invitation is its owner's, and one sent by
+		// an owner whose ownership ended meanwhile would outlive its withdrawal (lockAsOwner).
+		if _, err := lockAsOwner(ctx, tx); err != nil {
+			return mutation.Record{}, err
+		}
 		if req.Kind == kindEmail {
-			if _, err := lockHousehold(ctx, tx, household); err != nil {
-				return mutation.Record{}, err
-			}
 			other, err := waiting(ctx, tx, household, *req.Email, nil, now)
 			if err != nil {
 				return mutation.Record{}, err
@@ -509,6 +509,9 @@ func (s *Service) revokeInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		if _, err := lockAsOwner(ctx, tx); err != nil {
+			return mutation.Record{}, err
+		}
 		i, err := readInvitation(ctx, tx, id)
 		switch {
 		case err != nil:
@@ -602,9 +605,9 @@ func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.Now()
 	token, hash := newToken()
-	var letter sendInvitation
+	var letter outgoing
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
-		if _, err := lockHousehold(ctx, tx, household); err != nil {
+		if _, err := lockAsOwner(ctx, tx); err != nil {
 			return mutation.Record{}, err
 		}
 		old, err := readInvitation(ctx, tx, id)
@@ -942,10 +945,7 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scoped := tenant.Assume(ctx, s.Pool, held.household, user, held.role)
-	var told struct {
-		to, locale string
-		args       i18n.Args
-	}
+	var told outgoing
 	_, err = mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
 		// Under the household's lock, which accepting takes too, so that whether the caller is a
 		// member already is read after any acceptance of theirs that was committing meanwhile.

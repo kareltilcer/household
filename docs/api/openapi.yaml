@@ -959,13 +959,18 @@ paths:
       operationId: getMeInvitationsByToken
       tags: [me]
       summary: Preview an invitation
-      description: Shows exactly what is being granted — household, inviter, role, and the module levels — before acceptance.
-      security: []
+      description: |
+        Shows exactly what is being granted — household, inviter, role, and the module levels — before
+        acceptance. Signed in or not: the token its email or link carries opens it before the invitee
+        has an account, and its id opens it for its addressee alone, signed in. A signed-in caller's
+        requests count against their own limit (`429`).
+      security: [{}, { bearerAuth: [] }, { sessionCookie: [] }]
       parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }]
       responses:
         '200': { description: The invitation, content: { application/json: { schema: { $ref: '#/components/schemas/InvitationForInvitee' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '410': { description: Expired or already used, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /me/invitations/{token}/accept:
     post:
