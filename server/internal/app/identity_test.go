@@ -513,10 +513,10 @@ func TestAWebSignInSetsTheSessionCookies(t *testing.T) {
 	if me := b.me(); me.Email == nil || *me.Email != s.a("jana@tilcerovi.cz") {
 		t.Fatalf("%+v", me)
 	}
-	// A native client's sign-in is item 9's.
+	// A native client's sign-in names its device.
 	if got := fieldErrorsOf(t, b.post("/auth/login", jsonBody(t, map[string]string{
 		"email": s.a("jana@tilcerovi.cz"), "password": "correct horse battery", "client_type": "mobile",
-	}))); !slices.Equal(got, []problem.FieldError{{Field: "/client_type", Code: problem.FieldInvalid}}) {
+	}))); !slices.Equal(got, []problem.FieldError{{Field: "/device", Code: "required"}}) {
 		t.Fatalf("%v", got)
 	}
 }

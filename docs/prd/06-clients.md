@@ -156,7 +156,7 @@ line is whether a wrong answer costs anything.
 |---|---|
 | **Mobile** | EAS Build; **EAS Update** for JavaScript-only fixes, store submission for native changes. An update never changes the API version the client speaks |
 | **Web** | Continuous deployment; the SPA checks its build id and prompts a reload when a new one is live |
-| **API compatibility** | The server supports the current and the previous minor for **at least 6 months**. Clients send a version header; a client below the minimum supported version gets a blocking, translated *"please update"* screen and nothing else |
+| **API compatibility** | The server supports the current and the previous minor for **at least 6 months**. Clients send a version header, `Household-Client: mobile/1.4.2` or `web/…`; a client below the minimum supported version for its type, set per deployment, gets a blocking, translated *"please update"* screen and nothing else. The server answers such a client's every request `400 update_required`, naming the oldest version it serves, before it checks anything else, so an old client is never refused for a request the contract has since changed. A request naming no client is held to no minimum ([ADR 0010](../adr/0010-mobile-tokens-second-step-providers-and-client-versions.md)) |
 | **Feature flags** | Per household and per platform, so a module can ship dark and be enabled progressively |
 | **Beta** | TestFlight and Play internal testing, opt-in from settings |
 

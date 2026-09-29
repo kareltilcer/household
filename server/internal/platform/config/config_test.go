@@ -1,6 +1,13 @@
 package config_test
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"log/slog"
 	"net/url"
 	"strings"
@@ -64,7 +71,8 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		config.EnvVar:         "production",
 		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
 	}))
-	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachCorpusVar} {
+	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachCorpusVar,
+		config.TokenKeysVar, config.MFAKeysVar} {
 		if err == nil || !strings.Contains(err.Error(), key) {
 			t.Errorf("serving in production without %s: %v", key, err)
 		}
@@ -90,6 +98,8 @@ func serving(vars map[string]string) map[string]string {
 		config.SMTPURLVar:        "smtps://mailer:" + "pw" + "@smtp.example:465",
 		config.MailFromVar:       "Household <no-reply@household.example>",
 		config.BreachCorpusVar:   "/var/lib/household/breached.bin",
+		config.TokenKeysVar:      base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
+		config.MFAKeysVar:        base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
 	} {
 		if _, ok := vars[key]; !ok {
 			vars[key] = value
@@ -294,4 +304,70 @@ func dsn(user, password, host, database string) string {
 		u.User = url.UserPassword(user, password)
 	}
 	return u.String()
+}
+
+// Outside development the keys that sign access tokens and seal the second step's secrets must be
+// set, and not to the published development ones; no error quotes a key.
+func TestTheKeysAreTheDeploymentsOwn(t *testing.T) {
+	c, err := config.Load(config.Serve, env(nil))
+	if err != nil || c.TokenKeys == nil || c.MFAKeys == nil {
+		t.Fatalf("development: %+v %v", c, err)
+	}
+	devToken := base64.StdEncoding.EncodeToString([]byte("household development access key"))
+	_, err = config.Load(config.Serve, env(serving(map[string]string{
+		config.EnvVar: "production", config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
+		config.TokenKeysVar: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{3}, 32)) + "," + devToken,
+		config.MFAKeysVar:   "not base64!",
+	})))
+	if err == nil || !strings.Contains(err.Error(), config.TokenKeysVar) || !strings.Contains(err.Error(), config.MFAKeysVar) ||
+		strings.Contains(err.Error(), devToken) || strings.Contains(err.Error(), "not base64!") {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestProvidersAreConfiguredWhole(t *testing.T) {
+	appleKey := func() string {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		der, err := x509.MarshalPKCS8PrivateKey(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	}()
+	c, err := config.Load(config.Serve, env(map[string]string{
+		config.RedirectURIsVar:       "https://app.household.example/sign-in/callback, household://sign-in",
+		config.GoogleClientIDVar:     "id.apps.googleusercontent.com",
+		config.GoogleClientSecretVar: "secret",
+		config.AppleClientIDVar:      "com.household.web",
+		config.AppleTeamIDVar:        "TEAM",
+		config.AppleKeyIDVar:         "KEY",
+		config.ApplePrivateKeyVar:    appleKey,
+		config.MinMobileVersionVar:   "1.6.0",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Google == nil || c.Google.ClientID != "id.apps.googleusercontent.com" || c.Apple == nil || c.Apple.Apple.Key == nil ||
+		len(c.RedirectURIs) != 2 || c.MinClients["mobile"].String() != "1.6.0" {
+		t.Fatalf("%+v", c)
+	}
+	if c, err := config.Load(config.Serve, env(nil)); err != nil || c.Google != nil || c.Apple != nil || len(c.MinClients) != 0 {
+		t.Fatalf("none configured: %+v %v", c, err)
+	}
+	for name, vars := range map[string]map[string]string{
+		"Google without its secret": {config.GoogleClientIDVar: "id", config.RedirectURIsVar: "https://a.example/cb"},
+		"Apple without its key":     {config.AppleClientIDVar: "c", config.AppleTeamIDVar: "t", config.AppleKeyIDVar: "k", config.RedirectURIsVar: "https://a.example/cb"},
+		"Apple with a key not PEM":  {config.AppleClientIDVar: "c", config.AppleTeamIDVar: "t", config.AppleKeyIDVar: "k", config.ApplePrivateKeyVar: "nope", config.RedirectURIsVar: "https://a.example/cb"},
+		"a provider and no URI":     {config.GoogleClientIDVar: "id", config.GoogleClientSecretVar: "s"},
+		"a URI with a fragment":     {config.RedirectURIsVar: "https://a.example/cb#x"},
+		"a relative URI":            {config.RedirectURIsVar: "/cb"},
+		"a version that is not one": {config.MinWebVersionVar: "1.6"},
+	} {
+		if _, err := config.Load(config.Serve, env(vars)); err == nil {
+			t.Errorf("%s: loaded", name)
+		}
+	}
 }

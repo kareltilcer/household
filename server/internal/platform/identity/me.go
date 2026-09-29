@@ -21,30 +21,38 @@ import (
 
 // meJSON is the contract's Me.
 type meJSON struct {
-	ID                  uuid.UUID  `json:"id"`
-	Email               *string    `json:"email"`
-	EmailVerified       bool       `json:"email_verified"`
-	DisplayName         string     `json:"display_name"`
-	AvatarURL           *string    `json:"avatar_url"`
-	Locale              string     `json:"locale"`
-	Timezone            *string    `json:"timezone"`
-	FirstDayOfWeek      *int       `json:"first_day_of_week"`
-	IsChild             bool       `json:"is_child"`
-	MFAEnabled          bool       `json:"mfa_enabled"`
-	Credentials         []string   `json:"credentials"`
-	DeletionScheduledAt *time.Time `json:"deletion_scheduled_at"`
+	ID                   uuid.UUID  `json:"id"`
+	Email                *string    `json:"email"`
+	EmailVerified        bool       `json:"email_verified"`
+	DisplayName          string     `json:"display_name"`
+	AvatarURL            *string    `json:"avatar_url"`
+	Locale               string     `json:"locale"`
+	Timezone             *string    `json:"timezone"`
+	FirstDayOfWeek       *int       `json:"first_day_of_week"`
+	IsChild              bool       `json:"is_child"`
+	MFAEnabled           bool       `json:"mfa_enabled"`
+	MFARecoveryCodesLeft *int       `json:"mfa_recovery_codes_left"`
+	Credentials          []string   `json:"credentials"`
+	DeletionScheduledAt  *time.Time `json:"deletion_scheduled_at"`
 }
 
-// loadMe reads user as the contract's Me. Avatars (item 16), a second factor (item 9) and a
-// scheduled deletion (item 20) are later items'; until then each reads as absent.
+// loadMe reads user as the contract's Me. Avatars (item 16) and a scheduled deletion (item 20) are
+// later items'; until then each reads as absent.
 func loadMe(ctx context.Context, tx pgx.Tx, user uuid.UUID) (meJSON, error) {
 	me := meJSON{ID: user}
+	var left int
 	err := tx.QueryRow(ctx, `
 		SELECT u.email, u.email_verified_at IS NOT NULL, u.display_name, u.locale, u.timezone, u.first_day_of_week,
-		  array(SELECT c.type::text FROM credentials c WHERE c.user_id = u.id ORDER BY c.type)
+		  array(SELECT c.type::text FROM credentials c WHERE c.user_id = u.id ORDER BY c.type),
+		  EXISTS (SELECT FROM mfa_totp t WHERE t.user_id = u.id AND t.activated_at IS NOT NULL),
+		  (SELECT count(*) FROM mfa_recovery_codes r WHERE r.user_id = u.id AND r.used_at IS NULL)
 		FROM users u WHERE u.id = $1`, user).
-		Scan(&me.Email, &me.EmailVerified, &me.DisplayName, &me.Locale, &me.Timezone, &me.FirstDayOfWeek, &me.Credentials)
+		Scan(&me.Email, &me.EmailVerified, &me.DisplayName, &me.Locale, &me.Timezone, &me.FirstDayOfWeek, &me.Credentials,
+			&me.MFAEnabled, &left)
 	me.IsChild = slices.Contains(me.Credentials, "child_pin")
+	if me.MFAEnabled {
+		me.MFARecoveryCodesLeft = &left
+	}
 	return me, err
 }
 
@@ -214,12 +222,19 @@ func (s *Service) sessions(w http.ResponseWriter, r *http.Request) {
 }
 
 // signOutEverywhere is deleteMeSessions (FR-ID7): every session ends, the one the request came
-// with too, whose cookies go. Item 9 ends the mobile devices' token families here as well.
+// with too, whose cookies go, and every device's sign-in, and no browser or device stays trusted to
+// skip the second step.
 func (s *Service) signOutEverywhere(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
 	err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		if err := s.Sessions.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
+			return err
+		}
+		if err := s.Devices.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
+			return err
+		}
+		if err := s.endTrust(ctx, tx, user); err != nil {
 			return err
 		}
 		return idempotency.Commit(ctx, tx)

@@ -51,7 +51,8 @@ func protocolStatus(o *Operation, status int) bool {
 // and a status the operation answers undeclared. The 409 idempotency_in_progress, which the
 // contract admits from every operation that accepts Idempotency-Key, is held to Problem alone,
 // whatever 409 the operation declares for its own conflicts, and so is the 403 csrf_failed,
-// which it admits from every unsafe operation.
+// which it admits from every unsafe operation; the 400 update_required, which it admits from
+// every operation, is held to UpdateRequiredProblem.
 func (c *Contract) ValidateResponse(req *http.Request, pattern string, params map[string]string, status int, header http.Header, body []byte) error {
 	problemDocument := isProblem(header)
 	var code problem.Code
@@ -80,6 +81,11 @@ func (c *Contract) ValidateResponse(req *http.Request, pattern string, params ma
 	case problem.CodeCsrfFailed:
 		if status != http.StatusForbidden || httpx.Safe(req.Method) {
 			return fmt.Errorf("%s %s answered %d %s, which only a 403 from an unsafe operation may", req.Method, pattern, status, code)
+		}
+		return nil
+	case problem.CodeUpdateRequired:
+		if status != http.StatusBadRequest {
+			return fmt.Errorf("%s %s answered %d %s, which only a 400 may", req.Method, pattern, status, code)
 		}
 		return nil
 	}
@@ -115,7 +121,7 @@ func isProblem(header http.Header) bool {
 }
 
 // validateProblem checks body against Problem, or ValidationProblem when its code is
-// validation_failed, and returns its code.
+// validation_failed, or UpdateRequiredProblem when it is update_required, and returns its code.
 func (c *Contract) validateProblem(body []byte) (problem.Code, error) {
 	var value any
 	if err := json.Unmarshal(body, &value); err != nil {
@@ -127,8 +133,11 @@ func (c *Contract) validateProblem(body []byte) (problem.Code, error) {
 		code = problem.Code(s)
 	}
 	name := "Problem"
-	if code == problem.CodeValidationFailed {
+	switch code { //nolint:exhaustive // Every other code is a Problem.
+	case problem.CodeValidationFailed:
 		name = "ValidationProblem"
+	case problem.CodeUpdateRequired:
+		name = "UpdateRequiredProblem"
 	}
 	ref := c.doc.Components.Schemas[name]
 	if ref == nil || ref.Value == nil {

@@ -38,10 +38,24 @@ info:
       the value of the readable `__Host-hh_csrf` cookie. A session lasts 30 days from its last
       use.
     - **Mobile** — `Authorization: Bearer <access token>`, 15-minute lifetime, refreshed via
-      `POST /auth/token` with a rotating single-use refresh token.
+      `POST /auth/token` with a rotating single-use refresh token. A device's sign-in lasts until
+      it is revoked, and an access token authenticates only while it lasts.
 
     Access tokens carry **no roles and no grants**; authorization is resolved server-side per
-    request, so a revoked grant takes effect immediately.
+    request, so a revoked grant takes effect immediately. A request that carries an
+    `Authorization` header is authenticated by it alone, and the session cookie is not read.
+
+    ## Clients
+
+    Household's own clients name themselves in `Household-Client`, their `ClientType` and their
+    version, MAJOR.MINOR.PATCH with an optional pre-release or build suffix: `mobile/1.4.2`,
+    `web/2.0.0-beta.3`. The server serves each type from a minimum version on, and answers a
+    request from an older client `400` (`update_required`), naming the oldest version it serves in
+    `minimum_version`, whatever the request asked for: the client shows its blocking *please
+    update* screen and nothing else. The check comes before any other, so an old client is told to
+    update rather than refused for a request the contract no longer admits. A header that is not a
+    client's answers `422` naming `header:Household-Client`, and a request without one, not a
+    client of Household's own, is not held to a minimum.
 
     An unsafe request whose `Origin` (or, lacking one, `Referer`) names an origin that is not
     Household's own web client's is refused `403` (`csrf_failed`), whatever it carries: a page on
@@ -89,9 +103,9 @@ info:
     is checked against this document before it is served, so any operation can also answer `422`
     (`validation_failed`) for a request the document does not admit, and any operation that takes
     a body `413` (`payload_too_large`) or `415` (`unsupported_media_type`). Any operation that
-    accepts `Idempotency-Key` can also answer `409` (`idempotency_in_progress`), and any unsafe
-    operation `403` (`csrf_failed`, see Authentication). None of these is declared on each
-    operation.
+    accepts `Idempotency-Key` can also answer `409` (`idempotency_in_progress`), any unsafe
+    operation `403` (`csrf_failed`, see Authentication), and any operation `400`
+    (`update_required`, see Clients). None of these is declared on each operation.
 
     In a `ValidationProblem`, each `errors[].field` is an RFC 6901 JSON Pointer into the request
     body (`/name`, `/items/0/amount_minor`, or an empty string for the body as a whole), or, for a
@@ -267,12 +281,16 @@ paths:
       summary: Sign in
       description: |
         Branches on `client_type`. `web` sets `__Host-hh_session` and the readable `__Host-hh_csrf`
-        cookie, and `tokens` is null; `mobile` returns a token pair and registers or updates a
-        device. Failures are generic whatever the cause: a wrong password, an address with no
-        account and an account that may not sign in all answer `401` (`invalid_credentials`), in the
-        same time. Ten failures in fifteen minutes for an address answer `429` until a cooldown
-        passes, which lengthens as the failures go on; sixty for a client's network answer `429`
-        until the fifteen minutes that counted them end.
+        cookie, and `tokens` is null; `mobile` needs `device`, returns a token pair, and registers
+        or updates the device, ending the sign-in it held. Failures are generic whatever the cause:
+        a wrong password, an address with no account and an account that may not sign in all
+        answer `401` (`invalid_credentials`), in the same time. Ten failures in fifteen minutes for
+        an address answer `429` until a cooldown passes, which lengthens as the failures go on;
+        sixty for a client's network answer `429` until the fifteen minutes that counted them end.
+
+        An account with the second step on answers `409` with an `MfaChallenge`, unless the browser
+        or the device is trusted: a browser by its `__Host-hh_trust` cookie, a device by its
+        `trust_token`. Nothing is signed in until the challenge is answered at `/auth/mfa/verify`.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -312,6 +330,7 @@ paths:
       operationId: postAuthLogout
       tags: [auth]
       summary: Sign out of the current session or device
+      description: 'Ends the web session the request came with, or the sign-in of the device whose access token it carries: its refresh token and its access tokens stop working at once.'
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Signed out }
@@ -324,16 +343,21 @@ paths:
       tags: [auth]
       summary: Exchange a refresh token for a new token pair
       description: |
-        Refresh tokens are single-use and rotating. Presenting one that has already been used
-        invalidates the entire family and every session it produced, and notifies the user.
+        Refresh tokens are single-use and rotating, and a device's sign-in lasts until it is
+        revoked. Presenting one that has already been used invalidates the entire family and every
+        session it produced, and notifies the user, with one exception: a token presented again
+        within a minute of its use, while the token it was exchanged for is still unused, is a retry
+        whose answer was lost, and is answered with a new pair, the unused one retired. The version
+        in `Household-Client` is recorded as the device's. No `Idempotency-Key` is kept: there is
+        no caller yet, and a stored pair would be a stored credential.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [refresh_token], properties: { refresh_token: { type: string } } } } }
+        content: { application/json: { schema: { type: object, required: [refresh_token], properties: { refresh_token: { type: string, maxLength: 128 } } } } }
       responses:
         '200': { description: A new token pair, content: { application/json: { schema: { $ref: '#/components/schemas/TokenPair' } } } }
-        '401': { description: 'Invalid, expired, or a detected reuse', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '401': { description: 'The token opens no live sign-in (`refresh_token_invalid`): unknown, its device signed out or revoked, or a reuse that has just revoked it. The device''s sign-in has ended, so the client discards its replica and signs in again.', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
   /auth/password-reset:
     post:
@@ -356,9 +380,10 @@ paths:
       tags: [auth]
       summary: Set a new password with a reset token
       description: |
-        On success, invalidates every session and every refresh-token family, and emails the
-        account's address to say so. The link proves the address, so an unverified one is verified
-        too. A password found in the breached-password screen is refused `422`, naming `/password`
+        On success, invalidates every session, every refresh-token family and every browser and
+        device trusted to skip the second step, and emails the account's address to say so. The
+        link proves the address, so an unverified one is verified too. The second step, if it is
+        on, stays on. A password found in the breached-password screen is refused `422`, naming `/password`
         with the code `invalid`.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
@@ -377,7 +402,8 @@ paths:
       tags: [auth]
       summary: Change the current password
       description: |
-        Signs out every other session and emails the account's address to say the password changed.
+        Signs out every other session and every other device, and emails the account's address to
+        say the password changed.
         A password-reset link already sent still works, so that the address's owner can take the
         account back from someone who knows the password; a reset that lands while a change is
         running wins, and the change answers as a wrong `current_password` does. A wrong
@@ -402,9 +428,18 @@ paths:
       summary: Begin an OIDC authorization-code flow with PKCE
       description: |
         `redirect_uri` is matched **exactly** against a server-side allowlist of registered URIs —
-        no prefix, wildcard or substring matching — and an unregistered value is `422`. PKCE stops
-        another app on the device stealing the code; it does not stop the code being delivered to
-        an attacker-chosen redirect, so the allowlist is what closes that hole.
+        no prefix, wildcard or substring matching — and an unregistered value is `422`
+        (`redirect_uri_not_registered`, naming `/redirect_uri`). PKCE stops another app on the
+        device stealing the code; it does not stop the code being delivered to an attacker-chosen
+        redirect, so the allowlist is what closes that hole. `code_challenge` is the S256 challenge
+        of a verifier the client keeps, and hands `/callback` or `/link` with the code.
+
+        The answer is the provider's authorization URL, carrying a `state` and a nonce of the
+        server's, and the `state`, which the provider sends back to the redirect URI and the client
+        compares before going on. It lasts ten minutes and is used once. A start made signed in may
+        be completed by `/link`, and only by the account that made it. A provider the server is not
+        configured for answers `404`. A client's network may begin sixty an hour. Apple answers a
+        request for an address or a name as a form posted to the redirect URI.
       security: []
       parameters:
         - name: provider
@@ -414,11 +449,12 @@ paths:
         - { $ref: '#/components/parameters/IdempotencyKey' }
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [redirect_uri, code_challenge], properties: { redirect_uri: { type: string, format: uri, description: 'Must match a registered redirect URI exactly.' }, code_challenge: { type: string }, client_type: { $ref: '#/components/schemas/ClientType' } } } } }
+        content: { application/json: { schema: { type: object, required: [redirect_uri, code_challenge], properties: { redirect_uri: { type: string, format: uri, maxLength: 2048, description: 'Must match a registered redirect URI exactly.' }, code_challenge: { type: string, pattern: '^[A-Za-z0-9_-]{43}$', description: 'The S256 challenge of the verifier (RFC 7636): the base64url SHA-256 of it, without padding.' }, client_type: { $ref: '#/components/schemas/ClientType' } } } } }
       responses:
-        '200': { description: The authorization URL and state, content: { application/json: { schema: { type: object, properties: { authorization_url: { type: string, format: uri }, state: { type: string } } } } } }
+        '200': { description: The authorization URL and state, content: { application/json: { schema: { type: object, required: [authorization_url, state], properties: { authorization_url: { type: string, format: uri }, state: { type: string } } } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /auth/oauth/{provider}/callback:
     post:
@@ -426,8 +462,22 @@ paths:
       tags: [auth]
       summary: Complete an OIDC flow
       description: |
-        A verified email matching an existing account produces `409 link_required` rather than a
-        silent link — a silent link on an unverified email is an account-takeover primitive.
+        Signs in the account whose credential holds the provider's subject, as `/auth/login` does
+        for the `client_type` the start named: `device` is required for `mobile`, and an account
+        with the second step on answers `409` with an `MfaChallenge` unless the browser or the
+        device is trusted.
+
+        A subject no account holds, whose address an account already has, produces `409
+        link_required` rather than a silent link, whether or not that account verified the
+        address — a silent link on an unverified email is an account-takeover primitive. Its owner
+        signs in as they always have and links the provider from their account. A subject no
+        account holds with an address none has makes a new account: its address verified when the
+        provider verified it, and its name the provider's, or `display_name` for Apple, which gives
+        a name only to the client, once.
+
+        A state that is unknown, expired, used or another provider's, a verifier that is not the
+        challenge's, and a code or an ID token the provider does not vouch for all answer `401`
+        (`invalid_credentials`): the client begins again.
       security: []
       parameters:
         - name: provider
@@ -437,17 +487,33 @@ paths:
         - { $ref: '#/components/parameters/IdempotencyKey' }
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [code, state, code_verifier], properties: { code: { type: string }, state: { type: string }, code_verifier: { type: string }, client_type: { $ref: '#/components/schemas/ClientType' } } } } }
+        content: { application/json: { schema: { $ref: '#/components/schemas/OauthCallbackRequest' } } }
       responses:
-        '200': { description: Signed in, content: { application/json: { schema: { $ref: '#/components/schemas/LoginResult' } } } }
+        '200':
+          description: Signed in
+          headers:
+            Set-Cookie: { description: 'Session and CSRF cookies, for a web sign-in only', schema: { type: string } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/LoginResult' } } }
+        '401': { description: 'The provider did not vouch for this sign-in (`invalid_credentials`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: An account exists with this email; explicit linking is required, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409':
+          description: 'An account exists with this address, so linking is required (`link_required`); or the second step is required, an `MfaChallenge`'
+          content:
+            application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+            application/json: { schema: { $ref: '#/components/schemas/MfaChallenge' } }
 
   /auth/oauth/{provider}/link:
     post:
       operationId: postAuthOauthByProviderLink
       tags: [auth]
       summary: Link an OIDC identity to the signed-in account
+      description: |
+        Completes a start made signed in as this account, and adds the provider's subject to it as
+        a credential, which then signs it in. A state that is unknown, expired, used, another
+        provider's or begun by anyone else answers `422` naming `/state`; a verifier that is not the
+        challenge's, or a code the provider does not vouch for, `422` naming `/code`. A subject
+        another account holds, or an account that holds another subject of the provider already,
+        answers `409` (`identity_already_linked`). The account's address is told by email.
       parameters:
         - name: provider
           in: path
@@ -456,12 +522,13 @@ paths:
         - { $ref: '#/components/parameters/IdempotencyKey' }
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [code, state, code_verifier], properties: { code: { type: string }, state: { type: string }, code_verifier: { type: string } } } } }
+        content: { application/json: { schema: { type: object, required: [code, state, code_verifier], properties: { code: { type: string, maxLength: 2048 }, state: { type: string, maxLength: 128 }, code_verifier: { type: string, pattern: '^[A-Za-z0-9._~-]{43,128}$' } } } } }
       responses:
         '204': { description: Linked }
         '404': { $ref: '#/components/responses/NotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { description: Already linked to another account, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'This identity is linked to another account, or this account to another identity of this provider (`identity_already_linked`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /auth/oauth/{provider}:
@@ -469,7 +536,7 @@ paths:
       operationId: deleteAuthOauthByProvider
       tags: [auth]
       summary: Unlink an OIDC identity
-      description: Refused if it is the account's only credential.
+      description: 'Refused `409` (`only_credential`) if it is the account''s only credential. An account that holds none of this provider answers `404`.'
       parameters:
         - name: provider
           in: path
@@ -491,14 +558,19 @@ paths:
       description: |
         Requires the current password. Binding a new second factor is at least as sensitive as
         removing one: without re-authentication a stolen session could enrol its own authenticator,
-        take the recovery codes, and lock the owner out of their own account.
+        take the recovery codes, and lock the owner out of their own account. A wrong password
+        answers `401` (`invalid_credentials`) and counts against the account as a failed sign-in
+        does; an account with no password, one that signs in only with Google or Apple, sets one by
+        a password reset first. The secret waits for `/auth/mfa/activate`: an authenticator already
+        on stays on until then, and a later enrolment replaces one not yet activated. No
+        `Idempotency-Key` is kept, since the body carries a password and the answer a secret.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [password], properties: { password: { type: string } } } } }
       responses:
         '200': { description: Secret and provisioning URI, content: { application/json: { schema: { $ref: '#/components/schemas/MfaEnrolment' } } } }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        '401': { description: 'No credential (`unauthenticated`), or `password` is not the account''s (`invalid_credentials`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /auth/mfa/activate:
@@ -506,12 +578,19 @@ paths:
       operationId: postAuthMfaActivate
       tags: [auth]
       summary: Activate TOTP by confirming a code
+      description: |
+        A code from the enrolled authenticator turns it on, in place of any authenticator on before,
+        and answers with ten new recovery codes, which replace any earlier set. Every browser and
+        device trusted to skip the second step is trusted no longer. With no enrolment waiting, or
+        a code that is not the authenticator's, it answers `422` naming `/code`. The answer is never
+        kept by an `Idempotency-Key`, since it carries the codes: a repeat answers `409`
+        (`idempotency_in_progress`).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [code], properties: { code: { type: string } } } } }
+        content: { application/json: { schema: { type: object, required: [code], properties: { code: { type: string, maxLength: 16 } } } } }
       responses:
-        '200': { description: Activated; recovery codes are returned once and never again, content: { application/json: { schema: { type: object, properties: { recovery_codes: { type: array, items: { type: string } } } } } } }
+        '200': { description: Activated; recovery codes are returned once and never again, content: { application/json: { schema: { $ref: '#/components/schemas/MfaRecoveryCodes' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -522,17 +601,31 @@ paths:
       tags: [auth]
       summary: Complete a login challenged for MFA
       description: |
-        Rate-limited per challenge token **and** per account, and ten failures invalidate the
-        challenge and lock the factor until an unlock — a six-digit code is otherwise a small
-        keyspace, and the second factor must not be the least defended step in the sign-in.
+        `code` is six digits from the authenticator, or one of the recovery codes, which is spent,
+        emailed about, and unlocks a locked factor. A wrong code answers `401`
+        (`invalid_credentials`) and the challenge stays; a challenge that is unknown, expired or
+        ended answers `401` (`unauthenticated`), and the client signs in again. Wrong codes are
+        limited per account, which bounds every challenge it has: five in five minutes answer
+        `429`, and ten since the last right one lock the factor and end the account's challenges,
+        answering `423` (`mfa_locked`). A six-digit code is otherwise a small keyspace, and the
+        second factor must not be the least defended step in the sign-in. A locked factor takes
+        only a recovery code until one, or support, unlocks it.
+
+        Answered, it signs in as `/auth/login` would have: a web session in cookies, or a device's
+        token pair. `remember_device` trusts this browser, in the `__Host-hh_trust` cookie, or this
+        device, in `trust_token`, to sign in without the second step for 30 days.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [challenge_token, code], properties: { challenge_token: { type: string }, code: { type: string }, remember_device: { type: boolean, default: false } } } } }
+        content: { application/json: { schema: { type: object, required: [challenge_token, code], properties: { challenge_token: { type: string, maxLength: 128 }, code: { type: string, maxLength: 16 }, remember_device: { type: boolean, default: false } } } } }
       responses:
-        '200': { description: Signed in, content: { application/json: { schema: { $ref: '#/components/schemas/LoginResult' } } } }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        '200':
+          description: Signed in
+          headers:
+            Set-Cookie: { description: 'Session and CSRF cookies, and the trust cookie when `remember_device` is set, for a web sign-in only', schema: { type: string } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/LoginResult' } } }
+        '401': { description: 'A wrong code (`invalid_credentials`), or no live challenge (`unauthenticated`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '423': { description: Too many failed codes; the challenge is dead and the factor is locked, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -544,14 +637,39 @@ paths:
       description: |
         A `POST` to a sub-resource rather than a `DELETE` with a body: RFC 9110 gives a `DELETE`
         payload no defined semantics and intermediaries and generated clients drop it, which would
-        strip the password that authorises this.
+        strip the password that authorises this. A wrong password answers `401`
+        (`invalid_credentials`) and counts against the account as a failed sign-in does. The
+        authenticator, the recovery codes and every trusted browser and device go, and the
+        account's address is told by email. With the second step already off it answers `204` as
+        well. No `Idempotency-Key` is kept, since the body carries a password.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [password], properties: { password: { type: string } } } } }
       responses:
         '204': { description: Disabled }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        '401': { description: 'No credential (`unauthenticated`), or `password` is not the account''s (`invalid_credentials`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/mfa/recovery-codes:
+    post:
+      operationId: postAuthMfaRecoveryCodes
+      tags: [auth]
+      summary: Make a new set of recovery codes
+      description: |
+        Ten new recovery codes, which retire every earlier one the moment they are made (A-6). It
+        requires the current password, as enrolling does, since the codes stand in for the second
+        factor; a wrong one answers `401` (`invalid_credentials`) and counts against the account as
+        a failed sign-in does. With the second step off it answers `404`. No `Idempotency-Key` is
+        kept, since the body carries a password and the answer the codes.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [password], properties: { password: { type: string } } } } }
+      responses:
+        '200': { description: 'The new codes, returned once and never again', content: { application/json: { schema: { $ref: '#/components/schemas/MfaRecoveryCodes' } } } }
+        '401': { description: 'No credential (`unauthenticated`), or `password` is not the account''s (`invalid_credentials`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /push/vapid-key:
@@ -661,7 +779,7 @@ paths:
       operationId: deleteMeSessions
       tags: [me]
       summary: Sign out everywhere
-      description: Revokes every session and every refresh-token family, and invalidates every device's sync cursor.
+      description: 'Revokes every session and every refresh-token family, and so every device''s sign-in and its sync cursor, and trusts no browser or device to skip the second step any longer.'
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Done }
@@ -685,6 +803,7 @@ paths:
       operationId: getMeDevices
       tags: [me]
       summary: List mobile devices
+      description: 'The devices the account is signed in on, the most recently seen first. A device signed out or revoked is not listed.'
       responses:
         '200': { description: Devices, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Device' } } } } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -695,6 +814,7 @@ paths:
       operationId: patchMeDevicesByDeviceId
       tags: [me]
       summary: Rename a device
+      description: 'A label with control characters has them dropped, and white space around it trimmed; an empty one clears it. A device the account is not signed in on is not found.'
       parameters: [{ $ref: '#/components/parameters/DeviceId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -708,7 +828,7 @@ paths:
       operationId: deleteMeDevicesByDeviceId
       tags: [me]
       summary: Revoke a device
-      description: Invalidates its refresh-token family and its sync cursor, so its local replica is discarded rather than resumed.
+      description: 'Invalidates its refresh-token family and its sync cursor, so its local replica is discarded rather than resumed: its access tokens stop at once, and its next refresh answers `401` (`refresh_token_invalid`). A device the account is not signed in on is not found.'
       parameters: [{ $ref: '#/components/parameters/DeviceId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Revoked }
@@ -8224,10 +8344,12 @@ components:
         a failure the caller cannot act on), which any operation can answer with,
         `idempotency_in_progress` (`409`, a repeated `Idempotency-Key` whose first request is
         still running or whose response was not kept), which any operation that accepts
-        `Idempotency-Key` can, and `csrf_failed` (`403`, an unsafe request from an origin that is
+        `Idempotency-Key` can, `csrf_failed` (`403`, an unsafe request from an origin that is
         not Household's own, or one the session cookie authenticates without its CSRF token),
-        which any unsafe operation can. Adding a code is a contract change and belongs in the same
-        review as the endpoint that raises it.
+        which any unsafe operation can, and `update_required` (`400`, a client older than the
+        oldest version the server serves, an `UpdateRequiredProblem`), which any operation can.
+        Adding a code is a contract change and belongs in the same review as the endpoint that
+        raises it.
       enum:
         # Cross-cutting — the reusable responses in `components.responses`
         - unauthenticated
@@ -8243,6 +8365,7 @@ components:
         - internal
         - idempotency_in_progress
         - csrf_failed
+        - update_required
         # Authentication and identity
         - invalid_credentials
         - refresh_token_invalid
@@ -8306,6 +8429,15 @@ components:
         detail: { type: string }
         instance: { type: string }
         request_id: { type: string }
+
+    UpdateRequiredProblem:
+      description: 'The `400 update_required` any operation answers a client older than the oldest version the server serves (see Clients in the description of the API).'
+      allOf:
+        - { $ref: '#/components/schemas/Problem' }
+        - type: object
+          required: [minimum_version]
+          properties:
+            minimum_version: { type: string, description: 'The oldest version of the client''s type the server serves, MAJOR.MINOR.PATCH.', examples: ['1.6.0'] }
 
     ValidationProblem:
       allOf:
@@ -8528,14 +8660,18 @@ components:
         email: { type: string, format: email }
         password: { type: string }
         client_type: { $ref: '#/components/schemas/ClientType' }
-        device:
-          type: object
-          description: Present for `client_type=mobile`.
-          properties:
-            id: { $ref: '#/components/schemas/Uuid' }
-            label: { type: string }
-            platform: { type: string, enum: [ios, android] }
-            app_version: { type: string }
+        device: { $ref: '#/components/schemas/DeviceSignIn' }
+        trust_token: { type: string, maxLength: 128, description: 'For `client_type=mobile`: the token a second step answered with `remember_device` gave this device, which signs it in without the second step until it expires. A browser holds the same in the `__Host-hh_trust` cookie.' }
+
+    DeviceSignIn:
+      type: object
+      description: 'The device a mobile sign-in is for, required with `client_type=mobile` and refused `422` without it. `id` is the installation''s own, which the client keeps; a device signs in once at a time, so signing in again on it ends the sign-in it held.'
+      required: [id]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        label: { type: string, maxLength: 80 }
+        platform: { type: string, enum: [ios, android] }
+        app_version: { type: string, maxLength: 64, description: 'Recorded as the device''s; the version in `Household-Client`, when the request carries one, is recorded instead.' }
 
     ChildLoginRequest:
       type: object
@@ -8551,6 +8687,7 @@ components:
       properties:
         user: { $ref: '#/components/schemas/Me' }
         tokens: { oneOf: [{ $ref: '#/components/schemas/TokenPair' }, { type: 'null' }] }
+        trust_token: { type: [string, 'null'], description: 'Set only by a mobile sign-in''s second step answered with `remember_device`: send it back as the sign-in''s `trust_token` to skip the second step on this device for 30 days.' }
 
     TokenPair:
       type: object
@@ -8558,21 +8695,43 @@ components:
       properties:
         access_token: { type: string }
         expires_in: { type: integer, description: Seconds. 900. }
-        refresh_token: { type: string, description: 'Single-use and rotating. Presenting a used token invalidates the whole family and notifies the user.' }
+        refresh_token: { type: string, description: 'Single-use and rotating, with no expiry of its own: the device''s sign-in lasts until it is revoked. Presenting a used token invalidates the whole family and notifies the user, unless it is presented again within a minute of its use while the token it was exchanged for is still unused, which is a retry whose answer was lost.' }
         token_type: { const: Bearer }
 
     MfaChallenge:
       type: object
+      required: [error, challenge_token, methods]
       properties:
         error: { const: mfa_required }
-        challenge_token: { type: string }
-        methods: { type: array, items: { type: string, enum: [totp, recovery_code] } }
+        challenge_token: { type: string, description: 'Answered at `/auth/mfa/verify` within ten minutes.' }
+        methods: { type: array, items: { type: string, enum: [totp, recovery_code] }, description: 'The ways the second step may be answered now: `totp` is left out while the factor is locked.' }
+        recovery_codes_left: { type: integer, minimum: 0, description: 'How many unused recovery codes the account holds, shown before one is spent.' }
 
     MfaEnrolment:
       type: object
+      required: [secret, otpauth_uri]
       properties:
-        secret: { type: string }
-        otpauth_uri: { type: string }
+        secret: { type: string, description: 'The authenticator''s key in base32, to type in when the QR code cannot be scanned.' }
+        otpauth_uri: { type: string, description: 'The otpauth:// URI a QR code carries.' }
+
+    MfaRecoveryCodes:
+      type: object
+      required: [recovery_codes]
+      properties:
+        recovery_codes: { type: array, minItems: 10, maxItems: 10, items: { type: string, pattern: '^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$' }, description: 'Ten codes, each spent once in place of a code from the authenticator. Case, spaces and the dash do not matter when one is typed.' }
+
+    OauthCallbackRequest:
+      type: object
+      required: [code, state, code_verifier]
+      properties:
+        code: { type: string, maxLength: 2048 }
+        state: { type: string, maxLength: 128 }
+        code_verifier: { type: string, pattern: '^[A-Za-z0-9._~-]{43,128}$', description: 'The verifier whose S256 challenge the start named (RFC 7636).' }
+        client_type: { description: 'Not read: the sign-in is for the client type its start named.', allOf: [{ $ref: '#/components/schemas/ClientType' }] }
+        device: { $ref: '#/components/schemas/DeviceSignIn' }
+        trust_token: { type: string, maxLength: 128, description: 'As `LoginRequest.trust_token`.' }
+        display_name: { type: string, maxLength: 80, description: 'A new account''s name, when the provider gives none: Apple gives the client the person''s name once, at their first sign-in.' }
+        locale: { type: string, description: 'A new account''s BCP 47 language tag, as at registering.' }
 
     Me:
       type: object
@@ -8588,6 +8747,7 @@ components:
         first_day_of_week: { type: [integer, 'null'], minimum: 0, maximum: 6, description: 'The member''s own first day of the week, 0 for Sunday to 6 for Saturday; null follows their locale.' }
         is_child: { type: boolean }
         mfa_enabled: { type: boolean }
+        mfa_recovery_codes_left: { type: [integer, 'null'], minimum: 0, description: 'How many unused recovery codes the account holds; null while the second step is off.' }
         credentials: { type: array, items: { type: string, enum: [password, google, apple, child_pin] } }
         deletion_scheduled_at: { type: [string, 'null'], format: date-time }
 
@@ -8617,13 +8777,13 @@ components:
       required: [id]
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
-        label: { type: string }
+        label: { type: string, description: 'As the device named itself, or as it was renamed; empty when it named nothing.' }
         platform: { type: string, enum: [ios, android] }
         app_version: { type: string }
-        last_seen_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time, description: 'When it last signed in or refreshed its tokens.' }
         push_enabled: { type: boolean }
         sync_cursor: { type: [integer, 'null'], format: int64 }
-        is_current: { type: boolean }
+        is_current: { type: boolean, description: 'Whether the request came from this device.' }
 
     NotificationCategory:
       type: string

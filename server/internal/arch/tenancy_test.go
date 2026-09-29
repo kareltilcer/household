@@ -101,6 +101,15 @@ var exemptions = map[string]exemption{
 	"public.email_tokens":             {why: "a user's single-use verification and reset tokens"},
 	"public.auth_throttles":           {why: "PRD 02 §9: attempt counts on the sign-in surfaces, keyed by a hash"},
 	"public.account_idempotency_keys": {why: "a signed-in user's Idempotency-Keys on routes outside any household"},
+	// Item 9's, each a user's too.
+	"public.devices":            {why: "PRD 02 §1: the mobile installations a user signs in on"},
+	"public.device_sessions":    {why: "a device's sign-in, which holds a refresh-token family (FR-ID4)"},
+	"public.refresh_tokens":     {why: "a device sign-in's refresh tokens, kept by their hash"},
+	"public.mfa_totp":           {why: "FR-ID5: a user's authenticator, its secret sealed"},
+	"public.mfa_recovery_codes": {why: "FR-ID5: a user's recovery codes, kept by their HMAC"},
+	"public.mfa_challenges":     {why: "a sign-in waiting for its second step"},
+	"public.mfa_trusts":         {why: "a browser or device a user trusted to skip the second step"},
+	"public.oauth_states":       {why: "FR-ID2: a sign-in begun with an identity provider"},
 	// PRD 01 §2.4's global reference data, which the request role only reads (item 7).
 	"public.reference_datasets": {why: "the version of each reference dataset the loader has loaded"},
 	"public.country_profiles":   {why: "PRD 01 §2.4: reference data, the same for every household"},

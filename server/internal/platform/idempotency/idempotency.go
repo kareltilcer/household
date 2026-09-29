@@ -29,6 +29,10 @@
 // (idempotency_keys, Middleware), and a signed-in user's, on a route about their account rather
 // than a household, on their account (account_idempotency_keys, AccountMiddleware). The two
 // answer alike. A request before sign-in has no caller to hold a key, and keeps none (ADR 0009).
+//
+// A response that carries a secret, recovery codes for instance, is never stored: its handler
+// marks it with Unstorable, and a repeat of its request answers 409 idempotency_in_progress, as
+// one whose response was not kept does.
 package idempotency
 
 import (
@@ -45,6 +49,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -94,6 +99,8 @@ type claim struct {
 	keyStore
 	key   string
 	token uuid.UUID
+	// unstorable is set by a handler whose response must not be stored (Unstorable).
+	unstorable *atomic.Bool
 }
 
 // keyStore is where a caller's keys live: its table, the columns and values that name the caller's
@@ -167,6 +174,15 @@ func Commit(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
+// Unstorable marks ctx's request's response as one its key must not store, since it carries a
+// secret: its key stays committed once its effect has, and a repeat answers 409
+// idempotency_in_progress. It does nothing for a request that holds no key.
+func Unstorable(ctx context.Context) {
+	if c, ok := ctx.Value(claimKey{}).(claim); ok {
+		c.unstorable.Store(true)
+	}
+}
+
 // Middleware makes the unsafe requests it serves that carry Idempotency-Key repeatable. Install
 // it behind the tenant middleware and the module's gate, so that a caller who may no longer see
 // a module is not answered from it; log records a failure to store or release a key. maxBody is
@@ -234,7 +250,7 @@ func middleware(log *slog.Logger, maxBody int64, storeOf func(*http.Request) (ke
 				problem.Write(w, requestID, problem.Validation(problem.FieldError{Field: "", Code: problem.FieldInvalid}))
 				return
 			}
-			c := claim{keyStore: st, key: key, token: idgen.New()}
+			c := claim{keyStore: st, key: key, token: idgen.New(), unstorable: &atomic.Bool{}}
 			held, found, err := take(r.Context(), c, fingerprint)
 			switch {
 			case err != nil:
@@ -259,7 +275,7 @@ func middleware(log *slog.Logger, maxBody int64, storeOf func(*http.Request) (ke
 				}
 			}()
 			next.ServeHTTP(rec, r.WithContext(context.WithValue(r.Context(), claimKey{}, c)))
-			if rec.status() < 200 || rec.status() > 299 || rec.overflow {
+			if rec.status() < 200 || rec.status() > 299 || rec.overflow || c.unstorable.Load() {
 				return
 			}
 			if err := store(context.WithoutCancel(r.Context()), c, rec); err != nil {

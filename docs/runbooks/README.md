@@ -7,6 +7,7 @@ someone who is doing it for the first time, under pressure.
 | Runbook | When |
 |---|---|
 | [Building and refreshing the breached-password corpus](breached-passwords.md) | Before an environment's first deploy, and every three months |
+| [Sign-in keys, identity providers and the oldest client served](sign-in-keys-and-providers.md) | Before an environment's first deploy, when a key is rotated or leaks, when a provider is added, and when a release retires an old client |
 
 The gate G-C acceptance protocol, `gate-g-c.md`, follows with plan item 34. Incident response,
 breach notification, restore and failover follow with the resilience drills (item 89), and secret

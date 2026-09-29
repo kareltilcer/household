@@ -29,6 +29,36 @@ paths:
     post: { operationId: postAuthPasswordResetConfirm, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Set }, default: { $ref: '#/components/responses/Problem' } } }
   /auth/password:
     post: { operationId: postAuthPassword, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Changed }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/token:
+    post: { operationId: postAuthToken, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Refreshed }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/mfa/enroll:
+    post: { operationId: postAuthMfaEnroll, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Enrolled }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/mfa/activate:
+    post: { operationId: postAuthMfaActivate, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Activated }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/mfa/verify:
+    post: { operationId: postAuthMfaVerify, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Signed in }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/mfa/disable:
+    post: { operationId: postAuthMfaDisable, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Disabled }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/mfa/recovery-codes:
+    post: { operationId: postAuthMfaRecoveryCodes, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Made }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/oauth/{provider}/start:
+    parameters: [{ name: provider, in: path, required: true, schema: { type: string } }]
+    post: { operationId: postAuthOauthByProviderStart, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Begun }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/oauth/{provider}/callback:
+    parameters: [{ name: provider, in: path, required: true, schema: { type: string } }]
+    post: { operationId: postAuthOauthByProviderCallback, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Signed in }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/oauth/{provider}/link:
+    parameters: [{ name: provider, in: path, required: true, schema: { type: string } }]
+    post: { operationId: postAuthOauthByProviderLink, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Linked }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/oauth/{provider}:
+    parameters: [{ name: provider, in: path, required: true, schema: { type: string } }]
+    delete: { operationId: deleteAuthOauthByProvider, responses: { '204': { description: Unlinked }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/devices:
+    get: { operationId: getMeDevices, responses: { '200': { description: Devices }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/devices/{device_id}:
+    parameters: [{ name: device_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    patch: { operationId: patchMeDevicesByDeviceId, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Renamed }, default: { $ref: '#/components/responses/Problem' } } }
+    delete: { operationId: deleteMeDevicesByDeviceId, responses: { '204': { description: Revoked }, default: { $ref: '#/components/responses/Problem' } } }
   /me:
     get: { operationId: getMe, responses: { '200': { description: The user }, default: { $ref: '#/components/responses/Problem' } } }
     patch: { operationId: patchMe, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }

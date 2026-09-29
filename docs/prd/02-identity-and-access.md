@@ -52,7 +52,11 @@ used as a stable identifier — the `sub` claim is.
 
 Linking rule: if the verified email of an OIDC identity matches an existing verified account,
 the credential is **linked** to it after an explicit confirmation step. It is never linked
-silently, because a silent link on an unverified email is an account-takeover primitive.
+silently, because a silent link on an unverified email is an account-takeover primitive. The
+sign-in answers `409 link_required` for an identity whose address any account has, verified or
+not; the account's owner signs in as they always have and links the provider from their account,
+which the account's address is told of by email. An identity whose address no account has makes a
+new account, its address verified only when the provider verified it. **D-102.**
 
 **FR-ID3 — Sign in.**
 `POST /api/v1/auth/login`, branching on `client_type`:
@@ -71,11 +75,26 @@ A web session lasts **30 days from its last use**, with no limit on how long it 
 until it is signed out, revoked from the session list, ended by signing out everywhere, or ended by
 a password reset. Signing in again from a browser ends the session it held. **D-95.**
 
+A mobile sign-in names its `device`: the installation's own id, which the client keeps, a label, a
+platform and an app version. A device holds one sign-in at a time, so signing in again on it ends
+the one it held; the id is unique per user, so a shared tablet signs several profiles in, each with
+a sign-in of its own. The sign-in lasts **until it is revoked**, with no idle expiry: by signing
+out on the device, revoking it from the device list, signing out everywhere, a password reset, or a
+reused refresh token (FR-ID4). **D-99.**
+
 **FR-ID4 — Token refresh with reuse detection.**
 `POST /api/v1/auth/token` with a refresh token. Refresh tokens are **single-use and rotating**;
 each belongs to a family. Presenting a token that has already been used invalidates the entire
 family and every session it produced, and notifies the user by email. This is the standard
-detection for a stolen refresh token and it is cheap. **D-14.**
+detection for a stolen refresh token and it is cheap. **D-14.** One exception: a token presented
+again within a minute of its use, while the token it was exchanged for is still unused, is a retry
+whose answer was lost, and is answered with a new pair; the unused one is retired, so presenting
+it later is a reuse. **D-98.** The email is the account-takeover notice (A-11), calm, naming the
+device and linking to a password reset, which signs every device out.
+
+An access token authenticates a request only while its device's sign-in is live, which the server
+reads on each request as it reads a web session: a revoked device, a password reset or signing out
+everywhere ends its requests at once, not when its token expires.
 
 Access tokens are JWTs, **15 minutes**, signed EdDSA, carrying only `sub`, `sid`, `iat`, `exp`
 and `client`. **They carry no roles and no household grants** — those are resolved server-side
@@ -85,13 +104,23 @@ than in fifteen minutes. **D-15.**
 **FR-ID5 — Multi-factor authentication.** Optional TOTP with recovery codes, per user. When
 enabled it is required on every login on a new device. Not required for children.
 
+A device, or a browser, is new unless it is trusted: trust is opt-in, chosen when the second step
+is answered, and lasts 30 days (A-7). It is required of a sign-in with Google or Apple as of one
+with a password. Turning it on takes the current password and a first code, and gives ten recovery
+codes, each used once in place of a code; a new set, with the password, retires the old one (A-6),
+and every recovery code spent is emailed (A-8). Ten wrong codes since the last right one lock the
+authenticator and end the account's pending sign-ins; a locked one takes only a recovery code,
+which unlocks it, or support's unlock. A password reset keeps the second step on; it, turning the
+second step off, and signing out everywhere end every trust. **D-100.**
+
 **FR-ID6 — Password reset.** `POST /api/v1/auth/password-reset` always returns `202`.
 Single-use token, **1 hour**, invalidates every session and every refresh-token family on use,
-and sends a confirmation email to the old address.
+and every trust of FR-ID5, and sends a confirmation email to the old address.
 
 **FR-ID7 — Session and device management.** `GET /api/v1/me/sessions` lists active sessions and
-devices with last-seen, approximate location from IP and user agent. Any can be revoked
-individually; "sign out everywhere" revokes all. Revoking a device also invalidates its offline
+`GET /api/v1/me/devices` the devices signed in, with last-seen, approximate location from IP and
+user agent. Any can be revoked individually; "sign out everywhere" revokes all. The approximate
+location stays null until an IP-to-place source is chosen (plan item 30). Revoking a device also invalidates its offline
 sync cursor, so its local replica is discarded on next contact rather than being resumed. Under
 D-93 the device is refused any further sync token, and its client discards the replica when it is
 refused. A sync token already issued keeps the device replicating until it expires, so that
@@ -368,6 +397,8 @@ to the household as *"Household support extended your trial"*.
 | Verification email resend, per account | 1 / min and 5 / hour |
 | Verification email resend, per IP | 20 / hour |
 | Invitation send, per household | 20 / day |
+| Second-step codes, per account | 5 wrong / 5 min; the tenth wrong since the last right one locks the authenticator (FR-ID5) |
+| Sign-in begun with Google or Apple, per IP | 60 / hour |
 | Child PIN attempts | 10, then owner unlock |
 | Sync mutation batch | 500 mutations / batch, 60 batches / min / device |
 | File upload | Plan-dependent; see [04](04-billing-and-entitlements.md) |
@@ -379,4 +410,4 @@ per-tenant as well as per-user so one household cannot degrade another. A limit 
 the address asked for, whether or not an account has it, so that a refusal says nothing about
 which addresses do (D-13). The rows the table did not first give (the registration note, the resend
 per account, the reset and the resend per IP, and the household's API budget) and the shape of the
-login backoff are **D-96**.
+login backoff are **D-96**; the second step's and the provider sign-in's are **D-101**.

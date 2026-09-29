@@ -15,7 +15,9 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/auth"
+	"github.com/kareltilcer/household/server/internal/platform/clientversion"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
+	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/grant"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
@@ -29,13 +31,16 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
-// Accounts are the account surfaces (item 8): the identity service behind /auth and /me, the
-// store that signs a web request in by its session cookie, the origins a browser's unsafe request
-// may come from, and the API's limits per signed-in user and per household (PRD 02 §9).
+// Accounts are the account surfaces (items 8 and 9): the identity service behind /auth and /me,
+// the store that signs a web request in by its session cookie and the one that signs a device's in
+// by its access token, the origins a browser's unsafe request may come from, the oldest client of
+// each type served, and the API's limits per signed-in user and per household (PRD 02 §9).
 type Accounts struct {
 	Identity       *identity.Service
 	Sessions       *session.Store
+	Devices        *device.Store
 	Origins        *session.Origins
+	MinClients     clientversion.Minimums
 	UserLimit      *ratelimit.Buckets
 	HouseholdLimit *ratelimit.Buckets
 }
@@ -66,11 +71,14 @@ type Deps struct {
 // contract.BasePath the contract's edge validation and every implemented route. It refuses
 // to build with a route the contract does not declare, so the server never serves one.
 //
-// Every unsafe request a browser sends from another site is refused before any route runs
-// (session.Origins). The routes a person reaches before signing in are served as they arrive; every
-// other route is behind the session cookie's authentication and the signed-in user's API limit,
-// and one about the caller's own account, under /me and the rest of /auth, keeps its
-// Idempotency-Key on the account, except the one whose body carries a password (D-97).
+// A client older than the oldest of its type served is answered please-update before anything else
+// is asked of its request, the contract included (clientversion). Every unsafe request a browser
+// sends from another site is refused before any route runs (session.Origins). The routes a person
+// reaches before signing in are served as they arrive; every other route is behind the
+// authentication, by an access token when the request carries one and by the session cookie when
+// not, and the signed-in user's API limit, and one about the caller's own account, under /me and
+// the rest of /auth, keeps its Idempotency-Key on the account, except those whose body carries a
+// password (D-97). Beginning a sign-in with a provider is authenticated but needs no caller.
 //
 // The reference reads under /reference answer any authenticated caller, with no household.
 //
@@ -86,7 +94,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		return nil, fmt.Errorf("app: %w", err)
 	}
 	a := d.Accounts
-	if a.Identity == nil || a.Sessions == nil || a.Origins == nil || a.UserLimit == nil || a.HouseholdLimit == nil {
+	if a.Identity == nil || a.Sessions == nil || a.Devices == nil || a.Origins == nil || a.UserLimit == nil || a.HouseholdLimit == nil {
 		return nil, errors.New("app: the router needs every account surface")
 	}
 	perUser := ratelimit.Middleware(a.UserLimit, func(r *http.Request) (string, bool) {
@@ -108,7 +116,8 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	root.MethodNotAllowed(httpx.MethodNotAllowed)
 
 	api := chi.NewRouter()
-	api.Use(d.Contract.Middleware(api, contract.Limits{MaxBody: d.MaxBodyBytes}), a.Origins.Middleware)
+	api.Use(clientversion.Middleware(a.MinClients), d.Contract.Middleware(api, contract.Limits{MaxBody: d.MaxBodyBytes}),
+		a.Origins.Middleware)
 	api.NotFound(httpx.NotFound)
 	api.MethodNotAllowed(httpx.MethodNotAllowed)
 
@@ -117,7 +126,8 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	a.Identity.PublicRoutes(api)
 
 	api.Group(func(signedIn chi.Router) {
-		signedIn.Use(a.Sessions.Authenticate, perUser)
+		signedIn.Use(authenticate(a.Devices.Authenticate, a.Sessions.Authenticate), perUser)
+		a.Identity.OptionalRoutes(signedIn)
 		signedIn.Route("/reference", reference.Routes(d.Pool, d.Logger))
 		signedIn.Group(func(account chi.Router) {
 			account.Use(auth.Required)
@@ -156,6 +166,22 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		return nil, fmt.Errorf("app: %s", strings.Join(undeclared, "; "))
 	}
 	return root, nil
+}
+
+// authenticate signs a request in by its access token when it carries an Authorization header,
+// which alone then decides, and by its session cookie when it does not (D-7): a request with a
+// bearer token that authenticates no one is not signed in by a cookie it also carries.
+func authenticate(bearer, cookie func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		byBearer, byCookie := bearer(next), cookie(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") != "" {
+				byBearer.ServeHTTP(w, r)
+				return
+			}
+			byCookie.ServeHTTP(w, r)
+		})
+	}
 }
 
 // Serve serves srv on ln until ctx ends, then stops accepting connections and waits up to

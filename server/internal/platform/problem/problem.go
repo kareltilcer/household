@@ -60,8 +60,10 @@ const (
 type Problem struct {
 	Status int
 	Code   Code
-	// Errors is the ValidationProblem member, and is written only when Code is
-	// CodeValidationFailed.
+	// Errors is the ValidationProblem member. It is always written when Code is
+	// CodeValidationFailed, and otherwise when it is set: a refusal with a code of its own that
+	// also names the fields it refuses, such as redirect_uri_not_registered, is a ValidationProblem
+	// too.
 	Errors []FieldError
 	// Extensions are further top-level members, such as ConflictProblem's `current` and
 	// `current_version`. A key that names a member this package writes is ignored.
@@ -148,7 +150,7 @@ func (p *Problem) document(requestID string) map[string]any {
 	if requestID != "" {
 		doc["request_id"] = requestID
 	}
-	if p.Code == CodeValidationFailed {
+	if p.Code == CodeValidationFailed || p.Errors != nil {
 		errs := p.Errors
 		if errs == nil {
 			errs = []FieldError{}

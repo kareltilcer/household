@@ -1,10 +1,12 @@
 // Package apptest builds what a test's router needs beyond the platform's pool and contract: the
 // account surfaces (app.Accounts), with password hashing cheap enough for a test, a
-// breached-password corpus of the test's choosing, mail kept in memory, and every job the
-// identity service defers run before the request that deferred it returns.
+// breached-password corpus of the test's choosing, mail kept in memory, keys of the test's own for
+// access tokens and the second step, and every job the identity service defers run before the
+// request that deferred it returns.
 package apptest
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"net/url"
@@ -18,12 +20,17 @@ import (
 	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/platform/breach"
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
+	"github.com/kareltilcer/household/server/internal/platform/clientversion"
+	"github.com/kareltilcer/household/server/internal/platform/device"
+	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
+	"github.com/kareltilcer/household/server/internal/platform/mfa"
 	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/token"
 )
 
 // WebURL is where the tests' web client is served; WebOrigin is its origin, which the router
@@ -80,6 +87,35 @@ type Options struct {
 	// Screening, when set, is called with each password the server screens, before the corpus is
 	// read: the moment between a current password's check and the new one's write.
 	Screening func(password string)
+	// Providers are the identity providers configured, by name, and RedirectURIs the redirect
+	// URIs registered for them.
+	Providers    map[string]*federation.Provider
+	RedirectURIs []string
+	// MinClients are the oldest clients served.
+	MinClients clientversion.Minimums
+}
+
+// TokenKeys and MFAKeys are the tests' keys: fixed, so that a token one router issued verifies at
+// another.
+var (
+	TokenKeys = mustTokenKeys()
+	MFAKeys   = mustMFAKeys()
+)
+
+func mustTokenKeys() *token.Keys {
+	k, err := token.NewKeys(bytes.Repeat([]byte{7}, 32))
+	if err != nil {
+		panic(err)
+	}
+	return k
+}
+
+func mustMFAKeys() *mfa.Keys {
+	k, err := mfa.NewKeys(bytes.Repeat([]byte{9}, 32))
+	if err != nil {
+		panic(err)
+	}
+	return k
 }
 
 // Cheap are password parameters cheap enough for a test to hash with often.
@@ -134,6 +170,7 @@ func Accounts(t testing.TB, pool session.Pool, log *slog.Logger, o Options) (app
 		t.Fatal(err)
 	}
 	sessions := session.NewStore(pool, origins, log, o.Now)
+	devices := device.NewStore(pool, TokenKeys, log, o.Now)
 	outbox := &Outbox{}
 	breached := func(pw string) (bool, error) {
 		if o.Screening != nil {
@@ -145,7 +182,8 @@ func Accounts(t testing.TB, pool session.Pool, log *slog.Logger, o Options) (app
 		Pool: pool, Log: log, Hasher: hasher, Breached: breached,
 		Throttles: ratelimit.NewThrottles(pool, o.Now), Sessions: sessions, Mail: outbox, Catalogs: catalogs,
 		WebURL: web, ClientIP: clientip.New(proxies),
-		Later: func(ctx context.Context, fn func(context.Context)) { fn(context.WithoutCancel(ctx)) },
+		Later:   func(ctx context.Context, fn func(context.Context)) { fn(context.WithoutCancel(ctx)) },
+		Devices: devices, MFA: MFAKeys, Providers: o.Providers, RedirectURIs: o.RedirectURIs,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +197,7 @@ func Accounts(t testing.TB, pool session.Pool, log *slog.Logger, o Options) (app
 		householdLimit = unlimited
 	}
 	return app.Accounts{
-		Identity: id, Sessions: sessions, Origins: origins,
+		Identity: id, Sessions: sessions, Devices: devices, Origins: origins, MinClients: o.MinClients,
 		UserLimit:      ratelimit.NewBuckets(userLimit, o.Now),
 		HouseholdLimit: ratelimit.NewBuckets(householdLimit, o.Now),
 	}, outbox
