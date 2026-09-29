@@ -1,10 +1,12 @@
 package app_test
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -255,6 +257,24 @@ func TestARefreshRetriedWithinAMinuteIsAnsweredAgain(t *testing.T) {
 		t.Fatal("presenting the retired pair did not revoke the family")
 	}
 
+	// The pair a retry retired is a reuse however soon it comes, even while the retry's own pair is
+	// still unused: it is never answered as a retry itself.
+	r := s.phone("")
+	expect(t, r.login(address, "correct horse battery"), http.StatusOK, "")
+	first = r.refresh
+	rec, lost = r.exchange(first)
+	expect(t, rec, http.StatusOK, "")
+	s.clock.advance(10 * time.Second)
+	rec, retried = r.exchange(first)
+	expect(t, rec, http.StatusOK, "")
+	s.clock.advance(10 * time.Second)
+	rec, _ = r.exchange(lost.RefreshToken)
+	expect(t, rec, http.StatusUnauthorized, problem.CodeRefreshTokenInvalid)
+	r.access, r.refresh = retried.AccessToken, retried.RefreshToken
+	if r.me() != http.StatusUnauthorized {
+		t.Fatal("presenting a retired pair within the minute did not revoke the family")
+	}
+
 	// Once the token it was exchanged for has been used, a retry is a reuse, however soon.
 	q := s.phone("")
 	expect(t, q.login(address, "correct horse battery"), http.StatusOK, "")
@@ -265,6 +285,59 @@ func TestARefreshRetriedWithinAMinuteIsAnsweredAgain(t *testing.T) {
 	expect(t, rec, http.StatusUnauthorized, problem.CodeRefreshTokenInvalid)
 	if q.me() != http.StatusUnauthorized {
 		t.Fatal("a retry after the next token's use did not revoke the family")
+	}
+}
+
+// A refresh token presented twice at once is exchanged once: the second presentation waits for the
+// first, then finds the token used, and is answered as a retry (D-98), which retires the pair the
+// first was given. The two answers never leave two live pairs beside each other, which reuse
+// detection would never find.
+func TestARefreshTokenPresentedTwiceAtOnceIsExchangedOnce(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	address := s.a("jana@tilcerovi.cz")
+	s.browser().register(address, "correct horse battery")
+	p := s.phone("")
+	expect(t, p.login(address, "correct horse battery"), http.StatusOK, "")
+
+	// The device's sign-in is held, so that both refreshes have read the token before either has
+	// its turn.
+	ctx := t.Context()
+	hold, err := s.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = hold.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := hold.Exec(ctx, "SELECT FROM device_sessions WHERE device_id = $1 AND revoked_at IS NULL FOR UPDATE", p.id); err != nil {
+		t.Fatal(err)
+	}
+	body := jsonBody(t, map[string]string{"refresh_token": p.refresh})
+	answers := []*httptest.ResponseRecorder{httptest.NewRecorder(), httptest.NewRecorder()}
+	var wg sync.WaitGroup
+	for _, rec := range answers {
+		r := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token", strings.NewReader(body))
+		r.RemoteAddr = s.peer
+		r.Header.Set("Content-Type", "application/json")
+		wg.Go(func() { s.router.ServeHTTP(rec, r) })
+	}
+	for deadline := time.Now().Add(10 * time.Second); s.count(`
+		SELECT count(*) FROM pg_stat_activity
+		WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%FROM refresh_tokens t%'`) < 2; {
+		if time.Now().After(deadline) {
+			t.Fatal("the two refreshes never both waited for the sign-in")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := hold.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	for _, rec := range answers {
+		expect(t, rec, http.StatusOK, "")
+	}
+	if live := s.count(`
+		SELECT count(*) FROM refresh_tokens t JOIN device_sessions d ON d.id = t.session_id
+		WHERE d.device_id = $1 AND d.revoked_at IS NULL AND t.used_at IS NULL`, p.id); live != 1 {
+		t.Fatalf("%d refresh tokens are live after one token was exchanged twice at once", live)
 	}
 }
 

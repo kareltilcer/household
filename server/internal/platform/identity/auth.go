@@ -459,7 +459,7 @@ func (s *Service) requestReset(w http.ResponseWriter, r *http.Request) {
 
 // confirmReset is postAuthPasswordResetConfirm (FR-ID6): a link, once, within its hour, sets the
 // password, ends every session and every other link to reset it, verifies the address it was sent
-// to, and says so by email.
+// to, unlinking the providers linked before when it was not verified yet, and says so by email.
 func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -541,6 +541,19 @@ func (s *Service) confirmReset(w http.ResponseWriter, r *http.Request) {
 			UPDATE email_tokens SET used_at = $2 WHERE user_id = $1 AND purpose = 'reset_password' AND used_at IS NULL`,
 			t.user, now); err != nil {
 			return err
+		}
+		// A reset that proves an address nobody had proven unlinks every provider the account held
+		// before it: whoever linked one had not shown the address was theirs, and may have
+		// registered with it before its owner came, to keep signing in once the owner took the
+		// account back (D-102).
+		var proven bool
+		if err := tx.QueryRow(ctx, "SELECT email_verified_at IS NOT NULL FROM users WHERE id = $1", t.user).Scan(&proven); err != nil {
+			return err
+		}
+		if !proven {
+			if _, err := tx.Exec(ctx, "DELETE FROM credentials WHERE user_id = $1 AND type IN ('google', 'apple')", t.user); err != nil {
+				return err
+			}
 		}
 		if err := tx.QueryRow(ctx, `
 			UPDATE users SET email_verified_at = coalesce(email_verified_at, $2) WHERE id = $1 RETURNING locale`,

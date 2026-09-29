@@ -56,7 +56,9 @@ silently, because a silent link on an unverified email is an account-takeover pr
 sign-in answers `409 link_required` for an identity whose address any account has, verified or
 not; the account's owner signs in as they always have and links the provider from their account,
 which the account's address is told of by email. An identity whose address no account has makes a
-new account, its address verified only when the provider verified it. **D-102.**
+new account, its address verified only when the provider verified it. A password reset that proves
+an address nobody had proven unlinks every identity the account held before it, which whoever
+linked it had not shown the address was theirs. **D-102.**
 
 **FR-ID3 — Sign in.**
 `POST /api/v1/auth/login`, branching on `client_type`:
@@ -115,7 +117,9 @@ second step off, and signing out everywhere end every trust. **D-100.**
 
 **FR-ID6 — Password reset.** `POST /api/v1/auth/password-reset` always returns `202`.
 Single-use token, **1 hour**, invalidates every session and every refresh-token family on use,
-and every trust of FR-ID5, and sends a confirmation email to the old address.
+and every trust of FR-ID5, and sends a confirmation email to the old address. The link proves the
+address: an unverified one is verified, and the Google or Apple identities linked to the account
+before it was are unlinked (D-102).
 
 **FR-ID7 — Session and device management.** `GET /api/v1/me/sessions` lists active sessions and
 `GET /api/v1/me/devices` the devices signed in, with last-seen, approximate location from IP and

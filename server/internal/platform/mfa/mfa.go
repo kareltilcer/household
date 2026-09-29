@@ -6,7 +6,8 @@
 // the database alone yields no second factor. A recovery code is kept as an HMAC under the same
 // key, since a code of forty bits would fall to a fast unkeyed hash. The keys are a list, of
 // which the first seals and every one opens, so that a key is rotated by putting its successor
-// first; a sealed secret and a recovery code name the key they were made with.
+// first; a sealed secret names the key it was sealed with, and a recovery code, which names none,
+// is checked under every key.
 package mfa
 
 import (

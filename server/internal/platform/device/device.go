@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -67,7 +68,7 @@ type Info struct {
 func (i Info) Clean() Info {
 	i.Label = clean(i.Label, MaxLabel)
 	i.AppVersion = clean(i.AppVersion, maxAppVersion)
-	if i.Platform != "ios" && i.Platform != "android" {
+	if !slices.Contains(Platforms, i.Platform) {
 		i.Platform = ""
 	}
 	return i
@@ -219,13 +220,13 @@ func (s *Store) Refresh(ctx context.Context, refresh, appVersion string) (Refres
 		// The sign-in's row is locked first, so that every refresh of one family takes its turn,
 		// and a token presented twice at once is exchanged once and then found used.
 		err := tx.QueryRow(ctx, `
-			SELECT t.id, t.used_at, t.replaced_by, s.id, s.user_id, s.revoked_at, d.id, d.label, d.platform
+			SELECT t.id, s.id, s.user_id, s.revoked_at, d.id, d.label, d.platform
 			FROM refresh_tokens t
 			JOIN device_sessions s ON s.id = t.session_id
 			JOIN devices d ON d.user_id = s.user_id AND d.id = s.device_id
 			WHERE t.token_hash = $1
 			FOR UPDATE OF s`, session.Hash(refresh)).
-			Scan(&tokenID, &usedAt, &replacedBy, &sid, &out.User, &revoked, &out.Device.ID, &out.Device.Label, &platform)
+			Scan(&tokenID, &sid, &out.User, &revoked, &out.Device.ID, &out.Device.Label, &platform)
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return nil
@@ -233,6 +234,17 @@ func (s *Store) Refresh(ctx context.Context, refresh, appVersion string) (Refres
 			return err
 		case revoked != nil:
 			return nil
+		}
+		// The token itself is read once the lock is held, in a statement of its own. The one that
+		// waited for the lock reads the sign-in's row as the refresh it waited for left it, but
+		// every other row as it was when it began: the token would still read as unused, and be
+		// exchanged a second time beside the first, two live pairs that no reuse ever finds.
+		err = tx.QueryRow(ctx, "SELECT used_at, replaced_by FROM refresh_tokens WHERE id = $1", tokenID).Scan(&usedAt, &replacedBy)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return nil
+		case err != nil:
+			return err
 		}
 		if platform != nil {
 			out.Device.Platform = *platform
@@ -264,10 +276,9 @@ func (s *Store) Refresh(ctx context.Context, refresh, appVersion string) (Refres
 		}
 		if retired != uuid.Nil {
 			// The pair the lost answer carried is retired, as if it had been used: presented later,
-			// it is a reuse.
-			if _, err := tx.Exec(ctx, `
-				UPDATE refresh_tokens SET used_at = $2, replaced_by = (SELECT replaced_by FROM refresh_tokens WHERE id = $3)
-				WHERE id = $1`, retired, now, tokenID); err != nil {
+			// however soon, it is a reuse (D-98). It names itself as the token it was exchanged
+			// for, which is used, so that it never passes for a retry of its own.
+			if _, err := tx.Exec(ctx, "UPDATE refresh_tokens SET used_at = $2, replaced_by = id WHERE id = $1", retired, now); err != nil {
 				return err
 			}
 		}

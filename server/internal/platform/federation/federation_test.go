@@ -5,11 +5,17 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/federation/federationtest"
@@ -137,6 +143,52 @@ func TestAppleIsAskedForAFormPostAndSentASignedSecret(t *testing.T) {
 	}
 	if _, err := federation.ParseAppleKey("not a key"); err == nil {
 		t.Fatal("a key that is not PEM was read")
+	}
+}
+
+// A sign-in does not wait for another's discovery: while the provider is slow to answer one fetch
+// of its discovery document, the next sign-in fetches it for itself.
+func TestADiscoveryIsNotHeldUpByAnother(t *testing.T) {
+	arrived, release := make(chan struct{}), make(chan struct{})
+	var calls atomic.Int32
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) == 1 {
+			close(arrived)
+			<-release
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"issuer": srv.URL, "authorization_endpoint": srv.URL + "/authorize",
+			"token_endpoint": srv.URL + "/token", "jwks_uri": srv.URL + "/keys", "id_token_signing_alg_values_supported": []string{"RS256"}})
+	}))
+	defer srv.Close()
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	defer unblock()
+	p, err := federation.New(federation.Google, federation.Config{Issuer: srv.URL, ClientID: "household-web", ClientSecret: "the-secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	begin := func() error {
+		_, err := p.AuthURL(t.Context(), redirect, "s", "n", federation.Challenge(verifier))
+		return err
+	}
+	slow, fast := make(chan error, 1), make(chan error, 1)
+	go func() { slow <- begin() }()
+	<-arrived
+	go func() { fast <- begin() }()
+	select {
+	case err := <-fast:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		unblock()
+		t.Fatal("a sign-in waited for another's discovery")
+	}
+	unblock()
+	if err := <-slow; err != nil {
+		t.Fatal(err)
 	}
 }
 

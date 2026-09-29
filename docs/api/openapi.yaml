@@ -382,8 +382,9 @@ paths:
       description: |
         On success, invalidates every session, every refresh-token family and every browser and
         device trusted to skip the second step, and emails the account's address to say so. The
-        link proves the address, so an unverified one is verified too. The second step, if it is
-        on, stays on. A password found in the breached-password screen is refused `422`, naming `/password`
+        link proves the address, so an unverified one is verified too, and every Google or Apple
+        identity linked to the account before it was is unlinked: whoever linked it had not shown
+        the address was theirs. The second step, if it is on, stays on. A password found in the breached-password screen is refused `422`, naming `/password`
         with the code `invalid`.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]

@@ -133,21 +133,29 @@ func New(name string, cfg Config) (*Provider, error) {
 func (p *Provider) Name() string { return p.name }
 
 // discover returns the provider's endpoints and its ID token verifier, fetching its discovery
-// document the first time it is asked, and again after a failure.
+// document the first time it is asked, and again after a failure. The fetch is made outside the
+// lock, so that sign-ins begun while the provider is slow or down each wait for their own fetch,
+// not for one another's in turn; the first to finish is kept.
 func (p *Provider) discover(ctx context.Context) (oauth2.Endpoint, *oidc.IDTokenVerifier, error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.verifier != nil {
-		return p.endpoint, p.verifier, nil
+	endpoint, verifier := p.endpoint, p.verifier
+	p.mu.Unlock()
+	if verifier != nil {
+		return endpoint, verifier, nil
 	}
 	provider, err := oidc.NewProvider(oidc.ClientContext(ctx, p.cfg.HTTP), p.cfg.Issuer)
 	if err != nil {
 		return oauth2.Endpoint{}, nil, fmt.Errorf("federation: discover %s: %w", p.name, err)
 	}
-	p.endpoint = provider.Endpoint()
+	endpoint = provider.Endpoint()
 	// The client secret goes in the body: Apple takes it nowhere else.
-	p.endpoint.AuthStyle = oauth2.AuthStyleInParams
-	p.verifier = provider.Verifier(&oidc.Config{ClientID: p.cfg.ClientID, Now: p.cfg.Now})
+	endpoint.AuthStyle = oauth2.AuthStyleInParams
+	verifier = provider.Verifier(&oidc.Config{ClientID: p.cfg.ClientID, Now: p.cfg.Now})
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.verifier == nil {
+		p.endpoint, p.verifier = endpoint, verifier
+	}
 	return p.endpoint, p.verifier, nil
 }
 

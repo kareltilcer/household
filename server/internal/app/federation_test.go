@@ -132,6 +132,50 @@ func TestAnAccountWithTheAddressLinksGoogleItself(t *testing.T) {
 	expect(t, only.send(request{method: http.MethodDelete, path: "/auth/oauth/google"}), http.StatusConflict, problem.CodeOnlyCredential)
 }
 
+// A reset that proves an address nobody had proven unlinks the providers the account held before
+// it (D-102): whoever registered with someone else's address and linked their own Google signs in
+// with it no longer once the address's owner has reset the password. An account whose address was
+// proven keeps its providers.
+func TestAResetThatProvesTheAddressUnlinksTheProvidersBeforeIt(t *testing.T) {
+	s, idp := federated(t, apptest.Options{})
+	address := s.a("jana@tilcerovi.cz")
+	squatter := s.signUp(address, "squatter horse battery")
+	intruder := federationtest.Person{Subject: s.a("g-squatter"), Email: s.a("squatter@gmail.test"), EmailVerified: true}
+	authURL, state := squatter.start("web")
+	code, _ := idp.Authorize(authURL, intruder)
+	expect(t, squatter.post("/auth/oauth/google/link", jsonBody(t, map[string]string{"code": code, "state": state, "code_verifier": verifier})),
+		http.StatusNoContent, "")
+
+	owner := s.browser()
+	expect(t, owner.post("/auth/password-reset", jsonBody(t, map[string]string{"email": address})), http.StatusAccepted, "")
+	tok, _ := s.token(address)
+	expect(t, owner.post("/auth/password-reset/confirm", jsonBody(t, map[string]string{"token": tok, "password": "correct horse battery"})),
+		http.StatusNoContent, "")
+	me := owner.loginAndMe(address, "correct horse battery")
+	if !me.EmailVerified || !slices.Equal(me.Credentials, []string{"password"}) {
+		t.Fatalf("%+v", me)
+	}
+	// The squatter's Google now opens an account of its own, not the owner's.
+	g := s.browser()
+	expect(t, g.google(idp, intruder), http.StatusOK, "")
+	if g.me().ID == me.ID {
+		t.Fatal("the squatter's Google still signs in to the owner's account")
+	}
+
+	// Proven, the address's owner links Google, and a later reset keeps it.
+	mine := federationtest.Person{Subject: s.a("g-jana"), Email: address, EmailVerified: true}
+	authURL, state = owner.start("web")
+	code, _ = idp.Authorize(authURL, mine)
+	expect(t, owner.post("/auth/oauth/google/link", jsonBody(t, map[string]string{"code": code, "state": state, "code_verifier": verifier})),
+		http.StatusNoContent, "")
+	expect(t, owner.post("/auth/password-reset", jsonBody(t, map[string]string{"email": address})), http.StatusAccepted, "")
+	tok, _ = s.token(address)
+	again := "a new horse battery"
+	expect(t, owner.post("/auth/password-reset/confirm", jsonBody(t, map[string]string{"token": tok, "password": again})),
+		http.StatusNoContent, "")
+	expect(t, s.browser().google(idp, mine), http.StatusOK, "")
+}
+
 // A link completes only a start its own account made, and never takes a subject another account
 // holds.
 func TestALinkIsTheAccountsOwn(t *testing.T) {

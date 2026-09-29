@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -337,10 +338,11 @@ func (s *Service) verifyMFA(w http.ResponseWriter, r *http.Request) {
 		return
 	case right:
 	}
-	// The right code: the account's count of wrong ones starts again.
+	// The right code: the account's count of wrong ones starts again. The sign-in has committed,
+	// its challenge ended and any recovery code spent, so a failure here is logged, not answered:
+	// the client still gets the credential that was made for it.
 	if err := s.Throttles.Clear(ctx, ratelimit.MFAAccount, account); err != nil {
-		s.fail(w, r, err)
-		return
+		s.Log.LogAttrs(ctx, slog.LevelWarn, "second-step throttle not cleared", slog.Any("error", err))
 	}
 	if recoveryLeft >= 0 {
 		s.notice(ctx, user, emailRecoveryCodeUsed, i18n.Args{"left": recoveryLeft})
