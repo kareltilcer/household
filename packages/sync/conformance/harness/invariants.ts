@@ -19,7 +19,14 @@ import type { Client } from './client.ts'
 import type { HoldReason } from './connector.ts'
 import { terminal } from './mutation.ts'
 import type { Recorder } from './recorder.ts'
-import { canonicalRow, entitySpec, tableSpec, type Canonical, type CanonicalRow, type TableName } from './schema.ts'
+import {
+  canonicalRow,
+  entitySpec,
+  tableSpec,
+  type Canonical,
+  type CanonicalRow,
+  type TableName,
+} from './schema.ts'
 import type { Target } from './target.ts'
 
 export type Invariant =
@@ -46,7 +53,11 @@ function same(a: Canonical, b: Canonical): boolean {
  * or holds otherwise than the server, a row the server never took or has deleted, a row of its
  * household its member may not see, and a row of another household.
  */
-export async function compareReplica(client: Client, target: Target, admin: Admin): Promise<Violation[]> {
+export async function compareReplica(
+  client: Client,
+  target: Target,
+  admin: Admin,
+): Promise<Violation[]> {
   const out: Violation[] = []
   const report = (invariant: Invariant, detail: string): void => {
     out.push({ invariant, client: client.name, detail })
@@ -67,7 +78,8 @@ export async function compareReplica(client: Client, target: Target, admin: Admi
         const there = server.get(id)
         if (there === undefined) {
           const other = await admin.householdOf(table, id)
-          if (other === null) report('convergence', `holds ${table} ${id}, which the server never took`)
+          if (other === null)
+            report('convergence', `holds ${table} ${id}, which the server never took`)
           else report('isolation', `holds ${table} ${id} of household ${other}`)
         } else if (there['deleted_at'] !== null && target.tombstones === 'dropped') {
           report('convergence', `holds ${table} ${id}, which the server has deleted`)
@@ -76,7 +88,9 @@ export async function compareReplica(client: Client, target: Target, admin: Admi
         }
         continue
       }
-      const differing = Object.keys(spec.columns).filter((name) => !same(row[name] ?? null, want[name] ?? null))
+      const differing = Object.keys(spec.columns).filter(
+        (name) => !same(row[name] ?? null, want[name] ?? null),
+      )
       if (differing.length > 0) {
         report(
           'convergence',
@@ -94,13 +108,22 @@ export async function compareReplica(client: Client, target: Target, admin: Admi
 }
 
 /** Invariant 2: the row every `applied` or `merged` answer names is on the server at its version or later. */
-export async function acknowledgedWrites(recorder: Recorder, admin: Admin, clients: readonly Client[]): Promise<Violation[]> {
+export async function acknowledgedWrites(
+  recorder: Recorder,
+  admin: Admin,
+  clients: readonly Client[],
+): Promise<Violation[]> {
   const out: Violation[] = []
   const householdOf = new Map(clients.map((c) => [c.name, c.household]))
   const cache = new Map<string, Map<string, CanonicalRow>>()
   for (const a of recorder.answers) {
     const { result, mutation } = a
-    if ((result.outcome !== 'applied' && result.outcome !== 'merged') || result.version === null || result.version === undefined) continue
+    if (
+      (result.outcome !== 'applied' && result.outcome !== 'merged') ||
+      result.version === null ||
+      result.version === undefined
+    )
+      continue
     const household = householdOf.get(a.client)
     if (household === undefined) continue
     const table = entitySpec(mutation.entity_type).table as TableName
@@ -113,7 +136,11 @@ export async function acknowledgedWrites(recorder: Recorder, admin: Admin, clien
     }
     const there = rows.get(rowId)
     if (there === undefined) {
-      out.push({ invariant: 'no-acknowledged-write-lost', client: a.client, detail: `${mutation.mutation_id} was ${result.outcome} as ${table} ${rowId}, which the server does not hold` })
+      out.push({
+        invariant: 'no-acknowledged-write-lost',
+        client: a.client,
+        detail: `${mutation.mutation_id} was ${result.outcome} as ${table} ${rowId}, which the server does not hold`,
+      })
     } else if (Number(there['version']) < result.version) {
       out.push({
         invariant: 'no-acknowledged-write-lost',
@@ -145,14 +172,23 @@ export interface TerminalityOptions {
 }
 
 /** Invariant 6: every mutation ended once; none left queued, held or unanswered; every answer well formed. */
-export async function terminality(recorder: Recorder, clients: readonly Client[], options: TerminalityOptions = {}): Promise<Violation[]> {
+export async function terminality(
+  recorder: Recorder,
+  clients: readonly Client[],
+  options: TerminalityOptions = {},
+): Promise<Violation[]> {
   const out: Violation[] = []
   const allowHeld = new Set(options.allowHeld ?? [])
   const held = new Map<string, HoldReason>()
   for (const client of clients) {
     for (const h of await client.held()) held.set(h.mutation.mutation_id, h.reason)
     const pending = await client.pending()
-    if (pending > 0) out.push({ invariant: 'terminality', client: client.name, detail: `${String(pending)} writes are still queued` })
+    if (pending > 0)
+      out.push({
+        invariant: 'terminality',
+        client: client.name,
+        detail: `${String(pending)} writes are still queued`,
+      })
   }
   for (const [id, w] of recorder.written) {
     const ended = recorder.answersTo(id).filter((a) => terminal.has(a.result.outcome))
@@ -167,13 +203,25 @@ export async function terminality(recorder: Recorder, clients: readonly Client[]
         detail: `${w.op} of ${w.table} ${w.entityId} (${id}) never ended${reason === undefined ? '' : `, held for ${reason}`}: ${String(tries)} requests carried it`,
       })
     } else if (outcomes.length > 1) {
-      out.push({ invariant: 'terminality', client: w.client, detail: `${id} ended ${outcomes.join(' and ')}` })
+      out.push({
+        invariant: 'terminality',
+        client: w.client,
+        detail: `${id} ended ${outcomes.join(' and ')}`,
+      })
     } else if (ended.length > 1) {
-      out.push({ invariant: 'terminality', client: w.client, detail: `${id} was answered ${outcomes.join('')} ${String(ended.length)} times, not once` })
+      out.push({
+        invariant: 'terminality',
+        client: w.client,
+        detail: `${id} was answered ${outcomes.join('')} ${String(ended.length)} times, not once`,
+      })
     }
   }
   for (const m of recorder.malformedResponses) {
-    out.push({ invariant: 'terminality', client: m.client, detail: `a response outside the contract: ${m.reason}` })
+    out.push({
+      invariant: 'terminality',
+      client: m.client,
+      detail: `a response outside the contract: ${m.reason}`,
+    })
   }
   return out
 }

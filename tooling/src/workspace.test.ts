@@ -344,6 +344,18 @@ describe('a developer machine and CI', () => {
     )
   })
 
+  // The conformance suite's stack (plan item 12) runs its own PostgreSQL, with logical
+  // replication, beside PowerSync. The two PostgreSQLs are one image, and PowerSync is pinned to a
+  // release, never a moving tag: the suite is what tells an upgrade apart.
+  it('run the same PostgreSQL image in the conformance stack, beside a pinned PowerSync', () => {
+    const local = field(readRecord('docker-compose.yml'), 'services', 'postgres', 'image')
+    const stack = readRecord('packages/sync/conformance/stack/docker-compose.yml')
+    expect(field(stack, 'services', 'postgres', 'image')).toBe(local)
+    expect(field(stack, 'services', 'powersync', 'image')).toMatch(
+      /^journeyapps\/powersync-service:\d+\.\d+\.\d+$/,
+    )
+  })
+
   // A cached `go test` result passes a database test without running it: CI restores Go's
   // cache through setup-go, and locally the compose Postgres may not be running.
   it('run the Go tests uncached', () => {

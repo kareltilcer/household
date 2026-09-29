@@ -60,7 +60,8 @@ async function family(w: World): Promise<Family> {
   return { jana, petr, eva, home, milk, bread, eggs }
 }
 
-const kinds = (violations: readonly Violation[]): string[] => [...new Set(violations.map((v) => v.invariant))].sort()
+const kinds = (violations: readonly Violation[]): string[] =>
+  [...new Set(violations.map((v) => v.invariant))].sort()
 
 describe('the harness, against the stand-ins', () => {
   it('drives clients through partitions, lost answers, duplicates and skew, and finds every invariant held', async () => {
@@ -68,7 +69,12 @@ describe('the harness, against the stand-ins', () => {
       const f = await family(w)
       const jana = w.client({ name: 'jana', member: f.jana, household: f.home })
       const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
-      const eva = w.client({ name: 'eva', member: f.eva, household: f.home, skewMs: 48 * 3_600_000 })
+      const eva = w.client({
+        name: 'eva',
+        member: f.eva,
+        household: f.home,
+        skewMs: 48 * 3_600_000,
+      })
       await Promise.all([jana.online(), petr.online(), eva.online()])
       expect(await w.settle()).toBe(true)
 
@@ -184,7 +190,12 @@ describe('the harness, against the stand-ins', () => {
   it('renews a credential the push refuses, and sends a batch again without the mutation the edge refused', async () => {
     await run('refusals', 12_004, async (w) => {
       const f = await family(w)
-      const petr = w.client({ name: 'petr', member: f.petr, household: f.home, credentialTtlSeconds: 2 })
+      const petr = w.client({
+        name: 'petr',
+        member: f.petr,
+        household: f.home,
+        credentialTtlSeconds: 2,
+      })
       await petr.online()
       expect(await w.settle()).toBe(true)
       await petr.offline()
@@ -198,8 +209,12 @@ describe('the harness, against the stand-ins', () => {
       expect(await w.settle()).toBe(true)
       expect(w.recorder.attempts.some((a) => a.status === 401)).toBe(true)
       expect(w.recorder.attempts.some((a) => a.status === 422)).toBe(true)
-      expect((await petr.outcomes()).map((o) => [o.entity_id, o.outcome, o.code])).toEqual([['not-a-uuid', 'rejected', 'validation_failed']])
-      expect((await admin.rows('conformance_items', f.home)).get(good)).toMatchObject({ title: 'Flour' })
+      expect((await petr.outcomes()).map((o) => [o.entity_id, o.outcome, o.code])).toEqual([
+        ['not-a-uuid', 'rejected', 'validation_failed'],
+      ])
+      expect((await admin.rows('conformance_items', f.home)).get(good)).toMatchObject({
+        title: 'Flour',
+      })
       expect(await w.violations()).toEqual([])
     })
   })
@@ -208,7 +223,12 @@ describe('the harness, against the stand-ins', () => {
     it('a connector that retries a rejection forever', async () => {
       await run('negative-connector', 12_005, async (w) => {
         const f = await family(w)
-        const eva = w.client({ name: 'eva', member: f.eva, household: f.home, retryRejections: true })
+        const eva = w.client({
+          name: 'eva',
+          member: f.eva,
+          household: f.home,
+          retryRejections: true,
+        })
         await eva.online()
         expect(await w.settle()).toBe(true)
         await eva.offline()
@@ -229,7 +249,12 @@ describe('the harness, against the stand-ins', () => {
         const f = await family(w)
         const cottage = await w.household('Chata', [{ member: f.petr, role: 'owner' }])
         await admin.insert('conformance_items', cottage, [{ id: w.rng.uuid(), title: 'Firewood' }])
-        const home = w.client({ name: 'petr-home', member: f.petr, household: f.home, extraStreams: [leakyStream] })
+        const home = w.client({
+          name: 'petr-home',
+          member: f.petr,
+          household: f.home,
+          extraStreams: [leakyStream],
+        })
         await home.online()
         expect(await w.settle({ timeoutMs: 5_000 })).toBe(false)
         const found = await w.violations()

@@ -39,7 +39,13 @@ export const tables = [
   {
     table: 'conformance_item_checks',
     entity: 'conformance.item_checked',
-    columns: { ...base, item_id: 'uuid', checked: 'boolean', checked_at: 'timestamp', clock_flagged: 'boolean' },
+    columns: {
+      ...base,
+      item_id: 'uuid',
+      checked: 'boolean',
+      checked_at: 'timestamp',
+      clock_flagged: 'boolean',
+    },
     writes: ['item_id', 'checked'],
   },
   {
@@ -77,13 +83,25 @@ export const tables = [
   {
     table: 'conformance_completions',
     entity: 'conformance.completion',
-    columns: { ...base, chore_id: 'uuid', occurrence: 'date', done: 'boolean', done_at: 'timestamp' },
+    columns: {
+      ...base,
+      chore_id: 'uuid',
+      occurrence: 'date',
+      done: 'boolean',
+      done_at: 'timestamp',
+    },
     writes: ['chore_id', 'occurrence', 'done'],
   },
   {
     table: 'conformance_attachments',
     entity: 'conformance.attachment',
-    columns: { ...base, item_id: 'uuid', file_name: 'text', attachment_status: 'text', failure_reason: 'text' },
+    columns: {
+      ...base,
+      item_id: 'uuid',
+      file_name: 'text',
+      attachment_status: 'text',
+      failure_reason: 'text',
+    },
     writes: ['item_id', 'file_name', 'attachment_status'],
   },
   {
@@ -139,7 +157,9 @@ export const schema = new Schema({
     tables.map((spec) => [
       spec.table,
       new Table(
-        Object.fromEntries(Object.entries(spec.columns).map(([name, kind]) => [name, clientColumn(kind)])),
+        Object.fromEntries(
+          Object.entries(spec.columns).map(([name, kind]) => [name, clientColumn(kind)]),
+        ),
         { trackMetadata: spec.entity !== null },
       ),
     ]),
@@ -165,7 +185,13 @@ export const schema = new Schema({
   // The mutations held to replay: a `deferred` one once its batch is answered, an `entitlement`
   // one once the household may write again.
   [heldTable]: new Table(
-    { mutation_id: column.text, reason: column.text, position: column.integer, mutation: column.text, held_at: column.text },
+    {
+      mutation_id: column.text,
+      reason: column.text,
+      position: column.integer,
+      mutation: column.text,
+      held_at: column.text,
+    },
     { localOnly: true },
   ),
 })
@@ -227,7 +253,10 @@ function parseList(text: string): unknown {
 /** A row in comparable form: its id and every column of spec, each canonical. */
 export type CanonicalRow = Readonly<Record<string, Canonical>> & { readonly id: string }
 
-export function canonicalRow(spec: TableSpec, row: Readonly<Record<string, unknown>>): CanonicalRow {
+export function canonicalRow(
+  spec: TableSpec,
+  row: Readonly<Record<string, unknown>>,
+): CanonicalRow {
   const out: Record<string, Canonical> = {}
   for (const [name, kind] of Object.entries(spec.columns)) out[name] = canonical(kind, row[name])
   return { ...out, id: String(row['id']).toLowerCase() }

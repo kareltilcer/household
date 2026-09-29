@@ -1,7 +1,15 @@
 // PRD 10 §4's scenarios about how concurrent writes merge (PRD 03 §2.5): 1, 2, 3, 4, 5, 11 and 13.
 
 import { expect } from 'vitest'
-import { answersOf, eventsAbout, family, offline, online, staysQuiet, type Scenario } from './scenario.ts'
+import {
+  answersOf,
+  eventsAbout,
+  family,
+  offline,
+  online,
+  staysQuiet,
+  type Scenario,
+} from './scenario.ts'
 
 export const merge: readonly Scenario[] = [
   {
@@ -20,11 +28,16 @@ export const merge: readonly Scenario[] = [
       await eva.update('conformance_items', f.milk, { note: 'two litres' })
       await online(w, petr, eva)
 
-      expect((await w.admin.rows('conformance_items', f.home)).get(f.milk)).toMatchObject({ title: 'Oat milk', note: 'two litres' })
+      expect((await w.admin.rows('conformance_items', f.home)).get(f.milk)).toMatchObject({
+        title: 'Oat milk',
+        note: 'two litres',
+      })
       const answers = [...answersOf(w, petr), ...answersOf(w, eva)]
       // No conflict and no refusal. A merged answer is shown only where a field the member set was
       // overridden, and here neither was: its row keeps what the member wrote.
-      expect(answers.map((a) => a.outcome).filter((o) => o !== 'applied' && o !== 'merged')).toEqual([])
+      expect(
+        answers.map((a) => a.outcome).filter((o) => o !== 'applied' && o !== 'merged'),
+      ).toEqual([])
       for (const a of answers.filter((x) => x.outcome === 'merged')) {
         expect(a.row).toMatchObject({ title: 'Oat milk', note: 'two litres' })
       }
@@ -50,7 +63,9 @@ export const merge: readonly Scenario[] = [
       await online(w, petr)
       await online(w, eva)
 
-      expect((await w.admin.rows('conformance_items', f.home)).get(f.milk)).toMatchObject({ title: 'Soy milk' })
+      expect((await w.admin.rows('conformance_items', f.home)).get(f.milk)).toMatchObject({
+        title: 'Soy milk',
+      })
       expect(answersOf(w, petr).map((a) => a.outcome)).toEqual(['applied'])
       const [won] = answersOf(w, eva)
       // The write that replaced a concurrent change of the same field says so, and its client
@@ -76,7 +91,9 @@ export const merge: readonly Scenario[] = [
       await eva.check(f.milk, true)
       await online(w, petr, eva)
 
-      const checks = [...(await w.admin.rows('conformance_item_checks', f.home)).values()].filter((c) => c['item_id'] === f.milk)
+      const checks = [...(await w.admin.rows('conformance_item_checks', f.home)).values()].filter(
+        (c) => c['item_id'] === f.milk,
+      )
       expect(checks).toHaveLength(1)
       expect(checks[0]).toMatchObject({ checked: true })
       const id = checks[0]?.id ?? ''
@@ -103,16 +120,22 @@ export const merge: readonly Scenario[] = [
       await online(w, petr)
 
       const rows = [...(await w.admin.rows('conformance_items', f.home)).values()]
-      expect(rows.filter((r) => r['title'] === 'Gouda')).toEqual([expect.objectContaining({ id: cheese, note: 'sliced' })])
+      expect(rows.filter((r) => r['title'] === 'Gouda')).toEqual([
+        expect.objectContaining({ id: cheese, note: 'sliced' }),
+      ])
       expect(rows.filter((r) => r['title'] === 'Cheese')).toEqual([])
       expect(answersOf(w, petr).map((a) => a.outcome)).toEqual(['applied', 'applied', 'applied'])
-      expect(await petr.row('conformance_items', cheese)).toMatchObject({ title: 'Gouda', note: 'sliced' })
+      expect(await petr.row('conformance_items', cheese)).toMatchObject({
+        title: 'Gouda',
+        note: 'sliced',
+      })
     },
   },
   {
     key: '5',
     title: 'Client A creates X, edits X, deletes X, all offline',
-    expected: 'The server sees three mutations for an id it never had; the net effect is a tombstone and no error storm',
+    expected:
+      'The server sees three mutations for an id it never had; the net effect is a tombstone and no error storm',
     enabledBy: 13,
     needs: ['conformance.item'],
     async run(w) {
@@ -131,7 +154,8 @@ export const merge: readonly Scenario[] = [
       // No error storm: one batch carried the three, and nothing follows it.
       expect(w.recorder.attempts.filter((a) => a.client === 'petr')).toHaveLength(1)
       await staysQuiet(w)
-      if (w.target.tombstones === 'dropped') expect(await petr.row('conformance_items', jam)).toBeNull()
+      if (w.target.tombstones === 'dropped')
+        expect(await petr.row('conformance_items', jam)).toBeNull()
     },
   },
   {
@@ -143,7 +167,9 @@ export const merge: readonly Scenario[] = [
     async run(w) {
       const f = await family(w)
       const groceries = w.rng.uuid()
-      await w.admin.insert('conformance_budgets', f.home, [{ id: groceries, name: 'Groceries', amount_minor: 450_000, currency: 'CZK' }])
+      await w.admin.insert('conformance_budgets', f.home, [
+        { id: groceries, name: 'Groceries', amount_minor: 450_000, currency: 'CZK' },
+      ])
       const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
       await online(w, petr, eva)
@@ -153,7 +179,10 @@ export const merge: readonly Scenario[] = [
       await online(w, petr)
       await online(w, eva)
 
-      expect((await w.admin.rows('conformance_budgets', f.home)).get(groceries)).toMatchObject({ amount_minor: 500_000, version: 2 })
+      expect((await w.admin.rows('conformance_budgets', f.home)).get(groceries)).toMatchObject({
+        amount_minor: 500_000,
+        version: 2,
+      })
       expect(answersOf(w, petr).map((a) => a.outcome)).toEqual(['applied'])
       const [refused] = answersOf(w, eva)
       expect(refused?.outcome).toBe('conflict')
@@ -161,30 +190,42 @@ export const merge: readonly Scenario[] = [
       // Eva's change stays in her outcomes table, to be re-presented beside the server's.
       const [kept] = await eva.outcomes()
       expect(kept).toMatchObject({ outcome: 'conflict', entity_id: groceries })
-      expect(await eva.row('conformance_budgets', groceries)).toMatchObject({ amount_minor: 500_000 })
+      expect(await eva.row('conformance_budgets', groceries)).toMatchObject({
+        amount_minor: 500_000,
+      })
     },
   },
   {
     key: '13',
     title: 'Two rotating-chore completions offline: one completion',
-    expected: 'The two completions of one occurrence are one row, applied once (state_set on (chore_id, occurrence))',
+    expected:
+      'The two completions of one occurrence are one row, applied once (state_set on (chore_id, occurrence))',
     enabledBy: 13,
     needs: ['conformance.completion'],
     async run(w) {
       const f = await family(w)
       const dishes = w.rng.uuid()
-      await w.admin.insert('conformance_chores', f.home, [{ id: dishes, name: 'Dishes', rotation: [f.petr.id, f.eva.id, f.jana.id] }])
+      await w.admin.insert('conformance_chores', f.home, [
+        { id: dishes, name: 'Dishes', rotation: [f.petr.id, f.eva.id, f.jana.id] },
+      ])
       const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
       await online(w, petr, eva)
       await offline(petr, eva)
       const today = new Date().toISOString().slice(0, 10)
       for (const c of [petr, eva]) {
-        await c.create('conformance_completions', { chore_id: dishes, occurrence: today, done: true, done_at: c.now().toISOString() })
+        await c.create('conformance_completions', {
+          chore_id: dishes,
+          occurrence: today,
+          done: true,
+          done_at: c.now().toISOString(),
+        })
       }
       await online(w, petr, eva)
 
-      const done = [...(await w.admin.rows('conformance_completions', f.home)).values()].filter((c) => c['chore_id'] === dishes)
+      const done = [...(await w.admin.rows('conformance_completions', f.home)).values()].filter(
+        (c) => c['chore_id'] === dishes,
+      )
       expect(done).toHaveLength(1)
       expect(done[0]).toMatchObject({ occurrence: today, done: true })
       expect(await eventsAbout(w, f.home, done[0]?.id ?? '')).toHaveLength(1)
@@ -199,18 +240,27 @@ export const merge: readonly Scenario[] = [
     async run(w) {
       const f = await family(w)
       const dishes = w.rng.uuid()
-      await w.admin.insert('conformance_chores', f.home, [{ id: dishes, name: 'Dishes', rotation: [f.petr.id, f.eva.id, f.jana.id] }])
+      await w.admin.insert('conformance_chores', f.home, [
+        { id: dishes, name: 'Dishes', rotation: [f.petr.id, f.eva.id, f.jana.id] },
+      ])
       const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
       await online(w, petr, eva)
       await offline(petr, eva)
       const today = new Date().toISOString().slice(0, 10)
       for (const c of [petr, eva]) {
-        await c.create('conformance_completions', { chore_id: dishes, occurrence: today, done: true, done_at: c.now().toISOString() })
+        await c.create('conformance_completions', {
+          chore_id: dishes,
+          occurrence: today,
+          done: true,
+          done_at: c.now().toISOString(),
+        })
       }
       await online(w, petr, eva)
 
-      expect((await w.admin.rows('conformance_chores', f.home)).get(dishes)).toMatchObject({ rotation_index: 1 })
+      expect((await w.admin.rows('conformance_chores', f.home)).get(dishes)).toMatchObject({
+        rotation_index: 1,
+      })
       expect(await petr.row('conformance_chores', dishes)).toMatchObject({ rotation_index: 1 })
     },
   },

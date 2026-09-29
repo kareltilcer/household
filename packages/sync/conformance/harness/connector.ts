@@ -21,7 +21,14 @@
 // `entitlement` or `not_found`; a 409 idempotency_in_progress throws, and past D-92's five minutes
 // the batch is sent under a fresh key, which per-mutation idempotency answers (FR-SY5).
 
-import { isEntitlement, terminal, toMutation, type QueuedWrite, type SyncMutation, type SyncMutationResult } from './mutation.ts'
+import {
+  isEntitlement,
+  terminal,
+  toMutation,
+  type QueuedWrite,
+  type SyncMutation,
+  type SyncMutationResult,
+} from './mutation.ts'
 
 /** How long a key whose first request never answered is kept before the batch gets a fresh one (D-92). */
 export const inProgressWindowMs = 5 * 60_000
@@ -177,12 +184,14 @@ export class ConformanceConnector {
       const mutations = held.map((h) => h.mutation)
       // Released once answered, before the answers are settled: an answer that holds a mutation
       // again holds it anew.
-      const release = (): Promise<void> => this.o.journal.release(mutations.map((m) => m.mutation_id))
+      const release = (): Promise<void> =>
+        this.o.journal.release(mutations.map((m) => m.mutation_id))
       if (!(await this.send(reason, mutations, release))) continue
       this.maxBatch = this.o.maxBatch
       const again = await this.o.journal.held(reason)
       // A mutation deferred at the head of its own batch waits for the next upload, not this one.
-      if (again[0] !== undefined && again[0].mutation.mutation_id === mutations[0]?.mutation_id) return
+      if (again[0] !== undefined && again[0].mutation.mutation_id === mutations[0]?.mutation_id)
+        return
     }
   }
 
@@ -191,7 +200,11 @@ export class ConformanceConnector {
    * returns true; or returns false when the batch must be sent again smaller (a 413). It throws
    * when the batch must be retried as it is.
    */
-  private async send(source: Attempt['source'], all: readonly SyncMutation[], answered: () => Promise<void>): Promise<boolean> {
+  private async send(
+    source: Attempt['source'],
+    all: readonly SyncMutation[],
+    answered: () => Promise<void>,
+  ): Promise<boolean> {
     const ids = all.map((m) => m.mutation_id)
     let flight = this.inflight
     if (flight === null || flight.source !== source || !sameIds(flight, ids)) {
@@ -240,7 +253,10 @@ export class ConformanceConnector {
       switch (response.status) {
         case 200: {
           const results = this.read(sent, mutations, text)
-          if (this.o.retryRejections === true && results.some((r) => r.outcome === 'rejected' && !isEntitlement(r.code))) {
+          if (
+            this.o.retryRejections === true &&
+            results.some((r) => r.outcome === 'rejected' && !isEntitlement(r.code))
+          ) {
             throw new Error('the broken connector retries a rejection')
           }
           for (const [i, r] of results.entries()) {
@@ -254,11 +270,14 @@ export class ConformanceConnector {
           throw new Error('the push refused the API credential; renewed, to be sent again')
         case 429: {
           const after = Number(response.headers.get('retry-after') ?? '1')
-          await this.o.sleep(Math.min(this.o.maxRetryAfterMs, (Number.isFinite(after) ? after : 1) * 1000))
+          await this.o.sleep(
+            Math.min(this.o.maxRetryAfterMs, (Number.isFinite(after) ? after : 1) * 1000),
+          )
           throw new Error('the push is rate limited; to be sent again')
         }
         case 413:
-          if (mutations.length === 1) throw new Error('one mutation alone is too large for the push')
+          if (mutations.length === 1)
+            throw new Error('one mutation alone is too large for the push')
           this.maxBatch = Math.max(1, Math.ceil(all.length / 2))
           this.inflight = null
           return false
@@ -289,15 +308,23 @@ export class ConformanceConnector {
         case 404: {
           const code = response.status === 402 ? 'entitlement' : 'not_found'
           for (const m of mutations) {
-            flight.settled.set(m.mutation_id, { mutation_id: m.mutation_id, outcome: 'rejected', code, message: null, version: null })
+            flight.settled.set(m.mutation_id, {
+              mutation_id: m.mutation_id,
+              outcome: 'rejected',
+              code,
+              message: null,
+              version: null,
+            })
           }
           continue
         }
         case 409:
-          if (problemCode(text) !== inProgress) this.o.observer?.malformed?.(sent, `a 409 the push does not declare: ${text}`)
+          if (problemCode(text) !== inProgress)
+            this.o.observer?.malformed?.(sent, `a 409 the push does not declare: ${text}`)
           throw new Error('an earlier send of this batch has not answered; to be sent again')
         default:
-          if (response.status < 500) this.o.observer?.malformed?.(sent, `status ${String(response.status)}: ${text}`)
+          if (response.status < 500)
+            this.o.observer?.malformed?.(sent, `status ${String(response.status)}: ${text}`)
           throw new Error(`the push answered ${String(response.status)}; to be sent again`)
       }
     }
@@ -305,19 +332,31 @@ export class ConformanceConnector {
 
   /** Ends each of all with its answer: records it, holds it, or both. */
   private async settle(all: readonly SyncMutation[], flight: InFlight): Promise<void> {
-    const via: Attempt = { key: flight.key, mutationIds: flight.ids, source: flight.source, status: 200, body: '', response: null }
+    const via: Attempt = {
+      key: flight.key,
+      mutationIds: flight.ids,
+      source: flight.source,
+      status: 200,
+      body: '',
+      response: null,
+    }
     for (const m of all) {
       const r = flight.settled.get(m.mutation_id)
       if (r === undefined) continue
       this.o.observer?.answered?.(m, r, via)
       if (r.outcome !== 'applied') await this.o.journal.record(m, r)
       if (r.outcome === 'deferred') await this.o.journal.hold('deferred', m)
-      else if (r.outcome === 'rejected' && isEntitlement(r.code)) await this.o.journal.hold('entitlement', m)
+      else if (r.outcome === 'rejected' && isEntitlement(r.code))
+        await this.o.journal.hold('entitlement', m)
     }
   }
 
   /** The answers of a 200, one for each mutation in order, or a throw when the body is not that. */
-  private read(sent: Attempt, mutations: readonly SyncMutation[], text: string): SyncMutationResult[] {
+  private read(
+    sent: Attempt,
+    mutations: readonly SyncMutation[],
+    text: string,
+  ): SyncMutationResult[] {
     const fail = (reason: string): never => {
       this.o.observer?.malformed?.(sent, reason)
       throw new Error(`the push's answer is malformed: ${reason}`)
@@ -330,16 +369,25 @@ export class ConformanceConnector {
     }
     const results = (body as { results?: unknown }).results
     if (!Array.isArray(results) || results.length !== mutations.length) {
-      return fail(`${String(Array.isArray(results) ? results.length : 'no')} results for ${String(mutations.length)} mutations`)
+      return fail(
+        `${String(Array.isArray(results) ? results.length : 'no')} results for ${String(mutations.length)} mutations`,
+      )
     }
     return results.map((r: unknown, i) => {
       const result = r as Partial<SyncMutationResult>
       const m = mutations[i]
-      if (m === undefined || result.mutation_id !== m.mutation_id) return fail(`result ${String(i)} answers another mutation`)
-      if (result.outcome === undefined || !(terminal.has(result.outcome) || result.outcome === 'deferred')) {
+      if (m === undefined || result.mutation_id !== m.mutation_id)
+        return fail(`result ${String(i)} answers another mutation`)
+      if (
+        result.outcome === undefined ||
+        !(terminal.has(result.outcome) || result.outcome === 'deferred')
+      ) {
         return fail(`result ${String(i)} has no outcome`)
       }
-      if (result.outcome !== 'applied' && (result.code === null || result.code === undefined || result.code === '')) {
+      if (
+        result.outcome !== 'applied' &&
+        (result.code === null || result.code === undefined || result.code === '')
+      ) {
         // PRD 10 §6: an outcome carries a machine-readable code, always.
         return fail(`result ${String(i)} is ${result.outcome} without a code`)
       }

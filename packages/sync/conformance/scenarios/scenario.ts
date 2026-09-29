@@ -85,7 +85,11 @@ export async function staysQuiet(w: World, quietMs = 1_500): Promise<void> {
 }
 
 /** The audit events household recorded about entity, as their actions. */
-export async function eventsAbout(w: World, household: Household, entity: string): Promise<string[]> {
+export async function eventsAbout(
+  w: World,
+  household: Household,
+  entity: string,
+): Promise<string[]> {
   const result = await w.admin.pool.query<{ action: string }>(
     `SELECT module || '.' || action AS action FROM audit_events WHERE household_id = $1 AND entity_id = $2 ORDER BY occurred_at`,
     [household.id, entity],

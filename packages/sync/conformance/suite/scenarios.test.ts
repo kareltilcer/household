@@ -40,11 +40,16 @@ describe(`PRD 10 §4, against the ${target.name}`, () => {
     const on = enabled.has(s.key) || (forced && lacks(s) === null)
     it.skipIf(!on)(`${s.key}. ${s.title} (item ${String(s.enabledBy)})`, async () => {
       const missing = lacks(s)
-      if (missing !== null) throw new Error(`scenario ${s.key} is switched on, but the ${target.name} target cannot run it: ${missing}`)
+      if (missing !== null)
+        throw new Error(
+          `scenario ${s.key} is switched on, but the ${target.name} target cannot run it: ${missing}`,
+        )
       const w = new World(target, admin, 10_000 + i, `scenario-${s.key}`)
       try {
         await s.run(w)
-        expect(await w.violations(s.allowHeld === undefined ? {} : { allowHeld: s.allowHeld })).toEqual([])
+        expect(
+          await w.violations(s.allowHeld === undefined ? {} : { allowHeld: s.allowHeld }),
+        ).toEqual([])
       } finally {
         await w.close()
       }

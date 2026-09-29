@@ -2,7 +2,15 @@
 
 import { expect } from 'vitest'
 import { push } from '../harness/network.ts'
-import { answersOf, eventsAbout, family, offline, online, staysQuiet, type Scenario } from './scenario.ts'
+import {
+  answersOf,
+  eventsAbout,
+  family,
+  offline,
+  online,
+  staysQuiet,
+  type Scenario,
+} from './scenario.ts'
 
 export const delivery: readonly Scenario[] = [
   {
@@ -24,7 +32,8 @@ export const delivery: readonly Scenario[] = [
       // While Petr is away, every item is rewritten many times and a new one comes and goes, so
       // that compaction supersedes operations his replica last saw.
       for (let i = 0; i < 20; i++) {
-        for (const item of [f.milk, f.bread, f.eggs]) await jana.update('conformance_items', item, { note: `round ${String(i)}` })
+        for (const item of [f.milk, f.bread, f.eggs])
+          await jana.update('conformance_items', item, { note: `round ${String(i)}` })
       }
       const gone = await jana.create('conformance_items', { title: 'Tea' })
       await jana.remove('conformance_items', gone)
@@ -32,7 +41,9 @@ export const delivery: readonly Scenario[] = [
       await w.target.compact?.()
       await online(w, petr)
 
-      expect((await w.admin.rows('conformance_items', f.home)).get(queued)).toMatchObject({ title: 'Coffee' })
+      expect((await w.admin.rows('conformance_items', f.home)).get(queued)).toMatchObject({
+        title: 'Coffee',
+      })
       expect(await petr.row('conformance_items', f.milk)).toMatchObject({ note: 'round 19' })
     },
   },
@@ -58,7 +69,13 @@ export const delivery: readonly Scenario[] = [
       await online(w, petr)
 
       const outcomes = answersOf(w, petr).map((a) => a.outcome)
-      expect(outcomes.slice(0, 5)).toEqual(['applied', 'applied', 'rejected', 'deferred', 'deferred'])
+      expect(outcomes.slice(0, 5)).toEqual([
+        'applied',
+        'applied',
+        'rejected',
+        'deferred',
+        'deferred',
+      ])
       expect(outcomes.slice(5)).toEqual(['applied', 'applied'])
       expect(answersOf(w, petr)[2]?.code).toBe('validation_failed')
       expect((await w.admin.rows('conformance_items', f.home)).get(rice)).toMatchObject({
@@ -95,7 +112,9 @@ export const delivery: readonly Scenario[] = [
       expect(await w.replay(petr, w.answered(petr), 'fresh-key')).toEqual([])
       expect(await w.replay(petr, w.answered(petr), 'same-key')).toEqual([])
       const rows = [...(await w.admin.rows('conformance_items', f.home)).values()]
-      expect(rows.filter((r) => r['title'] === 'Oats')).toEqual([expect.objectContaining({ id: oats })])
+      expect(rows.filter((r) => r['title'] === 'Oats')).toEqual([
+        expect.objectContaining({ id: oats }),
+      ])
       expect(await eventsAbout(w, f.home, oats)).toHaveLength(1)
       expect(await eventsAbout(w, f.home, f.milk)).toHaveLength(1)
     },
@@ -103,13 +122,19 @@ export const delivery: readonly Scenario[] = [
   {
     key: '10',
     title: 'Client clock skewed +48 h',
-    expected: 'Clamped and flagged; ordering unaffected: the server orders by receipt, whatever the clock said',
+    expected:
+      'Clamped and flagged; ordering unaffected: the server orders by receipt, whatever the clock said',
     enabledBy: 13,
     needs: ['conformance.item', 'conformance.item_checked'],
     async run(w) {
       const f = await family(w)
       const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
-      const eva = w.client({ name: 'eva', member: f.eva, household: f.home, skewMs: 48 * 3_600_000 })
+      const eva = w.client({
+        name: 'eva',
+        member: f.eva,
+        household: f.home,
+        skewMs: 48 * 3_600_000,
+      })
       await online(w, petr, eva)
       await offline(petr, eva)
       await eva.update('conformance_items', f.milk, { title: "Eva's milk" })
@@ -120,8 +145,12 @@ export const delivery: readonly Scenario[] = [
       const serverNow = Date.now()
       await online(w, petr)
 
-      expect((await w.admin.rows('conformance_items', f.home)).get(f.milk)).toMatchObject({ title: "Petr's milk" })
-      const check = [...(await w.admin.rows('conformance_item_checks', f.home)).values()].find((c) => c['item_id'] === f.bread)
+      expect((await w.admin.rows('conformance_items', f.home)).get(f.milk)).toMatchObject({
+        title: "Petr's milk",
+      })
+      const check = [...(await w.admin.rows('conformance_item_checks', f.home)).values()].find(
+        (c) => c['item_id'] === f.bread,
+      )
       expect(check).toMatchObject({ checked: true, clock_flagged: true })
       // Clamped to a day of the server's clock, not the two days Eva's said.
       expect(Number(check?.['checked_at'])).toBeLessThanOrEqual(serverNow + 24 * 3_600_000 + 5_000)
@@ -145,10 +174,15 @@ export const delivery: readonly Scenario[] = [
       const jam = await tablet.create('conformance_items', { title: 'Jam' })
       await online(w, phone, tablet)
 
-      expect((await w.admin.rows('conformance_items', f.home)).get(f.milk)).toMatchObject({ title: 'Milk 1.5 %', note: 'for coffee' })
+      expect((await w.admin.rows('conformance_items', f.home)).get(f.milk)).toMatchObject({
+        title: 'Milk 1.5 %',
+        note: 'for coffee',
+      })
       expect(await phone.row('conformance_items', jam)).toMatchObject({ title: 'Jam' })
       for (const device of [phone, tablet]) {
-        expect((await device.rows('conformance_item_checks')).filter((r) => r['item_id'] === f.bread)).toHaveLength(1)
+        expect(
+          (await device.rows('conformance_item_checks')).filter((r) => r['item_id'] === f.bread),
+        ).toHaveLength(1)
       }
       await staysQuiet(w)
     },

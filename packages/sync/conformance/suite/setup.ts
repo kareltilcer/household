@@ -26,23 +26,38 @@ export default async function setup(): Promise<() => Promise<void>> {
     await admin.connect()
     await admin.query("SELECT 'conformance_items'::regclass")
   } catch (error) {
-    throw new Error(`the stack's database is not ready at ${adminDatabaseUrl}: ${upHint}`, { cause: error })
+    throw new Error(`the stack's database is not ready at ${adminDatabaseUrl}: ${upHint}`, {
+      cause: error,
+    })
   } finally {
     await admin.end().catch(() => undefined)
   }
-  if (!(await answers(`${powerSyncUrl}/probes/readiness`))) throw new Error(`PowerSync does not answer at ${powerSyncUrl}: ${upHint}`)
+  if (!(await answers(`${powerSyncUrl}/probes/readiness`)))
+    throw new Error(`PowerSync does not answer at ${powerSyncUrl}: ${upHint}`)
 
   const health = `${standInUrl}/standin/healthz`
   if (await answers(health)) return () => Promise.resolve()
-  if (!startStandIn) throw new Error(`no stand-in answers at ${standInUrl}, and CONFORMANCE_START_STANDIN is false`)
+  if (!startStandIn)
+    throw new Error(`no stand-in answers at ${standInUrl}, and CONFORMANCE_START_STANDIN is false`)
 
   // Built, then run: a `go run` would leave its child running when it is stopped.
   const dir = mkdtempSync(join(tmpdir(), 'household-standin-'))
-  const binary = join(dir, process.platform === 'win32' ? 'conformance-standin.exe' : 'conformance-standin')
-  execFileSync('go', ['build', '-o', binary, './cmd/conformance-standin'], { cwd: serverDir, stdio: 'inherit' })
+  const binary = join(
+    dir,
+    process.platform === 'win32' ? 'conformance-standin.exe' : 'conformance-standin',
+  )
+  execFileSync('go', ['build', '-o', binary, './cmd/conformance-standin'], {
+    cwd: serverDir,
+    stdio: 'inherit',
+  })
   const listen = new URL(standInUrl)
   const child: ChildProcess = spawn(binary, ['serve'], {
-    env: { ...process.env, ...serverEnv, CONFORMANCE_STANDIN_ADDR: listen.host, CONFORMANCE_POWERSYNC_URL: powerSyncUrl },
+    env: {
+      ...process.env,
+      ...serverEnv,
+      CONFORMANCE_STANDIN_ADDR: listen.host,
+      CONFORMANCE_POWERSYNC_URL: powerSyncUrl,
+    },
     stdio: ['ignore', 'ignore', 'inherit'],
   })
   const exited = new Promise<void>((resolve) => {

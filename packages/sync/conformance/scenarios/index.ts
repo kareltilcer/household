@@ -11,15 +11,16 @@ import { delivery } from './delivery.ts'
 import { merge } from './merge.ts'
 import type { Scenario } from './scenario.ts'
 
-const order = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '13-rotation', '14', '15', '16', '17', '18']
+/** A scenario's place: PRD 10 §4's number, a part just after its scenario, a named case last. */
+function rank(key: string): number {
+  const n = Number.parseInt(key, 10)
+  if (Number.isNaN(n)) return Number.MAX_SAFE_INTEGER
+  return key === String(n) ? n : n + 0.5
+}
 
-export const scenarios: readonly Scenario[] = [...merge, ...delivery, ...access, ...admission].sort((a, b) => {
-  const at = (s: Scenario): number => {
-    const i = order.indexOf(s.key)
-    return i === -1 ? order.length : i
-  }
-  return at(a) - at(b)
-})
+export const scenarios: readonly Scenario[] = [...merge, ...delivery, ...access, ...admission].sort(
+  (a, b) => rank(a.key) - rank(b.key),
+)
 
 /** The scenarios switched on: none until item 13's engine exists. */
 export const enabled: ReadonlySet<string> = new Set<string>([])

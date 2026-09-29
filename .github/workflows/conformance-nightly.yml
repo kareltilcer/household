@@ -1,0 +1,47 @@
+name: Conformance nightly
+
+# The long fuzz run (PRD 10 §4): the CI workflow runs a short one on every change, and this one
+# runs many more seeded schedules, each longer, from a seed that moves with every run so that each
+# night explores schedules the last did not. A failing seed is named in the report and runs again
+# alone with CONFORMANCE_FUZZ_SEED=<seed> CONFORMANCE_FUZZ_RUNS=1.
+
+on:
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-nightly
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    name: Sync conformance — long fuzz run
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CONFORMANCE_FUZZ_RUNS: '150'
+      CONFORMANCE_FUZZ_STEPS: '150'
+      CONFORMANCE_FUZZ_SEED: ${{ format('{0}000', github.run_number) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          cache: true
+          require-lockfile: true
+      - name: Start the conformance stack
+        run: pnpm --filter @household/sync conformance:up
+      - name: Long fuzz run
+        run: pnpm --filter @household/sync conformance:fuzz
+      - name: The stack's logs
+        if: failure()
+        run: docker compose --file packages/sync/conformance/stack/docker-compose.yml logs --tail 200

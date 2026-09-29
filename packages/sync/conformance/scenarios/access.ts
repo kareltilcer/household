@@ -14,12 +14,21 @@ import { answersOf, family, offline, online, staysQuiet, type Scenario } from '.
  * A conversation of Jana and Petr, from its start, with two messages, which Eva joins at 3 with a
  * third message, the first at her floor.
  */
-async function conversation(w: World, home: Household, jana: Member, petr: Member, eva: Member): Promise<{ id: string; messages: string[] }> {
+async function conversation(
+  w: World,
+  home: Household,
+  jana: Member,
+  petr: Member,
+  eva: Member,
+): Promise<{ id: string; messages: string[] }> {
   const id = await w.admin.conversation(w.rng, home, [
     { member: jana, floor: 0 },
     { member: petr, floor: 0 },
   ])
-  const messages = [await w.admin.message(w.rng, home, id, 1, 'Who buys bread?'), await w.admin.message(w.rng, home, id, 2, 'I will')]
+  const messages = [
+    await w.admin.message(w.rng, home, id, 1, 'Who buys bread?'),
+    await w.admin.message(w.rng, home, id, 2, 'I will'),
+  ]
   await w.admin.joinConversation(w.rng, home, id, eva, 3)
   messages.push(await w.admin.message(w.rng, home, id, 3, 'Welcome, Eva'))
   return { id, messages }
@@ -60,7 +69,8 @@ export const access: readonly Scenario[] = [
   {
     key: '16',
     title: 'Member removed from a conversation while offline',
-    expected: 'Messages retracted; the floor still holds for everyone else; a message queued in it is rejected once',
+    expected:
+      'Messages retracted; the floor still holds for everyone else; a message queued in it is rejected once',
     enabledBy: 14,
     needs: ['conformance.message'],
     async run(w) {
@@ -78,7 +88,9 @@ export const access: readonly Scenario[] = [
 
       expect(await petr.rows('conformance_messages')).toEqual([])
       expect(answersOf(w, petr).map((a) => a.outcome)).toEqual(['rejected'])
-      expect(await eva.rows('conformance_messages')).toEqual([expect.objectContaining({ id: talk.messages[2] })])
+      expect(await eva.rows('conformance_messages')).toEqual([
+        expect.objectContaining({ id: talk.messages[2] }),
+      ])
       expect(await jana.rows('conformance_messages')).toHaveLength(3)
       await staysQuiet(w)
     },
@@ -143,14 +155,17 @@ export const access: readonly Scenario[] = [
   {
     key: 'loss-private',
     title: 'Access loss: an item moved from shared to private, while connected',
-    expected: "The note leaves every other member's replica, whose redacted form arrives in its place (D-88); its owner keeps it whole",
+    expected:
+      "The note leaves every other member's replica, whose redacted form arrives in its place (D-88); its owner keeps it whole",
     enabledBy: 14,
     needs: [],
     replicates: ['conformance_notes', 'conformance_notes_redacted'],
     async run(w) {
       const f = await family(w)
       const plan = w.rng.uuid()
-      await w.admin.insert('conformance_notes', f.home, [{ id: plan, visibility: 'shared', title: 'Holiday plan', body: 'Book the cottage' }])
+      await w.admin.insert('conformance_notes', f.home, [
+        { id: plan, visibility: 'shared', title: 'Holiday plan', body: 'Book the cottage' },
+      ])
       const jana = w.client({ name: 'jana', member: f.jana, household: f.home })
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
       await online(w, jana, eva)
@@ -158,7 +173,9 @@ export const access: readonly Scenario[] = [
       await w.admin.makePrivate(plan, f.jana)
       expect(await w.settle()).toBe(true)
       expect(await eva.row('conformance_notes', plan)).toBeNull()
-      expect(await eva.row('conformance_notes_redacted', plan)).toMatchObject({ owner_id: f.jana.id })
+      expect(await eva.row('conformance_notes_redacted', plan)).toMatchObject({
+        owner_id: f.jana.id,
+      })
       expect(await jana.row('conformance_notes', plan)).toMatchObject({ body: 'Book the cottage' })
     },
   },
@@ -180,7 +197,8 @@ export const access: readonly Scenario[] = [
   {
     key: 'loss-disabled',
     title: 'Access loss: a module disabled household-wide, while connected',
-    expected: "The module's rows leave every replica, the owner's included; they come back when it is enabled again",
+    expected:
+      "The module's rows leave every replica, the owner's included; they come back when it is enabled again",
     enabledBy: 14,
     needs: [],
     async run(w) {
@@ -200,7 +218,8 @@ export const access: readonly Scenario[] = [
   {
     key: 'no-loss-lapse',
     title: 'Not access loss: a lapsed entitlement',
-    expected: 'A household that may no longer write keeps every replica exactly where it is (PRD 03 §2.6, FR-BI2)',
+    expected:
+      'A household that may no longer write keeps every replica exactly where it is (PRD 03 §2.6, FR-BI2)',
     enabledBy: 18,
     needs: [],
     capabilities: ['setEntitlement'],

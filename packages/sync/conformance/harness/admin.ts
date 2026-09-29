@@ -67,7 +67,9 @@ export class Admin {
     if (owner === undefined) throw new Error('a household has an owner')
     const household = { id: rng.uuid(), name }
     // Unseeded: codes are unique across runs on one database, and no schedule depends on one.
-    const code = Array.from({ length: 8 }, () => joinCodeAlphabet.charAt(randomInt(joinCodeAlphabet.length))).join('')
+    const code = Array.from({ length: 8 }, () =>
+      joinCodeAlphabet.charAt(randomInt(joinCodeAlphabet.length)),
+    ).join('')
     const c = await this.pool.connect()
     try {
       await c.query('BEGIN')
@@ -77,26 +79,21 @@ export class Admin {
         [household.id, name, code, owner.member.id],
       )
       for (const m of members) {
-        await c.query('INSERT INTO memberships (id, household_id, user_id, role) VALUES ($1, $2, $3, $4)', [
-          rng.uuid(),
-          household.id,
-          m.member.id,
-          m.role,
-        ])
+        await c.query(
+          'INSERT INTO memberships (id, household_id, user_id, role) VALUES ($1, $2, $3, $4)',
+          [rng.uuid(), household.id, m.member.id, m.role],
+        )
         if (m.role !== 'owner' && m.level !== undefined) {
-          await c.query('INSERT INTO module_grants (household_id, user_id, module, level) VALUES ($1, $2, $3, $4)', [
-            household.id,
-            m.member.id,
-            moduleId,
-            m.level,
-          ])
+          await c.query(
+            'INSERT INTO module_grants (household_id, user_id, module, level) VALUES ($1, $2, $3, $4)',
+            [household.id, m.member.id, moduleId, m.level],
+          )
         }
       }
-      await c.query('INSERT INTO module_enablement (id, household_id, module, enabled) VALUES ($1, $2, $3, true)', [
-        rng.uuid(),
-        household.id,
-        moduleId,
-      ])
+      await c.query(
+        'INSERT INTO module_enablement (id, household_id, module, enabled) VALUES ($1, $2, $3, true)',
+        [rng.uuid(), household.id, moduleId],
+      )
       await c.query('COMMIT')
     } catch (error) {
       await c.query('ROLLBACK')
@@ -109,13 +106,12 @@ export class Admin {
 
   /** Adds member to household with role, and their grant. */
   async join(rng: Rng, household: Household, spec: MemberSpec): Promise<void> {
-    await this.pool.query('INSERT INTO memberships (id, household_id, user_id, role) VALUES ($1, $2, $3, $4)', [
-      rng.uuid(),
-      household.id,
-      spec.member.id,
-      spec.role,
-    ])
-    if (spec.role !== 'owner' && spec.level !== undefined) await this.setGrant(household, spec.member, spec.level)
+    await this.pool.query(
+      'INSERT INTO memberships (id, household_id, user_id, role) VALUES ($1, $2, $3, $4)',
+      [rng.uuid(), household.id, spec.member.id, spec.role],
+    )
+    if (spec.role !== 'owner' && spec.level !== undefined)
+      await this.setGrant(household, spec.member, spec.level)
   }
 
   /** Sets member's grant on the conformance module (FR-AC3). */
@@ -129,30 +125,42 @@ export class Admin {
 
   /** Enables or disables the conformance module household-wide (FR-HA3). */
   async setEnabled(household: Household, enabled: boolean): Promise<void> {
-    await this.pool.query('UPDATE module_enablement SET enabled = $3 WHERE household_id = $1 AND module = $2', [
-      household.id,
-      moduleId,
-      enabled,
-    ])
+    await this.pool.query(
+      'UPDATE module_enablement SET enabled = $3 WHERE household_id = $1 AND module = $2',
+      [household.id, moduleId, enabled],
+    )
   }
 
   /** Removes member from household (FR-HH5); their grants go with the membership. */
   async remove(household: Household, member: Member): Promise<void> {
-    await this.pool.query('DELETE FROM memberships WHERE household_id = $1 AND user_id = $2', [household.id, member.id])
+    await this.pool.query('DELETE FROM memberships WHERE household_id = $1 AND user_id = $2', [
+      household.id,
+      member.id,
+    ])
   }
 
   /**
    * A conversation of household whose members join it at the floors given, each the household's
    * feed sequence at which they joined (D-90), 0 for the start.
    */
-  async conversation(rng: Rng, household: Household, members: readonly { readonly member: Member; readonly floor: number }[]): Promise<string> {
+  async conversation(
+    rng: Rng,
+    household: Household,
+    members: readonly { readonly member: Member; readonly floor: number }[],
+  ): Promise<string> {
     const id = rng.uuid()
     await this.insert('conformance_conversations', household, [{ id, title: 'Nákup' }])
     for (const m of members) await this.joinConversation(rng, household, id, m.member, m.floor)
     return id
   }
 
-  async joinConversation(rng: Rng, household: Household, conversation: string, member: Member, floor: number): Promise<void> {
+  async joinConversation(
+    rng: Rng,
+    household: Household,
+    conversation: string,
+    member: Member,
+    floor: number,
+  ): Promise<void> {
     await this.insert('conformance_conversation_members', household, [
       { id: rng.uuid(), conversation_id: conversation, user_id: member.id, floor_seq: floor },
     ])
@@ -162,7 +170,13 @@ export class Admin {
    * A message at seq in conversation, whose readers are the members whose floor it is at or above,
    * as item 14's mutation will write them (ADR 0001).
    */
-  async message(rng: Rng, household: Household, conversation: string, seq: number, body: string): Promise<string> {
+  async message(
+    rng: Rng,
+    household: Household,
+    conversation: string,
+    seq: number,
+    body: string,
+  ): Promise<string> {
     const id = rng.uuid()
     await this.pool.query(
       `INSERT INTO conformance_messages (id, household_id, conversation_id, seq, body, readers)
@@ -175,23 +189,30 @@ export class Admin {
 
   /** Takes member out of conversation and out of the readers of every message in it (ADR 0001). */
   async leaveConversation(conversation: string, member: Member): Promise<void> {
-    await this.pool.query('UPDATE conformance_messages SET readers = array_remove(readers, $2::uuid) WHERE conversation_id = $1', [
-      conversation,
-      member.id,
-    ])
-    await this.pool.query('DELETE FROM conformance_conversation_members WHERE conversation_id = $1 AND user_id = $2', [
-      conversation,
-      member.id,
-    ])
+    await this.pool.query(
+      'UPDATE conformance_messages SET readers = array_remove(readers, $2::uuid) WHERE conversation_id = $1',
+      [conversation, member.id],
+    )
+    await this.pool.query(
+      'DELETE FROM conformance_conversation_members WHERE conversation_id = $1 AND user_id = $2',
+      [conversation, member.id],
+    )
   }
 
   /** Makes a shared note private to owner, which retracts it from everyone else (PRD 03 §2.6). */
   async makePrivate(note: string, owner: Member): Promise<void> {
-    await this.pool.query(`UPDATE conformance_notes SET visibility = 'private', owner_id = $2 WHERE id = $1`, [note, owner.id])
+    await this.pool.query(
+      `UPDATE conformance_notes SET visibility = 'private', owner_id = $2 WHERE id = $1`,
+      [note, owner.id],
+    )
   }
 
   /** Rows as the administrator inserts them, past the push: a scenario's starting state. */
-  async insert(table: TableName, household: Household, rows: readonly Readonly<Record<string, unknown>>[]): Promise<void> {
+  async insert(
+    table: TableName,
+    household: Household,
+    rows: readonly Readonly<Record<string, unknown>>[],
+  ): Promise<void> {
     for (const row of rows) {
       const columns = ['household_id', ...Object.keys(row)]
       const values = [household.id, ...Object.values(row)]
@@ -215,8 +236,14 @@ export class Admin {
 
   /** How many audit events and feed changes household has: what a replayed batch must not add to. */
   async history(household: Household): Promise<{ events: number; changes: number }> {
-    const events = await this.pool.query<{ n: string }>('SELECT count(*) AS n FROM audit_events WHERE household_id = $1', [household.id])
-    const changes = await this.pool.query<{ n: string }>('SELECT count(*) AS n FROM sync_changes WHERE household_id = $1', [household.id])
+    const events = await this.pool.query<{ n: string }>(
+      'SELECT count(*) AS n FROM audit_events WHERE household_id = $1',
+      [household.id],
+    )
+    const changes = await this.pool.query<{ n: string }>(
+      'SELECT count(*) AS n FROM sync_changes WHERE household_id = $1',
+      [household.id],
+    )
     return { events: Number(events.rows[0]?.n ?? 0), changes: Number(changes.rows[0]?.n ?? 0) }
   }
 
@@ -243,7 +270,8 @@ export class Admin {
                      AND g.module = '${moduleId}' AND g.level <> 'none'))`,
     ]
     if (tombstones === 'dropped') conditions.push('t.deleted_at IS NULL')
-    if (table === 'conformance_notes') conditions.push(`(t.visibility = 'shared' OR t.owner_id = $2)`)
+    if (table === 'conformance_notes')
+      conditions.push(`(t.visibility = 'shared' OR t.owner_id = $2)`)
     if (table === 'conformance_notes_redacted') conditions.push(`t.visibility = 'private'`)
     if (table === 'conformance_messages') conditions.push('$2 = ANY (t.readers)')
     const result = await this.pool.query<Record<string, unknown>>(

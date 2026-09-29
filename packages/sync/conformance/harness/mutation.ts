@@ -30,11 +30,15 @@ export function encodeMetadata(meta: WriteMetadata): string {
 
 function decodeMetadata(entry: Pick<CrudEntry, 'metadata' | 'table' | 'id'>): WriteMetadata {
   if (entry.metadata === undefined || entry.metadata === '') {
-    throw new Error(`a write to ${entry.table} ${entry.id} carries no metadata: every write the suite makes records its mutation`)
+    throw new Error(
+      `a write to ${entry.table} ${entry.id} carries no metadata: every write the suite makes records its mutation`,
+    )
   }
   const meta = JSON.parse(entry.metadata) as Partial<WriteMetadata>
   if (typeof meta.mutation_id !== 'string' || typeof meta.client_time !== 'string') {
-    throw new Error(`the metadata of a write to ${entry.table} ${entry.id} names no mutation id or client time`)
+    throw new Error(
+      `the metadata of a write to ${entry.table} ${entry.id} names no mutation id or client time`,
+    )
   }
   return meta as WriteMetadata
 }
@@ -49,7 +53,8 @@ export type QueuedWrite = Pick<CrudEntry, 'op' | 'table' | 'id' | 'opData' | 'me
  */
 export function toMutation(entry: QueuedWrite): SyncMutation {
   const spec = tableSpec(entry.table)
-  if (spec.entity === null) throw new Error(`${entry.table} is a projection, which no client writes`)
+  if (spec.entity === null)
+    throw new Error(`${entry.table} is a projection, which no client writes`)
   const meta = decodeMetadata(entry)
   const fields: Record<string, unknown> = {}
   for (const [name, value] of Object.entries(entry.opData ?? {})) {
@@ -58,7 +63,13 @@ export function toMutation(entry: QueuedWrite): SyncMutation {
   }
   Object.assign(fields, meta.fields ?? {})
   const op: SyncMutation['op'] =
-    entry.op === UpdateType.PUT ? 'create' : entry.op === UpdateType.DELETE ? 'delete' : meta.action !== undefined ? 'action' : 'update'
+    entry.op === UpdateType.PUT
+      ? 'create'
+      : entry.op === UpdateType.DELETE
+        ? 'delete'
+        : meta.action !== undefined
+          ? 'action'
+          : 'update'
   return {
     mutation_id: meta.mutation_id,
     entity_type: spec.entity,

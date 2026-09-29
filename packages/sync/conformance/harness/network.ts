@@ -11,7 +11,9 @@ export type Fault = 'deliver' | 'refuse' | 'lose'
 export class NetworkFault extends TypeError {
   readonly fault: Exclude<Fault, 'deliver'>
   constructor(fault: Exclude<Fault, 'deliver'>, url: string) {
-    super(fault === 'refuse' ? `network: ${url} refused` : `network: the response from ${url} was lost`)
+    super(
+      fault === 'refuse' ? `network: ${url} refused` : `network: the response from ${url} was lost`,
+    )
     this.fault = fault
   }
 }
@@ -58,7 +60,8 @@ export class Network {
 
   /** Scripts the faults of the next requests on (every request by default), one each, in order. */
   next(faults: Fault | readonly Fault[], on: (url: string) => boolean = () => true): void {
-    for (const fault of typeof faults === 'string' ? [faults] : faults) this.scripted.push({ fault, on })
+    for (const fault of typeof faults === 'string' ? [faults] : faults)
+      this.scripted.push({ fault, on })
   }
 
   /** Refuses and loses requests at random, at the given rates, drawn from rng. */

@@ -99,7 +99,7 @@ func New(cfg Config) (*StandIn, error) {
 // operation, answer a household's members only. The push is the contract's operation, validated
 // at the edge against the committed contract, behind the tenant middleware and the household's
 // Idempotency-Key, and it writes through the mutation spine.
-func (s *StandIn) Router() (http.Handler, error) {
+func (s *StandIn) Router() (chi.Router, error) {
 	tenancy, err := tenant.Middleware(tenant.Config{Pool: s.cfg.Pool, Logger: s.cfg.Logger})
 	if err != nil {
 		return nil, err

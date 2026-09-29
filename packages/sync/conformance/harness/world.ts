@@ -7,7 +7,13 @@ import { join } from 'node:path'
 import type { Admin, Household, Member, MemberSpec } from './admin.ts'
 import { Client, type ClientOptions } from './client.ts'
 import type { Attempt, HoldReason } from './connector.ts'
-import { acknowledgedWrites, compareReplica, monotonicity, terminality, type Violation } from './invariants.ts'
+import {
+  acknowledgedWrites,
+  compareReplica,
+  monotonicity,
+  terminality,
+  type Violation,
+} from './invariants.ts'
 import { Recorder } from './recorder.ts'
 import { Rng } from './rng.ts'
 import type { SyncMutationResult } from './mutation.ts'
@@ -50,7 +56,10 @@ export class World {
   }
 
   client(options: ClientOptions): Client {
-    const c = new Client({ target: this.target, recorder: this.recorder, rng: this.rng, dir: this.dir }, options)
+    const c = new Client(
+      { target: this.target, recorder: this.recorder, rng: this.rng, dir: this.dir },
+      options,
+    )
     this.clients.push(c)
     return c
   }
@@ -65,7 +74,9 @@ export class World {
    * left to replay, and each replica equal to what its member may see. It reports whether they got
    * there within timeoutMs; the invariants then judge whatever state they are in.
    */
-  async settle(options: { readonly clients?: readonly Client[]; readonly timeoutMs?: number } = {}): Promise<boolean> {
+  async settle(
+    options: { readonly clients?: readonly Client[]; readonly timeoutMs?: number } = {},
+  ): Promise<boolean> {
     const clients = options.clients ?? this.clients.filter((c) => c.isOnline)
     const took = await until(async () => {
       await this.sample(clients)
@@ -87,51 +98,80 @@ export class World {
     out.push(...(await acknowledgedWrites(this.recorder, this.admin, clients)))
     out.push(...monotonicity(this.recorder))
     out.push(
-      ...(await terminality(this.recorder, clients, options.allowHeld === undefined ? {} : { allowHeld: options.allowHeld })),
+      ...(await terminality(
+        this.recorder,
+        clients,
+        options.allowHeld === undefined ? {} : { allowHeld: options.allowHeld },
+      )),
     )
     return out
   }
 
   /** client's batches that were answered 200, the ones a network retry could deliver again. */
   answered(client: Client): Attempt[] {
-    return this.recorder.attempts.filter((a) => a.client === client.name && a.status === 200 && a.source === 'queue')
+    return this.recorder.attempts.filter(
+      (a) => a.client === client.name && a.status === 200 && a.source === 'queue',
+    )
   }
 
   /**
-   * Invariant 3: delivers each of attempts again, as a network retry would, under its own key or
-   * under a fresh one (mode, as far as the target allows by default), and reports a batch answered
-   * otherwise than the first time, or a server the delivery changed.
+   * Delivers attempt again, as a network retry would, under its own key or under a fresh one
+   * (mode, as far as the target allows by default), and reports it answered otherwise than the
+   * first time (invariant 3).
    */
-  async replay(client: Client, attempts: readonly Attempt[], mode: Target['replay'] = this.target.replay): Promise<Violation[]> {
+  async deliverAgain(
+    client: Client,
+    attempt: Attempt,
+    mode: Target['replay'] = this.target.replay,
+  ): Promise<Violation[]> {
+    const key = mode === 'fresh-key' ? this.rng.uuid() : attempt.key
+    const response = await fetch(this.target.pushUrl(client.household.id), {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${await client.credentialNow()}`,
+        'content-type': 'application/json',
+        'idempotency-key': key,
+      },
+      body: attempt.body,
+    })
+    const text = await response.text()
+    const report = (detail: string): Violation[] => [
+      { invariant: 'idempotency', client: client.name, detail },
+    ]
+    if (response.status !== 200)
+      return report(
+        `batch ${attempt.key} sent again was answered ${String(response.status)}: ${text}`,
+      )
+    const first = outcomes(attempt.response)
+    const again = outcomes(text)
+    if (JSON.stringify(first) !== JSON.stringify(again)) {
+      return report(
+        `batch ${attempt.key} sent again was answered ${JSON.stringify(again)}, first ${JSON.stringify(first)}`,
+      )
+    }
+    return []
+  }
+
+  /**
+   * Invariant 3, at rest: delivers each of attempts again (deliverAgain), and reports as well a
+   * server the deliveries changed. Nothing else may write meanwhile.
+   */
+  async replay(
+    client: Client,
+    attempts: readonly Attempt[],
+    mode: Target['replay'] = this.target.replay,
+  ): Promise<Violation[]> {
     const out: Violation[] = []
-    const report = (detail: string): void => {
-      out.push({ invariant: 'idempotency', client: client.name, detail })
-    }
     const before = await this.snapshot(client.household)
-    for (const a of attempts) {
-      const key = mode === 'fresh-key' ? this.rng.uuid() : a.key
-      const response = await fetch(this.target.pushUrl(client.household.id), {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${await client.credentialNow()}`,
-          'content-type': 'application/json',
-          'idempotency-key': key,
-        },
-        body: a.body,
-      })
-      const text = await response.text()
-      if (response.status !== 200) {
-        report(`batch ${a.key} sent again was answered ${String(response.status)}: ${text}`)
-        continue
-      }
-      const first = outcomes(a.response)
-      const again = outcomes(text)
-      if (JSON.stringify(first) !== JSON.stringify(again)) {
-        report(`batch ${a.key} sent again was answered ${JSON.stringify(again)}, first ${JSON.stringify(first)}`)
-      }
-    }
+    for (const a of attempts) out.push(...(await this.deliverAgain(client, a, mode)))
     const after = await this.snapshot(client.household)
-    if (after !== before) report(`sending ${String(attempts.length)} batches again changed the server`)
+    if (after !== before) {
+      out.push({
+        invariant: 'idempotency',
+        client: client.name,
+        detail: `sending ${String(attempts.length)} batches again changed the server`,
+      })
+    }
     return out
   }
 

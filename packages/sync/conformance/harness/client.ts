@@ -5,8 +5,19 @@
 import { PowerSyncDatabase } from '@powersync/node'
 import type { SyncStreamSubscription } from '@powersync/common'
 import type { Household, Member } from './admin.ts'
-import { ConformanceConnector, type Held, type HoldReason, type Journal, type Observer } from './connector.ts'
-import { encodeMetadata, type SyncMutation, type SyncMutationResult, type WriteMetadata } from './mutation.ts'
+import {
+  ConformanceConnector,
+  type Held,
+  type HoldReason,
+  type Journal,
+  type Observer,
+} from './connector.ts'
+import {
+  encodeMetadata,
+  type SyncMutation,
+  type SyncMutationResult,
+  type WriteMetadata,
+} from './mutation.ts'
 import { Network } from './network.ts'
 import type { Recorder } from './recorder.ts'
 import type { Rng } from './rng.ts'
@@ -99,13 +110,19 @@ export class Client {
       newKey: () => ctx.rng.uuid(),
       observer,
       ...(options.maxBatch === undefined ? {} : { maxBatch: options.maxBatch }),
-      ...(options.retryRejections === undefined ? {} : { retryRejections: options.retryRejections }),
+      ...(options.retryRejections === undefined
+        ? {}
+        : { retryRejections: options.retryRejections }),
     })
   }
 
   private async renew(): Promise<string> {
     const ttl = this.options.credentialTtlSeconds
-    this.credential = await this.ctx.target.signIn(this.member.id, this.network.fetch, ttl === undefined ? {} : { ttlSeconds: ttl })
+    this.credential = await this.ctx.target.signIn(
+      this.member.id,
+      this.network.fetch,
+      ttl === undefined ? {} : { ttlSeconds: ttl },
+    )
     return this.credential
   }
 
@@ -125,7 +142,9 @@ export class Client {
     if (this.subscriptions === null) {
       this.subscriptions = []
       for (const stream of [...target.streams, ...(this.options.extraStreams ?? [])]) {
-        this.subscriptions.push(await this.db.syncStream(stream, { household_id: this.household.id }).subscribe())
+        this.subscriptions.push(
+          await this.db.syncStream(stream, { household_id: this.household.id }).subscribe(),
+        )
       }
     }
     await this.db.connect(
@@ -133,10 +152,18 @@ export class Client {
         fetchCredentials: async () => {
           const credential = this.credential ?? (await this.renew())
           try {
-            return await target.powerSyncCredentials(credential, this.household.id, this.network.fetch)
+            return await target.powerSyncCredentials(
+              credential,
+              this.household.id,
+              this.network.fetch,
+            )
           } catch (error) {
             if (!(error instanceof Unauthorized)) throw error
-            return target.powerSyncCredentials(await this.renew(), this.household.id, this.network.fetch)
+            return target.powerSyncCredentials(
+              await this.renew(),
+              this.household.id,
+              this.network.fetch,
+            )
           }
         },
         uploadData: () => this.flush(),
@@ -178,16 +205,30 @@ export class Client {
   }
 
   private metadata(extra: Partial<WriteMetadata> = {}): { meta: WriteMetadata; encoded: string } {
-    const meta: WriteMetadata = { mutation_id: this.ctx.rng.uuid(), client_time: this.now().toISOString(), ...extra }
+    const meta: WriteMetadata = {
+      mutation_id: this.ctx.rng.uuid(),
+      client_time: this.now().toISOString(),
+      ...extra,
+    }
     return { meta, encoded: encodeMetadata(meta) }
   }
 
   private toClient(table: TableName, name: string, value: unknown): unknown {
-    return tableSpec(table).columns[name] === 'boolean' ? (value === true ? 1 : value === false ? 0 : value) : value
+    return tableSpec(table).columns[name] === 'boolean'
+      ? value === true
+        ? 1
+        : value === false
+          ? 0
+          : value
+      : value
   }
 
   /** Creates a row of table with fields, offline or not, and returns its id. */
-  async create(table: TableName, fields: Readonly<Record<string, unknown>>, options: { readonly id?: string } = {}): Promise<string> {
+  async create(
+    table: TableName,
+    fields: Readonly<Record<string, unknown>>,
+    options: { readonly id?: string } = {},
+  ): Promise<string> {
     const id = options.id ?? this.ctx.rng.uuid(this.now().getTime())
     const { meta, encoded } = this.metadata()
     const names = Object.keys(fields)
@@ -196,7 +237,12 @@ export class Client {
       `INSERT INTO ${table} (id, household_id, ${names.join(', ')}, _metadata) VALUES (?, ?, ${names.map(() => '?').join(', ')}, ?)`,
       [id, this.household.id, ...values, encoded],
     )
-    this.ctx.recorder.wrote(this.name, { mutationId: meta.mutation_id, table, entityId: id, op: 'create' })
+    this.ctx.recorder.wrote(this.name, {
+      mutationId: meta.mutation_id,
+      table,
+      entityId: id,
+      op: 'create',
+    })
     return id
   }
 
@@ -210,7 +256,10 @@ export class Client {
     fields: Readonly<Record<string, unknown>>,
     options: { readonly action?: string; readonly carry?: Readonly<Record<string, unknown>> } = {},
   ): Promise<boolean> {
-    const current = await this.db.getOptional<{ version: number | null }>(`SELECT version FROM ${table} WHERE id = ?`, [id])
+    const current = await this.db.getOptional<{ version: number | null }>(
+      `SELECT version FROM ${table} WHERE id = ?`,
+      [id],
+    )
     if (current === null) return false
     const { meta, encoded } = this.metadata({
       ...(current.version === null ? {} : { base_version: current.version }),
@@ -218,23 +267,40 @@ export class Client {
       ...(options.carry === undefined ? {} : { fields: options.carry }),
     })
     const names = Object.keys(fields)
-    await this.db.execute(`UPDATE ${table} SET ${names.map((n) => `${n} = ?`).join(', ')}, _metadata = ? WHERE id = ?`, [
-      ...names.map((n) => this.toClient(table, n, fields[n])),
-      encoded,
-      id,
-    ])
-    this.ctx.recorder.wrote(this.name, { mutationId: meta.mutation_id, table, entityId: id, op: options.action === undefined ? 'update' : 'action' })
+    await this.db.execute(
+      `UPDATE ${table} SET ${names.map((n) => `${n} = ?`).join(', ')}, _metadata = ? WHERE id = ?`,
+      [...names.map((n) => this.toClient(table, n, fields[n])), encoded, id],
+    )
+    this.ctx.recorder.wrote(this.name, {
+      mutationId: meta.mutation_id,
+      table,
+      entityId: id,
+      op: options.action === undefined ? 'update' : 'action',
+    })
     return true
   }
 
   /** Deletes table's row id, with its mutation's metadata, and reports whether the replica held it. */
   async remove(table: TableName, id: string): Promise<boolean> {
-    const current = await this.db.getOptional<{ version: number | null }>(`SELECT version FROM ${table} WHERE id = ?`, [id])
+    const current = await this.db.getOptional<{ version: number | null }>(
+      `SELECT version FROM ${table} WHERE id = ?`,
+      [id],
+    )
     if (current === null) return false
-    const { meta, encoded } = this.metadata(current.version === null ? {} : { base_version: current.version })
+    const { meta, encoded } = this.metadata(
+      current.version === null ? {} : { base_version: current.version },
+    )
     // A delete that carries metadata is written as an update of _deleted (trackMetadata).
-    await this.db.execute(`UPDATE ${table} SET _deleted = 1, _metadata = ? WHERE id = ?`, [encoded, id])
-    this.ctx.recorder.wrote(this.name, { mutationId: meta.mutation_id, table, entityId: id, op: 'delete' })
+    await this.db.execute(`UPDATE ${table} SET _deleted = 1, _metadata = ? WHERE id = ?`, [
+      encoded,
+      id,
+    ])
+    this.ctx.recorder.wrote(this.name, {
+      mutationId: meta.mutation_id,
+      table,
+      entityId: id,
+      op: 'delete',
+    })
     return true
   }
 
@@ -244,12 +310,25 @@ export class Client {
    * item_id the server keys the state on.
    */
   async check(item: string, checked: boolean): Promise<string> {
-    const row = await this.db.getOptional<{ id: string }>('SELECT id FROM conformance_item_checks WHERE item_id = ?', [item])
+    const row = await this.db.getOptional<{ id: string }>(
+      'SELECT id FROM conformance_item_checks WHERE item_id = ?',
+      [item],
+    )
     const at = this.now().toISOString()
     if (row === null) {
-      return this.create('conformance_item_checks', { item_id: item, checked, checked_at: at, clock_flagged: false })
+      return this.create('conformance_item_checks', {
+        item_id: item,
+        checked,
+        checked_at: at,
+        clock_flagged: false,
+      })
     }
-    await this.update('conformance_item_checks', row.id, { checked, checked_at: at }, { carry: { item_id: item } })
+    await this.update(
+      'conformance_item_checks',
+      row.id,
+      { checked, checked_at: at },
+      { carry: { item_id: item } },
+    )
     return row.id
   }
 
@@ -286,7 +365,9 @@ export class Client {
 
   /** The replica's buckets and the op each has applied up to: its checkpoint (PRD 10 §4, invariant 5). */
   buckets(): Promise<{ name: string; last_applied_op: number }[]> {
-    return this.db.getAll<{ name: string; last_applied_op: number }>('SELECT name, last_applied_op FROM ps_buckets')
+    return this.db.getAll<{ name: string; last_applied_op: number }>(
+      'SELECT name, last_applied_op FROM ps_buckets',
+    )
   }
 
   private journal(): Journal {
@@ -318,14 +399,23 @@ export class Client {
           await tx.execute(
             `INSERT INTO ${heldTable} (id, mutation_id, reason, position, mutation, held_at)
              VALUES (?, ?, ?, (SELECT coalesce(max(position), 0) + 1 FROM ${heldTable}), ?, ?)`,
-            [mutation.mutation_id, mutation.mutation_id, reason, JSON.stringify(mutation), new Date().toISOString()],
+            [
+              mutation.mutation_id,
+              mutation.mutation_id,
+              reason,
+              JSON.stringify(mutation),
+              new Date().toISOString(),
+            ],
           )
         })
       },
       held: (reason) => this.held(reason),
       release: async (ids) => {
         if (ids.length === 0) return
-        await this.db.execute(`DELETE FROM ${heldTable} WHERE id IN (${ids.map(() => '?').join(', ')})`, [...ids])
+        await this.db.execute(
+          `DELETE FROM ${heldTable} WHERE id IN (${ids.map(() => '?').join(', ')})`,
+          [...ids],
+        )
       },
     }
   }

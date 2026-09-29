@@ -16,9 +16,17 @@ export interface PowerSyncCredentials {
 export interface Target {
   readonly name: string
   /** Signs user in and returns the credential the push is sent with. */
-  signIn(user: string, via: typeof fetch, options?: { readonly ttlSeconds?: number }): Promise<string>
+  signIn(
+    user: string,
+    via: typeof fetch,
+    options?: { readonly ttlSeconds?: number },
+  ): Promise<string>
   /** PowerSync's URL and a token for user in household (item 13's credentials operation). */
-  powerSyncCredentials(credential: string, household: string, via: typeof fetch): Promise<PowerSyncCredentials>
+  powerSyncCredentials(
+    credential: string,
+    household: string,
+    via: typeof fetch,
+  ): Promise<PowerSyncCredentials>
   /** Where household's mutations are pushed. */
   pushUrl(household: string): string
   /** The streams a client subscribes to, each with {household_id}. */
@@ -93,12 +101,19 @@ export const standIn: Target = {
     )
     const endpoint = field(body, 'endpoint', 'the stand-in credentials')
     if (endpoint !== powerSyncUrl) {
-      throw new Error(`the stand-in hands out ${endpoint}, but the suite reaches PowerSync at ${powerSyncUrl}`)
+      throw new Error(
+        `the stand-in hands out ${endpoint}, but the suite reaches PowerSync at ${powerSyncUrl}`,
+      )
     }
     return { endpoint, token: field(body, 'token', 'the stand-in credentials') }
   },
   pushUrl: (household) => `${standInUrl}/api/v1/households/${household}/sync/mutations`,
-  streams: ['conformance_items_owner', 'conformance_items_granted', 'conformance_item_checks_owner', 'conformance_item_checks_granted'],
+  streams: [
+    'conformance_items_owner',
+    'conformance_items_granted',
+    'conformance_item_checks_owner',
+    'conformance_item_checks_granted',
+  ],
   replicates: new Set<TableName>(['conformance_items', 'conformance_item_checks']),
   writes: new Set<EntityType>(['conformance.item', 'conformance.item_checked']),
   tombstones: 'dropped',
