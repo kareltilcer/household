@@ -86,9 +86,15 @@ info:
       again, which each of them is safe to: the three that answer `202` send at most another
       email, which their limits cap; a sign-in starts a new session, since a credential is never
       kept to be answered with; and a spent link answers as spent, except a verification link,
-      whose repeat answers `204` while the address it confirmed stands. `/auth/password` keeps
-      none either, since a key's fingerprint of its body would be a fast hash of two passwords; a
-      repeat of a change that was made answers `401`, the current password being the new one.
+      whose repeat answers `204` while the address it confirmed stands. A child profile's
+      `/auth/child/profiles`, `/auth/child/login` and `/auth/graduation/confirm` keep nothing either:
+      a lookup reads, a sign-in starts a new sign-in on its device, and a spent graduation link
+      answers as spent. `/auth/password` keeps none either, since a key's fingerprint of its body
+      would be a fast hash of two passwords; a repeat of a change that was made answers `401`, the
+      current password being the new one. Nor do the two requests whose body carries a child
+      profile's PIN, `POST /households/{household_id}/children` and
+      `PUT /households/{household_id}/children/{user_id}/pin`: a repeat of a profile that was made
+      answers `422` naming `/id`, and a repeat of a new PIN sets it again.
     - A request that ended the session it was made with, `POST /auth/logout`, `DELETE /me/sessions`
       and `DELETE /me/sessions/{session_id}` naming the current session, keeps its key, but a
       repeat of it arrives with a session that has ended and answers `401` (`unauthenticated`), as
@@ -323,6 +329,7 @@ paths:
         answers `404`, and thirty of those in an hour from a client's network answer `429` until the
         hour that counted them ends.
       security: []
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [household_code], properties: { household_code: { type: string, maxLength: 32 } } } } }
@@ -450,8 +457,10 @@ paths:
         household's activity log.
 
         A link that opens nothing, or a profile no longer in its household, answers `404`; a link
-        used, or replaced by a newer one, `410` (`token_already_used`), and one past its time `410`
-        (`token_expired`). An address another account has taken since the link was sent answers `409`
+        used, replaced by a newer one, or withdrawn, `410` (`token_already_used`), and one past its
+        time `410` (`token_expired`). A link lapses with its sender's ownership, as an invitation
+        does (D-103): once the owner who sent it has been removed, has left or has been made a member,
+        it is withdrawn. An address another account has taken since the link was sent answers `409`
         (`email_taken`). A password found in the breached-password screen is refused `422`, naming
         `/password` with the code `invalid`.
       security: []
@@ -463,7 +472,7 @@ paths:
         '204': { description: Graduated }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: 'Another account has the address (`email_taken`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
-        '410': { description: 'The link has expired (`token_expired`) or has been used or replaced (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '410': { description: 'The link has expired (`token_expired`), or has been used, replaced or withdrawn with its sender''s ownership (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
 
   /auth/password:
@@ -1272,8 +1281,9 @@ paths:
         Any member, at any time. Content the member created stays with the household; their private
         root is deleted after a 30-day window in which they may export it. The last owner and the
         billing payer cannot leave, and one who is both is told both at once (FR-HH4). The
-        invitations they sent that are still waiting are withdrawn (D-103). A child profile is
-        refused `403`: it is nothing outside its household, and an owner removes it instead (D-104).
+        invitations they sent that are still waiting are withdrawn (D-103), and so are the graduation
+        links they sent. A child profile is refused `403`: it is nothing outside its household, and an
+        owner removes it instead (D-104).
         The `Idempotency-Key` is kept on the account rather than in the household, whose membership,
         and the member's keys in it, leaving ends.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
@@ -1323,7 +1333,8 @@ paths:
         have are refused `422` naming `/grants/<module>`. A `child` stays a child and nobody else
         becomes one (`422` naming `/role`): a child profile is created and graduated instead. An
         owner made a member keeps the levels they held until they are lowered, and the invitations
-        they sent that are still waiting are withdrawn (D-103).
+        they sent that are still waiting are withdrawn (D-103), and so are the graduation links they
+        sent.
       parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1344,7 +1355,9 @@ paths:
       description: |
         Owner only, and never the caller, who leaves instead (`403`). Immediate: their sessions stop
         resolving for this household, their replica receives retractions, the invitations they sent
-        that are still waiting are withdrawn (D-103), and they are told.
+        that are still waiting are withdrawn (D-103), and so are the graduation links they sent, and
+        they are told. A child profile removed is signed out of every device it is signed in on,
+        since nothing signs it in outside its household (D-104).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Removed }
@@ -1587,9 +1600,11 @@ paths:
         (`postAuthGraduationConfirm`); that verifies the address and makes the profile a `member`,
         keeping everything it made (FR-CH4, D-104). The profile stays a child, signing in with its
         PIN, until then. Sending again sends a new link, to the same address or another, and the one
-        before stops working. An address an account has answers `409` (`email_taken`); a member who is
-        not a child profile answers `404`. Each link counts among the twenty emails a day a household
-        sends with its invitations (`429`).
+        before stops working. The link is its sender's, and lapses with their ownership, as an
+        invitation does (D-103). An address an account has answers `409` (`email_taken`); a member who
+        is not a child profile answers `404`. Each link counts among the twenty emails a day a
+        household sends with its invitations (`429`), and so does each address refused `409`, since
+        that refusal says an account has it.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -8390,7 +8405,8 @@ components:
 
         A key is the caller's own, so a request made before signing in, which has no caller, keeps
         none, and a repeat of it runs again (see the description of the API); nor does a request
-        whose body carries a password, `/auth/password`. A repeat of a request that ended the
+        whose body carries a password, `/auth/password`, or a child profile's PIN, `postChildren` and
+        `putChildrenByUserIdPin`. A repeat of a request that ended the
         session it was made with, signing out for instance, answers `401`: that session makes no
         further request. Only a `2xx` response is stored: a repeat of a request that was refused
         before it took effect runs it again. A repeat while the first request is still running

@@ -49,8 +49,9 @@ func (s *Service) NewPassword(ctx context.Context, field, pw string) (string, er
 	return s.Hasher.Hash(ctx, pw)
 }
 
-// errAddressTaken is a graduation's answer for an address another account has.
-var errAddressTaken = problem.New(http.StatusConflict, problem.CodeEmailTaken)
+// ErrEmailTaken is a graduation's answer for an address another account has: the sending's, and
+// the confirmation's, for one taken since (Graduate).
+var ErrEmailTaken = problem.New(http.StatusConflict, problem.CodeEmailTaken)
 
 // Graduate turns child profile user into an account of its own in tx (FR-CH4): address becomes its
 // address, verified, since the link that carried it was opened; secret, a password's hash
@@ -66,12 +67,12 @@ func (s *Service) Graduate(ctx context.Context, tx pgx.Tx, user uuid.UUID, addre
 		return err
 	}
 	if taken {
-		return errAddressTaken
+		return ErrEmailTaken
 	}
 	tag, err := tx.Exec(ctx, "UPDATE users SET email = $2, email_verified_at = $3 WHERE id = $1", user, address, s.Sessions.Now())
 	if err != nil {
 		if uniqueViolation(err, "users_email") {
-			return errAddressTaken
+			return ErrEmailTaken
 		}
 		return err
 	}

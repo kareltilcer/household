@@ -83,8 +83,8 @@ the one it held; the id is unique per user, so a shared tablet signs several pro
 a sign-in of its own. The sign-in lasts **until it is revoked**, with no idle expiry: by signing
 out on the device, revoking it from the device list, signing out everywhere, a password reset, a
 password change made on another client, or a reused refresh token (FR-ID4). **D-99.** A child
-profile's sign-ins end too when an owner sets it a new PIN, and when it graduates (FR-CH4, FR-CH5,
-**D-104**).
+profile's sign-ins end too when an owner sets it a new PIN, removes it from the household, or when
+it graduates (FR-CH4, FR-CH5, **D-104**).
 
 **FR-ID4 — Token refresh with reuse detection.**
 `POST /api/v1/auth/token` with a refresh token. Refresh tokens are **single-use and rotating**;
@@ -348,8 +348,11 @@ The owner, once their own address is verified, sends the address a link valid 14
 the young adult chooses a password. Opening it verifies the address and makes the profile a
 `member` in one step, keeping its levels and everything it made; its PIN, and every device it was
 signed in on, end with it. Until then the profile is a child, signing in with its PIN, and an owner
-may send the link again, to the same address or a corrected one, which retires the one before. An
-address an account already has is refused. **D-104.**
+may send the link again, to the same address or a corrected one, which retires the one before. The
+link is its sender's, and lapses with their ownership, as an invitation does (D-103): its holder
+would come into the household with the profile's account and everything it made. An address an
+account already has is refused, and the refusal counts among the household's emails a day as a link
+does, since it says that an account has the address (D-13). **D-104.**
 
 **FR-CH5 — PIN reset and lockout.** An owner resets the PIN from their own authenticated
 session. Ten wrong PINs lock the profile until an owner unlocks it.
@@ -357,8 +360,9 @@ session. Ten wrong PINs lock the profile until an owner unlocks it.
 The ten are counted since the last right PIN, which clears them, and each is counted before it is
 checked, so that PINs sent at once meet the lock one by one: at most ten are checked between an
 owner's unlocks. Every attempt at a locked profile, the tenth wrong one included, is told it is
-locked. A new PIN also unlocks the profile, and signs it out of every device, since whoever knew the
-old PIN may hold one of them. **D-104.**
+locked, and so is a right PIN that a lock overtook while it was checked. A new PIN also unlocks the
+profile, and signs it out of every device, since whoever knew the old PIN may hold one of them.
+**D-104.**
 
 ## 7. The four access axes
 

@@ -42,9 +42,12 @@ history records the profile's making.
 **The lockout counts on the credential**: `credentials.failures`, the wrong PINs since the last right
 one, which only a `child_pin` may count. A sign-in counts its attempt before the PIN is checked,
 under the credential's row lock, and refuses one at ten unchecked; a right PIN clears the count.
-The attempt that counts the tenth, if wrong, records the lock as the system's change of the
-membership (`admin.child.lock`), whose row carries `pin_locked` to every member's replica; it records
-nothing if a right PIN or an owner cleared the count meanwhile. An owner's unlock and new PIN clear it
+The attempt that counts the tenth, unless it signs the child in, records the lock as the system's
+change of the membership (`admin.child.lock`), whose row carries `pin_locked` to every member's
+replica: a wrong PIN, and a check or a sign-in cut short, a client gone among them, alike, since each
+leaves the count at ten, with a context that outlives the request's. It records nothing if a right
+PIN or an owner cleared the count meanwhile. A right PIN whose sign-in finds another attempt's tenth
+counted since its own is refused `423`, so that no lock the replicas have read is cleared unrecorded. An owner's unlock and new PIN clear it
 the same way, and a new PIN, written with `updated_at = clock_timestamp()` under the row's lock, also
 ends the profile's device sign-ins; a sign-in that checked the old PIN finds `updated_at` moved and
 signs nobody in, as a password's does (`unchanged`, ADR 0009).
@@ -68,7 +71,12 @@ their own `via`: mobile for a lock, web for a graduation's link.
 **A graduation's link is an email token**, purpose `graduate`, whose row keeps the address until the
 link sets the password with it: the account has no address before then, so no reset, resend or
 provider sign-in treats a half-graduated profile as an adult's. Sending another spends the ones
-before. It counts among the household's twenty emails a day (`ratelimit.InvitationHousehold`).
+before. It counts among the household's twenty emails a day (`ratelimit.InvitationHousehold`), and
+so does an address refused as taken, whose refusal would otherwise let an owner test addresses for an
+account (D-13). The row names the owner who sent it, `email_tokens.sent_by`, and the confirmation
+checks under the household's lock that they are still an owner: a link lapses with its sender's
+ownership, as an invitation does (D-103), including one whose sending read the role just before a
+removal committed.
 
 **A PIN keeps no Idempotency-Key**, as a password does not (D-97): the two routes whose body carries
 one are mounted behind the tenant middleware but not the member's key (`household.PINRoutes`). A
@@ -88,6 +96,7 @@ root's owner-readable case (items 43 and 46) read.
 | A policy on `memberships` naming the household by its code | `memberships`' policy would read `households`, whose policy reads `memberships`: PostgreSQL refuses the recursion |
 | The child's sign-in in `identity`, calling into the household surface | `identity` is built first, and the lock and the profile list are the household's; a hook each way for one route |
 | The graduation's address on the account from the start, unverified | A password reset, a resend or a provider sign-in would then act on a profile that is still a child |
+| A sender's graduation links spent when their ownership ends, as `withdraw` spends their invitations | The link is written in a transaction of the account's, after the role was read: one written as the removal committed would outlive it. Checked at confirmation, under the household's lock, it cannot |
 | A key kept for a PIN's routes, with the PIN left out of the fingerprint | A second fingerprint for two routes, and a body with its PIN taken out is not the request it stands for |
 
 ## Consequences
@@ -100,6 +109,6 @@ root's owner-readable case (items 43 and 46) read.
 - Plan item 17 may tell the owners that a profile locked (A-18's *ask Jana*), from its
   `admin.child.lock` event; item 17's sweep deletes spent and expired `graduate` tokens with the rest.
 - Plan item 20 erases the account of a child profile removed from its household: it is nothing
-  outside it, and signs nobody in.
+  outside it, and signs nobody in. Its removal already signs it out of every device.
 - Plan item 13's membership stream carries a child's `pin_locked` and `dashboard_locked`, never its
   birth year, which only the owners and the child read.

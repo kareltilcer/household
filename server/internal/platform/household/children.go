@@ -3,6 +3,7 @@ package household
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"maps"
 	"net/http"
 	"strings"
@@ -202,8 +203,9 @@ type deviceSignIn struct {
 // A wrong PIN counts against the profile. It is counted before the PIN is checked, so that attempts
 // sent at once meet the lock one by one, and a right PIN clears the count: LockAfter wrong ones in a
 // row lock the profile until an owner unlocks it or sets a new PIN, and every attempt at a locked
-// profile, the one that locked it included, answers 423 (D-104). So at most LockAfter PINs are
-// checked against a profile between an owner's unlocks, however many are sent at once.
+// profile, the one that locked it included, answers 423 (D-104), a right PIN that another attempt's
+// lock overtook while it was checked among them. So at most LockAfter PINs are checked against a
+// profile between an owner's unlocks, however many are sent at once.
 func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -246,6 +248,30 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// fail answers err to an attempt that signs nobody in, wrong when its PIN was checked and found
+	// wrong. The attempt that counted the tenth locks the profile unless it signs the child in: a wrong
+	// PIN leaves the count at ten, and so does a check or a sign-in that ended otherwise, a client that
+	// went away while its PIN waited to be hashed among them, since only a right PIN that signs in
+	// clears it. So the lock is recorded whatever ended the attempt, and beyond its client, so that the
+	// owners and every replica read what every later attempt is told; a wrong PIN is then answered 423,
+	// and any other end as it ended. A record the database refused leaves the lock standing
+	// unrecorded until an owner acts, as a count at ten is the lock (ADR 0012).
+	fail := func(err error, wrong bool) {
+		if found && p.failures == LockAfter {
+			locked, lockErr := s.lockChild(context.WithoutCancel(ctx), p.household, profile)
+			switch {
+			case !wrong:
+				if lockErr != nil {
+					s.Log.LogAttrs(ctx, slog.LevelError, "child profile's lock not recorded", slog.Any("error", lockErr))
+				}
+			case lockErr != nil:
+				err = lockErr
+			case locked:
+				err = errLocked
+			}
+		}
+		s.fail(w, r, err)
+	}
 	hasher := s.Accounts.Hasher
 	var ok, rehash bool
 	switch {
@@ -258,47 +284,43 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 	default:
 		ok, rehash, err = hasher.Verify(ctx, req.PIN, p.secret)
 	}
-	if err != nil {
-		s.fail(w, r, err)
+	switch {
+	case err != nil:
+		fail(err, false)
 		return
-	}
-	if !ok {
-		if found && p.failures == LockAfter {
-			locked, err := s.lockChild(ctx, p.household, profile)
-			switch {
-			case err != nil:
-				s.fail(w, r, err)
-				return
-			case locked:
-				s.fail(w, r, errLocked)
-				return
-			}
-		}
-		s.fail(w, r, invalidCredentials())
+	case !ok:
+		fail(invalidCredentials(), true)
 		return
 	}
 	// The attempt succeeded: the network's count takes it back.
 	if err := s.Throttles.Refund(ctx, ratelimit.LoginNetwork, network); err != nil {
-		s.fail(w, r, err)
+		fail(err, false)
 		return
 	}
 	var newSecret string
 	if rehash {
 		if newSecret, err = hasher.Hash(ctx, req.PIN); err != nil {
-			s.fail(w, r, err)
+			fail(err, false)
 			return
 		}
 	}
 	var result identity.LoginResult
 	err = tenant.AccountTx(ctx, s.Pool, profile, func(tx pgx.Tx) error {
 		// The PIN was checked before this transaction: an owner's new PIN since then, a graduation
-		// or the profile's removal wins, and this one signs nobody in.
+		// or the profile's removal wins, and this one signs nobody in. So does a lock another attempt
+		// counted meanwhile: the count never passes LockAfter, since an attempt at it is refused
+		// uncounted, so a count at LockAfter above this attempt's own is another's tenth, which locked
+		// the profile if it was wrong, and a right PIN given after a lock opens it no more than a wrong
+		// one does. Were it let in, it would clear a lock the owners and the replicas have read, with
+		// no record of it.
 		now, found, err := findPIN(ctx, tx, code, profile)
 		switch {
 		case err != nil:
 			return err
 		case !found || !now.set.Equal(p.set):
 			return invalidCredentials()
+		case now.failures >= LockAfter && p.failures < LockAfter:
+			return errLocked
 		}
 		// The same PIN, hashed again, is no change of it: its updated_at stays.
 		if _, err := tx.Exec(ctx, `
@@ -312,7 +334,7 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		s.fail(w, r, err)
+		fail(err, false)
 		return
 	}
 	identity.NoStore(w)
@@ -320,9 +342,10 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // lockChild records that profile, a child profile of household, is locked, as the system's change of
-// its membership, and reports whether it was: the wrong PIN counted as the LockAfter-th locked it,
-// unless a right one given meanwhile cleared the count, or an owner unlocked it, when nothing is
-// locked and nothing is recorded. The membership's row carries the lock to the household's replicas.
+// its membership, and reports whether it was: the attempt counted as the LockAfter-th locked it when
+// it signed nobody in, unless a right PIN given meanwhile cleared the count, or an owner unlocked it,
+// when nothing is locked and nothing is recorded. The membership's row carries the lock to the
+// household's replicas.
 func (s *Service) lockChild(ctx context.Context, household, profile uuid.UUID) (bool, error) {
 	scoped := mutation.WithVia(tenant.Assume(ctx, s.Pool, household, uuid.Nil, access.Child), audit.ViaMobile)
 	locked := false
@@ -610,16 +633,16 @@ func (s *Service) unlockChild(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// errEmailTaken is a graduation's answer for an address an account has.
-var errEmailTaken = problem.New(http.StatusConflict, problem.CodeEmailTaken)
-
 // graduate is postChildrenByUserIdGraduate (FR-CH4): an owner sends the address a child profile is to
 // have a link, which works GraduateFor, with which the young adult chooses a password and becomes a
 // member (confirmGraduation). The profile stays a child, signing in with its PIN, until then. The
 // owner's address must be verified, as an invitation's sender's must: the link is trust extended past
-// the household (FR-ID1). Sending again sends a new link, to the same address or another, and the one
-// before stops working. An address an account has is refused 409; each link counts among the
-// household's twenty emails a day (ratelimit.InvitationHousehold).
+// the household (FR-ID1). The link is the owner's, and lapses with their ownership, as an invitation
+// does (D-103), which its confirmation checks. Sending again sends a new link, to the same address or
+// another, and the one before stops working. An address an account has is refused 409; each link
+// counts among the household's twenty emails a day (ratelimit.InvitationHousehold), and so does each
+// address refused, since the refusal says that an account has it: counted, an owner learns that of
+// twenty addresses a day at most, as a sign-up tells nobody of any (D-13).
 func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -652,13 +675,6 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 		if err := verified(ctx, tx, scope.UserID()); err != nil {
 			return err
 		}
-		var taken bool
-		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM users WHERE lower(email) = lower($1))", req.Email).Scan(&taken); err != nil {
-			return err
-		}
-		if taken {
-			return errEmailTaken
-		}
 		var owner, name, locale string
 		if err := tx.QueryRow(ctx, `
 			SELECT o.display_name, h.name, c.locale FROM users o, households h, users c
@@ -677,18 +693,28 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 	}
 	token, hash := newToken()
 	err = tenant.AccountTx(ctx, s.Pool, scope.UserID(), func(tx pgx.Tx) error {
+		var taken bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM users WHERE lower(email) = lower($1))", req.Email).Scan(&taken); err != nil {
+			return err
+		}
+		if taken {
+			return identity.ErrEmailTaken
+		}
 		now := s.Now()
 		if _, err := tx.Exec(ctx, "UPDATE email_tokens SET used_at = $2 WHERE user_id = $1 AND purpose = 'graduate' AND used_at IS NULL",
 			user, now); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `
-			INSERT INTO email_tokens (id, user_id, purpose, token_hash, email, created_at, expires_at)
-			VALUES ($1, $2, 'graduate', $3, $4, $5, $6)`, idgen.New(), user, hash, req.Email, now, now.Add(GraduateFor))
+			INSERT INTO email_tokens (id, user_id, purpose, token_hash, email, created_at, expires_at, sent_by)
+			VALUES ($1, $2, 'graduate', $3, $4, $5, $6, $7)`, idgen.New(), user, hash, req.Email, now, now.Add(GraduateFor), scope.UserID())
 		return err
 	})
 	if err != nil {
-		s.refund(ctx, household)
+		// An address an account has keeps its count: its refusal is what the count limits.
+		if !errors.Is(err, identity.ErrEmailTaken) {
+			s.refund(ctx, household)
+		}
 		s.fail(w, r, err)
 		return
 	}
@@ -697,31 +723,35 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// graduation is a graduation's link, as its row holds it.
+// graduation is a graduation's link, as its row holds it: sentBy is the owner who sent it.
 type graduation struct {
-	id, user uuid.UUID
-	email    string
-	expires  time.Time
-	used     *time.Time
+	id, user, sentBy uuid.UUID
+	email            string
+	expires          time.Time
+	used             *time.Time
 }
+
+// errLinkSpent is the answer to a graduation's link that was used, replaced by a newer one, or
+// withdrawn with its sender's ownership.
+var errLinkSpent = problem.New(http.StatusGone, problem.CodeTokenAlreadyUsed)
 
 // findGraduation reads the graduation link token opens in tx, locked for it when lock, and refuses one
 // that opens nothing, 404, one spent or replaced by a newer one, 410 token_already_used, and one past
 // its time at now, 410 token_expired.
 func findGraduation(ctx context.Context, tx pgx.Tx, token string, now time.Time, lock bool) (graduation, error) {
-	statement := "SELECT id, user_id, email, expires_at, used_at FROM email_tokens WHERE token_hash = $1 AND purpose = 'graduate'"
+	statement := "SELECT id, user_id, sent_by, email, expires_at, used_at FROM email_tokens WHERE token_hash = $1 AND purpose = 'graduate'"
 	if lock {
 		statement += " FOR UPDATE"
 	}
 	var g graduation
-	err := tx.QueryRow(ctx, statement, session.Hash(token)).Scan(&g.id, &g.user, &g.email, &g.expires, &g.used)
+	err := tx.QueryRow(ctx, statement, session.Hash(token)).Scan(&g.id, &g.user, &g.sentBy, &g.email, &g.expires, &g.used)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return g, problem.NotFound()
 	case err != nil:
 		return g, err
 	case g.used != nil:
-		return g, problem.New(http.StatusGone, problem.CodeTokenAlreadyUsed)
+		return g, errLinkSpent
 	case !now.Before(g.expires):
 		return g, problem.New(http.StatusGone, problem.CodeTokenExpired)
 	}
@@ -734,6 +764,14 @@ func findGraduation(ctx context.Context, tx pgx.Tx, token string, now time.Time,
 // the password in place of the PIN (identity.Graduate). It is their own change, recorded as theirs,
 // via the web client the link opens. The link is checked before the password is hashed, and again
 // under the membership's lock, so that two confirmations of one link graduate the profile once.
+//
+// A link lapses with its sender's ownership, as an invitation does (D-103): one whose sender has been
+// removed, has left or has been made a member since is refused as spent, 410 token_already_used,
+// since whoever holds it would come into the household with the profile's account and everything it
+// made, at an address the owners who stay never chose. It is checked here, under the household's
+// lock, which every change of a role takes, rather than withdrawn when the ownership ends, so that a
+// link its sender was sending when their ownership ended lapses too: the sending read their role
+// before that.
 func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -790,6 +828,14 @@ func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
 		link, err := findGraduation(ctx, tx, req.Token, s.Now(), true)
 		if err != nil {
 			return mutation.Record{}, err
+		}
+		var owns bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM memberships WHERE household_id = $1 AND user_id = $2 AND role = 'owner')",
+			household, link.sentBy).Scan(&owns); err != nil {
+			return mutation.Record{}, err
+		}
+		if !owns {
+			return mutation.Record{}, errLinkSpent
 		}
 		if _, err := tx.Exec(ctx, "UPDATE email_tokens SET used_at = $2 WHERE user_id = $1 AND purpose = 'graduate' AND used_at IS NULL",
 			m.user, s.Now()); err != nil {

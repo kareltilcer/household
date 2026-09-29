@@ -624,7 +624,7 @@ func (s *Service) changed(ctx context.Context, change Change) {
 // It is immediate: their next request finds no membership, their replica loses the household
 // (Hooks.Lost), no invitation they sent brings them back (withdraw), and they are told
 // (Hooks.Changed). The payer is refused until billing moves, and the content they made stays with
-// the household.
+// the household. A child profile removed is signed out of every device.
 func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -654,6 +654,14 @@ func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 		}
 		if payer != nil && *payer == user {
 			return mutation.Record{}, errPayer
+		}
+		// A child profile is nothing outside its household, and nobody can sign it in again once it
+		// is out of it (ADR 0012): it is signed out of every device it was signed in on, as a new PIN
+		// signs it out, rather than left with a sign-in to an account with no household.
+		if m.role == access.Child {
+			if err := s.Accounts.Devices.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
+				return mutation.Record{}, err
+			}
 		}
 		rec, err := s.end(ctx, tx, household, m, CauseRemoved, actionMemberRemove)
 		removed = err == nil

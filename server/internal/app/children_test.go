@@ -564,9 +564,68 @@ func TestAGraduationsRefusals(t *testing.T) {
 		http.StatusGone, problem.CodeTokenExpired)
 }
 
+// A graduation's link lapses with its sender's ownership, as an invitation does (D-103): once the owner
+// who sent it is made a member, is removed or leaves, it graduates nobody, since whoever holds it would
+// come into the household with the profile's account and everything it made. A link from an owner who
+// stays works.
+func TestAGraduationLinkLapsesWithItsSendersOwnership(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	adam := jana.child(h.ID, "Adam", "1234", nil)
+	path := householdPath(h.ID, "/children/"+adam.UserID.String()+"/graduate")
+	confirm := func(token string) *httptest.ResponseRecorder {
+		t.Helper()
+		return s.browser().post("/auth/graduation/confirm", jsonBody(t, map[string]string{"token": token, "password": passphrase}))
+	}
+	for i, c := range []struct {
+		name string
+		end  func(owner *browser, id uuid.UUID)
+	}{
+		{"Miloš", func(_ *browser, id uuid.UUID) {
+			expect(t, jana.patch(householdPath(h.ID, "/members/"+id.String()), `{"role":"member"}`, nil), http.StatusOK, "")
+		}},
+		{"Věra", func(_ *browser, id uuid.UUID) {
+			expect(t, jana.delete(householdPath(h.ID, "/members/"+id.String())), http.StatusNoContent, "")
+		}},
+		{"Karel", func(owner *browser, _ uuid.UUID) {
+			expect(t, owner.post(householdPath(h.ID, "/leave"), ""), http.StatusNoContent, "")
+		}},
+	} {
+		owner, id := s.joined(jana, h.ID, c.name, s.a(fmt.Sprintf("owner%d@tilcerovi.cz", i)), "owner", nil)
+		address := s.a(fmt.Sprintf("adam%d@tilcerovi.cz", i))
+		expect(t, owner.post(path, jsonBody(t, map[string]string{"email": address})), http.StatusAccepted, "")
+		link := s.graduationToken(address)
+		c.end(owner, id)
+		expect(t, confirm(link), http.StatusGone, problem.CodeTokenAlreadyUsed)
+		if m := jana.members(h.ID)["Adam"]; m.Role != "child" {
+			t.Fatalf("%s's link graduated Adam: %+v", c.name, m)
+		}
+	}
+	address := s.a("adam@tilcerovi.cz")
+	expect(t, jana.post(path, jsonBody(t, map[string]string{"email": address})), http.StatusAccepted, "")
+	expect(t, confirm(s.graduationToken(address)), http.StatusNoContent, "")
+}
+
+// An address refused as taken counts among the household's twenty emails a day as a link does, since
+// the refusal says that an account has it (D-13): an owner tests twenty addresses a day at most.
+func TestTakenAddressesCountAmongAHouseholdsEmails(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	adam := jana.child(h.ID, "Adam", "1234", nil)
+	path := householdPath(h.ID, "/children/"+adam.UserID.String()+"/graduate")
+	for range ratelimit.InvitationHousehold.Max {
+		expect(t, jana.post(path, jsonBody(t, map[string]string{"email": s.a("jana@tilcerovi.cz")})), http.StatusConflict, problem.CodeEmailTaken)
+	}
+	expect(t, jana.post(path, jsonBody(t, map[string]string{"email": s.a("jana@tilcerovi.cz")})), http.StatusTooManyRequests, problem.CodeRateLimited)
+	expect(t, jana.post(path, jsonBody(t, map[string]string{"email": s.a("adam@tilcerovi.cz")})), http.StatusTooManyRequests, problem.CodeRateLimited)
+}
+
 // A child profile is managed by its household's owners (D-17, D-104): it cannot make a household of its
 // own, leave its household, or link a provider that would sign it in past its PIN; and, as item 10
-// has it, it cannot invite or change the household's settings.
+// has it, it cannot invite or change the household's settings. An owner removes it, which signs it
+// out of every device.
 func TestAChildProfileIsManaged(t *testing.T) {
 	s, _ := federated(t, apptest.Options{})
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
@@ -589,5 +648,12 @@ func TestAChildProfileIsManaged(t *testing.T) {
 		http.StatusForbidden, problem.CodeForbidden)
 	if n := s.count("SELECT count(*) FROM memberships WHERE user_id = $1", adam.UserID); n != 1 {
 		t.Errorf("Adam is in %d households", n)
+	}
+
+	// Removed from its household, a child profile is nothing that anybody can sign in, and is signed
+	// out of every device it was signed in on.
+	expect(t, jana.delete(householdPath(h.ID, "/members/"+adam.UserID.String())), http.StatusNoContent, "")
+	if phone.me() != http.StatusUnauthorized {
+		t.Error("a removed child profile is still signed in")
 	}
 }
