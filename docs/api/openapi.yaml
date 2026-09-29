@@ -516,7 +516,10 @@ paths:
         provider's or begun by anyone else answers `422` naming `/state`; a verifier that is not the
         challenge's, or a code the provider does not vouch for, `422` naming `/code`. A subject
         another account holds, or an account that holds another subject of the provider already,
-        answers `409` (`identity_already_linked`). The account's address is told by email.
+        answers `409` (`identity_already_linked`). A link whose session, or device sign-in, a
+        password reset or signing out everywhere ended while it ran answers `401` and links nothing:
+        a reset that proves the address unlinks every provider linked before it, and a link never
+        lands after it. The account's address is told by email.
       parameters:
         - name: provider
           in: path

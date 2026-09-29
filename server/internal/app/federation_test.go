@@ -240,6 +240,99 @@ func TestAResetThatProvesTheAddressUnlinksTheProvidersBeforeIt(t *testing.T) {
 	expect(t, s.browser().google(idp, mine), http.StatusOK, "")
 }
 
+// A sign-in with a provider takes turns with the reset that unlinks it (D-102): one that reached the
+// credential while the reset was unlinking it waits for the reset, and then finds nothing linked,
+// rather than signing in to the account the reset took back with a session the reset never saw.
+func TestASignInWithAProviderWaitsForTheResetThatUnlinksIt(t *testing.T) {
+	s, idp := federated(t, apptest.Options{})
+	address := s.a("jana@tilcerovi.cz")
+	squatter := s.signUp(address, "squatter horse battery")
+	intruder := federationtest.Person{Subject: s.a("g-squatter"), Email: s.a("squatter@gmail.test"), EmailVerified: true}
+	authURL, state := squatter.start("web")
+	code, _ := idp.Authorize(authURL, intruder)
+	expect(t, squatter.post("/auth/oauth/google/link", jsonBody(t, map[string]string{"code": code, "state": state, "code_verifier": verifier})),
+		http.StatusNoContent, "")
+	account := squatter.me().ID
+
+	// The reset's unlink, made and not yet committed.
+	ctx := t.Context()
+	hold, err := s.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = hold.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := hold.Exec(ctx, "DELETE FROM credentials WHERE user_id = $1 AND type IN ('google', 'apple')", account); err != nil {
+		t.Fatal(err)
+	}
+
+	authURL, state = s.browser().start("web")
+	code, _ = idp.Authorize(authURL, intruder)
+	rec := httptest.NewRecorder()
+	r := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/google/callback",
+		strings.NewReader(jsonBody(t, map[string]string{"code": code, "state": state, "code_verifier": verifier})))
+	r.RemoteAddr = s.peer
+	r.Header.Set("Content-Type", "application/json")
+	var wg sync.WaitGroup
+	wg.Go(func() { s.router.ServeHTTP(rec, r) })
+	for deadline := time.Now().Add(10 * time.Second); s.count(`
+		SELECT count(*) FROM pg_stat_activity
+		WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%FROM credentials WHERE type%'`) < 1; {
+		if time.Now().After(deadline) {
+			t.Fatal("the sign-in never waited for the reset's unlink")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := hold.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	// The squatter's Google opens an account of its own.
+	expect(t, rec, http.StatusOK, "")
+	var result struct {
+		User meBody `json:"user"`
+	}
+	decode(t, rec, &result)
+	if result.User.ID == account {
+		t.Fatal("a sign-in with an unlinked provider signed in to the account")
+	}
+}
+
+// A link whose code is redeemed while a reset takes the account back lands not at all: the reset
+// ended the session the link came with, and unlinks every provider linked before it (D-102), so a
+// link landing after it would keep whoever it took the account from signing in.
+func TestALinkDoesNotLandAfterAResetConfirmedMeanwhile(t *testing.T) {
+	s, idp := federated(t, apptest.Options{})
+	address := s.a("jana@tilcerovi.cz")
+	squatter := s.signUp(address, "squatter horse battery")
+	intruder := federationtest.Person{Subject: s.a("g-squatter"), Email: s.a("squatter@gmail.test"), EmailVerified: true}
+	owner := s.browser()
+	expect(t, owner.post("/auth/password-reset", jsonBody(t, map[string]string{"email": address})), http.StatusAccepted, "")
+	tok, _ := s.token(address)
+	confirm := jsonBody(t, map[string]string{"token": tok, "password": "correct horse battery"})
+	confirmed := make(chan int, 1)
+	idp.Redeeming = func() {
+		// Confirmed while the server waits on the provider, on the provider's goroutine, where none
+		// of t's helpers may stop the test.
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(confirm))
+		r.RemoteAddr = s.peer
+		r.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		s.router.ServeHTTP(rec, r)
+		confirmed <- rec.Code
+	}
+
+	authURL, state := squatter.start("web")
+	code, _ := idp.Authorize(authURL, intruder)
+	expect(t, squatter.post("/auth/oauth/google/link", jsonBody(t, map[string]string{"code": code, "state": state, "code_verifier": verifier})),
+		http.StatusUnauthorized, problem.CodeUnauthenticated)
+	if status := <-confirmed; status != http.StatusNoContent {
+		t.Fatalf("the reset answered %d", status)
+	}
+	if n := s.count("SELECT count(*) FROM credentials WHERE subject = $1", intruder.Subject); n != 0 {
+		t.Fatal("a link landed after the reset that took the account back")
+	}
+}
+
 // A link completes only a start its own account made, and never takes a subject another account
 // holds.
 func TestALinkIsTheAccountsOwn(t *testing.T) {

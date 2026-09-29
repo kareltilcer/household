@@ -170,6 +170,7 @@ func TestAMobileSignInIssuesATokenPairForItsDevice(t *testing.T) {
 	if result.Tokens.ExpiresIn != 900 || result.Tokens.TokenType != "Bearer" || len(rec.Result().Cookies()) != 0 {
 		t.Fatalf("%+v, cookies %v", result.Tokens, rec.Result().Cookies())
 	}
+	unkept(t, rec)
 	claims, err := apptest.TokenKeys.Verify(p.access, s.clock.now())
 	if err != nil || claims.Subject != result.User.ID {
 		t.Fatalf("%+v %v", claims, err)
@@ -187,7 +188,10 @@ func TestAMobileSignInIssuesATokenPairForItsDevice(t *testing.T) {
 	if p.me() != http.StatusUnauthorized {
 		t.Fatal("an expired access token signed the phone in")
 	}
-	p.renew()
+	rec, renewed := p.exchange(p.refresh)
+	expect(t, rec, http.StatusOK, "")
+	unkept(t, rec)
+	p.access, p.refresh = renewed.AccessToken, renewed.RefreshToken
 	if p.me() != http.StatusOK {
 		t.Fatal("the renewed access token does not sign the phone in")
 	}
@@ -339,6 +343,54 @@ func TestARefreshTokenPresentedTwiceAtOnceIsExchangedOnce(t *testing.T) {
 		SELECT count(*) FROM refresh_tokens t JOIN device_sessions d ON d.id = t.session_id
 		WHERE d.device_id = $1 AND d.revoked_at IS NULL AND t.used_at IS NULL`, p.id); live != 1 {
 		t.Fatalf("%d refresh tokens are live after one token was exchanged twice at once", live)
+	}
+}
+
+// Signing in again on a device while it refreshes waits for the refresh rather than deadlocking with
+// it: a refresh holds the device's sign-in and then writes the device's row, and a sign-in takes
+// them in the same order.
+func TestSigningInAgainWhileTheDeviceRefreshesWaitsItsTurn(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	address := s.a("jana@tilcerovi.cz")
+	s.browser().register(address, "correct horse battery")
+	p := s.phone("iPhone")
+	expect(t, p.login(address, "correct horse battery"), http.StatusOK, "")
+
+	// A refresh under way: the sign-in's row held, the device's row written next.
+	ctx := t.Context()
+	hold, err := s.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = hold.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := hold.Exec(ctx, "SELECT FROM device_sessions WHERE device_id = $1 AND revoked_at IS NULL FOR UPDATE", p.id); err != nil {
+		t.Fatal(err)
+	}
+	body := jsonBody(t, map[string]any{"email": address, "password": "correct horse battery", "client_type": "mobile", "device": p.deviceBody()})
+	rec := httptest.NewRecorder()
+	r := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	r.RemoteAddr = s.peer
+	r.Header.Set("Content-Type", "application/json")
+	var wg sync.WaitGroup
+	wg.Go(func() { s.router.ServeHTTP(rec, r) })
+	for deadline := time.Now().Add(10 * time.Second); s.count(`
+		SELECT count(*) FROM pg_stat_activity
+		WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%device_sessions%'`) < 1; {
+		if time.Now().After(deadline) {
+			t.Fatal("the sign-in never waited for the refresh")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := hold.Exec(ctx, "UPDATE devices SET last_seen_at = now() WHERE id = $1", p.id); err != nil {
+		t.Fatalf("the refresh met the sign-in: %v", err)
+	}
+	if err := hold.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	expect(t, rec, http.StatusOK, "")
+	if live := s.count("SELECT count(*) FROM device_sessions WHERE device_id = $1 AND revoked_at IS NULL", p.id); live != 1 {
+		t.Fatalf("%d sign-ins are live on one device", live)
 	}
 }
 

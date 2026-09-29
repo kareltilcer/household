@@ -185,6 +185,15 @@ func (s *Store) RevokeToken(ctx context.Context, tx pgx.Tx, token string) (bool,
 	return tag.RowsAffected() > 0, err
 }
 
+// Live reports whether user's session id is still live in tx: a request it authenticated before a
+// reset or signing out everywhere ended it may still be running.
+func (s *Store) Live(ctx context.Context, tx pgx.Tx, user, id uuid.UUID) (bool, error) {
+	var live bool
+	err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM sessions WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > $3)",
+		id, user, s.now()).Scan(&live)
+	return live, err
+}
+
 // Revoke ends user's live session id in tx, and reports whether it had one.
 func (s *Store) Revoke(ctx context.Context, tx pgx.Tx, user, id uuid.UUID) (bool, error) {
 	now := s.now()

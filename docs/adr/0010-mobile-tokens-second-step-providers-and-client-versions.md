@@ -92,8 +92,10 @@ PKCE would otherwise let an intercepted code through; it then redeems the code w
 its client secret, and verifies the ID token's signature against the provider's published keys, its
 issuer, audience and expiry, and the nonce. A state is spent before anything else is checked, so it
 is used once whatever follows. A start made signed in records the account, and only that account
-may complete it as a link. Discovery documents are fetched on first use and kept, so the server
-starts without reaching Google or Apple. Apple's client secret is a JWT the team's key signs for each
+may complete it as a link. A sign-in holds the credential it found until it commits, and a link
+takes the account's row, as a reset does, and checks that the session it came with is still live,
+so that a reset that unlinks the providers (D-102) is outlived by neither. Discovery documents are
+fetched on first use and kept, so the server starts without reaching Google or Apple. Apple's client secret is a JWT the team's key signs for each
 exchange, and Apple is asked for `form_post`, which it requires for the email and name scopes.
 `federationtest` is a provider in a test server that holds every step to the same rules, which the
 tests run the whole flow against.

@@ -43,6 +43,7 @@ func (s *Service) refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	switch res.Outcome {
 	case device.Refreshed:
+		noStore(w)
 		httpx.WriteJSON(w, http.StatusOK, tokenPair(res.Tokens))
 		return
 	case device.Reused:

@@ -125,6 +125,15 @@ func (s *Store) Keys() *token.Keys { return s.keys }
 // it held ended, and a new one begun, with its first token pair. It returns the new sign-in's id.
 func (s *Store) SignIn(ctx context.Context, tx pgx.Tx, user uuid.UUID, d Info) (uuid.UUID, Tokens, error) {
 	d, now := d.Clean(), s.now()
+	// The sign-in the device holds is locked before the device's row, as a refresh takes them
+	// (Refresh), so that signing in again while the device refreshes waits its turn rather than
+	// deadlocking with it. A device with none has nothing to lock yet: two first sign-ins meet at
+	// its row instead, and the second then ends the first's sign-in below.
+	if _, err := tx.Exec(ctx, `
+		SELECT FROM device_sessions WHERE user_id = $1 AND device_id = $2 AND revoked_at IS NULL FOR UPDATE`,
+		user, d.ID); err != nil {
+		return uuid.Nil, Tokens{}, fmt.Errorf("device: hold the device's sign-in: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO devices (user_id, id, label, platform, app_version, created_at, last_seen_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $6)
@@ -304,6 +313,15 @@ func (s *Store) End(ctx context.Context, tx pgx.Tx, user, sid uuid.UUID) (bool, 
 	tag, err := tx.Exec(ctx, "UPDATE device_sessions SET revoked_at = $3 WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL",
 		sid, user, s.now())
 	return tag.RowsAffected() > 0, err
+}
+
+// Live reports whether user's sign-in sid is still live in tx: a request its access token
+// authenticated before a reset or signing out everywhere ended it may still be running.
+func (s *Store) Live(ctx context.Context, tx pgx.Tx, user, sid uuid.UUID) (bool, error) {
+	var live bool
+	err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM device_sessions WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL)",
+		sid, user).Scan(&live)
+	return live, err
 }
 
 // Revoke ends the live sign-in of user's device id in tx, and reports whether it had one.

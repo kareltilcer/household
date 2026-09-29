@@ -89,6 +89,7 @@ func (s *Service) enrollMFA(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	noStore(w)
 	httpx.WriteJSON(w, http.StatusOK, map[string]string{"secret": e.Secret, "otpauth_uri": e.URI})
 }
 
@@ -157,6 +158,7 @@ func (s *Service) activateMFA(w http.ResponseWriter, r *http.Request) {
 		s.Log.LogAttrs(ctx, slog.LevelWarn, "second-step throttle not cleared", slog.Any("error", err))
 	}
 	idempotency.Unstorable(ctx)
+	noStore(w)
 	httpx.WriteJSON(w, http.StatusOK, recoveryCodesJSON{RecoveryCodes: codes})
 }
 
@@ -272,7 +274,7 @@ func (s *Service) verifyMFA(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		matched, spent := false, false
+		matched := false
 		if code, ok := mfa.TOTPCode(req.Code); ok {
 			if lockedAt != nil {
 				outcome = locked
@@ -306,7 +308,7 @@ func (s *Service) verifyMFA(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			if tag.RowsAffected() > 0 {
-				matched, spent = true, true
+				matched = true
 				if _, err := tx.Exec(ctx, "UPDATE mfa_totp SET failures = 0, locked_at = NULL WHERE user_id = $1", user); err != nil {
 					return err
 				}
@@ -330,10 +332,6 @@ func (s *Service) verifyMFA(w http.ResponseWriter, r *http.Request) {
 			}
 			return s.endChallenges(ctx, tx, user)
 		}
-		if !spent {
-			recoveryLeft = -1
-		}
-
 		if _, err := tx.Exec(ctx, "UPDATE mfa_challenges SET ended_at = $2 WHERE id = $1", challenge, now); err != nil {
 			return err
 		}
@@ -462,5 +460,6 @@ func (s *Service) newRecoveryCodes(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	noStore(w)
 	httpx.WriteJSON(w, http.StatusOK, recoveryCodesJSON{RecoveryCodes: codes})
 }

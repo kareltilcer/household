@@ -40,6 +40,9 @@ type Provider struct {
 	ClientID, ClientSecret string
 	// Now is the provider's clock, for the ID token's times; time.Now when nil.
 	Now func() time.Time
+	// Redeeming, when set, is called as a code is redeemed, before the provider answers: the
+	// moment the server is waiting on the provider.
+	Redeeming func()
 
 	mu     sync.Mutex
 	grants map[string]grant
@@ -144,6 +147,9 @@ func (p *Provider) token(w http.ResponseWriter, r *http.Request) {
 		g.challenge != base64.RawURLEncoding.EncodeToString(sum[:]):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
 		return
+	}
+	if p.Redeeming != nil {
+		p.Redeeming()
 	}
 	now := p.now()
 	claims := jwt.MapClaims{"iss": p.URL, "aud": g.clientID, "sub": g.person.Subject, "iat": now.Unix(),

@@ -236,9 +236,14 @@ type loginResult struct {
 	TrustToken *string        `json:"trust_token"`
 }
 
+// noStore marks w's answer as one no cache may keep, since it carries a credential or a secret: a
+// token pair, a challenge or trust token, a TOTP secret or recovery codes (RFC 6749 §5.1).
+func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
+
 // admitted answers a sign-in with its admission: 409 and the challenge, or 200 and the credential,
 // in cookies for a browser and in the body for a device.
 func admitted(w http.ResponseWriter, adm admission) {
+	noStore(w)
 	if adm.challenge != nil {
 		httpx.WriteJSON(w, http.StatusConflict, adm.challenge)
 		return

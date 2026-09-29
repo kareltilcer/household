@@ -42,6 +42,7 @@ func (b *browser) enrol(pw string) (string, []string) {
 	}
 	rec := b.post("/auth/mfa/enroll", jsonBody(b.s.t, map[string]string{"password": pw}))
 	expect(b.s.t, rec, http.StatusOK, "")
+	unkept(b.s.t, rec)
 	var e struct {
 		Secret string `json:"secret"`
 		URI    string `json:"otpauth_uri"`
@@ -49,11 +50,21 @@ func (b *browser) enrol(pw string) (string, []string) {
 	decode(b.s.t, rec, &e)
 	rec = b.post("/auth/mfa/activate", jsonBody(b.s.t, map[string]string{"code": b.s.code(e.Secret)}))
 	expect(b.s.t, rec, http.StatusOK, "")
+	unkept(b.s.t, rec)
 	var codes struct {
 		RecoveryCodes []string `json:"recovery_codes"`
 	}
 	decode(b.s.t, rec, &codes)
 	return e.Secret, codes.RecoveryCodes
+}
+
+// unkept expects rec to tell every cache not to keep it, since it carries a credential or a secret
+// (RFC 6749 §5.1).
+func unkept(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control %q on an answer that carries a secret", got)
+	}
 }
 
 // verify opens the link of the last verification email to address.
@@ -75,6 +86,7 @@ type challenge struct {
 func challenged(t *testing.T, rec *httptest.ResponseRecorder) challenge {
 	t.Helper()
 	expect(t, rec, http.StatusConflict, "")
+	unkept(t, rec)
 	var c challenge
 	decode(t, rec, &c)
 	if c.Error != "mfa_required" || c.ChallengeToken == "" || len(rec.Result().Cookies()) != 0 {

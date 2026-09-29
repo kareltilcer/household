@@ -80,9 +80,12 @@ not a redirect with a query: the page at that URL must accept a `POST`.
 
 `HOUSEHOLD_OAUTH_REDIRECT_URIS` lists every URI a provider may send a person back to, comma-separated,
 each matched exactly: no prefix, no wildcard. The web client's, `https://app.household.example/sign-in/google`,
-and the mobile app's, `household://sign-in`, are typical. A provider configured with no URI stops the
-server at start. Each provider must list the same URIs on its side, or it refuses the sign-in before
-the server sees it.
+is typical. The mobile app's is an `https` URL too, one the app opens as a universal link (iOS) and an
+app link (Android), such as `https://app.household.example/sign-in/mobile`: the server redeems the
+code as the web client Google knows and the Services ID Apple knows, and neither accepts a custom
+scheme such as `household://` as a return URL. A provider configured with no URI stops the server at
+start. Each provider must list the same URIs on its side, or it refuses the sign-in before the server
+sees it.
 
 A provider is configured whole or not at all: a client id without its secret, or Apple without its
 key, stops the server at start, naming what is missing. A provider not configured answers `404`, and

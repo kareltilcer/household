@@ -14,6 +14,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
+	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
@@ -234,9 +235,14 @@ func (s *Service) oauthCallback(w http.ResponseWriter, r *http.Request) {
 // new one made for it: named name, speaking lang, with the address the provider holds, verified
 // when the provider verified it. A subject no account holds whose address an account has is
 // errLinkRequired, whether or not that account verified the address.
+//
+// The credential is held until tx ends, as a password sign-in holds its password (unchanged): a
+// reset that unlinks it (D-102), or an unlink, waits for the sign-in and then ends what it began,
+// and one that has unlinked it first leaves this sign-in nothing to find.
 func (s *Service) federatedAccount(ctx context.Context, tx pgx.Tx, provider string, id federation.Identity, name, lang string) (uuid.UUID, error) {
+	const holder = "SELECT user_id FROM credentials WHERE type = $1 AND subject = $2 FOR SHARE"
 	var user uuid.UUID
-	err := tx.QueryRow(ctx, "SELECT user_id FROM credentials WHERE type = $1 AND subject = $2", provider, id.Subject).Scan(&user)
+	err := tx.QueryRow(ctx, holder, provider, id.Subject).Scan(&user)
 	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
 		return user, err
 	}
@@ -259,15 +265,14 @@ func (s *Service) federatedAccount(ctx context.Context, tx pgx.Tx, provider stri
 		// An account has the address. It may be the one a sign-in with this subject running beside
 		// this one has just made, whose row the insert waited for: read again, now that it has
 		// committed, the subject is that account's, which this sign-in signs in as well.
-		var holder uuid.UUID
-		switch err := tx.QueryRow(ctx, "SELECT user_id FROM credentials WHERE type = $1 AND subject = $2", provider, id.Subject).
-			Scan(&holder); {
+		var found uuid.UUID
+		switch err := tx.QueryRow(ctx, holder, provider, id.Subject).Scan(&found); {
 		case errors.Is(err, pgx.ErrNoRows):
 			return uuid.Nil, errLinkRequired
 		case err != nil:
 			return uuid.Nil, err
 		}
-		return holder, nil
+		return found, nil
 	}
 	if err != nil {
 		return uuid.Nil, err
@@ -283,7 +288,8 @@ func (s *Service) federatedAccount(ctx context.Context, tx pgx.Tx, provider stri
 
 // oauthLink is postAuthOauthByProviderLink (FR-ID2): a start the signed-in account made, completed,
 // adds the provider's subject to it as a credential, which then signs it in; the explicit step a
-// subject whose address the account has needs. The account's address is told.
+// subject whose address the account has needs. The account's address is told. A link whose session
+// a reset ended while the code was redeemed answers 401, and links nothing.
 func (s *Service) oauthLink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -325,6 +331,20 @@ func (s *Service) oauthLink(w http.ResponseWriter, r *http.Request) {
 	taken := problem.New(http.StatusConflict, problem.CodeIdentityAlreadyLinked)
 	var linked bool
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+		// The account's row first, as a reset takes it, and then the sign-in this request came
+		// with, which a reset confirmed while the code was redeemed has ended. A reset that proves
+		// the address unlinks every provider linked before it (D-102): the link lands before the
+		// reset, for it to unlink, or not at all, never after it for whoever it took the account
+		// from.
+		if _, err := tx.Exec(ctx, "SELECT FROM users WHERE id = $1 FOR NO KEY UPDATE", user); err != nil {
+			return err
+		}
+		switch live, err := s.stillSignedIn(ctx, tx, user); {
+		case err != nil:
+			return err
+		case !live:
+			return problem.New(http.StatusUnauthorized, problem.CodeUnauthenticated)
+		}
 		var holder uuid.UUID
 		err := tx.QueryRow(ctx, "SELECT user_id FROM credentials WHERE type = $1 AND subject = $2", name, id.Subject).Scan(&holder)
 		switch {
@@ -357,6 +377,19 @@ func (s *Service) oauthLink(w http.ResponseWriter, r *http.Request) {
 		s.notice(ctx, user, emailIdentityLinked, i18n.Args{"provider": providerNames[name]})
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// stillSignedIn reports whether the session or the device's sign-in that authenticated ctx's
+// request for user is still live in tx. The request was authenticated before tx began, and a reset
+// or signing out everywhere may have ended its credential since.
+func (s *Service) stillSignedIn(ctx context.Context, tx pgx.Tx, user uuid.UUID) (bool, error) {
+	if d, ok := device.From(ctx); ok {
+		return s.Devices.Live(ctx, tx, user, d.Session)
+	}
+	if id, ok := session.Current(ctx); ok {
+		return s.Sessions.Live(ctx, tx, user, id)
+	}
+	return false, nil
 }
 
 // oauthUnlink is deleteAuthOauthByProvider: the provider's credential goes, unless it is the
