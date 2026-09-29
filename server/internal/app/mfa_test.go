@@ -37,6 +37,9 @@ func (s *site) nextCode(secret string) string {
 // its recovery codes.
 func (b *browser) enrol(pw string) (string, []string) {
 	b.s.t.Helper()
+	if me := b.me(); !me.EmailVerified {
+		b.s.verify(*me.Email)
+	}
 	rec := b.post("/auth/mfa/enroll", jsonBody(b.s.t, map[string]string{"password": pw}))
 	expect(b.s.t, rec, http.StatusOK, "")
 	var e struct {
@@ -51,6 +54,13 @@ func (b *browser) enrol(pw string) (string, []string) {
 	}
 	decode(b.s.t, rec, &codes)
 	return e.Secret, codes.RecoveryCodes
+}
+
+// verify opens the link of the last verification email to address.
+func (s *site) verify(address string) {
+	s.t.Helper()
+	tok, _ := s.token(address)
+	expect(s.t, s.browser().post("/auth/verify-email", jsonBody(s.t, map[string]string{"token": tok})), http.StatusNoContent, "")
 }
 
 // challenge is the contract's MfaChallenge.
@@ -87,6 +97,10 @@ func (b *browser) signIn(address, pw string) *httptest.ResponseRecorder {
 func TestTurningOnTheSecondStep(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	b := s.signUp(s.a("jana@tilcerovi.cz"), "correct horse battery")
+	// An address not yet proven turns nothing on (D-100), and costs no password check.
+	expect(t, b.post("/auth/mfa/enroll", jsonBody(t, map[string]string{"password": "wrong horse battery"})),
+		http.StatusForbidden, problem.CodeAccountUnverified)
+	s.verify(s.a("jana@tilcerovi.cz"))
 	expect(t, b.post("/auth/mfa/enroll", jsonBody(t, map[string]string{"password": "wrong horse battery"})),
 		http.StatusUnauthorized, problem.CodeInvalidCredentials)
 	expect(t, b.post("/auth/mfa/activate", jsonBody(t, map[string]string{"code": "123456"})), http.StatusUnprocessableEntity, problem.CodeValidationFailed)
@@ -148,6 +162,7 @@ func TestTurningOnTheSecondStep(t *testing.T) {
 func TestTheFirstCodeIsLimitedAsTheSecondStepIs(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	b := s.signUp(s.a("jana@tilcerovi.cz"), "correct horse battery")
+	s.verify(s.a("jana@tilcerovi.cz"))
 	enrolment := func() string {
 		t.Helper()
 		rec := b.post("/auth/mfa/enroll", jsonBody(t, map[string]string{"password": "correct horse battery"}))

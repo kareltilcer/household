@@ -51,6 +51,20 @@ func (s *Service) enrollMFA(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// A second step is bound only to an account whose address is proven (D-100): one bound before
+	// would outlive the reset that proves the address, and lock its owner out of the account the
+	// reset hands them.
+	var verified bool
+	if err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, "SELECT email_verified_at IS NOT NULL FROM users WHERE id = $1", user).Scan(&verified)
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !verified {
+		s.fail(w, r, problem.New(http.StatusForbidden, problem.CodeAccountUnverified))
+		return
+	}
 	acct, err := s.reauthenticate(ctx, user, req.Password)
 	if err != nil {
 		s.fail(w, r, err)

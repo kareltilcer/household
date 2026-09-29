@@ -108,7 +108,8 @@ enabled it is required on every login on a new device. Not required for children
 
 A device, or a browser, is new unless it is trusted: trust is opt-in, chosen when the second step
 is answered, and lasts 30 days (A-7). It is required of a sign-in with Google or Apple as of one
-with a password. Turning it on takes the current password and a first code, and gives ten recovery
+with a password. Turning it on takes a verified address, the current password and a first code,
+and gives ten recovery
 codes, each used once in place of a code; a new set, with the password, retires the old one (A-6),
 and every recovery code spent is emailed (A-8). Ten wrong codes since the last right one lock the
 authenticator and end the account's pending sign-ins; a locked one takes only a recovery code,

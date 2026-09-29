@@ -564,9 +564,12 @@ paths:
         take the recovery codes, and lock the owner out of their own account. A wrong password
         answers `401` (`invalid_credentials`) and counts against the account as a failed sign-in
         does; an account with no password, one that signs in only with Google or Apple, sets one by
-        a password reset first. The secret waits for `/auth/mfa/activate`: an authenticator already
-        on stays on until then, and a later enrolment replaces one not yet activated. No
-        `Idempotency-Key` is kept, since the body carries a password and the answer a secret.
+        a password reset first. An account whose address is not verified is refused `403`
+        (`account_unverified`): a second step bound before the address is proven would outlive the
+        reset that proves it, and lock the address's owner out. The secret waits for
+        `/auth/mfa/activate`: an authenticator already on stays on until then, and a later enrolment
+        replaces one not yet activated. No `Idempotency-Key` is kept, since the body carries a
+        password and the answer a secret.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -574,6 +577,7 @@ paths:
       responses:
         '200': { description: Secret and provisioning URI, content: { application/json: { schema: { $ref: '#/components/schemas/MfaEnrolment' } } } }
         '401': { description: 'No credential (`unauthenticated`), or `password` is not the account''s (`invalid_credentials`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '403': { description: 'The account has not verified its address (`account_unverified`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /auth/mfa/activate:

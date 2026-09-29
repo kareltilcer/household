@@ -68,7 +68,9 @@ is kept as an HMAC-SHA-256 under the same key** (`internal/platform/mfa`). A cop
 alone yields no second factor: the secret needs the key, and a forty-bit code under a fast unkeyed
 hash would fall to a day of guessing. The key's id, four bytes of its SHA-256, prefixes a sealed
 secret, and a recovery code is looked up under every configured key. A code is accepted once: the
-last accepted time step is kept, and a code from it or an older one is refused (RFC 6238 §5.2).
+last accepted time step is kept, and a code from it or an older one is refused (RFC 6238 §5.2). An
+account turns the second step on only once its address is verified (D-100): one bound before would
+outlive the reset that proves the address and hands the account to its owner (D-102).
 
 **"New device" is "not trusted", and a trust is a token the browser or device holds.** A device id
 names no secret, so trusting it by id would let anyone with the password and the id skip the step.
