@@ -1,0 +1,36 @@
+# PowerSync as the conformance suite runs it (plan item 12, ADR 0001). Every credential here is a
+# loopback development value, repeated as the defaults of server/cmd/conformance-standin.
+
+# It replicates from the household database as the role conformance-standin setup makes, which
+# holds REPLICATION and BYPASSRLS and reads only the tables of the `powersync` publication.
+replication:
+  connections:
+    - type: postgresql
+      uri: postgresql://conformance_powersync:conformance_powersync@postgres:5432/household
+      sslmode: disable
+
+# Its buckets live in a database of their own, whose credential only the service holds.
+storage:
+  type: postgresql
+  uri: postgresql://conformance_powersync_storage:conformance_powersync_storage@postgres:5432/powersync_storage
+  sslmode: disable
+
+port: 8080
+
+sync_config:
+  path: sync-config.yaml
+
+# The stand-in signs a client's token with this key (HS256), with the member's id as sub. Item 13
+# signs with the API's EdDSA keys instead and serves them as a JWKS.
+client_auth:
+  audience: [powersync]
+  jwks:
+    keys:
+      - kty: oct
+        alg: HS256
+        kid: conformance
+        k: aG91c2Vob2xkLWNvbmZvcm1hbmNlLXBvd2Vyc3luYy1rZXktbm90LWEtc2VjcmV0
+
+# PowerSync shares anonymous usage by default; nothing leaves the machine.
+telemetry:
+  disable_telemetry_sharing: true

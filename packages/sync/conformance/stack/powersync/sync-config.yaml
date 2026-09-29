@@ -1,0 +1,75 @@
+# The conformance suite's stand-in streams (plan item 12), written by hand as the spike's were
+# (ADR 0001). Item 13 replaces them with the configuration it generates from the entity registry,
+# and item 14 adds the visibility and audience streams.
+#
+# A member replicates the conformance module's items and their checked states while their level
+# on the module is above none: the tenant middleware's rule (internal/platform/tenant), none when
+# the household has the module disabled, manage for an owner, the grant otherwise. The compiler
+# takes inner joins only and no OR across the joined tables, so "an owner, or a member with a
+# grant" is two streams, one per arm, and a row both reach is held once on the client.
+#
+# The household is the subscription's parameter, so that a replica holds one household (D-4):
+# a client subscribes to each stream with {household_id}, and a member of two households keeps
+# one replica for each. A soft-deleted row leaves the replica, as the spike's did; item 13 keeps
+# tombstones, so that a client can tell a row another member deleted from one it lost access to.
+config:
+  edition: 3
+
+streams:
+  conformance_items_owner:
+    query: |
+      SELECT * FROM conformance_items
+      WHERE deleted_at IS NULL
+        AND household_id = subscription.parameter('household_id')
+        AND household_id IN (
+          SELECT m.household_id FROM memberships m
+            JOIN module_enablement e ON e.household_id = m.household_id
+          WHERE m.user_id = auth.user_id() AND m.role = 'owner'
+            AND e.module = 'conformance' AND e.enabled
+        )
+
+  conformance_items_granted:
+    query: |
+      SELECT * FROM conformance_items
+      WHERE deleted_at IS NULL
+        AND household_id = subscription.parameter('household_id')
+        AND household_id IN (
+          SELECT g.household_id FROM module_grants g
+            JOIN module_enablement e ON e.household_id = g.household_id AND e.module = g.module
+          WHERE g.user_id = auth.user_id() AND g.module = 'conformance' AND g.level <> 'none'
+            AND e.enabled
+        )
+
+  conformance_item_checks_owner:
+    query: |
+      SELECT * FROM conformance_item_checks
+      WHERE deleted_at IS NULL
+        AND household_id = subscription.parameter('household_id')
+        AND household_id IN (
+          SELECT m.household_id FROM memberships m
+            JOIN module_enablement e ON e.household_id = m.household_id
+          WHERE m.user_id = auth.user_id() AND m.role = 'owner'
+            AND e.module = 'conformance' AND e.enabled
+        )
+
+  conformance_item_checks_granted:
+    query: |
+      SELECT * FROM conformance_item_checks
+      WHERE deleted_at IS NULL
+        AND household_id = subscription.parameter('household_id')
+        AND household_id IN (
+          SELECT g.household_id FROM module_grants g
+            JOIN module_enablement e ON e.household_id = g.household_id AND e.module = g.module
+          WHERE g.user_id = auth.user_id() AND g.module = 'conformance' AND g.level <> 'none'
+            AND e.enabled
+        )
+
+  # Broken on purpose, for the suite's negative control (conformance/suite/harness.test.ts): it
+  # holds a member to the households they belong to but not to the one they subscribed with, and
+  # checks no grant, so a member of two households replicates the other's items into this one's
+  # replica. No client but the negative control's subscribes to it, and the suite must fail it.
+  negative_control_leaky_items:
+    query: |
+      SELECT * FROM conformance_items
+      WHERE deleted_at IS NULL
+        AND household_id IN (SELECT m.household_id FROM memberships m WHERE m.user_id = auth.user_id())

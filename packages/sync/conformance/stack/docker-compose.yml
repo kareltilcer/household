@@ -1,0 +1,57 @@
+# The sync conformance suite's stack (plan item 12): a PostgreSQL with logical replication and a
+# PowerSync beside it, each image pinned. `pnpm --filter @household/sync conformance:up` starts
+# both, waits until each is healthy, and prepares the database; `conformance:down` removes them.
+#
+# It is the suite's own, apart from the development services in the repository's
+# docker-compose.yml, whose PostgreSQL runs without wal_level=logical. Item 13 deploys PowerSync
+# beside that one, and the suite moves onto it then. Every credential here is a loopback
+# development value, as in powersync/powersync.yaml, and every port is published on 127.0.0.1
+# only.
+name: household-conformance
+
+services:
+  postgres:
+    # The image the repository's docker-compose.yml runs; tooling/src/workspace.test.ts fails
+    # when the two disagree.
+    image: postgres:17.11-trixie
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_wal_senders=10
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: household
+    ports:
+      - 127.0.0.1:${HOUSEHOLD_CONFORMANCE_PG_PORT:-5442}:5432
+    # No volume: the suite's households are made for each run, and a fresh database is what
+    # CI starts from.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      # Over TCP, for the reason the repository's docker-compose.yml gives.
+      test: [CMD-SHELL, pg_isready --host=127.0.0.1 --username=postgres --dbname=household]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  powersync:
+    # The Open Edition service (ADR 0001), pinned: the suite is what tells an upgrade apart.
+    image: journeyapps/powersync-service:1.26.1
+    command: [start, -r, unified]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+    volumes:
+      - ./powersync:/config:ro
+    ports:
+      - 127.0.0.1:${HOUSEHOLD_CONFORMANCE_POWERSYNC_PORT:-8090}:8080
+    # It replicates only once `conformance:up` has made its role, its publication and its
+    # storage, and it restarts until then.
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
