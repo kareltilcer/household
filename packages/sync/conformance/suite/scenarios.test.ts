@@ -29,7 +29,8 @@ afterAll(async () => {
 /**
  * What target lacks for s, or null: an entity it needs that the push does not write, a table its
  * streams do not replicate (the tables of those entities as well as the ones it names, since a
- * replica is compared only on the tables the target replicates), or a capability.
+ * replica is held to the server's rows only on the tables the target replicates, and to nothing on
+ * the others), or a capability.
  */
 function lacks(s: Scenario): string | null {
   const entities = s.needs.filter((e) => !target.writes.has(e))

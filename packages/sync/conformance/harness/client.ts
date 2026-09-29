@@ -350,7 +350,10 @@ export class Client {
   /**
    * Checks or unchecks item: the state it wants, at the client's time (state_set, scenario 3). The
    * first check the replica makes of an item creates its row; later ones update it, carrying the
-   * item_id the server keys the state on.
+   * item_id the server keys the state on and the state itself: a state_set write carries the state
+   * it wants, not a delta (PRD 03 §2.5), and PowerSync's queued write leaves out a column the
+   * update did not change, so a check of an item the replica already shows checked would otherwise
+   * be sent without its state.
    */
   async check(item: string, checked: boolean): Promise<string> {
     const row = await this.db.getOptional<{ id: string }>(
@@ -370,7 +373,7 @@ export class Client {
       'conformance_item_checks',
       row.id,
       { checked, checked_at: at },
-      { carry: { item_id: item } },
+      { carry: { item_id: item, checked } },
     )
     return row.id
   }

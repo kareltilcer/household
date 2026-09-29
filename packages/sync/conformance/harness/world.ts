@@ -9,9 +9,12 @@ import { Client, type ClientOptions } from './client.ts'
 import type { Attempt, HoldReason } from './connector.ts'
 import {
   acknowledgedWrites,
+  answeredAs,
   compareReplica,
   monotonicity,
+  replayedAnswers,
   terminality,
+  type Answered,
   type Violation,
 } from './invariants.ts'
 import { Recorder } from './recorder.ts'
@@ -149,7 +152,9 @@ export class World {
    * should be (invariant 3). Under its own key the batch's stored answer comes back whole. Under a
    * fresh one each mutation is answered from its own stored result (FR-SY5): the answer that ended
    * it, which for one the batch held (deferred, or rejected for its entitlement) is the answer its
-   * replay got.
+   * replay got. One still held, whose replay has not ended it, has no stored result, and the
+   * target may run it now: mid-run, as the fuzzer delivers a batch again, it is compared by its id
+   * alone (replayedAnswers).
    */
   async deliverAgain(
     client: Client,
@@ -182,21 +187,23 @@ export class World {
       return report(
         `batch ${attempt.key} sent again was answered ${String(response.status)}: ${text}`,
       )
-    const first = outcomes(attempt.response)
-    const want = mode === 'fresh-key' ? first.map((r) => this.endOf(r)) : first
-    const again = outcomes(text)
-    if (JSON.stringify(want) !== JSON.stringify(again)) {
+    const { want, got } = replayedAnswers(
+      outcomes(attempt.response),
+      outcomes(text),
+      mode === 'fresh-key' ? (r) => this.endOf(r) : null,
+    )
+    if (want !== got) {
       return report(
-        `batch ${attempt.key} sent again under ${mode === 'fresh-key' ? 'a fresh key' : 'its key'} was answered ${JSON.stringify(again)}, for ${JSON.stringify(want)}`,
+        `batch ${attempt.key} sent again under ${mode === 'fresh-key' ? 'a fresh key' : 'its key'} was answered ${got}, for ${want}`,
       )
     }
     return []
   }
 
-  /** The answer that ended the mutation r answers, or r when none has. */
-  private endOf(r: Answered): Answered {
+  /** The answer that ended the mutation r answers, or null when none has yet. */
+  private endOf(r: Answered): Answered | null {
     const end = this.recorder.answersTo(r.id).find((a) => ends(a.result))
-    return end === undefined ? r : answeredAs(end.result)
+    return end === undefined ? null : answeredAs(end.result)
   }
 
   /**
@@ -242,18 +249,6 @@ export class World {
     }
     rmSync(this.dir, { recursive: true, force: true, maxRetries: 3 })
   }
-}
-
-/** A mutation's outcome, code and version, as a push answered it. */
-interface Answered {
-  readonly id: string
-  readonly outcome: string
-  readonly code: string | null
-  readonly version: number | null
-}
-
-function answeredAs(r: SyncMutationResult): Answered {
-  return { id: r.mutation_id, outcome: r.outcome, code: r.code ?? null, version: r.version ?? null }
 }
 
 /** Each mutation's outcome, code and version in a push's answer, in order. */

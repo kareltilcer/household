@@ -82,7 +82,9 @@ each other would not show.
 **A write records its mutation as PowerSync's row metadata**: each table a client writes tracks
 metadata (`trackMetadata`), and every write sets `_metadata` to its mutation id, its client time, its
 base version and any action or key field, which the queued write carries to the connector, a delete
-included (`_deleted`). The suite's connector (`harness/connector.ts`) follows ADR 0001's rules and
+included (`_deleted`). A `state_set` write carries its state there too: the queued write holds only
+the columns an update changed, and a check of an item the replica already shows checked must still
+say what it wants (PRD 03 §2.5). The suite's connector (`harness/connector.ts`) follows ADR 0001's rules and
 keeps its answers other than `applied`, and its held mutations, in local-only tables.
 
 **Under D-93 the invariants read as follows** (`harness/invariants.ts`), each returning what it finds
@@ -99,8 +101,12 @@ rather than throwing, so that a negative control can assert which one failed:
    idempotency (FR-SY5), under a fresh one, is answered alike (outcome, code and version) and changes
    nothing: after every scenario, every batch its clients had answered, the replays of the mutations
    they held included. Under a fresh key a mutation the batch held (`deferred`, or rejected for its
-   entitlement) is answered as its replay ended it.
-4. Retraction completeness: no replica holds a row its member may not see.
+   entitlement) is answered as its replay ended it; one still held when the fuzzer delivers its
+   batch again mid-run has no stored result, and the target may run it then, so it is compared by
+   its id alone.
+4. Retraction completeness: no replica holds a row its member may not see, in any table of the
+   schema: one the target's streams do not replicate is held to nothing, so a stream the target
+   leaves undeclared is judged too.
 5. Monotonicity: no bucket's applied op moves backwards. A bucket at op 0 has applied no checkpoint
    since it was made, as one a member's access brought back, or one downloaded again after its
    checksum failed, starts again from nothing; the long fuzz run found the first case.

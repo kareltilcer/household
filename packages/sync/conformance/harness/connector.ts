@@ -121,6 +121,13 @@ interface InFlight {
   key: string
   /** When the batch was first sent under key. */
   firstSentAt: number
+  /**
+   * Whether the push answered key 409 idempotency_in_progress: only such a key, whose first
+   * request may have taken effect without its response being kept, is given up past D-92's five
+   * minutes. A key whose answer was lost, or whose request never arrived, is kept, and the push
+   * answers it from its stored response or runs it.
+   */
+  inProgress: boolean
   /** Mutations a 422 or a 413 answered, which the batch no longer carries. */
   readonly settled: Map<string, SyncMutationResult>
 }
@@ -241,11 +248,18 @@ export class ConformanceConnector {
     const ids = all.map((m) => m.mutation_id)
     let flight = this.inflight.get(source)
     if (flight === undefined || !sameIds(flight, ids)) {
-      flight = { ids, key: this.o.newKey(), firstSentAt: this.o.now(), settled: new Map() }
+      flight = {
+        ids,
+        key: this.o.newKey(),
+        firstSentAt: this.o.now(),
+        inProgress: false,
+        settled: new Map(),
+      }
       this.inflight.set(source, flight)
-    } else if (this.o.now() - flight.firstSentAt > inProgressWindowMs) {
-      // D-92: the first request under this key never answered in five minutes; per-mutation
-      // idempotency answers each mutation that took effect from its stored result.
+    } else if (flight.inProgress && this.o.now() - flight.firstSentAt > inProgressWindowMs) {
+      // D-92: the push still answers this key idempotency_in_progress five minutes after its first
+      // request, which took effect without its response being kept; per-mutation idempotency
+      // answers each mutation that took effect from its stored result.
       this.rekey(flight)
     }
     for (;;) {
@@ -368,8 +382,8 @@ export class ConformanceConnector {
           continue
         }
         case 409:
-          if (problemCode(text) !== inProgress)
-            this.o.observer?.malformed?.(sent, `a 409 the push does not declare: ${text}`)
+          if (problemCode(text) === inProgress) flight.inProgress = true
+          else this.o.observer?.malformed?.(sent, `a 409 the push does not declare: ${text}`)
           throw new Error('an earlier send of this batch has not answered; to be sent again')
         default:
           if (response.status < 500)
@@ -383,6 +397,7 @@ export class ConformanceConnector {
   private rekey(flight: InFlight): void {
     flight.key = this.o.newKey()
     flight.firstSentAt = this.o.now()
+    flight.inProgress = false
   }
 
   /** Ends each of all with its answer: records it, holds it, or both. */

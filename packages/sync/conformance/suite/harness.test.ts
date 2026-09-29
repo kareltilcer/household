@@ -90,6 +90,15 @@ describe('the harness, against the stand-ins', () => {
       expect(milkCheck?.['clock_flagged']).toBe(true)
       expect(Number(milkCheck?.['checked_at'])).toBeLessThanOrEqual(Date.now() + 24 * 3_600_000)
 
+      // Jana checks the bread her replica already shows checked: the write still carries the state
+      // it wants (state_set), which the queued row write leaves out, and is applied.
+      await jana.check(f.bread, true)
+      expect(await w.settle()).toBe(true)
+      const janas = w.recorder.answers.filter((a) => a.client === 'jana')
+      expect(janas.map((a) => [a.mutation.fields, a.result.outcome])).toEqual([
+        [{ item_id: f.bread, checked: true }, 'applied'],
+      ])
+
       // Every batch delivered again is answered alike and changes nothing.
       expect(await w.replay(petr, w.answered(petr))).toEqual([])
       expect(await w.replay(eva, w.answered(eva))).toEqual([])

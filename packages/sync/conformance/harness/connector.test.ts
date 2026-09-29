@@ -416,6 +416,25 @@ describe('the connector', () => {
     expect(sent.map((s) => s.key)).toEqual(['key-1', 'key-1', 'key-2', 'key-2'])
   })
 
+  it('keeps a batch whose answer was lost on its key past five minutes: only a 409 gives a key up', async () => {
+    const q = new Queue()
+    q.write('Milk')
+    let now = 0
+    const { fetch, sent } = server(
+      new TypeError('network: the response was lost'),
+      new TypeError('network: refused'),
+    )
+    const { c } = connector(fetch, new Memory(), { now: () => now })
+    await expect(c.upload(q)).rejects.toThrow('lost')
+    now = inProgressWindowMs + 1
+    await expect(c.upload(q)).rejects.toThrow('refused')
+    now = 2 * inProgressWindowMs
+    await c.upload(q)
+    // The push answers the key from the response it stored, where a fresh key would run it again.
+    expect(sent.map((s) => s.key)).toEqual(['key-1', 'key-1', 'key-1'])
+    expect(q.entries).toEqual([])
+  })
+
   it('starts the D-92 window again for the fresh key a 422 moves the rest of a batch to', async () => {
     const q = new Queue()
     q.write('Milk')

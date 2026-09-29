@@ -1,7 +1,13 @@
 import { isUuid } from '@household/api'
 import { UpdateType } from '@powersync/common'
 import { describe, expect, it } from 'vitest'
-import { acknowledgedWrites, terminality } from './invariants.ts'
+import {
+  acknowledgedWrites,
+  compareReplica,
+  replayedAnswers,
+  terminality,
+  type Answered,
+} from './invariants.ts'
 import {
   encodeMetadata,
   ends,
@@ -13,7 +19,7 @@ import {
 import { Network, NetworkFault, push } from './network.ts'
 import { Recorder } from './recorder.ts'
 import { Rng } from './rng.ts'
-import { canonical, canonicalRow, tableSpec } from './schema.ts'
+import { canonical, canonicalRow, tableSpec, type CanonicalRow, type TableName } from './schema.ts'
 
 describe('the seeded generator', () => {
   it('draws the same sequence from the same seed, and another from another', () => {
@@ -313,6 +319,79 @@ describe('no acknowledged write lost', () => {
     expect(await judge({ outcome: 'applied', version: null, code: null })).toEqual([
       expect.stringContaining('without the version it committed at'),
     ])
+  })
+})
+
+describe('a batch delivered again', () => {
+  const answered = (
+    id: string,
+    outcome: string,
+    code: string | null = null,
+    version: number | null = null,
+  ): Answered => ({ id, outcome, code, version })
+  const applied = answered('m-1', 'applied', null, 2)
+  const deferred = answered('m-2', 'deferred', 'dependency_failed')
+  const held = answered('m-3', 'rejected', 'entitlement_read_only')
+  const replayed = answered('m-2', 'applied', null, 3)
+  const first = [applied, deferred, held]
+  const alike = ({ want, got }: { want: string; got: string }): boolean => want === got
+
+  it('is answered whole under its own key', () => {
+    expect(alike(replayedAnswers(first, first, null))).toBe(true)
+    expect(alike(replayedAnswers(first, [applied, replayed, held], null))).toBe(false)
+  })
+
+  it('is answered under a fresh key as each mutation ended, and a mutation still held by its id alone', () => {
+    // m-1 ended applied, m-2 ended applied at 3 when it replayed, and m-3 is still held for its
+    // entitlement: the target may run it now, as a duplicate delivered early would.
+    const endOf = (r: Answered): Answered | null =>
+      r.id === 'm-1' ? r : r.id === 'm-2' ? replayed : null
+    const early = answered('m-3', 'applied', null, 1)
+    expect(alike(replayedAnswers(first, [applied, replayed, early], endOf))).toBe(true)
+    expect(alike(replayedAnswers(first, [applied, deferred, early], endOf))).toBe(false)
+    expect(alike(replayedAnswers(first, [applied, replayed], endOf))).toBe(false)
+    expect(
+      alike(replayedAnswers(first, [applied, replayed, answered('m-4', 'applied')], endOf)),
+    ).toBe(false)
+  })
+})
+
+describe('a replica, judged', () => {
+  const home = { id: 'h', name: 'Novákovi', timezone: 'Europe/Prague' }
+  const eva = { id: 'e', name: 'Eva' }
+  const note = { id: 'n-1', household_id: 'h', visibility: 'private', owner_id: 'j', version: 1 }
+  const replica = (held: Partial<Record<string, Record<string, unknown>[]>>) => ({
+    name: 'eva',
+    household: home,
+    member: eva,
+    rows: (table: string) => Promise.resolve(held[table] ?? []),
+  })
+  // The server holds the note in Eva's household, and she may see nothing of the module's.
+  const server = {
+    visible: () => Promise.resolve(new Map<string, CanonicalRow>()),
+    rows: (table: string) => {
+      const rows = new Map<string, CanonicalRow>()
+      if (table === 'conformance_notes')
+        rows.set(note.id, canonicalRow(tableSpec('conformance_notes'), note))
+      return Promise.resolve(rows)
+    },
+    householdOf: () => Promise.resolve(home.id),
+  }
+  const target = {
+    name: 'stand-in',
+    replicates: new Set<TableName>(['conformance_items']),
+    tombstones: 'dropped' as const,
+  }
+
+  it('holds a table the target does not replicate to nothing', async () => {
+    expect(await compareReplica(replica({}), target, server)).toEqual([])
+    // A stream the target does not declare delivered a private note Eva may not see.
+    expect(
+      (await compareReplica(replica({ conformance_notes: [note] }), target, server)).map((v) => [
+        v.invariant,
+        v.detail,
+      ]),
+    ).toEqual([['retraction', 'holds conformance_notes n-1, which Eva may not see']])
   })
 })
 

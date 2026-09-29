@@ -20,7 +20,10 @@ export interface WriteMetadata {
   /** The row's version when the write was made; absent on a create. */
   readonly base_version?: number
   readonly action?: string
-  /** Fields the mutation carries that the row write does not, such as a state_set's key. */
+  /**
+   * Fields the mutation carries that the row write does not: a state_set's key, and its state,
+   * which a row write leaves out when the replica already held it.
+   */
   readonly fields?: Readonly<Record<string, unknown>>
 }
 
