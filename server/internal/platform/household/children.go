@@ -150,7 +150,8 @@ func (s *Service) childProfiles(w http.ResponseWriter, r *http.Request) {
 }
 
 // pin is a child profile's PIN as a sign-in finds it: the household whose code found it, its hash,
-// when it was set, and the wrong ones counted since the last right one.
+// its updated_at, which moves whenever an owner sets it, unlocks it or removes its profile, and the
+// wrong ones counted since the last right one, or since that moment when it is later.
 type pin struct {
 	household uuid.UUID
 	secret    string
@@ -186,8 +187,10 @@ func findPIN(ctx context.Context, tx pgx.Tx, code string, profile uuid.UUID) (pi
 // sent at once meet the lock one by one, and a right PIN clears the count: LockAfter wrong ones in a
 // row lock the profile until an owner unlocks it or sets a new PIN, and every attempt at a locked
 // profile, the one that locked it included, answers 423 (D-104), a right PIN that another attempt's
-// lock overtook while it was checked among them. So at most LockAfter PINs are checked against a
-// profile between an owner's unlocks, however many are sent at once.
+// lock overtook while it was checked among them. So once LockAfter are counted, no attempt that
+// follows has its PIN checked until an owner acts, however many are sent at once. What the count
+// bounds is the wrong PINs since the last right one, as FR-CH5 has it, not every PIN checked between
+// two unlocks: a right one starts it again.
 func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -240,7 +243,7 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 	// unrecorded until an owner acts, as a count at ten is the lock (ADR 0012).
 	fail := func(err error, wrong bool) {
 		if found && p.failures == LockAfter {
-			locked, lockErr := s.lockChild(context.WithoutCancel(ctx), p.household, profile)
+			locked, lockErr := s.lockChild(context.WithoutCancel(ctx), p.household, profile, p.set)
 			switch {
 			case !wrong:
 				if lockErr != nil {
@@ -288,13 +291,18 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	var result identity.LoginResult
 	err = tenant.AccountTx(ctx, s.Pool, profile, func(tx pgx.Tx) error {
-		// The PIN was checked before this transaction: an owner's new PIN since then, a graduation
-		// or the profile's removal wins, and this one signs nobody in. So does a lock another attempt
-		// counted meanwhile: the count never passes LockAfter, since an attempt at it is refused
-		// uncounted, so a count at LockAfter above this attempt's own is another's tenth, which locked
-		// the profile if it was wrong, and a right PIN given after a lock opens it no more than a wrong
-		// one does. Were it let in, it would clear a lock the owners and the replicas have read, with
-		// no record of it.
+		// The PIN was checked before this transaction: an owner's new PIN since then, their unlock, a
+		// graduation or the profile's removal wins, and this one signs nobody in. A graduation deletes
+		// the PIN; each of the others moves its updated_at, an unlock too, since the count this attempt
+		// read, and a lock it counted, belong to the time before it.
+		//
+		// So does a lock another attempt counted meanwhile. The count never passes LockAfter, since an
+		// attempt at it is refused uncounted, and while updated_at stays where it was, only a right
+		// PIN's sign-in brings it down, which no attempt but the tenth's own reaches once the tenth is
+		// counted: a count at LockAfter above this attempt's own is another's tenth, which locked the
+		// profile if it was wrong, and one at LockAfter that this attempt counted is its own. A right
+		// PIN given after a lock opens it no more than a wrong one does. Were it let in, it would clear
+		// a lock the owners and the replicas have read, with no record of it.
 		now, found, err := findPIN(ctx, tx, code, profile)
 		switch {
 		case err != nil:
@@ -322,11 +330,13 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // lockChild records that profile, a child profile of household, is locked, as the system's change of
-// its membership, and reports whether it was: the attempt counted as the LockAfter-th locked it when
-// it signed nobody in, unless a right PIN given meanwhile cleared the count, or an owner unlocked it,
-// when nothing is locked and nothing is recorded. The membership's row carries the lock to the
-// household's replicas.
-func (s *Service) lockChild(ctx context.Context, household, profile uuid.UUID) (bool, error) {
+// its membership, and reports whether it was: the attempt that counted the LockAfter-th wrong PIN,
+// having read the PIN's updated_at as set, locked it when it signed nobody in, unless an owner has
+// since set a new PIN, unlocked the profile or removed it, when nothing is recorded. Each of those
+// moves updated_at, and the count is then another's: a count at LockAfter under a later updated_at is
+// a later attempt's tenth, whose lock that attempt records, and this one would record it twice. The
+// membership's row carries the lock to the household's replicas.
+func (s *Service) lockChild(ctx context.Context, household, profile uuid.UUID, set time.Time) (bool, error) {
 	scoped := mutation.WithVia(tenant.Assume(ctx, s.Pool, household, uuid.Nil, access.Child), audit.ViaMobile)
 	locked := false
 	_, err := mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
@@ -342,8 +352,8 @@ func (s *Service) lockChild(ctx context.Context, household, profile uuid.UUID) (
 		case err != nil:
 			return mutation.Record{}, err
 		}
-		failures, err := lockPIN(ctx, tx, m)
-		if err != nil || failures < LockAfter {
+		failures, at, err := lockPIN(ctx, tx, m)
+		if err != nil || failures < LockAfter || !at.Equal(set) {
 			return mutation.Record{}, err
 		}
 		m.child.pinLocked, locked = true, true
@@ -356,18 +366,22 @@ func (s *Service) lockChild(ctx context.Context, household, profile uuid.UUID) (
 }
 
 // lockPIN locks the PIN of m, a child profile's membership, in tx, and returns the wrong PINs it has
-// counted since its last right one; -1 when m is no child profile's, which has none.
-func lockPIN(ctx context.Context, tx pgx.Tx, m membership) (int, error) {
+// counted since its last right one, and its updated_at, which a sign-in reads as pin.set; -1 when m
+// is no child profile's, which has none.
+func lockPIN(ctx context.Context, tx pgx.Tx, m membership) (int, time.Time, error) {
 	if m.child == nil {
-		return -1, nil
+		return -1, time.Time{}, nil
 	}
-	var failures int
-	err := tx.QueryRow(ctx, "SELECT failures FROM credentials WHERE user_id = $1 AND type = 'child_pin' FOR UPDATE", m.user).
-		Scan(&failures)
+	var (
+		failures int
+		at       time.Time
+	)
+	err := tx.QueryRow(ctx, "SELECT failures, updated_at FROM credentials WHERE user_id = $1 AND type = 'child_pin' FOR UPDATE", m.user).
+		Scan(&failures, &at)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return -1, nil
+		return -1, time.Time{}, nil
 	}
-	return failures, err
+	return failures, at, err
 }
 
 // childRecord is the record of action on child profile m's membership, as it stands after it.
@@ -568,7 +582,7 @@ func (s *Service) setPIN(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return mutation.Record{}, err
 		}
-		if _, err := lockPIN(ctx, tx, m); err != nil {
+		if _, _, err := lockPIN(ctx, tx, m); err != nil {
 			return mutation.Record{}, err
 		}
 		// updated_at is the moment it is written, under the row's lock, so that a sign-in that
@@ -595,8 +609,12 @@ func (s *Service) setPIN(w http.ResponseWriter, r *http.Request) {
 }
 
 // unlockChild is postChildrenByUserIdUnlock (FR-CH5): an owner lifts a child profile's lock, and its
-// wrong PINs are counted from none again. A profile that is not locked is left as it is, and nothing
-// is recorded.
+// wrong PINs are counted from none again. The PIN's updated_at moves with it, under the row's lock, as
+// a new PIN's does (setPIN), since a count of ten before the unlock and one after it are the same
+// number, and only updated_at tells them apart: a sign-in that read the PIN before the unlock, the one
+// that counted the tenth among them, then signs nobody in after it, and records no lock, where it
+// would take the tenth of ten more counted meanwhile for its own (childLogin, lockChild). A profile
+// that is not locked is left as it is, and nothing is recorded.
 func (s *Service) unlockChild(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -615,11 +633,12 @@ func (s *Service) unlockChild(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return mutation.Record{}, err
 		}
-		failures, err := lockPIN(ctx, tx, m)
+		failures, _, err := lockPIN(ctx, tx, m)
 		if err != nil || failures < LockAfter {
 			return mutation.Record{}, err
 		}
-		if _, err := tx.Exec(ctx, "UPDATE credentials SET failures = 0 WHERE user_id = $1 AND type = 'child_pin'", user); err != nil {
+		if _, err := tx.Exec(ctx, "UPDATE credentials SET failures = 0, updated_at = clock_timestamp() WHERE user_id = $1 AND type = 'child_pin'",
+			user); err != nil {
 			return mutation.Record{}, err
 		}
 		m.child.pinLocked = false
@@ -641,11 +660,11 @@ func (s *Service) unlockChild(w http.ResponseWriter, r *http.Request) {
 // owner's address must be verified, as an invitation's sender's must: the link is trust extended past
 // the household (FR-ID1). The link is the owner's, and lapses with their ownership, as an invitation
 // does (D-103): it is spent with their invitations (withdraw), and its confirmation checks it too.
-// Sending again sends a new link, to the same address or another, and the one before stops working.
-// An address an account has is refused 409; each link counts among the household's twenty emails a
-// day (ratelimit.InvitationHousehold), and so does each address refused, since the refusal says that
-// an account has it: counted, an owner learns that of twenty addresses a day at most, as a sign-up
-// tells nobody of any (D-13).
+// Sending again sends a new link, to the same address or another, and the one before stops working,
+// however many are sent at once. An address an account has is refused 409; each link counts among
+// the household's twenty emails a day (ratelimit.InvitationHousehold), and so does each address
+// refused, since the refusal says that an account has it: counted, an owner learns that of twenty
+// addresses a day at most, as a sign-up tells nobody of any (D-13).
 func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -696,6 +715,13 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 	}
 	token, hash := newToken()
 	err = tenant.AccountTx(ctx, s.Pool, scope.UserID(), func(tx pgx.Tx) error {
+		// The profile's account first, as its graduation's confirmation locks it before its links, so
+		// that two links sent at once are written one after the other, and the later retires the
+		// earlier: each statement reads what had committed when it began, and neither sending would
+		// otherwise see the other's link to retire it.
+		if _, err := tx.Exec(ctx, "SELECT FROM users WHERE id = $1 FOR NO KEY UPDATE", user); err != nil {
+			return err
+		}
 		var taken bool
 		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM users WHERE lower(email) = lower($1))", req.Email).Scan(&taken); err != nil {
 			return err
@@ -828,6 +854,12 @@ func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		case m.child == nil:
 			return mutation.Record{}, problem.NotFound()
+		}
+		// The profile's account before its link, in the order a sending takes them (graduate), which
+		// holds the account while it retires the links before its own: taken the other way round, a
+		// sending and a confirmation of the link it retires would each wait for the other.
+		if _, err := tx.Exec(ctx, "SELECT FROM users WHERE id = $1 FOR NO KEY UPDATE", m.user); err != nil {
+			return mutation.Record{}, err
 		}
 		link, err := findGraduation(ctx, tx, req.Token, s.Now(), true)
 		if err != nil {

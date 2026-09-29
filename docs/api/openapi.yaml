@@ -352,12 +352,13 @@ paths:
         matter.
 
         A code, a profile or a PIN that does not match, and a profile that is not a child's, answer
-        `401` (`invalid_credentials`) alike, in the same time; sixty such failures in fifteen minutes
-        from a client's network answer `429`, as a password's sign-in's do. Ten wrong PINs since the
-        last right one lock the profile until an owner unlocks it or sets a new PIN (FR-CH5): every
-        attempt at a locked profile, the tenth wrong one included, answers `423`
-        (`child_profile_locked`), and at most ten PINs are checked between an owner's unlocks, however
-        many are sent at once.
+        `401` (`invalid_credentials`) alike, in the same time. Sixty sign-ins that fail in fifteen
+        minutes from a client's network, those answered `423` among them, answer `429`, as a
+        password's sign-in's do. Ten wrong PINs since the last right one lock the profile until an
+        owner unlocks it or sets a new PIN (FR-CH5): every attempt at a locked profile, the tenth
+        wrong one included, answers `423` (`child_profile_locked`), and once the tenth is counted no
+        PIN sent after it is checked until an owner acts, however many are sent at once. A right PIN
+        starts the ten again.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -1576,7 +1577,8 @@ paths:
       summary: Unlock a child profile after failed PIN attempts
       description: |
         Owner only (FR-CH5). The wrong PINs counted since the last right one are cleared, and the
-        profile's PIN works again. A profile that is not locked is left as it is. A member who is not
+        profile's PIN works again, counting from the unlock: a sign-in that was checking a PIN
+        meanwhile signs nobody in. A profile that is not locked is left as it is. A member who is not
         a child profile answers `404`.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:

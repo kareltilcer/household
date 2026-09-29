@@ -388,7 +388,19 @@ func TestTenWrongPINsLockAProfileUntilAnOwnerUnlocksIt(t *testing.T) {
 		t.Errorf("%d changes carry the lock", n)
 	}
 
-	// Only an owner unlocks, a child profile alone.
+	// Only an owner unlocks, a child profile alone. The unlock moves the PIN's updated_at, as a new PIN
+	// does, so that a sign-in that read the PIN before it, the one that counted the tenth among them,
+	// signs nobody in after it, nor takes a tenth counted after it for its own.
+	set := func() time.Time {
+		t.Helper()
+		var at time.Time
+		if err := s.admin.QueryRow(t.Context(), "SELECT updated_at FROM credentials WHERE user_id = $1 AND type = 'child_pin'",
+			adam.UserID).Scan(&at); err != nil {
+			t.Fatal(err)
+		}
+		return at
+	}
+	locked := set()
 	petr, petrID := s.joined(jana, h.ID, "Petr", s.a("petr@tilcerovi.cz"), "member", nil)
 	expect(t, petr.post(householdPath(h.ID, "/children/"+adam.UserID.String()+"/unlock"), ""), http.StatusForbidden, problem.CodeForbidden)
 	expect(t, jana.post(householdPath(h.ID, "/children/"+petrID.String()+"/unlock"), ""), http.StatusNotFound, problem.CodeNotFound)
@@ -396,12 +408,19 @@ func TestTenWrongPINsLockAProfileUntilAnOwnerUnlocksIt(t *testing.T) {
 	if childOf(t, jana.members(h.ID)["Adam"]).PinLocked {
 		t.Fatal("the member list shows Adam locked")
 	}
+	unlocked := set()
+	if !unlocked.After(locked) {
+		t.Errorf("the unlock left the PIN's updated_at at %v", unlocked)
+	}
 	expect(t, phone.childLogin(h.JoinCode, adam.UserID, "1234"), http.StatusOK, "")
-	// Unlocking a profile that is not locked records nothing.
+	// Unlocking a profile that is not locked records nothing, and leaves the PIN as it is.
 	events := s.count("SELECT count(*) FROM audit_events WHERE household_id = $1 AND action = 'child.unlock'", h.ID)
 	expect(t, jana.post(householdPath(h.ID, "/children/"+adam.UserID.String()+"/unlock"), ""), http.StatusNoContent, "")
 	if n := s.count("SELECT count(*) FROM audit_events WHERE household_id = $1 AND action = 'child.unlock'", h.ID); n != events || n != 1 {
 		t.Errorf("%d unlock events, %d before", n, events)
+	}
+	if !set().Equal(unlocked) {
+		t.Error("an unlock of a profile that is not locked moved its PIN's updated_at")
 	}
 }
 
@@ -663,6 +682,32 @@ func TestTakenAddressesCountAmongAHouseholdsEmails(t *testing.T) {
 	}
 	expect(t, jana.post(path, jsonBody(t, map[string]string{"email": s.a("jana@tilcerovi.cz")})), http.StatusTooManyRequests, problem.CodeRateLimited)
 	expect(t, jana.post(path, jsonBody(t, map[string]string{"email": s.a("adam@tilcerovi.cz")})), http.StatusTooManyRequests, problem.CodeRateLimited)
+}
+
+// Graduation links sent at once for one profile leave one that works (D-104): each is written after
+// the one before it, and retires it, as a link sent again one at a time does.
+func TestGraduationLinksSentAtOnceLeaveOneWorking(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	adam := jana.child(h.ID, "Adam", "1234", nil)
+	path := householdPath(h.ID, "/children/"+adam.UserID.String()+"/graduate")
+	var wg sync.WaitGroup
+	for i := range 8 {
+		// Jana's browser, once for each request, since a browser keeps the cookies each answer sets.
+		b := &browser{s: s, cookies: maps.Clone(jana.cookies), peer: jana.peer}
+		body := jsonBody(t, map[string]string{"email": s.a(fmt.Sprintf("adam%d@tilcerovi.cz", i))})
+		wg.Go(func() {
+			if rec := b.post(path, body); rec.Code != http.StatusAccepted {
+				t.Errorf("%d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+	wg.Wait()
+	if n := s.count("SELECT count(*) FROM email_tokens WHERE user_id = $1 AND purpose = 'graduate' AND used_at IS NULL",
+		adam.UserID); n != 1 {
+		t.Fatalf("%d links work", n)
+	}
 }
 
 // A child profile is managed by its household's owners (D-17, D-104): it cannot make a household of its

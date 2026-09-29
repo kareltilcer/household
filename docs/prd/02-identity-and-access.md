@@ -358,12 +358,12 @@ does, since it says that an account has the address (D-13). **D-104.**
 **FR-CH5 — PIN reset and lockout.** An owner resets the PIN from their own authenticated
 session. Ten wrong PINs lock the profile until an owner unlocks it.
 
-The ten are counted since the last right PIN, which clears them, and each is counted before it is
-checked, so that PINs sent at once meet the lock one by one: at most ten are checked between an
-owner's unlocks. Every attempt at a locked profile, the tenth wrong one included, is told it is
-locked, and so is a right PIN that a lock overtook while it was checked. A new PIN also unlocks the
-profile, and signs it out of every device, since whoever knew the old PIN may hold one of them.
-**D-104.**
+The ten are counted since the last right PIN, which clears them, or since an owner's unlock, and
+each is counted before it is checked, so that PINs sent at once meet the lock one by one: once the
+tenth is counted, no PIN sent after it is checked until an owner acts. Every attempt at a locked
+profile, the tenth wrong one included, is told it is locked, and so is a right PIN that a lock
+overtook while it was checked. A new PIN also unlocks the profile, and signs it out of every device,
+since whoever knew the old PIN may hold one of them. **D-104.**
 
 ## 7. The four access axes
 

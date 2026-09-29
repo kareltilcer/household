@@ -13,9 +13,11 @@
 -- down rather than locking it.
 --
 -- A child_pin's updated_at, which a sign-in holds the PIN it checked to as a password's (01008),
--- also moves when its profile is removed from its household, with no new secret, so that a sign-in
--- checking the PIN meanwhile signs nobody in (ADR 0012): for a PIN, it is when the PIN last stopped
--- signing in what it signed in before, a new PIN's setting among them.
+-- also moves when an owner unlocks its profile or removes it from its household, with no new secret,
+-- so that a sign-in checking the PIN meanwhile signs nobody in, nor takes a count of ten made after
+-- the unlock for the one it made before it (ADR 0012): for a PIN, it is when an owner last set it,
+-- unlocked it or removed its profile, and the count of wrong ones is the count since then or since
+-- the last right one.
 ALTER TABLE credentials
   ADD COLUMN failures integer NOT NULL DEFAULT 0 CHECK (failures >= 0),
   ADD CHECK (type = 'child_pin' OR failures = 0);

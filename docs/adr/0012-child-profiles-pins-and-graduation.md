@@ -45,15 +45,19 @@ under the credential's row lock, and refuses one at ten unchecked; a right PIN c
 The attempt that counts the tenth, unless it signs the child in, records the lock as the system's
 change of the membership (`admin.child.lock`), whose row carries `pin_locked` to every member's
 replica: a wrong PIN, and a check or a sign-in cut short, a client gone among them, alike, since each
-leaves the count at ten, with a context that outlives the request's. It records nothing if a right
-PIN or an owner cleared the count meanwhile. A right PIN whose sign-in finds another attempt's tenth
-counted since its own is refused `423`, so that no lock the replicas have read is cleared unrecorded. An owner's unlock and new PIN clear it
-the same way, and a new PIN, written with `updated_at = clock_timestamp()` under the row's lock, also
-ends the profile's device sign-ins; a sign-in that checked the old PIN finds `updated_at` moved and
-signs nobody in, as a password's does (`unchanged`, ADR 0009). A profile's removal moves `updated_at`
-the same way before it signs the profile out: a sign-in reads the membership without waiting for the
-removal that deletes it, and holds the PIN alone, so one that held it first is signed out with the
-rest, and one that reaches it after waits for the removal and signs nobody in.
+leaves the count at ten, with a context that outlives the request's. A right PIN whose sign-in finds
+another attempt's tenth counted since its own is refused `423`, so that no lock the replicas have
+read is cleared unrecorded. An owner's unlock and new PIN clear the count, each writing
+`updated_at = clock_timestamp()` under the row's lock, and a new PIN also ends the profile's device
+sign-ins; a sign-in that checked the PIN before either finds `updated_at` moved and signs nobody in,
+as a password's does (`unchanged`, ADR 0009). A count of ten is the same number before an unlock and
+after it, and `updated_at` is what tells them apart: the attempt that counted the tenth records its
+lock only while `updated_at` is still the one it read, so an unlock between its count and its record
+leaves nothing recorded, and neither its record nor its right PIN takes a tenth counted after the
+unlock, which its own attempt records, for its own. A profile's removal moves `updated_at` the same
+way before it signs the profile out: a sign-in reads the membership without waiting for the removal
+that deletes it, and holds the PIN alone, so one that held it first is signed out with the rest, and
+one that reaches it after waits for the removal and signs nobody in.
 
 **A household is read by its code outside any context**: `households`' read policy admits the row
 whose `join_code` the transaction presents in `app.join_code`, as `invitations`' admits one by
@@ -74,9 +78,10 @@ their own `via`: mobile for a lock, web for a graduation's link.
 **A graduation's link is an email token**, purpose `graduate`, whose row keeps the address until the
 link sets the password with it: the account has no address before then, so no reset, resend or
 provider sign-in treats a half-graduated profile as an adult's. Sending another spends the ones
-before. It counts among the household's twenty emails a day (`ratelimit.InvitationHousehold`), and
-so does an address refused as taken, whose refusal would otherwise let an owner test addresses for an
-account (D-13). The row names the owner who sent it, `email_tokens.sent_by`: a link lapses with its
+before, holding the profile's account, which the confirmation locks before the link, so that two
+sent at once leave one that works. It counts among the household's twenty emails a day
+(`ratelimit.InvitationHousehold`), and so does an address refused as taken, whose refusal would
+otherwise let an owner test addresses for an account (D-13). The row names the owner who sent it, `email_tokens.sent_by`: a link lapses with its
 sender's ownership, as an invitation does (D-103). When the ownership ends, `withdraw` spends the
 links they sent for the household's profiles with their invitations, so that none works again once
 they are an owner again; and the confirmation checks under the household's lock that they are still
@@ -98,6 +103,7 @@ root's owner-readable case (items 43 and 46) read.
 |---|---|
 | The lockout on `ratelimit.Throttles` | A throttle counts in windows and backs off; FR-CH5's lock lasts until an owner acts, and owners read it in the member list and on their replicas |
 | The lock as a column of its own, `locked_at`, beside the count | Two states to keep in step for one fact; a count at ten is the lock, whether or not its record committed |
+| A count at ten taken as the lock of whichever attempt reads it | An owner's unlock between an attempt's count and its sign-in would let that attempt clear, or record a second time, a lock another attempt counted after the unlock; `updated_at`, which the unlock moves, tells the two counts apart |
 | A policy on `memberships` naming the household by its code | `memberships`' policy would read `households`, whose policy reads `memberships`: PostgreSQL refuses the recursion |
 | The child's sign-in in `identity`, calling into the household surface | `identity` is built first, and the lock and the profile list are the household's; a hook each way for one route |
 | The graduation's address on the account from the start, unverified | A password reset, a resend or a provider sign-in would then act on a profile that is still a child |
