@@ -2,12 +2,11 @@
 // the suite's global setup. The ports move with the variables docker-compose.yml reads.
 
 import { resolve } from 'node:path'
+import { pgPort } from '../harness/env.ts'
 
 export const stackDir = import.meta.dirname
 export const composeFile = resolve(stackDir, 'docker-compose.yml')
 export const serverDir = resolve(stackDir, '../../../../server')
-
-const pgPort = process.env['HOUSEHOLD_CONFORMANCE_PG_PORT'] ?? '5442'
 
 function url(role: string, password: string): string {
   return `postgres://${role}:${password}@127.0.0.1:${pgPort}/household?sslmode=disable`

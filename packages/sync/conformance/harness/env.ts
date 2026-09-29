@@ -7,17 +7,21 @@ function env(name: string, fallback: string): string {
   return value === undefined || value === '' ? fallback : value
 }
 
+/** The host ports docker-compose.yml publishes the stack's PostgreSQL and PowerSync on. */
+export const pgPort = env('HOUSEHOLD_CONFORMANCE_PG_PORT', '5442')
+const powerSyncPort = env('HOUSEHOLD_CONFORMANCE_POWERSYNC_PORT', '8090')
+
 /** The stack's PostgreSQL, as its administrator: the suite seeds and reads the truth as it. */
 export const adminDatabaseUrl = env(
   'CONFORMANCE_ADMIN_DATABASE_URL',
-  'postgres://postgres:postgres@127.0.0.1:5442/household',
+  `postgres://postgres:postgres@127.0.0.1:${pgPort}/household`,
 )
 
 /** The stand-in API (server/cmd/conformance-standin). */
 export const standInUrl = env('CONFORMANCE_STANDIN_URL', 'http://127.0.0.1:8091')
 
 /** PowerSync, as a client reaches it: the address its credentials name must match it. */
-export const powerSyncUrl = env('CONFORMANCE_POWERSYNC_URL', 'http://127.0.0.1:8090')
+export const powerSyncUrl = env('CONFORMANCE_POWERSYNC_URL', `http://127.0.0.1:${powerSyncPort}`)
 
 /** Whether the suite may start the stand-in itself when none answers at standInUrl. */
 export const startStandIn = env('CONFORMANCE_START_STANDIN', 'true') === 'true'
