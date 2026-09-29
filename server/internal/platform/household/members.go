@@ -383,7 +383,8 @@ func checkGrants(field string, grants map[string]access.Level, role access.Role,
 // updateMember changes a member's role or grants (FR-HA5), an owner's to change, under If-Match. It
 // takes effect on the member's next request. A child stays a child, since a child profile is made
 // and graduated rather than given a role (FR-CH1, FR-CH4); an owner made a member keeps the levels
-// they held, until the same or a later change lowers them. The last owner and the payer stay owners.
+// they held, until the same or a later change lowers them, and the invitations they sent that are
+// still waiting are withdrawn (D-103). The last owner and the payer stay owners.
 // What the member can no longer see is retracted from their replica (Hooks.Lost), and they are told
 // (Hooks.Changed, D-78).
 func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
@@ -473,12 +474,20 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		if err := s.Hooks.lost(ctx, tx, loss); err != nil {
 			return mutation.Record{}, err
 		}
+		changes := []sync.Change{m.change(household, payer, modules)}
+		if old.role == access.Owner && role != access.Owner {
+			withdrawn, err := withdraw(ctx, tx, household, user, s.Now())
+			if err != nil {
+				return mutation.Record{}, err
+			}
+			changes = append(changes, withdrawn...)
+		}
 		return mutation.Record{
 			Event: audit.Event{
 				Module: Name, Action: actionMemberUpdate, EntityType: entityMembership, EntityID: m.id,
 				SummaryKey: Name + "." + actionMemberUpdate, SummaryArgs: map[string]any{"member": m.name}, Changes: diffs,
 			},
-			Changes: []sync.Change{m.change(household, payer, modules)},
+			Changes: changes,
 		}, nil
 	})
 	if err != nil {
@@ -539,8 +548,9 @@ func (s *Service) changed(ctx context.Context, change Change) {
 
 // removeMember removes a member (FR-HH5), an owner's to do, and never the caller, who leaves instead.
 // It is immediate: their next request finds no membership, their replica loses the household
-// (Hooks.Lost), and they are told (Hooks.Changed). The payer is refused until billing moves, and the
-// content they made stays with the household.
+// (Hooks.Lost), no invitation they sent brings them back (withdraw), and they are told
+// (Hooks.Changed). The payer is refused until billing moves, and the content they made stays with
+// the household.
 func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -586,9 +596,14 @@ func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 }
 
 // end deletes m, a member leaving or removed from household for cause, their grants and their
-// Idempotency-Keys in it with it, and returns the mutation's record, recorded as action.
+// Idempotency-Keys in it with it, withdraws the invitations they sent that are still waiting, and
+// returns the mutation's record, recorded as action.
 func (s *Service) end(ctx context.Context, tx pgx.Tx, household uuid.UUID, m membership, cause Cause, action string) (mutation.Record, error) {
 	if _, err := tx.Exec(ctx, "DELETE FROM memberships WHERE id = $1", m.id); err != nil {
+		return mutation.Record{}, err
+	}
+	withdrawn, err := withdraw(ctx, tx, household, m.user, s.Now())
+	if err != nil {
 		return mutation.Record{}, err
 	}
 	if err := s.Hooks.lost(ctx, tx, Loss{Household: household, Cause: cause, Members: map[uuid.UUID][]string{m.user: nil}}); err != nil {
@@ -600,7 +615,7 @@ func (s *Service) end(ctx context.Context, tx pgx.Tx, household uuid.UUID, m mem
 			SummaryKey: Name + "." + action, SummaryArgs: map[string]any{"member": m.name},
 			Changes: []audit.Change{{Field: "role", Old: m.role, New: nil}},
 		},
-		Changes: []sync.Change{m.gone()},
+		Changes: append([]sync.Change{m.gone()}, withdrawn...),
 	}, nil
 }
 
@@ -614,7 +629,8 @@ func leaveBlocked(reasons []problem.Code) *problem.Problem {
 
 // leave takes the caller out of the household (FR-HH4), which any member may do at any time, unless
 // they are its last owner, or its payer, which are refused together. What they made stays with the
-// household; their private root is item 20's (Hooks.Lost).
+// household; their private root is item 20's (Hooks.Lost); the invitations they sent that are still
+// waiting are withdrawn (withdraw).
 func (s *Service) leave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)

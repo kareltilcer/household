@@ -27,7 +27,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	_ "time/tzdata" // An IANA name is checked against the zones the binary carries, wherever it runs.
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
@@ -370,11 +369,5 @@ func (t *turns) take(ctx context.Context, key string) (func(), error) {
 	}
 }
 
-// timezone reports whether name is an IANA timezone the binary knows.
-func timezone(name string) bool {
-	if name == "" || name == "Local" {
-		return false
-	}
-	_, err := time.LoadLocation(name)
-	return err == nil
-}
+// timezone reports whether name is an IANA timezone the binary knows (i18n.Timezone).
+func timezone(name string) bool { return i18n.Timezone(name) }

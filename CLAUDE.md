@@ -96,10 +96,14 @@ pnpm run down         # stop the services; volumes are kept
 - **The tenant is in the path**: `/api/v1/households/{household_id}/…`. Every tenant table
   has `household_id`, row-level security enabled **and** forced: its migration calls
   `enable_tenant_isolation`, and the PR adds its rows to the isolation fixture
-  (`server/internal/arch/testdata/isolation/fixture.sql`). A foreign key to another tenant
-  table carries the household, `(household_id, x_id)`, since PostgreSQL checks it past
-  row-level security. A handler reads through `tenant.InTx`, which is read-only, writes only
-  through `mutation.Apply`, and asks `grant.Require` for any level above `view`.
+  (`server/internal/arch/testdata/isolation/fixture.sql`). Only the three tables read before a
+  household's context exists, `households`, `memberships` and `invitations`, have policies of
+  their own instead, which architecture test 2 names
+  ([ADR 0005](docs/adr/0005-tenancy-registry-and-row-level-security.md),
+  [ADR 0011](docs/adr/0011-households-as-the-platforms-own-module.md)). A foreign key to
+  another tenant table carries the household, `(household_id, x_id)`, since PostgreSQL checks
+  it past row-level security. A handler reads through `tenant.InTx`, which is read-only, writes
+  only through `mutation.Apply`, and asks `grant.Require` for any level above `view`.
 - **`404`, not `403`,** for anything the caller may not see: a module they hold `none` on, a
   disabled module, a private item, a conversation they are not in. `403` means "you can see
   it and may not do this to it".

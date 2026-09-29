@@ -585,7 +585,9 @@ func TestALinkInvitation(t *testing.T) {
 		t.Errorf("a link with an address: %v", errs)
 	}
 
-	body := jsonBody(t, map[string]any{"id": idgen.New(), "kind": "link", "role": "member", "max_uses": 2})
+	// It carries a starting dashboard, which item 36 applies, kept as it was sent.
+	layout := map[string]any{"entries": []map[string]any{{"widget_key": "shopping.list", "visible": true, "size": "medium"}}}
+	body := jsonBody(t, map[string]any{"id": idgen.New(), "kind": "link", "role": "member", "max_uses": 2, "dashboard_layout": layout})
 	key := http.Header{"Idempotency-Key": {"link-1"}}
 	rec := jana.send(request{method: http.MethodPost, path: householdPath(h.ID, "/invitations"), body: body, header: key})
 	expect(t, rec, http.StatusCreated, "")
@@ -593,6 +595,14 @@ func TestALinkInvitation(t *testing.T) {
 	decode(t, rec, &i)
 	if i.URL == nil || i.MaxUses != 2 || !i.ExpiresAt.Equal(s.clock.now().Add(household.LinkFor)) {
 		t.Fatalf("the link: %+v", i)
+	}
+	if n := s.count(`SELECT count(*) FROM invitations WHERE id = $1
+		AND dashboard_layout = '{"entries": [{"widget_key": "shopping.list", "visible": true, "size": "medium"}]}'::jsonb`, i.ID); n != 1 {
+		t.Error("the starting dashboard is not kept")
+	}
+	none := jana.invite(h.ID, map[string]any{"kind": "link", "role": "member", "dashboard_layout": nil})
+	if n := s.count(`SELECT count(*) FROM invitations WHERE id = $1 AND dashboard_layout IS NULL`, none.ID); n != 1 {
+		t.Error("a null starting dashboard is kept as one")
 	}
 	link := invitationLink.FindStringSubmatch(*i.URL)[1]
 	again := jana.send(request{method: http.MethodPost, path: householdPath(h.ID, "/invitations"), body: body, header: key})
@@ -724,6 +734,12 @@ func TestAnInvitationToSomeoneWhoJoinedIsNotSentAgain(t *testing.T) {
 	if n := listed(); n != 1 {
 		t.Fatalf("%d invitations listed before Petr joined", n)
 	}
+	// Nor is the declined one sent again while the other waits: an address has one invitation waiting,
+	// as inviting it anew is refused.
+	expect(t, jana.post(householdPath(h.ID, "/invitations/"+declined.ID.String()+"/resend"), ""), http.StatusNotFound, problem.CodeNotFound)
+	if n := listed(); n != 1 {
+		t.Fatalf("%d invitations listed after the declined one was sent again", n)
+	}
 	link := jana.invite(h.ID, map[string]any{"kind": "link", "role": "member"})
 	expect(t, petrs.post("/me/invitations/"+invitationLink.FindStringSubmatch(*link.URL)[1]+"/accept", ""), http.StatusOK, "")
 	if n := listed(); n != 0 {
@@ -739,15 +755,24 @@ func TestAnInvitationToSomeoneWhoJoinedIsNotSentAgain(t *testing.T) {
 	}
 }
 
-// A household sends twenty invitations a day, resends among them (PRD 02 §9).
+// A household sends twenty invitations a day, resends among them (PRD 02 §9); one refused sends
+// nothing, and is not counted.
 func TestAHouseholdSendsTwentyInvitationsADay(t *testing.T) {
 	s, _ := newHouseholdSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
 	h := jana.create("Tilcerovi")
 	i := jana.invite(h.ID, map[string]any{"kind": "email", "email": s.a("petr@tilcerovi.cz"), "role": "member"})
+	var l invitationDoc
 	for range 18 {
-		jana.invite(h.ID, map[string]any{"kind": "link", "role": "member"})
+		l = jana.invite(h.ID, map[string]any{"kind": "link", "role": "member"})
 	}
+	errs := fieldErrorsOf(t, jana.post(householdPath(h.ID, "/invitations"), jsonBody(t, map[string]any{
+		"id": idgen.New(), "kind": "email", "email": s.a("petr@tilcerovi.cz"), "role": "member",
+	})))
+	if len(errs) != 1 || errs[0].Field != "/email" {
+		t.Errorf("a second invitation to the address: %v", errs)
+	}
+	expect(t, jana.post(householdPath(h.ID, "/invitations/"+l.ID.String()+"/resend"), ""), http.StatusNotFound, problem.CodeNotFound)
 	expect(t, jana.post(householdPath(h.ID, "/invitations/"+i.ID.String()+"/resend"), ""), http.StatusAccepted, "")
 	rec := jana.post(householdPath(h.ID, "/invitations"), jsonBody(t, map[string]any{"id": idgen.New(), "kind": "link", "role": "member"}))
 	expect(t, rec, http.StatusTooManyRequests, problem.CodeRateLimited)
@@ -952,6 +977,65 @@ func TestLeavingAHousehold(t *testing.T) {
 	}
 }
 
+// An invitation is an owner's grant of access, and lapses with their ownership (D-103): what an owner
+// sent that is still waiting is withdrawn when they are removed, leave or are made a member, so that
+// none of it brings them, or anyone, back; another owner may send an email invitation again, as
+// theirs, and an owner who stays keeps theirs.
+func TestAnOwnersInvitationsLapseWithTheirOwnership(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	petr, petrID := s.joined(jana, h.ID, "Petr", s.a("petr@tilcerovi.cz"), "owner", nil)
+	milos, milosID := s.joined(jana, h.ID, "Miloš", s.a("milos@tilcerovi.cz"), "owner", nil)
+	klara, _ := s.joined(jana, h.ID, "Klára", s.a("klara@tilcerovi.cz"), "owner", nil)
+	link := func(b *browser) (invitationDoc, string) {
+		i := b.invite(h.ID, map[string]any{"kind": "link", "role": "owner"})
+		return i, invitationLink.FindStringSubmatch(*i.URL)[1]
+	}
+	petrs, petrsLink := link(petr)
+	miloss, milossLink := link(milos)
+	klaras, klarasLink := link(klara)
+	_, janasLink := link(jana)
+	adam := s.a("adam@example.com")
+	email := petr.invite(h.ID, map[string]any{"kind": "email", "email": adam, "role": "member"})
+
+	// Removed, Petr does not come back through the link he kept, and his email is withdrawn with it.
+	expect(t, jana.delete(householdPath(h.ID, "/members/"+petrID.String())), http.StatusNoContent, "")
+	expect(t, petr.post("/me/invitations/"+petrsLink+"/accept", ""), http.StatusGone, problem.CodeTokenAlreadyUsed)
+	expect(t, s.browser().get("/me/invitations/"+s.invitationToken(adam)), http.StatusGone, problem.CodeTokenAlreadyUsed)
+	// Made a member, Miloš's link brings nobody in; Klára's goes when she leaves.
+	expect(t, jana.patch(householdPath(h.ID, "/members/"+milosID.String()), `{"role":"member"}`, nil), http.StatusOK, "")
+	stranger := s.person("Eva", s.a("eva@example.com"))
+	expect(t, stranger.post("/me/invitations/"+milossLink+"/accept", ""), http.StatusGone, problem.CodeTokenAlreadyUsed)
+	expect(t, klara.post(householdPath(h.ID, "/leave"), ""), http.StatusNoContent, "")
+	expect(t, klara.post("/me/invitations/"+klarasLink+"/accept", ""), http.StatusGone, problem.CodeTokenAlreadyUsed)
+
+	rec := jana.get(householdPath(h.ID, "/invitations"))
+	expect(t, rec, http.StatusOK, "")
+	var list struct {
+		Items []invitationDoc `json:"items"`
+	}
+	decode(t, rec, &list)
+	status := map[uuid.UUID]string{}
+	for _, i := range list.Items {
+		status[i.ID] = i.Status
+	}
+	for _, i := range []invitationDoc{petrs, miloss, klaras, email} {
+		if status[i.ID] != "revoked" {
+			t.Errorf("invitation %s is %s", i.ID, status[i.ID])
+		}
+		if n := s.count(`SELECT count(*) FROM sync_changes WHERE household_id = $1 AND entity_type = 'admin.invitation'
+			AND entity_id = $2 AND payload ->> 'status' = 'revoked'`, h.ID, i.ID); n != 1 {
+			t.Errorf("%d withdrawals of %s in the feed", n, i.ID)
+		}
+	}
+
+	// Jana sends the email again, now hers; her own link still works.
+	expect(t, jana.post(householdPath(h.ID, "/invitations/"+email.ID.String()+"/resend"), ""), http.StatusAccepted, "")
+	expect(t, s.browser().get("/me/invitations/"+s.invitationToken(adam)), http.StatusOK, "")
+	expect(t, stranger.post("/me/invitations/"+janasLink+"/accept", ""), http.StatusOK, "")
+}
+
 // An owner turns a module off for everyone and on again (FR-HA8): off, it is none for every member,
 // and retracted from whoever could see it; its data stays. Household settings stays on.
 func TestTurningAModuleOffAndOn(t *testing.T) {
@@ -992,6 +1076,26 @@ func TestTurningAModuleOffAndOn(t *testing.T) {
 	}
 	if n := s.count(`SELECT count(*) FROM audit_events WHERE household_id = $1 AND action LIKE 'module.%'`, h.ID); n != 2 {
 		t.Errorf("%d module events", n)
+	}
+
+	// A module the household has no row for is off already, which turning it off leaves as it is;
+	// turned on, it gets its row.
+	arrange(t, s, func(tx pgx.Tx) {
+		exec(t, tx, "DELETE FROM module_enablement WHERE household_id = $1 AND module = 'pets'", h.ID)
+	})
+	pets := householdPath(h.ID, "/modules/pets")
+	rec = jana.patch(pets, `{"enabled":false}`, nil)
+	expect(t, rec, http.StatusOK, "")
+	decode(t, rec, &state)
+	if state.Enabled || state.MyLevel != "none" {
+		t.Errorf("pets, off already: %+v", state)
+	}
+	expect(t, jana.patch(pets, `{"enabled":true}`, nil), http.StatusOK, "")
+	if n := s.count(`SELECT count(*) FROM audit_events WHERE household_id = $1 AND summary_args ->> 'module' = 'pets'`, h.ID); n != 1 {
+		t.Errorf("%d events about pets: want its enabling alone", n)
+	}
+	if n := s.count(`SELECT count(*) FROM module_enablement WHERE household_id = $1 AND module = 'pets' AND enabled`, h.ID); n != 1 {
+		t.Error("pets has no row once enabled")
 	}
 }
 

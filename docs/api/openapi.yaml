@@ -1196,8 +1196,9 @@ paths:
         Any member, at any time. Content the member created stays with the household; their private
         root is deleted after a 30-day window in which they may export it. The last owner and the
         billing payer cannot leave, and one who is both is told both at once (FR-HH4). The
-        `Idempotency-Key` is kept on the account rather than in the household, whose membership, and
-        the member's keys in it, leaving ends.
+        invitations they sent that are still waiting are withdrawn (D-103). The `Idempotency-Key` is
+        kept on the account rather than in the household, whose membership, and the member's keys in
+        it, leaving ends.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Left }
@@ -1243,7 +1244,8 @@ paths:
         level above either, a level below `manage` for an owner, and a module Household does not
         have are refused `422` naming `/grants/<module>`. A `child` stays a child and nobody else
         becomes one (`422` naming `/role`): a child profile is created and graduated instead. An
-        owner made a member keeps the levels they held until they are lowered.
+        owner made a member keeps the levels they held until they are lowered, and the invitations
+        they sent that are still waiting are withdrawn (D-103).
       parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1263,7 +1265,8 @@ paths:
       summary: Remove a member
       description: |
         Owner only, and never the caller, who leaves instead (`403`). Immediate: their sessions stop
-        resolving for this household, their replica receives retractions, and they are told.
+        resolving for this household, their replica receives retractions, the invitations they sent
+        that are still waiting are withdrawn (D-103), and they are told.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Removed }
@@ -1364,8 +1367,8 @@ paths:
         `email` invitations expire in 14 days and are accepted by the one account with that address;
         one to an address with an invitation waiting, or a member's, is refused `422` naming `/email`.
         `link` invitations expire in 72 hours and are accepted by up to `max_uses` accounts. A household
-        sends 20 invitations a day, resends included (`429`). The link is in the response once, which
-        its `Idempotency-Key` does not keep.
+        sends 20 invitations a day, resends included (`429`); one refused is not counted. The link is
+        in the response once, which its `Idempotency-Key` does not keep.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1405,8 +1408,9 @@ paths:
         Owner only, once the owner's address is verified (`403 account_unverified`). Sends a new link,
         which replaces the old one, valid for another 14 days, from this owner. A declined, revoked or
         expired invitation is open again. A `link` invitation, which has no address, an accepted one,
-        and one to an address that is a member's by now are not found. Counted against the
-        household's 20 invitations a day.
+        one to an address that is a member's by now, and one whose address has another invitation
+        waiting are not found. Counted against the household's 20 invitations a day, unless it is
+        refused.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '202': { description: Sent }

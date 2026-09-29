@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
+	_ "time/tzdata" // An IANA name is checked against the zones the binary carries, wherever it runs.
 
 	"golang.org/x/text/language"
 
@@ -90,6 +92,16 @@ func Canonical(tag string) (string, bool) {
 		return "", false
 	}
 	return t.String(), true
+}
+
+// Timezone reports whether name is an IANA timezone the binary knows, a person's or a household's,
+// in which their calendar days are counted: not Local, which is the server's own.
+func Timezone(name string) bool {
+	if name == "" || name == "Local" {
+		return false
+	}
+	_, err := time.LoadLocation(name)
+	return err == nil
 }
 
 // ErrUnknownKey is a key the catalogs do not have.

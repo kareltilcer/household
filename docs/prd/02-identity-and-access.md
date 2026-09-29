@@ -163,10 +163,13 @@ earlier for a reason the member cannot see.
 The invitation carries the **proposed role and the proposed module grants**, so what the
 invitee accepts is what they get, and the owner does not have to configure access afterwards.
 An owner may set up the grants before the person exists. The role is `owner` or `member`: a child
-profile is created by an owner (FR-CH1), never invited (**D-17**, **D-103**). An email invitation is
-sent again with a new link, which replaces the old one and runs another 14 days, and one that was
-declined, withdrawn or expired is open again. A household sends 20 invitations a day, resends
-included (§9).
+profile is created by an owner (FR-CH1), never invited (**D-17**, **D-103**). An address has one
+email invitation waiting at a time. An email invitation is sent again with a new link, which
+replaces the old one and runs another 14 days, and one that was declined, withdrawn or expired is
+open again. A household sends 20 invitations a day, resends included (§9); one refused sends
+nothing, and is not counted. An invitation is its inviter's grant, and lapses with their ownership:
+what an owner sent that is still waiting is withdrawn when they are removed, leave or are made a
+member, and another owner may send an email invitation again, as theirs (**D-103**).
 
 **FR-HH3 — Accept an invitation.** The invitee signs in or registers, sees exactly what they
 are being given (household name, inviter, role, the list of modules and levels), and accepts or

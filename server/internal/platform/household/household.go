@@ -26,7 +26,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	_ "time/tzdata" // An IANA name is checked against the zones the binary carries, wherever it runs.
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -186,15 +185,6 @@ const uniqueViolationCode = "23505"
 func uniqueViolation(err error, constraint string) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolationCode && pgErr.ConstraintName == constraint
-}
-
-// timezone reports whether name is an IANA timezone the binary knows.
-func timezone(name string) bool {
-	if name == "" || name == "Local" {
-		return false
-	}
-	_, err := time.LoadLocation(name)
-	return err == nil
 }
 
 // email sends t to address in the language of locale, with args, after the response. A failure is

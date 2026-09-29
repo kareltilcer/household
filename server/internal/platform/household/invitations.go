@@ -274,6 +274,30 @@ func (s *Service) throttle(ctx context.Context, household uuid.UUID) error {
 	return nil
 }
 
+// refund takes back the invitation throttle counted for a request that sent nothing, whose mutation
+// refused it or failed: the twenty a day count what a household sends, and an owner who tried an
+// address with an invitation waiting has sent nothing. A refund that fails is logged; the request's
+// own answer stands.
+func (s *Service) refund(ctx context.Context, household uuid.UUID) {
+	if err := s.Throttles.Refund(context.WithoutCancel(ctx), ratelimit.InvitationHousehold, household.String()); err != nil {
+		s.Log.LogAttrs(ctx, slog.LevelError, "invitation throttle not refunded", slog.Any("error", err))
+	}
+}
+
+// waiting reports whether an email invitation of household other than except, nil for none, waits at
+// now for address, whatever its case: an address has one invitation waiting at a time, so that
+// neither inviting it again nor sending another again leaves it two. The caller holds the household's
+// lock (lockHousehold), so that two requests cannot both find none.
+func waiting(ctx context.Context, tx pgx.Tx, household uuid.UUID, address string, except *uuid.UUID, now time.Time) (bool, error) {
+	var found bool
+	err := tx.QueryRow(ctx, `
+		SELECT EXISTS (SELECT FROM invitations
+		               WHERE household_id = $1 AND kind = 'email' AND lower(email) = lower($2)
+		                 AND status = 'pending' AND expires_at > $3 AND ($4::uuid IS NULL OR id <> $4))`,
+		household, address, now, except).Scan(&found)
+	return found, err
+}
+
 // newToken is a token for an invitation's email or link, and its hash as the row keeps it.
 func newToken() (string, []byte) {
 	token := session.NewToken()
@@ -321,19 +345,18 @@ func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 	)
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		if req.Kind == kindEmail {
-			var waiting bool
-			if err := tx.QueryRow(ctx, `
-				SELECT EXISTS (SELECT FROM invitations
-				               WHERE household_id = $1 AND kind = 'email' AND lower(email) = lower($2)
-				                 AND status = 'pending' AND expires_at > $3)`,
-				household, *req.Email, now).Scan(&waiting); err != nil {
+			if _, err := lockHousehold(ctx, tx, household); err != nil {
+				return mutation.Record{}, err
+			}
+			other, err := waiting(ctx, tx, household, *req.Email, nil, now)
+			if err != nil {
 				return mutation.Record{}, err
 			}
 			member, err := memberAddress(ctx, tx, household, *req.Email)
 			if err != nil {
 				return mutation.Record{}, err
 			}
-			if waiting || member {
+			if other || member {
 				return mutation.Record{}, invalid("/email", problem.FieldInvalid)
 			}
 		}
@@ -386,6 +409,7 @@ func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 		}, nil
 	})
 	if err != nil {
+		s.refund(ctx, household)
 		s.fail(w, r, err)
 		return
 	}
@@ -513,13 +537,39 @@ func setStatus(ctx context.Context, tx pgx.Tx, i invitation, status string) (inv
 	return i, nil
 }
 
+// withdraw withdraws the invitations user sent in household that are still waiting at now, and
+// returns their changes. An invitation is an owner's grant of access, and lapses with their ownership
+// (D-103): what they sent is withdrawn when they are removed, leave or are made a member, so that a
+// link they kept cannot bring them back, nor anything they sent bring in someone the owners who stay
+// may never have seen. Another owner may send an email invitation again, and it is then theirs.
+func withdraw(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, now time.Time) ([]sync.Change, error) {
+	rows, err := tx.Query(ctx, `
+		WITH i AS (
+		  UPDATE invitations SET status = 'revoked'
+		  WHERE household_id = $1 AND invited_by = $2 AND status = 'pending' AND expires_at > $3
+		  RETURNING *
+		)
+		SELECT `+invitationColumns+` FROM i JOIN users u ON u.id = i.invited_by
+		ORDER BY i.created_at, i.id`, household, user, now)
+	if err != nil {
+		return nil, err
+	}
+	withdrawn, err := pgx.CollectRows(rows, scanInvitation)
+	changes := make([]sync.Change, 0, len(withdrawn))
+	for _, i := range withdrawn {
+		changes = append(changes, i.change())
+	}
+	return changes, err
+}
+
 // resendInvitation sends an email invitation again, an owner's to do once their own address is
 // verified, and counted against the household's twenty a day: with a new link, since the old one's
 // token is kept only as its hash, which the old link stops matching, and for another 14 days from
 // the owner who sent it this time. One declined, withdrawn or expired is open again, as inviting the
 // person anew (A-25); one accepted is a membership, and so is one to an address that has joined since,
-// by another invitation, which inviting the address anew would refuse; a link has no address to send
-// to.
+// by another invitation, which inviting the address anew would refuse; one whose address has another
+// invitation waiting is that one's to send, as inviting the address anew would refuse too; a link has
+// no address to send to.
 func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -532,17 +582,22 @@ func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	household := scope.HouseholdID()
 	err = tenant.InTx(ctx, func(tx pgx.Tx) error { return verified(ctx, tx, scope.UserID()) })
 	if err == nil {
-		err = s.throttle(ctx, scope.HouseholdID())
+		err = s.throttle(ctx, household)
 	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	now := s.Now()
 	token, hash := newToken()
 	var letter sendInvitation
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		if _, err := lockHousehold(ctx, tx, household); err != nil {
+			return mutation.Record{}, err
+		}
 		old, err := readInvitation(ctx, tx, id)
 		switch {
 		case err != nil:
@@ -550,11 +605,15 @@ func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 		case old.kind != kindEmail || old.status == statusAccepted:
 			return mutation.Record{}, problem.NotFound()
 		}
-		member, err := memberAddress(ctx, tx, old.household, *old.email)
+		member, err := memberAddress(ctx, tx, household, *old.email)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		other, err := waiting(ctx, tx, household, *old.email, &old.id, now)
 		switch {
 		case err != nil:
 			return mutation.Record{}, err
-		case member:
+		case member || other:
 			return mutation.Record{}, problem.NotFound()
 		}
 		rows, err := tx.Query(ctx, `
@@ -563,7 +622,7 @@ func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 			  RETURNING *
 			)
 			SELECT `+invitationColumns+` FROM i JOIN users u ON u.id = i.invited_by`,
-			id, hash, s.Now().Add(EmailFor), scope.UserID())
+			id, hash, now.Add(EmailFor), scope.UserID())
 		if err != nil {
 			return mutation.Record{}, err
 		}
@@ -583,6 +642,7 @@ func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 		}, nil
 	})
 	if err != nil {
+		s.refund(ctx, household)
 		s.fail(w, r, err)
 		return
 	}

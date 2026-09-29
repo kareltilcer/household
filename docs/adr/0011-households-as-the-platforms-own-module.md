@@ -66,7 +66,9 @@ inside a household's context, that household's rows; outside any, `FOR SELECT` o
 whose token's SHA-256 the transaction presents in `app.invitation_token`, and every email invitation to
 the caller's verified address. It is written only in its household's context. The token is kept as its
 hash, a link invitation's response is never kept by its `Idempotency-Key`, and a signed-in addressee may
-name an invitation by its id, which is how their list names it.
+name an invitation by its id, which is how their list names it. What an owner sent that is still
+waiting is withdrawn in the transaction that ends their ownership, their removal, leaving or demotion,
+each withdrawal a change of its own in that mutation's record (D-103).
 
 **A household's settings are its own row's**, on the tenant root, which its members read before any
 household's context: name, country, timezone, base currency, locale, units, first day of the week, the
@@ -76,9 +78,10 @@ names its household by.
 
 **The rules that hold across members are checked under a lock on the household's row**, `FOR NO KEY
 UPDATE`, which does not hold up another mutation's audit event: the last owner and the payer (FR-HH4),
-so that two owners leaving at once cannot each find the other still an owner, and who lost access to
-a change of a member's grants or of the household's modules, which depends on both. A change of the
-settings takes the same lock.
+so that two owners leaving at once cannot each find the other still an owner; who lost access to
+a change of a member's grants or of the household's modules, which depends on both; and that an
+address has one email invitation waiting, which inviting it and sending another again both check. A
+change of the settings takes the same lock.
 
 **The household surface enables and grants the contract's seventeen modules**, from the household's
 creation, whether or not a module's package is built yet: `household.Modules`, which a test holds to

@@ -177,7 +177,7 @@ func (f *settingsFields) check() error {
 		}
 		f.Name = &name
 	}
-	if f.Timezone != nil && !timezone(*f.Timezone) {
+	if f.Timezone != nil && !i18n.Timezone(*f.Timezone) {
 		errs = append(errs, problem.FieldError{Field: "/timezone", Code: problem.FieldInvalid})
 	}
 	if f.BaseCurrency != nil {

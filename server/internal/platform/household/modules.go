@@ -133,9 +133,13 @@ func (s *Service) updateModule(w http.ResponseWriter, r *http.Request) {
 			household, module).Scan(&e.id, &e.module, &e.enabled, &e.version)
 		was := e.enabled
 		switch {
+		case errors.Is(err, pgx.ErrNoRows) && !req.Enabled:
+			// A module the household has no row for is disabled (PRD 01 §5) already.
+			e = enablement{module: module}
+			return mutation.Record{}, nil
 		case errors.Is(err, pgx.ErrNoRows):
-			// A module the household has no row for is disabled (PRD 01 §5), and gets its row now.
-			e = enablement{id: idgen.New(), module: module, enabled: req.Enabled}
+			// It gets its row once it is enabled.
+			e = enablement{id: idgen.New(), module: module, enabled: true}
 			if e.version, err = e.insert(ctx, tx, household); err != nil {
 				return mutation.Record{}, err
 			}
