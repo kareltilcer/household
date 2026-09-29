@@ -60,15 +60,123 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		}
 	}
 
-	c, err := config.Load(config.Serve, env(map[string]string{
+	_, err := config.Load(config.Serve, env(map[string]string{
 		config.EnvVar:         "production",
 		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
 	}))
+	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachCorpusVar} {
+		if err == nil || !strings.Contains(err.Error(), key) {
+			t.Errorf("serving in production without %s: %v", key, err)
+		}
+	}
+
+	c, err := config.Load(config.Serve, env(serving(map[string]string{
+		config.EnvVar:         "production",
+		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
+	})))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.HTTPAddr != ":8080" {
-		t.Errorf("production listens on %q, want :8080", c.HTTPAddr)
+	if c.HTTPAddr != ":8080" || len(c.TrustedProxies) != 0 {
+		t.Errorf("production listens on %q, want :8080, behind %v, want no proxy", c.HTTPAddr, c.TrustedProxies)
+	}
+}
+
+// serving adds to vars what serving needs outside development, where vars does not set it.
+func serving(vars map[string]string) map[string]string {
+	for key, value := range map[string]string{
+		config.WebURLVar:         "https://app.household.example",
+		config.TrustedProxiesVar: config.NoProxies,
+		config.SMTPURLVar:        "smtps://mailer:" + "pw" + "@smtp.example:465",
+		config.MailFromVar:       "Household <no-reply@household.example>",
+		config.BreachCorpusVar:   "/var/lib/household/breached.bin",
+	} {
+		if _, ok := vars[key]; !ok {
+			vars[key] = value
+		}
+	}
+	return vars
+}
+
+// In development the account settings default to the web client's dev server and the compose mail
+// catcher, and the breached-password screen may be off.
+func TestServingInDevelopmentDefaultsTheAccountSettings(t *testing.T) {
+	c, err := config.Load(config.Serve, env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.WebURL.String() != "http://localhost:5173" || c.SMTPURL != "smtp://127.0.0.1:1025" ||
+		c.MailFrom != "Household <no-reply@household.localhost>" || c.BreachCorpus != "" ||
+		len(c.TrustedProxies) != 0 || strings.Join(c.AllowedOrigins, ",") != "http://localhost:5173" {
+		t.Fatalf("%+v", c)
+	}
+}
+
+func TestTheAccountSettingsAreRead(t *testing.T) {
+	c, err := config.Load(config.Serve, env(serving(map[string]string{
+		config.AllowedOriginsVar: "https://preview.household.example, http://localhost:5173",
+		config.TrustedProxiesVar: "10.0.0.0/8,192.168.1.1",
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.WebURL.String() != "https://app.household.example" || c.BreachCorpus != "/var/lib/household/breached.bin" ||
+		strings.Join(c.AllowedOrigins, ",") != "https://app.household.example,https://preview.household.example,http://localhost:5173" ||
+		len(c.TrustedProxies) != 2 {
+		t.Fatalf("%+v", c)
+	}
+}
+
+// Each malformed account setting is named, and the mail server's URL, which carries its password,
+// never appears in an error.
+func TestMalformedAccountSettingsAreReported(t *testing.T) {
+	_, err := config.Load(config.Serve, env(map[string]string{
+		config.WebURLVar:         "app.household.example",
+		config.AllowedOriginsVar: "https://ok.example, ftp://files.example",
+		config.TrustedProxiesVar: "10.0.0.0/8, somewhere",
+		config.SMTPURLVar:        "imap://mailer:" + "hunter2" + "@smtp.example:993",
+	}))
+	if err == nil {
+		t.Fatal("loaded")
+	}
+	for _, key := range []string{config.WebURLVar, config.AllowedOriginsVar, config.TrustedProxiesVar, config.SMTPURLVar} {
+		if !strings.Contains(err.Error(), key) {
+			t.Errorf("the error does not name %s: %v", key, err)
+		}
+	}
+	if strings.Contains(err.Error(), "hunter2") {
+		t.Errorf("the error quotes the mail server's password: %v", err)
+	}
+}
+
+// A list of proxies that names none, empty variables a template joined, is neither the proxies nor
+// `none`, and is refused rather than taken for no proxy.
+func TestTrustedProxiesNameAProxyOrNone(t *testing.T) {
+	for _, proxies := range []string{",", " , ,"} {
+		_, err := config.Load(config.Serve, env(serving(map[string]string{
+			config.EnvVar:            "production",
+			config.DatabaseURLVar:    dsn("household_app", "s3cret", "db.internal:5432", "household"),
+			config.TrustedProxiesVar: proxies,
+		})))
+		if err == nil || !strings.Contains(err.Error(), config.TrustedProxiesVar) {
+			t.Errorf("%q: %v", proxies, err)
+		}
+	}
+}
+
+// Outside development the web client is served over https, where its Secure cookies are kept and
+// the emails' links travel encrypted; development's dev server is plain http.
+func TestOutsideDevelopmentTheWebClientIsServedOverHTTPS(t *testing.T) {
+	_, err := config.Load(config.Serve, env(serving(map[string]string{
+		config.EnvVar:         "production",
+		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
+		config.WebURLVar:      "http://app.household.example",
+	})))
+	if err == nil || !strings.Contains(err.Error(), config.WebURLVar) {
+		t.Fatalf("an http web client in production: %v", err)
+	}
+	if _, err := config.Load(config.Serve, env(map[string]string{config.WebURLVar: "http://localhost:3000"})); err != nil {
+		t.Fatalf("an http web client in development: %v", err)
 	}
 }
 

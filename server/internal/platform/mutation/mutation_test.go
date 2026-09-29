@@ -244,6 +244,41 @@ func TestApplyWritesTheRowTheEventAndTheChange(t *testing.T) {
 	}
 }
 
+// An event is labelled with its actor's display name as it was when the event was written, so
+// that it still reads after a rename; an actor with no name is labelled NULL.
+func TestAnEventIsLabelledWithItsActorsName(t *testing.T) {
+	w := newWorld(t)
+	h, u := w.member()
+	label := func(title string) *string {
+		t.Helper()
+		id := idgen.New()
+		w.in(h, u, func(ctx context.Context) {
+			if _, err := mutation.Apply(ctx, create(ctx, id, title)); err != nil {
+				t.Fatal(err)
+			}
+		})
+		var l *string
+		if err := w.admin.QueryRow(t.Context(), "SELECT actor_label FROM audit_events WHERE entity_id = $1", id).Scan(&l); err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	if l := label("Bread"); l != nil {
+		t.Fatalf("an actor with no name is labelled %q", *l)
+	}
+	w.exec("UPDATE users SET display_name = 'Jana' WHERE id = $1", u)
+	first := label("Milk")
+	w.exec("UPDATE users SET display_name = 'Jana Tilcerová' WHERE id = $1", u)
+	second := label("Eggs")
+	if first == nil || *first != "Jana" || second == nil || *second != "Jana Tilcerová" {
+		t.Fatalf("labels %v and %v", first, second)
+	}
+	var kept string
+	if err := w.admin.QueryRow(t.Context(), "SELECT actor_label FROM audit_events WHERE summary_args->>'title' = 'Milk' AND household_id = $1", h).Scan(&kept); err != nil || kept != "Jana" {
+		t.Fatalf("the earlier event's label became %q (%v)", kept, err)
+	}
+}
+
 // A field with no value is NULL in its diff however the mutation spells it, nil or a nil
 // pointer, and never the JSON null.
 func TestADiffOfNoValueIsNull(t *testing.T) {

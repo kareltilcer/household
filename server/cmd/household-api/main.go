@@ -10,27 +10,38 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/modules"
+	"github.com/kareltilcer/household/server/internal/platform/breach"
+	"github.com/kareltilcer/household/server/internal/platform/clientip"
 	"github.com/kareltilcer/household/server/internal/platform/config"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
+	"github.com/kareltilcer/household/server/internal/platform/i18n"
+	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
+	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/password"
+	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/reference"
+	"github.com/kareltilcer/household/server/internal/platform/session"
 )
 
 func main() {
@@ -94,6 +105,12 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 	if err != nil {
 		return err
 	}
+	background := identity.NewBackground(log, 4, 1024, time.Minute)
+	accounts, closeAccounts, err := newAccounts(ctx, cfg, log, pool, background)
+	if err != nil {
+		return err
+	}
+	defer closeAccounts()
 	router, err := app.NewRouter(app.Deps{
 		Logger:       log,
 		Contract:     c,
@@ -102,6 +119,7 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 		Modules:      registry,
 		MaxBodyBytes: cfg.MaxBodyBytes,
 		BodyTimeout:  cfg.BodyTimeout,
+		Accounts:     accounts,
 	})
 	if err != nil {
 		return err
@@ -116,7 +134,71 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 	if listening != nil {
 		listening <- ln.Addr()
 	}
-	return app.Serve(ctx, log, app.NewServer(router, log), ln, cfg.ShutdownTimeout)
+	// The grace starts when the shutdown does: the requests in flight finish, then the emails the
+	// last of them queued go out, and the process ends within one ShutdownTimeout, not two.
+	began := make(chan time.Time, 1)
+	stop := context.AfterFunc(ctx, func() { began <- time.Now() })
+	defer stop()
+	served := app.Serve(ctx, log, app.NewServer(router, log), ln, cfg.ShutdownTimeout)
+	// Serving that failed before any shutdown began gives the emails a grace of their own.
+	deadline := time.Now().Add(cfg.ShutdownTimeout)
+	if ctx.Err() != nil {
+		deadline = (<-began).Add(cfg.ShutdownTimeout)
+	}
+	closeCtx, cancel := context.WithDeadline(context.WithoutCancel(ctx), deadline)
+	defer cancel()
+	return errors.Join(served, background.Close(closeCtx))
+}
+
+// newAccounts builds the account surfaces (item 8) from cfg, and returns what closes them.
+func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool,
+	background *identity.Background,
+) (app.Accounts, func(), error) {
+	closeAll := func() {}
+	catalogs, err := i18n.Default()
+	if err != nil {
+		return app.Accounts{}, closeAll, err
+	}
+	// One hash at once per CPU the process may use: GOMAXPROCS follows a container's CPU limit,
+	// where NumCPU counts the host's, each hash holding 64 MiB.
+	hasher, err := password.New(password.Default, runtime.GOMAXPROCS(0))
+	if err != nil {
+		return app.Accounts{}, closeAll, err
+	}
+	var breached func(string) (bool, error)
+	if cfg.BreachCorpus != "" {
+		corpus, err := breach.Open(cfg.BreachCorpus)
+		if err != nil {
+			return app.Accounts{}, closeAll, err
+		}
+		closeAll = func() { _ = corpus.Close() }
+		breached = corpus.Contains
+	} else {
+		// Only development gets this far without a corpus (config).
+		log.LogAttrs(ctx, slog.LevelWarn, "breached-password screening is off: no corpus configured")
+	}
+	sender, err := mail.NewSMTP(cfg.SMTPURL, cfg.MailFrom)
+	if err != nil {
+		return app.Accounts{}, closeAll, err
+	}
+	origins, err := session.NewOrigins(cfg.AllowedOrigins...)
+	if err != nil {
+		return app.Accounts{}, closeAll, err
+	}
+	sessions := session.NewStore(pool, origins, log, nil)
+	id, err := identity.New(identity.Config{
+		Pool: pool, Log: log, Hasher: hasher, Breached: breached,
+		Throttles: ratelimit.NewThrottles(pool, nil), Sessions: sessions, Mail: sender, Catalogs: catalogs,
+		WebURL: cfg.WebURL, ClientIP: clientip.New(cfg.TrustedProxies), Later: background.Run,
+	})
+	if err != nil {
+		return app.Accounts{}, closeAll, err
+	}
+	return app.Accounts{
+		Identity: id, Sessions: sessions, Origins: origins,
+		UserLimit:      ratelimit.NewBuckets(ratelimit.PerUser, nil),
+		HouseholdLimit: ratelimit.NewBuckets(ratelimit.PerHousehold, nil),
+	}, closeAll, nil
 }
 
 // migrate applies every pending migration, the platform's and each module's, logging each one

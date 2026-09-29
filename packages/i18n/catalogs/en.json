@@ -1,4 +1,12 @@
 {
+  "email.password_changed.body": "Hello,\n\nThe password for your Household account was just changed.\n\nIf you did this, there’s nothing more to do. If you didn’t, reset your password now:\n\n{link}",
+  "email.password_changed.subject": "Your Household password was changed",
+  "email.password_reset.body": "Hello,\n\nSomeone asked to reset the password for your Household account. To choose a new one, open the link below. It works for one hour.\n\n{link}\n\nIf you didn’t ask for this, you can ignore this email. Your password stays as it is.",
+  "email.password_reset.subject": "Reset your Household password",
+  "email.register_existing.body": "Hello,\n\nSomeone, perhaps you, tried to create a Household account with this email address. It already has one, so nothing was changed.\n\nTo get in, sign in. If you’ve forgotten your password, you can reset it from the same page:\n\n{link}\n\nIf this wasn’t you, you can ignore this email.",
+  "email.register_existing.subject": "You already have a Household account",
+  "email.verify_email.body": "Hello,\n\nPlease confirm that this is your email address by opening the link below. It works for 24 hours.\n\n{link}\n\nIf you didn’t create a Household account, you can ignore this email.",
+  "email.verify_email.subject": "Confirm your email address for Household",
   "module.activity.name": "Activity log",
   "module.admin.name": "Household settings",
   "module.calendar.name": "Calendar",

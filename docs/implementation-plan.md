@@ -168,7 +168,7 @@ you**, not from the implementing session.
 | Q11 | **Contract gaps**: no route serves the Calendar ICS feed; no receiver for Google push notifications; Chores rewards and Shopping categories/staples have no PATCH or DELETE; no path for the reference-data reads or the Garden region bundle; `POST …/notifications/broadcast` has no PRD requirement (implement it with a PRD entry, or remove it with a decision entry). Three creates accept a client id without requiring it (D-91): `postTasksCardsByCardIdChecklist` (`id`), `postShoppingListsByListIdItems` (`ids`) and `postChoresRedemptions` (`id`); architecture test 9 fails each once its entity names it among its creates. **The reference-data reads: settled by item 7** (`/reference/countries`, `/reference/units`) | `openapi.yaml` vs PRD | 76, 77, 49, 31, 7, 68, 53, 40 |
 | Q12 | **Reading anchors** (FR-UT9): a conversion change also blocks, and each service has its own reading cadence | design/v1 `utilities.js` | 57 |
 | Q13 | **Tokens**: emit resolved values or add primitives? Many semantic tokens in the prototype sit off the primitive ramp | design/v1 `foundations.js` | 23 |
-| Q14 | **Vendors not named in the PRD**, each EU-established: weather provider, email provider, analytics store, error aggregation. The office-to-PDF converter (LibreOffice headless is assumed) | 05 §10, 07 §5 | 71, 30/88, 92, 30, 16 |
+| Q14 | **Vendors not named in the PRD**, each EU-established: weather provider, email provider, analytics store, error aggregation, and an IP-to-place source for the session list and the takeover notice (FR-ID7; item 8 answers `approximate_location` null). The office-to-PDF converter (LibreOffice headless is assumed) | 05 §10, 07 §5 | 71, 30/88, 92, 30, 9, 16 |
 | Q15 ★ | **UK Online Safety Act** (OQ-1). Counsel's answer decides whether Chat ships disabled in the UK. Item 85 ships a per-country switch either way | 05 §11, DD-11 | counsel → 85 |
 | Q16 | **Fixture drifts** to fix when porting the seed: Stage 8 has Property and Pets toggled off; the vehicles widget date; the washing-machine warranty date; `garden.task_due` names the wrong bed and crop; Petr's persona note is stale | design/v1 `github.md` | 30 and each module |
 | Q17 | **Subscribe flow.** The PRD says Stripe Elements / PaymentSheet; the contract's `billing/checkout-session` and `billing/portal-session` describe a hosted checkout and a hosted portal. The PRD wins, so those operations are amended in `openapi.yaml` before the client is generated | 04 §6; `openapi.yaml` tag `billing` | 19 |
@@ -377,7 +377,7 @@ Phase 0 · after 3, 6 · size M
   - The loader is idempotent.
 - **PR:** [#10](https://github.com/kareltilcer/household/pull/10)
 
-### 8 · Identity I — accounts, web sessions, email, rate limits · `planned`
+### 8 · Identity I — accounts, web sessions, email, rate limits · `done`
 
 Phase 0 · after 3, 6 · size L
 
@@ -387,12 +387,13 @@ Phase 0 · after 3, 6 · size L
     - Breached-password screening against a **local** k-anonymity dataset, including the dataset build script ([D-12](prd/09-decisions.md)).
     - An enumeration-resistant `202` whose email differs by case.
   - **Email verification**: a 24-hour single-use token. An unverified account works but cannot extend outbound trust.
-  - **Web sign-in** (FR-ID3, `client_type=web`): the `__Host-hh_session` cookie; double-submit CSRF plus an Origin allowlist; sliding expiry; logout.
+  - **Web sign-in** (FR-ID3, `client_type=web`): the `__Host-hh_session` cookie; double-submit CSRF plus an Origin allowlist; sliding expiry; logout. `client_type=mobile` is refused `422` until item 9.
   - **Password reset** (FR-ID6): a 1-hour token that invalidates everything and confirms by email to the old address.
+  - **Password change** (`POST /auth/password`): the current password, counted against the account as a sign-in failure is; every other session ends. It keeps no `Idempotency-Key`, whose fingerprint would be a fast hash of the passwords (D-97).
   - **Rate limiter**: per IP, account, user and household, per the [02 §9](prd/02-identity-and-access.md) table, returning `429` with `Retry-After` and a problem document.
   - **Email transport**: SMTP, with templates rendered from i18n keys in the recipient's language.
   - **Profile and sessions**:
-    - `/me` profile and preferences: language, timezone override, first day of week, quiet hours.
+    - `/me` profile and preferences: language, timezone override, first day of week. The account-wide quiet hours are `/me/notification-preferences` without a household, which item 17 builds whole.
     - `/me/sessions`: list, revoke, and sign out everywhere (FR-ID7).
   - **Audit context** (item 4): a request the session cookie authenticates records `via: web` (`mutation.WithVia`), and the spine writes the actor's display name as each audit event's `actor_label`.
   - **`Idempotency-Key` outside a household** (item 4): `idempotency_keys` holds a member's keys in their household, so the `/auth` and `/me` routes, and item 10's household create, need keys of their own; decide where they live and serve the same answers ([ADR 0006](adr/0006-sync-ready-schema-and-the-mutation-spine.md)).
@@ -405,7 +406,7 @@ Phase 0 · after 3, 6 · size L
   - Enumeration tests assert identical response shapes.
   - Limits are tested.
   - The implemented operations are off `contract_pending`.
-- **PR:** —
+- **PR:** [#11](https://github.com/kareltilcer/household/pull/11)
 
 ### 9 · Identity II — mobile tokens, MFA, Google and Apple, client versions · `planned`
 
@@ -421,6 +422,7 @@ Phase 0 · after 8 · size L
   - **Account-takeover notice.**
   - **Client versions** ([06 §7](prd/06-clients.md), FR-HA18): a client-version header and a minimum supported version. Below it, a blocking *please update* problem is returned.
   - **Audit context** (item 4): a request the access token authenticates records `via: mobile` (`mutation.WithVia`).
+  - **Item 8's account routes for a device** ([ADR 0009](adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md)): `POST /auth/login` with `client_type=mobile`, which item 8 refuses `422`; `POST /auth/logout` and `DELETE /me/sessions` end the device's token family too; a handler can mark its response unstorable, so that the account's `Idempotency-Key` never keeps a TOTP secret or recovery codes; the session list's `approximate_location`, null until an IP-to-place source is chosen (Q14), which the takeover notice needs as well.
 - **Inputs**
   - PRD: [02 §2](prd/02-identity-and-access.md); [06 §7](prd/06-clients.md); [17 FR-HA18](prd/modules/17-household-admin.md); D-7, D-14, D-15
   - Design: A-5–A-8, A-11, A-13, A-21, C-57
@@ -441,7 +443,8 @@ Phase 0 · after 4, 7, 8 · size L
     - By email (14 days) or link (72 hours, `max_uses`).
     - Each carries the proposed role and grants, plus a starting-dashboard placeholder.
     - Accept or decline; a decline notifies the inviter.
-    - Limited to 20 per day.
+    - Limited to 20 per day, per household: a `ratelimit.Limit` on item 8's throttles.
+    - Only a verified inviter may send one (FR-ID1): `users.email_verified_at`, refused `403 account_unverified`.
   - **Roles and grants**:
     - Roles: owner, member and child.
     - Module enablement: disabling returns `404`, emits a retraction hook and keeps the data.
@@ -644,6 +647,7 @@ Phase 0 · after 4, 10 · size L
   - **Usage sampling** (FR-ST2): nightly, as `household_meter`, by module and member, with object and row counts.
   - **Storage picture API** (FR-ST4, HA14): the largest items, and what deleting something would recover.
   - **Fair-use counters.**
+  - **Avatars**: the upload behind `Me.avatar_url`, which `PATCH /me` refuses to set to anything but null until then (item 8).
 - **Inputs**
   - PRD: [01 §8](prd/01-architecture.md); [03 §3, §8](prd/03-platform-strands.md); [04 §4–5](prd/04-billing-and-entitlements.md); D-9, D-25, D-28; FR-NF3
   - Design: C-54; `household.js` (storage arithmetic)
@@ -663,13 +667,13 @@ Phase 0 · after 10, 6 · size L
     - In-process, with an advisory-lock leader so only one instance fires.
     - A job registry for modules.
     - Household-timezone resolution that is DST-safe.
-    - The expiry sweep with [03 §5](prd/03-platform-strands.md)'s retention table.
+    - The expiry sweep with [03 §5](prd/03-platform-strands.md)'s retention table, and item 8's tables: ended `sessions`, spent and expired `email_tokens`, `auth_throttles` whose window and block have passed, and `account_idempotency_keys` past seven days.
     - Invitation and token expiry.
   - **Transports**:
     - Web Push (VAPID) subscriptions on `/push/*`.
     - Expo push tokens per device.
-    - Email.
-  - **Preferences**: four categories plus a master switch and quiet hours, per member per household.
+    - Email, over item 8's `mail.SMTP`, which sends from an in-memory queue that a restart loses ([ADR 0009](adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md)); a notification that must survive one needs a durable queue here.
+  - **Preferences**: four categories plus a master switch and quiet hours, per member per household, and the account-wide defaults `/me/notification-preferences` answers without a household.
   - **Direct notifications** for modules: assignments, mentions, and access changes ([D-78](prd/09-decisions.md)).
   - **Filtering at send time**, per recipient, by grant and by privacy (FR-NT5).
   - **Delivery log** (FR-NT6): `404`/`410` from a push service deletes the subscription; repeated failure marks a device stale.
@@ -749,7 +753,7 @@ Phase 0 · after 14, 16, 17 · size L
     - Ready within 24 hours, downloadable for 7 days.
   - **Account deletion** (FR-PR3–4):
     - Each household is resolved first.
-    - A 30-day window: the account is disabled and revoked immediately, and an email carries a cancel link.
+    - A 30-day window: the account is disabled and revoked immediately, and an email carries a cancel link. A disabled account's sign-in fails as a wrong password does (`401 invalid_credentials`, FR-ID3), and its sessions end. `POST /me/deletion` keeps no `Idempotency-Key`, since its body carries the password ([D-97](prd/09-decisions.md)).
     - A nightly job then runs `EraseSource` everywhere, deletes object prefixes, writes an identity tombstone, and relabels authorship as *Former member*.
     - PowerSync's compaction (item 14) runs after that job each night, so an erased row's superseded data leaves bucket storage with it ([05 §6](prd/05-privacy-and-compliance.md), [D-93](prd/09-decisions.md)).
   - **Household deletion** (FR-PR6): the owner types the household name, every member is notified, and the same 30-day window applies.
@@ -902,6 +906,7 @@ Phase 0 · after 24, 15, 9, 17, 20 · size XL
     - the takeover notice;
     - Google and Apple on the web.
   - **Account settings** (A-19): profile, language, MFA, sessions and devices, notification categories, quiet hours and first day.
+  - **Item 8's web half** ([ADR 0009](adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md)): every unsafe request sends `X-CSRF-Token` from the `__Host-hh_csrf` cookie, and a `403 csrf_failed` signs the member in again; the routes the emails link to, `/verify-email` and `/reset/set`, read their token from the fragment; `/sign-in` and `/reset` exist by those names; a `null` timezone or first day follows the household or the locale. The design's register copy says a fingerprint prefix of the password leaves the device; the server screens it at set time instead and no range endpoint exists, so the copy says what happens.
   - **Web Push**: permission asked in context.
   - **Account deletion** (A-20).
   - **Please update.**
@@ -1045,6 +1050,7 @@ Phase 0 · after 27, 29, 20 · size L · **Phase 0 exit**
     - Postgres 17 and S3-compatible storage;
     - PowerSync with its bucket storage, the Postgres at `wal_level=logical` (item 13);
     - EU SMTP (Q14) and Stripe test mode;
+    - item 8's settings: `HOUSEHOLD_WEB_URL`, the proxies to trust, and the breached-password corpus, built per [the runbook](runbooks/breached-passwords.md);
     - migrations run as `household_migrate`;
     - secrets in Coolify environment variables;
     - synthetic data only;
@@ -2270,6 +2276,7 @@ Phase 5 · after 1–87 (the Phase 4 exit, crop catalog included) · size L
     - EAS production profiles and update channels.
   - **Services**:
     - An EU email provider with SPF, DKIM and DMARC.
+    - The breached-password corpus on a volume beside each API instance, about 8 GB, refreshed quarterly ([runbook](runbooks/breached-passwords.md)), and `HOUSEHOLD_TRUSTED_PROXIES` set to the load balancer's addresses, without which every client shares one sign-in budget.
     - Live Stripe.
     - Expo push credentials.
 - **Inputs**
@@ -2428,3 +2435,4 @@ Tracked here so they are not forgotten. None of them takes a numbered slot.
 | 2026-09-27 | 5, 9, 12–15, 18, 20, 21, 27, 28, 30, 31, 34, 43, 75, 85, 88–90, 94, PL-5, PL-6, Q2 | Item 5: the spike's verdict is to adopt PowerSync, self-hosted, for replication and keep the write path, every push going through the mutation spine (D-93, [ADR 0001](adr/0001-sync-engine.md)). Items 12–15 are rewritten around it. The conformance suite drives PowerSync clients against the real stack instead of an in-process engine. Item 13 deploys PowerSync, generates its streams from the entity registry, and gains item 9 as a dependency, for the tokens PowerSync validates. Item 14 adds the visibility and audience streams and decides what becomes of `sync_changes`, the digest, the reset and the stream. Item 15 wraps PowerSync's SDKs. PL-5's replica is op-sqlite in a dev build, PL-6 and G-C's fallback (now: build the engine) follow, and items 9, 20, 27, 28, 31 and 90 drop the replaced cursor, snapshot and simulator. Items 75 and 85 keep an audience's readers on each row instead of `floor_seq`. Item 12 runs against stand-ins of its own until items 13–14 land; item 13's PowerSync token carries an audience item 9's access token does not; item 14 keeps `sync_changes`' partitions while the spine still writes it; item 15's connector records each write's `client_time`, handles a refusal of the whole batch, and proves the queue survives a restart, which the spike did not test. PowerSync's replication role, with its bucket storage's credential, is the one exception to D-3 (PRD 01 §2.3, 05 §6), so item 21's no-content-access test leaves it out and item 13 amends the contract's statement that no role bypasses row-level security. Items 30 and 88 deploy PowerSync to staging, the dogfood environment and production, whose provider must let an administrator create that role. Item 34's failed gate takes the new fallback, not a vendor. Item 12 scripts reordering as the order in which clients reconnect. Items 14 and 85 put readers on every row an audience bounds, not only on messages, and item 14 may resolve a `member_shared` calendar, which has no floor, through its member list. Item 14 also settles the push response's `seq` and every frame the socket carries, not only Chat's, and weighs the digest against what bucket checksums cannot see: the buckets against PostgreSQL. Item 15's connector handles a `409 idempotency_in_progress` and a `422`. Item 12 carries a connector of its own that holds and replays scenario 14's and scenario 8's mutations, since items 13, 14 and 18 need those scenarios green before item 15 exists. Item 15's connector sends several queued transactions to a batch, since a device may send 60 a minute, and its withdrawn state is a row that left the replica, which items 13 and 15 must tell from a deletion by another member. Item 13 holds the bucket storage's credential to the service alone, item 27 shows the last checkpoint that FR-HA19 still asks for, item 75 leaves item 14 its choice for a `member_shared` calendar, and item 94's privacy notice states the sync service's credentials as PRD 05 §6 requires. Item 13's isolation test connects a member of two households, since the spike's members each belonged to one; item 14 schedules PowerSync's compaction nightly, since bucket storage keeps superseded data until it runs, and builds a socket it keeps; item 15 carries the client half of the socket and the digest if item 14 keeps them; item 89 alerts on PowerSync's replication lag, which the ADR says is monitored. Item 18 holds a `suspended` household's Sync ✗ on PowerSync's read path, which passes no tenant middleware. Item 75 declares its busy projection as item 14's column list rather than two feed rows, and item 43 retracts a note made private through its streams rather than by emitting retractions. Item 14's redacted stream keeps an audience's readers, its metrics keep the divergence item 89 alerts on, its feed decision amends PRD 07 §1 and weighs G-C's fallback, and item 15 shows a held `deferred` mutation as pending. Item 20, whose nightly erasure job item 14 precedes, runs item 14's compaction after it; item 14's feed decision also amends PRD 01 §3 and §10 if the write stops. Item 13 defines PowerSync's failure behaviour under FR-NF3, keeps its `debug_api` off, and holds every streamed table in the publication; item 89 tests PowerSync's outages and drills its recovery, and item 90 measures its concurrent connections, which one API process caps at 200, and `sync_changes` at volume if item 14 kept it. Item 14 keeps a rewrite of an audience's readers from counting as an edit, since item 4's `touch_entity` would bump every row's version and turn queued edits into conflicts, and takes a member removed from the household out of every audience's readers; item 13 amends the contract's device sync cursor; item 15 keeps a batch's mutations fixed under its key and gives a split batch keys of its own; item 12 names item 18 among the items that switch scenarios on. Item 13's member stream checks the module's enablement as the owner's does, and its Inputs name the D-3 exception, the bucket storage and the sync token it builds; item 14 records keeping an audience's readers out of the version in a new ADR, since ADR 0006's trigger bumps it on every update, and its streams test a reader table as well as readers on the row. Item 14 takes a reader table, which the probes accepted only alone, only once the suite shows it beside the grant, as it does the calendar's member list, and restates PRD 07 §1's connection target for PowerSync, which item 90 measures; item 15's connector renews the API's credential on a `401`, not PowerSync's token; items 13 and 21 count the bucket storage's credential in D-3's one exception, as D-3 does. Item 12 scripts a held `deferred` or `entitlement` mutation replayed after a later write to the same row, the one reorder within a client; item 14 holds every row a private item or root bounds to its owner, since a stream reads no feed row, and settles the point a kept digest is computed at, since a PowerSync client has no feed cursor. Item 14 keeps a rewrite of the visibility and owner such a row carries from counting as an edit, as it does an audience's readers, and writes the row leaving the buckets into FR-SY7; item 13's replication role reads the tables later modules create through a `SELECT` grant, which `BYPASSRLS` does not give; item 12's stand-ins include the replication role and publication, and its Inputs name the spike's SQL, configuration and backend as well as its harness; item 90 load-tests the socket only if item 14 keeps it; items 20, 21, 27, 34, 43 and 85 name D-93 among their Inputs. Item 13's replication role reads only the tables in the publication, not every table by default privileges, since it reads past row-level security, and its contract change amends the contract's description of the offline data path; item 15's connector keeps each outcome other than `applied` with its mutation, since the next checkpoint replaces the local write that the conflict inbox and scenario 17 need; items 13–15 name ADR 0001 among their Inputs |
 | 2026-09-28 | 6, 17, 24, 28 | Item 6: the API client is generated on every build and not committed, the server renders the clients' own catalogs through a Go module in `packages/i18n`, both renderers share one ICU subset held by `vectors/i18n.json`, and money rounds ties away from zero with a refund split as its charge negated (D-94, [ADR 0007](adr/0007-shared-packages-client-catalogs-and-vectors.md)). Item 17 adds the date, time and money arguments its messages need to both renderers, since the subset has none; items 24 and 28 take `@household/i18n`'s translator and pseudo-locale rather than building a runtime; item 28 installs a `crypto.getRandomValues` polyfill, which `newId` needs on Hermes, and `Intl.PluralRules` where Hermes still lacks it, with the i18n vectors' plural cases run on the device's engine |
 | 2026-09-28 | 7, 10, 21, 22, 40, 46, 56, 68, 75, 81, Q11 | Item 7: reference data is JSON under `reference-data/`, one record per file, each field a value with its source and a `drafted` flag that is the review ledger, and every text in the five languages, which a test holds to `i18n.Locales`. The server embeds it, `reference.Read` checks it against JSON Schemas and across files, and `household-api migrate` loads it after the migrations: a row's version, and its dataset's, move only when a value changes, so a repeated load writes nothing, and no row is ever deleted (D-11). The reads are a fourth scope, `/api/v1/reference/…`, for any authenticated user, with every name in every language ([ADR 0008](adr/0008-reference-data-pipeline.md); PRD 01 §2.4 amended: the languages are not a `locales` table). The United Kingdom's profile is `GB`, its ISO 3166-1 code, and like every profile defaults to metric units, as PRD 03 §9 does; the contract's `first_day_of_week` counts 0 as Sunday, and its household's `country` is a `CountryCode`. Item 10 takes a new household's units and first day, when the request omits them, from its country's profile, and refuses a country without one; item 21's admin edits write the loader's tables, so it decides what the next load does to one. Items 22, 40, 46, 56, 68, 75 and 81 put their sets through the same pipeline, and the first of them adds the registry hook for a module's datasets; items 46 and 75 define the sets a profile's `document_type_set` and `holiday_set` name, and item 81 labels the inspection with `inspection_label` |
+| 2026-09-28 | 8, 9, 10, 16, 17, 20, 25, 30, 88, Q14 | Item 8: passwords are Argon2id at RFC 9106's second parameters, screened against Have I Been Pwned's corpus kept as a sorted file of 8-byte SHA-1 prefixes that `cmd/breach-dataset` builds; a web session is bound to its CSRF token, both cookies `__Host-`, and a failed check or a foreign origin answers the new protocol-level `403 csrf_failed`; sign-in throttles count in PostgreSQL by the address asked for, and the API's per-user and per-household buckets in memory; a signed-in user's `Idempotency-Key` lives on their account and a request before sign-in, or one whose body carries a password, keeps none; the emails go out after the response ([ADR 0009](adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md); D-95 a session lasts 30 days from its last use with no maximum; D-96 the resend limit, the registration note's limit, the network's limits on a reset and a resend, the household's API budget and the login cooldown; D-97 no key before sign-in or on a password; PRD 01 §6 and 02 §2, §9 amended). The contract gains `csrf_failed` and `invalid_credentials`, `first_day_of_week` and a nullable `timezone` on `Me`, a `410` on a spent reset link and an email format the edge checks, and loses the sign-in's `403`, which FR-ID3's generic failure contradicts. Item 8 also builds `POST /auth/password`, which no item named, and leaves the account-wide quiet hours to item 17, which owns `/me/notification-preferences`. Item 9 adds the mobile sign-in item 8 refuses, ends a device's family on sign-out, and keeps secrets out of the account's keys; item 10 counts invitations on item 8's throttles and checks the inviter is verified; item 16 lets `avatar_url` be set; item 17 sweeps item 8's tables and sends email durably if it must; item 20 makes a disabled account's sign-in fail generically and keeps no key on `POST /me/deletion`; item 25 sends the CSRF token and reads the emails' links from the fragment; items 30 and 88 deploy the corpus and trust the load balancer; Q14 adds an IP-to-place source |

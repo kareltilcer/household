@@ -25,8 +25,8 @@ import (
 //     back a mutation that reports nothing and refuses one that reports half
 //     (internal/platform/mutation's tests prove it);
 //   - and no module opens a write transaction of its own: this test fails a module, its tests
-//     and its testdata included, that names tenant.InWriteTx, which only the platform may, or
-//     dot-imports the tenant package, which would hide the name from it.
+//     and its testdata included, that names tenant.InWriteTx or tenant.AccountTx, which only the
+//     platform may, or dot-imports the tenant package, which would hide the names from it.
 func TestModulesWriteOnlyThroughTheSpine(t *testing.T) {
 	// The server's internal directory, one up.
 	for _, v := range spineViolations(t, os.DirFS("..")) {
@@ -50,7 +50,8 @@ func TestModulesWriteOnlyThroughTheSpineCatchesEachViolation(t *testing.T) {
 const tenantPath = internalPath + "platform/tenant"
 
 // spineViolations walks root, an internal directory, and returns each place a module's Go file
-// names tenant.InWriteTx or dot-imports the tenant package, as "path:line: message".
+// names tenant.InWriteTx or tenant.AccountTx, or dot-imports the tenant package, as
+// "path:line: message".
 func spineViolations(t *testing.T, root fs.FS) []string {
 	t.Helper()
 	var out []string
@@ -93,7 +94,7 @@ func spineViolations(t *testing.T, root fs.FS) []string {
 			case spec.Name == nil:
 				names = append(names, "tenant")
 			case spec.Name.Name == ".":
-				out = append(out, fmt.Sprintf("%s:%d: module %s dot-imports the tenant package, which hides tenant.InWriteTx from this test",
+				out = append(out, fmt.Sprintf("%s:%d: module %s dot-imports the tenant package, which hides tenant.InWriteTx and tenant.AccountTx from this test",
 					p, fset.Position(spec.Pos()).Line, mod))
 			case spec.Name.Name != "_":
 				names = append(names, spec.Name.Name)
@@ -101,7 +102,7 @@ func spineViolations(t *testing.T, root fs.FS) []string {
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
 			sel, ok := n.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "InWriteTx" {
+			if !ok || (sel.Sel.Name != "InWriteTx" && sel.Sel.Name != "AccountTx") {
 				return true
 			}
 			if x, ok := sel.X.(*ast.Ident); ok && slices.Contains(names, x.Name) {

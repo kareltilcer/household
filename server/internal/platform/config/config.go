@@ -5,11 +5,13 @@
 //
 // In development, and only there, the connection strings default to the services
 // docker-compose.yml starts, so a fresh clone runs with nothing set. Everywhere else, each
-// connection string a command needs must be set explicitly. The other settings, which
-// carry no secret and name no database, default everywhere; only the listen address
-// differs, loopback in development and :8080 elsewhere. HOUSEHOLD_ENV itself defaults to
-// development, so bootstrap, which sets the roles' passwords, sets a defaulted one only on a
-// cluster on this machine.
+// connection string a command needs must be set explicitly, and so must what serving the
+// accounts needs: where the web client is, the proxies in front of the server (or none), the
+// mail server and its sender, and the breached-password corpus, which development may run
+// without. The other settings, which carry no secret and name no database, default
+// everywhere; only the listen address differs, loopback in development and :8080 elsewhere.
+// HOUSEHOLD_ENV itself defaults to development, so bootstrap, which sets the roles'
+// passwords, sets a defaulted one only on a cluster on this machine.
 package config
 
 import (
@@ -17,6 +19,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -24,7 +28,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/kareltilcer/household/server/internal/platform/clientip"
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/mail"
+	"github.com/kareltilcer/household/server/internal/platform/session"
 )
 
 // Env is the deployment environment.
@@ -65,7 +72,17 @@ const (
 	ShutdownTimeoutVar    = "HOUSEHOLD_SHUTDOWN_TIMEOUT"
 	MaxBodyBytesVar       = "HOUSEHOLD_MAX_BODY_BYTES"
 	BodyTimeoutVar        = "HOUSEHOLD_BODY_TIMEOUT"
+	WebURLVar             = "HOUSEHOLD_WEB_URL"
+	AllowedOriginsVar     = "HOUSEHOLD_ALLOWED_ORIGINS"
+	TrustedProxiesVar     = "HOUSEHOLD_TRUSTED_PROXIES"
+	SMTPURLVar            = "HOUSEHOLD_SMTP_URL"
+	MailFromVar           = "HOUSEHOLD_MAIL_FROM"
+	BreachCorpusVar       = "HOUSEHOLD_BREACH_CORPUS"
 )
+
+// NoProxies is TrustedProxiesVar's value for a server its clients reach directly, with no proxy
+// in front of it: outside development the variable must name the proxies or say this.
+const NoProxies = "none"
 
 // The development defaults: the compose services, and the role passwords .env.example
 // documents. Local-only values, public by design.
@@ -76,6 +93,10 @@ const (
 	devMigrateDatabaseURL = "postgres://household_migrate:household_migrate@127.0.0.1:5432/household?sslmode=disable"
 	devMeterDatabaseURL   = "postgres://household_meter:household_meter@127.0.0.1:5432/household?sslmode=disable"
 	devAdminDatabaseURL   = "postgres://postgres:postgres@127.0.0.1:5432/household?sslmode=disable"
+	// The web client's dev server, and the compose mail catcher, which keeps every message.
+	devWebURL   = "http://localhost:5173"
+	devSMTPURL  = "smtp://127.0.0.1:1025"
+	devMailFrom = "Household <no-reply@household.localhost>"
 )
 
 // Config is the validated configuration. A connection string a command does not use is
@@ -102,6 +123,21 @@ type Config struct {
 	// BodyTimeout caps how long a request body may take to arrive. Its default leaves a
 	// full-size JSON body a slow mobile connection's time; an upload's handler extends it.
 	BodyTimeout time.Duration
+
+	// WebURL is where the web client is served, which the emails link to: https outside
+	// development. Its origin is always allowed.
+	WebURL *url.URL
+	// AllowedOrigins are the origins an unsafe request from a browser may come from: WebURL's,
+	// and any HOUSEHOLD_ALLOWED_ORIGINS adds.
+	AllowedOrigins []string
+	// TrustedProxies are the proxies whose X-Forwarded-For names the client (clientip), none when
+	// HOUSEHOLD_TRUSTED_PROXIES is NoProxies, as development defaults it.
+	TrustedProxies []netip.Prefix
+	// SMTPURL is the mail server, smtp:// or smtps://, with its credentials; MailFrom the sender.
+	SMTPURL, MailFrom string
+	// BreachCorpus is the path of the breached-password corpus file (internal/platform/breach),
+	// "" for none, which only development may serve with.
+	BreachCorpus string
 }
 
 // Getenv looks a variable up, reporting whether it is set.
@@ -164,6 +200,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 	switch command {
 	case Serve:
 		c.DatabaseURL = url(DatabaseURLVar, devDatabaseURL, db.RoleApp)
+		l.serving(c, dev)
 	case Migrate:
 		c.MigrateDatabaseURL = url(MigrateDatabaseURLVar, devMigrateDatabaseURL, db.RoleMigrate)
 	case Bootstrap:
@@ -183,6 +220,72 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 		return nil, fmt.Errorf("config: %w", errors.Join(l.errs...))
 	}
 	return c, nil
+}
+
+// serving reads what serving the accounts needs (item 8).
+func (l *loader) serving(c *Config, dev bool) {
+	required := func(key, devDefault string) string {
+		value, ok := l.getenv(key)
+		if ok && value != "" {
+			return value
+		}
+		if !dev {
+			l.fail("%s is required outside development", key)
+			return ""
+		}
+		return devDefault
+	}
+
+	if web := required(WebURLVar, devWebURL); web != "" {
+		u, err := url.Parse(web)
+		switch {
+		case err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
+			u.RawQuery != "" || u.Fragment != "":
+			l.fail("%s is %q; want the web client's absolute http(s) URL", WebURLVar, web)
+		// Over plain HTTP a browser keeps none of the session's Secure cookies, and the emails'
+		// links would carry their tokens where anyone on the way reads them.
+		case !dev && u.Scheme != "https":
+			l.fail("%s is %q; outside development the web client is served over https", WebURLVar, web)
+		default:
+			c.WebURL = u
+			c.AllowedOrigins = append(c.AllowedOrigins, u.Scheme+"://"+u.Host)
+		}
+	}
+	for _, origin := range strings.Split(l.str(AllowedOriginsVar, ""), ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			c.AllowedOrigins = append(c.AllowedOrigins, origin)
+		}
+	}
+	if _, err := session.NewOrigins(c.AllowedOrigins...); err != nil {
+		l.fail("%s: %v", AllowedOriginsVar, err)
+	}
+
+	// Named outside development, or `none` said: behind a load balancer the server was not told
+	// of, every client would be the balancer, and share one network's sign-in and registration
+	// limits with every other. A list that names nothing, a template's empty variables joined by a
+	// comma, says neither.
+	if proxies := required(TrustedProxiesVar, NoProxies); proxies != NoProxies && proxies != "" {
+		parsed, err := clientip.ParsePrefixes(proxies)
+		switch {
+		case err != nil:
+			l.fail("%s: %v", TrustedProxiesVar, err)
+		case len(parsed) == 0:
+			l.fail("%s is %q, which names no proxy; want the proxies' addresses or %q", TrustedProxiesVar, proxies, NoProxies)
+		}
+		c.TrustedProxies = parsed
+	}
+
+	// The mail server's URL carries its credentials: it is a secret, and is never named in an
+	// error.
+	c.SMTPURL = required(SMTPURLVar, devSMTPURL)
+	c.MailFrom = required(MailFromVar, devMailFrom)
+	if c.SMTPURL != "" && c.MailFrom != "" {
+		if _, err := mail.NewSMTP(c.SMTPURL, c.MailFrom); err != nil {
+			l.fail("%s or %s: %v", SMTPURLVar, MailFromVar, err)
+		}
+	}
+
+	c.BreachCorpus = required(BreachCorpusVar, "")
 }
 
 // Database returns the name of the database a connection string connects to.

@@ -19,6 +19,8 @@ const (
 	CodeMethodNotAllowed         Code = "method_not_allowed"
 	CodeInternal                 Code = "internal"
 	CodeIdempotencyInProgress    Code = "idempotency_in_progress"
+	CodeCsrfFailed               Code = "csrf_failed"
+	CodeInvalidCredentials       Code = "invalid_credentials"
 	CodeRefreshTokenInvalid      Code = "refresh_token_invalid"
 	CodeAccountDisabled          Code = "account_disabled"
 	CodeAccountUnverified        Code = "account_unverified"
@@ -77,6 +79,8 @@ var Codes = []Code{
 	CodeMethodNotAllowed,
 	CodeInternal,
 	CodeIdempotencyInProgress,
+	CodeCsrfFailed,
+	CodeInvalidCredentials,
 	CodeRefreshTokenInvalid,
 	CodeAccountDisabled,
 	CodeAccountUnverified,

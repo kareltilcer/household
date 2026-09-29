@@ -12,6 +12,32 @@ paths:
     get: { operationId: getReferenceCountriesByCountry, responses: { '200': { description: Found }, '401': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' } } }
   /reference/units:
     get: { operationId: getReferenceUnits, responses: { '200': { description: Listed }, '401': { $ref: '#/components/responses/Problem' } } }
+  # The account routes the router always serves (item 8), declared as loosely as the tests need.
+  /auth/register:
+    post: { operationId: postAuthRegister, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Accepted }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/verify-email:
+    post: { operationId: postAuthVerifyEmail, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Verified }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/verify-email/resend:
+    post: { operationId: postAuthVerifyEmailResend, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Accepted }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/login:
+    post: { operationId: postAuthLogin, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Signed in }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/logout:
+    post: { operationId: postAuthLogout, responses: { '204': { description: Signed out }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/password-reset:
+    post: { operationId: postAuthPasswordReset, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Accepted }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/password-reset/confirm:
+    post: { operationId: postAuthPasswordResetConfirm, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Set }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/password:
+    post: { operationId: postAuthPassword, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Changed }, default: { $ref: '#/components/responses/Problem' } } }
+  /me:
+    get: { operationId: getMe, responses: { '200': { description: The user }, default: { $ref: '#/components/responses/Problem' } } }
+    patch: { operationId: patchMe, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/sessions:
+    get: { operationId: getMeSessions, responses: { '200': { description: Sessions }, default: { $ref: '#/components/responses/Problem' } } }
+    delete: { operationId: deleteMeSessions, responses: { '204': { description: Done }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/sessions/{session_id}:
+    parameters: [{ name: session_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    delete: { operationId: deleteMeSessionsBySessionId, responses: { '204': { description: Revoked }, default: { $ref: '#/components/responses/Problem' } } }
   /households/{household_id}/probe/items:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get:
@@ -21,6 +47,7 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '402': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
     post:
       operationId: postProbeItems
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
@@ -31,6 +58,7 @@ paths:
         '402': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
   /households/{household_id}/probe/items/{item_id}:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: item_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
     delete:
@@ -42,10 +70,13 @@ paths:
         '402': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
 components:
   parameters:
     HouseholdId: { name: household_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string, minLength: 1, maxLength: 128 } }
+  requestBodies:
+    Any: { required: true, content: { application/json: { schema: { type: object } } } }
   responses:
     Problem:
       description: A problem.

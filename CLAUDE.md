@@ -109,6 +109,9 @@ pnpm run down         # stop the services; volumes are kept
   calls `add_entity_columns` for the base columns (`version`, `created_*`, `updated_*`,
   `deleted_at`), and its module declares it through `SyncSource` with its merge policy and
   access (architecture tests 5 and 9; [ADR 0006](docs/adr/0006-sync-ready-schema-and-the-mutation-spine.md)).
+  The one other write path is the platform's own, for the global account tables (a user's
+  profile, credentials and sessions), which are no household's history: `tenant.AccountTx`,
+  which architecture test 4 keeps out of every module ([ADR 0009](docs/adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md)).
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`

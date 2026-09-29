@@ -1,4 +1,12 @@
 {
+  "email.password_changed.body": "Dobrý deň,\n\nheslo k vášmu účtu v aplikácii Household bolo práve zmenené.\n\nAk ste to boli vy, netreba nič robiť. Ak nie, obnovte si heslo hneď teraz:\n\n{link}",
+  "email.password_changed.subject": "Heslo do aplikácie Household bolo zmenené",
+  "email.password_reset.body": "Dobrý deň,\n\nniekto požiadal o obnovenie hesla k vášmu účtu v aplikácii Household. Nové heslo si zvolíte po otvorení odkazu nižšie. Odkaz platí jednu hodinu.\n\n{link}\n\nAk ste o obnovenie nežiadali, tento e-mail môžete ignorovať. Vaše heslo zostáva nezmenené.",
+  "email.password_reset.subject": "Obnovenie hesla do aplikácie Household",
+  "email.register_existing.body": "Dobrý deň,\n\nniekto, možno vy, sa pokúsil založiť účet v aplikácii Household s touto e-mailovou adresou. Účet s ňou už existuje, takže sa nič nezmenilo.\n\nPrihláste sa. Ak ste heslo zabudli, na tej istej stránke si ho môžete obnoviť:\n\n{link}\n\nAk ste to neboli vy, tento e-mail môžete ignorovať.",
+  "email.register_existing.subject": "Účet v aplikácii Household už máte",
+  "email.verify_email.body": "Dobrý deň,\n\npotvrďte, prosím, že táto e-mailová adresa patrí vám, otvorením odkazu nižšie. Odkaz platí 24 hodín.\n\n{link}\n\nAk ste si účet v aplikácii Household nezakladali, tento e-mail môžete ignorovať.",
+  "email.verify_email.subject": "Potvrďte svoju e-mailovú adresu v aplikácii Household",
   "module.activity.name": "História zmien",
   "module.admin.name": "Nastavenia domácnosti",
   "module.calendar.name": "Kalendár",

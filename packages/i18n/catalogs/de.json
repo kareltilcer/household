@@ -1,4 +1,12 @@
 {
+  "email.password_changed.body": "Hallo,\n\ndas Passwort für Ihr Household-Konto wurde soeben geändert.\n\nWenn Sie das waren, müssen Sie nichts weiter tun. Wenn nicht, setzen Sie Ihr Passwort jetzt zurück:\n\n{link}",
+  "email.password_changed.subject": "Ihr Household-Passwort wurde geändert",
+  "email.password_reset.body": "Hallo,\n\njemand hat angefordert, das Passwort für Ihr Household-Konto zurückzusetzen. Öffnen Sie den folgenden Link, um ein neues zu wählen. Er ist eine Stunde gültig.\n\n{link}\n\nWenn Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren. Ihr Passwort bleibt unverändert.",
+  "email.password_reset.subject": "Setzen Sie Ihr Household-Passwort zurück",
+  "email.register_existing.body": "Hallo,\n\njemand, vielleicht Sie selbst, hat versucht, mit dieser E-Mail-Adresse ein Household-Konto zu erstellen. Für diese Adresse gibt es bereits ein Konto, daher wurde nichts geändert.\n\nMelden Sie sich an. Wenn Sie Ihr Passwort vergessen haben, können Sie es auf derselben Seite zurücksetzen:\n\n{link}\n\nWenn Sie das nicht waren, können Sie diese E-Mail ignorieren.",
+  "email.register_existing.subject": "Sie haben bereits ein Household-Konto",
+  "email.verify_email.body": "Hallo,\n\nbitte bestätigen Sie, dass dies Ihre E-Mail-Adresse ist, indem Sie den folgenden Link öffnen. Er ist 24 Stunden gültig.\n\n{link}\n\nWenn Sie kein Household-Konto erstellt haben, können Sie diese E-Mail ignorieren.",
+  "email.verify_email.subject": "Bestätigen Sie Ihre E-Mail-Adresse für Household",
   "module.activity.name": "Aktivitätsprotokoll",
   "module.admin.name": "Haushaltseinstellungen",
   "module.calendar.name": "Kalender",

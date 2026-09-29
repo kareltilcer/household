@@ -14,16 +14,31 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/grant"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
+	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/reference"
+	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
+
+// Accounts are the account surfaces (item 8): the identity service behind /auth and /me, the
+// store that signs a web request in by its session cookie, the origins a browser's unsafe request
+// may come from, and the API's limits per signed-in user and per household (PRD 02 §9).
+type Accounts struct {
+	Identity       *identity.Service
+	Sessions       *session.Store
+	Origins        *session.Origins
+	UserLimit      *ratelimit.Buckets
+	HouseholdLimit *ratelimit.Buckets
+}
 
 // Deps are what the router's handlers need.
 type Deps struct {
@@ -43,25 +58,49 @@ type Deps struct {
 	// BodyTimeout caps how long any request body may take to arrive, zero for no cap
 	// (httpx.BodyDeadline).
 	BodyTimeout time.Duration
+	// Accounts are the account surfaces, every one of which the router needs.
+	Accounts Accounts
 }
 
 // NewRouter returns the server's whole HTTP surface: the platform middleware, and under
 // contract.BasePath the contract's edge validation and every implemented route. It refuses
 // to build with a route the contract does not declare, so the server never serves one.
 //
+// Every unsafe request a browser sends from another site is refused before any route runs
+// (session.Origins). The routes a person reaches before signing in are served as they arrive; every
+// other route is behind the session cookie's authentication and the signed-in user's API limit,
+// and one about the caller's own account, under /me and the rest of /auth, keeps its
+// Idempotency-Key on the account, except the one whose body carries a password (D-97).
+//
 // The reference reads under /reference answer any authenticated caller, with no household.
 //
 // Everything under /households/{household_id} passes the tenant middleware, which answers a
 // caller who is not a member of the household before any route does, and carries the module
-// registry the mutation spine checks each mutation against. Each module's routes are mounted
-// below that at /<name>, behind the gate that answers 404 to a member who cannot see the module
-// (PRD modules/00 §1), and behind the Idempotency-Key middleware, which answers a repeated
-// unsafe request with its first response.
+// registry the mutation spine checks each mutation against, and the household's API limit, which
+// its members share. Each module's routes are mounted below that at /<name>, behind the gate that
+// answers 404 to a member who cannot see the module (PRD modules/00 §1), and behind the
+// Idempotency-Key middleware, which answers a repeated unsafe request with its first response.
 func NewRouter(d Deps) (*chi.Mux, error) {
 	tenancy, err := tenant.Middleware(tenant.Config{Pool: d.Pool, Logger: d.Logger, Entitlement: d.Entitlement})
 	if err != nil {
 		return nil, fmt.Errorf("app: %w", err)
 	}
+	a := d.Accounts
+	if a.Identity == nil || a.Sessions == nil || a.Origins == nil || a.UserLimit == nil || a.HouseholdLimit == nil {
+		return nil, errors.New("app: the router needs every account surface")
+	}
+	perUser := ratelimit.Middleware(a.UserLimit, func(r *http.Request) (string, bool) {
+		user, ok := auth.User(r.Context())
+		return user.String(), ok
+	})
+	// Behind the tenant middleware, so that only a member spends a household's budget.
+	perHousehold := ratelimit.Middleware(a.HouseholdLimit, func(r *http.Request) (string, bool) {
+		s := tenant.From(r.Context())
+		if s == nil {
+			return "", false
+		}
+		return s.HouseholdID().String(), true
+	})
 
 	root := chi.NewRouter()
 	root.Use(httpx.RequestScope, httpx.AccessLog(d.Logger), httpx.Recover(d.Logger), httpx.BodyDeadline(d.BodyTimeout))
@@ -69,22 +108,34 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	root.MethodNotAllowed(httpx.MethodNotAllowed)
 
 	api := chi.NewRouter()
-	api.Use(d.Contract.Middleware(api, contract.Limits{MaxBody: d.MaxBodyBytes}))
+	api.Use(d.Contract.Middleware(api, contract.Limits{MaxBody: d.MaxBodyBytes}), a.Origins.Middleware)
 	api.NotFound(httpx.NotFound)
 	api.MethodNotAllowed(httpx.MethodNotAllowed)
 
 	api.Get("/healthz", d.Health.Liveness)
 	api.Get("/readyz", d.Health.Readiness)
-	api.Route("/reference", reference.Routes(d.Pool, d.Logger))
+	a.Identity.PublicRoutes(api)
 
-	api.Route("/households/{"+tenant.Param+"}", func(household chi.Router) {
-		household.Use(tenancy, mutation.Catalog(d.Modules))
-		for _, m := range d.Modules.All() {
-			household.Route("/"+m.Name(), func(r chi.Router) {
-				r.Use(grant.Gate(m.Name()), idempotency.Middleware(d.Logger, d.MaxBodyBytes))
-				m.RegisterRoutes(r)
+	api.Group(func(signedIn chi.Router) {
+		signedIn.Use(a.Sessions.Authenticate, perUser)
+		signedIn.Route("/reference", reference.Routes(d.Pool, d.Logger))
+		signedIn.Group(func(account chi.Router) {
+			account.Use(auth.Required)
+			a.Identity.PasswordRoutes(account)
+			account.Group(func(keyed chi.Router) {
+				keyed.Use(idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes))
+				a.Identity.AccountRoutes(keyed)
 			})
-		}
+		})
+		signedIn.Route("/households/{"+tenant.Param+"}", func(household chi.Router) {
+			household.Use(tenancy, perHousehold, mutation.Catalog(d.Modules))
+			for _, m := range d.Modules.All() {
+				household.Route("/"+m.Name(), func(r chi.Router) {
+					r.Use(grant.Gate(m.Name()), idempotency.Middleware(d.Logger, d.MaxBodyBytes))
+					m.RegisterRoutes(r)
+				})
+			}
+		})
 	})
 
 	root.Mount(contract.BasePath, api)

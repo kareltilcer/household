@@ -135,7 +135,7 @@ func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 					panic(http.ErrAbortHandler)
 				}
 				log.LogAttrs(r.Context(), slog.LevelError, "panic",
-					slog.String("panic", typeName(v)),
+					slog.String("panic", TypeName(v)),
 					slog.String("stack", logging.Stack()),
 				)
 				if ww.sent() != 0 {
@@ -201,8 +201,8 @@ func (w *responseWriter) sent() int {
 	return 0
 }
 
-// typeName is the panic value's type, which is safe to log where the value is not.
-func typeName(v any) string { return fmt.Sprintf("%T", v) }
+// TypeName is a panic value's type, which is safe to log where the value is not.
+func TypeName(v any) string { return fmt.Sprintf("%T", v) }
 
 // NotFound answers a request no route matches with the not_found problem.
 func NotFound(w http.ResponseWriter, r *http.Request) {
@@ -257,6 +257,16 @@ func MountPoint(router chi.Routes, path string) bool {
 var methods = []string{
 	http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
 	http.MethodDelete, http.MethodOptions, http.MethodTrace, http.MethodConnect,
+}
+
+// Safe reports whether method is one RFC 9110 calls safe, a request for nothing to change: one
+// the CSRF defences leave be, and whose repeat needs no Idempotency-Key.
+func Safe(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return true
+	}
+	return false
 }
 
 // RoutePath is the path a router routes the request by: what remains below the mount

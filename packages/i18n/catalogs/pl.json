@@ -1,4 +1,12 @@
 {
+  "email.password_changed.body": "Dzień dobry,\n\nhasło do Twojego konta w aplikacji Household zostało właśnie zmienione.\n\nJeśli to Ty, nie musisz nic robić. Jeśli nie, zresetuj hasło od razu:\n\n{link}",
+  "email.password_changed.subject": "Hasło do aplikacji Household zostało zmienione",
+  "email.password_reset.body": "Dzień dobry,\n\notrzymaliśmy prośbę o zresetowanie hasła do Twojego konta w aplikacji Household. Aby wybrać nowe hasło, otwórz poniższy link. Link jest ważny przez godzinę.\n\n{link}\n\nJeśli to nie Ty o to prosisz, możesz zignorować tę wiadomość. Twoje hasło pozostanie bez zmian.",
+  "email.password_reset.subject": "Zresetuj hasło do aplikacji Household",
+  "email.register_existing.body": "Dzień dobry,\n\nktoś, być może Ty, próbował założyć konto w aplikacji Household przy użyciu tego adresu e-mail. Konto z tym adresem już istnieje, więc nic nie zostało zmienione.\n\nZaloguj się. Jeśli nie pamiętasz hasła, możesz je zresetować na tej samej stronie:\n\n{link}\n\nJeśli to nie Ty, możesz zignorować tę wiadomość.",
+  "email.register_existing.subject": "Masz już konto w aplikacji Household",
+  "email.verify_email.body": "Dzień dobry,\n\npotwierdź, że to Twój adres e-mail, otwierając poniższy link. Link jest ważny przez 24 godziny.\n\n{link}\n\nJeśli konto w aplikacji Household nie zostało założone przez Ciebie, możesz zignorować tę wiadomość.",
+  "email.verify_email.subject": "Potwierdź swój adres e-mail w aplikacji Household",
   "module.activity.name": "Historia zmian",
   "module.admin.name": "Ustawienia gospodarstwa domowego",
   "module.calendar.name": "Kalendarz",

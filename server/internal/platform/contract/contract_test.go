@@ -87,6 +87,7 @@ func router(t *testing.T) (http.Handler, *recorder) {
 	api := chi.NewRouter()
 	api.Use(c.Middleware(api, contract.Limits{MaxBody: maxBody}))
 	api.Put("/me/consents", handle)
+	api.Post("/auth/password-reset", handle)
 	api.Post("/households/{household_id}/shopping/lists", handle)
 	api.Patch("/households/{household_id}/shopping/lists/{list_id}", handle)
 	api.Get("/households/{household_id}/garden/harvests", handle)
@@ -690,6 +691,36 @@ func TestADateIsADayOnTheCalendar(t *testing.T) {
 	}
 }
 
+// kin-openapi does not check `format: email` at all by default; the edge holds it to a bare
+// address that SMTP can carry, as the server checks one everywhere it takes one.
+func TestAnEmailIsAnAddress(t *testing.T) {
+	h, _ := router(t)
+	reset := func(email string) call {
+		body, err := json.Marshal(map[string]string{"email": email})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return call{method: http.MethodPost, path: "/auth/password-reset", contentType: "application/json", body: string(body)}
+	}
+	for _, bad := range []string{
+		"", "jana", "jana@", "@tilcerovi.cz", "Jana <jana@tilcerovi.cz>", " jana@tilcerovi.cz", "jana@tilcerovi.cz ",
+		"jana@tilcerovi.cz\r\nBcc: x@y.z", "jana(home)@tilcerovi.cz", strings.Repeat("a", 250) + "@b.cz",
+		// 168 characters, but 268 octets, which is what SMTP counts.
+		strings.Repeat("a", 64) + "@" + strings.Repeat("ž", 100) + ".cz",
+		// A part before the @ longer than SMTP's 64 octets, in characters or in octets alone.
+		strings.Repeat("a", 65) + "@example.com", strings.Repeat("ž", 33) + "@example.cz",
+		// An address in brackets, which would have the relay deliver to a host the caller chose.
+		"jana@[192.0.2.1]", "jana@[IPv6:2001:db8::1]",
+	} {
+		sameErrors(t, fieldErrors(t, reset(bad).do(t, h)), problem.FieldError{Field: "/email", Code: "format"})
+	}
+	for _, good := range []string{"jana@tilcerovi.cz", "Jana.Tilcerova+home@tilcerovi.cz", "miloš@example.cz", strings.Repeat("a", 64) + "@example.com"} {
+		if rec := reset(good).do(t, h); rec.Code != http.StatusNoContent {
+			t.Errorf("%q: %d %s", good, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func TestARequestNoRouteMatchesPassesThrough(t *testing.T) {
 	h, _ := router(t)
 	for _, c := range []call{
@@ -747,6 +778,20 @@ func TestValidateResponse(t *testing.T) {
 	if err := c.ValidateResponse(post, "/households/{household_id}/shopping/lists", map[string]string{"household_id": household},
 		http.StatusBadRequest, problemHeader, inProgress); err == nil {
 		t.Error("an idempotency_in_progress answered with another status passed")
+	}
+	// A CSRF refusal is any unsafe operation's 403, whether or not it declares one, and no safe
+	// operation's.
+	csrf := []byte(`{"type":"urn:household:problem:csrf_failed","title":"Forbidden","status":403,"code":"csrf_failed"}`)
+	if err := c.ValidateResponse(post, "/households/{household_id}/shopping/lists", map[string]string{"household_id": household},
+		http.StatusForbidden, problemHeader, csrf); err != nil {
+		t.Errorf("a 403 csrf_failed from an unsafe operation: %v", err)
+	}
+	if err := c.ValidateResponse(get, "/healthz", nil, http.StatusForbidden, problemHeader, csrf); err == nil {
+		t.Error("a 403 csrf_failed from a safe operation passed")
+	}
+	if err := c.ValidateResponse(post, "/households/{household_id}/shopping/lists", map[string]string{"household_id": household},
+		http.StatusUnauthorized, problemHeader, csrf); err == nil {
+		t.Error("a csrf_failed answered with another status passed")
 	}
 	if err := c.ValidateResponse(get, "", nil, http.StatusNotFound, problemHeader, []byte(`{"type":"x","title":"Not Found","status":404}`)); err == nil {
 		t.Error("a problem without a code passed")

@@ -38,7 +38,7 @@ type Actor struct {
 	// ID is the user, for a User actor; the zero UUID otherwise.
 	ID uuid.UUID
 	// Label is the actor's name as the event was written, so that the log reads after they
-	// leave; "" until accounts have names (item 8).
+	// leave; "" for a user who has none, whose event records NULL.
 	Label string
 }
 

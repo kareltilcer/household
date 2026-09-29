@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kareltilcer/household/server/internal/app"
+	"github.com/kareltilcer/household/server/internal/app/apptest"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
@@ -34,9 +35,11 @@ func TestRoutesMatchTheContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	log := logging.New(io.Discard, slog.LevelError)
+	pool := testsupport.Open(t).Pool(t, db.RoleApp)
+	accounts, _ := apptest.Accounts(t, pool, log, apptest.Options{})
 	router, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
-		Pool: testsupport.Open(t).Pool(t, db.RoleApp), Modules: registry(t), MaxBodyBytes: 1,
+		Pool: pool, Modules: registry(t), MaxBodyBytes: 1, Accounts: accounts,
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

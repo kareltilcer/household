@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { catalogs, locales } from './catalogs.ts'
-import { formatMessage, MessageError } from './message.ts'
+import { formatMessage, MessageError, parseMessage, signature } from './message.ts'
 import { pseudoLocale, pseudolocalize } from './pseudo.ts'
 import { createTranslator } from './translator.ts'
 
@@ -51,10 +51,18 @@ describe('the pseudo-locale', () => {
     expect(formatMessage('en', pseudolocalize(message), args)).toBe(shown)
   })
 
+  // Each with the arguments its English takes, a number where it formats one, as the
+  // pseudo-locale's translator formats it; a message may run over several lines, an email's body.
   it('renders every key of the catalogs', () => {
-    const t = createTranslator(pseudoLocale)
     for (const key of Object.keys(catalogs.en) as (keyof typeof catalogs.en)[]) {
-      expect(t(key)).toMatch(/^⟦.*⟧$/)
+      const english = catalogs.en[key]
+      const args = Object.fromEntries(
+        [...signature(parseMessage(english))].map(([name, kind]) => [
+          name,
+          kind === 'number' ? 1 : 'x',
+        ]),
+      )
+      expect(formatMessage('en', pseudolocalize(english), args)).toMatch(/^⟦[\s\S]*⟧$/)
     }
   })
 })
