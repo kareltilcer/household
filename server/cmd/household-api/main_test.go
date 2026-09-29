@@ -45,7 +45,7 @@ func env(t *testing.T) config.Getenv {
 		config.TrustedProxiesVar:     config.NoProxies,
 		config.SMTPURLVar:            "smtp://127.0.0.1:1",
 		config.MailFromVar:           "Household <no-reply@household.test>",
-		config.BreachedPasswordsVar:  corpus,
+		config.BreachCorpusVar:       corpus,
 	}
 	return func(key string) (string, bool) {
 		v, ok := vars[key]

@@ -77,7 +77,7 @@ const (
 	TrustedProxiesVar     = "HOUSEHOLD_TRUSTED_PROXIES"
 	SMTPURLVar            = "HOUSEHOLD_SMTP_URL"
 	MailFromVar           = "HOUSEHOLD_MAIL_FROM"
-	BreachedPasswordsVar  = "HOUSEHOLD_BREACHED_PASSWORDS"
+	BreachCorpusVar       = "HOUSEHOLD_BREACH_CORPUS"
 )
 
 // NoProxies is TrustedProxiesVar's value for a server its clients reach directly, with no proxy
@@ -135,9 +135,9 @@ type Config struct {
 	TrustedProxies []netip.Prefix
 	// SMTPURL is the mail server, smtp:// or smtps://, with its credentials; MailFrom the sender.
 	SMTPURL, MailFrom string
-	// BreachedPasswords is the breached-password corpus (internal/platform/breach), "" for none,
-	// which only development may serve with.
-	BreachedPasswords string
+	// BreachCorpus is the path of the breached-password corpus file (internal/platform/breach),
+	// "" for none, which only development may serve with.
+	BreachCorpus string
 }
 
 // Getenv looks a variable up, reporting whether it is set.
@@ -285,7 +285,7 @@ func (l *loader) serving(c *Config, dev bool) {
 		}
 	}
 
-	c.BreachedPasswords = required(BreachedPasswordsVar, "")
+	c.BreachCorpus = required(BreachCorpusVar, "")
 }
 
 // Database returns the name of the database a connection string connects to.

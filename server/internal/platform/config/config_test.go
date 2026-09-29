@@ -64,7 +64,7 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		config.EnvVar:         "production",
 		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
 	}))
-	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachedPasswordsVar} {
+	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachCorpusVar} {
 		if err == nil || !strings.Contains(err.Error(), key) {
 			t.Errorf("serving in production without %s: %v", key, err)
 		}
@@ -85,11 +85,11 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 // serving adds to vars what serving needs outside development, where vars does not set it.
 func serving(vars map[string]string) map[string]string {
 	for key, value := range map[string]string{
-		config.WebURLVar:            "https://app.household.example",
-		config.TrustedProxiesVar:    config.NoProxies,
-		config.SMTPURLVar:           "smtps://mailer:" + "pw" + "@smtp.example:465",
-		config.MailFromVar:          "Household <no-reply@household.example>",
-		config.BreachedPasswordsVar: "/var/lib/household/breached.bin",
+		config.WebURLVar:         "https://app.household.example",
+		config.TrustedProxiesVar: config.NoProxies,
+		config.SMTPURLVar:        "smtps://mailer:" + "pw" + "@smtp.example:465",
+		config.MailFromVar:       "Household <no-reply@household.example>",
+		config.BreachCorpusVar:   "/var/lib/household/breached.bin",
 	} {
 		if _, ok := vars[key]; !ok {
 			vars[key] = value
@@ -106,7 +106,7 @@ func TestServingInDevelopmentDefaultsTheAccountSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.WebURL.String() != "http://localhost:5173" || c.SMTPURL != "smtp://127.0.0.1:1025" ||
-		c.MailFrom != "Household <no-reply@household.localhost>" || c.BreachedPasswords != "" ||
+		c.MailFrom != "Household <no-reply@household.localhost>" || c.BreachCorpus != "" ||
 		len(c.TrustedProxies) != 0 || strings.Join(c.AllowedOrigins, ",") != "http://localhost:5173" {
 		t.Fatalf("%+v", c)
 	}
@@ -120,7 +120,7 @@ func TestTheAccountSettingsAreRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.WebURL.String() != "https://app.household.example" || c.BreachedPasswords != "/var/lib/household/breached.bin" ||
+	if c.WebURL.String() != "https://app.household.example" || c.BreachCorpus != "/var/lib/household/breached.bin" ||
 		strings.Join(c.AllowedOrigins, ",") != "https://app.household.example,https://preview.household.example,http://localhost:5173" ||
 		len(c.TrustedProxies) != 2 {
 		t.Fatalf("%+v", c)

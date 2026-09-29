@@ -1,7 +1,7 @@
 # Building and refreshing the breached-password corpus
 
 The server refuses a new password that appears in a public breach (FR-ID1, D-12). It checks against
-a file on its own disk, `HOUSEHOLD_BREACHED_PASSWORDS`, and never asks anyone else: no password,
+a file on its own disk, `HOUSEHOLD_BREACH_CORPUS`, and never asks anyone else: no password,
 hashed or prefixed, leaves the platform. The file is built from Have I Been Pwned's *Pwned
 Passwords* by Troy Hunt, licensed CC BY 4.0, and holds the first 8 bytes of each password's SHA-1,
 sorted ([ADR 0009](../adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md)).
@@ -44,7 +44,7 @@ The command prints how many prefixes it wrote. A full build holds about a billio
 ## Deploy it
 
 1. Copy the file to the server's volume beside the old one, under a new name.
-2. Point `HOUSEHOLD_BREACHED_PASSWORDS` at the new file and restart the API. The server opens the
+2. Point `HOUSEHOLD_BREACH_CORPUS` at the new file and restart the API. The server opens the
    file at start and checks its header and size; one that is not a whole corpus stops it with a
    message naming the file, so a bad copy never serves.
 3. Delete the old file once the new one is serving.

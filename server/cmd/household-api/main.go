@@ -166,8 +166,8 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 		return app.Accounts{}, closeAll, err
 	}
 	var breached func(string) (bool, error)
-	if cfg.BreachedPasswords != "" {
-		corpus, err := breach.Open(cfg.BreachedPasswords)
+	if cfg.BreachCorpus != "" {
+		corpus, err := breach.Open(cfg.BreachCorpus)
 		if err != nil {
 			return app.Accounts{}, closeAll, err
 		}
