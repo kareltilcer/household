@@ -108,23 +108,22 @@ export async function compareReplica(
   return out
 }
 
-/** Invariant 2: the row every `applied` or `merged` answer names is on the server at its version or later. */
+/**
+ * Invariant 2: the row every `applied` or `merged` answer names is on the server at its version or
+ * later. Such an answer carries the version it committed at (PRD 03 §2.4); one without it cannot be
+ * held to the server, and is reported as well as looked for.
+ */
 export async function acknowledgedWrites(
   recorder: Recorder,
-  admin: Admin,
-  clients: readonly Client[],
+  admin: Pick<Admin, 'rows'>,
+  clients: readonly Pick<Client, 'name' | 'household'>[],
 ): Promise<Violation[]> {
   const out: Violation[] = []
   const householdOf = new Map(clients.map((c) => [c.name, c.household]))
   const cache = new Map<string, Map<string, CanonicalRow>>()
   for (const a of recorder.answers) {
     const { result, mutation } = a
-    if (
-      (result.outcome !== 'applied' && result.outcome !== 'merged') ||
-      result.version === null ||
-      result.version === undefined
-    )
-      continue
+    if (result.outcome !== 'applied' && result.outcome !== 'merged') continue
     const household = householdOf.get(a.client)
     if (household === undefined) continue
     const table = entitySpec(mutation.entity_type).table as TableName
@@ -141,6 +140,12 @@ export async function acknowledgedWrites(
         invariant: 'no-acknowledged-write-lost',
         client: a.client,
         detail: `${mutation.mutation_id} was ${result.outcome} as ${table} ${rowId}, which the server does not hold`,
+      })
+    } else if (result.version === null || result.version === undefined) {
+      out.push({
+        invariant: 'no-acknowledged-write-lost',
+        client: a.client,
+        detail: `${mutation.mutation_id} was ${result.outcome} as ${table} ${rowId} without the version it committed at`,
       })
     } else if (Number(there['version']) < result.version) {
       out.push({
@@ -173,9 +178,9 @@ export interface TerminalityOptions {
 }
 
 /**
- * Invariant 6: every mutation ended once; none left queued, held or unanswered; every answer well
- * formed. A mutation held for its entitlement and then replayed was answered twice, a rejection
- * that held it and the answer that ended it, and ended once.
+ * Invariant 6: every mutation clients wrote ended once; none left queued, held or unanswered; every
+ * answer they read well formed. A mutation held for its entitlement and then replayed was answered
+ * twice, a rejection that held it and the answer that ended it, and ended once.
  */
 export async function terminality(
   recorder: Recorder,
@@ -183,6 +188,7 @@ export async function terminality(
   options: TerminalityOptions = {},
 ): Promise<Violation[]> {
   const out: Violation[] = []
+  const judged = new Set(clients.map((c) => c.name))
   const allowHeld = new Set(options.allowHeld ?? [])
   const held = new Map<string, HoldReason>()
   for (const client of clients) {
@@ -196,6 +202,7 @@ export async function terminality(
       })
   }
   for (const [id, w] of recorder.written) {
+    if (!judged.has(w.client)) continue
     const ended = recorder.answersTo(id).filter((a) => ends(a.result))
     const outcomes = [...new Set(ended.map((a) => a.result.outcome))]
     if (ended.length === 0) {
@@ -222,6 +229,7 @@ export async function terminality(
     }
   }
   for (const m of recorder.malformedResponses) {
+    if (!judged.has(m.client)) continue
     out.push({
       invariant: 'terminality',
       client: m.client,

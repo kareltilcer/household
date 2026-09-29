@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Admin } from '../harness/admin.ts'
 import { adminDatabaseUrl } from '../harness/env.ts'
+import { entitySpec, type TableName } from '../harness/schema.ts'
 import { standIn, type Target } from '../harness/target.ts'
 import { World } from '../harness/world.ts'
 import { enabled, scenarios } from '../scenarios/index.ts'
@@ -25,11 +26,19 @@ afterAll(async () => {
   await admin.close()
 })
 
-/** What target lacks for s, or null. */
+/**
+ * What target lacks for s, or null: an entity it needs that the push does not write, a table its
+ * streams do not replicate (the tables of those entities as well as the ones it names, since a
+ * replica is compared only on the tables the target replicates), or a capability.
+ */
 function lacks(s: Scenario): string | null {
   const entities = s.needs.filter((e) => !target.writes.has(e))
   if (entities.length > 0) return `its push does not write ${entities.join(', ')}`
-  const tables = (s.replicates ?? []).filter((t) => !target.replicates.has(t))
+  const needed = new Set<TableName>([
+    ...s.needs.map((e) => entitySpec(e).table as TableName),
+    ...(s.replicates ?? []),
+  ])
+  const tables = [...needed].filter((t) => !target.replicates.has(t))
   if (tables.length > 0) return `its streams do not replicate ${tables.join(', ')}`
   const capabilities = (s.capabilities ?? []).filter((c) => target[c] === undefined)
   if (capabilities.length > 0) return `it cannot ${capabilities.join(', ')}`

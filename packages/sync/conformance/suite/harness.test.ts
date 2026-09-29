@@ -4,13 +4,14 @@
 // The scenarios themselves (scenarios.test.ts) wait for the engine items 13, 14 and 18 build.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { Admin, type Household, type Member } from '../harness/admin.ts'
+import { Admin } from '../harness/admin.ts'
 import { adminDatabaseUrl } from '../harness/env.ts'
 import type { Violation } from '../harness/invariants.ts'
 import { push } from '../harness/network.ts'
 import { leakyStream, standIn } from '../harness/target.ts'
 import { sleep } from '../harness/wait.ts'
 import { World } from '../harness/world.ts'
+import { family } from '../scenarios/scenario.ts'
 
 let admin: Admin
 
@@ -31,34 +32,8 @@ async function run(name: string, seed: number, body: (w: World) => Promise<void>
   }
 }
 
-interface Family {
-  readonly jana: Member
-  readonly petr: Member
-  readonly eva: Member
-  readonly home: Household
-  readonly milk: string
-  readonly bread: string
-  readonly eggs: string
-}
-
-/** Jana owns the household; Petr and Eva contribute to the module; three items are on the list. */
-async function family(w: World): Promise<Family> {
-  const jana = await w.member('Jana')
-  const petr = await w.member('Petr')
-  const eva = await w.member('Eva')
-  const home = await w.household('Novákovi', [
-    { member: jana, role: 'owner' },
-    { member: petr, role: 'member', level: 'contribute' },
-    { member: eva, role: 'member', level: 'contribute' },
-  ])
-  const [milk, bread, eggs] = [w.rng.uuid(), w.rng.uuid(), w.rng.uuid()]
-  await admin.insert('conformance_items', home, [
-    { id: milk, title: 'Milk' },
-    { id: bread, title: 'Bread' },
-    { id: eggs, title: 'Eggs' },
-  ])
-  return { jana, petr, eva, home, milk, bread, eggs }
-}
+// Every run starts from the household the scenarios start from (family): Jana owns it, Petr and
+// Eva contribute to the module, and three items are on the list.
 
 const kinds = (violations: readonly Violation[]): string[] =>
   [...new Set(violations.map((v) => v.invariant))].sort()
@@ -183,6 +158,23 @@ describe('the harness, against the stand-ins', () => {
       expect(await w.settle()).toBe(true)
       expect(await home.rows('conformance_items')).toHaveLength(3)
       expect(await away.rows('conformance_items')).toHaveLength(1)
+      expect(await w.violations()).toEqual([])
+    })
+  })
+
+  // PowerSync refuses a connection whose parameter lookups return more than 1000 results
+  // (PSYNC_S2305), so a stream that looks up every household enabling the module stops syncing
+  // once the database holds 250 of them across its four streams. The suite's database keeps its
+  // households from run to run, and the engine's serves every household there is.
+  it('keeps each stream to the caller and the household, however many households enable the module', async () => {
+    await run('many-households', 12_007, async (w) => {
+      await admin.fill(w.rng.fork(), 300)
+      const f = await family(w)
+      const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
+      const jana = w.client({ name: 'jana', member: f.jana, household: f.home })
+      await Promise.all([petr.online(), jana.online()])
+      expect(await w.settle()).toBe(true)
+      expect(await petr.rows('conformance_items')).toHaveLength(3)
       expect(await w.violations()).toEqual([])
     })
   })

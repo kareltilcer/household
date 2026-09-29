@@ -12,6 +12,12 @@
 # a client subscribes to each stream with {household_id}, and a member of two households keeps
 # one replica for each. A soft-deleted row leaves the replica, as the spike's did; item 13 keeps
 # tombstones, so that a client can tell a row another member deleted from one it lost access to.
+#
+# Every table a stream's subquery reads is looked up by the caller (auth.user_id()) or by the
+# subscribed household, never by constants alone: PowerSync caps the parameter results of one
+# connection at 1000, and a lookup of every household that enables the module grows with the
+# database until PowerSync refuses every connection (PSYNC_S2305), as these four streams did past
+# 250 such households.
 config:
   edition: 3
 
@@ -25,6 +31,7 @@ streams:
           SELECT m.household_id FROM memberships m
             JOIN module_enablement e ON e.household_id = m.household_id
           WHERE m.user_id = auth.user_id() AND m.role = 'owner'
+            AND e.household_id = subscription.parameter('household_id')
             AND e.module = 'conformance' AND e.enabled
         )
 
@@ -37,7 +44,7 @@ streams:
           SELECT g.household_id FROM module_grants g
             JOIN module_enablement e ON e.household_id = g.household_id AND e.module = g.module
           WHERE g.user_id = auth.user_id() AND g.module = 'conformance' AND g.level <> 'none'
-            AND e.enabled
+            AND e.household_id = subscription.parameter('household_id') AND e.enabled
         )
 
   conformance_item_checks_owner:
@@ -49,6 +56,7 @@ streams:
           SELECT m.household_id FROM memberships m
             JOIN module_enablement e ON e.household_id = m.household_id
           WHERE m.user_id = auth.user_id() AND m.role = 'owner'
+            AND e.household_id = subscription.parameter('household_id')
             AND e.module = 'conformance' AND e.enabled
         )
 
@@ -61,7 +69,7 @@ streams:
           SELECT g.household_id FROM module_grants g
             JOIN module_enablement e ON e.household_id = g.household_id AND e.module = g.module
           WHERE g.user_id = auth.user_id() AND g.module = 'conformance' AND g.level <> 'none'
-            AND e.enabled
+            AND e.household_id = subscription.parameter('household_id') AND e.enabled
         )
 
   # Broken on purpose, for the suite's negative control (conformance/suite/harness.test.ts): it

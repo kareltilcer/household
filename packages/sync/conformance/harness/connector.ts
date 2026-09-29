@@ -2,7 +2,10 @@
 // item 15's will (ADR 0001), until item 15's replaces it. PowerSync applies no checkpoint while
 // the queue holds anything, so the connector ends every mutation the server answers, whatever the
 // answer, and throws (so that PowerSync retries it) only when nothing answered the mutations: a
-// transport failure, a 5xx, a 401, a 409 or a 429.
+// transport failure, a 5xx, a 401, a 409 or a 429. A response outside the contract (a 200 that
+// does not answer the batch, a 422 that neither locates a mutation nor refuses the batch's size,
+// a status handled below by none of these rules) answers nothing either: it is reported to the
+// suite as a protocol fault (Observer.malformed), and thrown on.
 //
 // It sends the queue in order, several queued transactions to a batch up to maxBatch, under one
 // Idempotency-Key per batch that stays with the batch until it is answered, a held batch's as
@@ -84,7 +87,7 @@ export interface Attempt {
 /** What the connector tells the suite's recorder. */
 export interface Observer {
   attempted?(attempt: Attempt): void
-  answered?(mutation: SyncMutation, result: SyncMutationResult, via: Attempt): void
+  answered?(mutation: SyncMutation, result: SyncMutationResult): void
   /** A response the connector could not read as the contract says: a protocol fault, which it throws on. */
   malformed?(attempt: Attempt, reason: string): void
 }
@@ -114,7 +117,6 @@ const inProgress = 'idempotency_in_progress'
 
 /** A batch not yet answered, which a retry must send again unchanged. */
 interface InFlight {
-  readonly source: Attempt['source']
   readonly ids: readonly string[]
   key: string
   /** When the batch was first sent under key. */
@@ -224,7 +226,7 @@ export class ConformanceConnector {
     const ids = all.map((m) => m.mutation_id)
     let flight = this.inflight.get(source)
     if (flight === undefined || !sameIds(flight, ids)) {
-      flight = { source, ids, key: this.o.newKey(), firstSentAt: this.o.now(), settled: new Map() }
+      flight = { ids, key: this.o.newKey(), firstSentAt: this.o.now(), settled: new Map() }
       this.inflight.set(source, flight)
     } else if (this.o.now() - flight.firstSentAt > inProgressWindowMs) {
       // D-92: the first request under this key never answered in five minutes; per-mutation
@@ -366,18 +368,10 @@ export class ConformanceConnector {
 
   /** Ends each of all with its answer: records it, holds it, or both. */
   private async settle(all: readonly SyncMutation[], flight: InFlight): Promise<void> {
-    const via: Attempt = {
-      key: flight.key,
-      mutationIds: flight.ids,
-      source: flight.source,
-      status: 200,
-      body: '',
-      response: null,
-    }
     for (const m of all) {
       const r = flight.settled.get(m.mutation_id)
       if (r === undefined) continue
-      this.o.observer?.answered?.(m, r, via)
+      this.o.observer?.answered?.(m, r)
       if (r.outcome !== 'applied') await this.o.journal.record(m, r)
       if (r.outcome === 'deferred') await this.o.journal.hold('deferred', m)
       else if (r.outcome === 'rejected' && isEntitlement(r.code))

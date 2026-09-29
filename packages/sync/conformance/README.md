@@ -15,7 +15,8 @@ pnpm --filter @household/sync conformance        # the self-tests, the switched-
 pnpm --filter @household/sync conformance:down   # remove the stack
 ```
 
-`conformance:up` can be run again on a stack that is up. The suite builds and starts the stand-in API
+`conformance:up` can be run again on a stack that is up, and starts PowerSync afresh on the configuration
+and streams in `stack/powersync`. The suite builds and starts the stand-in API
 itself unless one already answers (`CONFORMANCE_START_STANDIN=false` to require one).
 
 | Variable | Default | What |

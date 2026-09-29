@@ -121,11 +121,12 @@ export class World {
     return out
   }
 
-  /** client's batches that were answered 200, the ones a network retry could deliver again. */
+  /**
+   * client's batches that were answered 200, the ones a network retry could deliver again: its
+   * queue's, and the replays of the mutations it held.
+   */
   answered(client: Client): Attempt[] {
-    return this.recorder.attempts.filter(
-      (a) => a.client === client.name && a.status === 200 && a.source === 'queue',
-    )
+    return this.recorder.attempts.filter((a) => a.client === client.name && a.status === 200)
   }
 
   /**
@@ -186,9 +187,7 @@ export class World {
   /** The answer that ended the mutation r answers, or r when none has. */
   private endOf(r: Answered): Answered {
     const end = this.recorder.answersTo(r.id).find((a) => ends(a.result))
-    return end === undefined
-      ? r
-      : { id: r.id, outcome: end.result.outcome, version: end.result.version ?? null }
+    return end === undefined ? r : answeredAs(end.result)
   }
 
   /**
@@ -236,16 +235,21 @@ export class World {
   }
 }
 
-/** A mutation's outcome and version, as a push answered it. */
+/** A mutation's outcome, code and version, as a push answered it. */
 interface Answered {
   readonly id: string
   readonly outcome: string
+  readonly code: string | null
   readonly version: number | null
 }
 
-/** Each mutation's outcome and version in a push's answer, in order. */
+function answeredAs(r: SyncMutationResult): Answered {
+  return { id: r.mutation_id, outcome: r.outcome, code: r.code ?? null, version: r.version ?? null }
+}
+
+/** Each mutation's outcome, code and version in a push's answer, in order. */
 function outcomes(text: string | null): Answered[] {
   if (text === null) return []
   const results = (JSON.parse(text) as { results?: SyncMutationResult[] }).results ?? []
-  return results.map((r) => ({ id: r.mutation_id, outcome: r.outcome, version: r.version ?? null }))
+  return results.map(answeredAs)
 }

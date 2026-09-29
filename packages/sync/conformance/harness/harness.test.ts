@@ -1,7 +1,7 @@
 import { isUuid } from '@household/api'
 import { UpdateType } from '@powersync/common'
 import { describe, expect, it } from 'vitest'
-import { terminality } from './invariants.ts'
+import { acknowledgedWrites, terminality } from './invariants.ts'
 import {
   encodeMetadata,
   ends,
@@ -262,6 +262,56 @@ describe('terminality', () => {
     expect((await terminality(r, [quiet])).map((v) => v.detail)).toEqual([
       'm-1 ended rejected and applied',
       expect.stringContaining('(m-2) never ended'),
+    ])
+  })
+
+  it('judges only the clients it is given', async () => {
+    const r = recorder('m-1')
+    r.wrote('eva', { mutationId: 'm-2', table: 'conformance_items', entityId: 'y', op: 'update' })
+    r.answered('petr', mutation('m-1'), answer('m-1', 'applied'))
+    expect(await terminality(r, [quiet])).toEqual([])
+  })
+})
+
+describe('no acknowledged write lost', () => {
+  const home = { id: 'h', name: 'Novákovi', timezone: 'Europe/Prague' }
+  const server = {
+    rows: () =>
+      Promise.resolve(
+        new Map([['x', canonicalRow(tableSpec('conformance_items'), { id: 'x', version: 3 })]]),
+      ),
+  }
+  const judge = async (result: Omit<SyncMutationResult, 'mutation_id'>): Promise<string[]> => {
+    const r = new Recorder()
+    r.answered(
+      'petr',
+      {
+        mutation_id: 'm-1',
+        entity_type: 'conformance.item',
+        entity_id: 'x',
+        op: 'update',
+        base_version: 1,
+        action: null,
+        fields: {},
+        client_time: '2026-09-29T10:00:00Z',
+      },
+      { mutation_id: 'm-1', ...result },
+    )
+    const found = await acknowledgedWrites(r, server, [{ name: 'petr', household: home }])
+    return found.map((v) => v.detail)
+  }
+
+  it('holds an applied write to the row at the version it answered, or later', async () => {
+    expect(await judge({ outcome: 'applied', version: 3, code: null })).toEqual([])
+    expect(await judge({ outcome: 'merged', version: 2, code: 'merged' })).toEqual([])
+    expect(await judge({ outcome: 'applied', version: 4, code: null })).toEqual([
+      expect.stringContaining('the server holds at 3'),
+    ])
+  })
+
+  it('reports an applied write answered without the version it committed at', async () => {
+    expect(await judge({ outcome: 'applied', version: null, code: null })).toEqual([
+      expect.stringContaining('without the version it committed at'),
     ])
   })
 })

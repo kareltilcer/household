@@ -165,7 +165,8 @@ export const schema = new Schema({
     ]),
   ),
   // Each answer that was not `applied`, with its mutation: the conflict inbox and a rejection keep
-  // what the member wrote from it.
+  // what the member wrote from it. position orders them as they were answered, which answered_at,
+  // in milliseconds, cannot within a batch.
   [outcomesTable]: new Table(
     {
       mutation_id: column.text,
@@ -179,6 +180,7 @@ export const schema = new Schema({
       row: column.text,
       mutation: column.text,
       answered_at: column.text,
+      position: column.integer,
     },
     { localOnly: true },
   ),

@@ -393,7 +393,7 @@ export class Client {
   /** The answers other than `applied` the client recorded, oldest first. */
   async outcomes(): Promise<RecordedOutcome[]> {
     const rows = await this.db.getAll<Omit<RecordedOutcome, 'row'> & { row: string | null }>(
-      `SELECT mutation_id, entity_type, entity_id, op, outcome, code, version, row FROM ${outcomesTable} ORDER BY answered_at, id`,
+      `SELECT mutation_id, entity_type, entity_id, op, outcome, code, version, row FROM ${outcomesTable} ORDER BY position`,
     )
     return rows.map((r) => ({ ...r, row: r.row === null ? null : (JSON.parse(r.row) as unknown) }))
   }
@@ -408,9 +408,10 @@ export class Client {
   private journal(): Journal {
     return {
       record: async (mutation, result) => {
+        // After every answer recorded before it, as held mutations are (hold).
         await this.db.execute(
-          `INSERT INTO ${outcomesTable} (id, mutation_id, entity_type, entity_id, op, outcome, code, message, version, row, mutation, answered_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO ${outcomesTable} (id, mutation_id, entity_type, entity_id, op, outcome, code, message, version, row, mutation, answered_at, position)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(position), 0) + 1 FROM ${outcomesTable}))`,
           [
             this.ctx.rng.uuid(),
             mutation.mutation_id,

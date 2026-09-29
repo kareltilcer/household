@@ -38,6 +38,16 @@ export interface Household {
 
 const joinCodeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
+/**
+ * A household's join code. Unseeded: codes are unique across runs on one database, and no schedule
+ * depends on one.
+ */
+function joinCode(): string {
+  return Array.from({ length: 8 }, () =>
+    joinCodeAlphabet.charAt(randomInt(joinCodeAlphabet.length)),
+  ).join('')
+}
+
 // A date is a calendar day, read as its text: node-postgres would make it a Date at the local
 // timezone's midnight, which is another day in UTC. The suite reads the database only here.
 pg.types.setTypeParser(pg.types.builtins.DATE, (value: string) => value)
@@ -68,10 +78,7 @@ export class Admin {
     const owner = members.find((m) => m.role === 'owner')
     if (owner === undefined) throw new Error('a household has an owner')
     const household: Household = { id: rng.uuid(), name, timezone: 'Europe/Prague' }
-    // Unseeded: codes are unique across runs on one database, and no schedule depends on one.
-    const code = Array.from({ length: 8 }, () =>
-      joinCodeAlphabet.charAt(randomInt(joinCodeAlphabet.length)),
-    ).join('')
+    const code = joinCode()
     const c = await this.pool.connect()
     try {
       await c.query('BEGIN')
@@ -106,14 +113,41 @@ export class Admin {
     return household
   }
 
-  /** Adds member to household with role, and their grant. */
-  async join(rng: Rng, household: Household, spec: MemberSpec): Promise<void> {
-    await this.pool.query(
-      'INSERT INTO memberships (id, household_id, user_id, role) VALUES ($1, $2, $3, $4)',
-      [rng.uuid(), household.id, spec.member.id, spec.role],
+  /**
+   * Households with no member, until the database holds at least total that enable the conformance
+   * module: the load a stream bears whose lookups reach households it was not asked for.
+   */
+  async fill(rng: Rng, total: number): Promise<void> {
+    const counted = await this.pool.query<{ n: string }>(
+      'SELECT count(*) AS n FROM module_enablement WHERE module = $1 AND enabled',
+      [moduleId],
     )
-    if (spec.role !== 'owner' && spec.level !== undefined)
-      await this.setGrant(household, spec.member, spec.level)
+    const missing = total - Number(counted.rows[0]?.n ?? 0)
+    if (missing <= 0) return
+    const households = Array.from({ length: missing }, () => rng.uuid())
+    const enablements = Array.from({ length: missing }, () => rng.uuid())
+    const codes = Array.from({ length: missing }, joinCode)
+    const c = await this.pool.connect()
+    try {
+      await c.query('BEGIN')
+      await c.query(
+        `INSERT INTO households (id, name, country, timezone, base_currency, locale, units, first_day_of_week, join_code)
+         SELECT f.id, 'Filler', 'CZ', 'Europe/Prague', 'CZK', 'cs', 'metric', 1, f.code
+         FROM unnest($1::uuid[], $2::text[]) AS f (id, code)`,
+        [households, codes],
+      )
+      await c.query(
+        `INSERT INTO module_enablement (id, household_id, module, enabled)
+         SELECT f.id, f.household_id, $3, true FROM unnest($1::uuid[], $2::uuid[]) AS f (id, household_id)`,
+        [enablements, households, moduleId],
+      )
+      await c.query('COMMIT')
+    } catch (error) {
+      await c.query('ROLLBACK')
+      throw error
+    } finally {
+      c.release()
+    }
   }
 
   /** Sets member's grant on the conformance module (FR-AC3). */

@@ -52,12 +52,13 @@ export const delivery: readonly Scenario[] = [
     title: 'Batch where mutation 3 fails',
     expected:
       '1–2 apply, 3 rejected, 4 and on deferred; the retry resolves: the deferred ones are replayed once the queue has ' +
-      'drained, and each ends once',
+      'drained, after a later write to the same row queued behind them (PRD 10 §4, D-93), and each ends once',
     enabledBy: 13,
     needs: ['conformance.item'],
     async run(w) {
       const f = await family(w)
-      const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
+      // Five mutations to a batch, so that the sixth write is sent in a batch of its own.
+      const petr = w.client({ name: 'petr', member: f.petr, household: f.home, maxBatch: 5 })
       await online(w, petr)
       await offline(petr)
       const rice = await petr.create('conformance_items', { title: 'Rice' })
@@ -66,6 +67,9 @@ export const delivery: readonly Scenario[] = [
       await petr.update('conformance_items', rice, { quantity: 0 })
       await petr.update('conformance_items', rice, { note: 'organic' })
       await petr.update('conformance_items', rice, { title: 'Basmati' })
+      // A later write to the same row, queued behind the two the server defers: they replay after
+      // it, the one reorder of a client's own uploads (PRD 10 §4).
+      await petr.update('conformance_items', rice, { quantity: 2 })
       await online(w, petr)
 
       const outcomes = answersOf(w, petr).map((a) => a.outcome)
@@ -76,12 +80,24 @@ export const delivery: readonly Scenario[] = [
         'deferred',
         'deferred',
       ])
-      expect(outcomes.slice(5)).toEqual(['applied', 'applied'])
+      expect(outcomes.slice(5)).toEqual(['applied', 'applied', 'applied'])
       expect(answersOf(w, petr)[2]?.code).toBe('validation_failed')
+      // Petr's outcomes table keeps the three answers that were not applied, in the order they came.
+      expect((await petr.outcomes()).map((o) => o.outcome)).toEqual([
+        'rejected',
+        'deferred',
+        'deferred',
+      ])
+      // The queue's two batches, then the replay of the deferred ones.
+      expect(
+        w.recorder.attempts
+          .filter((a) => a.client === 'petr' && a.status === 200)
+          .map((a) => a.source),
+      ).toEqual(['queue', 'queue', 'deferred'])
       expect((await w.admin.rows('conformance_items', f.home)).get(rice)).toMatchObject({
         title: 'Basmati',
         note: 'organic',
-        quantity: 1,
+        quantity: 2,
       })
       expect(await petr.held()).toEqual([])
     },

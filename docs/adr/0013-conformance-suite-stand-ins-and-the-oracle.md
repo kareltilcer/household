@@ -91,11 +91,13 @@ rather than throwing, so that a negative control can assert which one failed:
 1. Convergence: each replica equals the rows its member may see, field for field, compared in one
    canonical form (a replica's `0`/`1` a boolean, its timestamps instants, a date its text).
 2. No acknowledged write is lost: the row an `applied` or `merged` answer names is on the server at the
-   version it answered, or later.
+   version it answered, or later; an answer that names no version (PRD 03 §2.4 has it carry one)
+   cannot be held to the server, and fails.
 3. Idempotency: a batch delivered again, under its own key or, where the target has per-mutation
-   idempotency (FR-SY5), under a fresh one, is answered alike and changes nothing: after every
-   scenario, every batch its clients had answered. Under a fresh key a mutation the batch held
-   (`deferred`, or rejected for its entitlement) is answered as its replay ended it.
+   idempotency (FR-SY5), under a fresh one, is answered alike (outcome, code and version) and changes
+   nothing: after every scenario, every batch its clients had answered, the replays of the mutations
+   they held included. Under a fresh key a mutation the batch held (`deferred`, or rejected for its
+   entitlement) is answered as its replay ended it.
 4. Retraction completeness: no replica holds a row its member may not see.
 5. Monotonicity: no bucket's applied op moves backwards. A bucket at op 0 has applied no checkpoint
    since it was made, as one a member's access brought back, or one downloaded again after its
@@ -106,8 +108,9 @@ rather than throwing, so that a negative control can assert which one failed:
    its mutation to replay, as `deferred` does, and ends nothing.
 
 **A scenario waits for the engine it tests.** Each names the item that switches it on (13, 14 or 18),
-the entities its target's push must write, the tables its streams must replicate, and any capability
-beyond them (`compact`, `setEntitlement`, `uploadAttachment`). It is skipped until its key is in
+the entities its target's push must write, the tables its streams must replicate (those entities'
+own and any other it reads), and any capability beyond them (`compact`, `setEntitlement`,
+`uploadAttachment`). It is skipped until its key is in
 `scenarios/index.ts`'s `enabled`; one switched on that its target cannot run fails rather than
 skipping. Scenario 13 is two keys, `13` (the completion, item 13's half) and `13-rotation` (item
 14's), and the five causes of access loss item 14 proves, with the lapse that is not one (item 18),
@@ -116,9 +119,10 @@ building its engine.
 
 **The harness proves itself against the stand-ins now**: clients through partitions both ways, a lost
 answer retried under its key, duplicate delivery, a clock two days out, a grant revoked offline, each
-access loss the stand-in streams express, a member of two households, a refused credential and a
-refusal the edge locates; and it fails a connector that retries a rejection forever (`terminality`)
-and a stream that leaks another household's rows (`isolation`).
+access loss the stand-in streams express, a member of two households, streams that still sync with
+300 households enabling the module, a refused credential and a refusal the edge locates; and it fails
+a connector that retries a rejection forever (`terminality`) and a stream that leaks another
+household's rows (`isolation`).
 
 ## Alternatives rejected
 
@@ -138,7 +142,10 @@ and a stream that leaks another household's rows (`isolation`).
   configuration replaced, an engine `Target` beside `standIn` (its tombstones kept, its replay by fresh
   key), and scenarios 1, 3, 4, 5, 8, 9, 10, 13, 15 and 17 switched on. The contract caps a batch at 500
   mutations with `maxItems`, so the edge answers a larger one `422` before the `413` the operation
-  declares: item 13 settles which, and the connector handles both.
+  declares: item 13 settles which, and the connector handles both. Its generated streams look up every
+  table a subquery reads by the caller or the subscribed household: PowerSync refuses a connection
+  whose parameter results pass 1000 (`PSYNC_S2305`), which the stand-in streams, looking up the module's
+  enablement by the module alone, reached once 250 households enabled it.
 - **Item 14** switches on 2, 6, 7, 11, 12, `13-rotation`, 16, 18 and the five `loss-*` cases, with the
   target's `compact` and `uploadAttachment` (item 16's upload). Scenario 2 reads *the loser is surfaced*
   as the later write answered `merged`, carrying the row, since the earlier write was answered before
