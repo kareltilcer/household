@@ -82,7 +82,9 @@ platform and an app version. A device holds one sign-in at a time, so signing in
 the one it held; the id is unique per user, so a shared tablet signs several profiles in, each with
 a sign-in of its own. The sign-in lasts **until it is revoked**, with no idle expiry: by signing
 out on the device, revoking it from the device list, signing out everywhere, a password reset, a
-password change made on another client, or a reused refresh token (FR-ID4). **D-99.**
+password change made on another client, or a reused refresh token (FR-ID4). **D-99.** A child
+profile's sign-ins end too when an owner sets it a new PIN, removes it from the household, or when
+it graduates (FR-CH4, FR-CH5, **D-104**).
 
 **FR-ID4 — Token refresh with reuse detection.**
 `POST /api/v1/auth/token` with a refresh token. Refresh tokens are **single-use and rotating**;
@@ -211,7 +213,7 @@ grant, not the role.
 |---|---|---|
 | **`owner`** | An adult who is responsible for the household | Invite, remove and re-grant members; enable and disable modules; edit household settings; billing (if payer); household deletion; hard-delete anything; read the activity log; reset a child's PIN and read a child's private root (see §6) |
 | **`member`** | An adult participant | None. A member's abilities are exactly the union of their module grants |
-| **`child`** | A managed profile created by an owner | None, and additionally *restricted*: cannot be granted `manage` on any module, cannot see Finance or Chat unless explicitly granted, cannot invite, cannot change household settings, cannot delete anything but their own items |
+| **`child`** | A managed profile created by an owner | None, and additionally *restricted*: cannot be granted `manage` on any module, cannot see Finance or Chat unless explicitly granted, cannot invite, cannot change household settings, cannot delete anything but their own items; and, since an owner manages the profile, cannot create a household, leave its own, or link Google or Apple (**D-104**) |
 
 **There may be several owners.** A household with one owner shows a nudge to promote a second,
 because an account recovery problem for a sole owner is a household nobody can administer.
@@ -305,8 +307,9 @@ console family group takes.
 **FR-CH1 — Create a child profile.** An owner supplies `display_name`, an optional
 `year_of_birth`, an avatar, and sets a **4–6 digit PIN**. No email address is required and none
 is collected. If the child has a phone, they sign in on it with **household code + profile + PIN**;
-on a shared family tablet, an owner authorises the device once and profiles are switched without
-re-authentication.
+on a shared family tablet, each profile signs in once with its PIN in the same way, and profiles are
+then switched without re-authentication (**D-104**, which rejected a sign-in an owner issues for the
+tablet in the profile's place).
 
 **The household code** is a short, human-typeable identifier (8 characters, unambiguous alphabet —
 no `0`/`O`, no `1`/`I`) generated per household at creation and shown to owners in household
@@ -316,6 +319,14 @@ does not authenticate anybody, and knowing it grants nothing without a profile a
 PIN. An owner may **regenerate** it, which invalidates the old one for future sign-ins and leaves
 existing sessions alone. It is never used by an adult member, who signs in by email, and it is never
 an invitation — an invitation is FR-HH2 and carries a role and grants, which a code cannot.
+
+**The profile list.** A code opens its household's name and its child profiles, in the order they
+were made, for the child to pick their own (A-15); no adult is listed, since an adult signs in by
+email. Guessing codes is what is limited: thirty that open no household, in an hour from one network
+(§9). The sign-in that follows is a device's, as a mobile sign-in is (FR-ID3), with no second step
+(FR-ID5). **A shared tablet** is one an owner signs in on, which reads the code for the profiles that
+use it; each of them signs in on it once with their PIN, the tablet holding one sign-in per profile
+(FR-ID3's device id is per user), and switching between them asks for nothing more. **D-104.**
 
 **FR-CH2 — What is collected about a child is minimised.** Display name, optional birth year
 (used only for age-appropriate defaults and birthday reminders — never a full date unless an
@@ -334,8 +345,25 @@ an email address, which the (now young adult) verifies. Their content stays with
 no automatic graduation on a birthday, because Household does not know the birth date reliably
 and should not act on a guess.
 
+The owner, once their own address is verified, sends the address a link valid 14 days, with which
+the young adult chooses a password. Opening it verifies the address and makes the profile a
+`member` in one step, keeping its levels and everything it made; its PIN, and every device it was
+signed in on, end with it. Until then the profile is a child, signing in with its PIN, and an owner
+may send the link again, to the same address or a corrected one, which retires the one before. The
+link is its sender's, and lapses with their ownership, as an invitation does (D-103): its holder
+would come into the household with the profile's account and everything it made. An address an
+account already has is refused, and the refusal counts among the household's emails a day as a link
+does, since it says that an account has the address (D-13). **D-104.**
+
 **FR-CH5 — PIN reset and lockout.** An owner resets the PIN from their own authenticated
 session. Ten wrong PINs lock the profile until an owner unlocks it.
+
+The ten are counted since the last right PIN, which clears them, or since an owner's unlock, and
+each is counted before it is checked, so that PINs sent at once meet the lock one by one: once the
+tenth is counted, no PIN sent after it is checked until an owner acts. Every attempt at a locked
+profile, the tenth wrong one included, is told it is locked, and so is a right PIN that a lock
+overtook while it was checked. A new PIN also unlocks the profile, and signs it out of every device,
+since whoever knew the old PIN may hold one of them. **D-104.**
 
 ## 7. The four access axes
 
@@ -419,7 +447,8 @@ to the household as *"Household support extended your trial"*.
 | Invitation send, per household | 20 / day |
 | Second-step codes, per account | 5 wrong / 5 min, the first code that turns it on included; the tenth wrong since the last right one locks the authenticator (FR-ID5) |
 | Sign-in begun with Google or Apple, per IP | 60 / hour |
-| Child PIN attempts | 10, then owner unlock |
+| Child PIN attempts | 10 wrong since the last right one, then owner unlock; a child's failed sign-ins count against the network as a password's do |
+| Household code lookups that open no household, per IP | 30 / hour |
 | Sync mutation batch | 500 mutations / batch, 60 batches / min / device |
 | File upload | Plan-dependent; see [04](04-billing-and-entitlements.md) |
 | API, authenticated, per user | 600 / min sustained, burst 100 |
@@ -430,4 +459,5 @@ per-tenant as well as per-user so one household cannot degrade another. A limit 
 the address asked for, whether or not an account has it, so that a refusal says nothing about
 which addresses do (D-13). The rows the table did not first give (the registration note, the resend
 per account, the reset and the resend per IP, and the household's API budget) and the shape of the
-login backoff are **D-96**; the second step's and the provider sign-in's are **D-101**.
+login backoff are **D-96**; the second step's and the provider sign-in's are **D-101**; the code
+lookups' and the counting of a child's PINs are **D-104**.

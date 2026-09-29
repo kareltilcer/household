@@ -62,7 +62,7 @@ func (s *Service) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.RegisterNetwork, Subject: s.network(r)}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
+		s.fail(w, r, ratelimit.Verdict(wait, err))
 		return
 	}
 	secret, err := s.Hasher.Hash(ctx, req.Password)
@@ -123,14 +123,6 @@ func (s *Service) note(ctx context.Context, address, language string) {
 			s.deliver(ctx, address, language, emailRegisterExisting, s.link(routeSignIn, ""))
 		}
 	})
-}
-
-// refusal is the answer to a throttle's verdict: err as it is, or the 429 for a wait.
-func refusal(wait time.Duration, err error) error {
-	if err != nil {
-		return err
-	}
-	return ratelimit.Refusal(wait)
 }
 
 // linkToken is a token an email's link carries, as its row holds it.
@@ -225,7 +217,7 @@ func (s *Service) resendVerification(w http.ResponseWriter, r *http.Request) {
 	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.ResendMinute, Subject: asked},
 		ratelimit.Count{Limit: ratelimit.ResendHour, Subject: asked},
 		ratelimit.Count{Limit: ratelimit.ResendNetwork, Subject: s.network(r)}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
+		s.fail(w, r, ratelimit.Verdict(wait, err))
 		return
 	}
 	s.sendLink(ctx, req.Email, verifyLink)
@@ -292,11 +284,11 @@ func (s *Service) sendLink(ctx context.Context, email string, l emailLink) {
 func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
-		Email      string      `json:"email"`
-		Password   string      `json:"password"`
-		ClientType string      `json:"client_type"`
-		Device     *deviceJSON `json:"device"`
-		TrustToken string      `json:"trust_token"`
+		Email      string        `json:"email"`
+		Password   string        `json:"password"`
+		ClientType string        `json:"client_type"`
+		Device     *DeviceSignIn `json:"device"`
+		TrustToken string        `json:"trust_token"`
 	}
 	if err := decode(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -310,7 +302,7 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	network, account := s.network(r), subject(req.Email)
 	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.LoginNetwork, Subject: network},
 		ratelimit.Count{Limit: ratelimit.LoginAccount, Subject: account}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
+		s.fail(w, r, ratelimit.Verdict(wait, err))
 		return
 	}
 
@@ -340,7 +332,7 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		s.fail(w, r, invalidCredentials())
+		s.fail(w, r, InvalidCredentials())
 		return
 	}
 	// The attempt succeeded: the address's failures end, and the network's count takes it back.
@@ -385,7 +377,7 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	admitted(w, adm)
 }
 
-// unchanged locks user's password in tx, and answers invalidCredentials when it is no longer the
+// unchanged locks user's password in tx, and answers InvalidCredentials when it is no longer the
 // one a check made before tx began verified: when its updated_at, the moment it was set, is no
 // longer set, as that check read it. A reset or a change that landed since has ended what the check
 // proved, so nothing signs in with it, and nothing writes over the new password; a rehash of the
@@ -397,11 +389,11 @@ func unchanged(ctx context.Context, tx pgx.Tx, user uuid.UUID, set time.Time) er
 		Scan(&at)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return invalidCredentials()
+		return InvalidCredentials()
 	case err != nil:
 		return err
 	case !at.Equal(set):
-		return invalidCredentials()
+		return InvalidCredentials()
 	}
 	return nil
 }
@@ -450,7 +442,7 @@ func (s *Service) requestReset(w http.ResponseWriter, r *http.Request) {
 	// Both limits in one step, so that a reset one refuses is not counted by the other.
 	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.ResetAccount, Subject: subject(req.Email)},
 		ratelimit.Count{Limit: ratelimit.ResetNetwork, Subject: s.network(r)}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
+		s.fail(w, r, ratelimit.Verdict(wait, err))
 		return
 	}
 	s.sendLink(ctx, req.Email, resetLink)
@@ -676,19 +668,19 @@ func (s *Service) reauthenticate(ctx context.Context, user uuid.UUID, pw string)
 		return c, err
 	}
 	if email == nil || secret == nil {
-		return c, invalidCredentials()
+		return c, InvalidCredentials()
 	}
 	c.address, c.set = *email, *set
 	// Counted before it is checked, as a sign-in is, and taken back when it is right.
 	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.LoginAccount, Subject: subject(c.address)}); err != nil || wait > 0 {
-		return c, refusal(wait, err)
+		return c, ratelimit.Verdict(wait, err)
 	}
 	ok, _, err := s.Hasher.Verify(ctx, pw, *secret)
 	if err != nil {
 		return c, err
 	}
 	if !ok {
-		return c, invalidCredentials()
+		return c, InvalidCredentials()
 	}
 	return c, s.Throttles.Clear(ctx, ratelimit.LoginAccount, subject(c.address))
 }

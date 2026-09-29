@@ -89,14 +89,17 @@ type Deps struct {
 // The household surface (item 10) is admin's, the module the platform serves itself, which the
 // module registry the router carries declares beside the modules: a signed-in user's households,
 // creating one and the invitations addressed to them sit beside the account's routes and keep their
-// keys on the account; an invitation's preview is reached signed in or not.
+// keys on the account; an invitation's preview is reached signed in or not; and a child profile's
+// sign-in and the link that finishes its graduation (item 11) are reached before signing in, carrying
+// the registry for the changes they record.
 //
 // Everything under /households/{household_id} passes the tenant middleware, which answers a
 // caller who is not a member of the household before any route does, and carries the module
 // registry the mutation spine checks each mutation against, and the household's API limit, which
 // its members share. The household's own routes are there, behind the member's Idempotency-Key,
 // but leaving, whose key is the account's and answers a repeat before the tenant middleware looks
-// for the membership leaving ended: a member's keys go with their membership. Each module's
+// for the membership leaving ended: a member's keys go with their membership; and the two whose body
+// carries a child profile's PIN, which keep none (D-97). Each module's
 // routes are mounted there at /<name>, behind the gate that answers 404 to a member who cannot see
 // the module (PRD modules/00 §1), and behind the Idempotency-Key middleware, which answers a
 // repeated unsafe request with its first response.
@@ -144,6 +147,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	api.Get("/healthz", d.Health.Liveness)
 	api.Get("/readyz", d.Health.Readiness)
 	a.Identity.PublicRoutes(api)
+	api.With(catalog).Group(d.Households.PublicRoutes)
 
 	api.Group(func(signedIn chi.Router) {
 		signedIn.Use(authenticate(a.Devices.Authenticate, a.Sessions.Authenticate), perUser)
@@ -168,6 +172,8 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		signedIn.Group(func(inHousehold chi.Router) {
 			inHousehold.Use(tenancy, perHousehold, catalog)
 			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Households.HouseholdRoutes)
+			// A child profile's PIN keeps no key, as a password does not (D-97).
+			inHousehold.Group(d.Households.PINRoutes)
 			for _, m := range d.Modules.All() {
 				inHousehold.Route("/households/{"+tenant.Param+"}/"+m.Name(), func(r chi.Router) {
 					r.Use(grant.Gate(m.Name()), idempotency.Middleware(d.Logger, d.MaxBodyBytes))

@@ -47,7 +47,7 @@ func TestRoutesMatchTheContract(t *testing.T) {
 	router, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Modules: mods, MaxBodyBytes: 1, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, outbox, apptest.Options{}),
+		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

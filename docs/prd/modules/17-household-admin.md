@@ -51,7 +51,10 @@ change a member discovers by finding something missing is a bug**, and telling t
 ([05](../05-privacy-and-compliance.md) §5).
 
 **FR-HA7 — Child profiles**: create, set the PIN, set and lock the dashboard, set grants, unlock
-after failed PIN attempts, graduate to a full member.
+after failed PIN attempts, graduate to a full member ([02](../02-identity-and-access.md) §6). A new
+PIN also unlocks the profile and signs it out of every device; a graduation sends the address a link
+the young adult finishes, the profile staying a child until then (**D-104**). A child's birth year is
+read by the owners and the child alone, as an address is.
 
 ### 3. Modules
 
@@ -129,7 +132,9 @@ a sync failure, and it has to exist as soon as the engine does.
 ## Data model
 
 `households` (carrying the household's settings, the `household_code`, unique and regenerable,
-and the billing payer), `memberships`, `module_grants`, `module_enablement`, `invitations`,
+and the billing payer), `memberships` (carrying a child profile's birth year and whether its
+dashboard is locked; its PIN is the account's `child_pin` credential, which counts the wrong ones),
+`module_grants`, `module_enablement`, `invitations`,
 `notification_rules`,
 `notification_schedules`, `notification_deliveries`, `export_jobs`, `deletion_requests`. Billing
 tables live in the billing schema.
@@ -148,7 +153,7 @@ the owning module keeps on each row of the audience, derived from these membersh
 | Entity | Policy | Notes |
 |---|---|---|
 | `admin.household_settings` | `strict_version`, never written offline | The household's settings, on `households` |
-| `admin.membership` | `strict_version`, **never written offline** | A member's role **and their grants**, which travel on the membership row as **derived capability state**, never as an editable entity: a grant's change is its membership's change, and moves its version. A client must never believe it can change its own permissions offline |
+| `admin.membership` | `strict_version`, **never written offline** | A member's role **and their grants**, which travel on the membership row as **derived capability state**, never as an editable entity: a grant's change is its membership's change, and moves its version. A client must never believe it can change its own permissions offline. A child profile's row carries whether it is locked and whether its dashboard is, which its PIN, its lock and its graduation change; never its birth year |
 | `admin.module_enablement` | `strict_version`, never written offline | Whether the household enables each module |
 | `admin.invitation` | `strict_version`, never written offline | An invitation, without its token |
 | `admin.notification_rule`, `admin.notification_schedule` | `strict_version` | |

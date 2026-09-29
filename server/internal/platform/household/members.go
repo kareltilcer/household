@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,17 +35,46 @@ type membership struct {
 	lastActive *time.Time
 	// grants are the member's stored levels, by module: none for a module with no row.
 	grants map[string]access.Level
+	// child is what a child profile's membership says of it, and nil for any other member's.
+	child *childProfile
+}
+
+// childProfile is what a child profile's membership says of it (FR-CH1, FR-CH5).
+type childProfile struct {
+	// yearOfBirth is the birth year an owner gave, or nil.
+	yearOfBirth *int
+	// dashboardLocked keeps the child from rearranging their dashboard (item 36).
+	dashboardLocked bool
+	// pinLocked is a profile whose PIN has counted LockAfter wrong ones since its last right one,
+	// until an owner unlocks it.
+	pinLocked bool
 }
 
 // membershipColumns are the columns scanMembership reads, in its order, of memberships m joined to
-// users u. A member's last activity in the household is their newest event in its log (FR-HA3).
-const membershipColumns = `m.id, m.user_id, m.role::text, m.version, m.created_at, u.display_name, u.email,
-	(SELECT max(e.occurred_at) FROM audit_events e WHERE e.household_id = m.household_id AND e.actor_id = m.user_id)`
+// users u. A member's last activity in the household is their newest event in its log (FR-HA3); a
+// child profile is locked while its PIN has counted LockAfter wrong ones since its last right one.
+var membershipColumns = `m.id, m.user_id, m.role::text, m.version, m.created_at, u.display_name, u.email,
+	(SELECT max(e.occurred_at) FROM audit_events e WHERE e.household_id = m.household_id AND e.actor_id = m.user_id),
+	m.year_of_birth, m.dashboard_locked,
+	coalesce((SELECT c.failures FROM credentials c WHERE c.user_id = m.user_id AND c.type = 'child_pin'), 0) >= ` +
+	strconv.Itoa(LockAfter)
 
 func scanMembership(row pgx.CollectableRow) (membership, error) {
-	var m membership
-	err := row.Scan(&m.id, &m.user, &m.role, &m.version, &m.joined, &m.name, &m.email, &m.lastActive)
+	var (
+		m           membership
+		p           childProfile
+		yearOfBirth *int16
+	)
+	err := row.Scan(&m.id, &m.user, &m.role, &m.version, &m.joined, &m.name, &m.email, &m.lastActive,
+		&yearOfBirth, &p.dashboardLocked, &p.pinLocked)
 	m.grants = map[string]access.Level{}
+	if m.role == access.Child {
+		if yearOfBirth != nil {
+			y := int(*yearOfBirth)
+			p.yearOfBirth = &y
+		}
+		m.child = &p
+	}
 	return m, err
 }
 
@@ -178,34 +208,37 @@ type memberBody struct {
 	Child          *childBody              `json:"child"`
 }
 
-// childBody is what the member list shows of a child profile, which item 11 builds: none of it is
-// collected yet, and no profile is locked yet.
+// childBody is what the member list shows of a child profile.
 type childBody struct {
 	YearOfBirth     *int `json:"year_of_birth"`
 	PinLocked       bool `json:"pin_locked"`
 	DashboardLocked bool `json:"dashboard_locked"`
 }
 
-// row is m as its sync row carries it to every member granted admin: without their address and their
-// last activity, which change with no change of the membership.
+// row is m as its sync row carries it to every member: without their address, their last activity,
+// which changes with no change of the membership, and a child's birth year, which only the owners and
+// the child read.
 func (m membership) row(household uuid.UUID, payer *uuid.UUID, modules []string) memberBody {
 	b := memberBody{
 		UserID: m.user, HouseholdID: household, DisplayName: m.name, Role: m.role,
 		Grants: grantsOf(m.role, m.grants, modules), IsBillingPayer: payer != nil && *payer == m.user,
 		JoinedAt: m.joined.UTC(), Version: m.version,
 	}
-	if m.role == access.Child {
-		b.Child = &childBody{}
+	if m.child != nil {
+		b.Child = &childBody{PinLocked: m.child.pinLocked, DashboardLocked: m.child.dashboardLocked}
 	}
 	return b
 }
 
-// body is m as scope's caller reads it: their address is shown to the household's owners, who invite
-// and manage its members, and to the member themself.
+// body is m as scope's caller reads it: their address, and a child's birth year, are shown to the
+// household's owners, who invite and manage its members, and to the member themself (FR-CH2).
 func (m membership) body(scope *tenant.Scope, payer *uuid.UUID, modules []string) memberBody {
 	b := m.row(scope.HouseholdID(), payer, modules)
 	if scope.Role() == access.Owner || scope.UserID() == m.user {
 		b.Email = m.email
+		if b.Child != nil {
+			b.Child.YearOfBirth = m.child.yearOfBirth
+		}
 	}
 	if m.lastActive != nil {
 		t := m.lastActive.UTC()
@@ -227,13 +260,22 @@ func (m membership) gone() sync.Change {
 // insertMembership makes user a member of household with role and grants, and returns the
 // membership.
 func insertMembership(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, role access.Role, grants map[string]access.Level) (membership, error) {
+	return insertProfile(ctx, tx, idgen.New(), household, user, role, grants, childProfile{})
+}
+
+// insertProfile makes user a member of household with role and grants, whose membership's id is id,
+// and with what p says of them when they are a child profile, and returns the membership.
+func insertProfile(ctx context.Context, tx pgx.Tx, id, household, user uuid.UUID, role access.Role, grants map[string]access.Level,
+	p childProfile,
+) (membership, error) {
 	rows, err := tx.Query(ctx, `
 		WITH m AS (
-		  INSERT INTO memberships (id, household_id, user_id, role) VALUES ($1, $2, $3, $4)
-		  RETURNING id, household_id, user_id, role, version, created_at
+		  INSERT INTO memberships (id, household_id, user_id, role, year_of_birth, dashboard_locked)
+		  VALUES ($1, $2, $3, $4, $5, $6)
+		  RETURNING id, household_id, user_id, role, version, created_at, year_of_birth, dashboard_locked
 		)
 		SELECT `+membershipColumns+` FROM m JOIN users u ON u.id = m.user_id`,
-		idgen.New(), household, user, string(role))
+		id, household, user, string(role), p.yearOfBirth, p.dashboardLocked)
 	if err != nil {
 		return membership{}, err
 	}
@@ -263,8 +305,8 @@ func writeGrants(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, gran
 	return tx.SendBatch(ctx, batch).Close()
 }
 
-// touch bumps m's version for a change of its grants or its role, which is its row's change, and
-// returns m as it stands.
+// touch bumps m's version for a change of what its row carries, its role, its grants or a child
+// profile's lock, which a new PIN, a lock and an unlock change, and returns m as it stands with role.
 func touch(ctx context.Context, tx pgx.Tx, m membership, role access.Role) (membership, error) {
 	if err := tx.QueryRow(ctx, "UPDATE memberships SET role = $2 WHERE id = $1 RETURNING version", m.id, string(role)).
 		Scan(&m.version); err != nil {
@@ -582,7 +624,7 @@ func (s *Service) changed(ctx context.Context, change Change) {
 // It is immediate: their next request finds no membership, their replica loses the household
 // (Hooks.Lost), no invitation they sent brings them back (withdraw), and they are told
 // (Hooks.Changed). The payer is refused until billing moves, and the content they made stays with
-// the household.
+// the household. A child profile removed is signed out of every device.
 func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -612,6 +654,25 @@ func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 		}
 		if payer != nil && *payer == user {
 			return mutation.Record{}, errPayer
+		}
+		// A child profile is nothing outside its household, and nobody can sign it in again once it
+		// is out of it (ADR 0012): it is signed out of every device it was signed in on, as a new PIN
+		// signs it out, rather than left with a sign-in to an account with no household.
+		//
+		// Its PIN's updated_at moves first, under the row's lock, as a new PIN's does (setPIN). A
+		// sign-in reads the membership this deletes without waiting for it, and holds the PIN alone
+		// (findPIN): one that held it first has finished when the devices are signed out below, and
+		// is signed out with them; one that reaches it after waits for this to commit, and finds the
+		// PIN it checked moved, and signs nobody in. Left alone, the PIN would let a sign-in commit
+		// between the sign-out and the removal's commit, keeping a device's sign-in to the profile.
+		if m.role == access.Child {
+			if _, err := tx.Exec(ctx, "UPDATE credentials SET updated_at = clock_timestamp() WHERE user_id = $1 AND type = 'child_pin'",
+				user); err != nil {
+				return mutation.Record{}, err
+			}
+			if err := s.Accounts.Devices.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
+				return mutation.Record{}, err
+			}
 		}
 		rec, err := s.end(ctx, tx, household, m, CauseRemoved, actionMemberRemove)
 		removed = err == nil
@@ -662,7 +723,8 @@ func leaveBlocked(reasons []problem.Code) *problem.Problem {
 // leave takes the caller out of the household (FR-HH4), which any member may do at any time, unless
 // they are its last owner, or its payer, which are refused together. What they made stays with the
 // household; their private root is item 20's (Hooks.Lost); the invitations they sent that are still
-// waiting are withdrawn (withdraw).
+// waiting are withdrawn (withdraw). A child profile does not leave, since it is nothing outside its
+// household, and is refused 403: an owner removes it (D-104).
 func (s *Service) leave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -675,6 +737,9 @@ func (s *Service) leave(w http.ResponseWriter, r *http.Request) {
 		m, err := readMembership(ctx, tx, household, user, true)
 		if err != nil {
 			return mutation.Record{}, err
+		}
+		if m.role == access.Child {
+			return mutation.Record{}, forbidden()
 		}
 		var blocked []problem.Code
 		if m.role == access.Owner {

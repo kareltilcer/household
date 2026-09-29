@@ -86,9 +86,15 @@ info:
       again, which each of them is safe to: the three that answer `202` send at most another
       email, which their limits cap; a sign-in starts a new session, since a credential is never
       kept to be answered with; and a spent link answers as spent, except a verification link,
-      whose repeat answers `204` while the address it confirmed stands. `/auth/password` keeps
-      none either, since a key's fingerprint of its body would be a fast hash of two passwords; a
-      repeat of a change that was made answers `401`, the current password being the new one.
+      whose repeat answers `204` while the address it confirmed stands. A child profile's
+      `/auth/child/profiles`, `/auth/child/login` and `/auth/graduation/confirm` keep nothing either:
+      a lookup reads, a sign-in starts a new sign-in on its device, and a spent graduation link
+      answers as spent. `/auth/password` keeps none either, since a key's fingerprint of its body
+      would be a fast hash of two passwords; a repeat of a change that was made answers `401`, the
+      current password being the new one. Nor do the two requests whose body carries a child
+      profile's PIN, `POST /households/{household_id}/children` and
+      `PUT /households/{household_id}/children/{user_id}/pin`: a repeat of a profile that was made
+      answers `422` naming `/id`, and a repeat of a new PIN sets it again.
     - A request that ended the session it was made with, `POST /auth/logout`, `DELETE /me/sessions`
       and `DELETE /me/sessions/{session_id}` naming the current session, keeps its key, but a
       repeat of it arrives with a session that has ended and answers `401` (`unauthenticated`), as
@@ -310,12 +316,49 @@ paths:
           content: { application/json: { schema: { $ref: '#/components/schemas/MfaChallenge' } } }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /auth/child/profiles:
+    post:
+      operationId: postAuthChildProfiles
+      tags: [auth]
+      summary: The child profiles a household code opens
+      description: |
+        The first step of a child's sign-in (A-14, A-15): the name of the household the code opens,
+        and its child profiles in the order they were made, to pick one from. The code identifies a
+        household and authenticates nobody (FR-CH1); an adult, who signs in by email, is not listed
+        (D-104). Case, spaces and dashes in the code do not matter. A code that opens no household
+        answers `404`, and thirty of those in an hour from a client's network answer `429` until the
+        hour that counted them ends.
+      security: []
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [household_code], properties: { household_code: { type: string, maxLength: 32 } } } } }
+      responses:
+        '200': { description: The household's child profiles, content: { application/json: { schema: { $ref: '#/components/schemas/ChildProfileList' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /auth/child/login:
     post:
       operationId: postAuthChildLogin
       tags: [auth]
       summary: Sign in as a managed child profile
-      description: Household code plus profile plus PIN. Ten failures lock the profile until an owner unlocks it.
+      description: |
+        Household code plus profile plus PIN (FR-CH1), for the device the body names, which is signed
+        in as a mobile sign-in's is (`postAuthLogin`), ending the sign-in it held, with a token pair
+        and no second step (FR-ID5). A shared tablet signs in each profile that uses it this way once,
+        and switches between the sign-ins it holds (D-104). Case, spaces and dashes in the code do not
+        matter.
+
+        A code, a profile or a PIN that does not match, and a profile that is not a child's, answer
+        `401` (`invalid_credentials`) alike, in the same time. Sixty sign-ins that fail in fifteen
+        minutes from a client's network, those answered `423` among them, answer `429`, as a
+        password's sign-in's do. Ten wrong PINs since the last right one lock the profile until an
+        owner unlocks it or sets a new PIN (FR-CH5): every attempt at a locked profile, the tenth
+        wrong one included, answers `423` (`child_profile_locked`), and once the tenth is counted no
+        PIN sent after it is checked until an owner acts, however many are sent at once. A right PIN
+        starts the ten again.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -323,8 +366,9 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/ChildLoginRequest' } } }
       responses:
         '200': { description: Signed in, content: { application/json: { schema: { $ref: '#/components/schemas/LoginResult' } } } }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '423': { description: The profile is locked; an owner must unlock it, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '401': { description: 'The code, the profile and the PIN sign nobody in (`invalid_credentials`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '423': { description: 'The profile is locked (`child_profile_locked`); an owner must unlock it or set a new PIN', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /auth/logout:
@@ -397,6 +441,39 @@ paths:
         '204': { description: Password set }
         '404': { $ref: '#/components/responses/NotFound' }
         '410': { description: 'The link has expired (`token_expired`) or has been used (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /auth/graduation/confirm:
+    post:
+      operationId: postAuthGraduationConfirm
+      tags: [auth]
+      summary: Finish a child profile's graduation with the password its link sets
+      description: |
+        The link an owner's graduation sent (`postChildrenByUserIdGraduate`), within its 14 days, with
+        the password the young adult chooses (FR-CH4, D-104). The address the link was sent to becomes
+        the account's, verified, since opening the link proved it; the password becomes its credential
+        in place of the PIN; and the profile becomes a `member` of its household, keeping everything it
+        made and the levels it held. Every device the profile was signed in on is signed out, to sign
+        in again with the address and the password. The change is the young adult's own, in the
+        household's activity log.
+
+        A link that opens nothing, or a profile no longer in its household, answers `404`; a link
+        used, replaced by a newer one, or withdrawn, `410` (`token_already_used`), and one past its
+        time `410` (`token_expired`). A link lapses with its sender's ownership, as an invitation
+        does (D-103): once the owner who sent it has been removed, has left or has been made a member,
+        it is withdrawn, and stays withdrawn if they are made an owner again. An address another
+        account has taken since the link was sent answers `409` (`email_taken`). A password found in
+        the breached-password screen is refused `422`, naming `/password` with the code `invalid`.
+      security: []
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [token, password], properties: { token: { type: string }, password: { type: string, minLength: 12 } } } } }
+      responses:
+        '204': { description: Graduated }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'Another account has the address (`email_taken`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '410': { description: 'The link has expired (`token_expired`), or has been used, replaced or withdrawn with its sender''s ownership (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
 
   /auth/password:
@@ -524,7 +601,8 @@ paths:
         answers `409` (`identity_already_linked`). A link whose session, or device sign-in, a
         password reset or signing out everywhere ended while it ran answers `401` and links nothing:
         a reset that proves the address unlinks every provider linked before it, and a link never
-        lands after it. The account's address is told by email.
+        lands after it. The account's address is told by email. A child profile is refused `403`: it
+        signs in with its PIN alone, which an owner sets and ten wrong ones lock (D-104).
       parameters:
         - name: provider
           in: path
@@ -538,6 +616,7 @@ paths:
         '204': { description: Linked }
         '404': { $ref: '#/components/responses/NotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 'A child profile, which signs in with its PIN alone', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '409': { description: 'This identity is linked to another account, or this account to another identity of this provider (`identity_already_linked`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1090,7 +1169,8 @@ paths:
         every module is enabled with the creator holding `manage` on each, the household is given its
         code, and a 30-day trial begins. `units` and `first_day_of_week` default to the country's
         profile; a country Household has no profile of is refused `422` naming `/country`, and an `id`
-        another household has `422` naming `/id`.
+        another household has `422` naming `/id`. A child profile is refused `403`: it is a profile an
+        owner manages in their household, never a household's owner and payer (D-17, D-104).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1098,7 +1178,7 @@ paths:
       responses:
         '201': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Household' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: The per-user household ceiling is reached, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '403': { description: 'The per-user household ceiling is reached, or the caller is a child profile', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -1202,13 +1282,16 @@ paths:
         Any member, at any time. Content the member created stays with the household; their private
         root is deleted after a 30-day window in which they may export it. The last owner and the
         billing payer cannot leave, and one who is both is told both at once (FR-HH4). The
-        invitations they sent that are still waiting are withdrawn (D-103). The `Idempotency-Key` is
-        kept on the account rather than in the household, whose membership, and the member's keys in
-        it, leaving ends.
+        invitations they sent that are still waiting are withdrawn (D-103), and so are the graduation
+        links they sent. A child profile is refused `403`: it is nothing outside its household, and an
+        owner removes it instead (D-104).
+        The `Idempotency-Key` is kept on the account rather than in the household, whose membership,
+        and the member's keys in it, leaving ends.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Left }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 'A child profile, which an owner removes', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: 'You are the last owner, the billing payer, or both: promote another owner or delete the household, and hand billing to another owner', content: { application/problem+json: { schema: { $ref: '#/components/schemas/LeaveBlockedProblem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1251,7 +1334,8 @@ paths:
         have are refused `422` naming `/grants/<module>`. A `child` stays a child and nobody else
         becomes one (`422` naming `/role`): a child profile is created and graduated instead. An
         owner made a member keeps the levels they held until they are lowered, and the invitations
-        they sent that are still waiting are withdrawn (D-103).
+        they sent that are still waiting are withdrawn (D-103), and so are the graduation links they
+        sent.
       parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1272,7 +1356,9 @@ paths:
       description: |
         Owner only, and never the caller, who leaves instead (`403`). Immediate: their sessions stop
         resolving for this household, their replica receives retractions, the invitations they sent
-        that are still waiting are withdrawn (D-103), and they are told.
+        that are still waiting are withdrawn (D-103), and so are the graduation links they sent, and
+        they are told. A child profile removed is signed out of every device it is signed in on,
+        since nothing signs it in outside its household (D-104).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Removed }
@@ -1435,12 +1521,22 @@ paths:
       description: |
         Owner only. No email address is required and none is collected. The child signs in with the
         household code, their profile and a PIN. Child profiles are excluded from analytics entirely.
+
+        `id` is the profile's: its account's and its membership's alike, the `user_id` its other
+        operations name. Its levels are FR-AC4's defaults with `grants` over them: `manage`, or more
+        than `view` on `finance`, is refused `422` naming `/grants/<module>`. It speaks the household's
+        language, and its dashboard is locked unless `lock_dashboard` is false. A `year_of_birth`
+        after this year in the household's timezone is refused `422`, and so is an `avatar_url` other
+        than null until uploads exist (plan item 16). An `id` another account or profile has is refused `422` naming `/id`.
+        No `Idempotency-Key` is kept, since its fingerprint would be a fast hash of the PIN: a repeat
+        of one that was created answers `422` naming `/id`, and the profile is read at
+        `getMembersByUserId`.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/ChildProfileCreate' } } }
       responses:
-        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
+        '201': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1454,6 +1550,12 @@ paths:
       operationId: putChildrenByUserIdPin
       tags: [households]
       summary: Set or reset a child's PIN
+      description: |
+        Owner only (FR-CH5). The new PIN replaces the old one and unlocks the profile, and every device
+        the profile is signed in on is signed out, since whoever knew the old PIN may hold one of them
+        (D-104); a sign-in that was checking the old PIN meanwhile signs nobody in. A member who is not
+        a child profile answers `404`. No `Idempotency-Key` is kept, since its fingerprint would be a
+        fast hash of the PIN: a repeat sets the same PIN again.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1464,6 +1566,7 @@ paths:
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /households/{household_id}/children/{user_id}/unlock:
@@ -1472,6 +1575,11 @@ paths:
       operationId: postChildrenByUserIdUnlock
       tags: [households]
       summary: Unlock a child profile after failed PIN attempts
+      description: |
+        Owner only (FR-CH5). The wrong PINs counted since the last right one are cleared, and the
+        profile's PIN works again, counting from the unlock: a sign-in that was checking a PIN
+        meanwhile signs nobody in. A profile that is not locked is left as it is. A member who is not
+        a child profile answers `404`.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Unlocked }
@@ -1487,18 +1595,30 @@ paths:
       operationId: postChildrenByUserIdGraduate
       tags: [households]
       summary: Convert a child profile into a full member
-      description: Attaches an email address which the young adult then verifies. Their content stays with them.
+      description: |
+        Owner only, and only once the owner's own address is verified, since the link is trust extended
+        beyond the household (FR-ID1): `403` (`account_unverified`) until then. Sends the address a
+        link, valid 14 days, with which the young adult chooses a password
+        (`postAuthGraduationConfirm`); that verifies the address and makes the profile a `member`,
+        keeping everything it made (FR-CH4, D-104). The profile stays a child, signing in with its
+        PIN, until then. Sending again sends a new link, to the same address or another, and the one
+        before stops working. The link is its sender's, and lapses with their ownership, as an
+        invitation does (D-103). An address an account has answers `409` (`email_taken`); a member who
+        is not a child profile answers `404`. Each link counts among the twenty emails a day a
+        household sends with its invitations (`429`), and so does each address refused `409`, since
+        that refusal says an account has it.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, format: email } } } } }
       responses:
-        '202': { description: Verification sent }
+        '202': { description: Link sent }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        '403': { description: 'Not an owner (`forbidden`), or the owner''s address is unverified (`account_unverified`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: That email already belongs to an account, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'That address belongs to an account (`email_taken`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /households/{household_id}/modules:
@@ -8287,7 +8407,8 @@ components:
 
         A key is the caller's own, so a request made before signing in, which has no caller, keeps
         none, and a repeat of it runs again (see the description of the API); nor does a request
-        whose body carries a password, `/auth/password`. A repeat of a request that ended the
+        whose body carries a password, `/auth/password`, or a child profile's PIN, `postChildren` and
+        `putChildrenByUserIdPin`. A repeat of a request that ended the
         session it was made with, signing out for instance, answers `401`: that session makes no
         further request. Only a `2xx` response is stored: a repeat of a request that was refused
         before it took effect runs it again. A repeat while the first request is still running
@@ -8784,12 +8905,29 @@ components:
 
     ChildLoginRequest:
       type: object
-      required: [household_code, profile_id, pin]
+      required: [household_code, profile_id, pin, device]
       properties:
-        household_code: { type: string }
-        profile_id: { $ref: '#/components/schemas/Uuid' }
-        pin: { type: string }
-        device: { type: object, properties: { id: { $ref: '#/components/schemas/Uuid' }, label: { type: string } } }
+        household_code: { type: string, maxLength: 32, description: 'The household''s code (`Household.join_code`); case, spaces and dashes do not matter.' }
+        profile_id: { $ref: '#/components/schemas/Uuid', description: 'The profile''s `id` in `postAuthChildProfiles`.' }
+        pin: { type: string, pattern: '^[0-9]{4,6}$' }
+        device: { $ref: '#/components/schemas/DeviceSignIn' }
+
+    ChildProfileList:
+      type: object
+      description: The household a code opens, and its child profiles to pick one from (A-15).
+      required: [household_name, items]
+      properties:
+        household_name: { type: string }
+        items:
+          type: array
+          description: The household's child profiles, in the order they were made. No adult is listed.
+          items:
+            type: object
+            required: [id, display_name]
+            properties:
+              id: { $ref: '#/components/schemas/Uuid', description: 'The profile, which the sign-in names as its `profile_id`.' }
+              display_name: { type: string }
+              avatar_url: { type: [string, 'null'] }
 
     LoginResult:
       type: object
@@ -9055,14 +9193,15 @@ components:
         is_billing_payer: { type: boolean }
         joined_at: { type: string, format: date-time }
         last_active_at: { type: [string, 'null'], format: date-time, description: 'When the member last changed anything in the household, from its activity log.' }
-        version: { type: integer, format: int64, description: 'The membership''s version, its `ETag`, which moves with its role and its grants.' }
+        version: { type: integer, format: int64, description: 'The membership''s version, its `ETag`, which moves with its role and its grants, and with a child profile''s PIN, its lock and its graduation.' }
         child:
+          description: What the membership says of a child profile; null for any other member.
           oneOf:
             - { type: 'null' }
             - type: object
               properties:
-                year_of_birth: { type: [integer, 'null'] }
-                pin_locked: { type: boolean }
+                year_of_birth: { type: [integer, 'null'], description: 'Shown to the household''s owners and to the child themself, as `email` is; null to anyone else.' }
+                pin_locked: { type: boolean, description: 'Ten wrong PINs since the last right one have locked the profile until an owner unlocks it or sets a new PIN.' }
                 dashboard_locked: { type: boolean }
 
     MembershipUpdate:
@@ -9128,10 +9267,10 @@ components:
       required: [id, display_name, pin]
       description: No email is required and none is collected. Child profiles are excluded from analytics entirely.
       properties:
-        id: { $ref: '#/components/schemas/Uuid' }
+        id: { $ref: '#/components/schemas/Uuid', description: 'The profile''s: its account''s and its membership''s alike.' }
         display_name: { type: string, maxLength: 80 }
-        year_of_birth: { type: [integer, 'null'], description: 'Optional, and a year rather than a full date — used only for age-appropriate defaults.' }
-        avatar_url: { type: [string, 'null'] }
+        year_of_birth: { type: [integer, 'null'], minimum: 1900, description: 'Optional, and a year rather than a full date — used only for age-appropriate defaults. A year after this one in the household''s timezone is refused.' }
+        avatar_url: { type: [string, 'null'], description: 'Refused unless null until uploads exist (plan item 16), as `Me.avatar_url` is.' }
         pin: { type: string, pattern: '^[0-9]{4,6}$' }
         grants: { type: object, additionalProperties: { $ref: '#/components/schemas/AccessLevel' } }
         lock_dashboard: { type: boolean, default: true }

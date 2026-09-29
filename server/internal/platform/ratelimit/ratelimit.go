@@ -35,6 +35,15 @@ func Refusal(retry time.Duration) *problem.Problem {
 	return p
 }
 
+// Verdict is the answer to an attempt Take or Attempt did not admit: err, when counting it failed, as
+// it is, or else the 429 for its wait.
+func Verdict(wait time.Duration, err error) error {
+	if err != nil {
+		return err
+	}
+	return Refusal(wait)
+}
+
 // Limit is a throttle on one surface: at most Max attempts per subject in Window.
 type Limit struct {
 	// Name is the surface, part of every key the limit counts under.
@@ -77,6 +86,10 @@ var (
 	// A household sends twenty invitations a day, counted by the household, a resend among them:
 	// each is an email to an address its owners chose.
 	InvitationHousehold = Limit{Name: "invitation.household", Max: 20, Window: 24 * time.Hour}
+	// A client's network looks up thirty household codes an hour that open no household (D-104): a
+	// code identifies a household and authenticates nobody, and one found shows its child profiles'
+	// names, so guessing them is what is counted.
+	ChildCodeNetwork = Limit{Name: "child_code.network", Max: 30, Window: time.Hour}
 )
 
 // Beginner opens transactions.

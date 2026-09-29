@@ -48,8 +48,9 @@ type attempt struct {
 	remember bool
 }
 
-// deviceJSON is the contract's DeviceSignIn.
-type deviceJSON struct {
+// DeviceSignIn is the contract's DeviceSignIn: the device a mobile sign-in is for, a child profile's
+// (SignInChild) among them.
+type DeviceSignIn struct {
 	ID         uuid.UUID `json:"id"`
 	Label      string    `json:"label"`
 	Platform   string    `json:"platform"`
@@ -58,7 +59,7 @@ type deviceJSON struct {
 
 // attemptOf is the attempt a sign-in's request makes for clientType: a mobile sign-in needs its
 // device, and records the version its Household-Client header names over the one its body does.
-func attemptOf(r *http.Request, clientType string, d *deviceJSON, trust string) (attempt, error) {
+func attemptOf(r *http.Request, clientType string, d *DeviceSignIn, trust string) (attempt, error) {
 	switch clientType {
 	case clientversion.Web:
 		return attempt{client: clientversion.Web}, nil
@@ -229,8 +230,8 @@ func tokenPair(t device.Tokens) *tokenPairJSON {
 	return &tokenPairJSON{AccessToken: t.Access, ExpiresIn: int(token.Lifetime.Seconds()), RefreshToken: t.Refresh, TokenType: "Bearer"}
 }
 
-// loginResult is the contract's LoginResult: the web client's has no tokens.
-type loginResult struct {
+// LoginResult is the contract's LoginResult: the web client's has no tokens.
+type LoginResult struct {
 	User       meJSON         `json:"user"`
 	Tokens     *tokenPairJSON `json:"tokens"`
 	TrustToken *string        `json:"trust_token"`
@@ -248,7 +249,7 @@ func admitted(w http.ResponseWriter, adm admission) {
 		httpx.WriteJSON(w, http.StatusConflict, adm.challenge)
 		return
 	}
-	result := loginResult{User: adm.me}
+	result := LoginResult{User: adm.me}
 	if adm.web != nil {
 		session.SetCookies(w, *adm.web)
 		if adm.trust != "" {

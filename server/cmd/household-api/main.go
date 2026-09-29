@@ -213,7 +213,7 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 	}
 	households, err := household.New(household.Config{
 		Pool: pool, Log: log, Throttles: throttles, Mail: sender, Catalogs: catalogs, WebURL: cfg.WebURL,
-		Later: background.Run,
+		Later: background.Run, Accounts: id,
 	})
 	if err != nil {
 		return app.Accounts{}, nil, closeAll, err
