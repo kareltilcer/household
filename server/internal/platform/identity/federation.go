@@ -151,7 +151,8 @@ var errSubjectTaken = errors.New("identity: the subject was given an account mea
 // redeemed with the client's verifier, signs in the account whose credential holds the provider's
 // subject, as a sign-in with a password does, second step included. A subject no account holds
 // makes a new one, unless an account has its address, which is linked only by its owner. Every
-// failure of the flow is one 401, and the client begins again.
+// refusal of the flow is one 401, and the client begins again; a provider that turns the server
+// away is the server's error (federation.ErrRefused).
 func (s *Service) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p, name, ok := s.provider(r)
@@ -237,8 +238,9 @@ func (s *Service) oauthCallback(w http.ResponseWriter, r *http.Request) {
 // errLinkRequired, whether or not that account verified the address.
 //
 // The credential is held until tx ends, as a password sign-in holds its password (unchanged): a
-// reset that unlinks it (D-102), or an unlink, waits for the sign-in and then ends what it began,
-// and one that has unlinked it first leaves this sign-in nothing to find.
+// reset that unlinks it (D-102) waits for the sign-in and then ends what it began, since it ends
+// every session and device sign-in, and a reset or an unlink that has deleted it first leaves this
+// sign-in nothing to find. An unlink that waits for the sign-in ends nothing it began.
 func (s *Service) federatedAccount(ctx context.Context, tx pgx.Tx, provider string, id federation.Identity, name, lang string) (uuid.UUID, error) {
 	const holder = "SELECT user_id FROM credentials WHERE type = $1 AND subject = $2 FOR SHARE"
 	var user uuid.UUID

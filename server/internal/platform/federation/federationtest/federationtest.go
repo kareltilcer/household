@@ -48,6 +48,31 @@ type Provider struct {
 	grants map[string]grant
 	// Redeemed counts the codes redeemed.
 	Redeemed int
+	// turnAway and keysDown are TurnAway's and KeysDown's.
+	turnAway *Refusal
+	keysDown bool
+}
+
+// Refusal is an answer the token endpoint gives in place of redeeming a code: its status, and the
+// error code its body names, none when "".
+type Refusal struct {
+	Status int
+	Code   string
+}
+
+// TurnAway makes the token endpoint answer every request with r from now on, whatever it asks,
+// as a provider that throttles the server or finds its request malformed does; nil redeems again.
+func (p *Provider) TurnAway(r *Refusal) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.turnAway = r
+}
+
+// KeysDown makes the provider's keys unreachable, 503, from now on, or reachable again.
+func (p *Provider) KeysDown(down bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.keysDown = down
 }
 
 type grant struct {
@@ -96,6 +121,13 @@ func (p *Provider) discovery(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (p *Provider) keys(w http.ResponseWriter, _ *http.Request) {
+	p.mu.Lock()
+	down := p.keysDown
+	p.mu.Unlock()
+	if down {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "unavailable"})
+		return
+	}
 	pub := p.key.PublicKey
 	writeJSON(w, http.StatusOK, map[string]any{"keys": []map[string]string{{
 		"kty": "RSA", "alg": "RS256", "use": "sig", "kid": "test",
@@ -134,9 +166,20 @@ func (p *Provider) token(w http.ResponseWriter, r *http.Request) {
 	}
 	f := r.PostForm
 	p.mu.Lock()
+	turnAway := p.turnAway
 	g, ok := p.grants[f.Get("code")]
-	delete(p.grants, f.Get("code"))
+	if turnAway == nil {
+		delete(p.grants, f.Get("code"))
+	}
 	p.mu.Unlock()
+	if turnAway != nil {
+		if turnAway.Code == "" {
+			w.WriteHeader(turnAway.Status)
+			return
+		}
+		writeJSON(w, turnAway.Status, map[string]string{"error": turnAway.Code})
+		return
+	}
 	sum := sha256.Sum256([]byte(f.Get("code_verifier")))
 	switch {
 	case f.Get("grant_type") != "authorization_code" || f.Get("client_id") != p.ClientID ||

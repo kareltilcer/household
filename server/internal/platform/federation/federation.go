@@ -211,8 +211,10 @@ type Identity struct {
 }
 
 // ErrRefused is Exchange's answer when the provider does not vouch for the sign-in: it refused the
-// code, or its ID token does not verify or carries another nonce. A provider that refuses the
-// server's own credentials is another error, the server's.
+// code, or its ID token is another sign-in's, carrying another nonce. Anything else that stops an
+// exchange is about the server, not the person, and is another error, the server's: the provider
+// refusing the server's credentials or its request, or turning it away, and an ID token the server
+// cannot verify.
 var ErrRefused = errors.New("federation: the provider did not vouch for the sign-in")
 
 // Exchange redeems code, which the provider sent to redirectURI, with verifier, and returns what
@@ -230,26 +232,35 @@ func (p *Provider) Exchange(ctx context.Context, code, redirectURI, verifier, no
 	ctx = oidc.ClientContext(ctx, p.cfg.HTTP)
 	tok, err := cfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
-		// The provider refusing the code refuses the sign-in; the provider refusing the server
-		// itself, its client id or its secret, Apple's signed one included, is the server's
-		// misconfiguration, which no one signs in past until it is mended (RFC 6749 §5.2).
+		// invalid_grant is the provider refusing the code, which refuses the sign-in: unknown,
+		// spent or expired, or redeemed with another verifier or redirect URI (RFC 6749 §5.2).
+		// Every other answer is about the server's request, not the person's: its client id or its
+		// secret, Apple's signed one included, a parameter it sent, or the provider turning it
+		// away, 429 among them. No one signs in past it until it is mended or passes, and it is
+		// the server's error, logged.
 		var refused *oauth2.RetrieveError
-		if errors.As(err, &refused) && refused.Response != nil && refused.Response.StatusCode < http.StatusInternalServerError &&
-			refused.ErrorCode != "invalid_client" && refused.ErrorCode != "unauthorized_client" {
+		if errors.As(err, &refused) && refused.ErrorCode == "invalid_grant" {
 			return Identity{}, ErrRefused
 		}
 		return Identity{}, fmt.Errorf("federation: redeem a %s code: %w", p.name, err)
 	}
+	// The ID token comes from the provider itself, in the answer to the server's own request, so one
+	// that is missing or does not verify is the server's to look into, not the person's doing: the
+	// provider's keys unreachable, the server's clock wrong, or its configuration. Only one carrying
+	// another nonce is a refusal, a code from another sign-in than the one this state began.
 	raw, _ := tok.Extra("id_token").(string)
 	if raw == "" {
-		return Identity{}, ErrRefused
+		return Identity{}, fmt.Errorf("federation: %s answered no ID token", p.name)
 	}
 	idToken, err := idVerifier.Verify(ctx, raw)
 	if err != nil {
+		return Identity{}, fmt.Errorf("federation: verify a %s ID token: %w", p.name, err)
+	}
+	if subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(nonce)) != 1 {
 		return Identity{}, ErrRefused
 	}
-	if subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(nonce)) != 1 || idToken.Subject == "" {
-		return Identity{}, ErrRefused
+	if idToken.Subject == "" {
+		return Identity{}, fmt.Errorf("federation: a %s ID token names no subject", p.name)
 	}
 	var claims struct {
 		Email string `json:"email"`
@@ -258,7 +269,7 @@ func (p *Provider) Exchange(ctx context.Context, code, redirectURI, verifier, no
 		Name          string          `json:"name"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
-		return Identity{}, ErrRefused
+		return Identity{}, fmt.Errorf("federation: read a %s ID token's claims: %w", p.name, err)
 	}
 	verified := string(claims.EmailVerified) == "true" || string(claims.EmailVerified) == `"true"`
 	return Identity{Subject: idToken.Subject, Email: claims.Email, EmailVerified: verified, Name: claims.Name}, nil

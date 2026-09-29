@@ -94,4 +94,8 @@ the clients do not offer it.
 A provider that refuses the server itself, `invalid_client` or `unauthorized_client`, because the
 Google secret was rotated at Google or the Apple key was revoked, fails every sign-in with it `500`,
 and each is logged as `identity request failed` with the provider's error. Mend the setting and
-redeploy; a person's own refused sign-in answers `401` and is not logged.
+redeploy. So does any other answer from its token endpoint but `invalid_grant`, a `429` that
+throttles the server or an `invalid_request` among them, and an ID token the server cannot verify:
+its keys unreachable from the server (`fetching keys` in the log), or the server's clock off. Only a
+person's own refused sign-in, `invalid_grant` for their code or an ID token that is another
+sign-in's, answers `401`, and is not logged.

@@ -121,6 +121,44 @@ func TestASignInTheProviderDoesNotVouchForIsRefused(t *testing.T) {
 	}
 }
 
+// A provider that turns the server's request away, or whose ID token the server cannot verify, has
+// not refused the person: the exchange is the server's error, which is answered 500 and logged,
+// not a sign-in refused as if its code were wrong.
+func TestAProviderThatTurnsTheServerAwayIsTheServersError(t *testing.T) {
+	p, idp := google(t)
+	begin := func() string {
+		authURL, err := p.AuthURL(t.Context(), redirect, "s", "the-nonce", federation.Challenge(verifier))
+		if err != nil {
+			t.Fatal(err)
+		}
+		code, _ := idp.Authorize(authURL, federationtest.Person{Subject: "g-1"})
+		return code
+	}
+	serversError := func(name string) {
+		t.Helper()
+		if _, err := p.Exchange(t.Context(), begin(), redirect, verifier, "the-nonce"); err == nil || errors.Is(err, federation.ErrRefused) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for name, r := range map[string]federationtest.Refusal{
+		"throttled":         {Status: http.StatusTooManyRequests},
+		"a request refused": {Status: http.StatusBadRequest, Code: "invalid_request"},
+		"a scope refused":   {Status: http.StatusBadRequest, Code: "invalid_scope"},
+	} {
+		idp.TurnAway(&r)
+		serversError(name)
+	}
+	idp.TurnAway(nil)
+	// The provider's keys, which the first ID token fetches, unreachable.
+	idp.KeysDown(true)
+	serversError("the keys unreachable")
+	// Once they are back, the next sign-in goes through.
+	idp.KeysDown(false)
+	if _, err := p.Exchange(t.Context(), begin(), redirect, verifier, "the-nonce"); err != nil {
+		t.Fatalf("the keys back: %v", err)
+	}
+}
+
 func TestAppleIsAskedForAFormPostAndSentASignedSecret(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

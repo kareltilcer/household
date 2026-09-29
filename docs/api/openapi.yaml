@@ -443,7 +443,10 @@ paths:
         be completed by `/link`, and only by the account that made it. A provider the server is not
         configured for answers `404`. A client's network may begin sixty an hour. Apple answers a
         request for an address or a name as a form posted to the redirect URI.
-      security: []
+
+        Authentication is optional: a start made with the account's credential records the account,
+        which `/link` needs, and one made without it is completed only at `/callback`.
+      security: [{}, { bearerAuth: [] }, { sessionCookie: [] }]
       parameters:
         - name: provider
           in: path
@@ -479,8 +482,10 @@ paths:
         a name only to the client, once.
 
         A state that is unknown, expired, used or another provider's, a verifier that is not the
-        challenge's, and a code or an ID token the provider does not vouch for all answer `401`
-        (`invalid_credentials`): the client begins again.
+        challenge's, a code the provider refuses, and an ID token that is another sign-in's all
+        answer `401` (`invalid_credentials`): the client begins again. A provider that turns the
+        server's own request away, or whose ID token the server cannot verify, is the server's
+        error, `500`, not the person's.
       security: []
       parameters:
         - name: provider

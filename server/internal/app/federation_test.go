@@ -409,6 +409,14 @@ func TestAProviderSignInIsHeldToItsStart(t *testing.T) {
 	if idp.Redeemed != 0 {
 		t.Fatalf("%d codes were redeemed", idp.Redeemed)
 	}
+
+	// A provider that turns the server away has refused the server, not the person: the server's
+	// error, which is logged, not a sign-in answered as if its code were wrong.
+	authURL, state = b.start("web")
+	code, _ = idp.Authorize(authURL, person)
+	idp.TurnAway(&federationtest.Refusal{Status: http.StatusTooManyRequests})
+	expect(t, callback(code, state, verifier), http.StatusInternalServerError, problem.CodeInternal)
+	idp.TurnAway(nil)
 }
 
 // A provider sign-in is a sign-in like any other: a device's is given a token pair, and one to an
