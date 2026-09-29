@@ -16,6 +16,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/etag"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
@@ -55,16 +56,14 @@ const (
 // errLocked is the answer to every attempt at a locked profile's PIN.
 var errLocked = problem.New(http.StatusLocked, problem.CodeChildProfileLocked)
 
-// invalidCredentials is a child's sign-in's one failure, as a password's is (FR-ID3).
-func invalidCredentials() *problem.Problem {
-	return problem.New(http.StatusUnauthorized, problem.CodeInvalidCredentials)
-}
-
 // joinCode is code as a household keeps it: in capitals, and without the spaces and dashes a person
-// types between the groups a client shows it in (FR-CH1).
+// types between the groups a client shows it in (FR-CH1). Every space and every dash Unicode has
+// goes, not only the ASCII ones: a keyboard's smart punctuation may make " - " an en dash, a code
+// copied from a screen may carry a non-breaking space or hyphen, and a right code refused for either
+// would count against the network's lookups as a guess does.
 func joinCode(code string) string {
 	return strings.ToUpper(strings.Map(func(r rune) rune {
-		if unicode.IsSpace(r) || r == '-' {
+		if unicode.IsSpace(r) || unicode.Is(unicode.Pd, r) {
 			return -1
 		}
 		return r
@@ -74,14 +73,6 @@ func joinCode(code string) string {
 // network is the client's network, as a throttle counts it.
 func (s *Service) network(r *http.Request) string {
 	return clientip.Network(s.Accounts.ClientIP.Addr(r))
-}
-
-// refusal is the answer to a throttle's verdict: err as it is, or the 429 for a wait.
-func refusal(wait time.Duration, err error) error {
-	if err != nil {
-		return err
-	}
-	return ratelimit.Refusal(wait)
 }
 
 // childEntry is one child profile of the contract's ChildProfileList.
@@ -110,7 +101,7 @@ func (s *Service) childProfiles(w http.ResponseWriter, r *http.Request) {
 	// household, so that lookups sent at once meet the limit one by one.
 	network := s.network(r)
 	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.ChildCodeNetwork, Subject: network}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
+		s.fail(w, r, ratelimit.Verdict(wait, err))
 		return
 	}
 	var (
@@ -215,7 +206,7 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	network := s.network(r)
 	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.LoginNetwork, Subject: network}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
+		s.fail(w, r, ratelimit.Verdict(wait, err))
 		return
 	}
 	code, profile := joinCode(req.HouseholdCode), req.ProfileID
@@ -280,7 +271,7 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 		fail(err, false)
 		return
 	case !ok:
-		fail(invalidCredentials(), true)
+		fail(identity.InvalidCredentials(), true)
 		return
 	}
 	// The attempt succeeded: the network's count takes it back.
@@ -309,7 +300,7 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 		case err != nil:
 			return err
 		case !found || !now.set.Equal(p.set):
-			return invalidCredentials()
+			return identity.InvalidCredentials()
 		case now.failures >= LockAfter && p.failures < LockAfter:
 			return errLocked
 		}
@@ -402,17 +393,18 @@ type childCreate struct {
 }
 
 // check canonicalises the name req gives and refuses what is wrong with it, each field by its
-// pointer: a name with nothing in it or a control character, a birth year after this one, an avatar,
-// which waits for uploads (item 16), and a level above a child's ceiling (FR-AC4). The edge has
-// checked the types, the name's length, the earliest year and the PIN's digits.
-func (req *childCreate) check(now time.Time) error {
+// pointer: a name with nothing in it or a control character, a birth year after thisYear, the
+// household's, an avatar, which waits for uploads (item 16), and a level above a child's ceiling
+// (FR-AC4). The edge has checked the types, the name's length, the earliest year and the PIN's
+// digits.
+func (req *childCreate) check(thisYear int) error {
 	var errs []problem.FieldError
 	name, ok := text.Name(req.DisplayName)
 	if !ok {
 		errs = append(errs, problem.FieldError{Field: "/display_name", Code: problem.FieldInvalid})
 	}
 	req.DisplayName = name
-	if req.YearOfBirth != nil && *req.YearOfBirth > now.Year() {
+	if req.YearOfBirth != nil && *req.YearOfBirth > thisYear {
 		errs = append(errs, problem.FieldError{Field: "/year_of_birth", Code: problem.FieldInvalid})
 	}
 	if req.AvatarURL != nil {
@@ -428,6 +420,22 @@ func (req *childCreate) check(now time.Time) error {
 		return problem.Validation(errs...)
 	}
 	return nil
+}
+
+// thisYear is the year it is in the household of ctx, in its timezone, where its calendar days are
+// counted: a birth year after it has not begun there yet, whatever year the server's clock is in.
+func (s *Service) thisYear(ctx context.Context) (int, error) {
+	var zone string
+	if err := tenant.InTx(ctx, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, "SELECT timezone FROM households WHERE id = $1", tenant.From(ctx).HouseholdID()).Scan(&zone)
+	}); err != nil {
+		return 0, err
+	}
+	loc, err := time.LoadLocation(zone)
+	if err != nil {
+		return 0, err
+	}
+	return s.Now().In(loc).Year(), nil
 }
 
 // createChild is postChildren (FR-CH1, FR-HA7): an owner makes a child profile, an account with no
@@ -449,7 +457,12 @@ func (s *Service) createChild(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := req.check(s.Now()); err != nil {
+	thisYear, err := s.thisYear(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := req.check(thisYear); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -485,7 +498,7 @@ func (s *Service) createChild(w http.ResponseWriter, r *http.Request) {
 		maps.Copy(grants, req.Grants)
 		m, err = insertProfile(ctx, tx, req.ID, household, req.ID, access.Child, grants,
 			childProfile{yearOfBirth: req.YearOfBirth, dashboardLocked: lock})
-		if uniqueViolation(err, "memberships_pkey") {
+		if db.UniqueViolation(err, "memberships_pkey") {
 			return mutation.Record{}, invalid("/id", problem.FieldInvalid)
 		}
 		if err != nil {

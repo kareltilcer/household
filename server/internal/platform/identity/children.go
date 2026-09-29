@@ -2,14 +2,13 @@ package identity
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
 
@@ -71,7 +70,7 @@ func (s *Service) Graduate(ctx context.Context, tx pgx.Tx, user uuid.UUID, addre
 	}
 	tag, err := tx.Exec(ctx, "UPDATE users SET email = $2, email_verified_at = $3 WHERE id = $1", user, address, s.Sessions.Now())
 	if err != nil {
-		if uniqueViolation(err, "users_email") {
+		if db.UniqueViolation(err, "users_email") {
 			return ErrEmailTaken
 		}
 		return err
@@ -93,13 +92,6 @@ func (s *Service) Graduate(ctx context.Context, tx pgx.Tx, user uuid.UUID, addre
 		return err
 	}
 	return s.Devices.RevokeAll(ctx, tx, user, uuid.Nil)
-}
-
-// uniqueViolation reports whether err is PostgreSQL's refusal of a row that index, a unique index,
-// already has: 23505, unique_violation.
-func uniqueViolation(err error, index string) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == index
 }
 
 // IsChild reports whether user is a child profile in tx: an account whose credential is a PIN.

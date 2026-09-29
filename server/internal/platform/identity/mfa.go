@@ -113,7 +113,7 @@ func (s *Service) activateMFA(w http.ResponseWriter, r *http.Request) {
 	}
 	account := user.String()
 	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.MFAAccount, Subject: account}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
+		s.fail(w, r, ratelimit.Verdict(wait, err))
 		return
 	}
 	var codes []string
@@ -227,7 +227,7 @@ func (s *Service) verifyMFA(w http.ResponseWriter, r *http.Request) {
 	}
 	account := user.String()
 	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.MFAAccount, Subject: account}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
+		s.fail(w, r, ratelimit.Verdict(wait, err))
 		return
 	}
 
@@ -358,7 +358,7 @@ func (s *Service) verifyMFA(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, problem.New(http.StatusUnauthorized, problem.CodeUnauthenticated))
 		return
 	case wrong:
-		s.fail(w, r, invalidCredentials())
+		s.fail(w, r, InvalidCredentials())
 		return
 	case locked:
 		s.fail(w, r, problem.New(http.StatusLocked, problem.CodeMfaLocked))

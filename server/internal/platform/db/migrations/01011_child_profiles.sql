@@ -11,6 +11,11 @@
 -- the profile until an owner unlocks it or sets a new PIN (D-104). Only a PIN counts any: a
 -- password's failures are the sign-in throttle's (ratelimit.LoginAccount), which cools an address
 -- down rather than locking it.
+--
+-- A child_pin's updated_at, which a sign-in holds the PIN it checked to as a password's (01008),
+-- also moves when its profile is removed from its household, with no new secret, so that a sign-in
+-- checking the PIN meanwhile signs nobody in (ADR 0012): for a PIN, it is when the PIN last stopped
+-- signing in what it signed in before, a new PIN's setting among them.
 ALTER TABLE credentials
   ADD COLUMN failures integer NOT NULL DEFAULT 0 CHECK (failures >= 0),
   ADD CHECK (type = 'child_pin' OR failures = 0);

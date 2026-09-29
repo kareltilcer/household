@@ -1,13 +1,26 @@
 // Package db opens the server's PostgreSQL connections, creates the roles it connects as,
-// and applies its migrations (PRD 01 §2.3, §9).
+// applies its migrations (PRD 01 §2.3, §9), and names the refusals of PostgreSQL's that a
+// caller answers as a problem of the request's rather than as a failure.
 package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// uniqueViolationCode is PostgreSQL's SQLSTATE for unique_violation.
+const uniqueViolationCode = "23505"
+
+// UniqueViolation reports whether err is PostgreSQL's refusal of a row that constraint, a unique
+// constraint or index, already has.
+func UniqueViolation(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolationCode && pgErr.ConstraintName == constraint
+}
 
 // Open returns a pool for url, which names the database and the role. Connections are
 // made lazily, so an unreachable database fails readiness, not startup. Each session runs

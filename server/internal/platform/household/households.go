@@ -14,6 +14,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/auth"
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/etag"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
@@ -532,7 +533,7 @@ func setJoinCode(ctx context.Context, tx pgx.Tx, household uuid.UUID) (settings,
 				"UPDATE households SET join_code = $2 WHERE id = $1 RETURNING "+settingsColumns, household, newJoinCode()))
 			return err
 		})
-		if !uniqueViolation(err, "households_join_code_key") {
+		if !db.UniqueViolation(err, "households_join_code_key") {
 			return h, err
 		}
 	}

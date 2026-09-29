@@ -192,8 +192,9 @@ func invalid(field, code string) *problem.Problem {
 	return problem.Validation(problem.FieldError{Field: field, Code: code})
 }
 
-// invalidCredentials is every sign-in's one failure (FR-ID3).
-func invalidCredentials() *problem.Problem {
+// InvalidCredentials is every sign-in's one failure (FR-ID3), a child profile's PIN's among them
+// (internal/platform/household).
+func InvalidCredentials() *problem.Problem {
 	return problem.New(http.StatusUnauthorized, problem.CodeInvalidCredentials)
 }
 

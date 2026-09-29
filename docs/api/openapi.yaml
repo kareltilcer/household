@@ -1525,8 +1525,8 @@ paths:
         operations name. Its levels are FR-AC4's defaults with `grants` over them: `manage`, or more
         than `view` on `finance`, is refused `422` naming `/grants/<module>`. It speaks the household's
         language, and its dashboard is locked unless `lock_dashboard` is false. A `year_of_birth`
-        after this year is refused `422`, and so is an `avatar_url` other than null until uploads
-        exist (plan item 16). An `id` another account or profile has is refused `422` naming `/id`.
+        after this year in the household's timezone is refused `422`, and so is an `avatar_url` other
+        than null until uploads exist (plan item 16). An `id` another account or profile has is refused `422` naming `/id`.
         No `Idempotency-Key` is kept, since its fingerprint would be a fast hash of the PIN: a repeat
         of one that was created answers `422` naming `/id`, and the profile is read at
         `getMembersByUserId`.
@@ -9267,7 +9267,7 @@ components:
       properties:
         id: { $ref: '#/components/schemas/Uuid', description: 'The profile''s: its account''s and its membership''s alike.' }
         display_name: { type: string, maxLength: 80 }
-        year_of_birth: { type: [integer, 'null'], minimum: 1900, description: 'Optional, and a year rather than a full date — used only for age-appropriate defaults. A year after this one is refused.' }
+        year_of_birth: { type: [integer, 'null'], minimum: 1900, description: 'Optional, and a year rather than a full date — used only for age-appropriate defaults. A year after this one in the household''s timezone is refused.' }
         avatar_url: { type: [string, 'null'], description: 'Refused unless null until uploads exist (plan item 16), as `Me.avatar_url` is.' }
         pin: { type: string, pattern: '^[0-9]{4,6}$' }
         grants: { type: object, additionalProperties: { $ref: '#/components/schemas/AccessLevel' } }

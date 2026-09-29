@@ -190,7 +190,7 @@ func TestAnOwnerMakesAChildProfile(t *testing.T) {
 		field  string
 	}{
 		{map[string]any{"avatar_url": "https://example.com/adam.png"}, "/avatar_url"},
-		{map[string]any{"year_of_birth": time.Now().Year() + 1}, "/year_of_birth"},
+		{map[string]any{"year_of_birth": s.clock.now().In(prague(t)).Year() + 1}, "/year_of_birth"},
 		{map[string]any{"id": id}, "/id"},
 		{map[string]any{"id": jana.me().ID}, "/id"},
 	} {
@@ -209,6 +209,39 @@ func TestAnOwnerMakesAChildProfile(t *testing.T) {
 	expect(t, petr.makeChild(h.ID, "Bára", "1234", nil), http.StatusForbidden, problem.CodeForbidden)
 	if c := childOf(t, petr.members(h.ID)["Adam"]); c.YearOfBirth != nil || !c.DashboardLocked {
 		t.Errorf("Adam as Petr reads him: %+v", c)
+	}
+}
+
+// prague is the timezone of the tests' households (browser.create).
+func prague(t *testing.T) *time.Location {
+	t.Helper()
+	loc, err := time.LoadLocation("Europe/Prague")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return loc
+}
+
+// A birth year is refused only once it is after the household's own year, in its timezone, where its
+// calendar days are counted: half an hour into New Year's Day in Prague, still the old year in UTC,
+// the new year is this year.
+func TestABirthYearIsTheHouseholdsYear(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	now := s.clock.now()
+	newYear := time.Date(now.In(prague(t)).Year()+1, time.January, 1, 0, 30, 0, 0, prague(t))
+	s.clock.advance(newYear.Sub(now))
+	if s.clock.now().UTC().Year() == newYear.Year() {
+		t.Fatalf("%v is the new year in UTC already", s.clock.now())
+	}
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	if c := childOf(t, jana.child(h.ID, "Ema", "1234", map[string]any{"year_of_birth": newYear.Year()})); c.YearOfBirth == nil ||
+		*c.YearOfBirth != newYear.Year() {
+		t.Errorf("%+v", c)
+	}
+	got := fieldErrorsOf(t, jana.makeChild(h.ID, "Bára", "1234", map[string]any{"year_of_birth": newYear.Year() + 1}))
+	if !slices.Equal(got, []problem.FieldError{{Field: "/year_of_birth", Code: problem.FieldInvalid}}) {
+		t.Errorf("next year: %v", got)
 	}
 }
 
@@ -241,6 +274,11 @@ func TestAChildSignsInWithTheCodeAProfileAndAPIN(t *testing.T) {
 		t.Fatalf("%+v", list)
 	}
 	expect(t, phone.profiles("ABCD2345"), http.StatusNotFound, problem.CodeNotFound)
+	// Any space or dash, as smart punctuation or a copied code has them: an en dash, a non-breaking
+	// hyphen and a non-breaking space.
+	for _, sep := range []string{" – ", "‑", " "} {
+		expect(t, phone.profiles(h.JoinCode[:4]+sep+h.JoinCode[4:]), http.StatusOK, "")
+	}
 
 	// What does not match signs nobody in, alike.
 	for _, c := range []struct {

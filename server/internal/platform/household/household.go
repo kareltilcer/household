@@ -32,7 +32,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
@@ -208,16 +207,6 @@ var pointerEscaper = strings.NewReplacer("~", "~0", "/", "~1")
 
 // escapePointer is name as a JSON Pointer's reference token (pointerEscaper).
 func escapePointer(name string) string { return pointerEscaper.Replace(name) }
-
-// uniqueViolationCode is PostgreSQL's SQLSTATE for unique_violation.
-const uniqueViolationCode = "23505"
-
-// uniqueViolation reports whether err is PostgreSQL's refusal of a row that constraint, a unique
-// index, already has.
-func uniqueViolation(err error, constraint string) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolationCode && pgErr.ConstraintName == constraint
-}
 
 // email sends t to address in the language of locale, with args, after the response. A failure is
 // logged: nothing the request did depends on it.

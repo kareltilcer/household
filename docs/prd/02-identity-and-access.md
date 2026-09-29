@@ -307,8 +307,9 @@ console family group takes.
 **FR-CH1 — Create a child profile.** An owner supplies `display_name`, an optional
 `year_of_birth`, an avatar, and sets a **4–6 digit PIN**. No email address is required and none
 is collected. If the child has a phone, they sign in on it with **household code + profile + PIN**;
-on a shared family tablet, an owner authorises the device once and profiles are switched without
-re-authentication.
+on a shared family tablet, each profile signs in once with its PIN in the same way, and profiles are
+then switched without re-authentication (**D-104**, which rejected a sign-in an owner issues for the
+tablet in the profile's place).
 
 **The household code** is a short, human-typeable identifier (8 characters, unambiguous alphabet —
 no `0`/`O`, no `1`/`I`) generated per household at creation and shown to owners in household

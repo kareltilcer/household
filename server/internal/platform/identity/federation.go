@@ -79,7 +79,7 @@ func (s *Service) oauthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if wait, err := s.Throttles.Take(ctx, ratelimit.Count{Limit: ratelimit.OAuthStartNetwork, Subject: s.network(r)}); err != nil || wait > 0 {
-		s.fail(w, r, refusal(wait, err))
+		s.fail(w, r, ratelimit.Verdict(wait, err))
 		return
 	}
 	state, nonce := session.NewToken(), session.NewToken()
@@ -179,7 +179,7 @@ func (s *Service) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	case !found, !st.verifies(req.CodeVerifier):
-		s.fail(w, r, invalidCredentials())
+		s.fail(w, r, InvalidCredentials())
 		return
 	}
 	a, err := attemptOf(r, st.client, req.Device, req.TrustToken)
@@ -189,7 +189,7 @@ func (s *Service) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := p.Exchange(ctx, req.Code, st.redirect, req.CodeVerifier, st.nonce)
 	if errors.Is(err, federation.ErrRefused) {
-		s.fail(w, r, invalidCredentials())
+		s.fail(w, r, InvalidCredentials())
 		return
 	}
 	if err != nil {
