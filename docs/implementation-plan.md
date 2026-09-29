@@ -431,7 +431,7 @@ Phase 0 · after 8 · size L
   - the MFA new-device rule;
   - OIDC against a mock identity provider;
   - the please-update response.
-- **PR:** —
+- **PR:** [#12](https://github.com/kareltilcer/household/pull/12)
 
 ### 10 · Households, memberships, invitations and grants · `planned`
 
