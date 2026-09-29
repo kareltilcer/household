@@ -488,7 +488,7 @@ Phase 0 · after 9, 10 · size M
   - Lockout and unlock are tested.
   - Granting a child `manage` returns `422`.
   - Graduation keeps the child's content.
-- **PR:** —
+- **PR:** [#14](https://github.com/kareltilcer/household/pull/14)
 
 ### 12 · Conformance suite · `planned`
 
