@@ -26,6 +26,9 @@ func TestAuditSummariesAreInTheCatalogs(t *testing.T) {
 	for _, m := range registry(t).All() {
 		mods = append(mods, m)
 	}
+	for _, p := range registry(t).Platform() {
+		mods = append(mods, platformAuditor{p})
+	}
 	for _, v := range summaryViolations(t, mods...) {
 		t.Error(v)
 	}
@@ -40,6 +43,12 @@ func TestAuditSummariesAreInTheCatalogsCatchesAViolation(t *testing.T) {
 		t.Fatalf("violations:\n  %s\nwant:\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))
 	}
 }
+
+// platformAuditor is a module the platform serves itself, as the summary check reads it.
+type platformAuditor struct{ p module.PlatformModule }
+
+func (a platformAuditor) Name() string                       { return a.p.Name }
+func (a platformAuditor) AuditActions() []module.AuditAction { return a.p.Actions }
 
 func summaryViolations(t *testing.T, mods ...auditor) []string {
 	t.Helper()

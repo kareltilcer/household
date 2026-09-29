@@ -35,6 +35,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/health"
+	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
@@ -108,7 +109,7 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 		return err
 	}
 	background := identity.NewBackground(log, 4, 1024, time.Minute)
-	accounts, closeAccounts, err := newAccounts(ctx, cfg, log, pool, background)
+	accounts, households, closeAccounts, err := newAccounts(ctx, cfg, log, pool, background)
 	if err != nil {
 		return err
 	}
@@ -122,6 +123,7 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 		MaxBodyBytes: cfg.MaxBodyBytes,
 		BodyTimeout:  cfg.BodyTimeout,
 		Accounts:     accounts,
+		Households:   households,
 	})
 	if err != nil {
 		return err
@@ -152,26 +154,27 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, listening 
 	return errors.Join(served, background.Close(closeCtx))
 }
 
-// newAccounts builds the account surfaces (items 8 and 9) from cfg, and returns what closes them.
+// newAccounts builds the account surfaces (items 8 and 9) from cfg, and the household surface (item
+// 10), which sends its email as they do, and returns what closes them.
 func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool,
 	background *identity.Background,
-) (app.Accounts, func(), error) {
+) (app.Accounts, *household.Service, func(), error) {
 	closeAll := func() {}
 	catalogs, err := i18n.Default()
 	if err != nil {
-		return app.Accounts{}, closeAll, err
+		return app.Accounts{}, nil, closeAll, err
 	}
 	// One hash at once per CPU the process may use: GOMAXPROCS follows a container's CPU limit,
 	// where NumCPU counts the host's, each hash holding 64 MiB.
 	hasher, err := password.New(password.Default, runtime.GOMAXPROCS(0))
 	if err != nil {
-		return app.Accounts{}, closeAll, err
+		return app.Accounts{}, nil, closeAll, err
 	}
 	var breached func(string) (bool, error)
 	if cfg.BreachCorpus != "" {
 		corpus, err := breach.Open(cfg.BreachCorpus)
 		if err != nil {
-			return app.Accounts{}, closeAll, err
+			return app.Accounts{}, nil, closeAll, err
 		}
 		closeAll = func() { _ = corpus.Close() }
 		breached = corpus.Contains
@@ -181,11 +184,11 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 	}
 	sender, err := mail.NewSMTP(cfg.SMTPURL, cfg.MailFrom)
 	if err != nil {
-		return app.Accounts{}, closeAll, err
+		return app.Accounts{}, nil, closeAll, err
 	}
 	origins, err := session.NewOrigins(cfg.AllowedOrigins...)
 	if err != nil {
-		return app.Accounts{}, closeAll, err
+		return app.Accounts{}, nil, closeAll, err
 	}
 	sessions := session.NewStore(pool, origins, log, nil)
 	devices := device.NewStore(pool, cfg.TokenKeys, log, nil)
@@ -195,23 +198,31 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 			continue
 		}
 		if providers[name], err = federation.New(name, *p); err != nil {
-			return app.Accounts{}, closeAll, err
+			return app.Accounts{}, nil, closeAll, err
 		}
 	}
+	throttles := ratelimit.NewThrottles(pool, nil)
 	id, err := identity.New(identity.Config{
 		Pool: pool, Log: log, Hasher: hasher, Breached: breached,
-		Throttles: ratelimit.NewThrottles(pool, nil), Sessions: sessions, Mail: sender, Catalogs: catalogs,
+		Throttles: throttles, Sessions: sessions, Mail: sender, Catalogs: catalogs,
 		WebURL: cfg.WebURL, ClientIP: clientip.New(cfg.TrustedProxies), Later: background.Run,
 		Devices: devices, MFA: cfg.MFAKeys, Providers: providers, RedirectURIs: cfg.RedirectURIs,
 	})
 	if err != nil {
-		return app.Accounts{}, closeAll, err
+		return app.Accounts{}, nil, closeAll, err
+	}
+	households, err := household.New(household.Config{
+		Pool: pool, Log: log, Throttles: throttles, Mail: sender, Catalogs: catalogs, WebURL: cfg.WebURL,
+		Later: background.Run,
+	})
+	if err != nil {
+		return app.Accounts{}, nil, closeAll, err
 	}
 	return app.Accounts{
 		Identity: id, Sessions: sessions, Devices: devices, Origins: origins, MinClients: cfg.MinClients,
 		UserLimit:      ratelimit.NewBuckets(ratelimit.PerUser, nil),
 		HouseholdLimit: ratelimit.NewBuckets(ratelimit.PerHousehold, nil),
-	}, closeAll, nil
+	}, households, closeAll, nil
 }
 
 // migrate applies every pending migration, the platform's and each module's, logging each one

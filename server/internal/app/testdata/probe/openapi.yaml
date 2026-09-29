@@ -68,6 +68,58 @@ paths:
   /me/sessions/{session_id}:
     parameters: [{ name: session_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
     delete: { operationId: deleteMeSessionsBySessionId, responses: { '204': { description: Revoked }, default: { $ref: '#/components/responses/Problem' } } }
+  # The household routes the router always serves (item 10), declared as loosely as the tests need.
+  /households:
+    get: { operationId: getHouseholds, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+    post: { operationId: postHouseholds, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '201': { description: Created }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getHouseholdsByHouseholdId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+    patch: { operationId: patchHouseholdsByHouseholdId, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/join-code:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postHouseholdsByHouseholdIdJoinCode, responses: { '200': { description: Made }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/leave:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postLeave, responses: { '204': { description: Left }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/members:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getMembers, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/members/{user_id}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    get: { operationId: getMembersByUserId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+    patch: { operationId: patchMembersByUserId, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+    delete: { operationId: deleteMembersByUserId, responses: { '204': { description: Removed }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/ownership/transfer:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postOwnershipTransfer, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Promoted }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/invitations:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getInvitations, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+    post: { operationId: postInvitations, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '201': { description: Created }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/invitations/{invitation_id}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: invitation_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    delete: { operationId: deleteInvitationsByInvitationId, responses: { '204': { description: Revoked }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/invitations/{invitation_id}/resend:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: invitation_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    post: { operationId: postInvitationsByInvitationIdResend, responses: { '202': { description: Sent }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/modules:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getModules, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/modules/{module}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: module, in: path, required: true, schema: { type: string } }]
+    patch: { operationId: patchModulesByModule, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/invitations:
+    get: { operationId: getMeInvitations, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/invitations/{token}:
+    parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+    get: { operationId: getMeInvitationsByToken, security: [], responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/invitations/{token}/accept:
+    parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+    post: { operationId: postMeInvitationsByTokenAccept, responses: { '200': { description: Joined }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/invitations/{token}/decline:
+    parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+    post: { operationId: postMeInvitationsByTokenDecline, responses: { '204': { description: Declined }, default: { $ref: '#/components/responses/Problem' } } }
   /households/{household_id}/probe/items:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get:

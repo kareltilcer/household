@@ -73,10 +73,11 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 		t.Fatal(err)
 	}
 	pool := d.Pool(t, db.RoleApp)
-	accounts, _ := apptest.Accounts(t, pool, log, apptest.Options{})
+	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Modules: registry, MaxBodyBytes: 1 << 10, Accounts: accounts,
+		Households: apptest.Households(t, pool, log, outbox, apptest.Options{}),
 	}
 	for _, o := range options {
 		o(&deps)
@@ -107,8 +108,8 @@ func (w *world) exec(sql string, args ...any) {
 func (w *world) household(probeEnabled bool) uuid.UUID {
 	w.t.Helper()
 	h := idgen.New()
-	w.exec("INSERT INTO households (id) VALUES ($1)", h)
-	w.exec("INSERT INTO module_enablement (household_id, module, enabled) VALUES ($1, $2, $3)", h, probe.Name, probeEnabled)
+	w.exec(testsupport.InsertHousehold, h)
+	w.exec(testsupport.InsertEnablement, h, probe.Name, probeEnabled)
 	return h
 }
 
@@ -125,7 +126,7 @@ func (w *world) member(household uuid.UUID, role access.Role, level *access.Leve
 // join adds user to household with role and, unless level is nil, a grant on the probe.
 func (w *world) join(household, user uuid.UUID, role access.Role, level *access.Level) {
 	w.t.Helper()
-	w.exec("INSERT INTO memberships (household_id, user_id, role) VALUES ($1, $2, $3)", household, user, string(role))
+	w.exec(testsupport.InsertMember, household, user, string(role))
 	if level != nil {
 		w.exec("INSERT INTO module_grants (household_id, user_id, module, level) VALUES ($1, $2, $3, $4)",
 			household, user, probe.Name, level.String())
@@ -293,7 +294,7 @@ func TestADisabledModuleIsAbsentAndKeepsItsData(t *testing.T) {
 	}
 
 	unlisted := idgen.New()
-	w.exec("INSERT INTO households (id) VALUES ($1)", unlisted)
+	w.exec(testsupport.InsertHousehold, unlisted)
 	unlistedOwner := w.member(unlisted, access.Owner, nil)
 	expect(t, w.do(http.MethodGet, items(unlisted), unlistedOwner, ""), http.StatusNotFound, problem.CodeNotFound)
 

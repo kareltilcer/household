@@ -24,11 +24,11 @@ func TestEffectiveLevel(t *testing.T) {
 		// A child never manages, and at most views Finance (FR-AC4).
 		{access.Child, "garden", true, access.Manage, access.Contribute},
 		{access.Child, "garden", true, access.View, access.View},
-		{access.Child, finance, true, access.Contribute, access.View},
-		{access.Child, finance, true, access.None, access.None},
+		{access.Child, access.Finance, true, access.Contribute, access.View},
+		{access.Child, access.Finance, true, access.None, access.None},
 		{access.Child, "garden", false, access.Contribute, access.None},
 	} {
-		if got := effective(tc.role, tc.module, tc.enabled, tc.granted); got != tc.want {
+		if got := Effective(tc.role, tc.module, tc.enabled, tc.granted); got != tc.want {
 			t.Errorf("%s on %s, enabled %v, granted %v: %v, want %v", tc.role, tc.module, tc.enabled, tc.granted, got, tc.want)
 		}
 	}

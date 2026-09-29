@@ -3,22 +3,33 @@
 -- member of household A as well, so that household A holds rows of theirs. The PR that adds a
 -- tenant table adds its rows here: a tenant table with no row of household A fails the test,
 -- since a table the test cannot read from proves nothing. Item 30's seed may take this over.
-INSERT INTO users (id) VALUES
-  ('01900000-0000-7000-8000-0000000000a1'),
-  ('01900000-0000-7000-8000-0000000000b1');
+INSERT INTO users (id, email, email_verified_at) VALUES
+  ('01900000-0000-7000-8000-0000000000a1', 'a@example.test', now()),
+  ('01900000-0000-7000-8000-0000000000b1', 'b@example.test', now());
 
-INSERT INTO households (id) VALUES
-  ('01900000-0000-7000-8000-00000000000a'),
-  ('01900000-0000-7000-8000-00000000000b');
+INSERT INTO households (id, name, country, timezone, base_currency, locale, units, first_day_of_week, join_code, billing_payer_id) VALUES
+  ('01900000-0000-7000-8000-00000000000a', 'A', 'CZ', 'Europe/Prague', 'CZK', 'cs', 'metric', 1, 'AAAAAAAA',
+   '01900000-0000-7000-8000-0000000000a1'),
+  ('01900000-0000-7000-8000-00000000000b', 'B', 'GB', 'Europe/London', 'GBP', 'en', 'metric', 1, 'BBBBBBBB',
+   '01900000-0000-7000-8000-0000000000b1');
 
-INSERT INTO memberships (household_id, user_id, role) VALUES
-  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000a1', 'owner'),
-  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000b1', 'member'),
-  ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000b1', 'owner');
+INSERT INTO memberships (id, household_id, user_id, role) VALUES
+  ('01900000-0000-7000-8000-0000000000f1', '01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000a1', 'owner'),
+  ('01900000-0000-7000-8000-0000000000f2', '01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000b1', 'member'),
+  ('01900000-0000-7000-8000-0000000000f3', '01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000b1', 'owner');
 
-INSERT INTO module_enablement (household_id, module, enabled) VALUES
-  ('01900000-0000-7000-8000-00000000000a', 'tasks', true),
-  ('01900000-0000-7000-8000-00000000000b', 'tasks', true);
+INSERT INTO module_enablement (id, household_id, module, enabled) VALUES
+  ('01900000-0000-7000-8000-0000000000f4', '01900000-0000-7000-8000-00000000000a', 'tasks', true),
+  ('01900000-0000-7000-8000-0000000000f5', '01900000-0000-7000-8000-00000000000b', 'tasks', true);
+
+-- An invitation in each household, household A's to household B's owner's address: a row the
+-- invitation's own policy would show its addressee outside any household's context, and not in
+-- household B's.
+INSERT INTO invitations (id, household_id, kind, email, role, grants, token_hash, invited_by, expires_at, max_uses) VALUES
+  ('01900000-0000-7000-8000-0000000000f6', '01900000-0000-7000-8000-00000000000a', 'email', 'b@example.test', 'member', '{}',
+   decode(repeat('a1', 32), 'hex'), '01900000-0000-7000-8000-0000000000a1', now() + interval '14 days', 1),
+  ('01900000-0000-7000-8000-0000000000f7', '01900000-0000-7000-8000-00000000000b', 'link', NULL, 'member', '{}',
+   decode(repeat('b1', 32), 'hex'), '01900000-0000-7000-8000-0000000000b1', now() + interval '3 days', 1);
 
 INSERT INTO module_grants (household_id, user_id, module, level) VALUES
   ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000a1', 'tasks', 'manage'),

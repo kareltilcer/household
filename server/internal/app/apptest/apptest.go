@@ -23,6 +23,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
 	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/federation"
+	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
@@ -93,6 +94,8 @@ type Options struct {
 	RedirectURIs []string
 	// MinClients are the oldest clients served.
 	MinClients clientversion.Minimums
+	// Hooks are the household surface's (Households).
+	Hooks household.Hooks
 }
 
 // TokenKeys and MFAKeys are the tests' keys: fixed, so that a token one router issued verifies at
@@ -201,4 +204,28 @@ func Accounts(t testing.TB, pool session.Pool, log *slog.Logger, o Options) (app
 		UserLimit:      ratelimit.NewBuckets(userLimit, o.Now),
 		HouseholdLimit: ratelimit.NewBuckets(householdLimit, o.Now),
 	}, outbox
+}
+
+// Households returns the household surface for a router over pool, logging to log, on the clock
+// and with the hooks of o, sending its mail to outbox and running what it defers before the request
+// that deferred it returns.
+func Households(t testing.TB, pool session.Pool, log *slog.Logger, outbox *Outbox, o Options) *household.Service {
+	t.Helper()
+	catalogs, err := i18n.Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	web, err := url.Parse(WebURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := household.New(household.Config{
+		Pool: pool, Log: log, Throttles: ratelimit.NewThrottles(pool, o.Now), Mail: outbox, Catalogs: catalogs,
+		WebURL: web, Later: func(ctx context.Context, fn func(context.Context)) { fn(context.WithoutCancel(ctx)) },
+		Now: o.Now, Hooks: o.Hooks,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
 }

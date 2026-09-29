@@ -119,6 +119,8 @@ var exemptions = map[string]exemption{
 		"before a household context exists, to list their households"},
 	"public.memberships": {ownPolicy: true, why: "PRD 01 §2.4: how tenancy is resolved, read before a " +
 		"household context exists, so its policy is keyed on user_id there"},
+	"public.invitations": {ownPolicy: true, why: "PRD 01 §2.4: read before a household context exists, by " +
+		"the holder of its token and by the verified address it was sent to"},
 }
 
 // tenantIsolation is the expression of the policy enable_tenant_isolation creates, both its

@@ -71,6 +71,27 @@ func Match(preferences ...string) Locale {
 	return Source
 }
 
+// maxTag is the longest language tag kept, in characters.
+const maxTag = 64
+
+// Canonical is tag, a person's or a household's language as a BCP 47 tag, in its canonical form,
+// and false when it is not a BCP 47 tag or does not name its language: und, a private-use tag
+// such as x-home, and one whose language is only guessed from its region or script, und-CZ. A
+// language Household does not ship is kept as it is: Match addresses it in English.
+func Canonical(tag string) (string, bool) {
+	if len(tag) > maxTag {
+		return "", false
+	}
+	t, err := language.Parse(tag)
+	if err != nil {
+		return "", false
+	}
+	if _, confidence := t.Base(); confidence != language.Exact {
+		return "", false
+	}
+	return t.String(), true
+}
+
 // ErrUnknownKey is a key the catalogs do not have.
 var ErrUnknownKey = errors.New("i18n: no such key")
 

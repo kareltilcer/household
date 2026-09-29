@@ -944,6 +944,10 @@ paths:
       operationId: getMeInvitations
       tags: [me]
       summary: Invitations addressed to the signed-in user
+      description: |
+        The pending email invitations to the signed-in user's address, once it is verified. Each
+        carries the invitation's id as its `token`, which its addressee, signed in with that verified
+        address, may use in place of the token the email carries.
       responses:
         '200': { description: Invitations, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/InvitationForInvitee' } } } } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -956,7 +960,7 @@ paths:
       summary: Preview an invitation
       description: Shows exactly what is being granted — household, inviter, role, and the module levels — before acceptance.
       security: []
-      parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+      parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }]
       responses:
         '200': { description: The invitation, content: { application/json: { schema: { $ref: '#/components/schemas/InvitationForInvitee' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -967,7 +971,12 @@ paths:
       operationId: postMeInvitationsByTokenAccept
       tags: [me]
       summary: Accept an invitation
-      parameters: [{ name: token, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      description: |
+        The account's address must be verified (`403 account_unverified`), and an `email` invitation's
+        must be the one it was sent to, which is otherwise not found. The membership has exactly the
+        role and the levels the invitation proposed. Someone already a member is answered their
+        membership as it is.
+      parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '200': { description: Membership created, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -981,8 +990,11 @@ paths:
       operationId: postMeInvitationsByTokenDecline
       tags: [me]
       summary: Decline an invitation
-      description: Recorded, and the inviter is told.
-      parameters: [{ name: token, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      description: |
+        Recorded, and the inviter is told. It closes the invitation, a link's too. An `email`
+        invitation is declined only from the account with its address; an invitation that no longer
+        works is not found.
+      parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Declined }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1066,7 +1078,12 @@ paths:
       operationId: postHouseholds
       tags: [households]
       summary: Create a household
-      description: The creator becomes an owner and the billing payer, and a 30-day trial begins.
+      description: |
+        Any user may, verified or not (FR-HH1). The creator becomes an owner and the billing payer,
+        every module is enabled with the creator holding `manage` on each, the household is given its
+        code, and a 30-day trial begins. `units` and `first_day_of_week` default to the country's
+        profile; a country Household has no profile of is refused `422` naming `/country`, and an `id`
+        another household has `422` naming `/id`.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1074,7 +1091,7 @@ paths:
       responses:
         '201': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Household' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: 'The account is unverified, or the per-user household ceiling is reached', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '403': { description: The per-user household ceiling is reached, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -1094,9 +1111,11 @@ paths:
       tags: [households]
       summary: Update household settings
       description: |
-        Changing `country` changes which reference data is offered from that point on and never
-        reinterprets recorded values. Changing `base_currency` recomputes totals from each row's
-        stored rate, is warned in the client, and is audited.
+        Owner only. Changing `country` changes which reference data is offered from that point on and
+        never reinterprets recorded values; a country Household has no profile of is refused `422`
+        naming `/country`. Changing `base_currency` recomputes totals from each row's stored rate, is
+        warned in the client, and is audited; until that recomputation is built, a `base_currency`
+        other than the household's is refused `422` naming `/base_currency`.
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -1110,6 +1129,25 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/VersionConflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /households/{household_id}/join-code:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post:
+      operationId: postHouseholdsByHouseholdIdJoinCode
+      tags: [households]
+      summary: Make a new household code
+      description: |
+        Owner only. The household's code (`join_code`), which a child's sign-in names the household by
+        (FR-CH1), is replaced: the old one signs nobody in from now on, and the sessions it signed in
+        stay. The household's `version` moves with it.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: The household with its new code, content: { application/json: { schema: { $ref: '#/components/schemas/Household' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /households/{household_id}/deletion:
@@ -1154,14 +1192,17 @@ paths:
       tags: [households]
       summary: Leave the household
       description: |
-        Content the member created stays with the household; their private root is deleted after a
-        30-day window in which they may export it. The last owner cannot leave.
+        Any member, at any time. Content the member created stays with the household; their private
+        root is deleted after a 30-day window in which they may export it. The last owner and the
+        billing payer cannot leave, and one who is both is told both at once (FR-HH4). The
+        `Idempotency-Key` is kept on the account rather than in the household, whose membership, and
+        the member's keys in it, leaving ends.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Left }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: You are the last owner; promote another owner or delete the household, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'You are the last owner, the billing payer, or both: promote another owner or delete the household, and hand billing to another owner', content: { application/problem+json: { schema: { $ref: '#/components/schemas/LeaveBlockedProblem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /households/{household_id}/members:
@@ -1170,6 +1211,9 @@ paths:
       operationId: getMembers
       tags: [households]
       summary: List members with their roles and module grants
+      description: |
+        Any member: the comparison is the point of the screen (FR-HA3). A member's `email` is shown to
+        the household's owners and to the member themself, and is `null` to everyone else.
       responses:
         '200': { description: Members, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Membership' } } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1183,7 +1227,7 @@ paths:
       tags: [households]
       summary: One member
       responses:
-        '200': { description: The member, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
+        '200': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: The member, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1194,25 +1238,31 @@ paths:
       description: |
         Owner only. Takes effect on the member's next request; lowering a grant emits sync
         retractions immediately, and the member is notified that their access changed.
-        A `child` cannot be granted `manage` on any module.
+        A `child` cannot be granted `manage` on any module, nor more than `view` on `finance`; a
+        level above either, a level below `manage` for an owner, and a module Household does not
+        have are refused `422` naming `/grants/<module>`. A `child` stays a child and nobody else
+        becomes one (`422` naming `/role`): a child profile is created and graduated instead. An
+        owner made a member keeps the levels they held until they are lowered.
       parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/MembershipUpdate' } } }
       responses:
-        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
+        '200': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: Would remove the last owner, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'The `If-Match` version is stale, or the change would leave the household with no owner (`last_owner`) or its billing payer no longer an owner (`billing_payer`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
     delete:
       operationId: deleteMembersByUserId
       tags: [households]
       summary: Remove a member
-      description: Immediate. Their sessions stop resolving for this household and their replica receives retractions.
+      description: |
+        Owner only, and never the caller, who leaves instead (`403`). Immediate: their sessions stop
+        resolving for this household, their replica receives retractions, and they are told.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Removed }
@@ -1229,12 +1279,15 @@ paths:
       operationId: postOwnershipTransfer
       tags: [households]
       summary: Promote a member to owner
+      description: |
+        Owner only. There may be several owners, and billing does not move with it (FR-HH6). The new
+        owner holds `manage` on every module. A `child` cannot be an owner (`422` naming `/user_id`).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [user_id], properties: { user_id: { $ref: '#/components/schemas/Uuid' } } } } }
       responses:
-        '200': { description: Promoted, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
+        '200': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: Promoted, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1291,7 +1344,8 @@ paths:
     get:
       operationId: getInvitations
       tags: [households]
-      summary: Pending invitations
+      summary: The household's invitations
+      description: Every invitation, newest first, whatever its `status`, to a member with `view` on `admin`, the module whose data they are.
       responses:
         '200': { description: Invitations, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Invitation' } } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1302,9 +1356,15 @@ paths:
       tags: [households]
       summary: Invite a member
       description: |
-        Owner only. Carries the proposed role, the full module grant matrix and optionally a
-        starting dashboard layout, so what the invitee accepts is what they get.
-        `email` invitations expire in 14 days; `link` invitations in 72 hours.
+        Owner only, and only once the owner's own address is verified (`403 account_unverified`).
+        Carries the proposed role, the module grant matrix and optionally a starting dashboard
+        layout, so what the invitee accepts is what they get; a module the matrix leaves out takes the
+        role's default. A `child` is never invited: a child profile is created (`422` naming `/role`).
+        `email` invitations expire in 14 days and are accepted by the one account with that address;
+        one to an address with an invitation waiting, or a member's, is refused `422` naming `/email`.
+        `link` invitations expire in 72 hours and are accepted by up to `max_uses` accounts. A household
+        sends 20 invitations a day, resends included (`429`). The link is in the response once, which
+        its `Idempotency-Key` does not keep.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1324,11 +1384,13 @@ paths:
       operationId: deleteInvitationsByInvitationId
       tags: [households]
       summary: Revoke an invitation
+      description: Owner only. Its email or link no longer works. An accepted invitation is a membership, and is not found here.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Revoked }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -1338,11 +1400,17 @@ paths:
       operationId: postInvitationsByInvitationIdResend
       tags: [households]
       summary: Resend an email invitation
+      description: |
+        Owner only, once the owner's address is verified (`403 account_unverified`). Sends a new link,
+        which replaces the old one, valid for another 14 days, from this owner. A declined, revoked or
+        expired invitation is open again. A `link` invitation, which has no address, and an accepted
+        one are not found. Counted against the household's 20 invitations a day.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '202': { description: Sent }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
+        '403': { description: 'Not an owner, or the owner''s address is unverified', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -1427,6 +1495,7 @@ paths:
       operationId: getModules
       tags: [households]
       summary: Module enablement and the caller's effective level for each
+      description: Any member, every module in the order of `ModuleKeyValue`.
       responses:
         '200': { description: Modules, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/ModuleState' } } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1440,8 +1509,9 @@ paths:
       tags: [households]
       summary: Enable or disable a module for the household
       description: |
-        Disabling makes the module's routes `404`, removes its widgets, stops and retracts its sync
-        entities, and **retains its data**. Re-enabling restores everything.
+        Owner only. Disabling makes the module's routes `404`, removes its widgets, stops and retracts
+        its sync entities, and **retains its data**. Re-enabling restores everything. `admin`, the
+        household's settings, is never disabled (`403`).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -8527,6 +8597,15 @@ components:
                   member_count: { type: integer }
             billing_payer_for: { type: array, items: { $ref: '#/components/schemas/Uuid' } }
 
+    LeaveBlockedProblem:
+      description: 'Why the caller cannot leave yet (FR-HH4): `code` is `last_owner` when they are the last owner and `billing_payer` otherwise, and `blocked_by` lists every reason at once.'
+      allOf:
+        - { $ref: '#/components/schemas/Problem' }
+        - type: object
+          required: [blocked_by]
+          properties:
+            blocked_by: { type: array, minItems: 1, items: { type: string, enum: [last_owner, billing_payer] } }
+
     DocumentReferencedProblem:
       allOf:
         - { $ref: '#/components/schemas/Problem' }
@@ -8923,7 +9002,7 @@ components:
         - type: object
           properties:
             version: { type: integer, format: int64 }
-            join_code: { type: string, description: Used with a profile and a PIN for child sign-in. }
+            join_code: { type: string, pattern: '^[A-HJ-NP-Z2-9]{8}$', description: 'The household code, used with a profile and a PIN for child sign-in (FR-CH1). Eight characters without 0, O, 1 and I; clients may show it as two groups of four. Shown to owners only.' }
             created_at: { type: string, format: date-time }
             entitlement: { $ref: '#/components/schemas/EntitlementSummary' }
             my_role: { $ref: '#/components/schemas/HouseholdRole' }
@@ -8963,7 +9042,8 @@ components:
         grants: { type: object, additionalProperties: { $ref: '#/components/schemas/AccessLevel' } }
         is_billing_payer: { type: boolean }
         joined_at: { type: string, format: date-time }
-        last_active_at: { type: [string, 'null'], format: date-time }
+        last_active_at: { type: [string, 'null'], format: date-time, description: 'When the member last changed anything in the household, from its activity log.' }
+        version: { type: integer, format: int64, description: 'The membership''s version, its `ETag`, which moves with its role and its grants.' }
         child:
           oneOf:
             - { type: 'null' }
@@ -8993,6 +9073,7 @@ components:
         grants: { type: object, additionalProperties: { $ref: '#/components/schemas/AccessLevel' } }
         dashboard_layout: { oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/DashboardLayoutUpdate' }] }
         message: { type: string, maxLength: 500 }
+        max_uses: { type: integer, minimum: 1, maximum: 12, description: 'For `kind=link`: how many accounts may accept it, 1 when omitted, and at most the members'' fair-use ceiling. An `email` invitation is accepted once.' }
 
     Invitation:
       type: object
@@ -9008,12 +9089,14 @@ components:
         created_at: { type: string, format: date-time }
         expires_at: { type: string, format: date-time }
         status: { type: string, enum: [pending, accepted, declined, revoked, expired] }
+        max_uses: { type: integer, description: How many accounts may accept it. }
+        uses: { type: integer, description: 'How many have; it is `accepted` once they are `max_uses`.' }
 
     InvitationForInvitee:
       type: object
       description: What the invitee sees before accepting — exactly what they are being given.
       properties:
-        token: { type: string }
+        token: { type: string, description: 'How the request named it: the token its email or link carries, or its id in `getMeInvitations`.' }
         household_name: { type: string }
         household_avatar_url: { type: [string, 'null'] }
         invited_by: { type: string }

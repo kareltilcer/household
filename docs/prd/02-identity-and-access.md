@@ -158,15 +158,21 @@ earlier for a reason the member cannot see.
 | Form | Use |
 |---|---|
 | **Email invitation** | Named, single-recipient, expires in 14 days, binds to that email on acceptance |
-| **Link invitation** | A single-use code an owner can send over any channel, expires in 72 hours, `max_uses` of 1 by default |
+| **Link invitation** | A single-use code an owner can send over any channel, expires in 72 hours, `max_uses` of 1 by default and at most 12, the members' fair-use ceiling ([04](04-billing-and-entitlements.md) §5) |
 
 The invitation carries the **proposed role and the proposed module grants**, so what the
 invitee accepts is what they get, and the owner does not have to configure access afterwards.
-An owner may set up the grants before the person exists.
+An owner may set up the grants before the person exists. The role is `owner` or `member`: a child
+profile is created by an owner (FR-CH1), never invited (**D-17**, **D-103**). An email invitation is
+sent again with a new link, which replaces the old one and runs another 14 days, and one that was
+declined, withdrawn or expired is open again. A household sends 20 invitations a day, resends
+included (§9).
 
 **FR-HH3 — Accept an invitation.** The invitee signs in or registers, sees exactly what they
 are being given (household name, inviter, role, the list of modules and levels), and accepts or
-declines. Declining is recorded and the inviter is told.
+declines. Accepting needs a verified address, and an email invitation's is the one it was sent to:
+joining a household is trust extended beyond the account (FR-ID1). Declining is recorded, closes
+the invitation, and the inviter is told.
 
 **FR-HH4 — Leave a household.** Any member may leave at any time. Content they created stays
 with the household (it is household data, not personal data they own), except items in their
@@ -189,7 +195,9 @@ their device deletes it on next sync.
 
 **FR-HH6 — Transfer ownership and transfer billing.** Two separate actions, deliberately. An
 owner may promote another member to `owner` (there may be several), and the billing payer may
-hand billing to another owner. Neither implies the other.
+hand billing to another owner. Neither implies the other. Billing moves only between owners, so the
+payer stays an owner until it has moved: making them a member is refused `409`, `billing_payer`, as
+their leaving is (**D-103**).
 
 ## 4. Roles
 
@@ -265,8 +273,10 @@ Three of these need their reasoning stated, because they are the ones that look 
   filtered by every other grant — a member sees history only for modules they can see — so `view`
   here reveals nothing they could not read directly, and the log is the transparency surface on
   which FR-PS2 and D-75 depend. `view` on Household settings works the same way: it unlocks the
-  member list, the household profile and the storage picture, and every *write* in that module is
-  `owner`-gated regardless of the grant.
+  household's invitations and the storage picture, and every *write* in that module is
+  `owner`-gated regardless of the grant. The member list and the household profile every member
+  reads, whatever their grant, since every member's app works from them
+  ([modules/17-household-admin.md](modules/17-household-admin.md) Permissions, **D-103**).
 
 **FR-AC4 — Child defaults.** A new `child` gets `contribute` on Chores, Shopping, Calendar, Tasks
 and **Pets**; `view` on Reminders and Dashboard; `none` on everything else — including Finance,

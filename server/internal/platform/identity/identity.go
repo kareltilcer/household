@@ -314,25 +314,8 @@ func cut(s string, n int) string {
 	return strings.TrimSpace(string([]rune(s)[:n]))
 }
 
-// maxLocale is the longest language tag kept, in characters.
-const maxLocale = 64
-
-// locale is tag in its canonical form, and false when it is not a BCP 47 tag or does not name its
-// language: und, a private-use tag such as x-home, and one whose language is only guessed from its
-// region or script, und-CZ.
-func locale(tag string) (string, bool) {
-	if len(tag) > maxLocale {
-		return "", false
-	}
-	t, err := language.Parse(tag)
-	if err != nil {
-		return "", false
-	}
-	if _, confidence := t.Base(); confidence != language.Exact {
-		return "", false
-	}
-	return t.String(), true
-}
+// locale is tag in its canonical form, and false when it is not one (i18n.Canonical).
+func locale(tag string) (string, bool) { return i18n.Canonical(tag) }
 
 // preferredLocale is the language of r's Accept-Language that Household ships, else English: a
 // new account's, when the request names none.

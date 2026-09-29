@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/modules"
+	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
@@ -25,11 +26,15 @@ func TestMain(m *testing.M) {
 	testsupport.Main(m, registry.Blocks()...)
 }
 
-// registry returns the server's module registry.
+// registry returns the server's module registry, with the modules the platform serves itself, as
+// the router carries it.
 func registry(t *testing.T) *module.Registry {
 	t.Helper()
 	r, err := module.NewRegistry(modules.All()...)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err = r.WithPlatform(household.Admin()); err != nil {
 		t.Fatal(err)
 	}
 	return r

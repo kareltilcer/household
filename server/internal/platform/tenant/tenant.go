@@ -75,6 +75,22 @@ func (s *Scope) Role() access.Role { return s.role }
 // not enable, and for one it has no row for. grant.Require is how a handler asks.
 func (s *Scope) Level(module string) access.Level { return s.levels[module] }
 
+// Assume returns ctx carrying the scope of household for user, whose role there is role, without
+// the membership check the middleware makes: the scope through which the platform reads and
+// writes a household the caller holds no membership in, or none yet, once something else has
+// proved their right to, as creating a household, or holding its invitation, does (plan item 10).
+// The scope resolves no module levels, so grant.Require refuses every module in it. user is
+// uuid.Nil for a caller who is not signed in, whose transactions carry no caller.
+//
+// A module never calls it, since a module's routes are behind the middleware, and a scope it made
+// itself would read and write whichever household it named: architecture test 4 fails a module
+// that does.
+func Assume(ctx context.Context, pool Beginner, household, user uuid.UUID, role access.Role) context.Context {
+	return context.WithValue(ctx, scopeKey{}, &Scope{
+		householdID: household, userID: user, role: role, levels: map[string]access.Level{}, pool: pool,
+	})
+}
+
 // InTx runs fn in a read-only transaction of ctx's household, and commits it when fn returns
 // nil; an error or a panic rolls it back. The transaction runs as the request role, with the
 // household and the caller set for as long as it lasts (SET LOCAL), so a query in fn that
@@ -263,7 +279,7 @@ func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Sc
 			if err != nil {
 				return err
 			}
-			s.levels[module] = effective(s.role, module, enabled, granted)
+			s.levels[module] = Effective(s.role, module, enabled, granted)
 			return nil
 		})
 		return err
@@ -274,28 +290,17 @@ func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Sc
 	return s, nil
 }
 
-// finance is the one module whose ceiling for a child is lower than every other's (FR-AC4).
-const finance = "finance"
-
-// effective is a member's level on a module: the minimum of the household's enablement and the
+// Effective is a member's level on a module: the minimum of the household's enablement and the
 // member's grant (PRD 01 §5). An owner has Manage on every enabled module and cannot be reduced
 // (PRD modules/00 §2); a child is capped below Manage everywhere and at View on Finance,
-// whatever their grant says (FR-AC4). The caps hold here as well as where a grant is written
-// (item 10), so that no stored row lifts a child past them.
-func effective(role access.Role, module string, enabled bool, granted access.Level) access.Level {
+// whatever their grant says (FR-AC4, access.Ceiling). The caps hold here as well as where a grant
+// is written (item 10), so that no stored row lifts a child past them.
+func Effective(role access.Role, module string, enabled bool, granted access.Level) access.Level {
 	if !enabled {
 		return access.None
 	}
-	switch role {
-	case access.Owner:
+	if role == access.Owner {
 		return access.Manage
-	case access.Child:
-		ceiling := access.Contribute
-		if module == finance {
-			ceiling = access.View
-		}
-		return min(granted, ceiling)
-	case access.Member:
 	}
-	return granted
+	return min(granted, access.Ceiling(role, module))
 }

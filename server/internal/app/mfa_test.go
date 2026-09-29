@@ -72,13 +72,6 @@ func unkept(t *testing.T, rec *httptest.ResponseRecorder) {
 	}
 }
 
-// verify opens the link of the last verification email to address.
-func (s *site) verify(address string) {
-	s.t.Helper()
-	tok, _ := s.token(address)
-	expect(s.t, s.browser().post("/auth/verify-email", jsonBody(s.t, map[string]string{"token": tok})), http.StatusNoContent, "")
-}
-
 // challenge is the contract's MfaChallenge.
 type challenge struct {
 	Error             string   `json:"error"`

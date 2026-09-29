@@ -112,6 +112,11 @@ pnpm run down         # stop the services; volumes are kept
   The one other write path is the platform's own, for the global account tables (a user's
   profile, credentials and sessions), which are no household's history: `tenant.AccountTx`,
   which architecture test 4 keeps out of every module ([ADR 0009](docs/adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md)).
+  The household surface (`internal/platform/household`) is `admin`, a module the platform
+  serves itself: it writes through `mutation.Apply` with the actions and entities
+  `module.PlatformModule` declares, and holds a household its caller is not yet in, creating
+  it or holding its invitation, through `tenant.Assume`, which test 4 keeps out of modules too
+  ([ADR 0011](docs/adr/0011-households-as-the-platforms-own-module.md)).
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`

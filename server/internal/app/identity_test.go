@@ -88,6 +88,7 @@ func newSite(t *testing.T, o apptest.Options) *site {
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, MaxBodyBytes: 1 << 16, Accounts: accounts,
+		Households: apptest.Households(t, pool, log, outbox, o),
 	})
 	if err != nil {
 		t.Fatal(err)

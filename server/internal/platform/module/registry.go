@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -21,13 +22,81 @@ var name = regexp.MustCompile(`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`)
 // by dots.
 var actionKey = regexp.MustCompile(`^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$`)
 
-// Registry is the modules compiled into the server, checked once at startup (PRD 01 §4).
+// Registry is the modules compiled into the server, checked once at startup (PRD 01 §4), and the
+// modules the platform serves itself (WithPlatform).
 type Registry struct {
 	modules  []Module
 	byName   map[string]Module
+	platform []PlatformModule
 	blocks   []db.Block
 	actions  map[string]AuditAction
 	entities map[string]sync.Entity
+}
+
+// PlatformModule is a module the platform serves itself rather than a package under
+// internal/modules: admin, the household's settings, members, invitations and module switches
+// (plan item 10, ADR 0011), whose routes the contract puts at the household's root, whose tables
+// are the platform's block's, and whose writes the platform makes for callers no module could
+// serve, a household's creator and an invitation's holder. It declares the audit actions its
+// mutations record and the sync entities they change, as a module does, so that the mutation spine
+// records them; it is not among All, which are the modules mounted under /<name>.
+type PlatformModule struct {
+	Name     string
+	Actions  []AuditAction
+	Entities []sync.Entity
+}
+
+// WithPlatform returns a registry holding r's modules and mods, checked as NewRegistry checks a
+// module's declarations: a name that is not a module id or is already registered, an audit
+// action that is not the module's or is declared twice or without its summary key, and a sync
+// entity that sync.Violations finds wrong are refused.
+func (r *Registry) WithPlatform(mods ...PlatformModule) (*Registry, error) {
+	out := &Registry{
+		modules:  r.All(),
+		byName:   map[string]Module{},
+		platform: append([]PlatformModule(nil), r.Platform()...),
+		blocks:   r.Blocks(),
+		actions:  map[string]AuditAction{},
+		entities: map[string]sync.Entity{},
+	}
+	if r != nil {
+		maps.Copy(out.byName, r.byName)
+		maps.Copy(out.actions, r.actions)
+		maps.Copy(out.entities, r.entities)
+	}
+	for _, p := range mods {
+		if !name.MatchString(p.Name) {
+			return nil, fmt.Errorf("module: %q is not a module id: lowercase words joined by underscores", p.Name)
+		}
+		if out.registered(p.Name) {
+			return nil, fmt.Errorf("module: two modules are named %s", p.Name)
+		}
+		out.platform = append(out.platform, p)
+		if err := out.addActions(p.Name, p.Actions); err != nil {
+			return nil, err
+		}
+		if err := out.addEntities(p.Name, p.Entities); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// registered reports whether a module or a platform module is named n.
+func (r *Registry) registered(n string) bool {
+	if _, ok := r.byName[n]; ok {
+		return true
+	}
+	return slices.ContainsFunc(r.platform, func(p PlatformModule) bool { return p.Name == n })
+}
+
+// Platform returns the modules the platform serves itself, in the order they were added. A nil
+// registry has none.
+func (r *Registry) Platform() []PlatformModule {
+	if r == nil {
+		return nil
+	}
+	return append([]PlatformModule(nil), r.platform...)
 }
 
 // NewRegistry checks mods and returns their registry. It refuses a nil module, a name that is
@@ -62,11 +131,13 @@ func NewRegistry(mods ...Module) (*Registry, error) {
 		if ok {
 			r.blocks = append(r.blocks, block)
 		}
-		if err := r.addActions(m); err != nil {
+		if err := r.addActions(n, m.AuditActions()); err != nil {
 			return nil, err
 		}
-		if err := r.addEntities(m); err != nil {
-			return nil, err
+		if source, ok := m.(SyncSource); ok {
+			if err := r.addEntities(n, source.SyncEntities()); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if _, err := db.Assemble(append([]db.Block{db.Platform()}, r.blocks...)...); err != nil {
@@ -75,14 +146,14 @@ func NewRegistry(mods ...Module) (*Registry, error) {
 	return r, nil
 }
 
-// addActions checks m's audit actions and adds them.
-func (r *Registry) addActions(m Module) error {
+// addActions checks the audit actions of the module named module and adds them.
+func (r *Registry) addActions(module string, actions []AuditAction) error {
 	var errs []error
-	for _, a := range m.AuditActions() {
+	for _, a := range actions {
 		_, declared := r.actions[a.Key]
 		switch {
-		case !actionKey.MatchString(a.Key) || !strings.HasPrefix(a.Key, m.Name()+"."):
-			errs = append(errs, fmt.Errorf("audit action %q is not %s.<action> in lowercase words joined by dots", a.Key, m.Name()))
+		case !actionKey.MatchString(a.Key) || !strings.HasPrefix(a.Key, module+"."):
+			errs = append(errs, fmt.Errorf("audit action %q is not %s.<action> in lowercase words joined by dots", a.Key, module))
 		case declared:
 			errs = append(errs, fmt.Errorf("audit action %s is declared twice", a.Key))
 		case a.SummaryKey == "":
@@ -92,20 +163,15 @@ func (r *Registry) addActions(m Module) error {
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
-		return fmt.Errorf("module: %s: %w", m.Name(), err)
+		return fmt.Errorf("module: %s: %w", module, err)
 	}
 	return nil
 }
 
-// addEntities checks the sync entities m declares, when it declares any, and adds them.
-func (r *Registry) addEntities(m Module) error {
-	source, ok := m.(SyncSource)
-	if !ok {
-		return nil
-	}
-	entities := source.SyncEntities()
-	if v := sync.Violations(m.Name(), entities); len(v) > 0 {
-		return fmt.Errorf("module: %s declares sync entities wrongly:\n  %s", m.Name(), strings.Join(v, "\n  "))
+// addEntities checks the sync entities of the module named module and adds them.
+func (r *Registry) addEntities(module string, entities []sync.Entity) error {
+	if v := sync.Violations(module, entities); len(v) > 0 {
+		return fmt.Errorf("module: %s declares sync entities wrongly:\n  %s", module, strings.Join(v, "\n  "))
 	}
 	for _, e := range entities {
 		r.entities[e.Name] = e
@@ -179,7 +245,8 @@ func (r *Registry) Entity(n string) (sync.Entity, bool) {
 	return e, ok
 }
 
-// Entities returns every sync entity the modules declare, ordered by name.
+// Entities returns every sync entity the modules declare, the platform's among them, ordered by
+// name.
 func (r *Registry) Entities() []sync.Entity {
 	if r == nil {
 		return nil

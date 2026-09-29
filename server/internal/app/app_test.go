@@ -60,10 +60,11 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 	logs := &syncBuffer{}
 	log := logging.New(logs, slog.LevelDebug)
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
-	accounts, _ := apptest.Accounts(t, pool, log, apptest.Options{})
+	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second, checks...),
 		Pool: pool, MaxBodyBytes: 1 << 10, Accounts: accounts,
+		Households: apptest.Households(t, pool, log, outbox, apptest.Options{}),
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
@@ -329,10 +330,11 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 	const timeout = 300 * time.Millisecond
 	log := logging.New(io.Discard, slog.LevelError)
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
-	accounts, _ := apptest.Accounts(t, pool, log, apptest.Options{})
+	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, MaxBodyBytes: 1 << 10, BodyTimeout: timeout, Accounts: accounts,
+		Households: apptest.Households(t, pool, log, outbox, apptest.Options{}),
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

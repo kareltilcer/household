@@ -74,6 +74,9 @@ var (
 	// A client's network begins sixty sign-ins with a provider an hour (D-101): each writes a row
 	// that waits ten minutes for its callback.
 	OAuthStartNetwork = Limit{Name: "oauth_start.network", Max: 60, Window: time.Hour}
+	// A household sends twenty invitations a day, counted by the household, a resend among them:
+	// each is an email to an address its owners chose.
+	InvitationHousehold = Limit{Name: "invitation.household", Max: 20, Window: 24 * time.Hour}
 )
 
 // Beginner opens transactions.

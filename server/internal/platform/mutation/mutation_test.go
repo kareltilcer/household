@@ -121,9 +121,9 @@ func (w *world) count(sql string, args ...any) int {
 func (w *world) member() (household, user uuid.UUID) {
 	w.t.Helper()
 	household, user = idgen.New(), idgen.New()
-	w.exec("INSERT INTO households (id) VALUES ($1)", household)
+	w.exec(testsupport.InsertHousehold, household)
 	w.exec("INSERT INTO users (id) VALUES ($1)", user)
-	w.exec("INSERT INTO memberships (household_id, user_id, role) VALUES ($1, $2, 'owner')", household, user)
+	w.exec(testsupport.InsertMember, household, user, "owner")
 	return household, user
 }
 
@@ -578,7 +578,7 @@ func TestAnUpdateGrowsTheVersion(t *testing.T) {
 	})
 	editor := idgen.New()
 	w.exec("INSERT INTO users (id) VALUES ($1)", editor)
-	w.exec("INSERT INTO memberships (household_id, user_id, role) VALUES ($1, $2, 'member')", h, editor)
+	w.exec(testsupport.InsertMember, h, editor, "member")
 	w.in(h, editor, func(ctx context.Context) {
 		_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 			var version int64
@@ -852,7 +852,7 @@ func TestAKeyIsCommittedOutsideTheFeedLock(t *testing.T) {
 	h, owner := w.member()
 	member := idgen.New()
 	w.exec("INSERT INTO users (id) VALUES ($1)", member)
-	w.exec("INSERT INTO memberships (household_id, user_id, role) VALUES ($1, $2, 'member')", h, member)
+	w.exec(testsupport.InsertMember, h, member, "member")
 
 	claimed, removing := make(chan struct{}), make(chan struct{})
 	var keyed, removal error

@@ -20,6 +20,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/grant"
 	"github.com/kareltilcer/household/server/internal/platform/health"
+	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
@@ -65,6 +66,9 @@ type Deps struct {
 	BodyTimeout time.Duration
 	// Accounts are the account surfaces, every one of which the router needs.
 	Accounts Accounts
+	// Households is the household surface (item 10): households, their members, invitations and
+	// modules.
+	Households *household.Service
 }
 
 // NewRouter returns the server's whole HTTP surface: the platform middleware, and under
@@ -82,12 +86,20 @@ type Deps struct {
 //
 // The reference reads under /reference answer any authenticated caller, with no household.
 //
+// The household surface (item 10) is admin's, the module the platform serves itself, which the
+// module registry the router carries declares beside the modules: a signed-in user's households,
+// creating one and the invitations addressed to them sit beside the account's routes and keep their
+// keys on the account; an invitation's preview is reached signed in or not.
+//
 // Everything under /households/{household_id} passes the tenant middleware, which answers a
 // caller who is not a member of the household before any route does, and carries the module
 // registry the mutation spine checks each mutation against, and the household's API limit, which
-// its members share. Each module's routes are mounted below that at /<name>, behind the gate that
-// answers 404 to a member who cannot see the module (PRD modules/00 §1), and behind the
-// Idempotency-Key middleware, which answers a repeated unsafe request with its first response.
+// its members share. The household's own routes are there, behind the member's Idempotency-Key,
+// but leaving, whose key is the account's and answers a repeat before the tenant middleware looks
+// for the membership leaving ended: a member's keys go with their membership. Each module's
+// routes are mounted there at /<name>, behind the gate that answers 404 to a member who cannot see
+// the module (PRD modules/00 §1), and behind the Idempotency-Key middleware, which answers a
+// repeated unsafe request with its first response.
 func NewRouter(d Deps) (*chi.Mux, error) {
 	tenancy, err := tenant.Middleware(tenant.Config{Pool: d.Pool, Logger: d.Logger, Entitlement: d.Entitlement})
 	if err != nil {
@@ -97,6 +109,14 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	if a.Identity == nil || a.Sessions == nil || a.Devices == nil || a.Origins == nil || a.UserLimit == nil || a.HouseholdLimit == nil {
 		return nil, errors.New("app: the router needs every account surface")
 	}
+	if d.Households == nil {
+		return nil, errors.New("app: the router needs the household surface")
+	}
+	registry, err := d.Modules.WithPlatform(household.Admin())
+	if err != nil {
+		return nil, fmt.Errorf("app: %w", err)
+	}
+	catalog := mutation.Catalog(registry)
 	perUser := ratelimit.Middleware(a.UserLimit, func(r *http.Request) (string, bool) {
 		user, ok := auth.User(r.Context())
 		return user.String(), ok
@@ -128,6 +148,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	api.Group(func(signedIn chi.Router) {
 		signedIn.Use(authenticate(a.Devices.Authenticate, a.Sessions.Authenticate), perUser)
 		a.Identity.OptionalRoutes(signedIn)
+		d.Households.OptionalRoutes(signedIn)
 		signedIn.Route("/reference", reference.Routes(d.Pool, d.Logger))
 		signedIn.Group(func(account chi.Router) {
 			account.Use(auth.Required)
@@ -135,12 +156,20 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 			account.Group(func(keyed chi.Router) {
 				keyed.Use(idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes))
 				a.Identity.AccountRoutes(keyed)
+				keyed.With(catalog).Group(d.Households.AccountRoutes)
 			})
 		})
-		signedIn.Route("/households/{"+tenant.Param+"}", func(household chi.Router) {
-			household.Use(tenancy, perHousehold, mutation.Catalog(d.Modules))
+		// Leaving keeps its key on the account, found before the membership it ended is looked for,
+		// so that a repeat is answered as the first request was rather than as a stranger.
+		signedIn.With(auth.Required, idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes), tenancy, perHousehold, catalog).
+			Group(d.Households.LeaveRoutes)
+		// A group rather than a router mounted at /households/{household_id}, whose mount point
+		// would then be no route of its own (httpx.MountPoint): the household's own route is there.
+		signedIn.Group(func(inHousehold chi.Router) {
+			inHousehold.Use(tenancy, perHousehold, catalog)
+			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Households.HouseholdRoutes)
 			for _, m := range d.Modules.All() {
-				household.Route("/"+m.Name(), func(r chi.Router) {
+				inHousehold.Route("/households/{"+tenant.Param+"}/"+m.Name(), func(r chi.Router) {
 					r.Use(grant.Gate(m.Name()), idempotency.Middleware(d.Logger, d.MaxBodyBytes))
 					m.RegisterRoutes(r)
 				})
