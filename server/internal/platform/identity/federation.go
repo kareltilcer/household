@@ -291,7 +291,8 @@ func (s *Service) federatedAccount(ctx context.Context, tx pgx.Tx, provider stri
 // oauthLink is postAuthOauthByProviderLink (FR-ID2): a start the signed-in account made, completed,
 // adds the provider's subject to it as a credential, which then signs it in; the explicit step a
 // subject whose address the account has needs. The account's address is told. A link whose session
-// a reset ended while the code was redeemed answers 401, and links nothing.
+// a reset ended while the code was redeemed answers 401, and links nothing; a child profile's is
+// refused 403.
 func (s *Service) oauthLink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -306,6 +307,18 @@ func (s *Service) oauthLink(w http.ResponseWriter, r *http.Request) {
 		CodeVerifier string `json:"code_verifier"`
 	}
 	if err := decode(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// A child profile signs in with its PIN alone, which an owner sets and resets, and ten wrong ones
+	// lock: a provider linked to it would sign it in past both (D-104).
+	if err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+		child, err := IsChild(ctx, tx, user)
+		if err == nil && child {
+			err = errChild
+		}
+		return err
+	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}

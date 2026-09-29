@@ -109,6 +109,25 @@ paths:
   /households/{household_id}/modules/{module}:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: module, in: path, required: true, schema: { type: string } }]
     patch: { operationId: patchModulesByModule, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  # The child profiles' routes the router always serves (item 11), declared as loosely as the tests need.
+  /auth/child/profiles:
+    post: { operationId: postAuthChildProfiles, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/child/login:
+    post: { operationId: postAuthChildLogin, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Signed in }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/graduation/confirm:
+    post: { operationId: postAuthGraduationConfirm, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Graduated }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/children:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postChildren, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '201': { description: Created }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/children/{user_id}/pin:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    put: { operationId: putChildrenByUserIdPin, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Set }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/children/{user_id}/unlock:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    post: { operationId: postChildrenByUserIdUnlock, responses: { '204': { description: Unlocked }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/children/{user_id}/graduate:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    post: { operationId: postChildrenByUserIdGraduate, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Sent }, default: { $ref: '#/components/responses/Problem' } } }
   /me/invitations:
     get: { operationId: getMeInvitations, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
   /me/invitations/{token}:

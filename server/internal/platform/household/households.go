@@ -17,6 +17,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/etag"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
+	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/money"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
@@ -206,7 +207,9 @@ var errIDTaken = invalid("/id", problem.FieldInvalid)
 // createHousehold creates a household (FR-HH1): any user, verified or not, may, and becomes its
 // owner and its payer of record. It enables every module, grants its owner Manage on each, gives it
 // a household code, and starts its trial (Hooks.Created). Its units and first day of the week are
-// its country's unless the request says, and a country Household has no profile of is refused.
+// its country's unless the request says, and a country Household has no profile of is refused. A
+// child profile is refused 403: it is a profile an owner manages in their household, never a
+// household's owner and payer (D-17, D-104).
 func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -225,6 +228,12 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 		modules = Modules
 	)
 	_, err := mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
+		switch child, err := identity.IsChild(ctx, tx, user); {
+		case err != nil:
+			return mutation.Record{}, err
+		case child:
+			return mutation.Record{}, forbidden()
+		}
 		p, ok, err := countryProfile(ctx, tx, *req.Country)
 		switch {
 		case err != nil:

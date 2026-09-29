@@ -166,6 +166,8 @@ written down so nobody later believes it was an oversight.
 Beyond [02](02-identity-and-access.md) §6:
 
 - Child profiles are **excluded from analytics collection entirely** — not anonymised, excluded.
+  A child profile is an account whose credential is a PIN: its client reads `is_child` on the
+  account and starts no analytics for it, and nothing the server counts names it.
 - No marketing communication is ever sent to or about a child profile.
 - No child data is used for any purpose other than delivering the household's own service.
 - The privacy notice has a **plain-language section addressed to children**, in each supported

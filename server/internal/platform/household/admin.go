@@ -42,6 +42,11 @@ const (
 	actionInviteDecline = "invitation.decline"
 	actionModuleEnable  = "module.enable"
 	actionModuleDisable = "module.disable"
+	actionChildCreate   = "child.create"
+	actionChildPIN      = "child.pin"
+	actionChildLock     = "child.lock"
+	actionChildUnlock   = "child.unlock"
+	actionGraduate      = "member.graduate"
 )
 
 // Admin is what admin declares to the module registry: the audit actions its mutations record and
@@ -52,6 +57,7 @@ func Admin() module.PlatformModule {
 		actionMemberJoin, actionMemberUpdate, actionMemberPromote, actionMemberRemove, actionMemberLeave,
 		actionInviteCreate, actionInviteResend, actionInviteRevoke, actionInviteDecline,
 		actionModuleEnable, actionModuleDisable,
+		actionChildCreate, actionChildPIN, actionChildLock, actionChildUnlock, actionGraduate,
 	}
 	p := module.PlatformModule{Name: Name}
 	for _, a := range actions {
@@ -60,7 +66,8 @@ func Admin() module.PlatformModule {
 	p.Entities = []sync.Entity{
 		{Name: entitySettings, Table: "households", Policy: sync.StrictVersion, Access: sync.Grant,
 			Creates: []string{"postHouseholds"}},
-		{Name: entityMembership, Table: "memberships", Policy: sync.StrictVersion, Access: sync.Grant},
+		{Name: entityMembership, Table: "memberships", Policy: sync.StrictVersion, Access: sync.Grant,
+			Creates: []string{"postChildren"}},
 		{Name: entityModule, Table: "module_enablement", Policy: sync.StrictVersion, Access: sync.Grant},
 		{Name: entityInvitation, Table: "invitations", Policy: sync.StrictVersion, Access: sync.Grant,
 			Creates: []string{"postInvitations"}},
@@ -87,8 +94,8 @@ var memberDefaults = map[string]access.Level{
 	"documents": access.View, "activity": access.View, Name: access.View,
 }
 
-// childDefaults are a new child's levels (FR-AC4), for item 11's profiles. A module not named is
-// none: Finance, Chat and the activity log among them.
+// childDefaults are a new child profile's levels (FR-AC4). A module not named is none: Finance, Chat
+// and the activity log among them.
 var childDefaults = map[string]access.Level{
 	"chores": access.Contribute, "shopping": access.Contribute, "calendar": access.Contribute,
 	"tasks": access.Contribute, "pets": access.Contribute,

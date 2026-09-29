@@ -207,9 +207,9 @@ func Accounts(t testing.TB, pool session.Pool, log *slog.Logger, o Options) (app
 }
 
 // Households returns the household surface for a router over pool, logging to log, on the clock
-// and with the hooks of o, sending its mail to outbox and running what it defers before the request
-// that deferred it returns.
-func Households(t testing.TB, pool session.Pool, log *slog.Logger, outbox *Outbox, o Options) *household.Service {
+// and with the hooks of o, with accounts' identity service as its account half, sending its mail to
+// outbox and running what it defers before the request that deferred it returns.
+func Households(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.Accounts, outbox *Outbox, o Options) *household.Service {
 	t.Helper()
 	catalogs, err := i18n.Default()
 	if err != nil {
@@ -222,7 +222,7 @@ func Households(t testing.TB, pool session.Pool, log *slog.Logger, outbox *Outbo
 	s, err := household.New(household.Config{
 		Pool: pool, Log: log, Throttles: ratelimit.NewThrottles(pool, o.Now), Mail: outbox, Catalogs: catalogs,
 		WebURL: web, Later: func(ctx context.Context, fn func(context.Context)) { fn(context.WithoutCancel(ctx)) },
-		Now: o.Now, Hooks: o.Hooks,
+		Now: o.Now, Hooks: o.Hooks, Accounts: accounts.Identity,
 	})
 	if err != nil {
 		t.Fatal(err)

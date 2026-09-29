@@ -77,6 +77,10 @@ var (
 	// A household sends twenty invitations a day, counted by the household, a resend among them:
 	// each is an email to an address its owners chose.
 	InvitationHousehold = Limit{Name: "invitation.household", Max: 20, Window: 24 * time.Hour}
+	// A client's network looks up thirty household codes an hour that open no household (D-104): a
+	// code identifies a household and authenticates nobody, and one found shows its child profiles'
+	// names, so guessing them is what is counted.
+	ChildCodeNetwork = Limit{Name: "child_code.network", Max: 30, Window: time.Hour}
 )
 
 // Beginner opens transactions.

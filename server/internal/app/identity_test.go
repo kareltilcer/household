@@ -89,7 +89,7 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, MaxBodyBytes: 1 << 16, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, outbox, o),
+		Households: apptest.Households(t, pool, log, accounts, outbox, o),
 	}
 	for _, option := range options {
 		option(&deps)

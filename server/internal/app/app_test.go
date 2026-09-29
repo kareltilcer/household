@@ -64,7 +64,7 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second, checks...),
 		Pool: pool, MaxBodyBytes: 1 << 10, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, outbox, apptest.Options{}),
+		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
@@ -334,7 +334,7 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, MaxBodyBytes: 1 << 10, BodyTimeout: timeout, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, outbox, apptest.Options{}),
+		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

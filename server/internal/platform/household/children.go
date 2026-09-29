@@ -1,0 +1,816 @@
+package household
+
+import (
+	"context"
+	"errors"
+	"maps"
+	"net/http"
+	"strings"
+	"time"
+	"unicode"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/kareltilcer/household/server/internal/platform/access"
+	"github.com/kareltilcer/household/server/internal/platform/audit"
+	"github.com/kareltilcer/household/server/internal/platform/clientip"
+	"github.com/kareltilcer/household/server/internal/platform/device"
+	"github.com/kareltilcer/household/server/internal/platform/etag"
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
+	"github.com/kareltilcer/household/server/internal/platform/i18n"
+	"github.com/kareltilcer/household/server/internal/platform/identity"
+	"github.com/kareltilcer/household/server/internal/platform/idgen"
+	"github.com/kareltilcer/household/server/internal/platform/mail"
+	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
+	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/sync"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
+	"github.com/kareltilcer/household/server/internal/platform/text"
+)
+
+// A child profile (PRD 02 §6, ADR 0012) is an account with no address whose one credential is a PIN,
+// child_pin, and a membership of the household whose owner made it, whose role is child. It signs in
+// with the household's code, which says which household, its profile, picked from the list the code
+// opens, and the PIN, on a device, as a mobile sign-in does. A shared tablet holds one such sign-in
+// per profile, and the client switches between them (D-104).
+
+// LockAfter is how many wrong PINs since its last right one lock a child profile, until an owner
+// unlocks it or sets a new PIN (FR-CH5, D-104).
+const LockAfter = 10
+
+// GraduateFor is how long a graduation's link works: an email invitation's fourteen days, since each
+// is an owner's email asking someone into a membership.
+const GraduateFor = EmailFor
+
+// The email a graduation sends, and the web client's route its link opens.
+const (
+	emailGraduate mail.Template = "email.graduate"
+
+	routeGraduate = "graduate"
+)
+
+// errLocked is the answer to every attempt at a locked profile's PIN.
+var errLocked = problem.New(http.StatusLocked, problem.CodeChildProfileLocked)
+
+// invalidCredentials is a child's sign-in's one failure, as a password's is (FR-ID3).
+func invalidCredentials() *problem.Problem {
+	return problem.New(http.StatusUnauthorized, problem.CodeInvalidCredentials)
+}
+
+// joinCode is code as a household keeps it: in capitals, and without the spaces and dashes a person
+// types between the groups a client shows it in (FR-CH1).
+func joinCode(code string) string {
+	return strings.ToUpper(strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || r == '-' {
+			return -1
+		}
+		return r
+	}, code))
+}
+
+// network is the client's network, as a throttle counts it.
+func (s *Service) network(r *http.Request) string {
+	return clientip.Network(s.Accounts.ClientIP.Addr(r))
+}
+
+// refusal is the answer to a throttle's verdict: err as it is, or the 429 for a wait.
+func refusal(wait time.Duration, err error) error {
+	if err != nil {
+		return err
+	}
+	return ratelimit.Refusal(wait)
+}
+
+// childEntry is one child profile of the contract's ChildProfileList.
+type childEntry struct {
+	ID          uuid.UUID `json:"id"`
+	DisplayName string    `json:"display_name"`
+	AvatarURL   *string   `json:"avatar_url"`
+}
+
+// childProfiles is postAuthChildProfiles, the first step of a child's sign-in (A-14, A-15): the
+// household a code opens, by its name, and its child profiles, in the order they were made, to pick
+// one from. An adult, who signs in by email, is not listed (D-104). A code that opens no household
+// answers 404 and counts against the client's network, which may look up thirty such an hour
+// (ratelimit.ChildCodeNetwork): the code identifies a household and authenticates nobody, so guessing
+// codes is what is limited.
+func (s *Service) childProfiles(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req struct {
+		HouseholdCode string `json:"household_code"`
+	}
+	if err := decode(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// Counted before it is looked up, as a sign-in's failure is, and taken back once the code opens a
+	// household, so that lookups sent at once meet the limit one by one.
+	network := s.network(r)
+	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.ChildCodeNetwork, Subject: network}); err != nil || wait > 0 {
+		s.fail(w, r, refusal(wait, err))
+		return
+	}
+	var (
+		household uuid.UUID
+		name      string
+	)
+	err := tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
+		code := joinCode(req.HouseholdCode)
+		if _, err := tx.Exec(ctx, "SELECT set_config('app.join_code', $1, true)", code); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, "SELECT id, name FROM households WHERE join_code = $1", code).Scan(&household, &name)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = problem.NotFound()
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.Throttles.Refund(ctx, ratelimit.ChildCodeNetwork, network); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	items := []childEntry{}
+	err = s.readTx(ctx, household, uuid.Nil, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT m.user_id, u.display_name FROM memberships m JOIN users u ON u.id = m.user_id
+			WHERE m.household_id = $1 AND m.role = 'child'
+			ORDER BY m.created_at, m.id`, household)
+		if err != nil {
+			return err
+		}
+		items, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (childEntry, error) {
+			var e childEntry
+			err := row.Scan(&e.ID, &e.DisplayName)
+			return e, err
+		})
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"household_name": name, "items": items})
+}
+
+// pin is a child profile's PIN as a sign-in finds it: the household whose code found it, its hash,
+// when it was set, and the wrong ones counted since the last right one.
+type pin struct {
+	household uuid.UUID
+	secret    string
+	set       time.Time
+	failures  int
+}
+
+// findPIN reads profile's PIN in tx, locked for it, when profile is a child profile of the household
+// whose code is code, and reports false for any other code and profile. tx's caller is profile, whose
+// own memberships, and the households they are in, it reads outside any household's context.
+func findPIN(ctx context.Context, tx pgx.Tx, code string, profile uuid.UUID) (pin, bool, error) {
+	var p pin
+	err := tx.QueryRow(ctx, `
+		SELECT m.household_id, c.secret, c.updated_at, c.failures
+		FROM credentials c
+		JOIN memberships m ON m.user_id = c.user_id AND m.role = 'child'
+		JOIN households h ON h.id = m.household_id
+		WHERE c.user_id = $1 AND c.type = 'child_pin' AND h.join_code = $2
+		FOR UPDATE OF c`, profile, code).Scan(&p.household, &p.secret, &p.set, &p.failures)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return pin{}, false, nil
+	}
+	return p, err == nil, err
+}
+
+// deviceSignIn is the contract's DeviceSignIn.
+type deviceSignIn struct {
+	ID         uuid.UUID `json:"id"`
+	Label      string    `json:"label"`
+	Platform   string    `json:"platform"`
+	AppVersion string    `json:"app_version"`
+}
+
+// childLogin is postAuthChildLogin (FR-CH1, FR-CH5): the household's code, a profile and its PIN sign
+// the child in on the device the body names, with a device's token pair and no second step (FR-ID5,
+// identity.SignInChild). A code, a profile or a PIN that does not match, and a profile that is not a
+// child's, are one 401 in one time, as a password's sign-in's failures are, and count against the
+// client's network as those do (ratelimit.LoginNetwork).
+//
+// A wrong PIN counts against the profile. It is counted before the PIN is checked, so that attempts
+// sent at once meet the lock one by one, and a right PIN clears the count: LockAfter wrong ones in a
+// row lock the profile until an owner unlocks it or sets a new PIN, and every attempt at a locked
+// profile, the one that locked it included, answers 423 (D-104). So at most LockAfter PINs are
+// checked against a profile between an owner's unlocks, however many are sent at once.
+func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req struct {
+		HouseholdCode string       `json:"household_code"`
+		ProfileID     uuid.UUID    `json:"profile_id"`
+		PIN           string       `json:"pin"`
+		Device        deviceSignIn `json:"device"`
+	}
+	if err := decode(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if req.Device.ID == uuid.Nil {
+		s.fail(w, r, invalid("/device/id", problem.FieldInvalid))
+		return
+	}
+	network := s.network(r)
+	if wait, err := s.Throttles.Attempt(ctx, ratelimit.Count{Limit: ratelimit.LoginNetwork, Subject: network}); err != nil || wait > 0 {
+		s.fail(w, r, refusal(wait, err))
+		return
+	}
+	code, profile := joinCode(req.HouseholdCode), req.ProfileID
+	var (
+		p              pin
+		found, blocked bool
+	)
+	err := tenant.AccountTx(ctx, s.Pool, profile, func(tx pgx.Tx) error {
+		var err error
+		if p, found, err = findPIN(ctx, tx, code, profile); err != nil || !found {
+			return err
+		}
+		if blocked = p.failures >= LockAfter; blocked {
+			return nil
+		}
+		p.failures++
+		_, err = tx.Exec(ctx, "UPDATE credentials SET failures = $2 WHERE user_id = $1 AND type = 'child_pin'", profile, p.failures)
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	hasher := s.Accounts.Hasher
+	var ok, rehash bool
+	switch {
+	case !found:
+		// The same hash as a PIN that is wrong, so that the answer's time says nothing either.
+		err = hasher.Burn(ctx, req.PIN)
+	case blocked:
+		s.fail(w, r, errLocked)
+		return
+	default:
+		ok, rehash, err = hasher.Verify(ctx, req.PIN, p.secret)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !ok {
+		if found && p.failures == LockAfter {
+			locked, err := s.lockChild(ctx, p.household, profile)
+			switch {
+			case err != nil:
+				s.fail(w, r, err)
+				return
+			case locked:
+				s.fail(w, r, errLocked)
+				return
+			}
+		}
+		s.fail(w, r, invalidCredentials())
+		return
+	}
+	// The attempt succeeded: the network's count takes it back.
+	if err := s.Throttles.Refund(ctx, ratelimit.LoginNetwork, network); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var newSecret string
+	if rehash {
+		if newSecret, err = hasher.Hash(ctx, req.PIN); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	var result identity.LoginResult
+	err = tenant.AccountTx(ctx, s.Pool, profile, func(tx pgx.Tx) error {
+		// The PIN was checked before this transaction: an owner's new PIN since then, a graduation
+		// or the profile's removal wins, and this one signs nobody in.
+		now, found, err := findPIN(ctx, tx, code, profile)
+		switch {
+		case err != nil:
+			return err
+		case !found || !now.set.Equal(p.set):
+			return invalidCredentials()
+		}
+		// The same PIN, hashed again, is no change of it: its updated_at stays.
+		if _, err := tx.Exec(ctx, `
+			UPDATE credentials SET failures = 0, secret = coalesce(nullif($2, ''), secret) WHERE user_id = $1 AND type = 'child_pin'`,
+			profile, newSecret); err != nil {
+			return err
+		}
+		result, err = s.Accounts.SignInChild(ctx, tx, r, profile, device.Info{
+			ID: req.Device.ID, Label: req.Device.Label, Platform: req.Device.Platform, AppVersion: req.Device.AppVersion,
+		})
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	identity.NoStore(w)
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+// lockChild records that profile, a child profile of household, is locked, as the system's change of
+// its membership, and reports whether it was: the wrong PIN counted as the LockAfter-th locked it,
+// unless a right one given meanwhile cleared the count, or an owner unlocked it, when nothing is
+// locked and nothing is recorded. The membership's row carries the lock to the household's replicas.
+func (s *Service) lockChild(ctx context.Context, household, profile uuid.UUID) (bool, error) {
+	scoped := mutation.WithVia(tenant.Assume(ctx, s.Pool, household, uuid.Nil, access.Child), audit.ViaMobile)
+	locked := false
+	_, err := mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
+		payer, err := lockHousehold(ctx, tx, household)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		m, err := readMembership(ctx, tx, household, profile, true)
+		var p *problem.Problem
+		switch {
+		case errors.As(err, &p):
+			return mutation.Record{}, nil
+		case err != nil:
+			return mutation.Record{}, err
+		}
+		failures, err := lockPIN(ctx, tx, m)
+		if err != nil || failures < LockAfter {
+			return mutation.Record{}, err
+		}
+		m.child.pinLocked, locked = true, true
+		if m, err = touch(ctx, tx, m, m.role); err != nil {
+			return mutation.Record{}, err
+		}
+		return childRecord(household, payer, m, actionChildLock), nil
+	})
+	return locked && err == nil, err
+}
+
+// lockPIN locks the PIN of m, a child profile's membership, in tx, and returns the wrong PINs it has
+// counted since its last right one; -1 when m is no child profile's, which has none.
+func lockPIN(ctx context.Context, tx pgx.Tx, m membership) (int, error) {
+	if m.child == nil {
+		return -1, nil
+	}
+	var failures int
+	err := tx.QueryRow(ctx, "SELECT failures FROM credentials WHERE user_id = $1 AND type = 'child_pin' FOR UPDATE", m.user).
+		Scan(&failures)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return -1, nil
+	}
+	return failures, err
+}
+
+// childRecord is the record of action on child profile m's membership, as it stands after it.
+func childRecord(household uuid.UUID, payer *uuid.UUID, m membership, action string) mutation.Record {
+	return mutation.Record{
+		Event: audit.Event{
+			Module: Name, Action: action, EntityType: entityMembership, EntityID: m.id,
+			SummaryKey: Name + "." + action, SummaryArgs: map[string]any{"member": m.name},
+		},
+		Changes: []sync.Change{m.change(household, payer, Modules)},
+	}
+}
+
+// childCreate is the contract's ChildProfileCreate.
+type childCreate struct {
+	ID            uuid.UUID               `json:"id"`
+	DisplayName   string                  `json:"display_name"`
+	YearOfBirth   *int                    `json:"year_of_birth"`
+	AvatarURL     *string                 `json:"avatar_url"`
+	PIN           string                  `json:"pin"`
+	Grants        map[string]access.Level `json:"grants"`
+	LockDashboard *bool                   `json:"lock_dashboard"`
+}
+
+// check canonicalises the name req gives and refuses what is wrong with it, each field by its
+// pointer: a name with nothing in it or a control character, a birth year after this one, an avatar,
+// which waits for uploads (item 16), and a level above a child's ceiling (FR-AC4). The edge has
+// checked the types, the name's length, the earliest year and the PIN's digits.
+func (req *childCreate) check(now time.Time) error {
+	var errs []problem.FieldError
+	name, ok := text.Name(req.DisplayName)
+	if !ok {
+		errs = append(errs, problem.FieldError{Field: "/display_name", Code: problem.FieldInvalid})
+	}
+	req.DisplayName = name
+	if req.YearOfBirth != nil && *req.YearOfBirth > now.Year() {
+		errs = append(errs, problem.FieldError{Field: "/year_of_birth", Code: problem.FieldInvalid})
+	}
+	if req.AvatarURL != nil {
+		errs = append(errs, problem.FieldError{Field: "/avatar_url", Code: problem.FieldInvalid})
+	}
+	if err := checkGrants("/grants", req.Grants, access.Child, Modules); err != nil {
+		var p *problem.Problem
+		if errors.As(err, &p) {
+			errs = append(errs, p.Errors...)
+		}
+	}
+	if len(errs) > 0 {
+		return problem.Validation(errs...)
+	}
+	return nil
+}
+
+// createChild is postChildren (FR-CH1, FR-HA7): an owner makes a child profile, an account with no
+// address whose credential is the PIN, and a child's membership of the household, whose levels are
+// FR-AC4's with the request's over them, never manage, nor more than view on Finance. The id is the
+// profile's, its account's and its membership's alike, and one another account or membership has is
+// refused 422 naming /id. The profile speaks the household's language, and its dashboard is locked
+// unless the request says otherwise. No Idempotency-Key is kept, whose fingerprint would be a fast
+// hash of the PIN (PINRoutes): a repeat of one that was made is refused for its id.
+func (s *Service) createChild(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	scope := tenant.From(ctx)
+	if err := owner(ctx); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var req childCreate
+	if err := decode(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := req.check(s.Now()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	secret, err := s.Accounts.Hasher.Hash(ctx, req.PIN)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	household, modules := scope.HouseholdID(), Modules
+	lock := req.LockDashboard == nil || *req.LockDashboard
+	var (
+		m     membership
+		payer *uuid.UUID
+	)
+	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		var err error
+		if payer, err = lockAsOwner(ctx, tx); err != nil {
+			return mutation.Record{}, err
+		}
+		tag, err := tx.Exec(ctx, `
+			INSERT INTO users (id, display_name, locale) SELECT $1, $2, locale FROM households WHERE id = $3
+			ON CONFLICT (id) DO NOTHING`, req.ID, req.DisplayName, household)
+		switch {
+		case err != nil:
+			return mutation.Record{}, err
+		case tag.RowsAffected() == 0:
+			return mutation.Record{}, invalid("/id", problem.FieldInvalid)
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO credentials (user_id, type, secret) VALUES ($1, 'child_pin', $2)", req.ID, secret); err != nil {
+			return mutation.Record{}, err
+		}
+		grants := Defaults(access.Child, modules)
+		maps.Copy(grants, req.Grants)
+		m, err = insertProfile(ctx, tx, req.ID, household, req.ID, access.Child, grants,
+			childProfile{yearOfBirth: req.YearOfBirth, dashboardLocked: lock})
+		if uniqueViolation(err, "memberships_pkey") {
+			return mutation.Record{}, invalid("/id", problem.FieldInvalid)
+		}
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		rec := childRecord(household, payer, m, actionChildCreate)
+		rec.Event.Changes = joinDiffs(access.Child, grants, modules)
+		return rec, nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	etag.Set(w, m.version)
+	httpx.WriteJSON(w, http.StatusCreated, m.body(scope, payer, modules))
+}
+
+// childOf reads the membership of the child profile the request's {user_id} names, locked for tx,
+// with the household's payer, once the caller is found an owner still under the household's lock: a
+// member who is not a child profile is not found.
+func childOf(ctx context.Context, tx pgx.Tx, user uuid.UUID) (membership, *uuid.UUID, error) {
+	payer, err := lockAsOwner(ctx, tx)
+	if err != nil {
+		return membership{}, nil, err
+	}
+	m, err := readMembership(ctx, tx, tenant.From(ctx).HouseholdID(), user, true)
+	switch {
+	case err != nil:
+		return membership{}, nil, err
+	case m.child == nil:
+		return membership{}, nil, problem.NotFound()
+	}
+	return m, payer, nil
+}
+
+// setPIN is putChildrenByUserIdPin (FR-CH5): an owner sets a child profile's PIN, which unlocks it
+// too, and signs it out of every device it is signed in on, since whoever knew the old PIN may hold
+// one of them (D-104). A sign-in checking the old PIN meanwhile signs nobody in. No Idempotency-Key is
+// kept (PINRoutes): a repeat sets the same PIN again.
+func (s *Service) setPIN(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	scope := tenant.From(ctx)
+	if err := owner(ctx); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	user, err := pathUUID(r, "user_id")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var req struct {
+		PIN string `json:"pin"`
+	}
+	if err := decode(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	secret, err := s.Accounts.Hasher.Hash(ctx, req.PIN)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	household := scope.HouseholdID()
+	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		m, payer, err := childOf(ctx, tx, user)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		if _, err := lockPIN(ctx, tx, m); err != nil {
+			return mutation.Record{}, err
+		}
+		// updated_at is the moment it is written, under the row's lock, so that a sign-in that
+		// checked the old PIN finds it changed.
+		if _, err := tx.Exec(ctx, `
+			UPDATE credentials SET secret = $2, updated_at = clock_timestamp(), failures = 0 WHERE user_id = $1 AND type = 'child_pin'`,
+			user, secret); err != nil {
+			return mutation.Record{}, err
+		}
+		if err := s.Accounts.Devices.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
+			return mutation.Record{}, err
+		}
+		m.child.pinLocked = false
+		if m, err = touch(ctx, tx, m, m.role); err != nil {
+			return mutation.Record{}, err
+		}
+		return childRecord(household, payer, m, actionChildPIN), nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// unlockChild is postChildrenByUserIdUnlock (FR-CH5): an owner lifts a child profile's lock, and its
+// wrong PINs are counted from none again. A profile that is not locked is left as it is, and nothing
+// is recorded.
+func (s *Service) unlockChild(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	scope := tenant.From(ctx)
+	if err := owner(ctx); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	user, err := pathUUID(r, "user_id")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	household := scope.HouseholdID()
+	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		m, payer, err := childOf(ctx, tx, user)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		failures, err := lockPIN(ctx, tx, m)
+		if err != nil || failures < LockAfter {
+			return mutation.Record{}, err
+		}
+		if _, err := tx.Exec(ctx, "UPDATE credentials SET failures = 0 WHERE user_id = $1 AND type = 'child_pin'", user); err != nil {
+			return mutation.Record{}, err
+		}
+		m.child.pinLocked = false
+		if m, err = touch(ctx, tx, m, m.role); err != nil {
+			return mutation.Record{}, err
+		}
+		return childRecord(household, payer, m, actionChildUnlock), nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// errEmailTaken is a graduation's answer for an address an account has.
+var errEmailTaken = problem.New(http.StatusConflict, problem.CodeEmailTaken)
+
+// graduate is postChildrenByUserIdGraduate (FR-CH4): an owner sends the address a child profile is to
+// have a link, which works GraduateFor, with which the young adult chooses a password and becomes a
+// member (confirmGraduation). The profile stays a child, signing in with its PIN, until then. The
+// owner's address must be verified, as an invitation's sender's must: the link is trust extended past
+// the household (FR-ID1). Sending again sends a new link, to the same address or another, and the one
+// before stops working. An address an account has is refused 409; each link counts among the
+// household's twenty emails a day (ratelimit.InvitationHousehold).
+func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	scope := tenant.From(ctx)
+	if err := owner(ctx); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	user, err := pathUUID(r, "user_id")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := decode(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	household := scope.HouseholdID()
+	var letter outgoing
+	err = tenant.InTx(ctx, func(tx pgx.Tx) error {
+		m, err := readMembership(ctx, tx, household, user, false)
+		switch {
+		case err != nil:
+			return err
+		case m.child == nil:
+			return problem.NotFound()
+		}
+		if err := verified(ctx, tx, scope.UserID()); err != nil {
+			return err
+		}
+		var taken bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM users WHERE lower(email) = lower($1))", req.Email).Scan(&taken); err != nil {
+			return err
+		}
+		if taken {
+			return errEmailTaken
+		}
+		var owner, name, locale string
+		if err := tx.QueryRow(ctx, `
+			SELECT o.display_name, h.name, c.locale FROM users o, households h, users c
+			WHERE o.id = $1 AND h.id = $2 AND c.id = $3`, scope.UserID(), household, user).Scan(&owner, &name, &locale); err != nil {
+			return err
+		}
+		letter = outgoing{to: req.Email, locale: locale, args: i18n.Args{"owner": owner, "household": name, "member": m.name}}
+		return nil
+	})
+	if err == nil {
+		err = s.throttle(ctx, household)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	token, hash := newToken()
+	err = tenant.AccountTx(ctx, s.Pool, scope.UserID(), func(tx pgx.Tx) error {
+		now := s.Now()
+		if _, err := tx.Exec(ctx, "UPDATE email_tokens SET used_at = $2 WHERE user_id = $1 AND purpose = 'graduate' AND used_at IS NULL",
+			user, now); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `
+			INSERT INTO email_tokens (id, user_id, purpose, token_hash, email, created_at, expires_at)
+			VALUES ($1, $2, 'graduate', $3, $4, $5, $6)`, idgen.New(), user, hash, req.Email, now, now.Add(GraduateFor))
+		return err
+	})
+	if err != nil {
+		s.refund(ctx, household)
+		s.fail(w, r, err)
+		return
+	}
+	letter.args["link"] = s.link(routeGraduate, token)
+	s.email(ctx, letter.to, letter.locale, emailGraduate, letter.args)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// graduation is a graduation's link, as its row holds it.
+type graduation struct {
+	id, user uuid.UUID
+	email    string
+	expires  time.Time
+	used     *time.Time
+}
+
+// findGraduation reads the graduation link token opens in tx, locked for it when lock, and refuses one
+// that opens nothing, 404, one spent or replaced by a newer one, 410 token_already_used, and one past
+// its time at now, 410 token_expired.
+func findGraduation(ctx context.Context, tx pgx.Tx, token string, now time.Time, lock bool) (graduation, error) {
+	statement := "SELECT id, user_id, email, expires_at, used_at FROM email_tokens WHERE token_hash = $1 AND purpose = 'graduate'"
+	if lock {
+		statement += " FOR UPDATE"
+	}
+	var g graduation
+	err := tx.QueryRow(ctx, statement, session.Hash(token)).Scan(&g.id, &g.user, &g.email, &g.expires, &g.used)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return g, problem.NotFound()
+	case err != nil:
+		return g, err
+	case g.used != nil:
+		return g, problem.New(http.StatusGone, problem.CodeTokenAlreadyUsed)
+	case !now.Before(g.expires):
+		return g, problem.New(http.StatusGone, problem.CodeTokenExpired)
+	}
+	return g, nil
+}
+
+// confirmGraduation is postAuthGraduationConfirm (FR-CH4): a graduation's link, once, within
+// GraduateFor, with the password the young adult chooses, makes the child profile a member of its
+// household, keeping everything it made and its levels, and its account the address's, verified, with
+// the password in place of the PIN (identity.Graduate). It is their own change, recorded as theirs,
+// via the web client the link opens. The link is checked before the password is hashed, and again
+// under the membership's lock, so that two confirmations of one link graduate the profile once.
+func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req struct {
+		Token    string `json:"token"`
+		Password string `json:"password"`
+	}
+	if err := decode(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var (
+		g         graduation
+		household uuid.UUID
+	)
+	err := tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
+		var err error
+		g, err = findGraduation(ctx, tx, req.Token, s.Now(), false)
+		return err
+	})
+	if err == nil {
+		// The profile's household is read as the profile's own membership, outside any household's
+		// context: a child profile is in one household, the one whose owner made it.
+		err = tenant.AccountTx(ctx, s.Pool, g.user, func(tx pgx.Tx) error {
+			err := tx.QueryRow(ctx, "SELECT household_id FROM memberships WHERE user_id = $1 AND role = 'child'", g.user).
+				Scan(&household)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return problem.NotFound()
+			}
+			return err
+		})
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	secret, err := s.Accounts.NewPassword(ctx, "/password", req.Password)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	scoped := mutation.WithVia(tenant.Assume(ctx, s.Pool, household, g.user, access.Child), audit.ViaWeb)
+	_, err = mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
+		payer, err := lockHousehold(ctx, tx, household)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		m, err := readMembership(ctx, tx, household, g.user, true)
+		switch {
+		case err != nil:
+			return mutation.Record{}, err
+		case m.child == nil:
+			return mutation.Record{}, problem.NotFound()
+		}
+		link, err := findGraduation(ctx, tx, req.Token, s.Now(), true)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		if _, err := tx.Exec(ctx, "UPDATE email_tokens SET used_at = $2 WHERE user_id = $1 AND purpose = 'graduate' AND used_at IS NULL",
+			m.user, s.Now()); err != nil {
+			return mutation.Record{}, err
+		}
+		if err := s.Accounts.Graduate(ctx, tx, m.user, link.email, secret); err != nil {
+			return mutation.Record{}, err
+		}
+		if err := tx.QueryRow(ctx, `
+			UPDATE memberships SET role = 'member', year_of_birth = NULL, dashboard_locked = false WHERE id = $1 RETURNING version`,
+			m.id).Scan(&m.version); err != nil {
+			return mutation.Record{}, err
+		}
+		m.role, m.child = access.Member, nil
+		rec := childRecord(household, payer, m, actionGraduate)
+		rec.Event.Changes = []audit.Change{{Field: "role", Old: access.Child, New: access.Member}}
+		return rec, nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

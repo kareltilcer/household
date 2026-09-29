@@ -392,8 +392,8 @@ func TestCreatingAHousehold(t *testing.T) {
 
 // The five personas of design/v1's fixtures.js, joined as the product joins them, hold exactly the
 // fixture's grants (plan item 10's Done-when): Jana creates Tilcerovi and pays for it, Petr, Klára and
-// Miloš accept email invitations carrying their levels, and Adam is a child profile, which item 11
-// creates, here its rows. Accepting gives exactly what was proposed.
+// Miloš accept email invitations carrying their levels, and Jana makes Adam's child profile with his,
+// which he signs in to on his phone (item 11). Accepting gives exactly what was proposed.
 func TestThePersonasGrantsResolveAsTheFixtureHasThem(t *testing.T) {
 	s, _ := newHouseholdSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
@@ -424,14 +424,10 @@ func TestThePersonasGrantsResolveAsTheFixtureHasThem(t *testing.T) {
 		equal(t, name+"'s membership", m.Grants, fixture[name])
 	}
 
-	adam := idgen.New()
-	arrange(t, s, func(tx pgx.Tx) {
-		exec(t, tx, "INSERT INTO users (id, display_name) VALUES ($1, 'Adam')", adam)
-		exec(t, tx, "INSERT INTO memberships (id, household_id, user_id, role) VALUES ($1, $2, $3, 'child')", idgen.New(), h.ID, adam)
-		for module, level := range fixture["Adam"] {
-			exec(t, tx, "INSERT INTO module_grants (household_id, user_id, module, level) VALUES ($1, $2, $3, $4)", h.ID, adam, module, level)
-		}
-	})
+	adam := jana.child(h.ID, "Adam", "1234", map[string]any{"grants": fixture["Adam"]})
+	equal(t, "Adam's profile", adam.Grants, fixture["Adam"])
+	onPhone := s.phone("Adam's phone")
+	expect(t, onPhone.childLogin(h.JoinCode, adam.UserID, "1234"), http.StatusOK, "")
 
 	members := jana.members(h.ID)
 	if len(members) != 5 {
@@ -458,11 +454,12 @@ func TestThePersonasGrantsResolveAsTheFixtureHasThem(t *testing.T) {
 		t.Errorf("addresses: Petr to Klára %v, Klára to herself %v, Petr to Jana %v",
 			seen["Petr"].Email, seen["Klára"].Email, members["Petr"].Email)
 	}
-	// What each adult can do resolves to the fixture's levels, every module being enabled.
+	// What each can do resolves to the fixture's levels, every module being enabled.
 	equal(t, "Jana's levels", jana.levels(h.ID), all("manage"))
 	for name, b := range browsers {
 		equal(t, name+"'s levels", b.levels(h.ID), fixture[name])
 	}
+	equal(t, "Adam's levels", onPhone.levels(h.ID), fixture["Adam"])
 }
 
 // arrange runs fn in a transaction as the administrator, and commits it.

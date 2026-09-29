@@ -77,7 +77,7 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Modules: registry, MaxBodyBytes: 1 << 10, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, outbox, apptest.Options{}),
+		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
 	}
 	for _, o := range options {
 		o(&deps)

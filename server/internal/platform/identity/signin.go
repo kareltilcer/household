@@ -229,8 +229,8 @@ func tokenPair(t device.Tokens) *tokenPairJSON {
 	return &tokenPairJSON{AccessToken: t.Access, ExpiresIn: int(token.Lifetime.Seconds()), RefreshToken: t.Refresh, TokenType: "Bearer"}
 }
 
-// loginResult is the contract's LoginResult: the web client's has no tokens.
-type loginResult struct {
+// LoginResult is the contract's LoginResult: the web client's has no tokens.
+type LoginResult struct {
 	User       meJSON         `json:"user"`
 	Tokens     *tokenPairJSON `json:"tokens"`
 	TrustToken *string        `json:"trust_token"`
@@ -248,7 +248,7 @@ func admitted(w http.ResponseWriter, adm admission) {
 		httpx.WriteJSON(w, http.StatusConflict, adm.challenge)
 		return
 	}
-	result := loginResult{User: adm.me}
+	result := LoginResult{User: adm.me}
 	if adm.web != nil {
 		session.SetCookies(w, *adm.web)
 		if adm.trust != "" {
