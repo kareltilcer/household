@@ -292,11 +292,11 @@ func (s *Service) sendLink(ctx context.Context, email string, l emailLink) {
 func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
-		Email      string      `json:"email"`
-		Password   string      `json:"password"`
-		ClientType string      `json:"client_type"`
-		Device     *deviceJSON `json:"device"`
-		TrustToken string      `json:"trust_token"`
+		Email      string        `json:"email"`
+		Password   string        `json:"password"`
+		ClientType string        `json:"client_type"`
+		Device     *DeviceSignIn `json:"device"`
+		TrustToken string        `json:"trust_token"`
 	}
 	if err := decode(r, &req); err != nil {
 		s.fail(w, r, err)

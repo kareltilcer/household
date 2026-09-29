@@ -460,9 +460,9 @@ paths:
         used, replaced by a newer one, or withdrawn, `410` (`token_already_used`), and one past its
         time `410` (`token_expired`). A link lapses with its sender's ownership, as an invitation
         does (D-103): once the owner who sent it has been removed, has left or has been made a member,
-        it is withdrawn. An address another account has taken since the link was sent answers `409`
-        (`email_taken`). A password found in the breached-password screen is refused `422`, naming
-        `/password` with the code `invalid`.
+        it is withdrawn, and stays withdrawn if they are made an owner again. An address another
+        account has taken since the link was sent answers `409` (`email_taken`). A password found in
+        the breached-password screen is refused `422`, naming `/password` with the code `invalid`.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:

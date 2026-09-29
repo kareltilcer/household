@@ -16,7 +16,6 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
-	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/etag"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
@@ -186,14 +185,6 @@ func findPIN(ctx context.Context, tx pgx.Tx, code string, profile uuid.UUID) (pi
 	return p, err == nil, err
 }
 
-// deviceSignIn is the contract's DeviceSignIn.
-type deviceSignIn struct {
-	ID         uuid.UUID `json:"id"`
-	Label      string    `json:"label"`
-	Platform   string    `json:"platform"`
-	AppVersion string    `json:"app_version"`
-}
-
 // childLogin is postAuthChildLogin (FR-CH1, FR-CH5): the household's code, a profile and its PIN sign
 // the child in on the device the body names, with a device's token pair and no second step (FR-ID5,
 // identity.SignInChild). A code, a profile or a PIN that does not match, and a profile that is not a
@@ -209,10 +200,10 @@ type deviceSignIn struct {
 func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
-		HouseholdCode string       `json:"household_code"`
-		ProfileID     uuid.UUID    `json:"profile_id"`
-		PIN           string       `json:"pin"`
-		Device        deviceSignIn `json:"device"`
+		HouseholdCode string                `json:"household_code"`
+		ProfileID     uuid.UUID             `json:"profile_id"`
+		PIN           string                `json:"pin"`
+		Device        identity.DeviceSignIn `json:"device"`
 	}
 	if err := decode(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -328,9 +319,7 @@ func (s *Service) childLogin(w http.ResponseWriter, r *http.Request) {
 			profile, newSecret); err != nil {
 			return err
 		}
-		result, err = s.Accounts.SignInChild(ctx, tx, r, profile, device.Info{
-			ID: req.Device.ID, Label: req.Device.Label, Platform: req.Device.Platform, AppVersion: req.Device.AppVersion,
-		})
+		result, err = s.Accounts.SignInChild(ctx, tx, r, profile, req.Device)
 		return err
 	})
 	if err != nil {
@@ -638,11 +627,12 @@ func (s *Service) unlockChild(w http.ResponseWriter, r *http.Request) {
 // member (confirmGraduation). The profile stays a child, signing in with its PIN, until then. The
 // owner's address must be verified, as an invitation's sender's must: the link is trust extended past
 // the household (FR-ID1). The link is the owner's, and lapses with their ownership, as an invitation
-// does (D-103), which its confirmation checks. Sending again sends a new link, to the same address or
-// another, and the one before stops working. An address an account has is refused 409; each link
-// counts among the household's twenty emails a day (ratelimit.InvitationHousehold), and so does each
-// address refused, since the refusal says that an account has it: counted, an owner learns that of
-// twenty addresses a day at most, as a sign-up tells nobody of any (D-13).
+// does (D-103): it is spent with their invitations (withdraw), and its confirmation checks it too.
+// Sending again sends a new link, to the same address or another, and the one before stops working.
+// An address an account has is refused 409; each link counts among the household's twenty emails a
+// day (ratelimit.InvitationHousehold), and so does each address refused, since the refusal says that
+// an account has it: counted, an owner learns that of twenty addresses a day at most, as a sign-up
+// tells nobody of any (D-13).
 func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -725,10 +715,10 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 
 // graduation is a graduation's link, as its row holds it: sentBy is the owner who sent it.
 type graduation struct {
-	id, user, sentBy uuid.UUID
-	email            string
-	expires          time.Time
-	used             *time.Time
+	user, sentBy uuid.UUID
+	email        string
+	expires      time.Time
+	used         *time.Time
 }
 
 // errLinkSpent is the answer to a graduation's link that was used, replaced by a newer one, or
@@ -739,12 +729,12 @@ var errLinkSpent = problem.New(http.StatusGone, problem.CodeTokenAlreadyUsed)
 // that opens nothing, 404, one spent or replaced by a newer one, 410 token_already_used, and one past
 // its time at now, 410 token_expired.
 func findGraduation(ctx context.Context, tx pgx.Tx, token string, now time.Time, lock bool) (graduation, error) {
-	statement := "SELECT id, user_id, sent_by, email, expires_at, used_at FROM email_tokens WHERE token_hash = $1 AND purpose = 'graduate'"
+	statement := "SELECT user_id, sent_by, email, expires_at, used_at FROM email_tokens WHERE token_hash = $1 AND purpose = 'graduate'"
 	if lock {
 		statement += " FOR UPDATE"
 	}
 	var g graduation
-	err := tx.QueryRow(ctx, statement, session.Hash(token)).Scan(&g.id, &g.user, &g.sentBy, &g.email, &g.expires, &g.used)
+	err := tx.QueryRow(ctx, statement, session.Hash(token)).Scan(&g.user, &g.sentBy, &g.email, &g.expires, &g.used)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return g, problem.NotFound()
@@ -768,10 +758,11 @@ func findGraduation(ctx context.Context, tx pgx.Tx, token string, now time.Time,
 // A link lapses with its sender's ownership, as an invitation does (D-103): one whose sender has been
 // removed, has left or has been made a member since is refused as spent, 410 token_already_used,
 // since whoever holds it would come into the household with the profile's account and everything it
-// made, at an address the owners who stay never chose. It is checked here, under the household's
-// lock, which every change of a role takes, rather than withdrawn when the ownership ends, so that a
-// link its sender was sending when their ownership ended lapses too: the sending read their role
-// before that.
+// made, at an address the owners who stay never chose. The ownership's end spends it, with the
+// sender's invitations (withdraw), so that it stays spent once they are an owner again; and it is
+// checked here too, under the household's lock, which every change of a role takes, for a link its
+// sender was sending when their ownership ended, which the withdrawal did not find: the sending read
+// their role before that.
 func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {

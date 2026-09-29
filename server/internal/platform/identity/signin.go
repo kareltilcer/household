@@ -48,8 +48,9 @@ type attempt struct {
 	remember bool
 }
 
-// deviceJSON is the contract's DeviceSignIn.
-type deviceJSON struct {
+// DeviceSignIn is the contract's DeviceSignIn: the device a mobile sign-in is for, a child profile's
+// (SignInChild) among them.
+type DeviceSignIn struct {
 	ID         uuid.UUID `json:"id"`
 	Label      string    `json:"label"`
 	Platform   string    `json:"platform"`
@@ -58,7 +59,7 @@ type deviceJSON struct {
 
 // attemptOf is the attempt a sign-in's request makes for clientType: a mobile sign-in needs its
 // device, and records the version its Household-Client header names over the one its body does.
-func attemptOf(r *http.Request, clientType string, d *deviceJSON, trust string) (attempt, error) {
+func attemptOf(r *http.Request, clientType string, d *DeviceSignIn, trust string) (attempt, error) {
 	switch clientType {
 	case clientversion.Web:
 		return attempt{client: clientversion.Web}, nil

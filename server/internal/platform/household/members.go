@@ -305,8 +305,8 @@ func writeGrants(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, gran
 	return tx.SendBatch(ctx, batch).Close()
 }
 
-// touch bumps m's version for a change of its grants or its role, which is its row's change, and
-// returns m as it stands.
+// touch bumps m's version for a change of what its row carries, its role, its grants or a child
+// profile's lock, which a new PIN, a lock and an unlock change, and returns m as it stands with role.
 func touch(ctx context.Context, tx pgx.Tx, m membership, role access.Role) (membership, error) {
 	if err := tx.QueryRow(ctx, "UPDATE memberships SET role = $2 WHERE id = $1 RETURNING version", m.id, string(role)).
 		Scan(&m.version); err != nil {
@@ -658,7 +658,18 @@ func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 		// A child profile is nothing outside its household, and nobody can sign it in again once it
 		// is out of it (ADR 0012): it is signed out of every device it was signed in on, as a new PIN
 		// signs it out, rather than left with a sign-in to an account with no household.
+		//
+		// Its PIN's updated_at moves first, under the row's lock, as a new PIN's does (setPIN). A
+		// sign-in reads the membership this deletes without waiting for it, and holds the PIN alone
+		// (findPIN): one that held it first has finished when the devices are signed out below, and
+		// is signed out with them; one that reaches it after waits for this to commit, and finds the
+		// PIN it checked moved, and signs nobody in. Left alone, the PIN would let a sign-in commit
+		// between the sign-out and the removal's commit, keeping a device's sign-in to the profile.
 		if m.role == access.Child {
+			if _, err := tx.Exec(ctx, "UPDATE credentials SET updated_at = clock_timestamp() WHERE user_id = $1 AND type = 'child_pin'",
+				user); err != nil {
+				return mutation.Record{}, err
+			}
 			if err := s.Accounts.Devices.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
 				return mutation.Record{}, err
 			}

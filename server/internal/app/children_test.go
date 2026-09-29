@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -566,8 +567,8 @@ func TestAGraduationsRefusals(t *testing.T) {
 
 // A graduation's link lapses with its sender's ownership, as an invitation does (D-103): once the owner
 // who sent it is made a member, is removed or leaves, it graduates nobody, since whoever holds it would
-// come into the household with the profile's account and everything it made. A link from an owner who
-// stays works.
+// come into the household with the profile's account and everything it made, and it stays withdrawn
+// when they are made an owner again. A link from an owner who stays works.
 func TestAGraduationLinkLapsesWithItsSendersOwnership(t *testing.T) {
 	s, _ := newHouseholdSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
@@ -590,6 +591,10 @@ func TestAGraduationLinkLapsesWithItsSendersOwnership(t *testing.T) {
 		}},
 		{"Karel", func(owner *browser, _ uuid.UUID) {
 			expect(t, owner.post(householdPath(h.ID, "/leave"), ""), http.StatusNoContent, "")
+		}},
+		{"Ota", func(_ *browser, id uuid.UUID) {
+			expect(t, jana.patch(householdPath(h.ID, "/members/"+id.String()), `{"role":"member"}`, nil), http.StatusOK, "")
+			expect(t, jana.post(householdPath(h.ID, "/ownership/transfer"), jsonBody(t, map[string]any{"user_id": id})), http.StatusOK, "")
 		}},
 	} {
 		owner, id := s.joined(jana, h.ID, c.name, s.a(fmt.Sprintf("owner%d@tilcerovi.cz", i)), "owner", nil)
@@ -654,6 +659,48 @@ func TestAChildProfileIsManaged(t *testing.T) {
 	// out of every device it was signed in on.
 	expect(t, jana.delete(householdPath(h.ID, "/members/"+adam.UserID.String())), http.StatusNoContent, "")
 	if phone.me() != http.StatusUnauthorized {
+		t.Error("a removed child profile is still signed in")
+	}
+}
+
+// A child's sign-in that runs while an owner removes the profile keeps no sign-in (D-104): the sign-in
+// reads the membership the removal is deleting without waiting for it, so it waits for the PIN the
+// removal holds instead, and then signs nobody in; one that held the PIN first would be signed out with
+// the rest.
+func TestASignInRacingAChildProfilesRemovalKeepsNoSignIn(t *testing.T) {
+	var during atomic.Pointer[func()]
+	s := newSite(t, apptest.Options{Hooks: household.Hooks{Lost: func(context.Context, pgx.Tx, household.Loss) error {
+		// In the removal's transaction, once the membership is deleted and before it commits.
+		if f := during.Swap(nil); f != nil {
+			(*f)()
+		}
+		return nil
+	}}})
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	adam := jana.child(h.ID, "Adam", "1234", nil)
+	phone := s.phone("Adam's phone")
+	expect(t, phone.childLogin(h.JoinCode, adam.UserID, "1234"), http.StatusOK, "")
+
+	tablet := s.phone("Kitchen iPad")
+	done := make(chan *httptest.ResponseRecorder, 1)
+	race := func() {
+		go func() { done <- tablet.childLogin(h.JoinCode, adam.UserID, "1234") }()
+		// The sign-in either finishes while the removal is still open, or waits for the PIN.
+		for deadline := time.Now().Add(10 * time.Second); len(done) == 0 && s.count(`
+			SELECT count(*) FROM pg_stat_activity
+			WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%FROM credentials c%'`) < 1; {
+			if time.Now().After(deadline) {
+				t.Error("the sign-in neither finished nor waited for the PIN")
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	during.Store(&race)
+	expect(t, jana.delete(householdPath(h.ID, "/members/"+adam.UserID.String())), http.StatusNoContent, "")
+	expect(t, <-done, http.StatusUnauthorized, problem.CodeInvalidCredentials)
+	if phone.me() != http.StatusUnauthorized || tablet.me() != http.StatusUnauthorized {
 		t.Error("a removed child profile is still signed in")
 	}
 }

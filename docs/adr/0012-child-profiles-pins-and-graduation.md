@@ -50,7 +50,10 @@ PIN or an owner cleared the count meanwhile. A right PIN whose sign-in finds ano
 counted since its own is refused `423`, so that no lock the replicas have read is cleared unrecorded. An owner's unlock and new PIN clear it
 the same way, and a new PIN, written with `updated_at = clock_timestamp()` under the row's lock, also
 ends the profile's device sign-ins; a sign-in that checked the old PIN finds `updated_at` moved and
-signs nobody in, as a password's does (`unchanged`, ADR 0009).
+signs nobody in, as a password's does (`unchanged`, ADR 0009). A profile's removal moves `updated_at`
+the same way before it signs the profile out: a sign-in reads the membership without waiting for the
+removal that deletes it, and holds the PIN alone, so one that held it first is signed out with the
+rest, and one that reaches it after waits for the removal and signs nobody in.
 
 **A household is read by its code outside any context**: `households`' read policy admits the row
 whose `join_code` the transaction presents in `app.join_code`, as `invitations`' admits one by
@@ -73,10 +76,12 @@ link sets the password with it: the account has no address before then, so no re
 provider sign-in treats a half-graduated profile as an adult's. Sending another spends the ones
 before. It counts among the household's twenty emails a day (`ratelimit.InvitationHousehold`), and
 so does an address refused as taken, whose refusal would otherwise let an owner test addresses for an
-account (D-13). The row names the owner who sent it, `email_tokens.sent_by`, and the confirmation
-checks under the household's lock that they are still an owner: a link lapses with its sender's
-ownership, as an invitation does (D-103), including one whose sending read the role just before a
-removal committed.
+account (D-13). The row names the owner who sent it, `email_tokens.sent_by`: a link lapses with its
+sender's ownership, as an invitation does (D-103). When the ownership ends, `withdraw` spends the
+links they sent for the household's profiles with their invitations, so that none works again once
+they are an owner again; and the confirmation checks under the household's lock that they are still
+an owner, for a link whose sending read the role just before a removal committed, which the
+withdrawal did not find.
 
 **A PIN keeps no Idempotency-Key**, as a password does not (D-97): the two routes whose body carries
 one are mounted behind the tenant middleware but not the member's key (`household.PINRoutes`). A
@@ -96,7 +101,8 @@ root's owner-readable case (items 43 and 46) read.
 | A policy on `memberships` naming the household by its code | `memberships`' policy would read `households`, whose policy reads `memberships`: PostgreSQL refuses the recursion |
 | The child's sign-in in `identity`, calling into the household surface | `identity` is built first, and the lock and the profile list are the household's; a hook each way for one route |
 | The graduation's address on the account from the start, unverified | A password reset, a resend or a provider sign-in would then act on a profile that is still a child |
-| A sender's graduation links spent when their ownership ends, as `withdraw` spends their invitations | The link is written in a transaction of the account's, after the role was read: one written as the removal committed would outlive it. Checked at confirmation, under the household's lock, it cannot |
+| A sender's graduation links only spent when their ownership ends, as `withdraw` spends their invitations | The link is written in a transaction of the account's, after the role was read: one written as the removal committed would outlive it. Checked at confirmation too, under the household's lock, it cannot |
+| A sender's ownership only checked at confirmation | A sender made an owner again would bring back every link they sent before, which D-103's withdrawal never does for an invitation |
 | A key kept for a PIN's routes, with the PIN left out of the fingerprint | A second fingerprint for two routes, and a body with its PIN taken out is not the request it stands for |
 
 ## Consequences

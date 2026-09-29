@@ -554,7 +554,21 @@ func setStatus(ctx context.Context, tx pgx.Tx, i invitation, status string) (inv
 // (D-103): what they sent is withdrawn when they are removed, leave or are made a member, so that a
 // link they kept cannot bring them back, nor anything they sent bring in someone the owners who stay
 // may never have seen. Another owner may send an email invitation again, and it is then theirs.
+//
+// The graduation links they sent for the household's child profiles are spent with them (D-104), so
+// that none works again once they are an owner again: its holder would come into the household with
+// the profile's account and everything it made. A link is no row of the household's, and changes
+// nothing its replicas hold. One whose sending read their role before this withdrawal committed is
+// written after it, and is refused at its confirmation instead, which reads its sender's role under
+// the household's lock (confirmGraduation).
 func withdraw(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, now time.Time) ([]sync.Change, error) {
+	if _, err := tx.Exec(ctx, `
+		UPDATE email_tokens SET used_at = $3
+		WHERE purpose = 'graduate' AND used_at IS NULL AND sent_by = $2
+		  AND user_id IN (SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'child')`,
+		household, user, now); err != nil {
+		return nil, err
+	}
 	rows, err := tx.Query(ctx, `
 		WITH i AS (
 		  UPDATE invitations SET status = 'revoked'

@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
-	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
 
@@ -21,16 +20,17 @@ import (
 // and the account a graduation turns it into.
 
 // SignInChild signs profile, a child profile whose PIN the household surface has checked, in on the
-// device d in tx, as a mobile sign-in is (FR-ID3), with no second step, which a child is never asked
-// for (FR-ID5): the device's row made or brought up to date, the sign-in it held ended, and a token
-// pair issued. The device's version is the one r's Household-Client header names, when it names one.
-// It returns the contract's LoginResult to answer with, which carries the pair: an answer no cache may
-// keep (NoStore).
-func (s *Service) SignInChild(ctx context.Context, tx pgx.Tx, r *http.Request, profile uuid.UUID, d device.Info) (LoginResult, error) {
-	if c, ok := clientversion.From(ctx); ok && c.Type == clientversion.Mobile {
-		d.AppVersion = c.Raw
+// device d in tx, as a mobile sign-in is (FR-ID3, attemptOf), with no second step, which a child is
+// never asked for (FR-ID5): the device's row made or brought up to date, the sign-in it held ended,
+// and a token pair issued. It returns the contract's LoginResult to answer with, which carries the
+// pair: an answer no cache may keep (NoStore).
+func (s *Service) SignInChild(ctx context.Context, tx pgx.Tx, r *http.Request, profile uuid.UUID, d DeviceSignIn) (LoginResult, error) {
+	a, err := attemptOf(r, clientversion.Mobile, &d, "")
+	if err != nil {
+		return LoginResult{}, err
 	}
-	adm, err := s.admit(ctx, tx, r, profile, attempt{client: clientversion.Mobile, device: d, answered: true})
+	a.answered = true
+	adm, err := s.admit(ctx, tx, r, profile, a)
 	if err != nil {
 		return LoginResult{}, err
 	}

@@ -161,13 +161,13 @@ func (s *Service) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Code         string      `json:"code"`
-		State        string      `json:"state"`
-		CodeVerifier string      `json:"code_verifier"`
-		Device       *deviceJSON `json:"device"`
-		TrustToken   string      `json:"trust_token"`
-		DisplayName  string      `json:"display_name"`
-		Locale       *string     `json:"locale"`
+		Code         string        `json:"code"`
+		State        string        `json:"state"`
+		CodeVerifier string        `json:"code_verifier"`
+		Device       *DeviceSignIn `json:"device"`
+		TrustToken   string        `json:"trust_token"`
+		DisplayName  string        `json:"display_name"`
+		Locale       *string       `json:"locale"`
 	}
 	if err := decode(r, &req); err != nil {
 		s.fail(w, r, err)
