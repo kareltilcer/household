@@ -699,6 +699,46 @@ func TestTheInvitationsAddressedToMe(t *testing.T) {
 	}
 }
 
+// An email invitation to someone who has joined since, by another invitation, asks them into a
+// household they are in: it is not sent again, as inviting their address anew is refused, and it is
+// not listed to them.
+func TestAnInvitationToSomeoneWhoJoinedIsNotSentAgain(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	petr := s.a("petr@tilcerovi.cz")
+	petrs := s.person("Petr", petr)
+	declined := jana.invite(h.ID, map[string]any{"kind": "email", "email": petr, "role": "member"})
+	expect(t, petrs.post("/me/invitations/"+declined.ID.String()+"/decline", ""), http.StatusNoContent, "")
+	waiting := jana.invite(h.ID, map[string]any{"kind": "email", "email": petr, "role": "member"})
+
+	listed := func() int {
+		rec := petrs.get("/me/invitations")
+		expect(t, rec, http.StatusOK, "")
+		var list struct {
+			Items []preview `json:"items"`
+		}
+		decode(t, rec, &list)
+		return len(list.Items)
+	}
+	if n := listed(); n != 1 {
+		t.Fatalf("%d invitations listed before Petr joined", n)
+	}
+	link := jana.invite(h.ID, map[string]any{"kind": "link", "role": "member"})
+	expect(t, petrs.post("/me/invitations/"+invitationLink.FindStringSubmatch(*link.URL)[1]+"/accept", ""), http.StatusOK, "")
+	if n := listed(); n != 0 {
+		t.Errorf("%d invitations listed to a member", n)
+	}
+
+	sent := len(s.outbox.To(petr))
+	for _, i := range []invitationDoc{declined, waiting} {
+		expect(t, jana.post(householdPath(h.ID, "/invitations/"+i.ID.String()+"/resend"), ""), http.StatusNotFound, problem.CodeNotFound)
+	}
+	if n := len(s.outbox.To(petr)); n != sent {
+		t.Errorf("%d invitations mailed to a member", n-sent)
+	}
+}
+
 // A household sends twenty invitations a day, resends among them (PRD 02 §9).
 func TestAHouseholdSendsTwentyInvitationsADay(t *testing.T) {
 	s, _ := newHouseholdSite(t)
@@ -752,6 +792,16 @@ func TestChangingAMembersAccess(t *testing.T) {
 	expect(t, rec, http.StatusOK, "")
 	if rec.Header().Get("ETag") != `"1"` {
 		t.Fatalf("ETag %q", rec.Header().Get("ETag"))
+	}
+	// The nil UUID, which the contract's Uuid admits, names nobody: not the first member to join,
+	// Jana, the payer and last owner, whom a change naming it would otherwise make a member.
+	nobody := householdPath(h.ID, "/members/"+uuid.Nil.String())
+	expect(t, jana.get(nobody), http.StatusNotFound, problem.CodeNotFound)
+	expect(t, jana.patch(nobody, `{"role":"member"}`, nil), http.StatusNotFound, problem.CodeNotFound)
+	expect(t, jana.post(householdPath(h.ID, "/ownership/transfer"), jsonBody(t, map[string]any{"user_id": uuid.Nil})),
+		http.StatusNotFound, problem.CodeNotFound)
+	if got := jana.members(h.ID)["Jana"]; got.Role != "owner" || got.Version != 1 {
+		t.Fatalf("Jana after the nil UUID: %+v", got)
 	}
 	stale := http.Header{"If-Match": {`"7"`}}
 	expect(t, jana.patch(path, `{"grants":{"tasks":"none"}}`, stale), http.StatusConflict, problem.CodeVersionConflict)
@@ -844,6 +894,8 @@ func TestRemovingAMember(t *testing.T) {
 	expect(t, klara.delete(householdPath(h.ID, "/members/"+petrID.String())), http.StatusForbidden, problem.CodeForbidden)
 	expect(t, jana.delete(householdPath(h.ID, "/members/"+jana.me().ID.String())), http.StatusForbidden, problem.CodeForbidden)
 	expect(t, petr.delete(householdPath(h.ID, "/members/"+jana.me().ID.String())), http.StatusConflict, problem.CodeBillingPayer)
+	// The nil UUID names nobody, not the first member to join, whom it would otherwise remove.
+	expect(t, jana.delete(householdPath(h.ID, "/members/"+uuid.Nil.String())), http.StatusNotFound, problem.CodeNotFound)
 
 	expect(t, petr.delete(householdPath(h.ID, "/members/"+klaraID.String())), http.StatusNoContent, "")
 	expect(t, klara.get(householdPath(h.ID, "")), http.StatusNotFound, problem.CodeNotFound)
@@ -965,6 +1017,8 @@ func TestTheHouseholdsSettings(t *testing.T) {
 	for field, body := range map[string]string{
 		"/base_currency": `{"base_currency":"EUR"}`,
 		"/country":       `{"country":"US"}`,
+		// As long as a new household's may be, which the row holds it to.
+		"/name": `{"name":"` + strings.Repeat("a", 81) + `"}`,
 	} {
 		errs := fieldErrorsOf(t, jana.patch(path, body, nil))
 		if len(errs) != 1 || errs[0].Field != field {
@@ -1001,8 +1055,17 @@ func TestInvitationsAreReadWithViewOnAdmin(t *testing.T) {
 	klara, _ := s.joined(jana, h.ID, "Klára", s.a("klara@tilcerovi.cz"), "member", map[string]string{"admin": "none"})
 	expect(t, petr.get(householdPath(h.ID, "/invitations")), http.StatusOK, "")
 	expect(t, klara.get(householdPath(h.ID, "/invitations")), http.StatusNotFound, problem.CodeNotFound)
-	i := jana.invite(h.ID, map[string]any{"kind": "link", "role": "member"})
-	expect(t, petr.post(householdPath(h.ID, "/invitations"), jsonBody(t, map[string]any{"id": idgen.New(), "kind": "link", "role": "member"})),
-		http.StatusForbidden, problem.CodeForbidden)
-	expect(t, petr.delete(householdPath(h.ID, "/invitations/"+i.ID.String())), http.StatusForbidden, problem.CodeForbidden)
+	i := jana.invite(h.ID, map[string]any{"kind": "email", "email": s.a("milos@tilcerovi.cz"), "role": "member"})
+	link := jana.invite(h.ID, map[string]any{"kind": "link", "role": "member"})
+	// A member who sees the invitations may not change them; one who cannot see them finds none to
+	// change.
+	for b, want := range map[*browser]struct {
+		status int
+		code   problem.Code
+	}{petr: {http.StatusForbidden, problem.CodeForbidden}, klara: {http.StatusNotFound, problem.CodeNotFound}} {
+		expect(t, b.post(householdPath(h.ID, "/invitations"), jsonBody(t, map[string]any{"id": idgen.New(), "kind": "link", "role": "member"})),
+			want.status, want.code)
+		expect(t, b.delete(householdPath(h.ID, "/invitations/"+link.ID.String())), want.status, want.code)
+		expect(t, b.post(householdPath(h.ID, "/invitations/"+i.ID.String()+"/resend"), ""), want.status, want.code)
+	}
 }

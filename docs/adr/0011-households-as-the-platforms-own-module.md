@@ -76,7 +76,9 @@ names its household by.
 
 **The rules that hold across members are checked under a lock on the household's row**, `FOR NO KEY
 UPDATE`, which does not hold up another mutation's audit event: the last owner and the payer (FR-HH4),
-so that two owners leaving at once cannot each find the other still an owner.
+so that two owners leaving at once cannot each find the other still an owner, and who lost access to
+a change of a member's grants or of the household's modules, which depends on both. A change of the
+settings takes the same lock.
 
 **The household surface enables and grants the contract's seventeen modules**, from the household's
 creation, whether or not a module's package is built yet: `household.Modules`, which a test holds to

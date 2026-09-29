@@ -23,6 +23,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
+	"github.com/kareltilcer/household/server/internal/platform/text"
 )
 
 // settings are a household's row: its settings, its code and its payer.
@@ -52,11 +53,14 @@ func scanSettings(row pgx.Row) (settings, error) {
 	return h, err
 }
 
-// readSettings reads the household of tx's context, locked FOR UPDATE when lock is set.
+// readSettings reads the household of tx's context, locked when lock is set as lockHousehold locks it,
+// FOR NO KEY UPDATE: a change of the settings writes no key of the row, and so need not hold up
+// another mutation of the household, whose audit event's foreign key locks the row FOR KEY SHARE, as
+// FOR UPDATE would.
 func readSettings(ctx context.Context, tx pgx.Tx, household uuid.UUID, lock bool) (settings, error) {
 	statement := "SELECT " + settingsColumns + " FROM households WHERE id = $1"
 	if lock {
-		statement += " FOR UPDATE"
+		statement += " FOR NO KEY UPDATE"
 	}
 	return scanSettings(tx.QueryRow(ctx, statement, household))
 }
@@ -167,7 +171,7 @@ type settingsFields struct {
 func (f *settingsFields) check() error {
 	var errs []problem.FieldError
 	if f.Name != nil {
-		name, ok := label(*f.Name)
+		name, ok := text.Name(*f.Name)
 		if !ok {
 			errs = append(errs, problem.FieldError{Field: "/name", Code: problem.FieldInvalid})
 		}

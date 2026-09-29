@@ -121,6 +121,13 @@ func (s *Service) updateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		// Under the household's lock, as a change of a member's grants is: who loses access depends
+		// on both the grants and the modules, and under one lock the second of two such changes reads
+		// the first once it has committed, so that a module enabled while a grant on it is lowered
+		// cannot leave each change reading the other's old state and neither retracting.
+		if _, err := lockHousehold(ctx, tx, household); err != nil {
+			return mutation.Record{}, err
+		}
 		err := tx.QueryRow(ctx, `
 			SELECT id, module, enabled, version FROM module_enablement WHERE household_id = $1 AND module = $2 FOR UPDATE`,
 			household, module).Scan(&e.id, &e.module, &e.enabled, &e.version)
@@ -175,7 +182,7 @@ func (s *Service) updateModule(w http.ResponseWriter, r *http.Request) {
 // disabled runs the Lost hook for module, which household no longer enables, for every member who
 // could see it.
 func (s *Service) disabled(ctx context.Context, tx pgx.Tx, household uuid.UUID, module string) error {
-	members, err := readMemberships(ctx, tx, household, uuid.Nil, false)
+	members, err := readMemberships(ctx, tx, household, nil, false)
 	if err != nil {
 		return err
 	}

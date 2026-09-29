@@ -28,7 +28,6 @@ import (
 	"sync"
 	"time"
 	_ "time/tzdata" // An IANA name is checked against the zones the binary carries, wherever it runs.
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
@@ -49,6 +48,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
+	"github.com/kareltilcer/household/server/internal/platform/text"
 )
 
 // How long an email's link works (FR-ID1, FR-ID6).
@@ -293,15 +293,8 @@ func issueToken(ctx context.Context, tx pgx.Tx, user uuid.UUID, purpose, email s
 	return token, err
 }
 
-// displayName is name as an account keeps it, trimmed, and false when nothing is left or it
-// holds a control character, a line break, U+2028 and U+2029 among them, or a bidirectional
-// control, U+202E among them, which would turn the name, and the text shown after it, around.
-func displayName(name string) (string, bool) {
-	name = strings.TrimSpace(name)
-	return name, name != "" && strings.IndexFunc(name, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control)
-	}) < 0
-}
+// displayName is name as an account keeps it, and false when it is not one (text.Name).
+func displayName(name string) (string, bool) { return text.Name(name) }
 
 // maxDisplayName is the longest name an account keeps, in characters: the contract's maxLength.
 const maxDisplayName = 80

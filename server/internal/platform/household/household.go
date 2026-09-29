@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 	_ "time/tzdata" // An IANA name is checked against the zones the binary carries, wherever it runs.
-	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -172,16 +171,6 @@ func pathUUID(r *http.Request, name string) (uuid.UUID, error) {
 		return uuid.Nil, problem.NotFound()
 	}
 	return id, nil
-}
-
-// label is text as a name is kept, a household's, trimmed, and false when nothing is left or it
-// holds a control character, a line break, U+2028 and U+2029 among them, or a bidirectional
-// control, U+202E among them, which would turn the name, and the text shown after it, around.
-func label(text string) (string, bool) {
-	text = strings.TrimSpace(text)
-	return text, text != "" && strings.IndexFunc(text, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control)
-	}) < 0
 }
 
 // escapePointer is name as a JSON Pointer's reference token (RFC 6901): ~ as ~0 and / as ~1.

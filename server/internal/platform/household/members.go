@@ -47,19 +47,17 @@ func scanMembership(row pgx.CollectableRow) (membership, error) {
 	return m, err
 }
 
-// readMemberships reads household's members in the order they joined, or only user's when user is
-// not uuid.Nil, with their grants; lock locks the rows FOR UPDATE.
-func readMemberships(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, lock bool) ([]membership, error) {
+// readMemberships reads household's members in the order they joined, with their grants: every one
+// of them when only is nil, else only's alone; lock locks the rows FOR UPDATE. Every member is asked
+// for with nil, never with a user id: the contract's Uuid admits the nil UUID in a path, and a
+// request naming it must find nobody rather than everybody.
+func readMemberships(ctx context.Context, tx pgx.Tx, household uuid.UUID, only *uuid.UUID, lock bool) ([]membership, error) {
 	statement := "SELECT " + membershipColumns + `
 		FROM memberships m JOIN users u ON u.id = m.user_id
 		WHERE m.household_id = $1 AND ($2::uuid IS NULL OR m.user_id = $2)
 		ORDER BY m.created_at, m.id`
 	if lock {
 		statement += " FOR UPDATE OF m"
-	}
-	var only *uuid.UUID
-	if user != uuid.Nil {
-		only = &user
 	}
 	rows, err := tx.Query(ctx, statement, household, only)
 	if err != nil {
@@ -95,7 +93,7 @@ func readMemberships(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, 
 
 // readMembership reads user's membership in household, or the 404 problem when they hold none.
 func readMembership(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, lock bool) (membership, error) {
-	members, err := readMemberships(ctx, tx, household, user, lock)
+	members, err := readMemberships(ctx, tx, household, &user, lock)
 	switch {
 	case err != nil:
 		return membership{}, err
@@ -105,11 +103,12 @@ func readMembership(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, l
 	return members[0], nil
 }
 
-// lockHousehold locks household's row against every other change of its members, its payer and its
-// settings until tx ends, and returns its payer: the rules that hold across members, the last owner
-// and the payer (FR-HH4), are checked under it, so that two owners leaving at once cannot both find
-// the other still an owner. FOR NO KEY UPDATE, so that another mutation's audit event, whose foreign
-// key locks the row FOR KEY SHARE, is not held up by it.
+// lockHousehold locks household's row against every other change of its members, its payer, its
+// settings and its modules until tx ends, and returns its payer: the rules that hold across members,
+// the last owner and the payer (FR-HH4), are checked under it, so that two owners leaving at once
+// cannot both find the other still an owner, and so is who lost access to a change, which depends on
+// both a member's grants and the household's modules. FOR NO KEY UPDATE, so that another mutation's
+// audit event, whose foreign key locks the row FOR KEY SHARE, is not held up by it.
 func lockHousehold(ctx context.Context, tx pgx.Tx, household uuid.UUID) (*uuid.UUID, error) {
 	var payer *uuid.UUID
 	err := tx.QueryRow(ctx, "SELECT billing_payer_id FROM households WHERE id = $1 FOR NO KEY UPDATE", household).Scan(&payer)
@@ -289,7 +288,7 @@ func (s *Service) listMembers(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		members, err := readMemberships(ctx, tx, scope.HouseholdID(), uuid.Nil, false)
+		members, err := readMemberships(ctx, tx, scope.HouseholdID(), nil, false)
 		if err != nil {
 			return err
 		}

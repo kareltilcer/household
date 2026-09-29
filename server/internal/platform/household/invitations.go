@@ -288,7 +288,7 @@ func newToken() (string, []byte) {
 func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
-	if err := owner(ctx); err != nil {
+	if err := invitationsOwner(ctx); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -321,17 +321,19 @@ func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 	)
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		if req.Kind == kindEmail {
-			var taken bool
+			var waiting bool
 			if err := tx.QueryRow(ctx, `
 				SELECT EXISTS (SELECT FROM invitations
 				               WHERE household_id = $1 AND kind = 'email' AND lower(email) = lower($2)
-				                 AND status = 'pending' AND expires_at > $3)
-				    OR EXISTS (SELECT FROM memberships m JOIN users u ON u.id = m.user_id
-				               WHERE m.household_id = $1 AND lower(u.email) = lower($2))`,
-				household, *req.Email, now).Scan(&taken); err != nil {
+				                 AND status = 'pending' AND expires_at > $3)`,
+				household, *req.Email, now).Scan(&waiting); err != nil {
 				return mutation.Record{}, err
 			}
-			if taken {
+			member, err := memberAddress(ctx, tx, household, *req.Email)
+			if err != nil {
+				return mutation.Record{}, err
+			}
+			if waiting || member {
 				return mutation.Record{}, invalid("/email", problem.FieldInvalid)
 			}
 		}
@@ -398,6 +400,26 @@ func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, body)
 }
 
+// invitationsOwner refuses a caller who may not change the household's invitations, which are
+// admin's data: 404 to one who cannot see them, holding none on admin, as anything a caller may not
+// see is answered, and 403 to one who can and is not an owner.
+func invitationsOwner(ctx context.Context) error {
+	if err := grant.Require(ctx, Name, access.View); err != nil {
+		return err
+	}
+	return owner(ctx)
+}
+
+// memberAddress reports whether address, whatever its case, is the address of one of household's
+// members: someone already in, whom an email invitation would ask into a household they are in.
+func memberAddress(ctx context.Context, tx pgx.Tx, household uuid.UUID, address string) (bool, error) {
+	var member bool
+	err := tx.QueryRow(ctx, `
+		SELECT EXISTS (SELECT FROM memberships m JOIN users u ON u.id = m.user_id
+		               WHERE m.household_id = $1 AND lower(u.email) = lower($2))`, household, address).Scan(&member)
+	return member, err
+}
+
 // invitationArgs are the summary arguments of an event about i: its kind, and its address, "" for a
 // link.
 func invitationArgs(i invitation) map[string]any {
@@ -444,7 +466,7 @@ func (s *Service) listInvitations(w http.ResponseWriter, r *http.Request) {
 // already accepted is a membership, which is removed instead.
 func (s *Service) revokeInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if err := owner(ctx); err != nil {
+	if err := invitationsOwner(ctx); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -495,11 +517,13 @@ func setStatus(ctx context.Context, tx pgx.Tx, i invitation, status string) (inv
 // verified, and counted against the household's twenty a day: with a new link, since the old one's
 // token is kept only as its hash, which the old link stops matching, and for another 14 days from
 // the owner who sent it this time. One declined, withdrawn or expired is open again, as inviting the
-// person anew (A-25); one accepted is a membership, and a link has no address to send to.
+// person anew (A-25); one accepted is a membership, and so is one to an address that has joined since,
+// by another invitation, which inviting the address anew would refuse; a link has no address to send
+// to.
 func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
-	if err := owner(ctx); err != nil {
+	if err := invitationsOwner(ctx); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -524,6 +548,13 @@ func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 		case err != nil:
 			return mutation.Record{}, err
 		case old.kind != kindEmail || old.status == statusAccepted:
+			return mutation.Record{}, problem.NotFound()
+		}
+		member, err := memberAddress(ctx, tx, old.household, *old.email)
+		switch {
+		case err != nil:
+			return mutation.Record{}, err
+		case member:
 			return mutation.Record{}, problem.NotFound()
 		}
 		rows, err := tx.Query(ctx, `
@@ -686,7 +717,8 @@ func (s *Service) previewInvitation(w http.ResponseWriter, r *http.Request) {
 }
 
 // myInvitations lists the email invitations waiting for the caller's verified address, each with its
-// id as its token, which they may accept or decline by signed in.
+// id as its token, which they may accept or decline by signed in: those of the households they are not
+// in yet, since one they have joined since, by another invitation, asks them into nothing.
 func (s *Service) myInvitations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -694,11 +726,12 @@ func (s *Service) myInvitations(w http.ResponseWriter, r *http.Request) {
 	var invitations []invitation
 	err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		// Outside any household's context the policy shows the caller only the email invitations
-		// to their verified address.
+		// to their verified address, and only their own memberships.
 		rows, err := tx.Query(ctx, "SELECT "+invitationColumns+`
 			FROM invitations i JOIN users u ON u.id = i.invited_by
 			WHERE i.kind = 'email' AND i.status = 'pending' AND i.expires_at > $1
-			ORDER BY i.created_at, i.id`, now)
+			  AND NOT EXISTS (SELECT FROM memberships m WHERE m.household_id = i.household_id AND m.user_id = $2)
+			ORDER BY i.created_at, i.id`, now, user)
 		if err != nil {
 			return err
 		}
@@ -774,7 +807,7 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		if payer, err = lockHousehold(ctx, tx, household); err != nil {
 			return mutation.Record{}, err
 		}
-		existing, err := readMemberships(ctx, tx, household, user, false)
+		existing, err := readMemberships(ctx, tx, household, &user, false)
 		if err != nil {
 			return mutation.Record{}, err
 		}

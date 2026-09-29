@@ -945,9 +945,10 @@ paths:
       tags: [me]
       summary: Invitations addressed to the signed-in user
       description: |
-        The pending email invitations to the signed-in user's address, once it is verified. Each
-        carries the invitation's id as its `token`, which its addressee, signed in with that verified
-        address, may use in place of the token the email carries.
+        The pending email invitations to the signed-in user's address, once it is verified, to the
+        households they are not a member of. Each carries the invitation's id as its `token`, which its
+        addressee, signed in with that verified address, may use in place of the token the email
+        carries.
       responses:
         '200': { description: Invitations, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/InvitationForInvitee' } } } } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1403,8 +1404,9 @@ paths:
       description: |
         Owner only, once the owner's address is verified (`403 account_unverified`). Sends a new link,
         which replaces the old one, valid for another 14 days, from this owner. A declined, revoked or
-        expired invitation is open again. A `link` invitation, which has no address, and an accepted
-        one are not found. Counted against the household's 20 invitations a day.
+        expired invitation is open again. A `link` invitation, which has no address, an accepted one,
+        and one to an address that is a member's by now are not found. Counted against the
+        household's 20 invitations a day.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '202': { description: Sent }
@@ -9011,7 +9013,7 @@ components:
     HouseholdUpdate:
       type: object
       properties:
-        name: { type: string }
+        name: { type: string, maxLength: 80 }
         country: { $ref: '#/components/schemas/CountryCode' }
         timezone: { type: string }
         base_currency: { type: string, pattern: '^[A-Z]{3}$', description: 'Recomputes totals from each row''s stored rate. Warned in the client and audited — silently redenominating a household''s history would be the worst bug the product could ship.' }
