@@ -465,7 +465,7 @@ Phase 0 · after 4, 7, 8 · size L
   - The five personas' grants resolve exactly as in `fixtures.js`.
   - Accepting an invitation yields exactly the proposed grants.
   - The REST surface returns `404` for `none`.
-- **PR:** —
+- **PR:** [#13](https://github.com/kareltilcer/household/pull/13)
 
 ### 11 · Child profiles · `planned`
 
