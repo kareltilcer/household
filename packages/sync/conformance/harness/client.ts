@@ -103,7 +103,7 @@ export class Client {
       pushUrl: ctx.target.pushUrl(options.household.id),
       fetch: this.network.fetch,
       credential: {
-        current: async () => this.credential ?? (await this.renew()),
+        current: () => this.credentialNow(),
         renew: async () => {
           await this.renew()
         },
@@ -152,7 +152,7 @@ export class Client {
     await this.db.connect(
       {
         fetchCredentials: async () => {
-          const credential = this.credential ?? (await this.renew())
+          const credential = await this.credentialNow()
           try {
             return await target.powerSyncCredentials(
               credential,
@@ -198,15 +198,23 @@ export class Client {
    */
   async replayHeld(): Promise<void> {
     if (!this.onlineNow || this.replaying !== null || (await this.pending()) > 0) return
-    const waiting =
-      (await this.held('deferred')).length > 0 ||
-      (this.connector.resuming && (await this.held('entitlement')).length > 0)
-    if (!waiting) return
+    if (!(await this.replayable())) return
     this.replaying = this.flush()
       .catch(() => undefined)
       .finally(() => {
         this.replaying = null
       })
+  }
+
+  /**
+   * Whether the connector holds mutations whose cause has cleared and that wait to replay: every
+   * deferred one, and the entitlement holds resume() let through.
+   */
+  async replayable(): Promise<boolean> {
+    return (
+      (await this.held('deferred')).length > 0 ||
+      (this.connector.resuming && (await this.held('entitlement')).length > 0)
+    )
   }
 
   /** Disconnects from PowerSync: the client goes offline, its replica and its queue kept. */

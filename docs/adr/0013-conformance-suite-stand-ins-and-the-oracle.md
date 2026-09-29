@@ -89,7 +89,9 @@ keeps its answers other than `applied`, and its held mutations, in local-only ta
 rather than throwing, so that a negative control can assert which one failed:
 
 1. Convergence: each replica equals the rows its member may see, field for field, compared in one
-   canonical form (a replica's `0`/`1` a boolean, its timestamps instants, a date its text).
+   canonical form (a replica's `0`/`1` a boolean, its timestamps instants, a date its text, an
+   array in its order). A projection, which only a replica has a table for, is read from the rows
+   of its source it picks.
 2. No acknowledged write is lost: the row an `applied` or `merged` answer names is on the server at the
    version it answered, or later; an answer that names no version (PRD 03 §2.4 has it carry one)
    cannot be held to the server, and fails.

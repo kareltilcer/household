@@ -78,11 +78,11 @@ export class World {
   }
 
   /**
-   * Waits until clients, the online ones by default, are quiet: nothing queued, nothing deferred
-   * left to replay, and each replica equal to what its member may see. A client holding mutations
-   * whose cause has cleared, with nothing queued that would make PowerSync upload, is flushed
-   * (Client.replayHeld). It reports whether they got there within timeoutMs; the invariants then
-   * judge whatever state they are in.
+   * Waits until clients, the online ones by default, are quiet: no upload under way, nothing
+   * queued, nothing held whose cause has cleared left to replay (Client.replayable), and each
+   * replica equal to what its member may see. A client holding such mutations, with nothing queued
+   * that would make PowerSync upload, is flushed (Client.replayHeld). It reports whether they got
+   * there within timeoutMs; the invariants then judge whatever state they are in.
    */
   async settle(
     options: { readonly clients?: readonly Client[]; readonly timeoutMs?: number } = {},
@@ -92,7 +92,8 @@ export class World {
       await this.sample(clients)
       for (const c of clients) {
         await c.replayHeld()
-        if ((await c.pending()) > 0 || (await c.held('deferred')).length > 0) return false
+        // An upload under way may have released a replay's holds and not yet recorded its answers.
+        if (c.connector.busy || (await c.pending()) > 0 || (await c.replayable())) return false
         if ((await compareReplica(c, this.target, this.admin)).length > 0) return false
       }
       return true
@@ -156,15 +157,23 @@ export class World {
     mode: Target['replay'] = this.target.replay,
   ): Promise<Violation[]> {
     const key = mode === 'fresh-key' ? this.keys.uuid() : attempt.key
-    const response = await fetch(this.target.pushUrl(client.household.id), {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${await client.credentialNow()}`,
-        'content-type': 'application/json',
-        'idempotency-key': key,
-      },
-      body: attempt.body,
-    })
+    const send = (credential: string): Promise<Response> =>
+      fetch(this.target.pushUrl(client.household.id), {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${credential}`,
+          'content-type': 'application/json',
+          'idempotency-key': key,
+        },
+        body: attempt.body,
+      })
+    let response = await send(await client.credentialNow())
+    if (response.status === 401) {
+      // The client's credential lapsed since it last pushed: sent again with a fresh one, signed
+      // in past the client's network, as its connector would renew it.
+      await response.body?.cancel()
+      response = await send(await this.target.signIn(client.member.id, fetch))
+    }
     const text = await response.text()
     const report = (detail: string): Violation[] => [
       { invariant: 'idempotency', client: client.name, detail },

@@ -179,6 +179,26 @@ describe('the harness, against the stand-ins', () => {
     })
   })
 
+  // A projection (a private note's redacted form) is a replica's table alone: the server's rows of
+  // it are those its source picks, which every read of the truth takes, a replay's snapshot too.
+  it("reads a projection's rows from the server table it projects", async () => {
+    await run('projection', 12_008, async (w) => {
+      const f = await family(w)
+      const [shared, secret] = [w.rng.uuid(), w.rng.uuid()]
+      await admin.insert('conformance_notes', f.home, [
+        { id: shared, visibility: 'shared', title: 'Shopping', body: 'Milk' },
+        { id: secret, visibility: 'private', owner_id: f.jana.id, title: 'Gift', body: 'A bike' },
+      ])
+      const redacted = await admin.rows('conformance_notes_redacted', f.home)
+      expect([...redacted.keys()]).toEqual([secret])
+      expect(redacted.get(secret)).toMatchObject({ owner_id: f.jana.id, deleted_at: null })
+      const seen = await admin.visible('conformance_notes_redacted', f.home, f.eva, 'dropped')
+      expect([...seen.keys()]).toEqual([secret])
+      expect(await admin.householdOf('conformance_notes_redacted', secret)).toBe(f.home.id)
+      expect(await admin.householdOf('conformance_notes_redacted', shared)).toBeNull()
+    })
+  })
+
   it('renews a credential the push refuses, and sends a batch again without the mutation the edge refused', async () => {
     await run('refusals', 12_004, async (w) => {
       const f = await family(w)

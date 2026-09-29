@@ -416,6 +416,58 @@ describe('the connector', () => {
     expect(sent.map((s) => s.key)).toEqual(['key-1', 'key-1', 'key-2', 'key-2'])
   })
 
+  it('starts the D-92 window again for the fresh key a 422 moves the rest of a batch to', async () => {
+    const q = new Queue()
+    q.write('Milk')
+    q.write('Bread')
+    let now = 0
+    const refusal = json(422, {
+      code: 'validation_failed',
+      errors: [{ field: '/mutations/1/entity_id', code: 'pattern' }],
+    })
+    const { fetch, sent } = server(
+      new TypeError('network: refused'),
+      refusal,
+      json(409, { code: 'idempotency_in_progress' }),
+    )
+    const { c } = connector(fetch, new Memory(), { now: () => now })
+    await expect(c.upload(q)).rejects.toThrow('refused')
+    // Late in key-1's window, a 422 moves the rest to key-2, whose first request is not answered.
+    now = inProgressWindowMs - 1_000
+    await expect(c.upload(q)).rejects.toThrow()
+    // Past key-1's window, but not key-2's: the rest is sent under key-2 still.
+    now = inProgressWindowMs + 1_000
+    await c.upload(q)
+    expect(sent.map((s) => [s.key, s.ids])).toEqual([
+      ['key-1', ['m-1', 'm-2']],
+      ['key-1', ['m-1', 'm-2']],
+      ['key-2', ['m-1']],
+      ['key-2', ['m-1']],
+    ])
+    expect(q.entries).toEqual([])
+  })
+
+  it('is busy from the moment an upload starts until it returns', async () => {
+    const q = new Queue()
+    q.write('Milk')
+    let answer: (response: Response) => void = () => undefined
+    const pending = new Promise<Response>((resolve) => {
+      answer = resolve
+    })
+    const { c } = connector(() => pending, new Memory())
+    expect(c.busy).toBe(false)
+    const upload = c.upload(q)
+    expect(c.busy).toBe(true)
+    answer(results([])(['m-1']))
+    await upload
+    expect(c.busy).toBe(false)
+
+    q.write('Bread')
+    const failing = connector(() => Promise.reject(new TypeError('network: refused')), new Memory())
+    await expect(failing.c.upload(q)).rejects.toThrow('refused')
+    expect(failing.c.busy).toBe(false)
+  })
+
   it('throws on an answer the contract does not allow, and reports it', async () => {
     const reasons: string[] = []
     for (const answer of [

@@ -121,6 +121,7 @@ export const access: readonly Scenario[] = [
     expected: "The member's rows leave their replica; they come back when the grant does",
     enabledBy: 14,
     needs: [],
+    replicates: ['conformance_items'],
     async run(w) {
       const f = await family(w)
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
@@ -185,6 +186,7 @@ export const access: readonly Scenario[] = [
     expected: "Every row of the household leaves the removed member's replica",
     enabledBy: 14,
     needs: [],
+    replicates: ['conformance_items'],
     async run(w) {
       const f = await family(w)
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
@@ -201,6 +203,7 @@ export const access: readonly Scenario[] = [
       "The module's rows leave every replica, the owner's included; they come back when it is enabled again",
     enabledBy: 14,
     needs: [],
+    replicates: ['conformance_items'],
     async run(w) {
       const f = await family(w)
       const jana = w.client({ name: 'jana', member: f.jana, household: f.home })
@@ -222,6 +225,7 @@ export const access: readonly Scenario[] = [
       'A household that may no longer write keeps every replica exactly where it is (PRD 03 §2.6, FR-BI2)',
     enabledBy: 18,
     needs: [],
+    replicates: ['conformance_items'],
     capabilities: ['setEntitlement'],
     async run(w) {
       const f = await family(w)

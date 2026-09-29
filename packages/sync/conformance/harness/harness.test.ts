@@ -342,10 +342,14 @@ describe('a row, compared', () => {
 
   it('reads a calendar day and a list of ids in either form', () => {
     expect(canonical('date', '2026-09-29')).toBe('2026-09-29')
-    expect(canonical('uuid[]', '["B","a"]')).toEqual(['a', 'b'])
-    expect(canonical('uuid[]', '{b,a}')).toEqual(['a', 'b'])
-    expect(canonical('uuid[]', ['b', 'a'])).toEqual(['a', 'b'])
+    expect(canonical('uuid[]', '["B","a"]')).toEqual(['b', 'a'])
+    expect(canonical('uuid[]', '{b,a}')).toEqual(['b', 'a'])
+    expect(canonical('uuid[]', ['b', 'a'])).toEqual(['b', 'a'])
     expect(canonical('text', null)).toBeNull()
+  })
+
+  it('tells a list of ids held in another order apart: a rotation is its order', () => {
+    expect(canonical('uuid[]', '["a","b","c"]')).not.toEqual(canonical('uuid[]', ['b', 'a', 'c']))
   })
 })
 

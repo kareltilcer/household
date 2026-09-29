@@ -136,6 +136,8 @@ export class ConformanceConnector {
   private maxBatch: number
   private entitlementResumed = false
   private lock: Promise<void> = Promise.resolve()
+  /** Uploads started and not yet returned, the one running and those waiting on the lock. */
+  private uploads = 0
 
   constructor(options: ConnectorOptions) {
     this.o = {
@@ -162,11 +164,24 @@ export class ConformanceConnector {
   }
 
   /**
+   * Whether an upload is under way: until it returns, the answers it has had may not all be
+   * recorded, nor its held mutations held again, so the client is not yet quiet.
+   */
+  get busy(): boolean {
+    return this.uploads > 0
+  }
+
+  /**
    * Sends queue in order, then the held mutations whose cause has cleared. It returns once every
    * write it read is answered, and throws on the failures that answer none.
    */
   upload(queue: UploadQueue): Promise<void> {
-    const run = this.lock.then(() => this.drain(queue))
+    this.uploads++
+    const run = this.lock
+      .then(() => this.drain(queue))
+      .finally(() => {
+        this.uploads--
+      })
     this.lock = run.catch(() => undefined)
     return run
   }
@@ -230,10 +245,8 @@ export class ConformanceConnector {
       this.inflight.set(source, flight)
     } else if (this.o.now() - flight.firstSentAt > inProgressWindowMs) {
       // D-92: the first request under this key never answered in five minutes; per-mutation
-      // idempotency answers each mutation that took effect from its stored result. The fresh key
-      // starts a window of its own.
-      flight.key = this.o.newKey()
-      flight.firstSentAt = this.o.now()
+      // idempotency answers each mutation that took effect from its stored result.
+      this.rekey(flight)
     }
     for (;;) {
       const mutations = all.filter((m) => !flight.settled.has(m.mutation_id))
@@ -306,7 +319,7 @@ export class ConformanceConnector {
               message: 'the push refused this mutation as too large',
               version: null,
             })
-            flight.key = this.o.newKey()
+            this.rekey(flight)
             continue
           }
           this.maxBatch = Math.max(1, Math.ceil(all.length / 2))
@@ -337,7 +350,7 @@ export class ConformanceConnector {
             })
           }
           // The rest are a new batch.
-          flight.key = this.o.newKey()
+          this.rekey(flight)
           continue
         }
         case 402:
@@ -364,6 +377,12 @@ export class ConformanceConnector {
           throw new Error(`the push answered ${String(response.status)}; to be sent again`)
       }
     }
+  }
+
+  /** Moves flight to a fresh key, whose D-92 window starts with its first request, now. */
+  private rekey(flight: InFlight): void {
+    flight.key = this.o.newKey()
+    flight.firstSentAt = this.o.now()
   }
 
   /** Ends each of all with its answer: records it, holds it, or both. */

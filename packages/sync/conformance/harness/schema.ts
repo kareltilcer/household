@@ -16,6 +16,11 @@ export interface TableSpec {
   readonly columns: Readonly<Record<string, Kind>>
   /** The columns a client writes, which its mutations carry as fields; the rest are the server's. */
   readonly writes: readonly string[]
+  /**
+   * For a projection, the server table its rows are read from and the condition that picks them
+   * out of it: the server has no table of the projection's name, only a replica does (Admin).
+   */
+  readonly source?: { readonly table: string; readonly where: string }
 }
 
 // The base columns every entity has (add_entity_columns), which only the server writes.
@@ -73,6 +78,7 @@ export const tables = [
     entity: null,
     columns: { household_id: 'uuid', owner_id: 'uuid', version: 'integer' },
     writes: [],
+    source: { table: 'conformance_notes', where: "visibility = 'private'" },
   },
   {
     table: 'conformance_chores',
@@ -235,8 +241,10 @@ export function canonical(kind: Kind, value: unknown): Canonical {
       // The server's is read as text (Admin), never as a Date at some timezone's midnight.
       return text(value).slice(0, 10)
     case 'uuid[]': {
+      // In order: a chore's rotation means its order, so a replica holding it in another order
+      // than the server has not converged.
       const list: unknown = typeof value === 'string' ? parseList(value) : value
-      return Array.isArray(list) ? list.map((v) => text(v).toLowerCase()).sort() : [text(value)]
+      return Array.isArray(list) ? list.map((v) => text(v).toLowerCase()) : [text(value)]
     }
   }
 }

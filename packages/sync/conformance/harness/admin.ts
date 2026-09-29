@@ -9,7 +9,7 @@
 import { randomInt } from 'node:crypto'
 import pg from 'pg'
 import type { Rng } from './rng.ts'
-import { canonicalRow, tableSpec, type CanonicalRow, type TableName } from './schema.ts'
+import { canonical, canonicalRow, tableSpec, type CanonicalRow, type TableName } from './schema.ts'
 
 export type Level = 'none' | 'view' | 'contribute' | 'manage'
 export type Role = 'owner' | 'member' | 'child'
@@ -51,6 +51,17 @@ function joinCode(): string {
 // A date is a calendar day, read as its text: node-postgres would make it a Date at the local
 // timezone's midnight, which is another day in UTC. The suite reads the database only here.
 pg.types.setTypeParser(pg.types.builtins.DATE, (value: string) => value)
+
+/**
+ * The server table table's rows are read from, and the condition that picks them out of it: a
+ * projection's source (TableSpec.source), or the table itself.
+ */
+function sourceOf(table: TableName): { readonly from: string; readonly where: string | null } {
+  const { source } = tableSpec(table)
+  return source === undefined
+    ? { from: table, where: null }
+    : { from: source.table, where: source.where }
+}
 
 export class Admin {
   readonly pool: pg.Pool
@@ -260,14 +271,23 @@ export class Admin {
     }
   }
 
-  /** Every row of table in household, deleted or not, keyed by id. */
+  /**
+   * Every row of table in household, deleted or not, keyed by id, each with its deleted_at: a
+   * projection's rows are its source's, and carry the source row's.
+   */
   async rows(table: TableName, household: Household): Promise<Map<string, CanonicalRow>> {
     const spec = tableSpec(table)
+    const { from, where } = sourceOf(table)
     const result = await this.pool.query<Record<string, unknown>>(
-      `SELECT * FROM ${pg.escapeIdentifier(table)} WHERE household_id = $1`,
+      `SELECT * FROM ${pg.escapeIdentifier(from)} WHERE household_id = $1${where === null ? '' : ` AND ${where}`}`,
       [household.id],
     )
-    return new Map(result.rows.map((r) => [String(r['id']), canonicalRow(spec, r)]))
+    return new Map(
+      result.rows.map((r) => [
+        String(r['id']),
+        { deleted_at: canonical('timestamp', r['deleted_at']), ...canonicalRow(spec, r) },
+      ]),
+    )
   }
 
   /** How many audit events and feed changes household has: what a replayed batch must not add to. */
@@ -297,7 +317,7 @@ export class Admin {
     tombstones: 'dropped' | 'kept',
   ): Promise<Map<string, CanonicalRow>> {
     const spec = tableSpec(table)
-    const source = table === 'conformance_notes_redacted' ? 'conformance_notes' : table
+    const { from, where } = sourceOf(table)
     const conditions = [
       't.household_id = $1',
       `EXISTS (SELECT FROM module_enablement e WHERE e.household_id = $1 AND e.module = '${moduleId}' AND e.enabled)`,
@@ -306,23 +326,26 @@ export class Admin {
                      AND g.module = '${moduleId}' AND g.level <> 'none'))`,
     ]
     if (tombstones === 'dropped') conditions.push('t.deleted_at IS NULL')
+    if (where !== null) conditions.push(`(${where})`)
     if (table === 'conformance_notes')
       conditions.push(`(t.visibility = 'shared' OR t.owner_id = $2)`)
-    if (table === 'conformance_notes_redacted') conditions.push(`t.visibility = 'private'`)
     if (table === 'conformance_messages') conditions.push('$2 = ANY (t.readers)')
     const result = await this.pool.query<Record<string, unknown>>(
-      `SELECT t.* FROM ${pg.escapeIdentifier(source)} t WHERE ${conditions.join(' AND ')}`,
+      `SELECT t.* FROM ${pg.escapeIdentifier(from)} t WHERE ${conditions.join(' AND ')}`,
       [household.id, member.id],
     )
     return new Map(result.rows.map((r) => [String(r['id']), canonicalRow(spec, r)]))
   }
 
-  /** The household every row of table with id belongs to, for a row a replica should not hold. */
+  /**
+   * The household the row of table with id belongs to, for a row a replica should not hold; null
+   * when no household's table (or, for a projection, its source's rows it picks) holds it.
+   */
   async householdOf(table: TableName, id: string): Promise<string | null> {
-    const source = table === 'conformance_notes_redacted' ? 'conformance_notes' : table
+    const { from, where } = sourceOf(table)
     const result = await this.pool.query<{ household_id: string }>(
       // As text: a replica may hold an id the server's uuid column could never take.
-      `SELECT household_id FROM ${pg.escapeIdentifier(source)} WHERE id::text = lower($1)`,
+      `SELECT household_id FROM ${pg.escapeIdentifier(from)} WHERE id::text = lower($1)${where === null ? '' : ` AND ${where}`}`,
       [id],
     )
     return result.rows[0]?.household_id ?? null
