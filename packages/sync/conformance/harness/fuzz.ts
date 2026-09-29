@@ -198,7 +198,8 @@ export async function fuzz(run: FuzzRun): Promise<FuzzResult> {
     const settled = await w.settle({ timeoutMs: 30_000 })
     log.push(settled ? 'settled' : 'did not settle within 30 s')
     violations.push(...(await w.violations()))
-    for (const s of steady) violations.push(...(await w.replay(s, w.answered(s).slice(-5))))
+    // Invariant 3 at rest: every batch the steady clients had answered, delivered again.
+    for (const s of steady) violations.push(...(await w.replay(s, w.answered(s))))
     return { violations, log, settled }
   } finally {
     await w.close()

@@ -8,7 +8,7 @@
 import { execFileSync } from 'node:child_process'
 import { powerSyncUrl } from '../harness/env.ts'
 import { until } from '../harness/wait.ts'
-import { composeFile, serverDir, serverEnv } from './stack.ts'
+import { answers, composeFile, serverDir, serverEnv } from './stack.ts'
 
 function run(command: string, args: readonly string[], cwd?: string): void {
   execFileSync(command, args, { cwd, stdio: 'inherit', env: { ...process.env, ...serverEnv } })
@@ -20,13 +20,7 @@ run('go', ['run', './cmd/household-api', 'migrate'], serverDir)
 run('go', ['run', './cmd/conformance-standin', 'setup'], serverDir)
 run('docker', ['compose', '--file', composeFile, 'up', '--detach', '--force-recreate', 'powersync'])
 
-const ready = await until(async () => {
-  try {
-    return (await fetch(`${powerSyncUrl}/probes/readiness`)).ok
-  } catch {
-    return false
-  }
-}, 120_000)
+const ready = await until(() => answers(`${powerSyncUrl}/probes/readiness`), 120_000)
 if (ready === null) {
   run('docker', ['compose', '--file', composeFile, 'logs', '--tail', '50', 'powersync'])
   throw new Error(`PowerSync did not become ready at ${powerSyncUrl}`)

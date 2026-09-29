@@ -106,7 +106,10 @@ rather than throwing, so that a negative control can assert which one failed:
    its id alone.
 4. Retraction completeness: no replica holds a row its member may not see, in any table of the
    schema: one the target's streams do not replicate is held to nothing, so a stream the target
-   leaves undeclared is judged too.
+   leaves undeclared is judged too. Nor does it hold a column its table does not declare: a
+   table's view shows only the columns the client schema names, but PowerSync stores every column
+   a stream sends, so each row is read as stored as well, and a private note's content sent in its
+   redacted form (D-88) is caught.
 5. Monotonicity: no bucket's applied op moves backwards. A bucket at op 0 has applied no checkpoint
    since it was made, as one a member's access brought back, or one downloaded again after its
    checksum failed, starts again from nothing; the long fuzz run found the first case.

@@ -9,15 +9,7 @@ import { createInterface } from 'node:readline'
 import pg from 'pg'
 import { adminDatabaseUrl, powerSyncUrl, standInUrl, startStandIn } from '../harness/env.ts'
 import { until } from '../harness/wait.ts'
-import { serverDir, serverEnv } from '../stack/stack.ts'
-
-async function answers(url: string): Promise<boolean> {
-  try {
-    return (await fetch(url)).ok
-  } catch {
-    return false
-  }
-}
+import { answers, serverDir, serverEnv } from '../stack/stack.ts'
 
 const upHint = 'start the stack with `pnpm --filter @household/sync conformance:up`'
 

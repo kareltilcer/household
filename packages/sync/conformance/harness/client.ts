@@ -353,9 +353,10 @@ export class Client {
    * item_id the server keys the state on and the state itself: a state_set write carries the state
    * it wants, not a delta (PRD 03 §2.5), and PowerSync's queued write leaves out a column the
    * update did not change, so a check of an item the replica already shows checked would otherwise
-   * be sent without its state.
+   * be sent without its state. It returns the id of the row it wrote, or null when a checkpoint
+   * took the row it found away before its write, which then queued nothing.
    */
-  async check(item: string, checked: boolean): Promise<string> {
+  async check(item: string, checked: boolean): Promise<string | null> {
     const row = await this.db.getOptional<{ id: string }>(
       'SELECT id FROM conformance_item_checks WHERE item_id = ?',
       [item],
@@ -369,18 +370,37 @@ export class Client {
         clock_flagged: false,
       })
     }
-    await this.update(
+    const queued = await this.update(
       'conformance_item_checks',
       row.id,
       { checked, checked_at: at },
       { carry: { item_id: item, checked } },
     )
-    return row.id
+    return queued ? row.id : null
   }
 
-  /** table's rows in the replica. */
+  /** table's rows in the replica, as its view shows them: the columns the schema declares. */
   rows(table: TableName): Promise<Record<string, unknown>[]> {
     return this.db.getAll<Record<string, unknown>>(`SELECT * FROM ${table}`)
+  }
+
+  /**
+   * The columns each of table's rows holds as PowerSync stored it, by id: every column its stream
+   * sent, which the table's view shows only as far as the schema declares them.
+   */
+  async stored(table: TableName): Promise<Map<string, string[]>> {
+    const rows = await this.db.getAll<{ id: string; data: string | null }>(
+      `SELECT id, data FROM ps_data__${table}`,
+    )
+    return new Map(
+      rows.map((r) => {
+        const data: unknown = r.data === null ? {} : JSON.parse(r.data)
+        return [
+          r.id.toLowerCase(),
+          typeof data === 'object' && data !== null ? Object.keys(data) : [],
+        ]
+      }),
+    )
   }
 
   row(table: TableName, id: string): Promise<Record<string, unknown> | null> {

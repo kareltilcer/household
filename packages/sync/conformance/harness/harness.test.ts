@@ -360,11 +360,25 @@ describe('a replica, judged', () => {
   const home = { id: 'h', name: 'Novákovi', timezone: 'Europe/Prague' }
   const eva = { id: 'e', name: 'Eva' }
   const note = { id: 'n-1', household_id: 'h', visibility: 'private', owner_id: 'j', version: 1 }
-  const replica = (held: Partial<Record<string, Record<string, unknown>[]>>) => ({
+  // A replica whose view shows each row's declared columns, and whose storage holds them and any
+  // others its stream sent (stored).
+  const replica = (
+    held: Partial<Record<string, Record<string, unknown>[]>>,
+    stored: Partial<Record<string, readonly string[]>> = {},
+  ) => ({
     name: 'eva',
     household: home,
     member: eva,
     rows: (table: string) => Promise.resolve(held[table] ?? []),
+    stored: (table: string) =>
+      Promise.resolve(
+        new Map<string, string[]>(
+          (held[table] ?? []).map((r) => [
+            String(r['id']),
+            [...Object.keys(r), ...(stored[table] ?? [])],
+          ]),
+        ),
+      ),
   })
   // The server holds the note in Eva's household, and she may see nothing of the module's.
   const server = {
@@ -392,6 +406,46 @@ describe('a replica, judged', () => {
         v.detail,
       ]),
     ).toEqual([['retraction', 'holds conformance_notes n-1, which Eva may not see']])
+  })
+
+  it('holds a row to the columns its table declares, whatever its view shows', async () => {
+    // Eva may see the private note's redacted form, which its stream sent with the note's title
+    // and body: the view shows neither, and the replica holds both.
+    const redacted = { id: 'n-1', household_id: 'h', owner_id: 'j', version: 1 }
+    const projection = tableSpec('conformance_notes_redacted')
+    const sees = {
+      ...server,
+      visible: (table: string) =>
+        Promise.resolve(
+          new Map<string, CanonicalRow>(
+            table === projection.table ? [['n-1', canonicalRow(projection, redacted)]] : [],
+          ),
+        ),
+    }
+    const replicating = {
+      ...target,
+      replicates: new Set<TableName>(['conformance_notes_redacted']),
+    }
+    expect(
+      await compareReplica(replica({ conformance_notes_redacted: [redacted] }), replicating, sees),
+    ).toEqual([])
+    expect(
+      (
+        await compareReplica(
+          replica(
+            { conformance_notes_redacted: [redacted] },
+            { conformance_notes_redacted: ['title', 'body'] },
+          ),
+          replicating,
+          sees,
+        )
+      ).map((v) => [v.invariant, v.detail]),
+    ).toEqual([
+      [
+        'retraction',
+        'holds title, body in conformance_notes_redacted n-1, columns its table does not declare',
+      ],
+    ])
   })
 })
 

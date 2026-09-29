@@ -216,7 +216,12 @@ export class ConformanceConnector {
     return this.inflight.get(source)?.ids.length ?? this.maxBatch
   }
 
-  /** Sends the held mutations of reason, oldest first, a batch at a time, until none is left or none moves. */
+  /**
+   * Sends the held mutations of reason, oldest first, a batch at a time, until none is left or a
+   * batch ends none of those it sent. A mutation held again goes behind the others, so batches of
+   * holds whose cause still refuses them, more than one batch takes, would otherwise follow one
+   * another without end.
+   */
   private async replay(reason: HoldReason): Promise<void> {
     for (;;) {
       const held = (await this.o.journal.held(reason)).slice(0, this.limit(reason))
@@ -228,10 +233,10 @@ export class ConformanceConnector {
         this.o.journal.release(mutations.map((m) => m.mutation_id))
       if (!(await this.send(reason, mutations, release))) continue
       this.maxBatch = this.o.maxBatch
-      const again = await this.o.journal.held(reason)
-      // A mutation deferred at the head of its own batch waits for the next upload, not this one.
-      if (again[0] !== undefined && again[0].mutation.mutation_id === mutations[0]?.mutation_id)
-        return
+      // Every one held again (deferred at the head of its batch, or its entitlement still refused)
+      // waits for the next replay, not this one.
+      const again = new Set((await this.o.journal.held(reason)).map((h) => h.mutation.mutation_id))
+      if (mutations.every((m) => again.has(m.mutation_id))) return
     }
   }
 
@@ -279,12 +284,14 @@ export class ConformanceConnector {
         body,
         response,
       })
+      // Before the request: a sign-in that fails sent nothing to the push, and is no attempt at it.
+      const credential = await this.o.credential.current()
       let response: Response
       try {
         response = await this.o.fetch(this.o.pushUrl, {
           method: 'POST',
           headers: {
-            authorization: `Bearer ${await this.o.credential.current()}`,
+            authorization: `Bearer ${credential}`,
             'content-type': 'application/json',
             'idempotency-key': flight.key,
           },

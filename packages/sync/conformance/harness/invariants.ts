@@ -9,8 +9,9 @@
 //   3. Idempotency: a batch delivered again changes nothing and is answered alike (World.replay,
 //      replayedAnswers).
 //   4. Retraction completeness: no replica holds a row its member may not see, in any table of the
-//      schema, those the target does not replicate included. A row of another household is
-//      reported as `isolation`, FR-NF4's read-path twin (D-4).
+//      schema, those the target does not replicate included, nor a column its table does not
+//      declare, which PowerSync stores whatever the table's view shows. A row of another
+//      household is reported as `isolation`, FR-NF4's read-path twin (D-4).
 //   5. Monotonicity: no replica's checkpoint moves backwards, bucket by bucket (Recorder.sampled).
 //   6. Terminality: every mutation a client wrote ends in exactly one of applied, merged,
 //      conflict and rejected, surfaced once; none is left queued, held or retried without end;
@@ -56,10 +57,13 @@ function same(a: Canonical, b: Canonical): boolean {
  * or holds otherwise than the server, a row the server never took or has deleted, a row of its
  * household its member may not see, and a row of another household. Every table of the schema is
  * read: one the target's streams do not replicate is held to nothing, so a row a stream delivers
- * there, which the target does not declare, is judged all the same.
+ * there, which the target does not declare, is judged all the same. And every row is read as
+ * PowerSync stored it as well: a table's view shows only the columns the schema declares, but the
+ * replica holds every column its stream sent, so one the table does not declare, a private note's
+ * content in its redacted form (D-88), is content its member may not see.
  */
 export async function compareReplica(
-  client: Pick<Client, 'name' | 'household' | 'member' | 'rows'>,
+  client: Pick<Client, 'name' | 'household' | 'member' | 'rows' | 'stored'>,
   target: Pick<Target, 'name' | 'replicates' | 'tombstones'>,
   admin: Pick<Admin, 'visible' | 'rows' | 'householdOf'>,
 ): Promise<Violation[]> {
@@ -76,6 +80,18 @@ export async function compareReplica(
       held.set(c.id, c)
     }
     if (!replicated && held.size === 0) continue
+    if (held.size > 0) {
+      const declared = new Set(['id', ...Object.keys(spec.columns)])
+      for (const [id, columns] of await client.stored(table)) {
+        const undeclared = columns.filter((c) => !declared.has(c))
+        if (undeclared.length > 0) {
+          report(
+            'retraction',
+            `holds ${undeclared.join(', ')} in ${table} ${id}, columns its table does not declare`,
+          )
+        }
+      }
+    }
     const visible = await admin.visible(table, client.household, client.member, target.tombstones)
     const expected = replicated ? visible : new Map<string, CanonicalRow>()
     let server: Map<string, CanonicalRow> | null = null

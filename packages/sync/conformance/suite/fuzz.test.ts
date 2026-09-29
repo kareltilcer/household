@@ -23,10 +23,11 @@ describe(`the fuzzer, against the ${standIn.name}`, () => {
     const seed = settings.seed + i
     it(`seed ${String(seed)}, ${String(settings.steps)} steps`, async () => {
       const result = await fuzz({ seed, steps: settings.steps, target: standIn, admin })
+      // A run that never settled is judged mid-flight, and fails whatever its invariants see.
       expect(
-        result.violations,
+        { settled: result.settled, violations: result.violations },
         `run it again with CONFORMANCE_FUZZ_SEED=${String(seed)} CONFORMANCE_FUZZ_RUNS=1; its schedule:\n${result.log.join('\n')}`,
-      ).toEqual([])
+      ).toEqual({ settled: true, violations: [] })
     })
   }
 })

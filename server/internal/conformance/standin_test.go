@@ -288,6 +288,33 @@ func TestPushAnswersEveryMutation(t *testing.T) {
 	}
 }
 
+// A constraint only the database sees is a rejection, never a 500, and writes nothing: a check
+// naming another household's item breaks the household's foreign key, and a check under an id
+// another household's check holds, the primary key.
+func TestPushRefusesWhatTheDatabaseRefuses(t *testing.T) {
+	w := newWorld(t)
+	household, member := w.household("contribute")
+	other, _ := w.household("contribute")
+	mine, theirs, theirCheck := idgen.New(), idgen.New(), idgen.New()
+	w.exec("INSERT INTO conformance_items (id, household_id, title) VALUES ($1, $2, 'Milk'), ($3, $4, 'Firewood')",
+		mine, household, theirs, other)
+	w.exec("INSERT INTO conformance_item_checks (id, household_id, item_id, checked, checked_at) VALUES ($1, $2, $3, true, now())",
+		theirCheck, other, theirs)
+	got := w.results(w.push(household, member, idgen.New().String(),
+		mutationOf(ItemChecked, "create", idgen.New(), map[string]any{"item_id": theirs.String(), "checked": true}),
+		mutationOf(ItemChecked, "create", theirCheck, map[string]any{"item_id": mine.String(), "checked": true}),
+	))
+	if want := []string{"rejected not_found", "rejected validation_failed"}; fmt.Sprint(outcomes(got)) != fmt.Sprint(want) {
+		t.Errorf("outcomes %v, want %v", outcomes(got), want)
+	}
+	if n := w.count("SELECT count(*) FROM conformance_item_checks WHERE household_id = $1", household); n != 0 {
+		t.Errorf("%d checks written", n)
+	}
+	if n := w.count("SELECT count(*) FROM conformance_item_checks WHERE id = $1 AND household_id = $2 AND item_id = $3", theirCheck, other, theirs); n != 1 {
+		t.Errorf("the other household's check changed")
+	}
+}
+
 // A member who may not write the module is refused each mutation: not_found without the module,
 // forbidden with it at view; nothing is written.
 func TestPushRefusesAMemberWithoutTheGrant(t *testing.T) {

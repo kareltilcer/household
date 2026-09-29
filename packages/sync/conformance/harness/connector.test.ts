@@ -376,6 +376,49 @@ describe('the connector', () => {
     expect(journal.holding).toEqual([])
   })
 
+  it('stops a replay once a batch ends none of the holds it sent, however many wait behind them', async () => {
+    const q = new Queue()
+    q.write('Honey')
+    q.write('Jam')
+    const journal = new Memory()
+    const refused = results([['rejected', 'entitlement_read_only']])
+    const { fetch, sent } = server(refused, refused, refused, refused, refused)
+    const { c } = connector(fetch, journal, { maxBatch: 1 })
+    await c.upload(q)
+    // Resumed while the household still refuses them: m-1 is held again, behind m-2.
+    c.resume()
+    await c.upload(q)
+    expect(sent.map((s) => s.ids)).toEqual([['m-1'], ['m-2'], ['m-1']])
+    expect(journal.holding.map((h) => h.mutation.mutation_id)).toEqual(['m-2', 'm-1'])
+    expect(c.resuming).toBe(false)
+  })
+
+  it('records no attempt at the push when the credential cannot be had', async () => {
+    const q = new Queue()
+    q.write('Milk')
+    const { fetch, sent } = server()
+    const attempts: string[] = []
+    const c = new ConformanceConnector({
+      pushUrl: push,
+      fetch,
+      journal: new Memory(),
+      credential: {
+        current: () => Promise.reject(new TypeError('network: the sign-in was refused')),
+        renew: () => Promise.resolve(),
+      },
+      newKey: () => 'key-1',
+      observer: {
+        attempted: (a) => {
+          attempts.push(a.key)
+        },
+      },
+    })
+    await expect(c.upload(q)).rejects.toThrow('sign-in was refused')
+    expect(sent).toEqual([])
+    expect(attempts).toEqual([])
+    expect(q.entries).toHaveLength(1)
+  })
+
   it('keeps a held batch its key while the queue is sent before it', async () => {
     const q = new Queue()
     for (const t of ['Rice', 'Brown rice']) q.write(t, UpdateType.PATCH)

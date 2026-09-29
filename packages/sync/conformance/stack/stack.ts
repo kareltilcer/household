@@ -13,6 +13,20 @@ function url(role: string, password: string): string {
 }
 
 /**
+ * Whether url answers with a 2xx: how `conformance:up` and the suite's setup wait for a service.
+ * The body is read to its end, so that each poll lets its connection go.
+ */
+export async function answers(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url)
+    await response.arrayBuffer()
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+/**
  * The environment `household-api` and `conformance-standin` run with against the stack's
  * database: one connection string per role, as .env.example gives them for the development one.
  */
