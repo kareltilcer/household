@@ -52,7 +52,8 @@ func env(t *testing.T) config.Getenv {
 		config.BreachCorpusVar:           corpus,
 		config.TokenKeysVar:              base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
 		config.MFAKeysVar:                base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
-		// The files pipeline's store and converter, which serving asks nothing of until a file comes.
+		// The files pipeline's store and converter, which serving asks nothing of until a file comes
+		// but readiness, which finds no store there and answers degraded.
 		config.ObjectStoreURLVar: "https://tester:" + "not-published" + "@objects.household.test/household",
 		config.ConverterURLVar:   "http://127.0.0.1:1",
 		config.UploadDirVar:      t.TempDir(),
@@ -152,7 +153,10 @@ func TestServeAnswersUntilItsContextEnds(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), `"database":"ok"`) {
+	// The object store is checked too, and one that cannot be reached degrades the answer without
+	// failing it: the API serves everything but uploads without it (FR-NF3).
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), `"database":"ok"`) ||
+		!strings.Contains(string(body), `"object_store":"down"`) || !strings.Contains(string(body), `"status":"degraded"`) {
 		t.Fatalf("readyz: %d %s", resp.StatusCode, body)
 	}
 

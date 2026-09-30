@@ -174,7 +174,8 @@ func current(ctx context.Context, tx pgx.Tx, user uuid.UUID) (uuid.UUID, error) 
 
 // purgeTimeout bounds the removal of a replaced picture. Its callers purge once their change has
 // committed and before they answer, and the store's client waits on a store that stops answering for
-// as long as it is let: past this, the change is answered, and the picture is left to the sweep.
+// a minute an attempt (objectstore.DefaultResponseTimeout), and tries again: past this, the change is
+// answered, and the picture is left to the sweep.
 const purgeTimeout = 10 * time.Second
 
 // Purge removes the object of user's picture id, once the transaction that replaced or cleared it

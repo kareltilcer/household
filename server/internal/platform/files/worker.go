@@ -178,8 +178,9 @@ func (s *Service) claim(ctx context.Context, household uuid.UUID) (job, bool, er
 // run runs j and settles it: done, tried again later, or given up.
 //
 // The job runs for its lease at most, and past it fails as any job does, to be tried again: another
-// worker may take it then, and a store that stops answering would otherwise hold this worker for as
-// long as the process lives, since the store's client gives up on nothing by itself.
+// worker may take it then, and a store or a converter that stops mid-transfer would otherwise hold
+// this worker for as long as the process lives, since the store's client bounds only how long an
+// answer takes to begin (objectstore.DefaultResponseTimeout).
 //
 // A job claimed more times than it may be tried is given up without running: each claim counts an
 // attempt, and one past the last is a job whose workers ended with the process before they could

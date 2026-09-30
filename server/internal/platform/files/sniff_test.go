@@ -152,6 +152,11 @@ func TestSniff(t *testing.T) {
 		{"svg in utf-16", append([]byte{0xFF, 0xFE}, utf16le(`<svg xmlns="http://www.w3.org/2000/svg"/>`)...), "", "image/svg+xml", ClassActive},
 		{"xml", []byte(`<?xml version="1.0"?><note>milk</note>`), "", "application/xml", ClassActive},
 		{"text", []byte("Milk, eggs, bread\n"), "", "text/plain; charset=utf-8", ClassText},
+		// Text in another encoding is not told it is UTF-8, however few of its bytes show it: only a
+		// character the sniff cut from the end of a longer file is taken for the UTF-8 it begins.
+		{"latin-1 text", []byte("Caf\xe9\n"), "note.txt", "text/plain", ClassText},
+		{"utf-8 cut by the sniff", []byte(strings.Repeat("a", sniffLen-1) + "é and more"), "", "text/plain; charset=utf-8", ClassText},
+		{"latin-1 cut by the sniff", []byte(strings.Repeat("a", sniffLen-2) + "\xe9" + strings.Repeat("a", 100)), "", "text/plain", ClassText},
 		{"csv", []byte("date,amount\n2026-09-30,120\n"), "Výpis.CSV", "text/csv; charset=utf-8", ClassText},
 		{"json", []byte(`{"milk": 2}`), "list.json", "application/json", ClassText},
 		{"a name that makes text no image", []byte("Milk, eggs\n"), "list.png", "text/plain; charset=utf-8", ClassText},

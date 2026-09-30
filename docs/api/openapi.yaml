@@ -224,6 +224,11 @@ paths:
       operationId: getReadyz
       tags: [health]
       summary: Readiness — database and object store reachable
+      description: |
+        Each dependency is a check, `ok` or `down`. The database is one the API cannot serve without:
+        when it is down, so is the instance, `503`. The object store is not: without it an upload
+        answers `502` (`storage_unavailable`) and everything else still serves, links to what is
+        already stored among it (FR-NF3), so the instance is `degraded` and still answers `200`.
       security: []
       responses:
         '200': { description: Ready, content: { application/json: { schema: { $ref: '#/components/schemas/Readiness' } } } }

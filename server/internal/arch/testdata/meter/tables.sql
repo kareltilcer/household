@@ -22,6 +22,11 @@ CREATE TABLE arch_testdata.whole (id uuid PRIMARY KEY, household_id uuid NOT NUL
 SELECT enable_tenant_isolation('arch_testdata.whole');
 GRANT SELECT ON arch_testdata.whole TO household_meter;
 
+-- Maintenance, which locks the table against every write, and vacuums, reindexes or refreshes it.
+CREATE TABLE arch_testdata.maintained (id uuid PRIMARY KEY, household_id uuid NOT NULL);
+SELECT enable_tenant_isolation('arch_testdata.maintained');
+GRANT MAINTAIN ON arch_testdata.maintained TO household_meter;
+
 -- A write, on a column it may read.
 CREATE TABLE arch_testdata.written (id uuid PRIMARY KEY, household_id uuid NOT NULL);
 SELECT enable_tenant_isolation('arch_testdata.written');

@@ -230,6 +230,12 @@ func (c *converter) convert(w http.ResponseWriter, r *http.Request, name string,
 	// failure is logged by the command and how it ended.
 	err = cmd.Run()
 	switch {
+	case r.Context().Err() != nil:
+		// The pipeline stopped waiting, its job's lease over or its process ending, and the commands
+		// were killed with its request: no one reads an answer, and no conversion ran out of time,
+		// which is what an operator reading the log would otherwise look into.
+		c.log.LogAttrs(r.Context(), slog.LevelInfo, "a conversion was abandoned by its client", slog.String("command", filepath.Base(argv[0])))
+		return
 	case ctx.Err() != nil:
 		c.log.LogAttrs(r.Context(), slog.LevelWarn, "a conversion ran out of time", slog.String("command", filepath.Base(argv[0])))
 		http.Error(w, "the conversion ran out of time", http.StatusGatewayTimeout)

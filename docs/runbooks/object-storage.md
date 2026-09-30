@@ -45,7 +45,9 @@ appearing, and when the sweep or a household's storage figures look wrong.
 ## Uploads fail with `502 storage_unavailable`
 
 The API could not write to the store, and committed nothing: the client sends the upload again. Reads
-of what is already stored, and their links, still work (FR-NF3).
+of what is already stored, and their links, still work (FR-NF3). Each instance's `/readyz` answers
+`degraded`, still `200`, with `object_store: down` while it cannot reach the bucket, and a store that
+stops answering fails a request once a minute has passed without an answer beginning.
 
 1. Look for `files: the object store refused an upload` or `avatar: the object store refused a
    picture` in the API's log, with the error.

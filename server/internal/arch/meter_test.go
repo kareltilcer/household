@@ -56,13 +56,14 @@ var meterColumns = map[string][]string{
 // meterViolations returns each privilege the meter role holds in schema, or in every schema that
 // is not PostgreSQL's own when schema is "", that allowed does not name: allowed names a table's
 // readable columns, household_id for one it does not name. A sequence's USAGE is among them, since
-// it draws the sequence's next value, a write; the CASE asks each relation only for the privileges
-// its kind has, which PostgreSQL's functions refuse to be asked for otherwise.
+// it draws the sequence's next value, a write, and so is a table's MAINTAIN (PostgreSQL 17), which
+// locks it against every write and vacuums, reindexes or refreshes it; the CASE asks each relation
+// only for the privileges its kind has, which PostgreSQL's functions refuse to be asked for otherwise.
 func meterViolations(t *testing.T, tx pgx.Tx, schema string, allowed map[string][]string) []string {
 	t.Helper()
 	rows, err := tx.Query(t.Context(), `
 		SELECT n.nspname || '.' || c.relname,
-		  array(SELECT p FROM unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER', 'USAGE']) AS p
+		  array(SELECT p FROM unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER', 'MAINTAIN', 'USAGE']) AS p
 		        WHERE CASE WHEN c.relkind = 'S' AND p IN ('SELECT', 'UPDATE', 'USAGE') THEN has_sequence_privilege($2::name, c.oid, p)
 		                   WHEN c.relkind <> 'S' AND p <> 'USAGE' THEN has_table_privilege($2::name, c.oid, p)
 		                   ELSE false END),

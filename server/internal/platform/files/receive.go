@@ -76,7 +76,7 @@ const (
 //   - 413 payload_too_large, a file over the cap, as soon as the body's length or its bytes show it;
 //   - 415 unsupported_media_type, a program, or a type the route does not take;
 //   - 422 validation_failed, a body that is not a form, a form with no file or more than one, an
-//     empty file, and a field over its length or that is not text.
+//     empty file, and a field sent twice, over its length or that is not text.
 //
 // The body may take the pipeline's Timeout to arrive, whatever the server's own deadline for bodies
 // (httpx.BodyDeadline); a client that sends it slower is disconnected. The caller closes what it
@@ -112,6 +112,7 @@ func (s *Service) Receive(w http.ResponseWriter, r *http.Request, rules Rules) (
 			return nil, readFailed(err)
 		}
 		name := part.FormName()
+		_, repeated := u.Fields[name]
 		switch {
 		case parts >= maxFields:
 			return nil, problem.Validation(problem.FieldError{Field: "", Code: problem.FieldInvalid})
@@ -124,6 +125,10 @@ func (s *Service) Receive(w http.ResponseWriter, r *http.Request, rules Rules) (
 			u.Filename = cleanName(part.FileName())
 		case name == "" || part.FileName() != "":
 			return nil, malformed("/" + name)
+		case repeated:
+			// A field sent twice is refused as a second file is: which of the two a module took, the
+			// first or the last, is not the client's to guess, nor a proxy's that added one.
+			return nil, problem.Validation(problem.FieldError{Field: "/" + name, Code: problem.FieldInvalid})
 		default:
 			value, err := io.ReadAll(io.LimitReader(part, maxFieldBytes+1))
 			switch {

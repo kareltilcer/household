@@ -135,6 +135,45 @@ func TestAWriteRacingAnotherIsTheKeyTaken(t *testing.T) {
 	}
 }
 
+// A store that takes a request and stops answering it fails the request once ResponseTimeout has
+// passed without an answer beginning, as a store that cannot be reached does: an upload is answered
+// 502 and sent again, rather than held for as long as its member waits (FR-NF3). The time runs from
+// once the request is sent, its body included, so a large write's transfer never counts against it.
+func TestAStoreThatStopsAnsweringFailsTheRequest(t *testing.T) {
+	stop := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		select {
+		case <-stop:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+	// Before the server closes, which waits for its handlers.
+	t.Cleanup(func() { close(stop) })
+	endpoint, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := objectstore.New(objectstore.Config{
+		Location: objectstore.Location{Endpoint: endpoint, Bucket: "stalled", AccessKey: "tester", Secret: "stalled"},
+		Attempts: 1, ResponseTimeout: 200 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := put(t, s, "h/a/documents/b/original", []byte("a photograph"), "image/jpeg"); err == nil || errors.Is(err, objectstore.ErrExists) {
+		t.Fatalf("a write the store never answers = %v, want a failure", err)
+	}
+	if _, err := s.Head(t.Context(), "h/a/documents/b/original"); err == nil || errors.Is(err, objectstore.ErrNotFound) {
+		t.Fatalf("a head the store never answers = %v, want a failure", err)
+	}
+	if took := time.Since(start); took > 10*time.Second {
+		t.Fatalf("the store's silence held the requests %s", took)
+	}
+}
+
 func TestAMissingObjectIsNotFound(t *testing.T) {
 	s := testsupport.ObjectStore(t)
 	if _, err := s.Head(t.Context(), "h/a/documents/none/original"); !errors.Is(err, objectstore.ErrNotFound) {

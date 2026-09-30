@@ -46,9 +46,9 @@ authorised the caller, in three steps:
   `.jar`, `.bat`, `.ps1`, `.chm`, `.jnlp`, a disk image Windows mounts, …) blocks a file whatever its
   bytes are, since a script is text to any sniffer. A program (PE, ELF, Mach-O, a shebang script, a
   JAR or an Android or Windows package, an MSI by its compound file's class id) or a type the route's
-  `Accept` does not take is `415`; a form with no file, two, an empty one, or a field over its length
-  is `422`. A ZIP's directory is read to 4 MiB at most, since `zip.NewReader` holds every entry it
-  lists; one larger is an archive. The upload's body may take `HOUSEHOLD_UPLOAD_TIMEOUT` (15 minutes)
+  `Accept` does not take is `415`; a form with no file, two, an empty one, a field sent twice, or a
+  field over its length is `422`. A ZIP's directory is read to 4 MiB at most, since `zip.NewReader`
+  holds every entry it lists; one larger is an archive. The upload's body may take `HOUSEHOLD_UPLOAD_TIMEOUT` (15 minutes)
   to arrive, extended past the server's body deadline through `http.ResponseController`; a spool the
   server cannot write is its own `500`, never the body's `422`. The Idempotency-Key's fingerprint of
   a multipart body leaves out its boundary, which a client draws afresh for every attempt, and its
@@ -64,7 +64,10 @@ authorised the caller, in three steps:
   flight, which is the same refusal), whoever races for it; a retry finds the same
   digest there and succeeds, and other bytes for the entity are `422` naming the field that named the
   entity. A store that cannot be reached is `502 storage_unavailable`, and nothing is recorded
-  (FR-NF3).
+  (FR-NF3); so is one that stops answering, whose client waits a minute at most for an answer to
+  begin once its request is sent. Readiness reports the store, and an instance without it is
+  `degraded`, still `200`, rather than taken out of rotation with every other instance over the
+  one thing none of them can do.
 - `Record`, in the transaction of the module's mutation, writes the `files` row with the attribution
   the module declares (`owner_id`, `private`) and, for a type with variants, the job that derives
   them, so both commit with the audit event and the change or neither does. `Remove` deletes an
@@ -89,8 +92,9 @@ anything unrecognised are downloads.
 transaction wrote. A commit wakes its instance's workers (`Nudge`); the others find due jobs every
 30 seconds. A worker claims a household's next due job with `FOR UPDATE SKIP LOCKED`, moving its
 `run_at` past a ten-minute lease, so a job whose worker died runs again once the lease passes, and a
-job runs no longer than its lease, since the store's client gives up on nothing by itself; one
-that fails for a reason a retry may mend waits 1, 5, 30 and 120 minutes, and after five tries, or at
+job runs no longer than its lease, since the store's client bounds only how long an answer takes
+to begin, not a transfer that stalls; one that fails for a reason a retry may mend waits 1, 5, 30
+and 120 minutes, and after five tries, or at
 once for a file that cannot be decoded or converted, the original's `variants` is `failed` and the
 file stays download-only, its upload never lost. A panic in deriving, a decoder's on the bytes a
 member sent, is such a failure and never the process's end; and a job claimed a sixth time, its

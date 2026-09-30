@@ -101,9 +101,22 @@ type Config struct {
 	Public *url.URL
 	// Attempts caps how many times a request is tried; the SDK's default when zero.
 	Attempts int
+	// ResponseTimeout is how long the store may take to begin answering a request once the request
+	// is sent, its body included, DefaultResponseTimeout when zero; it bounds the SDK's own client,
+	// and HTTPClient's is its own.
+	ResponseTimeout time.Duration
 	// HTTPClient sends the requests; the SDK's own when nil.
 	HTTPClient *http.Client
 }
+
+// DefaultResponseTimeout is how long the store may take to begin answering a request once it is
+// sent. The SDK's client waits for ever: a store that takes a request and stops answering it, wedged
+// or behind an edge that dropped it, would hold an upload for as long as its member waited, never
+// answered the 502 that says to send it again (FR-NF3), and a worker for the rest of its lease. A
+// minute is far longer than a store takes to answer a 100 MB write it has received, and the time
+// runs from once the request is sent, its body included, so a large write's transfer never counts
+// against it.
+const DefaultResponseTimeout = time.Minute
 
 // Store is one bucket of an S3-compatible store.
 type Store struct {
@@ -145,6 +158,14 @@ func New(cfg Config) (*Store, error) {
 	}
 	if cfg.HTTPClient != nil {
 		opts.HTTPClient = cfg.HTTPClient
+	} else {
+		timeout := cfg.ResponseTimeout
+		if timeout <= 0 {
+			timeout = DefaultResponseTimeout
+		}
+		opts.HTTPClient = awshttp.NewBuildableClient().WithTransportOptions(func(tr *http.Transport) {
+			tr.ResponseHeaderTimeout = timeout
+		})
 	}
 	return &Store{
 		client: s3.New(opts),

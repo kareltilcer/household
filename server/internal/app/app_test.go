@@ -26,6 +26,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
+	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
@@ -120,6 +121,47 @@ func TestReadinessFailsWhenACheckDoes(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), `"check":"database"`) || !strings.Contains(logs.String(), "connection refused") {
 		t.Errorf("the failed check was not logged:\n%s", logs)
+	}
+}
+
+// The object store is a dependency the API serves without (FR-NF3): readiness reports it, as the
+// contract says, and an instance that cannot reach it is degraded, still 200, rather than taken out
+// of rotation with every other instance over the one thing it cannot do, an upload. A database that
+// fails beside it is still down, whichever of the two is checked first.
+func TestReadinessIsDegradedWithoutTheObjectStore(t *testing.T) {
+	pool := testsupport.Open(t).Pool(t, db.RoleApp)
+	unmade, err := objectstore.New(objectstore.Config{Location: testsupport.ObjectStoreLocation(t, "unmade-bucket")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	down := health.Check{Name: "database", Probe: func(context.Context) error {
+		return errors.New("dial tcp 127.0.0.1:5432: connection refused")
+	}}
+	for name, tc := range map[string]struct {
+		checks []health.Check
+		code   int
+		body   string
+	}{
+		"a store that answers": {
+			[]health.Check{health.Database(pool), health.ObjectStore(testsupport.ObjectStore(t))},
+			http.StatusOK, `{"status":"ok","checks":{"database":"ok","object_store":"ok"}}`,
+		},
+		"a store that does not": {
+			[]health.Check{health.Database(pool), health.ObjectStore(unmade)},
+			http.StatusOK, `{"status":"degraded","checks":{"database":"ok","object_store":"down"}}`,
+		},
+		"neither": {
+			[]health.Check{health.ObjectStore(unmade), down},
+			http.StatusServiceUnavailable, `{"status":"down","checks":{"database":"down","object_store":"down"}}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, _ := router(t, tc.checks...)
+			rec := testsupport.Serve(t, r, get(t, "/api/v1/readyz"))
+			if rec.Code != tc.code || strings.TrimSpace(rec.Body.String()) != tc.body {
+				t.Fatalf("%d %s, want %d %s", rec.Code, rec.Body.String(), tc.code, tc.body)
+			}
+		})
 	}
 }
 

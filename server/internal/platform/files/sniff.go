@@ -125,7 +125,7 @@ func Sniff(r io.ReaderAt, size int64, name string) Type {
 	}
 	// Text is text whatever net/http's sniffer takes its first bytes for: "BMW service" is no bitmap.
 	if detected == "text/plain" || decodeText(head) != "" {
-		return sniffText(head, ext)
+		return sniffText(head, ext, size > int64(len(head)))
 	}
 	return Type{MIME: "application/octet-stream", Class: ClassBinary}
 }
@@ -319,16 +319,34 @@ var textTypes = map[string]Type{
 	"gpx":      {MIME: "application/gpx+xml", Class: ClassActive, Ext: "gpx"},
 }
 
-// sniffText returns the kind of plain text head is, by the extension of the client's name.
-func sniffText(head []byte, ext string) Type {
+// sniffText returns the kind of plain text head is, by the extension of the client's name, in
+// UTF-8 when head is: truncated says the file goes on past head, whose end may then cut a character
+// in two.
+func sniffText(head []byte, ext string, truncated bool) Type {
 	t, ok := textTypes[ext]
 	if !ok {
 		t = Type{MIME: "text/plain", Class: ClassText, Ext: "txt"}
 	}
-	if t.Class == ClassText && t.MIME != "application/json" && utf8.Valid(head[:max(0, len(head)-3)]) {
+	if t.Class == ClassText && t.MIME != "application/json" && utf8Text(head, truncated) {
 		t.MIME += "; charset=utf-8"
 	}
 	return t
+}
+
+// utf8Text reports whether head is UTF-8. Only a file that goes on past head, truncated, may end it
+// in the first bytes of a character, which the rest of the file completes; a file that ends there,
+// or bytes that begin no character, are some other encoding, Latin-1's "Caf\xe9" among them, which
+// a browser told it was UTF-8 would show with a replacement character for its last letter.
+func utf8Text(head []byte, truncated bool) bool {
+	if utf8.Valid(head) {
+		return true
+	}
+	for cut := 1; truncated && cut < utf8.UTFMax && cut <= len(head); cut++ {
+		if rest := head[len(head)-cut:]; utf8.Valid(head[:len(head)-cut]) && utf8.RuneStart(rest[0]) && !utf8.FullRune(rest) {
+			return true
+		}
+	}
+	return false
 }
 
 // maxZipDirectory bounds what sniffZip reads of a ZIP, its end record and its central directory

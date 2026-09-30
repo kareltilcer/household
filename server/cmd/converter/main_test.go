@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/png"
@@ -168,6 +169,26 @@ func TestAFailedConversionLogsNoContent(t *testing.T) {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 	if !strings.Contains(log.String(), "a conversion failed") || strings.Contains(log.String(), "Smlouva") {
+		t.Fatalf("logged %s", log.String())
+	}
+}
+
+// A conversion its client stops waiting for, the pipeline's job past its lease or its process ending,
+// is killed with the request, and is logged as abandoned: it did not run out of time, which the log
+// would otherwise send an operator to look into.
+func TestAConversionItsClientAbandonsIsNoTimeout(t *testing.T) {
+	c := newConverter(t, "hang", 10*time.Second)
+	var log bytes.Buffer
+	c.log = slog.New(slog.NewJSONHandler(&log, nil))
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/pdf?ext=docx", bytes.NewReader([]byte("PK\x03\x04 a document")))
+	start := time.Now()
+	c.routes().ServeHTTP(httptest.NewRecorder(), req)
+	if took := time.Since(start); took > 8*time.Second {
+		t.Fatalf("the conversion ran on for %s after its client left", took)
+	}
+	if !strings.Contains(log.String(), "a conversion was abandoned by its client") || strings.Contains(log.String(), "ran out of time") {
 		t.Fatalf("logged %s", log.String())
 	}
 }

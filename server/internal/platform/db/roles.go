@@ -28,8 +28,10 @@ const (
 	// RoleApp serves every request. It owns nothing and creates nothing; it reads and
 	// writes rows through the privileges the platform migration block grants it.
 	RoleApp = "household_app"
-	// RoleMeter is the nightly storage and usage sampler, which reads aggregate columns
-	// only (item 14 grants them).
+	// RoleMeter reads across households, and only the columns that name, count, size or
+	// schedule their rows (item 14 grants them, architecture test 11): the nightly storage and
+	// usage sampler, and every API instance's files workers, looking for the households with
+	// work due.
 	RoleMeter = "household_meter"
 )
 

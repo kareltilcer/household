@@ -92,7 +92,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	router, err := NewRouter(Deps{
 		Logger:       log,
 		Contract:     c,
-		Health:       health.New(log, 2*time.Second, health.Database(pool)),
+		Health:       health.New(log, 2*time.Second, health.Database(pool), health.ObjectStore(pipeline.Store())),
 		Pool:         pool,
 		Modules:      registry,
 		MaxBodyBytes: cfg.MaxBodyBytes,
@@ -152,7 +152,8 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 
 // newFiles builds the files pipeline (item 14) from cfg: the object store, whose bucket development
 // makes for itself, and the converter sidecar. The store is not asked for anything else at start: one
-// that cannot be reached fails uploads 502, and nothing else (FR-NF3).
+// that cannot be reached fails uploads 502, and nothing else (FR-NF3), and readiness answers degraded
+// while it cannot (health.ObjectStore).
 func newFiles(ctx context.Context, cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool) (*files.Service, error) {
 	store, err := objectstore.New(objectstore.Config{Location: cfg.ObjectStore, Public: cfg.ObjectStorePublic})
 	if err != nil {
