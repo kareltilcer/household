@@ -9,6 +9,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
 
@@ -91,6 +92,9 @@ func Sniff(r io.ReaderAt, size int64, name string) Type {
 	head := make([]byte, min(size, sniffLen))
 	n, _ := r.ReadAt(head, 0)
 	head = head[:n]
+	// Windows drops the dots and spaces that end a name as it saves the file, and a browser does
+	// before it: "run.bat." is saved as run.bat, so it is read as that.
+	name = strings.TrimRightFunc(name, func(r rune) bool { return r == '.' || unicode.IsSpace(r) })
 	ext := strings.ToLower(strings.TrimPrefix(path.Ext(name), "."))
 	if slices.Contains(programExtensions, ext) {
 		return Type{MIME: "application/octet-stream", Class: ClassBlocked}
@@ -126,11 +130,16 @@ func Sniff(r io.ReaderAt, size int64, name string) Type {
 }
 
 // programExtensions block a file by its name: a program, an installer or a script, which a
-// sniffer cannot always tell from text or from an archive.
+// sniffer cannot always tell from text or from an archive, and what the system opening it runs as
+// one: a management console (msc, XML to a sniffer), a program's shortcut (pif), a Windows script
+// component or scriptlet (ws, wsc, sct), a transform an installer applies (mst), a browser-hosted
+// application (xbap), a shortcut to a place that runs what it names (url, library-ms,
+// settingcontent-ms), a desktop gadget, and a macOS script Terminal runs when it is opened (command).
 var programExtensions = []string{
 	"exe", "com", "scr", "msi", "msp", "dll", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh",
 	"hta", "cpl", "lnk", "jar", "apk", "aab", "ipa", "appx", "msix", "app", "dmg", "pkg", "deb", "rpm", "sh", "run",
-	"reg", "scf", "application",
+	"reg", "scf", "application", "msc", "pif", "ws", "wsc", "sct", "mst", "xbap", "url", "library-ms",
+	"settingcontent-ms", "gadget", "command",
 }
 
 // signatures are the types known by their first bytes, the programs among them.

@@ -157,6 +157,10 @@ func TestTheFilesSettings(t *testing.T) {
 		"a public URL with a path":      {config.ObjectStorePublicURLVar: "https://files.household.example/household"},
 		"a public URL over http":        {config.ObjectStorePublicURLVar: "http://files.household.example"},
 		"a converter that is not a URL": {config.ConverterURLVar: "converter:3100"},
+		// A URL that carries no credentials refuses one it was given, and names it without them.
+		"a public URL with credentials":   {config.ObjectStorePublicURLVar: "https://AKIA:" + "s3cret" + "@files.household.example"},
+		"a converter with credentials":    {config.ConverterURLVar: "http://svc:" + "s3cret" + "@converter:3100"},
+		"a converter that does not parse": {config.ConverterURLVar: "http://svc:" + "s3cret%zz" + "@converter:3100"},
 	} {
 		vars[config.EnvVar] = "production"
 		vars[config.DatabaseURLVar] = dsn("household_app", "s3cret", "db.internal:5432", "household")

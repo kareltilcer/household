@@ -87,7 +87,10 @@ once for a file that cannot be decoded or converted, the original's `variants` i
 file stays download-only, its upload never lost. A variant is put `If-None-Match` too; one a
 previous attempt stored is kept as it is, since a conversion need not give the same bytes twice.
 What is derived carries no metadata: an image is decoded, turned upright by its EXIF orientation,
-scaled and written again. An image of more than 64 million pixels is not decoded.
+scaled and written again. An image of more than 64 million pixels is not decoded, and the images a
+process decodes at once, its workers' and its requests' pictures alike, hold a gigabyte between them
+at most (`imaging.Budget`): each waits for room, since a PNG of a few hundred kilobytes may decode to
+half a gigabyte, and a handful sent at once would otherwise take the process's memory.
 
 **The converter is a sidecar of our own**: `server/cmd/converter`, a small HTTP server in the server's
 module, built into `deploy/converter`'s image over Debian's LibreOffice (`*-nogui`) and poppler. `POST

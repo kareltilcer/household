@@ -1,26 +1,31 @@
 // Package imaging reads, scales and writes the raster images the platform derives from uploads: a
 // file's thumbnail and preview (FR-FL3) and a user's picture. It decodes only what Go reads without
 // cgo, refuses an image whose dimensions would take more memory than the process should give one
-// (a decompression bomb is a few kilobytes of PNG that decode to gigabytes), turns a photograph the
-// way its EXIF orientation says a camera held it, and writes what it derives without the
-// original's metadata, so a derived image carries no camera, no time and no place.
+// (a decompression bomb is a few kilobytes of PNG that decode to gigabytes), holds the images it
+// decodes at once to a budget of memory between them (Budget), turns a photograph the way its EXIF
+// orientation says a camera held it, and writes what it derives without the original's metadata, so
+// a derived image carries no camera, no time and no place.
 package imaging
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
+	"sync"
 
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/tiff"
 	"golang.org/x/image/webp"
+	"golang.org/x/sync/semaphore"
 )
 
 var (
@@ -29,6 +34,50 @@ var (
 	// ErrTooLarge is Decode's answer for an image with more pixels than it was allowed.
 	ErrTooLarge = errors.New("imaging: the image has too many pixels")
 )
+
+// Budget is the memory the images decoded at once, in every request and every files worker of the
+// process, may hold between them, in bytes. Each request decodes its own upload, and a PNG of a few
+// hundred kilobytes may decode to half a gigabyte: without a bound shared by all of them, a handful
+// of such uploads sent at once would take the process's memory, whatever each one's pixel cap. An
+// image waits until the others leave it room (Image.Release). The pixel caps keep every image the
+// platform takes within it but a CMYK JPEG of more than 53 million pixels, which waits for all of it
+// and is decoded alone: the pixel cap, not the budget, is what the contract promises.
+const Budget int64 = 1 << 30
+
+// budget is the budget in force, Budget but in the test that fills a smaller one, and decoding what
+// it has left.
+var (
+	budget   = Budget
+	decoding = semaphore.NewWeighted(Budget)
+)
+
+// footprint is the most memory decoding an image of cfg, in contentType, holds at once, in bytes:
+// its pixels at the depth of its colour model, and as much again for what a decoder keeps beside
+// them (an interlaced PNG's passes, a lossless WebP's pixels before they are converted); for a JPEG,
+// in place of that, four bytes a pixel for each of its components, the coefficients a progressive
+// JPEG keeps, which its header does not say it is.
+func footprint(contentType string, cfg image.Config) int64 {
+	depth, components := int64(8), int64(4)
+	if _, paletted := cfg.ColorModel.(color.Palette); paletted {
+		depth, components = 1, 1
+	} else {
+		switch cfg.ColorModel {
+		case color.GrayModel, color.AlphaModel:
+			depth, components = 1, 1
+		case color.Gray16Model, color.Alpha16Model:
+			depth, components = 2, 1
+		case color.YCbCrModel:
+			depth, components = 3, 3
+		case color.RGBAModel, color.NRGBAModel, color.CMYKModel, color.NYCbCrAModel:
+			depth, components = 4, 4
+		}
+	}
+	pixels := int64(cfg.Width) * int64(cfg.Height)
+	if contentType == "image/jpeg" {
+		return pixels * (depth + 4*components)
+	}
+	return pixels * 2 * depth
+}
 
 // decoders are the formats Decode reads, by the content type the files pipeline sniffs.
 var decoders = map[string]struct {
@@ -49,17 +98,29 @@ func Reads(contentType string) bool {
 	return ok
 }
 
-// Image is a decoded image and what was read about it.
+// Image is a decoded image and what was read about it. It holds its share of Budget until its holder
+// releases it.
 type Image struct {
 	image.Image
 	// Orientation is the EXIF orientation it was stored with, 1 to 8, 1 for upright or none.
 	// Decode has not applied it: Upright does, after the image is scaled, when it costs least.
 	Orientation int
+	release     func()
 }
 
-// Decode reads an image of contentType from r, refusing one of more than maxPixels. A GIF is read
-// as its first frame.
-func Decode(r io.ReadSeeker, contentType string, maxPixels int) (Image, error) {
+// Release gives back the share of Budget the image holds, once its holder is done with it and with
+// what it read from it: every image Decode returns is released, and releasing one twice releases it
+// once.
+func (m Image) Release() {
+	if m.release != nil {
+		m.release()
+	}
+}
+
+// Decode reads an image of contentType from r, refusing one of more than maxPixels. It waits, for as
+// long as ctx lets it, until the images decoded meanwhile leave room for this one in Budget; the
+// caller releases what it returns. A GIF is read as its first frame.
+func Decode(ctx context.Context, r io.ReadSeeker, contentType string, maxPixels int) (Image, error) {
 	d, ok := decoders[contentType]
 	if !ok {
 		return Image{}, ErrUnsupported
@@ -71,6 +132,7 @@ func Decode(r io.ReadSeeker, contentType string, maxPixels int) (Image, error) {
 	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > maxPixels/cfg.Height {
 		return Image{}, ErrTooLarge
 	}
+	need, held := min(footprint(contentType, cfg), budget), decoding
 	orientation := 1
 	if contentType == "image/jpeg" {
 		if _, err := r.Seek(0, io.SeekStart); err != nil {
@@ -81,11 +143,16 @@ func Decode(r io.ReadSeeker, contentType string, maxPixels int) (Image, error) {
 	if _, err := r.Seek(0, io.SeekStart); err != nil {
 		return Image{}, err
 	}
+	if err := held.Acquire(ctx, need); err != nil {
+		return Image{}, err
+	}
+	release := sync.OnceFunc(func() { held.Release(need) })
 	img, err := d.decode(r)
 	if err != nil {
+		release()
 		return Image{}, fmt.Errorf("imaging: %w", err)
 	}
-	return Image{Image: img, Orientation: orientation}, nil
+	return Image{Image: img, Orientation: orientation, release: release}, nil
 }
 
 // Size is the image's width and height as it is to be seen, its orientation applied.

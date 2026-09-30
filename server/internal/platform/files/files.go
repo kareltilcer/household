@@ -117,6 +117,8 @@ type Service struct {
 
 	wake chan struct{}
 	mu   sync.Mutex
+	// busy holds the households a worker of this instance is draining, each true once it was found
+	// due again meanwhile (hold).
 	busy map[uuid.UUID]bool
 }
 

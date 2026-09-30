@@ -80,6 +80,11 @@ func Remove(ctx context.Context, tx pgx.Tx, module string, entity uuid.UUID) err
 
 // Attribute attributes every object of module's entity as a says, in tx: the transaction of the
 // mutation that moves the entity between shared and private or hands it to another member.
+//
+// The original's row is locked first, as the workers lock it to record the variants they derived
+// with its attribution (recordVariants): a variant a worker is recording meanwhile is then committed
+// before the update reads the entity's rows, and is attributed with them, rather than left out of the
+// update's snapshot, counting against the member the entity has left.
 func Attribute(ctx context.Context, tx pgx.Tx, module string, entity uuid.UUID, a Attribution) error {
 	scope := tenant.From(ctx)
 	if scope == nil {
@@ -88,9 +93,15 @@ func Attribute(ctx context.Context, tx pgx.Tx, module string, entity uuid.UUID, 
 	if a.Private && a.Owner == uuid.Nil {
 		return errPrivateUnowned
 	}
+	household := scope.HouseholdID()
+	if _, err := tx.Exec(ctx, `
+		SELECT FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3 AND variant = 'original' FOR UPDATE`,
+		household, module, entity); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx, `
 		UPDATE files SET owner_id = $4, private = $5 WHERE household_id = $1 AND module = $2 AND entity_id = $3`,
-		scope.HouseholdID(), module, entity, owner(a.Owner), a.Private)
+		household, module, entity, owner(a.Owner), a.Private)
 	return err
 }
 

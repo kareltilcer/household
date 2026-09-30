@@ -116,6 +116,12 @@ func TestSniff(t *testing.T) {
 		{"script", []byte("#!/bin/sh\nrm -rf ~\n"), "readme.txt", "text/x-shellscript", ClassBlocked},
 		{"a program by its name", []byte("%PDF-1.7\n"), "invoice.pdf.EXE", "application/octet-stream", ClassBlocked},
 		{"a script by its name", []byte("WScript.Echo 1"), "run.vbs", "application/octet-stream", ClassBlocked},
+		// Saved on Windows, a name loses the dots and spaces it ends with.
+		{"a script by its name, dots after it", []byte("@echo off\n"), "run.bat.", "application/octet-stream", ClassBlocked},
+		{"a script by its name, a dot and a space after it", []byte("@echo off\n"), "run.bat. ", "application/octet-stream", ClassBlocked},
+		{"a console by its name", []byte(`<?xml version="1.0"?><MMC_ConsoleFile/>`), "tool.msc", "application/octet-stream", ClassBlocked},
+		{"a macOS script by its name", []byte("open -a Calculator\n"), "start.command", "application/octet-stream", ClassBlocked},
+		{"a name that only ends in dots", []byte("Milk, eggs\n"), "list...", "text/plain; charset=utf-8", ClassText},
 		{"html", []byte("<!DOCTYPE html><html><body>hi</body></html>"), "page.txt", "text/html", ClassActive},
 		{"html deep in text", []byte("Dear Jana,\n\nsee <script>alert(1)</script>"), "letter.txt", "text/html", ClassActive},
 		{"svg", []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>`), "plan.png", "image/svg+xml", ClassActive},

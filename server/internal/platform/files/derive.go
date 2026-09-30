@@ -79,7 +79,7 @@ func (s *Service) derive(ctx context.Context, j job) error {
 	//nolint:exhaustive // Derives is true of these three alone.
 	switch t.Class {
 	case ClassRaster:
-		out, err = rasterVariants(original, t.MIME)
+		out, err = rasterVariants(ctx, original, t.MIME)
 	case ClassPDF:
 		out, err = s.pageVariants(ctx, original, size)
 	case ClassOffice:
@@ -130,14 +130,15 @@ func remove(f *os.File) {
 
 // rasterVariants derives an image's thumbnail, and its preview when it is larger than one, not
 // upright, or of a type a browser does not show.
-func rasterVariants(original io.ReadSeeker, contentType string) ([]variant, error) {
+func rasterVariants(ctx context.Context, original io.ReadSeeker, contentType string) ([]variant, error) {
 	if _, err := original.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	m, err := imaging.Decode(original, contentType, maxPixels)
+	m, err := decode(ctx, original, contentType)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", errPermanent, err)
+		return nil, err
 	}
+	defer m.Release()
 	thumb, err := imaging.Encode(m.Fit(thumbnailSide))
 	if err != nil {
 		return nil, err
@@ -154,6 +155,20 @@ func rasterVariants(original io.ReadSeeker, contentType string) ([]variant, erro
 	return out, nil
 }
 
+// decode decodes an image a job derives from, once the images decoded meanwhile leave room for it
+// (imaging.Budget). One that cannot be decoded, or is too large to be, is a permanent failure; a
+// job stopped while it waited is not.
+func decode(ctx context.Context, r io.ReadSeeker, contentType string) (imaging.Image, error) {
+	m, err := imaging.Decode(ctx, r, contentType, maxPixels)
+	switch {
+	case err == nil:
+		return m, nil
+	case ctx.Err() != nil:
+		return m, ctx.Err()
+	}
+	return m, fmt.Errorf("%w: %w", errPermanent, err)
+}
+
 // pageVariants derives a PDF's first page as a preview and a thumbnail, drawn by the converter.
 func (s *Service) pageVariants(ctx context.Context, pdf io.ReadSeeker, size int64) ([]variant, error) {
 	if s.convert == nil {
@@ -166,10 +181,11 @@ func (s *Service) pageVariants(ctx context.Context, pdf io.ReadSeeker, size int6
 	if err := s.convert.Page(ctx, pdf, size, previewSide, &page, maxPage); err != nil {
 		return nil, converted(err)
 	}
-	m, err := imaging.Decode(bytes.NewReader(page.Bytes()), "image/png", maxPixels)
+	m, err := decode(ctx, bytes.NewReader(page.Bytes()), "image/png")
 	if err != nil {
-		return nil, fmt.Errorf("%w: the page: %w", errPermanent, err)
+		return nil, err
 	}
+	defer m.Release()
 	var out []variant
 	for _, v := range []struct {
 		name string

@@ -213,7 +213,7 @@ type Module interface {
 type WidgetSource     interface{ Widgets() []dashboard.WidgetProvider }
 type MetricSource     interface{ Metrics() []metrics.Descriptor }
 type ListSource       interface{ Lists() []lists.Descriptor }
-type StorageSource    interface{ Tables() []string; Blobs(ctx, HouseholdID) ([]storage.Usage, error) }
+type StorageSource    interface{ StorageTables() []string; StorageLabels(ctx, pgx.Tx, []EntityID) (map[EntityID]string, error) }
 type SyncSource       interface{ SyncEntities() []sync.EntityDescriptor }   // new
 type ReminderSource   interface{ ReminderKinds() []reminders.KindDescriptor } // new
 type SearchSource     interface{ SearchScopes() []search.ScopeDescriptor }  // new
@@ -232,7 +232,7 @@ one of the registered catalogs, which are owned by the platform.
 | **Widgets** | `platform/dashboard` | Dashboard | What a module shows on the landing screen |
 | **Metrics** | `platform/metrics` | Notifications, dashboard | Named scalar values a summary or a condition can reference |
 | **Lists** | `platform/lists` | Notifications | The itemised form of a metric |
-| **Storage** | `platform/storage` | Billing, admin | Which tables and object prefixes a module owns, and how blob bytes are attributed |
+| **Storage** | `platform/storage` | Billing, admin | Which tables a module owns, whose rows fair use counts, and how the storage picture labels its entities. Its objects are under `h/{household}/{module}/`, each attributed to a member as the module records it (`files.Record`, `files.Attribute`; [ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md)) |
 | **Sync entities** | `platform/sync` | Sync engine, clients | Which entities replicate offline, their merge policy and their access predicate |
 | **Reminder kinds** | `platform/reminders` | Reminders module, notifications | Date-bearing things a module produces that a member may want reminding about |
 | **Search scopes** | `platform/search` | Global search | What a module contributes to cross-module search, and how a hit is rendered |

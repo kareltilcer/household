@@ -2,6 +2,7 @@ package imaging_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"image"
@@ -9,6 +10,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"testing"
+	"time"
 
 	"github.com/kareltilcer/household/server/internal/platform/imaging"
 )
@@ -58,10 +60,11 @@ func near(c color.Color, r, b uint32) bool {
 // A photograph taken with the phone turned a quarter is stored on its side and says so: it comes
 // out as it was held, its red half on top.
 func TestAPhotographComesOutAsItWasHeld(t *testing.T) {
-	m, err := imaging.Decode(bytes.NewReader(photo(t, 40, 20, 6)), "image/jpeg", 1<<20)
+	m, err := imaging.Decode(t.Context(), bytes.NewReader(photo(t, 40, 20, 6)), "image/jpeg", 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer m.Release()
 	if m.Orientation != 6 {
 		t.Fatalf("orientation %d, want 6", m.Orientation)
 	}
@@ -84,10 +87,11 @@ func TestAPhotographComesOutAsItWasHeld(t *testing.T) {
 
 func TestEveryOrientationKeepsItsSize(t *testing.T) {
 	for o := 1; o <= 8; o++ {
-		m, err := imaging.Decode(bytes.NewReader(photo(t, 30, 10, o)), "image/jpeg", 1<<20)
+		m, err := imaging.Decode(t.Context(), bytes.NewReader(photo(t, 30, 10, o)), "image/jpeg", 1<<20)
 		if err != nil {
 			t.Fatal(err)
 		}
+		m.Release()
 		want := image.Rect(0, 0, 30, 10)
 		if o >= 5 {
 			want = image.Rect(0, 0, 10, 30)
@@ -99,10 +103,11 @@ func TestEveryOrientationKeepsItsSize(t *testing.T) {
 }
 
 func TestSquareIsTheCentreAsHeld(t *testing.T) {
-	m, err := imaging.Decode(bytes.NewReader(photo(t, 60, 20, 0)), "image/jpeg", 1<<20)
+	m, err := imaging.Decode(t.Context(), bytes.NewReader(photo(t, 60, 20, 0)), "image/jpeg", 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer m.Release()
 	sq := m.Square(10)
 	if b := sq.Bounds(); b.Dx() != 10 || b.Dy() != 10 {
 		t.Fatalf("square %v", b)
@@ -122,24 +127,78 @@ func TestAnImageWithTooManyPixelsIsRefused(t *testing.T) {
 	if err := png.Encode(&buf, image.NewGray(image.Rect(0, 0, 100, 100))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := imaging.Decode(bytes.NewReader(buf.Bytes()), "image/png", 100*100-1); !errors.Is(err, imaging.ErrTooLarge) {
+	if _, err := imaging.Decode(t.Context(), bytes.NewReader(buf.Bytes()), "image/png", 100*100-1); !errors.Is(err, imaging.ErrTooLarge) {
 		t.Fatalf("decode = %v, want ErrTooLarge", err)
 	}
-	if _, err := imaging.Decode(bytes.NewReader(buf.Bytes()), "image/png", 100*100); err != nil {
+	m, err := imaging.Decode(t.Context(), bytes.NewReader(buf.Bytes()), "image/png", 100*100)
+	if err != nil {
 		t.Fatalf("decode at the limit = %v", err)
 	}
-	if _, err := imaging.Decode(bytes.NewReader(buf.Bytes()), "image/heic", 1<<20); !errors.Is(err, imaging.ErrUnsupported) {
+	m.Release()
+	if _, err := imaging.Decode(t.Context(), bytes.NewReader(buf.Bytes()), "image/heic", 1<<20); !errors.Is(err, imaging.ErrUnsupported) {
 		t.Fatalf("decode of a type it does not read = %v", err)
 	}
+}
+
+// The images decoded at once hold no more than the budget between them, whichever request or worker
+// decodes them: a few kilobytes of PNG that decode to a gigabyte each, sent at once, would otherwise
+// take the process's memory. An image waits until another is released, for as long as its caller
+// lets it; one larger than the whole budget waits for all of it, and is decoded alone.
+func TestTheImagesDecodedAtOnceHoldNoMoreThanTheBudget(t *testing.T) {
+	encoded := func(img image.Image) []byte {
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			t.Fatal(err)
+		}
+		return buf.Bytes()
+	}
+	gray := encoded(image.NewGray(image.Rect(0, 0, 100, 100)))
+	// Sixteen bits a channel of RGBA: eight times the bytes a pixel of the gray.
+	deep := encoded(image.NewNRGBA64(image.Rect(0, 0, 100, 100)))
+	one, err := png.DecodeConfig(bytes.NewReader(gray))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := imaging.SetBudget(imaging.Footprint("image/png", one))
+	defer restore()
+	waits := func(content []byte) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+		defer cancel()
+		if _, err := imaging.Decode(ctx, bytes.NewReader(content), "image/png", 1<<20); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("an image beside a full budget = %v, want it to wait out its caller", err)
+		}
+	}
+
+	first, err := imaging.Decode(t.Context(), bytes.NewReader(gray), "image/png", 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waits(gray)
+	first.Release()
+	first.Release()
+
+	alone, err := imaging.Decode(t.Context(), bytes.NewReader(deep), "image/png", 1<<20)
+	if err != nil {
+		t.Fatalf("an image larger than the budget, decoded alone = %v", err)
+	}
+	waits(gray)
+	alone.Release()
+	last, err := imaging.Decode(t.Context(), bytes.NewReader(gray), "image/png", 1<<20)
+	if err != nil {
+		t.Fatalf("an image once the budget is free = %v", err)
+	}
+	last.Release()
 }
 
 // What is derived carries no metadata: the EXIF segment does not survive, and a transparent image
 // stays transparent.
 func TestEncodeDropsMetadataAndKeepsTransparency(t *testing.T) {
-	m, err := imaging.Decode(bytes.NewReader(photo(t, 20, 20, 6)), "image/jpeg", 1<<20)
+	m, err := imaging.Decode(t.Context(), bytes.NewReader(photo(t, 20, 20, 6)), "image/jpeg", 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer m.Release()
 	enc, err := imaging.Encode(m.Fit(10))
 	if err != nil {
 		t.Fatal(err)

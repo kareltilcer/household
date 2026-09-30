@@ -463,9 +463,9 @@ func (l *loader) files(c *Config, dev bool) {
 		switch {
 		case err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
 			(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "":
-			l.fail("%s is %q; want the object store's http(s) scheme and host", ObjectStorePublicURLVar, public)
+			l.fail("%s is %s; want the object store's http(s) scheme and host", ObjectStorePublicURLVar, quotedURL(public))
 		case !dev && u.Scheme != "https":
-			l.fail("%s is %q; outside development clients reach the object store over https", ObjectStorePublicURLVar, public)
+			l.fail("%s is %s; outside development clients reach the object store over https", ObjectStorePublicURLVar, quotedURL(public))
 		default:
 			c.ObjectStorePublic = &url.URL{Scheme: u.Scheme, Host: u.Host}
 		}
@@ -479,13 +479,24 @@ func (l *loader) files(c *Config, dev bool) {
 	}
 	if converter != "" {
 		if u, err := url.Parse(converter); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
-			l.fail("%s is %q; want the converter's absolute http(s) URL", ConverterURLVar, converter)
+			l.fail("%s is %s; want the converter's absolute http(s) URL", ConverterURLVar, quotedURL(converter))
 		} else {
 			c.ConverterURL = strings.TrimRight(converter, "/")
 		}
 	}
 	c.UploadDir = l.str(UploadDirVar, "")
 	c.UploadTimeout = l.duration(UploadTimeoutVar, 15*time.Minute)
+}
+
+// quotedURL is raw as an error about it quotes it: its password replaced, since a setting that refuses
+// a URL carrying credentials may still have been given one, and none of it when it does not parse as
+// a URL, since its text may then hold one where no parser finds it.
+func quotedURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "a value that does not parse as a URL"
+	}
+	return strconv.Quote(u.Redacted())
 }
 
 // providers reads the identity providers (item 9): each configured whole or not at all, and none

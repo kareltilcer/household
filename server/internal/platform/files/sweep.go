@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,7 +22,25 @@ const SweepGrace = 24 * time.Hour
 // SweepGrace: what an upload whose mutation failed, or a process that died between the store and
 // the commit, left behind, which nothing bills (FR-ST2 samples the rows) and nothing would ever
 // remove. It returns how many it removed.
+//
+// It lists the old objects first and reads the rows after, so that a row committed while the listing
+// ran keeps its bytes: a retry that found its own bytes stored a day before, never recorded, records
+// them now (Put). A row committed between the read and the delete is a window of moments that only a
+// delete conditional on the row could close, which the store cannot be asked.
 func (s *Service) Sweep(ctx context.Context, household uuid.UUID) (int, error) {
+	cutoff := s.now().Add(-SweepGrace)
+	var old []string
+	if err := s.store.List(ctx, "h/"+household.String()+"/", func(o objectstore.Info) error {
+		if o.LastModified.Before(cutoff) {
+			old = append(old, o.Key)
+		}
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+	if len(old) == 0 {
+		return 0, nil
+	}
 	recorded := map[string]bool{}
 	err := tenant.InTx(s.system(ctx, household), func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, "SELECT module, entity_id, variant FROM files WHERE household_id = $1", household)
@@ -41,16 +60,7 @@ func (s *Service) Sweep(ctx context.Context, household uuid.UUID) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	cutoff := s.now().Add(-SweepGrace)
-	var keys []string
-	if err := s.store.List(ctx, "h/"+household.String()+"/", func(o objectstore.Info) error {
-		if !recorded[o.Key] && o.LastModified.Before(cutoff) {
-			keys = append(keys, o.Key)
-		}
-		return nil
-	}); err != nil {
-		return 0, err
-	}
+	keys := slices.DeleteFunc(old, func(k string) bool { return recorded[k] })
 	return len(keys), s.store.Delete(ctx, keys...)
 }
 

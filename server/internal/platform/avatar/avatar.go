@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,9 +45,13 @@ const (
 	maxPixels = 64 << 20
 )
 
-// Accept takes the images this server decodes: a JPEG, a PNG, a GIF or a WebP. A HEIC photograph is
-// converted by the app before it is sent.
-func Accept(t files.Type) bool { return t.Class == files.ClassRaster && imaging.Reads(t.MIME) }
+// Accept takes what the contract's AvatarUpload takes: a JPEG, a PNG, a GIF or a WebP. A HEIC
+// photograph is converted by the app before it is sent; a BMP or a TIFF, which this server decodes to
+// preview a file, is no picture a phone or a browser sends, and is refused 415 as the contract says.
+func Accept(t files.Type) bool { return slices.Contains(pictureTypes, t.MIME) && imaging.Reads(t.MIME) }
+
+// pictureTypes are the types a picture is made from.
+var pictureTypes = []string{"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 // Service keeps the pictures.
 type Service struct {
@@ -90,10 +95,16 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) (Picture, error
 		return Picture{}, err
 	}
 	defer func() { _ = u.Close() }()
-	m, err := imaging.Decode(u.Reader(), u.Type.MIME, maxPixels)
-	if err != nil {
+	// Decoded once the images decoded meanwhile leave room for it (imaging.Budget): a request that
+	// gave up waiting is no image that did not decode.
+	m, err := imaging.Decode(r.Context(), u.Reader(), u.Type.MIME, maxPixels)
+	switch {
+	case err != nil && r.Context().Err() != nil:
+		return Picture{}, r.Context().Err()
+	case err != nil:
 		return Picture{}, problem.Validation(problem.FieldError{Field: "/" + files.FileField, Code: problem.FieldInvalid})
 	}
+	defer m.Release()
 	enc, err := imaging.Encode(m.Square(Side))
 	if err != nil {
 		return Picture{}, err

@@ -87,21 +87,29 @@ func (s *Service) Run(ctx context.Context) {
 }
 
 // hold marks household as one a worker of this instance is draining, and reports false when one
-// already is.
+// already is. That worker then looks again once it lets the household go (release): what found the
+// household due may be a job committed after the worker's last claim looked, which a worker about to
+// stop would otherwise leave to the next poll, however soon its commit woke the workers.
 func (s *Service) hold(household uuid.UUID) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.busy[household] {
+	if _, held := s.busy[household]; held {
+		s.busy[household] = true
 		return false
 	}
-	s.busy[household] = true
+	s.busy[household] = false
 	return true
 }
 
+// release lets household go, and wakes the workers when it was found due while it was held.
 func (s *Service) release(household uuid.UUID) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	again := s.busy[household]
 	delete(s.busy, household)
+	s.mu.Unlock()
+	if again {
+		s.Nudge()
+	}
 }
 
 // due returns the households with a job due, as the meter role reads them: no one household's

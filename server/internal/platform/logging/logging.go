@@ -78,14 +78,12 @@ var allowed = map[string]bool{
 	"mutation_id": true,
 
 	// A file job (internal/platform/files): its kind, variants or purge, the module id whose
-	// objects it derives or purges, and how many times it was tried; how many objects a sweep
-	// removed; and how many households a usage sample measured (internal/platform/storage). Never
-	// a file's name, its type or its key.
-	"kind":       true,
-	"module":     true,
-	"attempts":   true,
-	"objects":    true,
-	"households": true,
+	// objects it derives or purges, and how many times it was tried; and how many objects a sweep
+	// removed. Never a file's name, its type or its key.
+	"kind":     true,
+	"module":   true,
+	"attempts": true,
+	"objects":  true,
 }
 
 // The correlation keys the logger adds from the request's scope.

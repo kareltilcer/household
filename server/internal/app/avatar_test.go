@@ -14,6 +14,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/image/bmp"
+	"golang.org/x/image/tiff"
 
 	"github.com/kareltilcer/household/server/internal/app/apptest"
 	"github.com/kareltilcer/household/server/internal/platform/avatar"
@@ -155,6 +157,21 @@ func TestAPictureIsRefused(t *testing.T) {
 
 	expect(t, jana.sendPicture(http.MethodPut, "/me/avatar", []byte("%PDF-1.7\n%%EOF\n")), http.StatusUnsupportedMediaType,
 		problem.CodeUnsupportedMediaType)
+	// A BMP and a TIFF are images this server decodes, to preview a file, and no picture's: the
+	// contract takes a JPEG, a PNG, a GIF or a WebP.
+	img := image.NewNRGBA(image.Rect(0, 0, 10, 10))
+	var bitmap, scan bytes.Buffer
+	if err := bmp.Encode(&bitmap, img); err != nil {
+		t.Fatal(err)
+	}
+	if err := tiff.Encode(&scan, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string][]byte{"bmp": bitmap.Bytes(), "tiff": scan.Bytes()} {
+		if rec := jana.sendPicture(http.MethodPut, "/me/avatar", content); rec.Code != http.StatusUnsupportedMediaType {
+			t.Errorf("a %s picture: %d %s", name, rec.Code, rec.Body.String())
+		}
+	}
 
 	body, contentType := form(t, "photo.png", picture(t, 10, 10), nil)
 	req := request{method: http.MethodPut, path: "/me/avatar", body: body, contentType: contentType}

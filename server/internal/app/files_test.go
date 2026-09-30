@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/app/apptest"
@@ -39,6 +40,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/storage"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
@@ -473,6 +475,93 @@ func TestNoLinkIsIssuedBeforeAuthorisation(t *testing.T) {
 	expect(t, rec, http.StatusNotFound, problem.CodeNotFound)
 }
 
+// A module moves an entity to another member, or between shared and private, and every object of it
+// moves with it (FR-ST1): its original and the variants derived from it, which the storage picture
+// and the sample count against the member they name, and its link follows. A variant a worker is
+// recording as the entity moves moves with it too, rather than counting against the member the
+// entity left.
+func TestAnEntitysObjectsMoveWithIt(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	jana := w.member(h, access.Owner, nil)
+	petr := w.member(h, access.Member, level(access.Contribute))
+	item := idgen.New()
+	expect(t, w.upload(h, jana, "a.png", picture(t, 400, 400), map[string]string{"id": item.String()}), http.StatusCreated, "")
+	w.files.Drain(t.Context(), h)
+	scoped := tenant.Assume(t.Context(), testsupport.Open(t).Pool(t, db.RoleApp), h, uuid.Nil, "")
+	attribute := func(a files.Attribution) error {
+		return tenant.InWriteTx(scoped, func(tx pgx.Tx) error { return files.Attribute(scoped, tx, probe.Name, item, a) })
+	}
+
+	if err := attribute(files.Attribution{Owner: petr, Private: true}); err != nil {
+		t.Fatal(err)
+	}
+	rows := w.rows(h, item)
+	for variant, r := range rows {
+		if r.owner == nil || *r.owner != petr || !r.private {
+			t.Errorf("%s: %+v", variant, r)
+		}
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows %+v", rows)
+	}
+	w.link(h, item, petr, "")
+	expect(t, w.do(http.MethodGet, filePath(h, item), jana, ""), http.StatusNotFound, problem.CodeNotFound)
+	if err := attribute(files.Attribution{Private: true}); err == nil {
+		t.Fatal("an entity private to nobody was attributed")
+	}
+
+	// A worker's transaction holds the original, as it does to record what it derived, and has
+	// recorded a variant under the attribution it read; the move waits for it, and takes the variant.
+	moved := make(chan error, 1)
+	if err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(scoped, `
+			SELECT FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3 AND variant = 'original' FOR UPDATE`,
+			h, probe.Name, item); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(scoped, `
+			INSERT INTO files (household_id, module, entity_id, variant, content_type, byte_size, sha256, owner_id, private)
+			VALUES ($1, $2, $3, 'preview', 'image/jpeg', 10, $4, $5, true)`,
+			h, probe.Name, item, make([]byte, 32), petr); err != nil {
+			return err
+		}
+		go func() { moved <- attribute(files.Attribution{Owner: jana}) }()
+		waitForALock(t, w)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-moved; err != nil {
+		t.Fatal(err)
+	}
+	rows = w.rows(h, item)
+	for variant, r := range rows {
+		if r.owner == nil || *r.owner != jana || r.private {
+			t.Errorf("after the move beside a worker, %s: %+v", variant, r)
+		}
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows %+v", rows)
+	}
+}
+
+// waitForALock waits until a transaction of w's database waits for a lock another holds.
+func waitForALock(t *testing.T, w *fileWorld) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		var waiting int
+		if err := w.admin.QueryRow(t.Context(), `
+			SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting > 0 {
+			return
+		}
+	}
+	t.Fatal("no transaction waited for the lock")
+}
+
 // An active type is a download, never rendered (FR-FL2): an SVG is kept as one, and its link saves
 // it.
 func TestAnActiveTypeIsADownload(t *testing.T) {
@@ -542,6 +631,27 @@ func TestTheSweepRemovesWhatNoRowRecords(t *testing.T) {
 	}
 	if keys := w.objects("h/" + h.String() + "/"); !slices.Equal(keys, []string{files.Key(h, probe.Name, kept, files.Original)}) {
 		t.Fatalf("left %v", keys)
+	}
+
+	// Bytes a failed upload left a day ago, sent again for the same entity: the retry finds them
+	// stored, records them, and the sweep keeps them.
+	retried := idgen.New()
+	content := []byte("sent twice")
+	if err := w.files.Store().PutOnce(t.Context(), files.Key(h, probe.Name, retried, files.Original), bytes.NewReader(content),
+		int64(len(content)), objectstore.Object{ContentType: "text/plain; charset=utf-8", SHA256: sha256.Sum256(content)}); err != nil {
+		t.Fatal(err)
+	}
+	clk.advance(files.SweepGrace + time.Hour)
+	expect(t, w.upload(h, jana, "retried.txt", content, map[string]string{"id": retried.String()}), http.StatusCreated, "")
+	if n, err := w.files.Sweep(t.Context(), h); err != nil || n != 0 {
+		t.Fatalf("a retry's bytes swept: %d, %v", n, err)
+	}
+	if r, ok := w.rows(h, retried)[files.Original]; !ok || r.size != int64(len(content)) {
+		t.Fatalf("the retry's row %+v", w.rows(h, retried))
+	}
+	if info, err := w.files.Store().Head(t.Context(), files.Key(h, probe.Name, retried, files.Original)); err != nil ||
+		info.SHA256 != sha256.Sum256(content) {
+		t.Fatalf("the retry's bytes: %+v, %v", info, err)
 	}
 }
 
