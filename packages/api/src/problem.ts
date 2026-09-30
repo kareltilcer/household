@@ -80,6 +80,20 @@ export type EntitlementRefusal = Envelope &
     code: 'entitlement_read_only' | 'entitlement_restricted'
   }
 
+/**
+ * `402 storage_ceiling_reached`: an upload that would take the household past the most it may
+ * store (FR-FL4, D-33). It carries what an entitlement refusal does, the state and the remedy,
+ * `free_storage`, with by how much the upload is over, `over_by_bytes`, and the blocks the ceiling
+ * is at, `blocks_at_ceiling`. Unlike the entitlement gate's, it refuses uploads alone: reading,
+ * downloading and every other write go on.
+ */
+export type StorageCeilingReached = Envelope &
+  Omit<Schemas['EntitlementProblem'], keyof Schemas['Problem']> & {
+    code: 'storage_ceiling_reached'
+    over_by_bytes: number
+    blocks_at_ceiling: number
+  }
+
 /** `422 validation_failed`, naming each failure in `errors`. */
 export type ValidationFailure = Envelope &
   Omit<Schemas['ValidationProblem'], keyof Schemas['Problem']> & {
@@ -93,13 +107,19 @@ export type PlainProblem = Envelope & {
     | VersionConflict['code']
     | IdempotencyInProgress['code']
     | EntitlementRefusal['code']
+    | StorageCeilingReached['code']
     | ValidationFailure['code']
   >
 }
 
 /** A problem document from this contract, discriminated by `code`. */
 export type ApiProblem =
-  VersionConflict | IdempotencyInProgress | EntitlementRefusal | ValidationFailure | PlainProblem
+  | VersionConflict
+  | IdempotencyInProgress
+  | EntitlementRefusal
+  | StorageCeilingReached
+  | ValidationFailure
+  | PlainProblem
 
 /**
  * An error response that is not a problem document this build can read: a code added to the
@@ -135,6 +155,13 @@ export function readProblem(status: number, body: unknown): ApiProblem | Unreada
       // contract's, it would reach a switch over them unhandled.
       return isMember(entitlementStates, body.state) && isMember(remedies, body.remedy)
         ? (problem as EntitlementRefusal)
+        : unreadable
+    case 'storage_ceiling_reached':
+      return isMember(entitlementStates, body.state) &&
+        isMember(remedies, body.remedy) &&
+        isInteger(body.over_by_bytes) &&
+        isInteger(body.blocks_at_ceiling)
+        ? (problem as StorageCeilingReached)
         : unreadable
     case 'validation_failed':
       return Array.isArray(body.errors) ? (problem as ValidationFailure) : unreadable

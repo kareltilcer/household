@@ -204,12 +204,6 @@ func pathUUID(r *http.Request, name string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// pointerEscaper spells a name as a JSON Pointer's reference token (RFC 6901): ~ as ~0 and / as ~1.
-var pointerEscaper = strings.NewReplacer("~", "~0", "/", "~1")
-
-// escapePointer is name as a JSON Pointer's reference token (pointerEscaper).
-func escapePointer(name string) string { return pointerEscaper.Replace(name) }
-
 // email sends t to address in the language of locale, with args, after the response. A failure is
 // logged: nothing the request did depends on it.
 func (s *Service) email(ctx context.Context, address, locale string, t mail.Template, args i18n.Args) {

@@ -113,6 +113,8 @@ func (s *Service) Receive(w http.ResponseWriter, r *http.Request, rules Rules) (
 		}
 		name := part.FormName()
 		_, repeated := u.Fields[name]
+		// The client names the field, so its pointer is escaped: a field named "a/b" is not b in a.
+		field := problem.Pointer(name)
 		switch {
 		case parts >= maxFields:
 			return nil, problem.Validation(problem.FieldError{Field: "", Code: problem.FieldInvalid})
@@ -124,20 +126,20 @@ func (s *Service) Receive(w http.ResponseWriter, r *http.Request, rules Rules) (
 			}
 			u.Filename = cleanName(part.FileName())
 		case name == "" || part.FileName() != "":
-			return nil, malformed("/" + name)
+			return nil, malformed(field)
 		case repeated:
 			// A field sent twice is refused as a second file is: which of the two a module took, the
 			// first or the last, is not the client's to guess, nor a proxy's that added one.
-			return nil, problem.Validation(problem.FieldError{Field: "/" + name, Code: problem.FieldInvalid})
+			return nil, problem.Validation(problem.FieldError{Field: field, Code: problem.FieldInvalid})
 		default:
 			value, err := io.ReadAll(io.LimitReader(part, maxFieldBytes+1))
 			switch {
 			case err != nil:
 				return nil, readFailed(err)
 			case len(value) > maxFieldBytes:
-				return nil, problem.Validation(problem.FieldError{Field: "/" + name, Code: "max_length"})
+				return nil, problem.Validation(problem.FieldError{Field: field, Code: "max_length"})
 			case !utf8.Valid(value) || strings.ContainsRune(string(value), 0):
-				return nil, malformed("/" + name)
+				return nil, malformed(field)
 			}
 			u.Fields[name] = string(value)
 		}

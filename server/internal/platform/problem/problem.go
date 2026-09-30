@@ -18,6 +18,7 @@ import (
 	"maps"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/kareltilcer/household/server/internal/platform/etag"
 )
@@ -84,6 +85,21 @@ func New(status int, code Code) *Problem {
 // Validation returns the 422 validation_failed problem listing errs.
 func Validation(errs ...FieldError) *Problem {
 	return &Problem{Status: http.StatusUnprocessableEntity, Code: CodeValidationFailed, Errors: errs}
+}
+
+// pointerEscaper spells a name as a JSON Pointer's reference token (RFC 6901 §3): ~ as ~0 and / as
+// ~1, so that a member whose name holds either is named as itself and not as one nested in another.
+var pointerEscaper = strings.NewReplacer("~", "~0", "/", "~1")
+
+// Pointer is the RFC 6901 JSON Pointer a FieldError names the member at with: tokens, object keys
+// and array indexes from the outermost in, each escaped, and "" for none, the body as a whole.
+func Pointer(tokens ...string) string {
+	var b strings.Builder
+	for _, token := range tokens {
+		b.WriteByte('/')
+		b.WriteString(pointerEscaper.Replace(token))
+	}
+	return b.String()
 }
 
 // NotFound is the 404 for anything absent or not visible to the caller; the two are

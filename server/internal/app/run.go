@@ -42,8 +42,6 @@ type Served struct {
 	Pool *pgxpool.Pool
 	// Devices are the devices' sign-ins, whose access tokens the API authenticates.
 	Devices *device.Store
-	// Files is the upload pipeline, which a module's routes store and link files through.
-	Files *files.Service
 }
 
 // Around is what a command adds around the API it serves: the conformance suite's own sign-in, for
@@ -107,7 +105,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	}
 	var handler http.Handler = router
 	if around != nil {
-		if handler, err = around(router, Served{Pool: pool, Devices: accounts.Devices, Files: pipeline}); err != nil {
+		if handler, err = around(router, Served{Pool: pool, Devices: accounts.Devices}); err != nil {
 			return err
 		}
 	}

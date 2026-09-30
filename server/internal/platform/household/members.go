@@ -476,7 +476,7 @@ func checkGrants(field string, grants map[string]access.Level, role access.Role,
 		default:
 			continue
 		}
-		errs = append(errs, problem.FieldError{Field: field + "/" + escapePointer(m), Code: problem.FieldInvalid})
+		errs = append(errs, problem.FieldError{Field: field + problem.Pointer(m), Code: problem.FieldInvalid})
 	}
 	if len(errs) > 0 {
 		return problem.Validation(errs...)

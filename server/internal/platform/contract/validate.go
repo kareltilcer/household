@@ -423,7 +423,7 @@ func schemaFieldErrors(err *openapi3.SchemaError) []problem.FieldError {
 			return out
 		}
 	}
-	return []problem.FieldError{{Field: pointer(err.JSONPointer()), Code: keyword(err.SchemaField)}}
+	return []problem.FieldError{{Field: problem.Pointer(err.JSONPointer()...), Code: keyword(err.SchemaField)}}
 }
 
 // schemaErrors returns every SchemaError inside err, through the MultiErrors and the
@@ -452,19 +452,6 @@ func schemaErrors(err error) []*openapi3.SchemaError {
 		return schemaErrors(e.Unwrap())
 	}
 	return nil
-}
-
-// pointerEscape escapes a JSON Pointer reference token (RFC 6901 §3).
-var pointerEscape = strings.NewReplacer("~", "~0", "/", "~1")
-
-// pointer renders a path of object keys and array indexes as an RFC 6901 JSON Pointer.
-func pointer(path []string) string {
-	var b strings.Builder
-	for _, token := range path {
-		b.WriteByte('/')
-		b.WriteString(pointerEscape.Replace(token))
-	}
-	return b.String()
 }
 
 // keyword turns a JSON Schema keyword into the snake_case code a FieldError carries:

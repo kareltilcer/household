@@ -90,4 +90,11 @@ func TestAFieldSentTwiceIsRefused(t *testing.T) {
 	if entries, _ := os.ReadDir(s.dir); len(entries) != 0 {
 		t.Fatalf("the refused upload left %v", entries)
 	}
+
+	// The client names the field, and the refusal names it back as one member, escaped as RFC 6901
+	// escapes a pointer's token, rather than as a member nested in another.
+	_, err = s.Receive(httptest.NewRecorder(), form(t, "a/b~c", "1", "a/b~c", "2"), Rules{})
+	if !errors.As(err, &p) || len(p.Errors) != 1 || p.Errors[0].Field != "/a~1b~0c" {
+		t.Fatalf("a field named with a slash and a tilde, sent twice: %v", err)
+	}
 }

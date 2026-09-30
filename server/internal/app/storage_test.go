@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -215,6 +218,52 @@ func TestTheSampleBreaksDownByModuleAndMember(t *testing.T) {
 	}
 	if got, _ := w.sample(b, day); samples != 1 || got.stored != 50 || got.modules["probe"] != [4]int64{50, 0, 2, 2} {
 		t.Errorf("B sampled again: %d samples, %+v", samples, got)
+	}
+}
+
+// misdeclared is a module whose storage catalog names a table that is not there, and a name that is
+// no table's at all.
+type misdeclared struct{}
+
+func (misdeclared) Name() string                       { return "documents" }
+func (misdeclared) Migrations() fs.FS                  { return nil }
+func (misdeclared) RegisterRoutes(chi.Router)          {}
+func (misdeclared) AuditActions() []module.AuditAction { return nil }
+func (misdeclared) StorageTables() []string            { return []string{"documents_misnamed", "documents."} }
+
+func (misdeclared) StorageLabels(context.Context, pgx.Tx, []uuid.UUID) (map[uuid.UUID]string, error) {
+	return nil, nil
+}
+
+// A table a module declares that the meter role cannot count, one that is not there or a name that is
+// no table's, is logged by its module, left out of the rows the sample counts and returned as a
+// failure, and every household is sampled all the same: counted in the snapshot each household is
+// measured from, it would fail every household's sample, the bytes billing averages among them.
+func TestATableThatCannotBeCountedIsLeftOutOfTheSample(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	jana := w.member(h, access.Owner, nil)
+	expect(t, w.upload(h, jana, "a.txt", make([]byte, 100), map[string]string{"id": idgen.New().String()}), http.StatusCreated, "")
+	registry, err := module.NewRegistry(probe.Module{}, misdeclared{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sampler := w.sampler(time.Date(2026, 9, 30, 1, 30, 0, 0, time.UTC))
+	sampler.Modules = registry
+	logged := &syncBuffer{}
+	sampler.Log = logging.New(logged, slog.LevelDebug)
+
+	n, err := sampler.Sample(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "documents_misnamed") || !strings.Contains(err.Error(), `"documents."`) || n == 0 {
+		t.Fatalf("sampled %d households, %v; want every household sampled and both declarations named", n, err)
+	}
+	if got, ok := w.sample(h, time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)); !ok || got.stored != 100 ||
+		got.modules["probe"] != [4]int64{100, 0, 1, 1} || len(got.modules) != 1 {
+		t.Fatalf("the household's sample %+v, %v", got, ok)
+	}
+	if out := logged.String(); !strings.Contains(out, "storage: a table a module declares cannot be counted") ||
+		!strings.Contains(out, `"module":"documents"`) {
+		t.Fatalf("logged %s", out)
 	}
 }
 

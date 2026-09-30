@@ -27,6 +27,11 @@ const SweepGrace = 24 * time.Hour
 // ran keeps its bytes: a retry that found its own bytes stored a day before, never recorded, records
 // them now (Put). A row committed between the read and the delete is a window of moments that only a
 // delete conditional on the row could close, which the store cannot be asked.
+//
+// It reads the rows as the request role, with no caller, since the meter role may not read which
+// entity a row is of, and the purge does the same: a row hidden from them is bytes they delete, so
+// files takes no restrictive policy, a private file's owner's among them, whatever a module's table
+// takes (a test in internal/app holds it to that). Who may open a file is Link's to decide.
 func (s *Service) Sweep(ctx context.Context, household uuid.UUID) (int, error) {
 	cutoff := s.now().Add(-SweepGrace)
 	var old []string

@@ -108,7 +108,7 @@ func Sniff(r io.ReaderAt, size int64, name string) Type {
 		return sniffZip(r, size)
 	case bytes.HasPrefix(head, cfbMagic):
 		return sniffCFB(r)
-	case bytes.Contains(head[:min(len(head), 1024)], []byte("%PDF-")):
+	case pdfHeader(head):
 		return Type{MIME: "application/pdf", Class: ClassPDF, Ext: "pdf"}
 	case bytes.HasPrefix(head, []byte("{\\rtf")):
 		return Type{MIME: "application/rtf", Class: ClassOffice, Ext: "rtf"}
@@ -228,6 +228,20 @@ func magic(head []byte) (Type, bool) {
 		return Type{MIME: "application/x-tar", Class: ClassArchive, Ext: "tar"}, true
 	}
 	return Type{}, false
+}
+
+// pdfHeader reports whether head is a PDF's: its header first, after any white space or byte-order
+// mark, or, as a reader finds one, within its first kilobyte after bytes some producers put before
+// it, which are never text. Text that names a header there is text, a note about PDFs, and markup
+// that does is an SVG or an HTML page, whose class is active: taken for a PDF, the note would be
+// linked as a document no viewer opens, its variants failing for good, and the page shown in place,
+// where an active type is only ever a download (FR-FL2).
+func pdfHeader(head []byte) bool {
+	header := []byte("%PDF-")
+	if bytes.HasPrefix(bytes.TrimLeft(bytes.TrimPrefix(head, []byte{0xEF, 0xBB, 0xBF}), " \t\r\n\f"), header) {
+		return true
+	}
+	return bytes.Contains(head[:min(len(head), 1024)], header) && decodeText(head) == ""
 }
 
 // detectedTypes are the types net/http's sniffer names that magic does not, as the platform keeps

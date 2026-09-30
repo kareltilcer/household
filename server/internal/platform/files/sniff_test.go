@@ -111,6 +111,15 @@ func TestSniff(t *testing.T) {
 		{"m4a", ftyp("M4A ", "M4A ", "isom"), "", "audio/mp4", ClassMedia},
 		{"pdf", []byte("%PDF-1.7\n%âãÏÓ\n"), "", "application/pdf", ClassPDF},
 		{"pdf after junk", append(bytes.Repeat([]byte{0}, 100), []byte("%PDF-1.4")...), "", "application/pdf", ClassPDF},
+		{"pdf after white space", []byte("\r\n%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"), "", "application/pdf", ClassPDF},
+		// Text that names a PDF's header is no PDF, and markup that does is still active: taken for a
+		// PDF, the note would be linked as a document no viewer opens, and the page shown in place.
+		{"text that names a pdf's header", []byte("Every PDF starts %PDF-1.7 and ends %%EOF.\n"), "notes.txt",
+			"text/plain; charset=utf-8", ClassText},
+		{"svg that names a pdf's header", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><!-- %PDF-1.4 --></svg>`),
+			"", "image/svg+xml", ClassActive},
+		{"html that names a pdf's header", []byte("<html><body><script>alert(1)</script> %PDF-1.4</body></html>"), "", "text/html",
+			ClassActive},
 		{"rtf", []byte(`{\rtf1\ansi Hello}`), "", "application/rtf", ClassOffice},
 		{"docx", zipped(t, "", "[Content_Types].xml", "_rels/.rels", "word/document.xml"), "letter.pdf",
 			"application/vnd.openxmlformats-officedocument.wordprocessingml.document", ClassOffice},

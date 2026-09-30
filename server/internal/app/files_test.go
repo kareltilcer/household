@@ -749,6 +749,50 @@ func TestAJobFailingBesideADeleteWaitsForIt(t *testing.T) {
 	}
 }
 
+// The sweep and the purge read which objects a household's rows record as the request role, with no
+// caller, and delete what they do not find (files.Service.Sweep): a restrictive policy on files that
+// reached that role, a private file's owner's as ADR 0005 writes one for a module's table, would hide
+// rows from them, and the next sweep would delete the bytes of every file it hid. So files takes
+// none, and the question this asks of the schema finds one that is made.
+func TestNoPolicyHidesAFilesRowFromTheSweep(t *testing.T) {
+	admin := testsupport.Open(t).Pool(t, "")
+	const narrowing = `
+		SELECT p.polname FROM pg_policy p
+		WHERE p.polrelid = 'public.files'::regclass AND NOT p.polpermissive
+		  AND (0 = ANY (p.polroles) OR (SELECT r.oid FROM pg_roles r WHERE r.rolname = $1) = ANY (p.polroles))`
+	names := func(q interface {
+		Query(context.Context, string, ...any) (pgx.Rows, error)
+	},
+	) []string {
+		t.Helper()
+		rows, err := q.Query(t.Context(), narrowing, db.RoleApp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	if got := names(admin); len(got) != 0 {
+		t.Fatalf("files has restrictive policies %v, which would hide rows from the sweep and have it delete their bytes", got)
+	}
+
+	tx, err := admin.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(t.Context(),
+		"CREATE POLICY own_files ON files AS RESTRICTIVE FOR SELECT TO "+db.RoleApp+" USING (NOT private OR owner_id = app_user_id())"); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(tx); !slices.Equal(got, []string{"own_files"}) {
+		t.Fatalf("a restrictive policy made on files was found as %v", got)
+	}
+}
+
 // Bytes no row records, which an upload whose mutation failed leaves, are swept once they are a day
 // old, and nothing a row records is.
 func TestTheSweepRemovesWhatNoRowRecords(t *testing.T) {

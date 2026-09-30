@@ -109,6 +109,26 @@ func TestAValidationProblemAlwaysListsItsErrors(t *testing.T) {
 	}
 }
 
+// A field is named by an RFC 6901 pointer, each token escaped, so that a member whose name holds a
+// slash or a tilde is named as itself and not as one nested in another.
+func TestPointer(t *testing.T) {
+	for _, tc := range []struct {
+		tokens []string
+		want   string
+	}{
+		{nil, ""},
+		{[]string{"name"}, "/name"},
+		{[]string{"grants", "finance"}, "/grants/finance"},
+		{[]string{"items", "0", "amount_minor"}, "/items/0/amount_minor"},
+		{[]string{"a/b~c"}, "/a~1b~0c"},
+		{[]string{""}, "/"},
+	} {
+		if got := problem.Pointer(tc.tokens...); got != tc.want {
+			t.Errorf("Pointer(%q) = %q, want %q", tc.tokens, got, tc.want)
+		}
+	}
+}
+
 func TestExtensionsCannotReplaceStandardMembers(t *testing.T) {
 	p := problem.New(http.StatusConflict, problem.CodeVersionConflict)
 	p.Extensions = map[string]any{

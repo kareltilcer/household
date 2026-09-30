@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/module"
@@ -39,7 +41,8 @@ const batch = 500
 
 // Sample takes every household's sample as of now, replacing any taken on the same day, and returns
 // how many households it sampled. A household that cannot be written is logged and the rest are
-// sampled; every failure is returned.
+// sampled, and so is a table a module declares that cannot be counted, which the samples leave out
+// (countable); every failure is returned.
 func (s *Sampler) Sample(ctx context.Context) (int, error) {
 	now := time.Now
 	if s.Now != nil {
@@ -47,14 +50,18 @@ func (s *Sampler) Sample(ctx context.Context) (int, error) {
 	}
 	at := now().UTC()
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC)
-	tables, err := declaredTables(s.Modules)
-	if err != nil {
-		return 0, err
+	tables, failed := declaredTables(s.Modules)
+	if failed != nil {
+		s.Log.LogAttrs(ctx, slog.LevelError, "storage: a module declares a table that is not one", slog.Any("error", failed))
 	}
+	tables, refused, err := s.countable(ctx, tables)
+	if err != nil {
+		return 0, errors.Join(failed, err)
+	}
+	failed = errors.Join(append([]error{failed}, refused...)...)
 	var (
 		after   uuid.UUID
 		sampled int
-		failed  error
 	)
 	for {
 		samples, err := s.measure(ctx, after, tables)
@@ -101,9 +108,13 @@ type countedTable struct {
 }
 
 // declaredTables returns the tables modules declare, whose rows the sample and the live counts
-// count as each declaring module's.
+// count as each declaring module's, and a failure for each declaration that is not a table's name,
+// which it leaves out.
 func declaredTables(modules *module.Registry) ([]countedTable, error) {
-	var out []countedTable
+	var (
+		out []countedTable
+		bad error
+	)
 	for _, m := range modules.All() {
 		src, ok := m.(module.StorageSource)
 		if !ok {
@@ -111,14 +122,52 @@ func declaredTables(modules *module.Registry) ([]countedTable, error) {
 		}
 		for _, t := range src.StorageTables() {
 			parts := strings.Split(t, ".")
-			if len(parts) > 2 || t == "" {
-				return nil, fmt.Errorf("storage: %s declares %q, which is not a table's name", m.Name(), t)
+			if len(parts) > 2 || slices.Contains(parts, "") {
+				bad = errors.Join(bad, fmt.Errorf("storage: %s declares %q, which is not a table's name", m.Name(), t))
+				continue
 			}
 			out = append(out, countedTable{module: m.Name(), name: pgx.Identifier(parts)})
 		}
 	}
-	return out, nil
+	return out, bad
 }
+
+// countable returns the tables of tables the meter role can count, each asked once, in a transaction
+// of its own, before any household is measured, and why it cannot count each of the others. A table
+// a module declares that is not there, or whose household the role may not read, would fail the
+// snapshot each batch of households is measured from, and with it every household's sample, the
+// bytes billing averages among them (FR-ST2): it is logged and left out, its module's rows counted
+// without it, and the households are sampled all the same. A database that fails the question
+// otherwise is err, which fails the sample, as it would fail the measurement.
+func (s *Sampler) countable(ctx context.Context, tables []countedTable) ([]countedTable, []error, error) {
+	var (
+		out     []countedTable
+		refused []error
+	)
+	for _, t := range tables {
+		err := pgx.BeginTxFunc(ctx, s.Meter, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, "SELECT household_id FROM "+t.name.Sanitize()+" LIMIT 0")
+			return err
+		})
+		if err == nil {
+			out = append(out, t)
+			continue
+		}
+		err = fmt.Errorf("storage: count the rows of %s's %s: %w", t.module, t.name.Sanitize(), err)
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || !slices.Contains(undeclarable, pgErr.Code) {
+			return nil, nil, err
+		}
+		s.Log.LogAttrs(ctx, slog.LevelError, "storage: a table a module declares cannot be counted",
+			slog.String("module", t.module), slog.Any("error", err))
+		refused = append(refused, err)
+	}
+	return out, refused, nil
+}
+
+// undeclarable are the SQLSTATEs of a table the meter role cannot count because of what a module
+// declares: invalid_schema_name, undefined_table, undefined_column and insufficient_privilege.
+var undeclarable = []string{"3F000", "42P01", "42703", "42501"}
 
 // measure reads, as the meter role and from one snapshot, what the next batch of households after
 // after keep.
