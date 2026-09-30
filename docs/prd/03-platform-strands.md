@@ -241,7 +241,7 @@ the member who sent the mutation as well as its household, so that a member send
 `mutation_id` is never answered with the other's result, and its row; a `mutation_id` sent again
 carrying another mutation is `rejected`. A result that commits an effect is kept in the effect's
 transaction, so a mutation that took effect is never applied twice however its answer was lost; a
-`deferred` mutation keeps none, since its replay runs it (plan item 13).
+`deferred` mutation keeps none, since its replay runs it (**D-106**, plan item 13).
 
 **FR-SY6 — Batch ordering.** Mutations within a batch apply in order, each in its own
 transaction. A failure does not abort the batch; later mutations that depend on a failed one

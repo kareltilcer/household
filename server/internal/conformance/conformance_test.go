@@ -442,8 +442,9 @@ func TestPushKeysACompletionOnItsChoreAndOccurrence(t *testing.T) {
 // An additive series holds its invariant on arrival (scenario 17): a reading that falls below the
 // one before it, or rises above the one after it, is rejected monotonicity_violation, naming the
 // neighbour, and writes nothing; one between its neighbours is applied. A meter named in upper case
-// is the same series, and a meter that is no id is refused as the database refuses it. An additive
-// row is only created, and a state_set write is never a delete.
+// is the same series, and a meter that is no id, or a time in a zone PostgreSQL does not know, is
+// refused as the database refuses it, never failing the batch. An additive row is only created, and
+// a state_set write is never a delete.
 func TestPushHoldsAnAdditiveSeriesToItsInvariant(t *testing.T) {
 	w := newWorld(t, apptest.Options{})
 	household, member := w.household("contribute")
@@ -461,13 +462,22 @@ func TestPushHoldsAnAdditiveSeriesToItsInvariant(t *testing.T) {
 		mutationOf(conformance.Reading, "update", before, map[string]any{"value": 110}),
 		mutationOf(conformance.ItemChecked, "delete", idgen.New(), nil),
 		readingOf(strings.ToUpper(meter.String()), 4, 250), readingOf("the kitchen meter", 4, 350),
+		// 22023, a time zone PostgreSQL does not know: a code of a class the database refuses a value with.
+		mutationOf(conformance.Reading, "create", idgen.New(), map[string]any{
+			"meter_id": meter.String(), "read_at": "2026-09-04 07:00:00 Nowhere/Else", "value": 350,
+		}),
 	))
 	want := []string{
 		"rejected monotonicity_violation", "rejected monotonicity_violation", push.Applied, "rejected monotonicity_violation",
 		"rejected validation_failed", "rejected validation_failed", "rejected monotonicity_violation", "rejected validation_failed",
+		"rejected validation_failed",
 	}
 	if fmt.Sprint(outcomes(got)) != fmt.Sprint(want) {
 		t.Fatalf("outcomes\n  %v\nwant\n  %v", outcomes(got), want)
+	}
+	// A data exception names no constraint, and its message leaves none dangling.
+	if m := got.Results[7].Message; m == nil || *m != "a field is out of range" {
+		t.Errorf("the message of a meter that is no id: %v", m)
 	}
 	for i, neighbour := range map[int]uuid.UUID{0: before, 1: after, 3: after} {
 		r := got.Results[i]
@@ -544,6 +554,23 @@ func TestPushAnswersEachMutationAsItWasAnsweredFirst(t *testing.T) {
 	}
 	if n := w.count("SELECT count(*) FROM audit_events WHERE household_id = $1", household); n != events+1 {
 		t.Errorf("%d audit events, want %d: only the replay's", n, events+1)
+	}
+
+	// The same mutation encoded otherwise, as a client that kept its queue as objects encodes it
+	// again: a letter escaped is the letter, and a nested object's keys in another order are the same
+	// object. Each is answered as it was.
+	respelled := map[string]any{"mutation_id": batch[0]["mutation_id"], "entity_type": conformance.Item, "entity_id": milk.String(),
+		"op": "create", "fields": map[string]any{"title": json.RawMessage(`"\u004dilk"`)}}
+	if got := w.results(w.push(household, token, key(), respelled)); answered(got.Results[0]) != answered(first.Results[0]) {
+		t.Errorf("the first mutation encoded otherwise: %s, first %s", answered(got.Results[0]), answered(first.Results[0]))
+	}
+	nested := mutationOf(conformance.Item, "create", idgen.New(), map[string]any{"title": "Tea", "extra": json.RawMessage(`{"a": 1, "b": [2, {"c": 3, "d": 4}]}`)})
+	refused := w.results(w.push(household, token, key(), nested))
+	nested["fields"] = map[string]any{"extra": json.RawMessage(`{"b":[2,{"d":4,"c":3}],"a":1}`), "title": "Tea"}
+	reordered := w.results(w.push(household, token, key(), nested))
+	if outcomes(refused)[0] != "rejected validation_failed" || *reordered.Results[0].Message != *refused.Results[0].Message {
+		t.Errorf("a nested object's keys in another order: %q, first %v %q", *reordered.Results[0].Message, outcomes(refused),
+			*refused.Results[0].Message)
 	}
 
 	changed := batch[0]

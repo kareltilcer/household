@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -95,20 +96,28 @@ func Refuse(code problem.Code, format string, args ...any) *Refusal {
 }
 
 // FromDatabase returns the refusal a constraint the database enforces stands for, or nil for an
-// error that is none: a value out of range, missing, or one text cannot hold, a reference to a row
-// that is not the household's, or an id another row holds.
+// error that is none: a reference to a row that is not the household's, an id or a key another row
+// holds, and any other integrity violation or data exception (SQLSTATE classes 23 and 22), a value
+// out of range, missing, of the wrong form or one text cannot hold, or too large for an index to
+// hold (54000). It reads a class rather than a list of codes, since a mutation's values can raise
+// any code of either, and one read as none fails the whole batch, and every retry of it, at that
+// mutation, where a refusal lets the batch go on (FR-SY6).
 func FromDatabase(err error) *Refusal {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
 		return nil
 	}
-	switch pgErr.Code {
-	case "23514", "23502", "22P02", "22003", "22007", "22008", "22001", "22021":
-		return Refuse(problem.CodeValidationFailed, "a field is out of range: %s", pgErr.ConstraintName)
-	case "23503":
+	switch {
+	case pgErr.Code == "23503":
 		return Refuse(problem.CodeNotFound, "it names a row that is not there")
-	case "23505":
+	case pgErr.Code == "23505":
 		return Refuse(problem.CodeValidationFailed, "its id or its key is another row's")
+	case strings.HasPrefix(pgErr.Code, "22"), strings.HasPrefix(pgErr.Code, "23"), pgErr.Code == "54000":
+		// A data exception names no constraint, and a constraint is named only when there is one.
+		if pgErr.ConstraintName == "" {
+			return Refuse(problem.CodeValidationFailed, "a field is out of range")
+		}
+		return Refuse(problem.CodeValidationFailed, "a field is out of range: %s", pgErr.ConstraintName)
 	}
 	return nil
 }

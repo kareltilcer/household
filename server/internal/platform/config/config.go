@@ -555,11 +555,14 @@ func local(url string) bool {
 // by a role of its own that logs in with a password: it holds every household's replicated rows
 // outside row-level security, so neither the household database nor any role of the server's is
 // it. Nor is the administrator's role, which bootstrap would otherwise bring down to the storage
-// role's attributes and password; a connection string that names no role logs in as the operating
-// system's user, which may be the administrator's name. Bootstrap prepares it on the administrator's
-// cluster, so a storage named, rather than defaulted, on another cluster is refused: bootstrap would
-// make its role and its database where PowerSync never looks, and leave the cluster PowerSync
-// connects to unprepared. A storage kept on a cluster of its own is left unnamed, and prepared there.
+// role's attributes and password. The role and the password are the ones the URL itself writes:
+// pgconn fills a role the connection string leaves out from PGUSER or the operating system's user,
+// and a password from PGPASSWORD or ~/.pgpass, and bootstrap would then make, or bring down to the
+// storage role's attributes and a password nobody chose for it, whichever role the environment
+// names, another application's among them. Bootstrap prepares it on the administrator's cluster, so
+// a storage named, rather than defaulted, on another cluster is refused: bootstrap would make its
+// role and its database where PowerSync never looks, and leave the cluster PowerSync connects to
+// unprepared. A storage kept on a cluster of its own is left unnamed, and prepared there.
 func (l *loader) storage(c *Config, named bool) {
 	if c.PowerSyncStorageURL == "" {
 		return
@@ -573,8 +576,9 @@ func (l *loader) storage(c *Config, named bool) {
 	switch {
 	case cfg.Database == "" || cfg.Database == household:
 		l.fail("%s names the database %q; PowerSync's bucket storage is a database of its own", PowerSyncStorageURLVar, cfg.Database)
-	case cfg.User == "" || cfg.Password == "":
-		l.fail("%s carries no role or no password", PowerSyncStorageURLVar)
+	case !written(c.PowerSyncStorageURL, cfg):
+		l.fail("%s carries no role or no password of its own; write both in its postgres:// URL, which otherwise logs in as the environment's",
+			PowerSyncStorageURLVar)
 	case slices.Contains(append(db.Roles, db.RolePowerSync), cfg.User):
 		l.fail("%s logs in as %s; the bucket storage is owned by a role of its own", PowerSyncStorageURLVar, cfg.User)
 	case err == nil && cfg.User == admin.User:
@@ -585,6 +589,18 @@ func (l *loader) storage(c *Config, named bool) {
 			PowerSyncStorageURLVar, net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))),
 			net.JoinHostPort(admin.Host, strconv.Itoa(int(admin.Port))), AdminDatabaseURLVar)
 	}
+}
+
+// written reports whether conn, a postgres:// URL, writes the role and the password cfg, what pgconn
+// read it as, logs in with: a role and a non-empty password in its user information, which no query
+// parameter overrides. A string that leaves either out takes it from the environment.
+func written(conn string, cfg *pgconn.Config) bool {
+	u, err := url.Parse(conn)
+	if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.User == nil {
+		return false
+	}
+	password, ok := u.User.Password()
+	return u.User.Username() != "" && ok && password != "" && cfg.User == u.User.Username() && cfg.Password == password
 }
 
 // sameCluster reports whether a and b reach one PostgreSQL: at one port, of one host, or of the

@@ -42,9 +42,7 @@ const (
 
 // fingerprint is what makes two deliveries one mutation: everything it carries but its id.
 func fingerprint(m In) ([]byte, error) {
-	// A map's keys marshal in order, and a raw value compacted, so the same fields give the same
-	// bytes whatever order and spacing they arrived in.
-	fields, err := json.Marshal(m.Fields)
+	fields, err := canonical(m.Fields)
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +64,25 @@ func fingerprint(m In) ([]byte, error) {
 	}
 	h.Write(fields)
 	return h.Sum(nil), nil
+}
+
+// canonical returns fields as JSON that is the same whatever order, spacing and escapes they arrived
+// in: every value decoded and encoded again, so that an object's keys, a nested object's among them,
+// marshal in order, and a string's escapes, "\u00e9" or "é", as one. A number keeps the literal it
+// was written as, since a float would round a large integer into another. A client that encodes a
+// queued mutation again, from a store that kept it as an object, sends the same mutation.
+func canonical(fields map[string]json.RawMessage) ([]byte, error) {
+	values := make(map[string]any, len(fields))
+	for name, raw := range fields {
+		d := json.NewDecoder(bytes.NewReader(raw))
+		d.UseNumber()
+		var v any
+		if err := d.Decode(&v); err != nil {
+			return nil, fmt.Errorf("push: read field %s: %w", name, err)
+		}
+		values[name] = v
+	}
+	return json.Marshal(values)
 }
 
 // kept is an answer kept for a mutation, and what the mutation it answered carried.

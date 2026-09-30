@@ -311,7 +311,9 @@ type Storage struct {
 // roles and databases, and is safe to run again. A database cannot be created in a transaction,
 // so it runs outside one. It refuses a role of the server's, PowerSync's replication role and the
 // administrator's own, each of which it would bring down to the storage role's attributes and
-// password.
+// password; and, before it changes anything, a database that exists and is not the role's, the
+// cluster's maintenance database or another application's, whose connections through PUBLIC it
+// would revoke and in which PowerSync could keep no buckets.
 func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error {
 	switch {
 	case storage.Role == "" || storage.Database == "":
@@ -324,6 +326,7 @@ func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error
 			return fmt.Errorf("db: prepare storage: %s is a role CreateRoles makes; the bucket storage is owned by a role of its own", storage.Role)
 		}
 	}
+	var owner *string
 	err := pgx.BeginFunc(ctx, admin, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", CatalogLock); err != nil {
 			return fmt.Errorf("lock: %w", err)
@@ -335,20 +338,25 @@ func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error
 		if administrator {
 			return fmt.Errorf("%s is the administrator's role; the bucket storage is owned by a role of its own", storage.Role)
 		}
+		// The database's owner, nil when there is no database of that name yet.
+		if err := tx.QueryRow(ctx, "SELECT (SELECT pg_get_userbyid(datdba)::text FROM pg_database WHERE datname = $1)",
+			storage.Database).Scan(&owner); err != nil {
+			return fmt.Errorf("look up the database %s: %w", storage.Database, err)
+		}
+		if owner != nil && *owner != storage.Role {
+			return fmt.Errorf("the database %s is %s's, not %s's; the bucket storage is a database of its own, owned by its role",
+				storage.Database, *owner, storage.Role)
+		}
 		return setRole(ctx, tx, storage.Role, roleAttributes{login: true}, storage.Password)
 	})
 	if err != nil {
-		return fmt.Errorf("db: prepare storage: %w", err)
-	}
-	var exists bool
-	if err := admin.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_database WHERE datname = $1)", storage.Database).Scan(&exists); err != nil {
 		return fmt.Errorf("db: prepare storage: %w", err)
 	}
 	statements := []string{
 		"REVOKE ALL ON DATABASE %I FROM PUBLIC",
 		"GRANT CONNECT ON DATABASE %I TO CURRENT_USER, %I",
 	}
-	if !exists {
+	if owner == nil {
 		statements = append([]string{"CREATE DATABASE %I OWNER %I"}, statements...)
 	}
 	for _, s := range statements {

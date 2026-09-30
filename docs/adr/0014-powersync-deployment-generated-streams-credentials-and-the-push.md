@@ -106,7 +106,7 @@ client's clock is clamped to 24 hours and flagged, and handed to the writer, whi
 policy resolves by it. `lww_row` and `strict_version` writes, and `merged` and `conflict`, are item
 14's.
 
-**Each mutation that ends is answered once** (FR-SY5): its answer is kept in `sync_mutations` for 7
+**Each mutation that ends is answered once** (FR-SY5, D-106): its answer is kept in `sync_mutations` for 7
 days under its household, **its sender** and its `mutation_id`, with a fingerprint of what it
 carries. An answer that commits an effect is kept in the effect's own transaction, so a mutation that
 took effect is never run twice however its answer was lost, and a delivery racing another is rolled

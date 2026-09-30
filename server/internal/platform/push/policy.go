@@ -42,10 +42,11 @@ const invariantLock int32 = 0x696e7672
 // neighbour it breaks against by its id, its series, its place in the order and its value. Only the
 // server can decide it, since a replica may not hold that neighbour (scenario 17). The creates of
 // one series are serialised by an advisory lock held until tx ends, so that two arriving at once
-// cannot each pass against the rows the other has not written; the lock is keyed on the series'
-// values as their columns hold them, so that two spellings of one value, a meter's id in upper case
-// and in lower, take the same lock. A soft-deleted row is no neighbour, nor is one at the same place
-// in the order, nor one without a value to compare.
+// cannot each pass against the rows the other has not written; the lock is keyed on the household,
+// whose series no other household's creates can break, and on the series' values as their columns
+// hold them, so that two spellings of one value, a meter's id in upper case and in lower, take the
+// same lock. A soft-deleted row is no neighbour, nor is one at the same place in the order, nor one
+// without a value to compare.
 func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) error {
 	inv := e.Invariant
 	if inv == nil || e.Policy != sync.Additive || m.Op != Create {
@@ -66,7 +67,8 @@ func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) e
 	}
 	// A value its column's type cannot read fails the cast here, and is refused as the database
 	// refuses it (FromDatabase).
-	lockArgs, series := []any{invariantLock, e.Table}, []string{"$2::text"}
+	household := tenant.From(ctx).HouseholdID()
+	lockArgs, series := []any{invariantLock, household.String(), e.Table}, []string{"$2::text", "$3::text"}
 	for _, s := range inv.Series {
 		lockArgs = append(lockArgs, values[s])
 		series = append(series, "$"+strconv.Itoa(len(lockArgs))+"::"+types[s]+"::text")
@@ -76,7 +78,7 @@ func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) e
 		return fmt.Errorf("push: lock the series: %w", err)
 	}
 
-	args := []any{tenant.From(ctx).HouseholdID()}
+	args := []any{household}
 	param := func(name string) string {
 		args = append(args, values[name])
 		return "$" + strconv.Itoa(len(args)) + "::" + types[name]

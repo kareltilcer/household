@@ -270,6 +270,7 @@ func TestPowerSyncsStorageIsADatabaseOfItsOwn(t *testing.T) {
 		"PowerSync's replication":  {dsn("household_powersync", "b", "127.0.0.1", "powersync_storage"), "a role of its own"},
 		"the administrator's role": {dsn("postgres", "b", "127.0.0.1", "powersync_storage"), "the administrator"},
 		"no password":              {dsn("powersync_storage", "", "127.0.0.1", "powersync_storage"), "no role or no password"},
+		"a role a parameter swaps": {dsn("powersync_storage", "b", "127.0.0.1", "powersync_storage") + "?user=someone_else", "no role or no password"},
 		"another cluster":          {dsn("powersync_storage", "b", "buckets.internal:5432", "powersync_storage"), "leave it unset"},
 		"another port":             {dsn("powersync_storage", "b", "127.0.0.1:5433", "powersync_storage"), "leave it unset"},
 	} {
@@ -278,6 +279,18 @@ func TestPowerSyncsStorageIsADatabaseOfItsOwn(t *testing.T) {
 			t.Errorf("%s: error %v, want one containing %q", name, err, tc.want)
 		}
 	}
+	// A string that names no role nor password is not given the environment's: pgconn would log in as
+	// PGUSER, or the operating system's user, with PGPASSWORD, and bootstrap would bring that role down
+	// to a storage role's attributes and password.
+	t.Setenv("PGUSER", "someone_else")
+	t.Setenv("PGPASSWORD", "theirs")
+	if _, err := config.Load(config.Bootstrap, env(map[string]string{
+		config.PowerSyncStorageURLVar: "postgres://127.0.0.1:5432/powersync_storage",
+	})); err == nil || !strings.Contains(err.Error(), "no role or no password") {
+		t.Errorf("the environment's role and password: %v", err)
+	}
+	t.Setenv("PGUSER", "")
+	t.Setenv("PGPASSWORD", "")
 	// The administrator's cluster, at the loopback however it is spelled.
 	if _, err := config.Load(config.Bootstrap, env(map[string]string{
 		config.PowerSyncStorageURLVar: dsn("powersync_storage", "b", "localhost:5432", "powersync_storage"),

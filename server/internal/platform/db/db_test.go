@@ -355,6 +355,38 @@ func TestPrepareStorageRefusesARoleThatIsNotItsOwn(t *testing.T) {
 	}
 }
 
+// A database that exists and is not the storage role's, the cluster's maintenance database or
+// another application's, is refused before anything changes: PrepareStorage would otherwise revoke
+// PUBLIC's connections to it, and PowerSync could keep no buckets in it. The database is the
+// cluster's, so it goes once the test is done.
+func TestPrepareStorageRefusesADatabaseItDoesNotOwn(t *testing.T) {
+	admin := connect(t, testsupport.AdminURL())
+	suffix := strconv.FormatInt(int64(os.Getpid()), 10) + "_" + strconv.FormatInt(time.Now().UnixNano()%1_000_000, 10)
+	storage := db.Storage{Role: "household_test_storage_" + suffix, Password: "storage", Database: "household_test_foreign_" + suffix}
+	t.Cleanup(func() {
+		ctx := context.Background()
+		_, _ = admin.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{storage.Database}.Sanitize()+" WITH (FORCE)")
+		_, _ = admin.Exec(ctx, "DROP ROLE IF EXISTS "+pgx.Identifier{storage.Role}.Sanitize())
+	})
+	// The administrator's, as another application's would be, open to PUBLIC as a database is made.
+	if _, err := admin.Exec(t.Context(), "CREATE DATABASE "+pgx.Identifier{storage.Database}.Sanitize()); err != nil {
+		t.Fatal(err)
+	}
+	err := db.PrepareStorage(t.Context(), admin, storage)
+	if err == nil || !strings.Contains(err.Error(), "a database of its own") {
+		t.Fatalf("a database the storage's role does not own: %v", err)
+	}
+	var public, role bool
+	if err := admin.QueryRow(t.Context(), `
+		SELECT has_database_privilege('public', $1, 'CONNECT'), EXISTS (SELECT FROM pg_roles WHERE rolname = $2)`,
+		storage.Database, storage.Role).Scan(&public, &role); err != nil {
+		t.Fatal(err)
+	}
+	if !public || role {
+		t.Errorf("a refused storage changed the cluster: PUBLIC may connect %t, the role made %t", public, role)
+	}
+}
+
 // The request role reads and writes the rows of what the migrate role creates, and
 // creates nothing itself.
 func TestTheRequestRoleUsesTablesAndCreatesNone(t *testing.T) {
