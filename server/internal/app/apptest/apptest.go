@@ -30,6 +30,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/mfa"
 	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
+	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/token"
 )
@@ -96,6 +97,26 @@ type Options struct {
 	MinClients clientversion.Minimums
 	// Hooks are the household surface's (Households).
 	Hooks household.Hooks
+	// PushLimit is the push's limit per device, no limit a test would meet when zero.
+	PushLimit ratelimit.Rate
+}
+
+// PowerSyncURL is where the tests' replicas reach PowerSync, which the sync credentials name.
+const PowerSyncURL = "https://powersync.household.test"
+
+// Sync returns the sync surfaces for a router logging to log, on the clock of o: credentials for
+// PowerSyncURL signed with TokenKeys, and the push's limit.
+func Sync(t testing.TB, log *slog.Logger, o Options) app.Sync {
+	t.Helper()
+	replicas, err := replica.New(replica.Config{URL: PowerSyncURL, Keys: TokenKeys, Logger: log, Now: o.Now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := o.PushLimit
+	if limit == (ratelimit.Rate{}) {
+		limit = ratelimit.Rate{PerMinute: 1e9, Burst: 1e9}
+	}
+	return app.Sync{Replica: replicas, PushLimit: ratelimit.NewBuckets(limit, o.Now)}
 }
 
 // TokenKeys and MFAKeys are the tests' keys: fixed, so that a token one router issued verifies at

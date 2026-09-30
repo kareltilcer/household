@@ -1,0 +1,11 @@
+# Every violation architecture test 10 must report of the testdata's tables: the tables the streams
+# read in the streams' order, then the entities' columns, then the tables the replication role may
+# read that no stream reads, in name order.
+arch_testdata.unpublished_items: a stream reads it, and it is not in the powersync publication; publish it with replicate
+arch_testdata.unpublished_items: a stream reads it, and its REPLICA IDENTITY is not FULL; publish it with replicate
+arch_testdata.unpublished_items: a stream reads it, and household_powersync may not read it; publish it with replicate
+arch_testdata.halfway_items: a stream reads it, and its REPLICA IDENTITY is not FULL; publish it with replicate
+arch_testdata.halfway_items: a stream reads it, and household_powersync may not read it; publish it with replicate
+arch_testdata.gone_items: a stream reads it, and it does not exist
+arch_testdata.published_items: probe.published replicates its column colour, which it does not have
+arch_testdata.exposed_items: household_powersync may read it, and no stream reads it: the role reads past row-level security, and only what it replicates

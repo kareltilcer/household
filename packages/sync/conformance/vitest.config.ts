@@ -11,7 +11,7 @@ export default defineConfig({
     // Each scenario waits on replication, and a fuzz run is many scenarios' worth.
     testTimeout: 10 * 60_000,
     hookTimeout: 5 * 60_000,
-    // One PowerSync, one stand-in: the runs take their turns, so that one run's load does not
+    // One PowerSync, one API: the runs take their turns, so that one run's load does not
     // time another's.
     fileParallelism: false,
   },

@@ -1,35 +1,37 @@
-# PowerSync as the conformance suite runs it (plan item 12, ADR 0001). Every credential here is a
-# loopback development value, repeated as the defaults of server/cmd/conformance-standin.
+# PowerSync as the conformance suite runs it (plan items 12 and 13, ADR 0001, ADR 0014): the
+# deployed configuration (deploy/powersync/powersync.yaml) on the suite's stack. Every credential
+# here is a loopback development value, as the stack's compose file's are.
 
-# It replicates from the household database as the role conformance-standin setup makes, which
-# holds REPLICATION and BYPASSRLS and reads only the tables of the `powersync` publication.
+# It replicates from the household database as household_powersync, which `household-api bootstrap`
+# makes with REPLICATION and BYPASSRLS, and which reads the tables of the `powersync` publication
+# and no other. debug_api stays off: it would open the admin API's execute-sql, which reads the
+# database as that role, past row-level security.
 replication:
   connections:
     - type: postgresql
-      uri: postgresql://conformance_powersync:conformance_powersync@postgres:5432/household
+      uri: postgresql://household_powersync:household_powersync@postgres:5432/household
       sslmode: disable
+      debug_api: false
 
 # Its buckets live in a database of their own, whose credential only the service holds.
 storage:
   type: postgresql
-  uri: postgresql://conformance_powersync_storage:conformance_powersync_storage@postgres:5432/powersync_storage
+  uri: postgresql://household_powersync_storage:household_powersync_storage@postgres:5432/powersync_storage
   sslmode: disable
 
 port: 8080
 
+# The streams, generated from the entity registry with the conformance module's
+# (server/internal/syncconfig), and the negative control's, broken on purpose.
 sync_config:
   path: sync-config.yaml
 
-# The stand-in signs a client's token with this key (HS256), with the member's id as sub. Item 13
-# signs with the API's EdDSA keys instead and serves them as a JWKS.
+# A client's token is the API's (POST …/sync/credentials), signed EdDSA with the keys the API
+# publishes. The API is conformance-api, on the host, where the suite starts it
+# (conformance/suite/setup.ts).
 client_auth:
   audience: [powersync]
-  jwks:
-    keys:
-      - kty: oct
-        alg: HS256
-        kid: conformance
-        k: aG91c2Vob2xkLWNvbmZvcm1hbmNlLXBvd2Vyc3luYy1rZXktbm90LWEtc2VjcmV0
+  jwks_uri: http://host.docker.internal:8091/api/v1/sync/jwks
 
 # PowerSync shares anonymous usage by default; nothing leaves the machine.
 telemetry:

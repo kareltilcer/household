@@ -1,6 +1,6 @@
 // Where the conformance stack is, as conformance/stack/docker-compose.yml and
-// server/cmd/conformance-standin publish it by default. Each can be moved with the variable
-// named beside it, which CI and a developer with other ports set.
+// server/cmd/conformance-api publish it by default. Each can be moved with the variable named
+// beside it, which CI and a developer with other ports set.
 
 function env(name: string, fallback: string): string {
   const value = process.env[name]
@@ -17,14 +17,25 @@ export const adminDatabaseUrl = env(
   `postgres://postgres:postgres@127.0.0.1:${pgPort}/household`,
 )
 
-/** The stand-in API (server/cmd/conformance-standin). */
-export const standInUrl = env('CONFORMANCE_STANDIN_URL', 'http://127.0.0.1:8091')
+/**
+ * The API the suite runs against (server/cmd/conformance-api): the server's own, with the
+ * conformance module registered, which PowerSync's configuration fetches its keys from at
+ * host.docker.internal:8091.
+ */
+export const apiUrl = env('CONFORMANCE_API_URL', 'http://127.0.0.1:8091')
+
+/**
+ * Where the API the suite starts listens: its URL's host by default. PowerSync, in a container,
+ * reaches it at the host's address on its docker network, which a Linux host's loopback is not, so
+ * CI has it listen on every interface.
+ */
+export const apiListen = env('CONFORMANCE_API_ADDR', new URL(apiUrl).host)
 
 /** PowerSync, as a client reaches it: the address its credentials name must match it. */
 export const powerSyncUrl = env('CONFORMANCE_POWERSYNC_URL', `http://127.0.0.1:${powerSyncPort}`)
 
-/** Whether the suite may start the stand-in itself when none answers at standInUrl. */
-export const startStandIn = env('CONFORMANCE_START_STANDIN', 'true') === 'true'
+/** Whether the suite may start the API itself when none answers at apiUrl. */
+export const startApi = env('CONFORMANCE_START_API', 'true') === 'true'
 
 function integer(name: string, fallback: number): number {
   const raw = process.env[name]

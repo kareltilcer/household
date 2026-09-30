@@ -78,6 +78,7 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Modules: registry, MaxBodyBytes: 1 << 10, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
+		Sync:       apptest.Sync(t, log, apptest.Options{}),
 	}
 	for _, o := range options {
 		o(&deps)

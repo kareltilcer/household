@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     // The conformance suite runs on Node: its PowerSync clients (@powersync/node), its database
-    // reads and the stand-in it starts. Item 15's library adds the web and React Native builds.
+    // reads and the API it starts. Item 15's library adds the web and React Native builds.
     "types": ["node"]
   },
   "include": ["src", "conformance"]

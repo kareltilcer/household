@@ -10,13 +10,15 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/text/secure/precis"
 )
 
-// The three roles of PRD 01 §2.3. None is a superuser or may bypass row-level security;
-// there is deliberately no support role and no bypass role (D-3).
+// The three roles of PRD 01 §2.3, which the server runs as. None is a superuser or may bypass
+// row-level security; there is deliberately no support role and no bypass role (D-3). The one
+// exception D-93 makes is no role of the server's: RolePowerSync, PowerSync's own.
 const (
 	// RoleMigrate owns the database and every table in it, and is used only to migrate,
 	// at deploy time. As owner it would bypass row-level security, which is why every
@@ -30,15 +32,36 @@ const (
 	RoleMeter = "household_meter"
 )
 
-// Roles lists the three roles.
+// RolePowerSync is the role PowerSync replicates as (ADR 0001, D-93): REPLICATION, to stream the
+// write-ahead log, and BYPASSRLS, since every tenant table forces row-level security and PowerSync
+// sets no tenant, so that without it the engine could read no table's first snapshot. BYPASSRLS
+// grants no privilege: it reads through a SELECT on each table of the powersync publication, which
+// the migration that publishes the table grants (replicate), and on no other. It is D-3's one
+// exception, the sync service's own credential, which no staff member or tool connects with; the
+// generated streams and the read-path isolation test hold the tenant boundary it passes.
+const RolePowerSync = "household_powersync"
+
+// Roles lists the three roles the server runs as.
 var Roles = []string{RoleMigrate, RoleApp, RoleMeter}
+
+// managed are the roles CreateRoles makes, each with the attributes it holds: the three the server
+// runs as, and PowerSync's.
+var managed = []struct {
+	role  string
+	wants roleAttributes
+}{
+	{RoleMigrate, roleAttributes{login: true}},
+	{RoleApp, roleAttributes{login: true}},
+	{RoleMeter, roleAttributes{login: true}},
+	{RolePowerSync, roleAttributes{login: true, replication: true, bypassRLS: true}},
+}
 
 // Passwords are the login passwords Bootstrap sets, one per role.
 type Passwords struct {
-	Migrate, App, Meter string
+	Migrate, App, Meter, PowerSync string
 }
 
-// Of returns role's password, or "" for a role that is not one of the three.
+// Of returns role's password, or "" for a role that is not one of the four.
 func (p Passwords) Of(role string) string {
 	switch role {
 	case RoleMigrate:
@@ -47,6 +70,8 @@ func (p Passwords) Of(role string) string {
 		return p.App
 	case RoleMeter:
 		return p.Meter
+	case RolePowerSync:
+		return p.PowerSync
 	}
 	return ""
 }
@@ -63,44 +88,75 @@ func (p Passwords) Of(role string) string {
 // the tests the maintenance database HOUSEHOLD_TEST_DATABASE_URL names.
 const CatalogLock int64 = 0x686f7573_65686f6c // "househol"
 
-// attributes are what each role is, whatever it was before: Bootstrap creates a role with
-// them and restores any that drifted on a role that already exists, so a BYPASSRLS granted
-// by hand does not survive a deploy.
-const attributes = "LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
-
-// roleAttributes are an existing role's attributes, as pg_roles reports them.
+// roleAttributes are a role's attributes, as pg_roles reports them: those a role holds, and those
+// CreateRoles gives each role it makes (managed), whatever it held before. Bootstrap creates a
+// role with them and restores any that drifted on a role that already exists, so a BYPASSRLS
+// granted by hand does not survive a deploy.
 type roleAttributes struct {
 	login, super, createDB, createRole, replication, bypassRLS bool
 }
 
-// restore returns the clauses that put the role back to attributes, naming only those that
-// differ. PostgreSQL 16 and later refuse a SUPERUSER, REPLICATION or BYPASSRLS clause, the
-// NO form included, from an administrator without that attribute, which a managed
-// database's administrator is: restating every clause would fail each run after the first.
-// A clause that did drift is still named, and fails loudly when the administrator cannot
+// roleClauses are the clauses that make a role wants from one that is have: every attribute when
+// create, else only those that differ. PostgreSQL 16 and later refuse a SUPERUSER, REPLICATION or
+// BYPASSRLS clause, the NO form included, from an administrator without that attribute, which a
+// managed database's administrator is: restating every clause would fail each run after the
+// first. A clause that did drift is still named, and fails loudly when the administrator cannot
 // undo it.
-func (a roleAttributes) restore() string {
-	var clauses string
+func roleClauses(wants, have roleAttributes, create bool) string {
+	var out string
 	for _, c := range []struct {
-		drifted bool
-		clause  string
+		wants, have bool
+		yes, no     string
 	}{
-		{!a.login, "LOGIN"},
-		{a.super, "NOSUPERUSER"},
-		{a.createDB, "NOCREATEDB"},
-		{a.createRole, "NOCREATEROLE"},
-		{a.replication, "NOREPLICATION"},
-		{a.bypassRLS, "NOBYPASSRLS"},
+		{wants.login, have.login, "LOGIN", "NOLOGIN"},
+		{wants.super, have.super, "SUPERUSER", "NOSUPERUSER"},
+		{wants.createDB, have.createDB, "CREATEDB", "NOCREATEDB"},
+		{wants.createRole, have.createRole, "CREATEROLE", "NOCREATEROLE"},
+		{wants.replication, have.replication, "REPLICATION", "NOREPLICATION"},
+		{wants.bypassRLS, have.bypassRLS, "BYPASSRLS", "NOBYPASSRLS"},
 	} {
-		if c.drifted {
-			clauses += c.clause + " "
+		if !create && c.wants == c.have {
+			continue
+		}
+		if c.wants {
+			out += c.yes + " "
+		} else {
+			out += c.no + " "
 		}
 	}
-	return clauses
+	return out
 }
 
-// Bootstrap creates the three roles, or restores an existing one's attributes and sets its
-// password, and then prepares database: the migrate role owns it, and only the three
+// grantable returns why the administrator tx is connected as cannot give a role REPLICATION and
+// BYPASSRLS, "" when it can: PostgreSQL lets only a superuser, or a role holding each attribute,
+// grant it (ADR 0004), and a managed database's administrator may hold neither.
+func grantable(ctx context.Context, tx pgx.Tx) (string, error) {
+	var admin string
+	var a roleAttributes
+	if err := tx.QueryRow(ctx,
+		"SELECT rolname, rolsuper, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = current_user",
+	).Scan(&admin, &a.super, &a.replication, &a.bypassRLS); err != nil {
+		return "", fmt.Errorf("look up the administrator: %w", err)
+	}
+	if a.super {
+		return "", nil
+	}
+	var missing []string
+	if !a.replication {
+		missing = append(missing, "REPLICATION")
+	}
+	if !a.bypassRLS {
+		missing = append(missing, "BYPASSRLS")
+	}
+	if len(missing) == 0 {
+		return "", nil
+	}
+	return fmt.Sprintf("%s needs REPLICATION and BYPASSRLS, which only an administrator holding them may give, and %s lacks %s",
+		RolePowerSync, admin, strings.Join(missing, " and ")), nil
+}
+
+// Bootstrap creates the three roles and PowerSync's, or restores an existing one's attributes
+// and sets its password, and then prepares database: the migrate role owns it, and only the four
 // roles and the caller may connect to it. It runs as a role that may create roles, a
 // superuser locally and in CI, and is safe to run again.
 //
@@ -121,14 +177,17 @@ func Bootstrap(ctx context.Context, admin *pgx.Conn, database string, passwords 
 	})
 }
 
-// CreateRoles creates the three roles, or restores an existing one's drifted attributes and
-// sets its password. It holds a transaction-scoped advisory lock, since CREATE ROLE races
-// with itself: two sessions that both find a role missing both try to create it.
+// CreateRoles creates the three roles and PowerSync's, or restores an existing one's drifted
+// attributes and sets its password. It holds a transaction-scoped advisory lock, since CREATE
+// ROLE races with itself: two sessions that both find a role missing both try to create it. It
+// refuses, naming what is missing, to make PowerSync's role, or restore its REPLICATION or
+// BYPASSRLS, as an administrator that may not give them.
 func CreateRoles(ctx context.Context, tx pgx.Tx, passwords Passwords) error {
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", CatalogLock); err != nil {
 		return fmt.Errorf("lock: %w", err)
 	}
-	for _, role := range Roles {
+	for _, m := range managed {
+		role := m.role
 		password := passwords.Of(role)
 		if password == "" {
 			return fmt.Errorf("no password for %s", role)
@@ -137,12 +196,22 @@ func CreateRoles(ctx context.Context, tx pgx.Tx, passwords Passwords) error {
 		err := tx.QueryRow(ctx,
 			"SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1", role,
 		).Scan(&a.login, &a.super, &a.createDB, &a.createRole, &a.replication, &a.bypassRLS)
-		verb, clauses := "ALTER", a.restore()
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			verb, clauses = "CREATE", attributes+" "
-		case err != nil:
+		create := errors.Is(err, pgx.ErrNoRows)
+		if err != nil && !create {
 			return fmt.Errorf("look up %s: %w", role, err)
+		}
+		verb, clauses := "ALTER", roleClauses(m.wants, a, create)
+		if create {
+			verb = "CREATE"
+		}
+		if (m.wants.replication && (create || !a.replication)) || (m.wants.bypassRLS && (create || !a.bypassRLS)) {
+			why, err := grantable(ctx, tx)
+			if err != nil {
+				return err
+			}
+			if why != "" {
+				return errors.New(why)
+			}
 		}
 		salt := make([]byte, scramSaltBytes)
 		_, _ = rand.Read(salt) // It never fails: the process ends first.
@@ -196,8 +265,8 @@ func scramSecret(password string, salt []byte, iterations int) (string, error) {
 		"$" + encode(storedKey[:]) + ":" + encode(keyed("Server Key")), nil
 }
 
-// PrepareDatabase hands database to the migrate role and lets only the three roles and
-// the caller connect to it. Bootstrap runs it; the tests run it on each database they
+// PrepareDatabase hands database to the migrate role and lets only the four roles and the
+// caller connect to it. Bootstrap runs it; the tests run it on each database they
 // clone, since CREATE DATABASE does not copy a template's privileges.
 //
 // It takes the lock CreateRoles takes. Granting to a role or giving it a database locks
@@ -210,11 +279,81 @@ func PrepareDatabase(ctx context.Context, tx pgx.Tx, database string) error {
 	for _, stmt := range []string{
 		"REVOKE ALL ON DATABASE %I FROM PUBLIC",
 		// The caller keeps its own way in before it stops owning the database.
-		"GRANT CONNECT ON DATABASE %I TO CURRENT_USER, " + RoleMigrate + ", " + RoleApp + ", " + RoleMeter,
+		"GRANT CONNECT ON DATABASE %I TO CURRENT_USER, " + RoleMigrate + ", " + RoleApp + ", " + RoleMeter + ", " + RolePowerSync,
 		"ALTER DATABASE %I OWNER TO " + RoleMigrate,
 	} {
 		if err := execFormatted(ctx, tx, stmt, database); err != nil {
 			return fmt.Errorf("prepare database %s: %w", database, err)
+		}
+	}
+	return nil
+}
+
+// Storage is PowerSync's bucket storage (ADR 0001): a database of its own, owned by a role that
+// holds nothing in the household's, whose credential only the service holds. The storage keeps
+// every household's replicated rows outside row-level security (PRD 05 §6).
+type Storage struct {
+	Role, Password, Database string
+}
+
+// PrepareStorage makes storage's role, or brings it up to what it should be and sets its
+// password, and its database, owned by it, unless the database exists; only the role and the
+// caller may connect to it. It runs on the cluster admin connects to, as a role that may create
+// roles and databases, and is safe to run again. A database cannot be created in a transaction,
+// so it runs outside one.
+func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error {
+	switch {
+	case storage.Role == "" || storage.Database == "":
+		return errors.New("db: prepare storage: no role or no database")
+	case storage.Password == "":
+		return fmt.Errorf("db: prepare storage: no password for %s", storage.Role)
+	}
+	err := pgx.BeginFunc(ctx, admin, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", CatalogLock); err != nil {
+			return fmt.Errorf("lock: %w", err)
+		}
+		var a roleAttributes
+		err := tx.QueryRow(ctx,
+			"SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1",
+			storage.Role).Scan(&a.login, &a.super, &a.createDB, &a.createRole, &a.replication, &a.bypassRLS)
+		create := errors.Is(err, pgx.ErrNoRows)
+		if err != nil && !create {
+			return fmt.Errorf("look up %s: %w", storage.Role, err)
+		}
+		verb := "ALTER"
+		if create {
+			verb = "CREATE"
+		}
+		salt := make([]byte, scramSaltBytes)
+		_, _ = rand.Read(salt)
+		secret, err := scramSecret(storage.Password, salt, scramIterations)
+		if err != nil {
+			return fmt.Errorf("the SCRAM secret for %s: %w", storage.Role, err)
+		}
+		return execFormatted(ctx, tx, "%s ROLE %I WITH "+roleClauses(roleAttributes{login: true}, a, create)+"PASSWORD %L",
+			verb, storage.Role, secret)
+	})
+	if err != nil {
+		return fmt.Errorf("db: prepare storage: %w", err)
+	}
+	var exists bool
+	if err := admin.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_database WHERE datname = $1)", storage.Database).Scan(&exists); err != nil {
+		return fmt.Errorf("db: prepare storage: %w", err)
+	}
+	statements := []string{
+		"REVOKE ALL ON DATABASE %I FROM PUBLIC",
+		"GRANT CONNECT ON DATABASE %I TO CURRENT_USER, %I",
+	}
+	if !exists {
+		statements = append([]string{"CREATE DATABASE %I OWNER %I"}, statements...)
+	}
+	for _, s := range statements {
+		var stmt string
+		if err := admin.QueryRow(ctx, "SELECT format($1::text, $2::text, $3::text)", s, storage.Database, storage.Role).Scan(&stmt); err != nil {
+			return fmt.Errorf("db: prepare storage: %w", err)
+		}
+		if _, err := admin.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("db: prepare storage: %s: %w", stmt, err)
 		}
 	}
 	return nil

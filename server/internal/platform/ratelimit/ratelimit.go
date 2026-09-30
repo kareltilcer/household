@@ -329,6 +329,9 @@ type Rate struct {
 var (
 	PerUser      = Rate{PerMinute: 600, Burst: 100}
 	PerHousehold = Rate{PerMinute: 3000, Burst: 500}
+	// PushPerDevice is the sync push's: 60 batches a minute from one device, or one web session
+	// (plan item 13), which a device back from days offline spends in a burst before it waits.
+	PushPerDevice = Rate{PerMinute: 60, Burst: 60}
 )
 
 // Buckets are token buckets, one per key, held in memory.

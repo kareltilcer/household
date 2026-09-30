@@ -41,6 +41,9 @@ jobs:
       - name: Start the conformance stack
         run: pnpm --filter @household/sync conformance:up
       - name: Long fuzz run
+        # As the CI workflow's suite: PowerSync reaches the API at the docker bridge's address.
+        env:
+          CONFORMANCE_API_ADDR: 0.0.0.0:8091
         run: pnpm --filter @household/sync conformance:fuzz
       - name: The stack's logs
         if: failure()

@@ -1,0 +1,39 @@
+# PowerSync, the Open Edition service, as docker-compose.yml runs it beside the development
+# PostgreSQL (plan item 13, ADR 0001, ADR 0014). Items 30 and 88 carry it to staging and production,
+# each with credentials of its own. Every credential here is a loopback development value, as
+# .env.example's are.
+
+# It replicates from the household database as household_powersync, which `household-api bootstrap`
+# makes with REPLICATION and BYPASSRLS, and which reads the tables of the `powersync` publication
+# and no other (replicate). debug_api stays off: it would open the admin API's execute-sql, which
+# reads the database as that role, past row-level security.
+replication:
+  connections:
+    - type: postgresql
+      uri: postgresql://household_powersync:household_powersync@postgres:5432/household
+      sslmode: disable
+      debug_api: false
+
+# Its buckets hold every household's replicated rows outside row-level security, in a database of
+# their own whose credential only the service holds (PRD 05 §6).
+storage:
+  type: postgresql
+  uri: postgresql://household_powersync_storage:household_powersync_storage@postgres:5432/powersync_storage
+  sslmode: disable
+
+port: 8080
+
+# The streams, generated from the entity registry (server/internal/syncconfig).
+sync_config:
+  path: sync-config.yaml
+
+# A client's token is the API's (POST …/sync/credentials): signed EdDSA with the keys that sign a
+# device's access tokens, which the API publishes, and addressed to this audience, which the API
+# refuses. The API is on the host, where `pnpm run dev:api` serves it.
+client_auth:
+  audience: [powersync]
+  jwks_uri: http://host.docker.internal:8080/api/v1/sync/jwks
+
+# PowerSync shares anonymous usage by default; nothing leaves the machine.
+telemetry:
+  disable_telemetry_sharing: true

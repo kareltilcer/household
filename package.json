@@ -12,6 +12,7 @@
   },
   "scripts": {
     "up": "docker compose up --detach --wait",
+    "up:sync": "docker compose --profile sync up --detach --wait powersync",
     "down": "docker compose down",
     "db:setup": "cd server && go run ./cmd/household-api bootstrap && go run ./cmd/household-api migrate",
     "dev:api": "cd server && go run ./cmd/household-api serve",

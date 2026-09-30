@@ -24,6 +24,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -95,6 +96,10 @@ const (
 	AppleTeamIDVar        = "HOUSEHOLD_APPLE_TEAM_ID"
 	AppleKeyIDVar         = "HOUSEHOLD_APPLE_KEY_ID"
 	ApplePrivateKeyVar    = "HOUSEHOLD_APPLE_PRIVATE_KEY"
+
+	ReplicationDatabaseURLVar = "HOUSEHOLD_REPLICATION_DATABASE_URL"
+	PowerSyncStorageURLVar    = "HOUSEHOLD_POWERSYNC_STORAGE_URL"
+	PowerSyncURLVar           = "HOUSEHOLD_POWERSYNC_URL"
 )
 
 // NoProxies is TrustedProxiesVar's value for a server its clients reach directly, with no proxy
@@ -110,6 +115,11 @@ const (
 	devMigrateDatabaseURL = "postgres://household_migrate:household_migrate@127.0.0.1:5432/household?sslmode=disable"
 	devMeterDatabaseURL   = "postgres://household_meter:household_meter@127.0.0.1:5432/household?sslmode=disable"
 	devAdminDatabaseURL   = "postgres://postgres:postgres@127.0.0.1:5432/household?sslmode=disable"
+	// PowerSync's (ADR 0001): the role it replicates as, its bucket storage, and where a client
+	// reaches the service docker-compose.yml runs.
+	devReplicationDatabaseURL = "postgres://household_powersync:household_powersync@127.0.0.1:5432/household?sslmode=disable"
+	devPowerSyncStorageURL    = "postgres://household_powersync_storage:household_powersync_storage@127.0.0.1:5432/powersync_storage?sslmode=disable"
+	devPowerSyncURL           = "http://127.0.0.1:8081"
 	// The web client's dev server, and the compose mail catcher, which keeps every message.
 	devWebURL   = "http://localhost:5173"
 	devSMTPURL  = "smtp://127.0.0.1:1025"
@@ -139,7 +149,17 @@ type Config struct {
 	// AdminDatabaseURL connects as a role that may create roles, for Bootstrap only. The
 	// serving process never holds it.
 	AdminDatabaseURL string
-	LogLevel         slog.Level
+	// ReplicationDatabaseURL connects as the role PowerSync replicates as (db.RolePowerSync).
+	// Bootstrap sets the role's password from it; PowerSync's own configuration connects with it,
+	// and the server never does.
+	ReplicationDatabaseURL string
+	// PowerSyncStorageURL is PowerSync's bucket storage (db.Storage): its role and its database,
+	// which Bootstrap prepares on the administrator's cluster, "" when it is kept elsewhere and
+	// Bootstrap leaves it be.
+	PowerSyncStorageURL string
+	// PowerSyncURL is where a client reaches PowerSync, which its sync credentials name.
+	PowerSyncURL string
+	LogLevel     slog.Level
 	// ShutdownTimeout bounds how long Serve waits for in-flight requests to finish.
 	ShutdownTimeout time.Duration
 	// MaxBodyBytes caps a JSON request body.
@@ -243,8 +263,15 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 		c.DatabaseURL = url(DatabaseURLVar, devDatabaseURL, db.RoleApp)
 		c.MigrateDatabaseURL = url(MigrateDatabaseURLVar, devMigrateDatabaseURL, db.RoleMigrate)
 		c.MeterDatabaseURL = url(MeterDatabaseURLVar, devMeterDatabaseURL, db.RoleMeter)
+		c.ReplicationDatabaseURL = url(ReplicationDatabaseURLVar, devReplicationDatabaseURL, db.RolePowerSync)
 		c.AdminDatabaseURL = url(AdminDatabaseURLVar, devAdminDatabaseURL, "")
-		l.sameDatabase(c.DatabaseURL, c.MigrateDatabaseURL, c.MeterDatabaseURL)
+		l.sameDatabase(c.DatabaseURL, c.MigrateDatabaseURL, c.MeterDatabaseURL, c.ReplicationDatabaseURL)
+		// The bucket storage may be kept on a cluster of its own, which Bootstrap does not prepare:
+		// outside development it is prepared here only when it is named.
+		if value := l.str(PowerSyncStorageURLVar, ""); value != "" || dev {
+			c.PowerSyncStorageURL = url(PowerSyncStorageURLVar, devPowerSyncStorageURL, "")
+			l.storage(c)
+		}
 		l.localDefaults(defaulted, c.AdminDatabaseURL)
 	default:
 		l.fail("unknown command %q", command)
@@ -320,6 +347,21 @@ func (l *loader) serving(c *Config, dev bool) {
 	}
 
 	c.BreachCorpus = required(BreachCorpusVar, "")
+
+	// Where a client reaches PowerSync, which its sync credentials name: https outside development,
+	// since the token the credentials carry would otherwise travel where anyone on the way reads it.
+	if ps := required(PowerSyncURLVar, devPowerSyncURL); ps != "" {
+		u, err := url.Parse(ps)
+		switch {
+		case err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
+			u.RawQuery != "" || u.Fragment != "":
+			l.fail("%s is %q; want PowerSync's absolute http(s) URL", PowerSyncURLVar, ps)
+		case !dev && u.Scheme != "https":
+			l.fail("%s is %q; outside development PowerSync is reached over https", PowerSyncURLVar, ps)
+		default:
+			c.PowerSyncURL = strings.TrimRight(ps, "/")
+		}
+	}
 
 	// The keys are secrets: an error names the variable, never its value, and outside development
 	// no published key is taken for one left unset.
@@ -507,6 +549,29 @@ func local(url string) bool {
 		}
 	}
 	return true
+}
+
+// storage checks PowerSync's bucket storage is a database of its own, beside the household's, owned
+// by a role of its own that logs in with a password: it holds every household's replicated rows
+// outside row-level security, so neither the household database nor any role of the server's is
+// it.
+func (l *loader) storage(c *Config) {
+	if c.PowerSyncStorageURL == "" {
+		return
+	}
+	cfg, err := pgconn.ParseConfig(c.PowerSyncStorageURL)
+	if err != nil {
+		return // url has reported it.
+	}
+	household, _ := Database(c.DatabaseURL)
+	switch {
+	case cfg.Database == "" || cfg.Database == household:
+		l.fail("%s names the database %q; PowerSync's bucket storage is a database of its own", PowerSyncStorageURLVar, cfg.Database)
+	case cfg.User == "" || cfg.Password == "":
+		l.fail("%s carries no role or no password", PowerSyncStorageURLVar)
+	case slices.Contains(append(db.Roles, db.RolePowerSync), cfg.User):
+		l.fail("%s logs in as %s; the bucket storage is owned by a role of its own", PowerSyncStorageURLVar, cfg.User)
+	}
 }
 
 // sameDatabase checks the role connection strings Bootstrap reads all name one database,

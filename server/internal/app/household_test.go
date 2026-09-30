@@ -849,6 +849,18 @@ func TestChangingAMembersAccess(t *testing.T) {
 	if m.Grants["tasks"] != "none" || m.Grants["garden"] != "manage" || m.Version != 2 || rec.Header().Get("ETag") != `"2"` {
 		t.Fatalf("after the change: %+v, ETag %s", m, rec.Header().Get("ETag"))
 	}
+	// The membership's row carries the grants the member list shows, which its stream replicates to
+	// every member (PRD modules/17 Sync), at the version the change moved it to.
+	rowGrants := func(user uuid.UUID) map[string]string {
+		t.Helper()
+		var grants map[string]string
+		if err := s.admin.QueryRow(t.Context(), "SELECT grants FROM memberships WHERE household_id = $1 AND user_id = $2", h.ID, user).
+			Scan(&grants); err != nil {
+			t.Fatal(err)
+		}
+		return grants
+	}
+	equal(t, "Petr's row", rowGrants(petrID), m.Grants)
 	if got := petr.levels(h.ID); got["tasks"] != "none" || got["garden"] != "manage" {
 		t.Errorf("Petr's next request: %v", got)
 	}
@@ -899,6 +911,7 @@ func TestChangingAMembersAccess(t *testing.T) {
 	expect(t, rec, http.StatusOK, "")
 	decode(t, rec, &m)
 	equal(t, "Petr made an owner", m.Grants, all("manage"))
+	equal(t, "Petr's row, an owner", rowGrants(petrID), all("manage"))
 	errs := fieldErrorsOf(t, jana.post(householdPath(h.ID, "/ownership/transfer"), jsonBody(t, map[string]any{"user_id": adam})))
 	if len(errs) != 1 || errs[0].Field != "/user_id" {
 		t.Errorf("a child made an owner: %v", errs)

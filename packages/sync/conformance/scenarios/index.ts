@@ -2,8 +2,8 @@
 //
 // A scenario runs once the item named by its enabledBy has built the engine it tests, and that item
 // switches it on by adding its key to `enabled` below: before then its expectations are the
-// specification the item is built to, and it is reported as skipped (plan item 12). Items 13, 14
-// and 18 each move the suite from the stand-ins onto what they build (harness/target.ts).
+// specification the item is built to, and it is reported as skipped (plan item 12). Item 13 moved
+// the suite onto the engine (harness/target.ts), and items 14 and 18 add to it.
 
 import { access } from './access.ts'
 import { admission } from './admission.ts'
@@ -22,5 +22,19 @@ export const scenarios: readonly Scenario[] = [...merge, ...delivery, ...access,
   (a, b) => rank(a.key) - rank(b.key),
 )
 
-/** The scenarios switched on: none until item 13's engine exists. */
-export const enabled: ReadonlySet<string> = new Set<string>([])
+/**
+ * The scenarios switched on: item 13's, whose engine writes the merge policies they test (lww_field,
+ * state_set and additive) and replicates through the generated streams.
+ */
+export const enabled: ReadonlySet<string> = new Set<string>([
+  '1',
+  '3',
+  '4',
+  '5',
+  '8',
+  '9',
+  '10',
+  '13',
+  '15',
+  '17',
+])

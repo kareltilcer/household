@@ -1,12 +1,13 @@
-// What the suite runs against. Until items 13 and 14 land it is the stand-ins
-// (server/cmd/conformance-standin and conformance/stack/powersync): a sign-in that names the
-// caller, PowerSync credentials signed with a test key, hand-written streams over the items and
-// their checks, and a push that writes those two through the real spine. Item 13 adds the engine
-// as a target of its own and moves the scenarios onto it; a scenario asks the target for what it
-// needs, so the same scenario runs against either.
+// What the suite runs against: the engine (plan item 13, ADR 0014). The server's own API with the
+// conformance module registered (server/cmd/conformance-api), its push writing every entity whose
+// merge policy the item built, its credentials handing out PowerSync tokens signed with the API's
+// keys, and PowerSync on the streams generated from the entity registry. Item 12's stand-ins, a
+// hand-written configuration and a push of their own, were replaced by it; a scenario asks the
+// target for what it needs, so a later item's engine is a target the same scenarios run against.
 
-import { powerSyncUrl, standInUrl } from './env.ts'
-import type { EntityType, TableName } from './schema.ts'
+import { readFileSync } from 'node:fs'
+import { apiUrl, powerSyncUrl } from './env.ts'
+import { tables, type EntityType, type TableName } from './schema.ts'
 
 export interface PowerSyncCredentials {
   readonly endpoint: string
@@ -21,7 +22,7 @@ export interface Target {
     via: typeof fetch,
     options?: { readonly ttlSeconds?: number },
   ): Promise<string>
-  /** PowerSync's URL and a token for user in household (item 13's credentials operation). */
+  /** PowerSync's URL and a token for user in household (the credentials operation). */
   powerSyncCredentials(
     credential: string,
     household: string,
@@ -77,48 +78,68 @@ function field(body: unknown, name: string, what: string): string {
   return value
 }
 
-/** The stand-ins (plan item 12). */
-export const standIn: Target = {
-  name: 'stand-in',
+/** A stream of the generated configuration, with the entity and the table its rows come from. */
+interface Generated {
+  readonly stream: string
+  readonly entity: string
+  readonly table: string
+}
+
+/**
+ * The streams the suite's clients subscribe to, as server/internal/syncconfig generated them beside
+ * the configuration PowerSync runs (stack/powersync/streams.json): every stream but the negative
+ * control's.
+ */
+const generated = JSON.parse(
+  readFileSync(new URL('../stack/powersync/streams.json', import.meta.url), 'utf8'),
+) as readonly Generated[]
+
+function isTable(name: string): name is TableName {
+  return tables.some((t) => t.table === name)
+}
+
+/** The engine (plan item 13). */
+export const engine: Target = {
+  name: 'engine',
   async signIn(user, via, options) {
     const body = await json(
-      await via(`${standInUrl}/standin/sign-in`, {
+      await via(`${apiUrl}/conformance/sign-in`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ user_id: user, ttl_seconds: options?.ttlSeconds ?? 0 }),
       }),
-      'the stand-in sign-in',
+      'the conformance sign-in',
     )
-    return field(body, 'token', 'the stand-in sign-in')
+    return field(body, 'token', 'the conformance sign-in')
   },
   async powerSyncCredentials(credential, household, via) {
     const body = await json(
-      await via(`${standInUrl}/standin/households/${household}/sync/credentials`, {
+      await via(`${apiUrl}/api/v1/households/${household}/sync/credentials`, {
         method: 'POST',
         headers: { authorization: `Bearer ${credential}` },
       }),
-      'the stand-in credentials',
+      'the sync credentials',
     )
-    const endpoint = field(body, 'endpoint', 'the stand-in credentials')
+    const endpoint = field(body, 'endpoint', 'the sync credentials')
     if (endpoint !== powerSyncUrl) {
       throw new Error(
-        `the stand-in hands out ${endpoint}, but the suite reaches PowerSync at ${powerSyncUrl}`,
+        `the API hands out ${endpoint}, but the suite reaches PowerSync at ${powerSyncUrl}`,
       )
     }
-    return { endpoint, token: field(body, 'token', 'the stand-in credentials') }
+    return { endpoint, token: field(body, 'token', 'the sync credentials') }
   },
-  pushUrl: (household) => `${standInUrl}/api/v1/households/${household}/sync/mutations`,
-  streams: [
-    'conformance_items_owner',
-    'conformance_items_granted',
-    'conformance_item_checks_owner',
-    'conformance_item_checks_granted',
-  ],
-  replicates: new Set<TableName>(['conformance_items', 'conformance_item_checks']),
-  writes: new Set<EntityType>(['conformance.item', 'conformance.item_checked']),
-  tombstones: 'dropped',
-  replay: 'same-key',
+  pushUrl: (household) => `${apiUrl}/api/v1/households/${household}/sync/mutations`,
+  streams: generated.map((g) => g.stream),
+  replicates: new Set(generated.map((g) => g.table).filter(isTable)),
+  writes: new Set<EntityType>([
+    'conformance.item',
+    'conformance.item_checked',
+    'conformance.reading',
+    'conformance.completion',
+  ]),
+  tombstones: 'kept',
+  replay: 'fresh-key',
 }
 
-/** The stand-in's deliberately broken stream, which only the negative control subscribes to. */
+/** The configuration's deliberately broken stream, which only the negative control subscribes to. */
 export const leakyStream = 'negative_control_leaky_items'

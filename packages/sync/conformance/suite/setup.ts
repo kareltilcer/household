@@ -1,5 +1,6 @@
-// The suite's global setup: the stack must be up (`conformance:up`), and the stand-in API is
-// built and started here unless one already answers, then stopped when the suite ends.
+// The suite's global setup: the stack must be up (`conformance:up`), and the API the suite runs
+// against (server/cmd/conformance-api) is built and started here unless one already answers, then
+// stopped when the suite ends.
 
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -7,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import pg from 'pg'
-import { adminDatabaseUrl, powerSyncUrl, standInUrl, startStandIn } from '../harness/env.ts'
+import { adminDatabaseUrl, apiListen, apiUrl, powerSyncUrl, startApi } from '../harness/env.ts'
 import { until } from '../harness/wait.ts'
 import { answers, serverDir, serverEnv } from '../stack/stack.ts'
 
@@ -28,37 +29,31 @@ export default async function setup(): Promise<() => Promise<void>> {
   if (!(await answers(`${powerSyncUrl}/probes/readiness`)))
     throw new Error(`PowerSync does not answer at ${powerSyncUrl}: ${upHint}`)
 
-  const health = `${standInUrl}/standin/healthz`
+  const health = `${apiUrl}/conformance/healthz`
   if (await answers(health)) return () => Promise.resolve()
-  if (!startStandIn)
-    throw new Error(`no stand-in answers at ${standInUrl}, and CONFORMANCE_START_STANDIN is false`)
+  if (!startApi) throw new Error(`no API answers at ${apiUrl}, and CONFORMANCE_START_API is false`)
 
   // Built, then run: a `go run` would leave its child running when it is stopped.
-  const dir = mkdtempSync(join(tmpdir(), 'household-standin-'))
-  const binary = join(
-    dir,
-    process.platform === 'win32' ? 'conformance-standin.exe' : 'conformance-standin',
-  )
-  execFileSync('go', ['build', '-o', binary, './cmd/conformance-standin'], {
+  const dir = mkdtempSync(join(tmpdir(), 'household-conformance-api-'))
+  const binary = join(dir, process.platform === 'win32' ? 'conformance-api.exe' : 'conformance-api')
+  execFileSync('go', ['build', '-o', binary, './cmd/conformance-api'], {
     cwd: serverDir,
     stdio: 'inherit',
   })
-  const listen = new URL(standInUrl)
   const child: ChildProcess = spawn(binary, ['serve'], {
     env: {
       ...process.env,
       ...serverEnv,
-      CONFORMANCE_STANDIN_ADDR: listen.host,
-      CONFORMANCE_POWERSYNC_URL: powerSyncUrl,
+      HOUSEHOLD_HTTP_ADDR: apiListen,
+      HOUSEHOLD_POWERSYNC_URL: powerSyncUrl,
     },
     stdio: ['ignore', 'pipe', 'inherit'],
   })
-  // The stand-in logs to stdout, a line for every request and the error behind every 500 its push
-  // answers: the requests answered well are left out, and what went wrong is passed on.
+  // The API logs to stdout, a line for every request and the error behind every 500 it answers:
+  // the requests answered well are left out, and what went wrong is passed on.
   if (child.stdout !== null) {
     createInterface({ input: child.stdout }).on('line', (line) => {
-      if (/"level":"(?:WARN|ERROR)"/.test(line))
-        process.stderr.write(`conformance-standin: ${line}\n`)
+      if (/"level":"(?:WARN|ERROR)"/.test(line)) process.stderr.write(`conformance-api: ${line}\n`)
     })
   }
   const exited = new Promise<void>((resolve) => {
@@ -68,7 +63,7 @@ export default async function setup(): Promise<() => Promise<void>> {
   })
   if ((await until(() => answers(health), 30_000)) === null) {
     child.kill()
-    throw new Error(`the stand-in did not answer at ${health}`)
+    throw new Error(`the API did not answer at ${health}`)
   }
   return async () => {
     child.kill()

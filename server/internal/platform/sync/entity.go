@@ -1,8 +1,9 @@
 // Package sync is the platform's half of offline-first replication (PRD 03 §2): the registry
-// of the entities that replicate, each with the merge policy and the access it declares, and
-// the writer of the change feed, sync_changes, which the mutation spine calls in every
-// mutation's transaction. The engine that pulls from the feed and applies pushed mutations is
-// items 13 and 14.
+// of the entities that replicate, each with the merge policy and the access it declares; the
+// streams PowerSync replicates them through, generated from those declarations (Streams, D-93,
+// ADR 0014); and the writer of the change feed, sync_changes, which the mutation spine calls in
+// every mutation's transaction and whose fate plan item 14 decides. The push that applies a
+// client's mutations is internal/platform/push.
 package sync
 
 import (
@@ -76,13 +77,15 @@ type Invariant struct {
 	Field string
 }
 
-// Access is the access axes an entity's rows are held to in the feed (PRD 03 §2.3, D-22), as
-// a set. Grant is every entity's; the others are what a row may carry beyond it.
+// Access is the access axes an entity's rows are held to in the feed and in the streams generated
+// from it (PRD 03 §2.3, D-22), as a set. Grant or Members is every entity's; the others are what a
+// row may carry beyond the grant.
 type Access uint8
 
 const (
-	// Grant holds a row to the members whose grant on its module is above none. Every entity
-	// declares it: a zero Access is an entity that declared nothing.
+	// Grant holds a row to the members whose grant on its module is above none, while the household
+	// enables it. Every module's entity declares it: a zero Access is an entity that declared
+	// nothing.
 	Grant Access = 1 << iota
 	// Owner lets a row be private to one member, and the entity's redacted projection, where it
 	// declares one, reach everyone else (D-88).
@@ -90,8 +93,13 @@ const (
 	// Audience lets a row belong to an enumerated member list, a chat conversation or a
 	// member_shared calendar, and reach only its members from their floor on (D-90).
 	Audience
+	// Members holds a row to every member of its household, whatever their grant on its module: what
+	// every member's app works from, the household's settings, its memberships and which modules it
+	// enables (PRD modules/17 Sync). It stands in place of Grant, never beside it, and a row it
+	// holds is neither private nor an audience's.
+	Members
 
-	allAccess = Grant | Owner | Audience
+	allAccess = Grant | Owner | Audience | Members
 )
 
 // Entity is an entity that replicates offline, as its module declares it (module.SyncSource).
@@ -108,6 +116,10 @@ type Entity struct {
 	Invariant *Invariant
 	// Access is the axes its rows are held to.
 	Access Access
+	// Columns are the columns of Table its stream sends a replica, id first, or nil for every
+	// column: a row that holds what no member's replica may, an invitation's token or a household's
+	// code, names the rest (Streams). A column the table does not have fails architecture test 10.
+	Columns []string
 	// Redact is its redacted projection (D-88), for an entity whose private rows others may see
 	// in part, as a busy block stands in for a private event: it returns the representation
 	// that may reach everyone but the owner, from the full one. Nil for an entity that has none;
@@ -131,15 +143,17 @@ func (e Entity) Module() string {
 var (
 	entityName = regexp.MustCompile(`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`)
 	identifier = regexp.MustCompile(`^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?$`)
+	column     = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 )
 
 // Violations returns what is wrong with the entities module declares, one line each
 // (architecture test 5): a name that is not module-qualified by module, or used twice; no
 // table; no merge policy, or one that is not among the five; a state_set without its key and
 // resolution, or a key and resolution on another policy; an invariant on an entity that is not
-// additive, or one that names no rule or no fields; no access, or one that does not include the
-// grant; a redacted projection on an entity that is never private; and a create operation named
-// twice.
+// additive, or one that names no rule or no fields; no access, one that includes neither the grant
+// nor every member, or every member beside another axis; a redacted projection on an entity that is
+// never private; columns that do not start with id, or name one that is not an identifier, or one
+// twice; and a create operation named twice.
 func Violations(module string, entities []Entity) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -198,13 +212,31 @@ func Violations(module string, entities []Entity) []string {
 		switch {
 		case e.Access == 0:
 			bad("no access; every entity declares the axes its rows are held to")
-		case e.Access&Grant == 0:
-			bad("access without the module grant, which holds every entity")
 		case e.Access&^allAccess != 0:
-			bad("access holds an axis that is not grant, owner or audience")
+			bad("access holds an axis that is not grant, owner, audience or members")
+		case e.Access&Members != 0 && e.Access != Members:
+			bad("access to every member of the household beside another axis; members stands alone")
+		case e.Access&(Grant|Members) == 0:
+			bad("access without the module grant, which holds every entity not every member's")
 		}
 		if e.Redact != nil && e.Access&Owner == 0 {
 			bad("a redacted projection on an entity whose rows are never private")
+		}
+		if e.Columns != nil {
+			switch {
+			case len(e.Columns) == 0 || e.Columns[0] != "id":
+				bad("columns that do not start with id, which a replica keys every row on")
+			case slices.ContainsFunc(e.Columns, func(c string) bool { return !column.MatchString(c) }):
+				bad("a column that is not a lowercase identifier")
+			default:
+				seen := map[string]bool{}
+				for _, c := range e.Columns {
+					if seen[c] {
+						bad("column %s named twice", c)
+					}
+					seen[c] = true
+				}
+			}
 		}
 		creates := map[string]bool{}
 		for _, op := range e.Creates {

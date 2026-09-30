@@ -161,6 +161,13 @@ the owning module keeps on each row of the audience, derived from these membersh
 The settings, the memberships and the enablement reach every member of the household, whatever
 their grant on this module, since every member's app works from them; the invitations reach the
 members granted `view` on it ([ADR 0011](../../adr/0011-households-as-the-platforms-own-module.md)).
+Each stream sends only the columns its sync row carries (plan item 13,
+[ADR 0014](../../adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)): the
+settings without the household code, which only owners read, the memberships without a child's birth
+year, and the invitations without their tokens. A membership's row carries its member's grants as
+the member list shows them, and a child profile's whether its PIN has locked it, both written by the
+mutation that changes them, which moves the membership's version. A member's display name is the
+account's, no household's, and is not replicated yet.
 
 **D-80: permissions are never client-authoritative, offline or otherwise.** The client caches its
 resolved grants so the offline UI can hide what it should hide, and the server re-resolves them on

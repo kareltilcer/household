@@ -1,5 +1,7 @@
 # Local development services (PL-8). `pnpm run up` starts them and waits until each is
-# healthy; `pnpm run down` stops them and keeps their volumes.
+# healthy; `pnpm run down` stops them and keeps their volumes. PowerSync (ADR 0001) is in the `sync`
+# profile: it replicates only once `pnpm run db:setup` has made its role, its publication and its
+# storage, and `pnpm run up:sync` starts it then.
 #
 # Every credential here is a public, well-known development default, so every port is
 # published on 127.0.0.1 only. Override the ports in a `.env` beside this file
@@ -11,6 +13,19 @@ services:
     # The CI service container in .github/workflows/ci.yml runs this same image, and
     # tooling/src/workspace.test.ts fails when the two disagree.
     image: postgres:17.11-trixie
+    # Logical replication, which PowerSync streams from (ADR 0001). A replication slot keeps the
+    # write-ahead log PowerSync has not read, up to max_slot_wal_keep_size, past which the slot is
+    # lost and PowerSync replicates again from the start (docs/runbooks/replication-slot.md).
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_slot_wal_keep_size=2GB
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -56,6 +71,27 @@ services:
     ports:
       - 127.0.0.1:${HOUSEHOLD_SMTP_PORT:-1025}:1025
       - 127.0.0.1:${HOUSEHOLD_MAIL_UI_PORT:-8025}:8025
+
+  # The sync engine's read half (ADR 0001, D-93): the Open Edition service, pinned, which the
+  # conformance suite's stack runs too (tooling/src/workspace.test.ts holds the two to one image).
+  # It fetches the keys it verifies a client's token with from the API on the host
+  # (deploy/powersync/powersync.yaml).
+  powersync:
+    image: journeyapps/powersync-service:1.26.1
+    profiles: [sync]
+    command: [start, -r, unified]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+    volumes:
+      - ./deploy/powersync:/config:ro
+    ports:
+      - 127.0.0.1:${HOUSEHOLD_POWERSYNC_PORT:-8081}:8080
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres:

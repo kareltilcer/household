@@ -176,6 +176,36 @@ func (k *Keys) Verify(raw string, now time.Time) (Claims, error) {
 	return Claims{Subject: user, Session: session, IssuedAt: c.IssuedAt.Time, ExpiresAt: c.ExpiresAt.Time}, nil
 }
 
+// ReplicaType is the JOSE header's typ of a token a client's replica connects to PowerSync with,
+// which Verify refuses as it refuses any typ but an access token's.
+const ReplicaType = "JWT"
+
+// Replica returns a token for user that PowerSync verifies with the keys' JWKS (plan item 13, ADR
+// 0014), signed by the signing key and named by its thumbprint, and when it expires: it carries sub,
+// iat and exp, valid for ttl from now, and aud, audience, which PowerSync checks against the one it
+// is configured with and which makes Verify refuse it. It names no household: the household is the
+// stream subscription's parameter (D-4), and the streams hold the caller to the ones they are in.
+func (k *Keys) Replica(user uuid.UUID, audience string, now time.Time, ttl time.Duration) (string, time.Time, error) {
+	if audience == "" || ttl <= 0 {
+		return "", time.Time{}, errors.New("token: a replica's token names its audience and lasts a while")
+	}
+	now = now.Truncate(time.Second)
+	expires := now.Add(ttl)
+	t := jwt.NewWithClaims(jwt.SigningMethodEdDSA, jwt.RegisteredClaims{
+		Subject:   user.String(),
+		Audience:  jwt.ClaimStrings{audience},
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(expires),
+	})
+	t.Header["typ"] = ReplicaType
+	t.Header["kid"] = k.signerID
+	signed, err := t.SignedString(k.signer)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("token: sign: %w", err)
+	}
+	return signed, expires, nil
+}
+
 // JWKS returns the public keys as a JSON Web Key Set (RFC 7517), the signing key first.
 func (k *Keys) JWKS() ([]byte, error) {
 	type jwk struct {

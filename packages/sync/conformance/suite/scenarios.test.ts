@@ -8,12 +8,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Admin } from '../harness/admin.ts'
 import { adminDatabaseUrl } from '../harness/env.ts'
 import { entitySpec, type TableName } from '../harness/schema.ts'
-import { standIn, type Target } from '../harness/target.ts'
+import { engine, type Target } from '../harness/target.ts'
 import { World } from '../harness/world.ts'
 import { enabled, scenarios } from '../scenarios/index.ts'
 import type { Scenario } from '../scenarios/scenario.ts'
 
-const target: Target = standIn
+const target: Target = engine
 const forced = process.env['CONFORMANCE_SCENARIOS'] === 'all'
 
 let admin: Admin

@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -93,7 +95,7 @@ func TestCreateRolesRunsAgainForAnAdministratorWhoIsNoSuperuser(t *testing.T) {
 	for _, stmt := range []string{
 		"SELECT pg_advisory_xact_lock(" + strconv.FormatInt(db.CatalogLock, 10) + ")",
 		"CREATE ROLE household_test_managed_admin NOLOGIN CREATEROLE",
-		"GRANT household_migrate, household_app, household_meter TO household_test_managed_admin WITH ADMIN OPTION",
+		"GRANT household_migrate, household_app, household_meter, household_powersync TO household_test_managed_admin WITH ADMIN OPTION",
 		"SET LOCAL ROLE household_test_managed_admin",
 	} {
 		if _, err := tx.Exec(t.Context(), stmt); err != nil {
@@ -102,6 +104,52 @@ func TestCreateRolesRunsAgainForAnAdministratorWhoIsNoSuperuser(t *testing.T) {
 	}
 	if err := db.CreateRoles(t.Context(), tx, testsupport.Passwords); err != nil {
 		t.Fatalf("CreateRoles as a non-superuser administrator: %v", err)
+	}
+}
+
+// PowerSync's replication role is D-3's one exception (D-93): it holds REPLICATION, to stream the
+// write-ahead log, and BYPASSRLS, to read the tables it replicates past their row-level security,
+// and nothing else an administrator's role would.
+func TestPowerSyncsRoleReplicatesAndIsNothingMore(t *testing.T) {
+	admin := connect(t, testsupport.AdminURL())
+	var super, bypass, replication, createRole, createDB, login bool
+	if err := admin.QueryRow(t.Context(),
+		"SELECT rolsuper, rolbypassrls, rolreplication, rolcreaterole, rolcreatedb, rolcanlogin FROM pg_roles WHERE rolname = $1",
+		db.RolePowerSync).Scan(&super, &bypass, &replication, &createRole, &createDB, &login); err != nil {
+		t.Fatal(err)
+	}
+	if super || !bypass || !replication || createRole || createDB || !login {
+		t.Errorf("%s: superuser %t, bypassrls %t, replication %t, createrole %t, createdb %t, login %t",
+			db.RolePowerSync, super, bypass, replication, createRole, createDB, login)
+	}
+}
+
+// Only an administrator that holds REPLICATION and BYPASSRLS may give them (ADR 0004), which a
+// managed database's may not: bootstrap then fails, naming what the administrator lacks, rather
+// than making a role PowerSync cannot replicate as. The role and the administrator are made in a
+// transaction the test rolls back.
+func TestCreateRolesNamesWhatAnAdministratorLacksForPowerSync(t *testing.T) {
+	admin := connect(t, testsupport.AdminURL())
+	tx, err := admin.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	for _, stmt := range []string{
+		"SELECT pg_advisory_xact_lock(" + strconv.FormatInt(db.CatalogLock, 10) + ")",
+		// The role drifted: a REPLICATION taken away, which bootstrap must give back.
+		"ALTER ROLE household_powersync NOREPLICATION",
+		"CREATE ROLE household_test_managed_admin NOLOGIN CREATEROLE BYPASSRLS",
+		"GRANT household_migrate, household_app, household_meter, household_powersync TO household_test_managed_admin WITH ADMIN OPTION",
+		"SET LOCAL ROLE household_test_managed_admin",
+	} {
+		if _, err := tx.Exec(t.Context(), stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+	err = db.CreateRoles(t.Context(), tx, testsupport.Passwords)
+	if err == nil || !strings.HasSuffix(err.Error(), "household_test_managed_admin lacks REPLICATION") {
+		t.Fatalf("CreateRoles as an administrator without REPLICATION: %v", err)
 	}
 }
 
@@ -137,7 +185,7 @@ func TestCreateRolesSendsNoPassword(t *testing.T) {
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	passwords := db.Passwords{Migrate: "never-sent-migrate", App: "never-sent-app", Meter: "never-sent-meter"}
+	passwords := db.Passwords{Migrate: "never-sent-migrate", App: "never-sent-app", Meter: "never-sent-meter", PowerSync: "never-sent-powersync"}
 	if err := db.CreateRoles(t.Context(), tx, passwords); err != nil {
 		t.Fatalf("CreateRoles: %v", err)
 	}
@@ -146,7 +194,7 @@ func TestCreateRolesSendsNoPassword(t *testing.T) {
 			t.Errorf("a statement carries a password: %s", s)
 		}
 	}
-	for _, role := range db.Roles {
+	for _, role := range append(db.Roles, db.RolePowerSync) {
 		var stored string
 		if err := tx.QueryRow(t.Context(), "SELECT rolpassword FROM pg_authid WHERE rolname = $1", role).Scan(&stored); err != nil {
 			t.Fatal(err)
@@ -223,6 +271,50 @@ func TestBootstrapIsSafeToRunAgain(t *testing.T) {
 	}
 	if err := db.Bootstrap(t.Context(), admin, "", testsupport.Passwords); err == nil {
 		t.Error("Bootstrap without a database succeeded")
+	}
+}
+
+// PowerSync's bucket storage is a database of its own, owned by a role of its own, which only that
+// role and the administrator may connect to; prepared again, it changes nothing. The role and the
+// database are the cluster's, so they go once the test is done.
+func TestPrepareStorageMakesADatabaseOfItsOwn(t *testing.T) {
+	admin := connect(t, testsupport.AdminURL())
+	suffix := strconv.FormatInt(int64(os.Getpid()), 10) + "_" + strconv.FormatInt(time.Now().UnixNano()%1_000_000, 10)
+	storage := db.Storage{Role: "household_test_storage_" + suffix, Password: "storage", Database: "household_test_buckets_" + suffix}
+	t.Cleanup(func() {
+		ctx := context.Background()
+		_, _ = admin.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{storage.Database}.Sanitize()+" WITH (FORCE)")
+		_, _ = admin.Exec(ctx, "DROP ROLE IF EXISTS "+pgx.Identifier{storage.Role}.Sanitize())
+	})
+	for range 2 {
+		if err := db.PrepareStorage(t.Context(), admin, storage); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var owner string
+	var acl []string
+	if err := admin.QueryRow(t.Context(), "SELECT pg_get_userbyid(datdba), datacl::text[] FROM pg_database WHERE datname = $1",
+		storage.Database).Scan(&owner, &acl); err != nil {
+		t.Fatal(err)
+	}
+	if owner != storage.Role {
+		t.Errorf("the bucket storage is owned by %s, want %s", owner, storage.Role)
+	}
+	for _, entry := range acl {
+		if strings.HasPrefix(entry, "=") {
+			t.Errorf("PUBLIC keeps %q on the bucket storage", entry)
+		}
+	}
+	for _, role := range append(db.Roles, db.RolePowerSync) {
+		var can bool
+		if err := admin.QueryRow(t.Context(), "SELECT has_database_privilege($1, $2, 'CONNECT')", role, storage.Database).Scan(&can); err != nil || can {
+			t.Errorf("%s may connect to the bucket storage (%v)", role, err)
+		}
+	}
+	var replication, bypass bool
+	if err := admin.QueryRow(t.Context(), "SELECT rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1", storage.Role).
+		Scan(&replication, &bypass); err != nil || replication || bypass {
+		t.Errorf("the storage's role: replication %t, bypassrls %t (%v)", replication, bypass, err)
 	}
 }
 

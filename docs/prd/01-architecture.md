@@ -354,10 +354,15 @@ broken product for everyone who has not updated. **D-11.**
 8. A `float` or `numeric` used for money.
 9. A create operation for a sync entity that does not **require** a client-supplied `id`
    (**D-23**, **D-91**).
+10. A committed sync configuration that is not the one the entity registry generates, a table a
+    generated stream reads that is not published for PowerSync, and a table PowerSync's replication
+    role may read that no stream needs (**D-93**; plan item 13).
 
 Numbers 1, 4 and 6 exist in `home` already and paid for themselves. Numbers 2, 3, 5, 7, 8 and 9
 are the ones that make commercial and multi-tenant correctness structural instead of
-disciplinary.
+disciplinary. Number 10 holds under D-93 what row-level security holds on every other read: the
+replication role reads past it, so the streams generated from the entities' declared access are the
+tenant boundary, and nothing reaches the role that no stream was generated for.
 
 **Number 9 is the one that would otherwise be discovered late.** D-23 makes client-generated ids
 mandatory because an offline create needs a stable identity immediately — but the requirement is

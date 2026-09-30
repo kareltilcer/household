@@ -27,9 +27,10 @@ import (
 // roles. They are the local development defaults in .env.example, so the tests and a
 // locally running server agree.
 var Passwords = db.Passwords{
-	Migrate: "household_migrate",
-	App:     "household_app",
-	Meter:   "household_meter",
+	Migrate:   "household_migrate",
+	App:       "household_app",
+	Meter:     "household_meter",
+	PowerSync: "household_powersync",
 }
 
 // Blocks are the migrations the template database is built from: the platform's. A package

@@ -133,7 +133,8 @@ location stays null until an IP-to-place source is chosen (plan item 30). Revoki
 sync cursor, so its local replica is discarded on next contact rather than being resumed. Under
 D-93 the device is refused any further sync token, and its client discards the replica when it is
 refused. A sync token already issued keeps the device replicating until it expires, so that
-token's lifetime is how long a revoked device can still receive new rows; plan item 13 sets it.
+token's lifetime is how long a revoked device can still receive new rows: **five minutes**
+(`POST …/sync/credentials`, plan item 13), and the client asks for another before then.
 
 **FR-ID8 — Account deletion.** Self-service, from the app. See
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §4 for what happens to households

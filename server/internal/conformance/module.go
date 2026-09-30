@@ -1,18 +1,18 @@
-// Package conformance is the server half of the sync conformance suite (plan item 12,
-// packages/sync/conformance, PRD 10 §4): a test module whose entities the suite's scenarios
-// write, and the stand-ins the suite runs against until items 13 and 14 build the real ones.
+// Package conformance is the server half of the sync conformance suite (plan items 12 and 13,
+// packages/sync/conformance, PRD 10 §4, ADR 0013, ADR 0014): a test module whose entities the
+// suite's scenarios write, registered in the API the suite runs against (cmd/conformance-api) and in
+// no other.
 //
 // The module, conformance, declares one entity for each shape a scenario needs, across all five
 // merge policies (migrations/98001_conformance.sql). It is never among the modules the server
-// serves (internal/modules); the stand-in registers it, and so will the API the suite runs
-// against once item 13 replaces the stand-in's push.
+// serves (internal/modules). Its entities' streams are generated with every other entity's
+// (internal/syncconfig), and the push writes them as it writes any module's, through this module's
+// Writer: the entities whose policies item 13 builds, an item's fields (lww_field), its checked
+// state and a chore's completion (state_set) and a meter's readings (additive, with their
+// invariant). The others are item 14's.
 //
-// The stand-ins (StandIn) are what the spike's harness ran against (ADR 0001): a token PowerSync
-// verifies with a test key, a sign-in that names the caller, and a push at the contract's path
-// that writes the module's items and their checks through the real tenant middleware, grant
-// check, Idempotency-Key middleware and mutation spine. Setup gives PowerSync its replication
-// role, its publication and its bucket storage. Each is replaced by the real one: the token and
-// the push by item 13's, the streams by item 13's generated configuration and item 14's.
+// The suite signs its members in through Around, which stands in for a device's sign-in (item 9):
+// the suite's members have no address and no password, and a client needs only an access token.
 package conformance
 
 import (
@@ -27,18 +27,23 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/push"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
 // Name is the module's id.
 const Name = "conformance"
 
-// The entities the stand-in's push writes.
+// The entities the push writes.
 const (
 	// Item is a shopping item: lww_field.
 	Item = "conformance.item"
 	// ItemChecked is an item's checked state: state_set on (item_id), latest_client_time.
 	ItemChecked = "conformance.item_checked"
+	// Reading is a meter reading: additive, non_decreasing over its meter.
+	Reading = "conformance.reading"
+	// Completion is a chore's completion: state_set on (chore_id, occurrence), latest_client_time.
+	Completion = "conformance.completion"
 )
 
 //go:embed migrations/*.sql
@@ -52,6 +57,7 @@ var (
 	_ module.SyncSource   = Module{}
 	_ module.ExportSource = Module{}
 	_ module.EraseSource  = Module{}
+	_ push.Writer         = Module{}
 )
 
 // Name returns the module's id.
@@ -78,14 +84,13 @@ func Block() (db.Block, error) {
 // RegisterRoutes registers nothing: the suite writes through the push, as a client does.
 func (Module) RegisterRoutes(chi.Router) {}
 
-// AuditActions returns the actions the stand-in's push records.
+// AuditActions returns the actions the module's writes record.
 func (Module) AuditActions() []module.AuditAction {
-	return []module.AuditAction{
-		{Key: "conformance.item.create", SummaryKey: "conformance.item.create"},
-		{Key: "conformance.item.update", SummaryKey: "conformance.item.update"},
-		{Key: "conformance.item.delete", SummaryKey: "conformance.item.delete"},
-		{Key: "conformance.item_checked.set", SummaryKey: "conformance.item_checked.set"},
+	var out []module.AuditAction
+	for _, a := range []string{"item.create", "item.update", "item.delete", "item_checked.set", "reading.create", "completion.set"} {
+		out = append(out, module.AuditAction{Key: Name + "." + a, SummaryKey: Name + "." + a})
 	}
+	return out
 }
 
 // SyncEntities returns the module's entities: every merge policy, with the key and resolution of
@@ -101,7 +106,7 @@ func (Module) SyncEntities() []sync.Entity {
 			Access:   sync.Grant, OfflineWrites: true,
 		},
 		{
-			Name: "conformance.reading", Table: "conformance_readings", Policy: sync.Additive,
+			Name: Reading, Table: "conformance_readings", Policy: sync.Additive,
 			Invariant: &sync.Invariant{Rule: sync.NonDecreasing, Series: []string{"meter_id"}, Order: "read_at", Field: "value"},
 			Access:    sync.Grant, OfflineWrites: true,
 		},
@@ -112,7 +117,7 @@ func (Module) SyncEntities() []sync.Entity {
 		},
 		{Name: "conformance.chore", Table: "conformance_chores", Policy: sync.StrictVersion, Access: sync.Grant, OfflineWrites: true},
 		{
-			Name: "conformance.completion", Table: "conformance_completions", Policy: sync.StateSet,
+			Name: Completion, Table: "conformance_completions", Policy: sync.StateSet,
 			StateSet: &sync.StateSetRule{Key: []string{"chore_id", "occurrence"}, Resolution: sync.LatestClientTime},
 			Access:   sync.Grant, OfflineWrites: true,
 		},
@@ -123,6 +128,20 @@ func (Module) SyncEntities() []sync.Entity {
 			Access: sync.Grant, OfflineWrites: true,
 		},
 		{Name: "conformance.message", Table: "conformance_messages", Policy: sync.Additive, Access: sync.Grant | sync.Audience, OfflineWrites: true},
+	}
+}
+
+// LeakyStream is a stream broken on purpose, for the suite's negative control
+// (packages/sync/conformance/suite/harness.test.ts): it holds a member to the households they belong
+// to but not to the one they subscribed with, and checks no grant, so a member of two households
+// replicates the other's items into this one's replica. No client but the negative control's
+// subscribes to it, and the suite must fail it.
+func LeakyStream() sync.Stream {
+	return sync.Stream{
+		Name: "negative_control_leaky_items", Entity: Item, Table: "conformance_items",
+		Reads: []string{"conformance_items", "memberships"},
+		Query: "SELECT * FROM conformance_items\n" +
+			"WHERE household_id IN (SELECT m.household_id FROM memberships m WHERE m.user_id = auth.user_id())\n",
 	}
 }
 

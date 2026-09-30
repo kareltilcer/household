@@ -82,7 +82,14 @@ first response is to fix the query; a cache requires an explicit decision record
 uploads fail with a clear, retryable message; existing metadata still reads. Push provider
 unavailable ⇒ delivery is retried, never lost, and never blocks the mutation. Payment processor
 unavailable ⇒ entitlement state is held at its last value, never downgraded on a timeout. Weather
-provider unavailable ⇒ Garden renders from cache with no error the member can act on.
+provider unavailable ⇒ Garden renders from cache with no error the member can act on. PowerSync
+unavailable while the API is not ⇒ every replica stays readable as it last was and keeps every local
+write; queued writes still reach the push and are answered, a rejection surfaced as ever; the client
+says it is not receiving changes, and other members' arrive from its last checkpoint when PowerSync
+returns. Its replication slot lost, after a restore or past `max_slot_wal_keep_size` ⇒ PowerSync
+replicates the publication again from a snapshot, clients stay on their last checkpoint meanwhile and
+then download again each bucket whose checksum changed, and no queued mutation is lost
+([runbook](../runbooks/replication-slot.md)). **D-105.** Plan item 89 tests both.
 
 ## 4. Security
 

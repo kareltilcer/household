@@ -1,11 +1,13 @@
-// The conformance module's tables as a client holds them (server/internal/conformance), declared
-// once: the PowerSync schema each client opens, the fields its connector sends for each entity,
-// and the form in which a replica's rows and the server's are compared.
+// The tables a client of the suite holds, declared once: the conformance module's
+// (server/internal/conformance) and admin's, whose streams every member subscribes to (PRD
+// modules/17 Sync); the PowerSync schema each client opens, the fields its connector sends for each
+// entity, and the form in which a replica's rows and the server's are compared.
 
 import { Schema, Table, column } from '@powersync/node'
 
 /** How a column's value is compared: a replica holds booleans as 0 and 1, and times as text. */
-export type Kind = 'text' | 'uuid' | 'integer' | 'boolean' | 'timestamp' | 'date' | 'uuid[]'
+export type Kind =
+  'text' | 'uuid' | 'integer' | 'boolean' | 'timestamp' | 'date' | 'uuid[]' | 'json'
 
 export interface TableSpec {
   /** The table, the same name on the server and in a replica. */
@@ -35,6 +37,70 @@ const base = {
 } as const satisfies Record<string, Kind>
 
 export const tables = [
+  // admin's, which no client writes offline (D-80): the household's settings, without its code;
+  // its memberships, each with its member's grants and a child profile's locks, without a child's
+  // birth year; which modules it enables; and its invitations, without their tokens, which only the
+  // members granted admin replicate. The settings name their household by their own id, and carry
+  // no household_id.
+  {
+    table: 'households',
+    entity: 'admin.household_settings',
+    columns: {
+      name: 'text',
+      country: 'text',
+      timezone: 'text',
+      base_currency: 'text',
+      locale: 'text',
+      units: 'text',
+      first_day_of_week: 'integer',
+      billing_payer_id: 'uuid',
+      version: 'integer',
+      created_by: 'uuid',
+      created_at: 'timestamp',
+      updated_by: 'uuid',
+      updated_at: 'timestamp',
+      deleted_at: 'timestamp',
+    },
+    writes: [],
+  },
+  {
+    table: 'memberships',
+    entity: 'admin.membership',
+    columns: {
+      ...base,
+      user_id: 'uuid',
+      role: 'text',
+      grants: 'json',
+      dashboard_locked: 'boolean',
+      pin_locked: 'boolean',
+    },
+    writes: [],
+  },
+  {
+    table: 'module_enablement',
+    entity: 'admin.module_enablement',
+    columns: { ...base, module: 'text', enabled: 'boolean' },
+    writes: [],
+  },
+  {
+    table: 'invitations',
+    entity: 'admin.invitation',
+    columns: {
+      ...base,
+      kind: 'text',
+      email: 'text',
+      role: 'text',
+      grants: 'json',
+      dashboard_layout: 'json',
+      message: 'text',
+      invited_by: 'uuid',
+      expires_at: 'timestamp',
+      max_uses: 'integer',
+      uses: 'integer',
+      status: 'text',
+    },
+    writes: [],
+  },
   {
     table: 'conformance_items',
     entity: 'conformance.item',
@@ -166,7 +232,7 @@ export const schema = new Schema({
         Object.fromEntries(
           Object.entries(spec.columns).map(([name, kind]) => [name, clientColumn(kind)]),
         ),
-        { trackMetadata: spec.entity !== null },
+        { trackMetadata: spec.writes.length > 0 },
       ),
     ]),
   ),
@@ -240,6 +306,10 @@ export function canonical(kind: Kind, value: unknown): Canonical {
     case 'date':
       // The server's is read as text (Admin), never as a Date at some timezone's midnight.
       return text(value).slice(0, 10)
+    case 'json':
+      // As its keys sort: a replica holds PostgreSQL's text of a jsonb, and the server reads it back
+      // parsed.
+      return stable(typeof value === 'string' ? (JSON.parse(value) as unknown) : value)
     case 'uuid[]': {
       // In order: a chore's rotation means its order, so a replica holding it in another order
       // than the server has not converged.
@@ -247,6 +317,15 @@ export function canonical(kind: Kind, value: unknown): Canonical {
       return Array.isArray(list) ? list.map((v) => text(v).toLowerCase()) : [text(value)]
     }
   }
+}
+
+/** value as JSON, every object's keys in order. */
+function stable(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v !== null && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+      : v,
+  )
 }
 
 // A replica holds an array as JSON; PostgreSQL's text form is {a,b}.

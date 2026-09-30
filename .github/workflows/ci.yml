@@ -111,6 +111,11 @@ jobs:
       # items 13, 14 and 18 have switched on, and a short fuzz run (the nightly workflow runs a
       # long one).
       - name: Conformance suite
+        # The API the suite starts listens on every interface: PowerSync, in its container, fetches
+        # the keys it verifies a client's token with from it at host.docker.internal, which on a
+        # Linux runner is the docker bridge's address, not the loopback.
+        env:
+          CONFORMANCE_API_ADDR: 0.0.0.0:8091
         run: pnpm --filter @household/sync conformance
       - name: The stack's logs
         if: failure()
