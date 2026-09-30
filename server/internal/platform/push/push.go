@@ -126,15 +126,21 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fail := func(err error, attrs ...slog.Attr) {
+		switch {
 		// A repeat of the request took its Idempotency-Key over once the key's lease had passed, and
 		// runs the batch itself: this one can no longer commit, and is answered as a repeat of a
 		// request still running is, 409 idempotency_in_progress. Nothing on the server failed.
-		if errors.Is(err, idempotency.ErrClaimLost) {
+		case errors.Is(err, idempotency.ErrClaimLost):
 			problem.Write(w, requestID, idempotency.ErrClaimLost)
-			return
+		// The caller was removed from the household, or left it, while the batch ran: no answer can
+		// be kept for them any longer, and they are answered as the tenant middleware answers their
+		// next request, 404. Nothing on the server failed either.
+		case senderGone(err):
+			problem.Write(w, requestID, problem.NotFound())
+		default:
+			s.log.LogAttrs(ctx, slog.LevelError, "push: the batch could not be answered", append(attrs, slog.Any("error", err))...)
+			problem.Write(w, requestID, problem.Internal())
 		}
-		s.log.LogAttrs(ctx, slog.LevelError, "push: the batch could not be answered", append(attrs, slog.Any("error", err))...)
-		problem.Write(w, requestID, problem.Internal())
 	}
 	ids := make([]uuid.UUID, len(batch.Mutations))
 	for i, m := range batch.Mutations {
@@ -278,6 +284,10 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 		return s.answered(ctx, res, fp)
 	case errors.As(err, &no):
 		return s.end(ctx, fp, reject(res, no))
+	case senderGone(err):
+		// The sender's membership went while the mutation ran, and its answer with it: the batch
+		// ends here, rather than the mutation being refused as naming a row that is not there.
+		return res, err
 	case err != nil:
 		if no = FromDatabase(err); no != nil {
 			return s.end(ctx, fp, reject(res, no))

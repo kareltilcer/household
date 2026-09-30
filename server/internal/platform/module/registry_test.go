@@ -146,6 +146,10 @@ func TestTheRegistryRefusesWhatAModuleDeclaresWrongly(t *testing.T) {
 		"an action with no summary": {[]module.AuditAction{{Key: "garden.bed.create"}}, nil, "has no summary key"},
 		"an entity with no policy": {nil, []sync.Entity{good, {Name: "garden.bed", Table: "garden_beds", Access: sync.Grant}},
 			"garden.bed: no merge policy"},
+		// Held to every member, a module's rows would reach a member it is absent for: one whose grant
+		// on it is none, and every member while the household disables it.
+		"an entity held to every member": {nil, []sync.Entity{good, {Name: "garden.climate", Table: "garden_climates", Policy: sync.StrictVersion,
+			Access: sync.Members}}, "garden.climate: access to every member of the household, which only the platform's own entities hold"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := module.NewRegistry(declaring{fake{"garden", nil}, tc.actions, tc.entities})
@@ -157,7 +161,8 @@ func TestTheRegistryRefusesWhatAModuleDeclaresWrongly(t *testing.T) {
 }
 
 // A module the platform serves itself is held to a module's rules, declares its actions and
-// entities beside the modules', and is not among the modules mounted under /<name>.
+// entities beside the modules', among them one held to every member of the household, which no
+// module's may be, and is not among the modules mounted under /<name>.
 func TestAPlatformModuleIsDeclaredBesideTheModules(t *testing.T) {
 	garden := &fake{"garden", nil}
 	r, err := module.NewRegistry(garden)
@@ -165,9 +170,12 @@ func TestAPlatformModuleIsDeclaredBesideTheModules(t *testing.T) {
 		t.Fatal(err)
 	}
 	admin := module.PlatformModule{
-		Name:     "admin",
-		Actions:  []module.AuditAction{{Key: "admin.member.join", SummaryKey: "admin.member.join"}},
-		Entities: []sync.Entity{{Name: "admin.membership", Table: "memberships", Policy: sync.StrictVersion, Access: sync.Grant}},
+		Name:    "admin",
+		Actions: []module.AuditAction{{Key: "admin.member.join", SummaryKey: "admin.member.join"}},
+		Entities: []sync.Entity{
+			{Name: "admin.membership", Table: "memberships", Policy: sync.StrictVersion, Access: sync.Members},
+			{Name: "admin.invitation", Table: "invitations", Policy: sync.StrictVersion, Access: sync.Grant},
+		},
 	}
 	withAdmin, err := r.WithPlatform(admin)
 	if err != nil {

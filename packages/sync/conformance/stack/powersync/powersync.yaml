@@ -3,9 +3,10 @@
 # here is a loopback development value, as the stack's compose file's are.
 
 # It replicates from the household database as household_powersync, which `household-api bootstrap`
-# makes with REPLICATION and BYPASSRLS, and which reads the tables of the `powersync` publication
-# and no other. debug_api stays off: it would open the admin API's execute-sql, which reads the
-# database as that role, past row-level security.
+# makes with REPLICATION and BYPASSRLS, and which may query the tables of the `powersync` publication
+# and no other; its REPLICATION decodes the write-ahead log past those grants. debug_api stays off:
+# it would open the admin API's execute-sql, which reads the database as that role, past row-level
+# security.
 replication:
   connections:
     - type: postgresql

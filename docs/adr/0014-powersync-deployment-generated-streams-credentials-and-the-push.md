@@ -39,12 +39,16 @@ publish the credentials and the sessions besides. It adds `replicate(tbl)`, whic
 on every table a generated stream reads, as it calls `enable_tenant_isolation` on every tenant table:
 `REPLICA IDENTITY FULL` (kept as the spike ran every table; the suite has not been run without it),
 the table added to the publication, and `SELECT` granted to `household_powersync`, whose
-`BYPASSRLS` grants no privilege. `household-api bootstrap` makes that role with `REPLICATION` and
+`BYPASSRLS` grants no privilege. Its `REPLICATION` is held to none of those grants: logical decoding
+checks no table's privileges, so whoever holds its credential could decode every table's changes,
+the account tables' among them, through a slot of their own, and the credential is as sensitive as
+the database's own. `household-api bootstrap` makes that role with `REPLICATION` and
 `BYPASSRLS`, and refuses, naming what is missing, under an administrator that cannot give them; it
 also prepares PowerSync's bucket storage, a database of its own owned by a role of its own, when its
 connection string is named (always in development; elsewhere it may live on a cluster of its own).
 **Architecture test 10** holds it: every table a served stream reads is published, at full replica
-identity, and readable by the role, which reads no table no stream reads and no entity is kept in;
+identity, and readable by the role, which may `SELECT` no table no stream reads and no entity is
+kept in;
 every column an entity replicates exists; and the committed configurations are the generated ones.
 
 **The streams are generated** (`internal/syncconfig`, `go generate ./cmd/sync-config`, which
@@ -56,7 +60,9 @@ into the suite's stack for the suite, with a manifest of the suite's streams:
   them). A child's ceiling is never below `view`, so a stored grant above `none` is a grant held.
 - **`Members`**, a new axis in `sync.Access`, is one stream: every member of the household, whatever
   their grant. Admin's settings, memberships and module enablement declare it; its invitations keep
-  `Grant`, on admin (PRD modules/17 Sync).
+  `Grant`, on admin (PRD modules/17 Sync). Only the platform's own entities may: the stream checks
+  neither a grant nor the module's enablement, so the module registry refuses it of a module's
+  entity, whose rows would otherwise reach a member the module is absent for.
 - The household is the subscription's parameter (D-4), and every table a subquery reads is looked up
   by the caller or by that household, which a test holds, since PowerSync refuses a connection past
   1000 parameter results (`PSYNC_S2305`).
@@ -89,7 +95,8 @@ PowerSync any without one, so neither token opens the other's door. No `Idempote
 it: a credential is never kept to be answered with. **The keys** are `GET /sync/jwks`
 (`getSyncJwks`), public, which PowerSync fetches (`client_auth.jwks_uri`), caches for minutes, and
 fetches again at once for a token signed by a key it does not hold, so a key rotated in front of the
-others verifies from its first token.
+others verifies from its first token. They are answered `Cache-Control: no-cache`, so that no cache
+on the way answers that fetch with a set it kept from before the rotation.
 
 **The push** is `internal/platform/push`. A module whose entities a client writes offline implements
 `push.Writer`; the push hands it each mutation inside `mutation.Apply`'s transaction, recording
@@ -107,8 +114,10 @@ to 24 hours and flagged, and handed to the writer, which keeps it where its poli
 writer refuses with a `push.Refusal`, or with the problem its module's service layer answers the
 REST routes with, which the push reads as one: its code, the fields it names, and a
 `version_conflict` answered `conflict` with the row as it stands; a problem of the server's own fails
-the batch. `lww_row` and `strict_version` writes, and the `merged` and `conflict` their policies
-answer on a base version, are item 14's.
+the batch. A caller removed from the household, or leaving it, while their batch runs has their
+answers go with their membership, and the batch is answered `404`, as their next request is.
+`lww_row` and `strict_version` writes, and the `merged` and `conflict` their policies answer on a
+base version, are item 14's.
 
 **Each mutation that ends is answered once** (FR-SY5, D-106): its answer is kept in `sync_mutations` for 7
 days under its household, **its sender** and its `mutation_id`, with a fingerprint of what it

@@ -135,12 +135,12 @@ property of the system rather than a policy (**D-3**, and see
 
 > **Under D-93 a fourth role replicates, and it bypasses row-level security.** PowerSync reads the
 > write-ahead log and sets no tenant, so its replication role holds `REPLICATION`, whose stream of
-> changes row-level security does not filter, and `BYPASSRLS`, without which it could read no
-> table's initial snapshot, since every tenant table forces row-level security. It is the PowerSync
-> service's own credential, and no staff member or tool connects with it. On its path the tenant
-> boundary is the stream definitions generated from the entity registry, which a read-path isolation
-> test holds to one household. It is the one exception to the paragraph above, and the one path
-> on which §2.1's rule constrains a query once rather than twice (**D-2**,
+> changes neither row-level security nor the role's table grants filter, and `BYPASSRLS`, without
+> which it could read no table's initial snapshot, since every tenant table forces row-level
+> security. It is the PowerSync service's own credential, and no staff member or tool connects with
+> it. On its path the tenant boundary is the stream definitions generated from the entity registry,
+> which a read-path isolation test holds to one household. It is the one exception to the paragraph
+> above, and the one path on which §2.1's rule constrains a query once rather than twice (**D-2**,
 > [ADR 0001](../adr/0001-sync-engine.md)). What it replicates lands in PowerSync's bucket storage,
 > a database of its own with no row-level security, whose credential is likewise the service's
 > alone ([05](05-privacy-and-compliance.md) §6).
@@ -356,13 +356,16 @@ broken product for everyone who has not updated. **D-11.**
    (**D-23**, **D-91**).
 10. A committed sync configuration that is not the one the entity registry generates, a table a
     generated stream reads that is not published for PowerSync, and a table PowerSync's replication
-    role may read that no stream needs (**D-93**; plan item 13).
+    role may `SELECT` that no stream needs (**D-93**; plan item 13).
 
 Numbers 1, 4 and 6 exist in `home` already and paid for themselves. Numbers 2, 3, 5, 7, 8 and 9
 are the ones that make commercial and multi-tenant correctness structural instead of
 disciplinary. Number 10 holds under D-93 what row-level security holds on every other read: the
 replication role reads past it, so the streams generated from the entities' declared access are the
-tenant boundary, and nothing reaches the role that no stream was generated for.
+tenant boundary, and the role may query no table that no stream was generated for. It bounds the
+role's queries, not its `REPLICATION`: logical decoding checks no table's privileges, so the role's
+credential could decode every table's changes through a replication slot of its own, which is why
+that credential is the sync service's alone (§2.3, **D-3**).
 
 **Number 9 is the one that would otherwise be discovered late.** D-23 makes client-generated ids
 mandatory because an offline create needs a stable identity immediately — but the requirement is

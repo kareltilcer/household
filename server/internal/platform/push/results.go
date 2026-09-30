@@ -5,12 +5,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
@@ -163,4 +165,14 @@ func keep(ctx context.Context, tx pgx.Tx, fp []byte, res Result) (bool, error) {
 		return false, fmt.Errorf("push: keep an answer: %w", err)
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// senderGone reports whether err is an answer refused a place in sync_mutations for want of its
+// sender's membership: the caller was removed from the household, or left it, while their batch ran,
+// and the answers kept for them went with the membership (ON DELETE CASCADE). The membership is what
+// the tenant middleware let the request in by, so the batch ends there, answered as the caller's next
+// request is.
+func senderGone(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.TableName == "sync_mutations"
 }

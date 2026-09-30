@@ -17,8 +17,9 @@ import (
 // generated ones, so an entity a module adds, or an access it changes, reaches a replica only through
 // `pnpm run gen`; and every table a served stream reads is in the powersync publication, at REPLICA
 // IDENTITY FULL and readable by the replication role, while the role, which reads past row-level
-// security, may read no table no stream reads, so that a later module's table cannot be left out of
-// replication or let into it by hand.
+// security, may SELECT no table no stream reads, so that a later module's table cannot be left out of
+// replication or let into it by hand. It holds the role's queries; its REPLICATION decodes the log
+// past any grant, which is why its credential is the sync service's alone (db.RolePowerSync).
 func TestSyncConfigurationIsTheGeneratedOne(t *testing.T) {
 	files, err := syncconfig.Files()
 	if err != nil {

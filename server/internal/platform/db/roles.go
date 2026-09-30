@@ -36,8 +36,12 @@ const (
 // RolePowerSync is the role PowerSync replicates as (ADR 0001, D-93): REPLICATION, to stream the
 // write-ahead log, and BYPASSRLS, since every tenant table forces row-level security and PowerSync
 // sets no tenant, so that without it the engine could read no table's first snapshot. BYPASSRLS
-// grants no privilege: it reads through a SELECT on each table of the powersync publication, which
-// the migration that publishes the table grants (replicate), and on no other. It is D-3's one
+// grants no privilege: it queries through a SELECT on each table of the powersync publication, which
+// the migration that publishes the table grants (replicate), and on no other. REPLICATION is held to
+// none of those grants: logical decoding checks no table's privileges, so whoever holds the
+// credential may open a replication slot of their own, with an output plugin such as test_decoding,
+// and read every change to every table of the database, the account tables among them. The grants
+// bound what PowerSync queries; the credential is as sensitive as the database's own. It is D-3's one
 // exception, the sync service's own credential, which no staff member or tool connects with; the
 // generated streams and the read-path isolation test hold the tenant boundary it passes.
 const RolePowerSync = "household_powersync"

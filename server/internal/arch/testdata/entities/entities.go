@@ -17,7 +17,8 @@ func Declared() map[string][]sync.Entity {
 			{Name: "garden.harvest", Table: "garden_harvests", Policy: sync.Additive, Access: sync.Grant,
 				Invariant: &sync.Invariant{Rule: sync.NonDecreasing, Series: []string{"planting_id"}, Order: "harvested_on", Field: "total_grams"},
 				Columns: []string{"id", "household_id", "planting_id", "harvested_on", "total_grams"}},
-			// Keeps it: every member of the household, whatever their grant.
+			// Keeps it: every member of the household, whatever their grant. The descriptor rules hold it,
+			// and the module registry then refuses it of any module but the platform's own.
 			{Name: "garden.climate", Table: "garden_climates", Policy: sync.StrictVersion, Access: sync.Members},
 			{Name: "garden.planting", Table: "garden_plantings", Access: sync.Grant},
 			{Name: "garden.bed", Table: "garden_beds", Policy: "last_write_wins", Access: sync.Grant},

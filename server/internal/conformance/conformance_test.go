@@ -745,6 +745,32 @@ func TestPushAnswersABatchWhoseKeyWasTakenOver(t *testing.T) {
 	}
 }
 
+// A member removed from the household while their batch runs, as one who leaves it, is answered as
+// the tenant middleware answers their next request, 404 not_found, and never as a failure of the
+// server's: the answer to the mutation the removal caught cannot be kept for a sender who is no longer
+// a member, and the mutation is rolled back with it.
+func TestPushAnswersAMemberRemovedWhileTheirBatchRuns(t *testing.T) {
+	var take func()
+	w := newWorldOf(t, apptest.Options{}, takeover{take: func() { take() }})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	// As an owner's removal does, between the tenant middleware's look-up and the mutation's commit.
+	take = func() {
+		w.exec("DELETE FROM memberships WHERE household_id = $1 AND user_id = $2", household, member)
+	}
+	milk := idgen.New()
+	rec := w.push(household, token, key(), mutationOf(conformance.Item, "create", milk, map[string]any{"title": "Milk"}))
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"not_found"`) {
+		t.Fatalf("a member removed while their batch runs: %d %s", rec.Code, rec.Body)
+	}
+	if n := w.count("SELECT count(*) FROM conformance_items WHERE id = $1", milk); n != 0 {
+		t.Errorf("%d items written, want none", n)
+	}
+	if n := w.failures.Load(); n != 0 {
+		t.Errorf("%d failures logged, want none", n)
+	}
+}
+
 // serviceLayer is the conformance module with a writer that refuses as a module's REST service layer
 // does, with a problem: an item titled Refused as a validation_failed naming its title, one titled
 // Stale as the version_conflict of an item written since, and one titled Broken as a failure of the
@@ -852,6 +878,10 @@ func TestTheCredentialsHandOutPowerSyncsToken(t *testing.T) {
 	}
 	if err := json.Unmarshal(jwksRec.Body.Bytes(), &set); err != nil || jwksRec.Code != http.StatusOK || len(set.Keys) == 0 {
 		t.Fatalf("the keys: %d %s", jwksRec.Code, jwksRec.Body)
+	}
+	// PowerSync's asking again for a key it does not hold reaches the API, past any cache on the way.
+	if got := jwksRec.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Errorf("the keys' Cache-Control: %q, want no-cache", got)
 	}
 	var claims jwt.RegisteredClaims
 	_, err := jwt.ParseWithClaims(creds.Token, &claims, func(tok *jwt.Token) (any, error) {

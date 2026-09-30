@@ -16,7 +16,7 @@ restore or a failover, and when PowerSync logs that its slot is missing or inval
 | The slot | Named by PowerSync, `powersync_<n>_<id>`; one per sync configuration it runs |
 | Its bound | `max_slot_wal_keep_size` on the database server: `2GB` in `docker-compose.yml` and the suite's stack. Item 88 sets production's from the write rate and the outage PowerSync must survive |
 | The publication | `powersync`, owned by the migrate role; a migration adds each table with `replicate` |
-| The role | `household_powersync`, `REPLICATION` and `BYPASSRLS`, made by `household-api bootstrap` |
+| The role | `household_powersync`, `REPLICATION` and `BYPASSRLS`, made by `household-api bootstrap`. It may query only the published tables, but its `REPLICATION` decodes every table's changes through any slot made with its credential, which is therefore the service's alone |
 | The buckets | PowerSync's storage database, `powersync_storage` in development |
 
 ## Is the slot keeping up?
@@ -31,6 +31,9 @@ WHERE slot_type = 'logical';
 ```
 
 - `active` is true while PowerSync is connected.
+- A logical slot not named `powersync_…`, or on a plugin other than `pgoutput`, is not PowerSync's:
+  it decodes every table's changes, the account tables' among them, whatever its role may query.
+  Find who made it before dropping it, and treat the credential that made it as leaked.
 - `behind` is the log PowerSync has not confirmed. It should stay near zero; it grows while
   PowerSync is down, and a steady climb while it is up means it cannot keep up.
 - `wal_status` is `reserved` or `extended` while the slot is healthy, `unreserved` once it is past

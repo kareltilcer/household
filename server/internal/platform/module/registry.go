@@ -75,7 +75,7 @@ func (r *Registry) WithPlatform(mods ...PlatformModule) (*Registry, error) {
 		if err := out.addActions(p.Name, p.Actions); err != nil {
 			return nil, err
 		}
-		if err := out.addEntities(p.Name, p.Entities); err != nil {
+		if err := out.addEntities(p.Name, p.Entities, true); err != nil {
 			return nil, err
 		}
 	}
@@ -103,7 +103,8 @@ func (r *Registry) Platform() []PlatformModule {
 // not a module id, two modules with one name, migrations that are not one block of the
 // module's own under db.Assemble's rules, the platform's block included, an audit action that
 // is not the module's or is declared twice or without its summary key, and a sync entity that
-// sync.Violations finds wrong.
+// sync.Violations finds wrong or that holds its rows to every member of the household, which only
+// the platform's own entities do (WithPlatform).
 func NewRegistry(mods ...Module) (*Registry, error) {
 	r := &Registry{
 		byName:   make(map[string]Module, len(mods)),
@@ -135,7 +136,7 @@ func NewRegistry(mods ...Module) (*Registry, error) {
 			return nil, err
 		}
 		if source, ok := m.(SyncSource); ok {
-			if err := r.addEntities(n, source.SyncEntities()); err != nil {
+			if err := r.addEntities(n, source.SyncEntities(), false); err != nil {
 				return nil, err
 			}
 		}
@@ -168,9 +169,21 @@ func (r *Registry) addActions(module string, actions []AuditAction) error {
 	return nil
 }
 
-// addEntities checks the sync entities of the module named module and adds them.
-func (r *Registry) addEntities(module string, entities []sync.Entity) error {
-	if v := sync.Violations(module, entities); len(v) > 0 {
+// addEntities checks the sync entities of the module named module and adds them; platform says the
+// module is one the platform serves itself (PlatformModule). Only such a module holds an entity to
+// every member of the household (sync.Members): a module's rows are held to its grant while the
+// household enables it (PRD 03 §2.3, D-16), and a stream to every member checks neither, so a
+// module's entity declaring it would reach the replica of a member the module is absent for.
+func (r *Registry) addEntities(module string, entities []sync.Entity, platform bool) error {
+	v := sync.Violations(module, entities)
+	if !platform {
+		for _, e := range entities {
+			if e.Access&sync.Members != 0 {
+				v = append(v, e.Name+": access to every member of the household, which only the platform's own entities hold; a module's rows are held to its grant")
+			}
+		}
+	}
+	if len(v) > 0 {
 		return fmt.Errorf("module: %s declares sync entities wrongly:\n  %s", module, strings.Join(v, "\n  "))
 	}
 	for _, e := range entities {

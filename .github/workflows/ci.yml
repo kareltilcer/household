@@ -107,7 +107,7 @@ jobs:
       # file (packages/sync/conformance/stack), prepared as a deploy prepares a database.
       - name: Start the conformance stack
         run: pnpm --filter @household/sync conformance:up
-      # The harness's self-tests and negative controls against the stand-ins, the scenarios that
+      # The harness's self-tests and negative controls against the engine, the scenarios that
       # items 13, 14 and 18 have switched on, and a short fuzz run (the nightly workflow runs a
       # long one).
       - name: Conformance suite

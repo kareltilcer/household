@@ -2,11 +2,14 @@
 -- replication role PowerSync connects as streams from the write-ahead log, and replicate, which a
 -- migration calls on every table a generated stream reads, as it calls enable_tenant_isolation on
 -- every tenant table. Architecture test 10 fails a table a stream reads that is not published as
--- replicate leaves it, and one the replication role may read that no stream needs.
+-- replicate leaves it, and one the replication role may SELECT that no stream needs. Those grants
+-- bound the role's queries, PowerSync's snapshots among them, and not the write-ahead log: its
+-- REPLICATION decodes every table's changes through a slot of its own whatever it is granted, which
+-- is why its credential is the sync service's alone (db.RolePowerSync).
 
 -- +goose Up
 
--- The replication role reads nothing it is not given: it may look into the schema, and reads a
+-- The replication role queries nothing it is not given: it may look into the schema, and reads a
 -- table once replicate grants it one.
 GRANT USAGE ON SCHEMA public TO household_powersync;
 

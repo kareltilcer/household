@@ -60,7 +60,7 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   PowerSync's streams from the entity registry into `deploy/powersync/sync-config.yaml` and the
   conformance suite's stack, and architecture test 10 fails a committed one that is not what the
   registry generates, a table a stream reads that its migration did not publish with `replicate`,
-  and a table the replication role may read that no stream needs ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
+  and a table the replication role may `SELECT` that no stream needs ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
 - **Generated, never committed:** `packages/api/src/generated/` (the typed client, from
   `openapi.yaml`) and `packages/i18n/src/generated/` (message keys and arguments, from
   `catalogs/en.json`). turbo writes them before every typecheck, lint and test; after a

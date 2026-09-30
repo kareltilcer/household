@@ -87,10 +87,13 @@ func (s *Service) HouseholdRoutes(r chi.Router) {
 
 // keys answers the public keys as a JSON Web Key Set, the signing key first. PowerSync caches them
 // and asks again every few minutes, and at once for a token signed by a key it does not hold, so a
-// key added in front of the others signs a token PowerSync verifies.
+// key added in front of the others signs a token PowerSync verifies. That asking again must reach
+// the API: a cache on the way that kept an earlier set would answer it with the set that lacks the
+// new key, and PowerSync would refuse every token it signs until the cached set expired. So no cache
+// answers with a set it holds without asking the API first (no-cache); PowerSync's own is its own.
 func (s *Service) keys(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(s.jwks)
 }
 

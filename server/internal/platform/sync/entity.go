@@ -96,7 +96,10 @@ const (
 	// Members holds a row to every member of its household, whatever their grant on its module: what
 	// every member's app works from, the household's settings, its memberships and which modules it
 	// enables (PRD modules/17 Sync). It stands in place of Grant, never beside it, and a row it
-	// holds is neither private nor an audience's.
+	// holds is neither private nor an audience's. Only the platform's own entities declare it
+	// (module.PlatformModule): its stream checks neither a grant nor the module's enablement, so a
+	// module's rows held to it would reach a member the module is absent for, which the module
+	// registry refuses.
 	Members
 
 	allAccess = Grant | Owner | Audience | Members
@@ -229,12 +232,12 @@ func Violations(module string, entities []Entity) []string {
 			case slices.ContainsFunc(e.Columns, func(c string) bool { return !column.MatchString(c) }):
 				bad("a column that is not a lowercase identifier")
 			default:
-				seen := map[string]bool{}
+				named := map[string]bool{}
 				for _, c := range e.Columns {
-					if seen[c] {
+					if named[c] {
 						bad("column %s named twice", c)
 					}
-					seen[c] = true
+					named[c] = true
 				}
 			}
 		}

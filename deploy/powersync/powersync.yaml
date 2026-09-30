@@ -4,9 +4,11 @@
 # .env.example's are.
 
 # It replicates from the household database as household_powersync, which `household-api bootstrap`
-# makes with REPLICATION and BYPASSRLS, and which reads the tables of the `powersync` publication
-# and no other (replicate). debug_api stays off: it would open the admin API's execute-sql, which
-# reads the database as that role, past row-level security.
+# makes with REPLICATION and BYPASSRLS, and which may query the tables of the `powersync` publication
+# and no other (replicate). Its REPLICATION is held to none of those grants: a replication slot of
+# its own would decode every table's changes, so its credential is as sensitive as the database's.
+# debug_api stays off: it would open the admin API's execute-sql, which reads the database as that
+# role, past row-level security.
 replication:
   connections:
     - type: postgresql

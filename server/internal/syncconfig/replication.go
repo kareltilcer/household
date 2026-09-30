@@ -17,10 +17,11 @@ const Publication = "powersync"
 // Replication returns what is wrong, in the database tx reads, with what streams and entities need
 // of it (architecture test 10), one line each: a table a stream reads that is not in the powersync
 // publication, that is not at REPLICA IDENTITY FULL, or that the replication role may not read; a
-// table the replication role may read that no stream reads and no entity is kept in, since the role
-// reads past row-level security and must read nothing it does not replicate; and a column an entity
-// replicates that its table does not have. A table is named bare in the public schema, and with its
-// schema elsewhere.
+// table the replication role may SELECT that no stream reads and no entity is kept in, since the
+// role queries past row-level security and must query nothing it does not replicate; and a column an
+// entity replicates that its table does not have. A table is named bare in the public schema, and
+// with its schema elsewhere. It holds the role's queries, not its REPLICATION, which decodes every
+// table's changes whatever the role is granted (db.RolePowerSync).
 func Replication(ctx context.Context, tx pgx.Tx, streams []sync.Stream, entities []sync.Entity) ([]string, error) {
 	type table struct {
 		published, full, readable bool
