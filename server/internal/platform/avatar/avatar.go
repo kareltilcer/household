@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -231,40 +230,70 @@ func (s *Service) URL(ctx context.Context, user uuid.UUID, ref Ref) *string {
 // not commit. pool reads the pictures users have, as the request role; the table is no household's.
 // It returns how many it removed. Item 15's scheduler runs it nightly.
 //
-// It lists the old pictures first and asks the table about those alone, as a household's sweep lists
-// before it reads (files.Service.Sweep): a night finds a handful to remove, and the table holds a row
-// for every user who has a picture, which read whole would be held in memory to decide about them.
+// It lists the old pictures first and asks the table about them after, as a household's sweep lists
+// before it reads (files.Service.Sweep), sweepBatch of them at a time as the listing goes, and keeps
+// only those no user has, which it removes once the listing is done. Nearly every picture is older
+// than a day, and the table holds a row for each user who has one: held whole, either would grow with
+// every user to find the handful a night removes.
 func (s *Service) Sweep(ctx context.Context, pool files.Querier) (int, error) {
 	cutoff := s.now().Add(-files.SweepGrace)
-	old := map[string]bool{}
-	var ids []uuid.UUID
+	var old, unowned []string
+	resolve := func() error {
+		had, err := owned(ctx, pool, old)
+		if err != nil {
+			return err
+		}
+		for _, k := range old {
+			if !had[k] {
+				unowned = append(unowned, k)
+			}
+		}
+		old = old[:0]
+		return nil
+	}
 	if err := s.store.List(ctx, "u/", func(o objectstore.Info) error {
 		if !strings.Contains(o.Key, "/avatar/") || !o.LastModified.Before(cutoff) {
 			return nil
 		}
-		old[o.Key] = true
-		if id, ok := pictureID(o.Key); ok {
-			ids = append(ids, id)
+		if old = append(old, o.Key); len(old) < sweepBatch {
+			return nil
 		}
-		return nil
+		return resolve()
 	}); err != nil {
 		return 0, err
 	}
-	if len(ids) > 0 {
-		rows, err := pool.Query(ctx, "SELECT user_id, id FROM avatars WHERE id = ANY($1)", ids)
-		if err != nil {
-			return 0, err
-		}
-		var user, id uuid.UUID
-		if _, err := pgx.ForEachRow(rows, []any{&user, &id}, func() error {
-			delete(old, Key(user, id))
-			return nil
-		}); err != nil {
-			return 0, err
+	if err := resolve(); err != nil {
+		return 0, err
+	}
+	return len(unowned), s.store.Delete(ctx, unowned...)
+}
+
+// sweepBatch is how many of the old pictures Sweep asks the table about at once, a listing's page,
+// but in the test that crosses from one batch to the next.
+var sweepBatch = 1000
+
+// owned returns which of keys name a picture a user has, as pool reads the table.
+func owned(ctx context.Context, pool files.Querier, keys []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	var ids []uuid.UUID
+	for _, k := range keys {
+		if id, ok := pictureID(k); ok {
+			ids = append(ids, id)
 		}
 	}
-	keys := slices.Sorted(maps.Keys(old))
-	return len(keys), s.store.Delete(ctx, keys...)
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := pool.Query(ctx, "SELECT user_id, id FROM avatars WHERE id = ANY($1)", ids)
+	if err != nil {
+		return nil, err
+	}
+	var user, id uuid.UUID
+	_, err = pgx.ForEachRow(rows, []any{&user, &id}, func() error {
+		out[Key(user, id)] = true
+		return nil
+	})
+	return out, err
 }
 
 // pictureID returns the picture's id that key names, u/{user_id}/avatar/{id}/picture, and false for a

@@ -12,8 +12,8 @@ import (
 
 // Attribution is who a file's bytes count against, and whether its entity is private to them
 // (FR-ST1): only the module knows either, since only it knows whose its entity is. The storage
-// picture splits the household's bytes by the member, and keeps a private entity's link and label
-// from everyone else.
+// picture splits the household's bytes by the member, and a private entity's link and label are kept
+// from everyone else but, for a child profile's, the household's owners, who may read it (D-19).
 type Attribution struct {
 	// Owner is the member, uuid.Nil for none, such as a system import's.
 	Owner   uuid.UUID

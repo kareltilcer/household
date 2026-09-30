@@ -188,6 +188,22 @@ func TestAMissingObjectIsNotFound(t *testing.T) {
 	}
 }
 
+// A bucket that is not there is no object found gone: the files workers would take an original for
+// lost, and its file for download-only for good, where the store is what failed, and a purge would
+// succeed on bytes it never reached.
+func TestAMissingBucketIsNoMissingObject(t *testing.T) {
+	s, err := objectstore.New(objectstore.Config{Location: testsupport.ObjectStoreLocation(t, "unmade-bucket"), Attempts: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Get(t.Context(), "h/a/documents/none/original"); err == nil || errors.Is(err, objectstore.ErrNotFound) {
+		t.Fatalf("get from a bucket that is not there = %v, want the store's failure", err)
+	}
+	if err := s.Delete(t.Context(), "h/a/documents/none/original"); err == nil {
+		t.Fatal("a delete from a bucket that is not there succeeded")
+	}
+}
+
 func TestListAndDeleteKeepToAPrefix(t *testing.T) {
 	s := testsupport.ObjectStore(t)
 	for _, k := range []string{"h/a/notes/1/original", "h/a/notes/1/thumbnail", "h/a/notes/2/original", "h/b/notes/1/original"} {

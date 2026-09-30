@@ -140,18 +140,27 @@ func Sniff(r io.ReaderAt, size int64, name string) Type {
 // troubleshooting pack (diagcab, diagcfg, diagpack), an Access project with its code (ade, adp, mde),
 // an Internet settings file (ins, isp), a shell scrap (shb, shs), PowerShell's and its predecessor's
 // formats and consoles (ps1xml, ps2, ps2xml, psc1, psc2, psd1, msh, msh1, msh2, mshxml, msh1xml,
-// msh2xml), a Visual Basic source or a driver (vb, sys, vxd), an Excel add-in (xll), an installer's
-// bundle or its manifest (appxbundle, msixbundle, appinstaller), and a disk image Windows mounts
-// when it is opened, whose programs then run without the mark that says they were downloaded (iso,
-// img, vhd, vhdx).
+// msh2xml), a Visual Basic source or a driver (vb, bas, sys, vxd), an Excel add-in (xll), an
+// installer's bundle or its manifest (appxbundle, msixbundle, appinstaller), a disk image Windows
+// mounts when it is opened, whose programs then run without the mark that says they were downloaded
+// (iso, img, vhd, vhdx), a Windows update package, which installs itself when it is opened (msu), a
+// ClickOnce application's reference, which fetches and starts it (appref-ms), a Python program, its
+// source, its bytecode or its zipped application, which the Python launcher runs when it is opened
+// (py, pyw, pyc, pyo, pyz, pyzw), a Perl program (pl), a script of the shells beside sh (bash, zsh,
+// ksh, csh), a macOS command Terminal runs, or its settings, which name one to run (tool,
+// terminal), a launcher a Linux desktop runs what it names from (desktop), an Access database's
+// compiled form or its add-in, as mde is (accde, mda), a sandbox's configuration, which names the
+// command it runs at sign-in (wsb), an installer's setup information (inf), and a pinned site or a
+// search, which open what they name (website, search-ms, searchconnector-ms).
 var programExtensions = []string{
 	"exe", "com", "scr", "msi", "msp", "dll", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh",
 	"hta", "cpl", "lnk", "jar", "apk", "aab", "ipa", "appx", "msix", "app", "dmg", "pkg", "deb", "rpm", "sh", "run",
 	"reg", "scf", "application", "msc", "pif", "ws", "wsc", "sct", "mst", "xbap", "url", "library-ms",
 	"settingcontent-ms", "gadget", "command", "jnlp", "chm", "hlp", "diagcab", "diagcfg", "diagpack", "ade", "adp",
 	"mde", "ins", "isp", "shb", "shs", "ps1xml", "ps2", "ps2xml", "psc1", "psc2", "psd1", "msh", "msh1", "msh2",
-	"mshxml", "msh1xml", "msh2xml", "vb", "sys", "vxd", "xll", "appxbundle", "msixbundle", "appinstaller", "iso",
-	"img", "vhd", "vhdx",
+	"mshxml", "msh1xml", "msh2xml", "vb", "bas", "sys", "vxd", "xll", "appxbundle", "msixbundle", "appinstaller", "iso",
+	"img", "vhd", "vhdx", "msu", "appref-ms", "py", "pyw", "pyc", "pyo", "pyz", "pyzw", "pl", "bash", "zsh", "ksh",
+	"csh", "tool", "terminal", "desktop", "accde", "mda", "wsb", "inf", "website", "search-ms", "searchconnector-ms",
 }
 
 // signatures are the types known by their first bytes, the programs among them.

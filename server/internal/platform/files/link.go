@@ -32,10 +32,11 @@ type Link struct {
 }
 
 // Link returns a link to the variant of module's entity in ctx's household (FR-FL2). It is issued
-// only to a caller who can see the module, and for an entity private to a member, only to them: a
+// only to a caller who can see the module, and for an entity private to a member, only to those who
+// may open it (opens): the member, and, for a child profile's, the household's owners (D-19). A
 // module asks for more than seeing before it asks for the link, but no link reaches a caller the
-// module is absent for, or a private file of another's, whoever forgot to ask. Each of those, and an
-// object that is not there, is 404, since a 403 would say it exists (D-16).
+// module is absent for, or a private file they may not open, whoever forgot to ask. Each of those,
+// and an object that is not there, is 404, since a 403 would say it exists (D-16).
 //
 // An active type, HTML or SVG, and anything a browser does not show, is a download, never rendered
 // (FR-FL2); a variant is named after the original, with its own type's extension.
@@ -50,23 +51,25 @@ func (s *Service) Link(ctx context.Context, module string, entity uuid.UUID, var
 		filename    *string
 		ownerID     *uuid.UUID
 		private     bool
+		child       bool
 		contentType string
 	)
 	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
-			SELECT f.content_type, f.byte_size, f.sha256, o.filename, o.owner_id, o.private
+			SELECT f.content_type, f.byte_size, f.sha256, o.filename, o.owner_id, o.private,
+			  EXISTS (SELECT FROM memberships m WHERE m.household_id = o.household_id AND m.user_id = o.owner_id AND m.role = 'child')
 			FROM files f
 			JOIN files o ON o.household_id = f.household_id AND o.module = f.module AND o.entity_id = f.entity_id
 			  AND o.variant = 'original'
 			WHERE f.household_id = $1 AND f.module = $2 AND f.entity_id = $3 AND f.variant = $4`,
-			scope.HouseholdID(), module, entity, variant).Scan(&contentType, &row.ByteSize, &sha, &filename, &ownerID, &private)
+			scope.HouseholdID(), module, entity, variant).Scan(&contentType, &row.ByteSize, &sha, &filename, &ownerID, &private, &child)
 	})
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return Link{}, problem.NotFound()
 	case err != nil:
 		return Link{}, err
-	case private && (ownerID == nil || *ownerID != scope.UserID()):
+	case private && !opens(scope, ownerID, child):
 		return Link{}, problem.NotFound()
 	}
 	t := typeOf(contentType)
@@ -86,6 +89,21 @@ func (s *Service) Link(ctx context.Context, module string, entity uuid.UUID, var
 	row.URL, row.ExpiresAt, row.ContentType, row.Disposition = url, expires, contentType, t.Disposition()
 	row.ETag = hex.EncodeToString(sha)
 	return row, nil
+}
+
+// opens reports whether scope's caller may open an entity private to owner, which is a child profile
+// of the household when child says so: its owner may, and so may the household's owners when the
+// owner is a child profile, whose private items D-19 makes readable by them (FR-CH3), as a module
+// shows them the entity itself. An adult's private item is no one else's to open, owners included.
+// The storage picture's largest items hold to the same rule (storage.Picture).
+func opens(scope *tenant.Scope, owner *uuid.UUID, child bool) bool {
+	switch {
+	case owner == nil:
+		return false
+	case *owner == scope.UserID():
+		return true
+	}
+	return child && scope.Role() == access.Owner
 }
 
 // typeOf is the type a stored object was sniffed as, from the media type it was stored with.

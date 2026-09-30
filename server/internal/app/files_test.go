@@ -488,6 +488,50 @@ func TestNoLinkIsIssuedBeforeAuthorisation(t *testing.T) {
 	expect(t, rec, http.StatusNotFound, problem.CodeNotFound)
 }
 
+// A child profile's private file is its household's owners' to open, as D-19 makes a child's private
+// items readable by them (FR-CH3): its link is issued to them, and the storage picture lists it among
+// their largest items. It stays another adult's to open by nobody, and an adult's private file stays
+// no owner's to open (D-108).
+func TestAChildsPrivateFileIsItsOwnersToOpen(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	w.exec(testsupport.InsertEnablement, h, storage.Admin, true)
+	jana := w.member(h, access.Owner, nil)
+	petr := w.member(h, access.Member, level(access.Contribute))
+	w.exec("INSERT INTO module_grants (household_id, user_id, module, level) VALUES ($1, $2, $3, 'view')", h, petr, storage.Admin)
+	ema := w.member(h, access.Child, level(access.Contribute))
+	emas, petrs := idgen.New(), idgen.New()
+	expect(t, w.upload(h, ema, "deník.txt", []byte("Ema's diary"),
+		map[string]string{"id": emas.String(), "private": "true"}), http.StatusCreated, "")
+	expect(t, w.upload(h, petr, "poznámky.txt", []byte("Petr's own notes"),
+		map[string]string{"id": petrs.String(), "private": "true"}), http.StatusCreated, "")
+
+	w.link(h, emas, ema, "")
+	w.link(h, emas, jana, "")
+	w.link(h, petrs, petr, "")
+	expect(t, w.do(http.MethodGet, filePath(h, emas), petr, ""), http.StatusNotFound, problem.CodeNotFound)
+	expect(t, w.do(http.MethodGet, filePath(h, petrs), jana, ""), http.StatusNotFound, problem.CodeNotFound)
+
+	largest := func(reader uuid.UUID) []uuid.UUID {
+		t.Helper()
+		rec := w.do(http.MethodGet, "/api/v1"+householdPath(h, "/storage"), reader, "")
+		expect(t, rec, http.StatusOK, "")
+		var r reportDoc
+		decode(t, rec, &r)
+		var out []uuid.UUID
+		for _, it := range r.Largest {
+			out = append(out, it.EntityID)
+		}
+		return out
+	}
+	if got := largest(jana); !slices.Equal(got, []uuid.UUID{emas}) {
+		t.Fatalf("the owner's largest items %v, want the child's %v alone", got, emas)
+	}
+	if got := largest(petr); !slices.Equal(got, []uuid.UUID{petrs}) {
+		t.Fatalf("another adult's largest items %v, want his own %v alone", got, petrs)
+	}
+}
+
 // A module moves an entity to another member, or between shared and private, and every object of it
 // moves with it (FR-ST1): its original and the variants derived from it, which the storage picture
 // and the sample count against the member they name, and its link follows. A variant a worker is
@@ -1018,7 +1062,45 @@ func TestAJobItsWorkersNeverSettledIsGivenUp(t *testing.T) {
 	if keys := w.objects(files.Key(h, probe.Name, item, "")); len(keys) != 1 || len(w.jobs(h, item)) != 0 {
 		t.Fatalf("a job given up derived %v, jobs %v", keys, w.jobs(h, item))
 	}
-	if !strings.Contains(w.workLog.String(), "files: a job failed for good") {
-		t.Fatalf("a job given up was not logged: %s", w.workLog.String())
+	// Every line a job logs names its household, which the workers, in no request's scope, name
+	// themselves (FR-NF5).
+	if logged := w.workLog.String(); !strings.Contains(logged, "files: a job failed for good") ||
+		!strings.Contains(logged, `"household_id":"`+h.String()+`"`) {
+		t.Fatalf("a job given up was not logged with its household: %s", logged)
+	}
+}
+
+// A purge that fails for good marks no original's variants: none is its own, and one recorded again
+// under its entity's id once the delete had committed is another upload's, whose variants its own job
+// derived. Marked failed by the purge, that file would stay download-only for good.
+func TestAPurgeGivenUpLeavesAnotherUploadsVariants(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	jana := w.member(h, access.Owner, nil)
+	item := idgen.New()
+	content := picture(t, 100, 100)
+	expect(t, w.upload(h, jana, "a.png", content, map[string]string{"id": item.String()}), http.StatusCreated, "")
+	w.files.Drain(t.Context(), h)
+	expect(t, w.do(http.MethodDelete, filePath(h, item), jana, ""), http.StatusNoContent, "")
+	// The purge fails, and waits out its backoff, while the same file is recorded again under the id
+	// and its variants are derived.
+	w.exec("UPDATE file_jobs SET attempts = 4, run_at = now() + interval '1 hour' WHERE household_id = $1 AND kind = 'purge'", h)
+	expect(t, w.upload(h, jana, "a.png", content, map[string]string{"id": item.String()}), http.StatusCreated, "")
+	w.files.Drain(t.Context(), h)
+	if v := w.variantsOf(h, item); v != "ready" {
+		t.Fatalf("the variants of the file recorded again are %q", v)
+	}
+	// Its last attempt, whose worker died holding it: it is given up without running.
+	w.exec("UPDATE file_jobs SET attempts = 5, run_at = now() - interval '1 second' WHERE household_id = $1 AND kind = 'purge'", h)
+
+	w.files.Drain(t.Context(), h)
+	if jobs := w.jobs(h, item); len(jobs) != 0 {
+		t.Fatalf("jobs %v", jobs)
+	}
+	if v := w.variantsOf(h, item); v != "ready" {
+		t.Fatalf("a purge given up marked another upload's variants %q", v)
+	}
+	if keys := w.objects(files.Key(h, probe.Name, item, "")); len(keys) != 2 {
+		t.Fatalf("the file recorded again keeps %v", keys)
 	}
 }

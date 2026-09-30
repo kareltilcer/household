@@ -98,8 +98,9 @@ type trendDay struct {
 // whose, never what. The split by module leaves out every module the reader cannot see, which is
 // absent for them (FR-AC2): its line would tell a member kept out of Finance that the household keeps
 // Finance's files, and how many (D-16). The largest items leave out what the reader could not open,
-// another member's private item and anything in a module they cannot see (D-108), and name each as
-// its module labels it, by its file's name where the module gives no label.
+// another member's private item, but for an owner a child profile's, which they may read (D-19), and
+// anything in a module they cannot see (D-108), and name each as its module labels it, by its file's
+// name where the module gives no label.
 func (p *Picture) picture(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if err := grant.Require(ctx, Admin, access.View); err != nil {
@@ -162,7 +163,7 @@ func (p *Picture) picture(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		if err := p.largest(ctx, tx, household, scope.UserID(), visible, &out); err != nil {
+		if err := p.largest(ctx, tx, scope, visible, &out); err != nil {
 			return err
 		}
 
@@ -184,10 +185,13 @@ func (p *Picture) picture(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
-// largest fills in the household's largest items the reader may open: by what deleting each would
-// recover, its original and every variant derived from it, summed for every entity in one pass over
-// the household's rows rather than once for each of its originals.
-func (p *Picture) largest(ctx context.Context, tx pgx.Tx, household, reader uuid.UUID, visible []string, out *report) error {
+// largest fills in the largest items of scope's household its reader may open: by what deleting each
+// would recover, its original and every variant derived from it, summed for every entity in one pass
+// over the household's rows rather than once for each of its originals. A private item is the
+// reader's to open when it is their own, and, for an owner, when it is a child profile's, whose
+// private items D-19 makes readable by the household's owners (FR-CH3), as a link to its file is
+// issued to them (files.Service.Link).
+func (p *Picture) largest(ctx context.Context, tx pgx.Tx, scope *tenant.Scope, visible []string, out *report) error {
 	rows, err := tx.Query(ctx, `
 		SELECT o.module, o.entity_id, coalesce(o.filename, ''), o.byte_size, e.bytes
 		FROM files o
@@ -195,9 +199,11 @@ func (p *Picture) largest(ctx context.Context, tx pgx.Tx, household, reader uuid
 		      WHERE household_id = $1 AND module = ANY($2) GROUP BY module, entity_id) e
 		  ON e.module = o.module AND e.entity_id = o.entity_id
 		WHERE o.household_id = $1 AND o.variant = 'original' AND o.module = ANY($2)
-		  AND (NOT o.private OR o.owner_id = $3)
+		  AND (NOT o.private OR o.owner_id = $3
+		       OR ($5 AND EXISTS (SELECT FROM memberships m
+		                          WHERE m.household_id = o.household_id AND m.user_id = o.owner_id AND m.role = 'child')))
 		ORDER BY e.bytes DESC, o.entity_id
-		LIMIT $4`, household, visible, reader, Largest)
+		LIMIT $4`, scope.HouseholdID(), visible, scope.UserID(), Largest, scope.Role() == access.Owner)
 	if err != nil {
 		return err
 	}

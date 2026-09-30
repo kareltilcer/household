@@ -30,6 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 var (
@@ -471,12 +472,22 @@ func status(err error) int {
 }
 
 // missing reports whether err says there is no such object: a typed NoSuchKey or NotFound, or a
-// bare 404, which a HEAD answers with, having no body to type.
+// bare 404, which a HEAD answers with, having no body to type. A 404 that says the bucket is not
+// there, NoSuchBucket, is no object found gone: a bucket deleted, or not the one the URL names, is
+// the store's failure, which a files job retries rather than taking the original for lost and its
+// file for download-only for good, and which a purge reports rather than succeeding on.
 func missing(err error) bool {
+	var api smithy.APIError
+	if errors.As(err, &api) && api.ErrorCode() == noSuchBucket {
+		return false
+	}
 	var nsk *types.NoSuchKey
 	var nf *types.NotFound
 	return errors.As(err, &nsk) || errors.As(err, &nf) || status(err) == http.StatusNotFound
 }
+
+// noSuchBucket is the code S3 answers a request to a bucket that is not there with.
+const noSuchBucket = "NoSuchBucket"
 
 // digest reads the hex digest the metadata carries.
 func digest(s string) ([32]byte, bool) {

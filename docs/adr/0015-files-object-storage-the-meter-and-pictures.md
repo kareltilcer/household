@@ -43,10 +43,11 @@ authorised the caller, in three steps:
   (`413 payload_too_large`, refused from `Content-Length` before a byte is read when that shows it),
   computes its SHA-256 and sniffs its type from its bytes (`Sniff`). The client's name never makes a
   type: it only says which kind of plain text text is, and a program's extension (`.exe`, `.msi`,
-  `.jar`, `.bat`, `.ps1`, `.chm`, `.jnlp`, a disk image Windows mounts, …) blocks a file whatever its
-  bytes are, since a script is text to any sniffer. A program (PE, ELF, Mach-O, a shebang script, a
-  JAR or an Android or Windows package, an MSI by its compound file's class id) or a type the route's
-  `Accept` does not take is `415`; a form with no file, two, an empty one, a field sent twice, or a
+  `.msu`, `.jar`, `.bat`, `.ps1`, `.py`, `.chm`, `.jnlp`, `.appref-ms`, a disk image Windows mounts,
+  …) blocks a file whatever its bytes are, since a script is text to any sniffer. A program (PE, ELF,
+  Mach-O, a shebang script, a JAR or an Android or Windows package, an MSI by its compound file's
+  class id) or a type the route's `Accept` does not take is `415`; a form with no file, two, an empty
+  one, a field sent twice, or a
   field over its length is `422`. A ZIP's directory is read to 4 MiB at most, since `zip.NewReader`
   holds every entry it lists; one larger is an archive. The upload's body may take `HOUSEHOLD_UPLOAD_TIMEOUT` (15 minutes)
   to arrive, extended past the server's body deadline through `http.ResponseController`; a spool the
@@ -144,16 +145,19 @@ counts its empty days. Item 15's scheduler runs it nightly, with the sweeps.
 **Attribution travels with each object.** A module declares, when it records an upload, the member the
 bytes count against and whether the entity is private to them, and keeps it current with
 `Attribute`; the row carries it, so the sampler splits by member without reading any module's table,
-and a link to a private entity's object, or its variant, reaches its owner alone. A module labels its
-entities for the storage picture through `StorageLabels`, read in the reader's household; without it,
-the original's file name is the label.
+and a link to a private entity's object, or its variant, reaches its owner alone, and, when the owner
+is a child profile, the household's owners, whom D-19 lets read a child's private items. A module
+labels its entities for the storage picture through `StorageLabels`, read in the reader's household;
+without it, the original's file name is the label.
 
 **A link** (`Link`, the contract's `ContentLink`) is pre-signed for one object, signed as of the start
 of the five minutes it is issued in and valid for fifteen from then, so it works for ten minutes at
 least, and every link to an object issued in the same five minutes is the same URL, which a client's
 cache keeps. It is issued only to a caller who can see the module, and for a private entity only to
-its owner; each refusal is the `404` a missing object is. The response presents the stored type, and
-an active type or a type a browser does not show as an attachment, whatever the object says.
+its owner, or, for a child profile's, to the household's owners too (D-19); each refusal is the `404`
+a missing object is. The storage picture's largest items keep to the same rule. The response
+presents the stored type, and an active type or a type a browser does not show as an attachment,
+whatever the object says.
 
 **Pictures are the account's** (`internal/platform/avatar`, D-107): the upload (JPEG, PNG, GIF or WebP,
 20 MB) is decoded, its centred square scaled to at most 512 pixels, turned upright and written again,
@@ -199,11 +203,12 @@ holder of the household code that lists a child's profile.
   pending row: `files` names bytes once they are in the store, whatever the module's row says of
   them.
 - A file's attribution names one member and whether the entity is private to them, and no audience
-  between that and the whole module: `Link` refuses a private file to everyone but its owner, and the
-  storage picture lists a shared one to every reader who can see its module. A module whose entities
-  some of its members may not open, though they are no one member's, Chat's conversations (item 85),
-  extends the attribution with that audience before it records a file; recorded as shared, its
-  attachments would be named in the picture to members who are not in the conversation (D-108).
+  between that and the whole module: `Link` refuses a private file to everyone but its owner, and a
+  child profile's owners (D-19), and the storage picture lists a shared one to every reader who can
+  see its module. A module whose entities some of its members may not open, though they are no one
+  member's, Chat's conversations (item 85), extends the attribution with that audience before it
+  records a file; recorded as shared, its attachments would be named in the picture to members who
+  are not in the conversation (D-108).
 - `nosniff` cannot be set on what the store serves: S3 lets a pre-signed URL override the type and
   the disposition, not other headers. The edge in front of the bucket adds it in a deployment
   (`docs/runbooks/object-storage.md`); in development RustFS serves without it, from an origin other

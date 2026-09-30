@@ -61,17 +61,20 @@ func TestAHouseholdFoundDueWhileHeldIsLookedAtAgain(t *testing.T) {
 
 // A panic in what a job runs, a decoder's on a member's upload, fails the job for good rather than
 // ending the process that runs it, and is logged by its type and the stack, never by its value,
-// which may quote the file.
+// which may quote the file, and by the household whose job it was, which the workers, running in no
+// request's scope, name themselves (FR-NF5).
 func TestAJobThatPanicsFailsForGood(t *testing.T) {
 	var logged bytes.Buffer
 	s := &Service{log: logging.New(&logged, slog.LevelDebug)}
-	err := s.guard(t.Context(), job{kind: "variants", module: "probe"}, func(context.Context, job) error {
+	household := idgen.New()
+	err := s.guard(t.Context(), job{household: household, kind: "variants", module: "probe"}, func(context.Context, job) error {
 		panic("Smlouva o dílo, strana 1")
 	})
 	if !errors.Is(err, errPermanent) {
 		t.Fatalf("a job that panicked = %v, want a failure for good", err)
 	}
-	if out := logged.String(); !strings.Contains(out, "files: a job panicked") || strings.Contains(out, "Smlouva") {
+	if out := logged.String(); !strings.Contains(out, "files: a job panicked") || strings.Contains(out, "Smlouva") ||
+		!strings.Contains(out, `"household_id":"`+household.String()+`"`) {
 		t.Fatalf("logged %s", out)
 	}
 	if err := s.guard(t.Context(), job{kind: "purge"}, func(context.Context, job) error { return errGone }); !errors.Is(err, errGone) {

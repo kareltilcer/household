@@ -136,7 +136,7 @@ func (s *Service) drain(ctx context.Context, household uuid.UUID) {
 		j, ok, err := s.claim(ctx, household)
 		if err != nil {
 			if ctx.Err() == nil {
-				s.log.LogAttrs(ctx, slog.LevelError, "files: claim a job", slog.Any("error", err))
+				s.log.LogAttrs(ctx, slog.LevelError, "files: claim a job", householdAttr(household), slog.Any("error", err))
 			}
 			return
 		}
@@ -186,6 +186,12 @@ func (s *Service) claim(ctx context.Context, household uuid.UUID) (job, bool, er
 // attempt, and one past the last is a job whose workers ended with the process before they could
 // settle it, killed for the memory it took or by what else it did. Tried again, it would take down
 // each instance that claimed it, one lease after another.
+//
+// A variants job given up marks its original's variants failed, and the file stays download-only. A
+// purge given up marks nothing: no original is its own, and one there is another upload's, recorded
+// again under the entity's id once the delete had committed, whose variants its own job settles, and
+// which a purge marking it failed would leave download-only for good. The bytes the purge left, which
+// no row records, are the sweep's.
 func (s *Service) run(ctx context.Context, j job) {
 	running, stop := s.leased(ctx, j)
 	defer stop()
@@ -207,17 +213,28 @@ func (s *Service) run(ctx context.Context, j job) {
 		// Stopped by a shutdown, not failed: it runs again at once, its attempt not counted.
 		err = s.settle(settle, j, "", -1)
 	case errors.Is(err, errPermanent) || j.attempts >= maxAttempts:
-		s.log.LogAttrs(ctx, slog.LevelWarn, "files: a job failed for good", slog.String("kind", j.kind),
+		s.log.LogAttrs(ctx, slog.LevelWarn, "files: a job failed for good", householdAttr(j.household), slog.String("kind", j.kind),
 			slog.String("module", j.module), slog.Any("error", err))
-		err = s.settle(settle, j, "failed", 0)
+		status := ""
+		if j.kind == "variants" {
+			status = "failed"
+		}
+		err = s.settle(settle, j, status, 0)
 	default:
-		s.log.LogAttrs(ctx, slog.LevelWarn, "files: a job failed; it runs again later", slog.String("kind", j.kind),
-			slog.String("module", j.module), slog.Int("attempts", j.attempts), slog.Any("error", err))
+		s.log.LogAttrs(ctx, slog.LevelWarn, "files: a job failed; it runs again later", householdAttr(j.household),
+			slog.String("kind", j.kind), slog.String("module", j.module), slog.Int("attempts", j.attempts), slog.Any("error", err))
 		err = s.settle(settle, j, "", backoff[min(j.attempts, len(backoff))-1])
 	}
 	if err != nil {
-		s.log.LogAttrs(ctx, slog.LevelError, "files: settle a job", slog.Any("error", err))
+		s.log.LogAttrs(ctx, slog.LevelError, "files: settle a job", householdAttr(j.household), slog.Any("error", err))
 	}
+}
+
+// householdAttr names household on a line a job logs. The workers run in no request's scope, from
+// which the logger takes the household for a request's lines, and every line names its household
+// (FR-NF5): without it, an operator reading that a job failed could not tell whose files it was for.
+func householdAttr(household uuid.UUID) slog.Attr {
+	return slog.String(logging.KeyHouseholdID, household.String())
 }
 
 // leased returns ctx for as long as j's lease lasts. The lease runs from the now() of the transaction
@@ -236,7 +253,7 @@ func (s *Service) leased(ctx context.Context, j job) (context.Context, context.C
 func (s *Service) guard(ctx context.Context, j job, fn func(context.Context, job) error) (err error) {
 	defer func() {
 		if v := recover(); v != nil {
-			s.log.LogAttrs(ctx, slog.LevelError, "files: a job panicked", slog.String("kind", j.kind),
+			s.log.LogAttrs(ctx, slog.LevelError, "files: a job panicked", householdAttr(j.household), slog.String("kind", j.kind),
 				slog.String("module", j.module), slog.String("panic", httpx.TypeName(v)), slog.String("stack", logging.Stack()))
 			err = fmt.Errorf("%w: it panicked", errPermanent)
 		}

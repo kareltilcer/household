@@ -18,9 +18,10 @@
 --
 -- owner_id and private are the attribution the module declares for the object (FR-ST1): the member
 -- its bytes count against in the storage picture, and whether the entity is private to them, which
--- keeps its link and its label from anyone else. variants, on an original only, is the state of the
--- variants derived from it: pending until the job that derives them ends, then ready, failed (the
--- file stays download-only, FR-FL3), or none for a type that has none.
+-- keeps its link and its label from anyone else but, for a child profile's, the household's owners
+-- (D-19). variants, on an original only, is the state of the variants derived from it: pending until
+-- the job that derives them ends, then ready, failed (the file stays download-only, FR-FL3), or none
+-- for a type that has none.
 CREATE TABLE files (
   household_id uuid NOT NULL REFERENCES households (id) ON DELETE CASCADE,
   module text NOT NULL REFERENCES modules (id),
