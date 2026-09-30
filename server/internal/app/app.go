@@ -74,7 +74,8 @@ type Deps struct {
 	Households *household.Service
 	// Sync is the sync surfaces (item 13), every one of which the router needs.
 	Sync Sync
-	// Storage is the storage picture (item 14).
+	// Storage is the storage picture (item 14). It labels the largest items by Modules when it names
+	// no modules of its own.
 	Storage *storage.Picture
 }
 
@@ -141,6 +142,12 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	}
 	if d.Storage == nil {
 		return nil, errors.New("app: the router needs the storage picture")
+	}
+	// The picture labels the largest items by the modules the router serves, unless it was given
+	// others: without them it would name each by its file, whatever its module calls it.
+	picture := *d.Storage
+	if picture.Modules == nil {
+		picture.Modules = d.Modules
 	}
 	registry, err := d.Modules.WithPlatform(household.Admin())
 	if err != nil {
@@ -217,7 +224,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Households.HouseholdRoutes)
 			// A replica's credentials keep no key: a credential is never kept to be answered with.
 			inHousehold.Group(d.Sync.Replica.HouseholdRoutes)
-			inHousehold.Group(d.Storage.Routes)
+			inHousehold.Group(picture.Routes)
 			inHousehold.With(perDevice, idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(pushes.Routes)
 			// A child profile's PIN keeps no key, as a password does not (D-97).
 			inHousehold.Group(d.Households.PINRoutes)

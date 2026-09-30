@@ -219,7 +219,10 @@ func (c *converter) convert(w http.ResponseWriter, r *http.Request, name string,
 	cmd.Env = append(os.Environ(), "HOME="+dir)
 	cmd.WaitDelay = 5 * time.Second
 	killGroup(cmd)
-	output, err := cmd.CombinedOutput()
+	// What the commands print goes nowhere: a damaged document's diagnostics quote it, poppler's an
+	// operator it could not read from the page's text, and no log line carries content (FR-NF5). A
+	// failure is logged by the command and how it ended.
+	err = cmd.Run()
 	switch {
 	case ctx.Err() != nil:
 		c.log.LogAttrs(r.Context(), slog.LevelWarn, "a conversion ran out of time", slog.String("command", filepath.Base(argv[0])))
@@ -227,7 +230,7 @@ func (c *converter) convert(w http.ResponseWriter, r *http.Request, name string,
 		return
 	case err != nil:
 		c.log.LogAttrs(r.Context(), slog.LevelWarn, "a conversion failed", slog.String("command", filepath.Base(argv[0])),
-			slog.Any("error", err), slog.String("output", tail(output)))
+			slog.Any("error", err))
 	}
 	f, err := os.Open(out) //nolint:gosec // G304: a path in the conversion's own directory.
 	if err != nil {
@@ -266,14 +269,6 @@ func receive(path string, body io.Reader) (int, error) {
 		return http.StatusUnprocessableEntity, errors.New("empty")
 	}
 	return 0, nil
-}
-
-// tail is the last of a command's output, for a log line.
-func tail(output []byte) string {
-	if len(output) > 512 {
-		output = output[len(output)-512:]
-	}
-	return string(output)
 }
 
 func (c *converter) fail(w http.ResponseWriter, r *http.Request, err error) {

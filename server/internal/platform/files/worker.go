@@ -16,9 +16,10 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
-// The jobs' timing: a worker that takes a job holds it for lease, after which another may take it
-// as one whose worker died; a job that failed waits backoff[attempts-1] before it is tried again,
-// and one that failed maxAttempts times is given up, its file left download-only.
+// The jobs' timing: a worker that takes a job holds it for lease (Config.Lease), after which another
+// may take it as one whose worker died, and the job is stopped then as one that failed; a job that
+// failed waits backoff[attempts-1] before it is tried again, and one that failed maxAttempts times is
+// given up, its file left download-only.
 const (
 	lease       = 10 * time.Minute
 	maxAttempts = 5
@@ -157,7 +158,7 @@ func (s *Service) claim(ctx context.Context, household uuid.UUID) (job, bool, er
 			      ORDER BY run_at LIMIT 1 FOR UPDATE SKIP LOCKED) d
 			WHERE j.household_id = $1 AND j.kind = d.kind AND j.module = d.module AND j.entity_id = d.entity_id
 			RETURNING j.kind, j.module, j.entity_id, j.attempts`,
-			household, lease.Seconds(), j.claim).Scan(&j.kind, &j.module, &j.entity, &j.attempts)
+			household, s.lease.Seconds(), j.claim).Scan(&j.kind, &j.module, &j.entity, &j.attempts)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -168,13 +169,19 @@ func (s *Service) claim(ctx context.Context, household uuid.UUID) (job, bool, er
 }
 
 // run runs j and settles it: done, tried again later, or given up.
+//
+// The job runs for its lease at most, and past it fails as any job does, to be tried again: another
+// worker may take it then, and a store that stops answering would otherwise hold this worker for as
+// long as the process lives, since the store's client gives up on nothing by itself.
 func (s *Service) run(ctx context.Context, j job) {
+	running, stop := context.WithTimeout(ctx, s.lease)
+	defer stop()
 	var err error
 	switch j.kind {
 	case "variants":
-		err = s.derive(ctx, j)
+		err = s.derive(running, j)
 	case "purge":
-		err = s.purge(ctx, j)
+		err = s.purge(running, j)
 	}
 	// The job is settled even when ctx has ended: a job left claimed waits out its lease.
 	settle := context.WithoutCancel(ctx)

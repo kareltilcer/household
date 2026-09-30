@@ -23,7 +23,7 @@ import (
 const (
 	thumbnailSide = 320
 	previewSide   = 1600
-	maxPixels     = 64 << 20
+	maxPixels     = 64_000_000
 	// maxPage caps the PNG of a page the converter draws.
 	maxPage = 32 << 20
 )

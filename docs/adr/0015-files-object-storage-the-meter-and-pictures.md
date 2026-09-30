@@ -43,12 +43,15 @@ authorised the caller, in three steps:
   (`413 payload_too_large`, refused from `Content-Length` before a byte is read when that shows it),
   computes its SHA-256 and sniffs its type from its bytes (`Sniff`). The client's name never makes a
   type: it only says which kind of plain text text is, and a program's extension (`.exe`, `.msi`,
-  `.jar`, `.bat`, `.ps1`, …) blocks a file whatever its bytes are, since a script is text to any
-  sniffer. A program (PE, ELF, Mach-O, a shebang script, a JAR or an Android or Windows package, an
-  MSI by its compound file's class id) or a type the route's `Accept` does not take is `415`; a form
-  with no file, two, an empty one, or a field over its length is `422`. The upload's body may take
-  `HOUSEHOLD_UPLOAD_TIMEOUT` (15 minutes) to arrive, extended past the server's body deadline through
-  `http.ResponseController`.
+  `.jar`, `.bat`, `.ps1`, `.chm`, `.jnlp`, a disk image Windows mounts, …) blocks a file whatever its
+  bytes are, since a script is text to any sniffer. A program (PE, ELF, Mach-O, a shebang script, a
+  JAR or an Android or Windows package, an MSI by its compound file's class id) or a type the route's
+  `Accept` does not take is `415`; a form with no file, two, an empty one, or a field over its length
+  is `422`. A ZIP's directory is read to 4 MiB at most, since `zip.NewReader` holds every entry it
+  lists; one larger is an archive. The upload's body may take `HOUSEHOLD_UPLOAD_TIMEOUT` (15 minutes)
+  to arrive, extended past the server's body deadline through `http.ResponseController`; a spool the
+  server cannot write is its own `500`, never the body's `422`. The Idempotency-Key's fingerprint of
+  a multipart body leaves out its boundary, which a client draws afresh for every attempt.
 - `Put` checks the storage ceiling against the rows the household has now (`402
   storage_ceiling_reached`, with `over_by_bytes` and `blocks_at_ceiling`, remedy `free_storage`; below
   the ceiling an upload always succeeds, D-33) and writes the bytes to
@@ -81,7 +84,8 @@ anything unrecognised are downloads.
 **Variants are derived by workers in every instance**, from `file_jobs` rows the upload's own
 transaction wrote. A commit wakes its instance's workers (`Nudge`); the others find due jobs every
 30 seconds. A worker claims a household's next due job with `FOR UPDATE SKIP LOCKED`, moving its
-`run_at` past a ten-minute lease, so a job whose worker died runs again once the lease passes; one
+`run_at` past a ten-minute lease, so a job whose worker died runs again once the lease passes, and a
+job runs no longer than its lease, since the store's client gives up on nothing by itself; one
 that fails for a reason a retry may mend waits 1, 5, 30 and 120 minutes, and after five tries, or at
 once for a file that cannot be decoded or converted, the original's `variants` is `failed` and the
 file stays download-only, its upload never lost. A variant is put `If-None-Match` too; one a
@@ -97,7 +101,8 @@ module, built into `deploy/converter`'s image over Debian's LibreOffice (`*-nogu
 /pdf?ext=` converts an office document with `soffice --convert-to pdf`, `POST /page?side=` draws a
 PDF's first page with `pdftoppm`; each conversion has a directory and a LibreOffice profile of its
 own, so two run at once, and a timeout (two minutes, thirty seconds) past which its whole process
-group is killed. What it cannot convert is `422`, which the pipeline takes for good; a timeout `504`
+group is killed. What the commands print is discarded, since a damaged document's diagnostics quote
+it (FR-NF5). What it cannot convert is `422`, which the pipeline takes for good; a timeout `504`
 and a wait for a slot `503`, which it retries. It runs with no route out in a deployment, since a
 document may name remote resources. CI builds the image and converts a real document through it.
 

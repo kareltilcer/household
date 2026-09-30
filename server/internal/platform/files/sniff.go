@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net/http"
 	"path"
@@ -133,13 +134,24 @@ func Sniff(r io.ReaderAt, size int64, name string) Type {
 // sniffer cannot always tell from text or from an archive, and what the system opening it runs as
 // one: a management console (msc, XML to a sniffer), a program's shortcut (pif), a Windows script
 // component or scriptlet (ws, wsc, sct), a transform an installer applies (mst), a browser-hosted
-// application (xbap), a shortcut to a place that runs what it names (url, library-ms,
-// settingcontent-ms), a desktop gadget, and a macOS script Terminal runs when it is opened (command).
+// application (xbap) or one Java Web Start fetches (jnlp), a shortcut to a place that runs what it
+// names (url, library-ms, settingcontent-ms), a desktop gadget, a macOS script Terminal runs when it
+// is opened (command), help Windows opens in a browser that runs its scripts (chm, hlp), a
+// troubleshooting pack (diagcab, diagcfg, diagpack), an Access project with its code (ade, adp, mde),
+// an Internet settings file (ins, isp), a shell scrap (shb, shs), PowerShell's and its predecessor's
+// formats and consoles (ps1xml, ps2, ps2xml, psc1, psc2, psd1, msh, msh1, msh2, mshxml, msh1xml,
+// msh2xml), a Visual Basic source or a driver (vb, sys, vxd), an Excel add-in (xll), an installer's
+// bundle or its manifest (appxbundle, msixbundle, appinstaller), and a disk image Windows mounts
+// when it is opened, whose programs then run without the mark that says they were downloaded (iso,
+// img, vhd, vhdx).
 var programExtensions = []string{
 	"exe", "com", "scr", "msi", "msp", "dll", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh",
 	"hta", "cpl", "lnk", "jar", "apk", "aab", "ipa", "appx", "msix", "app", "dmg", "pkg", "deb", "rpm", "sh", "run",
 	"reg", "scf", "application", "msc", "pif", "ws", "wsc", "sct", "mst", "xbap", "url", "library-ms",
-	"settingcontent-ms", "gadget", "command",
+	"settingcontent-ms", "gadget", "command", "jnlp", "chm", "hlp", "diagcab", "diagcfg", "diagpack", "ade", "adp",
+	"mde", "ins", "isp", "shb", "shs", "ps1xml", "ps2", "ps2xml", "psc1", "psc2", "psd1", "msh", "msh1", "msh2",
+	"mshxml", "msh1xml", "msh2xml", "vb", "sys", "vxd", "xll", "appxbundle", "msixbundle", "appinstaller", "iso",
+	"img", "vhd", "vhdx",
 }
 
 // signatures are the types known by their first bytes, the programs among them.
@@ -319,11 +331,36 @@ func sniffText(head []byte, ext string) Type {
 	return t
 }
 
+// maxZipDirectory bounds what sniffZip reads of a ZIP, its end record and its central directory
+// among it: zip.NewReader holds every entry the directory lists, however many that is, and a 100 MB
+// ZIP of empty entries lists two million of them, half a gigabyte for one upload. A document's
+// directory is a few kilobytes and a large application's a megabyte or two; one larger is read no
+// further, and the file is an archive.
+const maxZipDirectory = 4 << 20
+
+// errZipDirectory is boundedReader's answer once a ZIP's reading is past maxZipDirectory.
+var errZipDirectory = errors.New("files: the ZIP's directory is larger than the sniffer reads")
+
+// boundedReader reads from r until it has read left bytes in all, and refuses every read after.
+type boundedReader struct {
+	r    io.ReaderAt
+	left int64
+}
+
+func (b *boundedReader) ReadAt(p []byte, off int64) (int, error) {
+	if int64(len(p)) > b.left {
+		b.left = 0
+		return 0, errZipDirectory
+	}
+	b.left -= int64(len(p))
+	return b.r.ReadAt(p, off)
+}
+
 // sniffZip reads a ZIP's directory: an office document, a program in an archive's clothing (a JAR,
 // an Android or Windows package), or an archive.
 func sniffZip(r io.ReaderAt, size int64) Type {
 	archive := Type{MIME: "application/zip", Class: ClassArchive, Ext: "zip"}
-	z, err := zip.NewReader(r, size)
+	z, err := zip.NewReader(&boundedReader{r: r, left: maxZipDirectory}, size)
 	if err != nil {
 		return archive
 	}

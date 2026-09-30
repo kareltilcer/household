@@ -97,6 +97,9 @@ type Config struct {
 	// for jobs other instances' commits left, 30 seconds when zero.
 	Workers int
 	Poll    time.Duration
+	// Lease is how long a worker holds a job it takes, and so how long the job may run, 10 minutes
+	// when zero: past it another worker may take the job, as one whose worker died.
+	Lease time.Duration
 }
 
 // Service is the pipeline.
@@ -114,6 +117,7 @@ type Service struct {
 	now       func() time.Time
 	workers   int
 	poll      time.Duration
+	lease     time.Duration
 
 	wake chan struct{}
 	mu   sync.Mutex
@@ -135,7 +139,7 @@ func New(cfg Config) (*Service, error) {
 	s := &Service{
 		pool: cfg.Pool, meter: cfg.Meter, store: cfg.Store, convert: cfg.Convert, log: cfg.Log,
 		dir: cfg.Dir, timeout: cfg.Timeout, maxBytes: cfg.MaxBytes, allowance: cfg.Allowance, state: cfg.State,
-		now: cfg.Now, workers: cfg.Workers, poll: cfg.Poll,
+		now: cfg.Now, workers: cfg.Workers, poll: cfg.Poll, lease: cfg.Lease,
 		wake: make(chan struct{}, 1), busy: map[uuid.UUID]bool{},
 	}
 	if s.dir == "" {
@@ -158,6 +162,9 @@ func New(cfg Config) (*Service, error) {
 	}
 	if s.poll <= 0 {
 		s.poll = 30 * time.Second
+	}
+	if s.lease <= 0 {
+		s.lease = lease
 	}
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return nil, fmt.Errorf("files: the upload directory: %w", err)

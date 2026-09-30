@@ -3,6 +3,7 @@ package files
 import (
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -163,16 +164,46 @@ func (s *Service) spool(u *Upload, part io.Reader, limit int64) error {
 	}
 	u.file = f
 	h := sha256.New()
-	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(part, limit+1))
-	switch {
-	case err != nil:
-		return readFailed(err)
-	case n > limit:
-		return problem.New(http.StatusRequestEntityTooLarge, problem.CodePayloadTooLarge)
+	n, err := copyPart(io.MultiWriter(f, h), part, limit)
+	if err != nil {
+		return err
 	}
 	u.Size = n
 	copy(u.SHA256[:], h.Sum(nil))
 	return nil
+}
+
+// copyPart copies part to dst, and refuses a part over limit. A part that stops arriving is the
+// client's (readFailed); a write that fails is the server's, the disk its uploads are read to full or
+// gone, and is the error it is, answered 500, never a body refused as malformed, which no client
+// sends again and no user can mend.
+func copyPart(dst io.Writer, part io.Reader, limit int64) (int64, error) {
+	src := &readErrors{r: io.LimitReader(part, limit+1)}
+	n, err := io.Copy(dst, src)
+	switch {
+	case src.err != nil:
+		return n, readFailed(src.err)
+	case err != nil:
+		return n, fmt.Errorf("files: spool an upload: %w", err)
+	case n > limit:
+		return n, problem.New(http.StatusRequestEntityTooLarge, problem.CodePayloadTooLarge)
+	}
+	return n, nil
+}
+
+// readErrors keeps the error its reader answered, other than the end of what it reads, so that a
+// copy's failure can be told the reader's from the writer's.
+type readErrors struct {
+	r   io.Reader
+	err error
+}
+
+func (e *readErrors) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		e.err = err
+	}
+	return n, err
 }
 
 // readFailed is the answer to a body that stopped arriving: past its deadline the request is

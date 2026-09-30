@@ -311,14 +311,22 @@ func unstorable(key string) (string, bool) {
 // put back for the handler; on a request an operation matches, the edge has already read it
 // into memory under the same cap. A body in another media type, an upload, is the handler's to
 // stream and is not read here, so its length stands in for it.
+//
+// A form's boundary is not the request's: a browser, and React Native, draw one afresh each time
+// they send a form, the same upload sent again included, so a multipart body's media type stands
+// in without it, and a retry that drew another is still the same request.
 func fingerprintOf(w http.ResponseWriter, r *http.Request, maxBody int64) ([]byte, error) {
 	h := sha256.New()
 	contentType := r.Header.Get("Content-Type")
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err == nil && strings.HasPrefix(mediaType, "multipart/") {
+		delete(params, "boundary")
+		contentType = mime.FormatMediaType(mediaType, params)
+	}
 	for _, part := range []string{r.Method, r.URL.EscapedPath(), r.URL.RawQuery, r.Header.Get("If-Match"), contentType} {
 		_, _ = io.WriteString(h, part)
 		_, _ = h.Write([]byte{0})
 	}
-	mediaType, _, _ := mime.ParseMediaType(contentType)
 	isJSON := mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
 	if r.Body == nil || r.Body == http.NoBody || !isJSON {
 		_, _ = io.WriteString(h, strconv.FormatInt(r.ContentLength, 10))

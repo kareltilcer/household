@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,7 +24,8 @@ const ObjectStoreURLEnv = "HOUSEHOLD_TEST_OBJECT_STORE_URL"
 // started with.
 const DefaultObjectStoreURL = "http://household:household-local-only@127.0.0.1:9000"
 
-// bucketPrefix starts the name of every bucket a test makes.
+// bucketPrefix starts the name of every bucket a test makes, which goes on with the second it was
+// made in (made).
 const bucketPrefix = "test-"
 
 // ObjectStoreLocation returns the test object store's location with bucket as its bucket.
@@ -50,7 +53,7 @@ func ObjectStore(t testing.TB) *objectstore.Store {
 	t.Helper()
 	var suffix [8]byte
 	_, _ = rand.Read(suffix[:])
-	store := objectStore(t, bucketPrefix+hex.EncodeToString(suffix[:]))
+	store := objectStore(t, fmt.Sprintf("%s%d-%s", bucketPrefix, time.Now().Unix(), hex.EncodeToString(suffix[:])))
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	if err := store.CreateBucket(ctx); err != nil {
@@ -86,11 +89,28 @@ func sweepBuckets(ctx context.Context, t testing.TB, store *objectstore.Store) {
 		return
 	}
 	for _, b := range buckets {
-		if !strings.HasPrefix(b.Name, bucketPrefix) || time.Since(b.Created) < staleAfter {
+		if at, ok := made(b); !strings.HasPrefix(b.Name, bucketPrefix) || !ok || time.Since(at) < staleAfter {
 			continue
 		}
 		if err := objectStore(t, b.Name).RemoveBucket(ctx); err != nil {
 			t.Logf("sweep the test bucket %s: %v", b.Name, err)
 		}
 	}
+}
+
+// made returns when the test bucket b was made, by its name, which says: the store's own date for it
+// is not to be trusted while it is new, since RustFS lists a bucket it has just made as made at the
+// Unix epoch until it has written its metadata, and a sweep that believed it would remove a bucket
+// another package's test is using. A bucket named before its name said is dated by the store, and
+// one the store cannot date is not dated at all, and kept.
+func made(b objectstore.Bucket) (time.Time, bool) {
+	if stamp, _, found := strings.Cut(strings.TrimPrefix(b.Name, bucketPrefix), "-"); found {
+		if seconds, err := strconv.ParseInt(stamp, 10, 64); err == nil {
+			return time.Unix(seconds, 0), true
+		}
+	}
+	if b.Created.Unix() <= 0 {
+		return time.Time{}, false
+	}
+	return b.Created, true
 }

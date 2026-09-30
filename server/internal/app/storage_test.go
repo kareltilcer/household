@@ -196,6 +196,24 @@ func TestTheSampleBreaksDownByModuleAndMember(t *testing.T) {
 	}
 }
 
+// The largest items are named as their module labels them (module.StorageSource), by the modules
+// the router serves, with no registry of the picture's own to keep in step with them.
+func TestTheStoragePictureLabelsAsTheModuleDoes(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	w.exec(testsupport.InsertEnablement, h, storage.Admin, true)
+	jana := w.member(h, access.Owner, nil)
+	item := idgen.New()
+	expect(t, w.upload(h, jana, "milk.txt", []byte("milk"), map[string]string{"id": item.String()}), http.StatusCreated, "")
+	rec := w.do(http.MethodGet, "/api/v1"+householdPath(h, "/storage"), jana, "")
+	expect(t, rec, http.StatusOK, "")
+	var r reportDoc
+	decode(t, rec, &r)
+	if len(r.Largest) != 1 || r.Largest[0].EntityID != item || r.Largest[0].Label != probe.Label(item) {
+		t.Fatalf("largest %+v", r.Largest)
+	}
+}
+
 // reportDoc is the contract's StorageReport, as a client reads it.
 type reportDoc struct {
 	TotalBytes    int64 `json:"total_bytes"`

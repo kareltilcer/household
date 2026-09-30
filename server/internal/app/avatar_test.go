@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"image"
 	"image/color"
 	"image/png"
@@ -9,8 +10,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -21,6 +24,8 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/avatar"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/files"
+	"github.com/kareltilcer/household/server/internal/platform/idempotency"
+	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
@@ -144,6 +149,64 @@ func TestAMembersPicture(t *testing.T) {
 	decode(t, rec, &set)
 	if set.AvatarURL != nil || len(pictures(t, fs, me.ID)) != 0 {
 		t.Fatalf("after removing: %v, %v", set.AvatarURL, pictures(t, fs, me.ID))
+	}
+}
+
+// A picture sent again with its Idempotency-Key is answered as it was the first time, though the
+// form was built again, as a client builds it for every attempt, with a boundary of its own; and
+// only the first is kept.
+func TestAPictureSentAgainWithItsKeyIsKeptOnce(t *testing.T) {
+	s, fs := newPictureSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	id := jana.me().ID
+	content := picture(t, 64, 64)
+	send := func() *httptest.ResponseRecorder {
+		body, contentType := form(t, "photo.png", content, nil)
+		return jana.send(request{method: http.MethodPut, path: "/me/avatar", body: body, contentType: contentType,
+			header: http.Header{idempotency.Header: {"picture-1"}}})
+	}
+	first := send()
+	expect(t, first, http.StatusOK, "")
+	again := send()
+	expect(t, again, http.StatusOK, "")
+	if again.Body.String() != first.Body.String() {
+		t.Fatalf("the repeat was answered %s, the first %s", again.Body.String(), first.Body.String())
+	}
+	if keys := pictures(t, fs, id); len(keys) != 1 {
+		t.Fatalf("kept %v", keys)
+	}
+}
+
+// The accounts' prefix is swept as a household's is: a picture no user has, which a replacement whose
+// purge failed or an upload whose transaction did not commit left, goes once it is a day old, and a
+// picture a user has stays.
+func TestAPictureNoUserHasIsSwept(t *testing.T) {
+	s, fs := newPictureSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	id := jana.me().ID
+	expect(t, jana.sendPicture(http.MethodPut, "/me/avatar", picture(t, 64, 64)), http.StatusOK, "")
+	kept := pictures(t, fs, id)
+	left := []byte("left behind")
+	if err := fs.Store().PutOnce(t.Context(), avatar.Key(id, idgen.New()), bytes.NewReader(left), int64(len(left)),
+		objectstore.Object{ContentType: "image/png", SHA256: sha256.Sum256(left)}); err != nil {
+		t.Fatal(err)
+	}
+	clk := &clock{t: time.Now()}
+	avatars, err := avatar.New(fs, logging.New(io.Discard, slog.LevelDebug), clk.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := testsupport.Open(t).Pool(t, db.RoleApp)
+
+	if n, err := avatars.Sweep(t.Context(), pool); err != nil || n != 0 {
+		t.Fatalf("a young picture swept: %d, %v", n, err)
+	}
+	clk.advance(files.SweepGrace + time.Hour)
+	if n, err := avatars.Sweep(t.Context(), pool); err != nil || n != 1 {
+		t.Fatalf("swept %d, %v", n, err)
+	}
+	if now := pictures(t, fs, id); len(kept) != 1 || !slices.Equal(now, kept) {
+		t.Fatalf("left %v, kept %v", now, kept)
 	}
 }
 

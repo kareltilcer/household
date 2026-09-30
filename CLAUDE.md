@@ -150,7 +150,9 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   for minutes. It declares its tables and labels through `module.StorageSource`. The meter role
   reads every household's counting columns, and nothing else (architecture test 11,
   [ADR 0015](docs/adr/0015-files-object-storage-the-meter-and-pictures.md)); a user's picture is the
-  account's (D-107).
+  account's (D-107). What the platform keeps of the work after a commit is no entity's history
+  either, and goes through `tenant.InWriteTx` in the household's context, with no caller: the
+  workers' claims on `file_jobs` and the variants they record, and the usage sampler's samples.
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`

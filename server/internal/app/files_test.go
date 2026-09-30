@@ -56,7 +56,8 @@ type fileWorld struct {
 	files *files.Service
 }
 
-// newFileWorld builds a file world, whose pipeline each of limits adjusts.
+// newFileWorld builds a file world, whose pipeline each of limits adjusts. Its storage picture
+// labels by the modules the router serves, as the server's does.
 func newFileWorld(t *testing.T, limits ...func(*files.Config)) *fileWorld {
 	t.Helper()
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
@@ -67,7 +68,6 @@ func newFileWorld(t *testing.T, limits ...func(*files.Config)) *fileWorld {
 			t.Fatal(err)
 		}
 		d.Modules = registry
-		d.Storage = &storage.Picture{Modules: registry, Log: d.Logger}
 	})
 	return &fileWorld{world: w, files: fs}
 }
@@ -607,6 +607,50 @@ func TestADeletedEntitysBytesArePurged(t *testing.T) {
 	}
 }
 
+// A worker's transaction holds the original, as it does to record what it derived, and has recorded
+// a variant; the entity's delete waits for it, and takes the variant with the rest, rather than
+// leaving a row no original, link or purge reaches, billed for good.
+func TestADeleteBesideAWorkerTakesWhatItRecorded(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	jana := w.member(h, access.Owner, nil)
+	item := idgen.New()
+	expect(t, w.upload(h, jana, "a.png", picture(t, 400, 400), map[string]string{"id": item.String()}), http.StatusCreated, "")
+	w.files.Drain(t.Context(), h)
+	scoped := tenant.Assume(t.Context(), testsupport.Open(t).Pool(t, db.RoleApp), h, uuid.Nil, "")
+
+	removed := make(chan error, 1)
+	if err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(scoped, `
+			SELECT FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3 AND variant = 'original' FOR UPDATE`,
+			h, probe.Name, item); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(scoped, `
+			INSERT INTO files (household_id, module, entity_id, variant, content_type, byte_size, sha256, owner_id)
+			VALUES ($1, $2, $3, 'preview', 'image/jpeg', 10, $4, $5)`,
+			h, probe.Name, item, make([]byte, 32), jana); err != nil {
+			return err
+		}
+		go func() {
+			removed <- tenant.InWriteTx(scoped, func(tx pgx.Tx) error { return files.Remove(scoped, tx, probe.Name, item) })
+		}()
+		waitForALock(t, w)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-removed; err != nil {
+		t.Fatal(err)
+	}
+	if rows := w.rows(h, item); len(rows) != 0 {
+		t.Fatalf("after the delete beside a worker: %+v", rows)
+	}
+	if jobs := w.jobs(h, item); !slices.Equal(jobs, []string{"purge"}) {
+		t.Fatalf("jobs %v", jobs)
+	}
+}
+
 // Bytes no row records, which an upload whose mutation failed leaves, are swept once they are a day
 // old, and nothing a row records is.
 func TestTheSweepRemovesWhatNoRowRecords(t *testing.T) {
@@ -652,6 +696,22 @@ func TestTheSweepRemovesWhatNoRowRecords(t *testing.T) {
 	if info, err := w.files.Store().Head(t.Context(), files.Key(h, probe.Name, retried, files.Original)); err != nil ||
 		info.SHA256 != sha256.Sum256(content) {
 		t.Fatalf("the retry's bytes: %+v, %v", info, err)
+	}
+
+	// The nightly sweep takes every household, as the meter role lists them.
+	another := files.Key(h, probe.Name, idgen.New(), files.Original)
+	if err := w.files.Store().PutOnce(t.Context(), another, bytes.NewReader([]byte("left")), 4,
+		objectstore.Object{ContentType: "text/plain", SHA256: sha256.Sum256([]byte("left"))}); err != nil {
+		t.Fatal(err)
+	}
+	clk.advance(files.SweepGrace + time.Hour)
+	if err := w.files.SweepAll(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{files.Key(h, probe.Name, kept, files.Original), files.Key(h, probe.Name, retried, files.Original)}
+	slices.Sort(want)
+	if keys := w.objects("h/" + h.String() + "/"); !slices.Equal(keys, want) {
+		t.Fatalf("after sweeping every household %v, want %v", keys, want)
 	}
 }
 
@@ -780,6 +840,54 @@ func TestAnOfficeDocumentsVariantsComeFromTheConverter(t *testing.T) {
 
 // The workers run the jobs every instance's commits leave: woken by their own, and finding the rest
 // through the meter role, which alone reads across households.
+// A job runs for its lease at most: one whose store stops answering fails, and is tried again later,
+// rather than holding its worker for as long as the process lives.
+func TestAJobPastItsLeaseIsTriedAgain(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	jana := w.member(h, access.Owner, nil)
+	item := idgen.New()
+	expect(t, w.upload(h, jana, "a.png", picture(t, 100, 100), map[string]string{"id": item.String()}), http.StatusCreated, "")
+
+	stalled := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { <-r.Context().Done() }))
+	t.Cleanup(stalled.Close)
+	endpoint, err := url.Parse(stalled.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := objectstore.New(objectstore.Config{
+		Location: objectstore.Location{Endpoint: endpoint, Bucket: "stalled", AccessKey: "tester", Secret: "stalled"},
+		Attempts: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stuck := apptest.Files(t, testsupport.Open(t).Pool(t, db.RoleApp), logging.New(io.Discard, slog.LevelDebug), apptest.Options{},
+		func(c *files.Config) { c.Store, c.Lease = store, 500*time.Millisecond })
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	stuck.Drain(ctx, h)
+	if ctx.Err() != nil {
+		t.Fatal("a job whose store stopped answering held its worker past its lease")
+	}
+	var (
+		attempts  int
+		backedOff bool
+	)
+	if err := w.admin.QueryRow(t.Context(), `
+		SELECT attempts, run_at > now() + interval '30 seconds' FROM file_jobs
+		WHERE household_id = $1 AND kind = 'variants' AND entity_id = $2`, h, item).Scan(&attempts, &backedOff); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 || !backedOff {
+		t.Fatalf("the job was left at attempt %d, backed off %t", attempts, backedOff)
+	}
+	if v := w.rows(h, item)[files.Original].variants; v == nil || *v != "pending" {
+		t.Fatalf("the variants are %v", v)
+	}
+}
+
 func TestTheWorkersRunWhatCommitsLeave(t *testing.T) {
 	w := newFileWorld(t, func(c *files.Config) { c.Poll = 50 * time.Millisecond })
 	h := w.household(true)

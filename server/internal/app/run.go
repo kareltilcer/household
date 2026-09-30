@@ -100,7 +100,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 		Accounts:     accounts,
 		Households:   households,
 		Sync:         Sync{Replica: replicas, PushLimit: ratelimit.NewBuckets(ratelimit.PushPerDevice, nil)},
-		Storage:      &storage.Picture{Modules: registry, Log: log},
+		Storage:      &storage.Picture{Log: log},
 	})
 	if err != nil {
 		return err

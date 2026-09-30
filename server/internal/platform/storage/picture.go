@@ -24,7 +24,8 @@ import (
 // its allowance, by module and by member, its derived overhead, its largest items with what
 // deleting each would recover, and the trend of its daily samples.
 type Picture struct {
-	// Modules are the modules served, whose labels name the largest items (module.StorageSource).
+	// Modules are the modules served, whose labels name the largest items (module.StorageSource):
+	// the router's, which app.NewRouter gives a picture that names none.
 	Modules *module.Registry
 	// Allowance is what a household may store, Default when zero.
 	Allowance Allowance

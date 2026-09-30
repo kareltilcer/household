@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
+	"io"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf16"
@@ -121,6 +123,9 @@ func TestSniff(t *testing.T) {
 		{"a script by its name, a dot and a space after it", []byte("@echo off\n"), "run.bat. ", "application/octet-stream", ClassBlocked},
 		{"a console by its name", []byte(`<?xml version="1.0"?><MMC_ConsoleFile/>`), "tool.msc", "application/octet-stream", ClassBlocked},
 		{"a macOS script by its name", []byte("open -a Calculator\n"), "start.command", "application/octet-stream", ClassBlocked},
+		{"compiled help by its name", []byte("ITSF\x03\x00\x00\x00\x60\x00\x00\x00"), "Invoice.CHM", "application/octet-stream", ClassBlocked},
+		{"a Java Web Start launch by its name", []byte(`<?xml version="1.0"?><jnlp spec="1.0+"/>`), "app.jnlp", "application/octet-stream", ClassBlocked},
+		{"a disk image by its name", append([]byte{0, 0, 0, 0}, []byte("CD001")...), "photos.iso", "application/octet-stream", ClassBlocked},
 		{"a name that only ends in dots", []byte("Milk, eggs\n"), "list...", "text/plain; charset=utf-8", ClassText},
 		{"html", []byte("<!DOCTYPE html><html><body>hi</body></html>"), "page.txt", "text/html", ClassActive},
 		{"html deep in text", []byte("Dear Jana,\n\nsee <script>alert(1)</script>"), "letter.txt", "text/html", ClassActive},
@@ -142,6 +147,43 @@ func TestSniff(t *testing.T) {
 				t.Fatalf("Sniff = %s (%s), want %s (%s)", got.MIME, got.Class, tc.mime, tc.class)
 			}
 		})
+	}
+}
+
+// countingReader counts the bytes read through it.
+type countingReader struct {
+	r    io.ReaderAt
+	read int64
+}
+
+func (c *countingReader) ReadAt(p []byte, off int64) (int, error) {
+	n, err := c.r.ReadAt(p, off)
+	c.read += int64(n)
+	return n, err
+}
+
+// A ZIP whose directory lists more than the sniffer reads is an archive, known without reading the
+// rest of it: zip.NewReader would hold every entry it lists. One listed in full is still known by
+// its entries.
+func TestAZipsDirectoryIsReadSoFar(t *testing.T) {
+	names := make([]string, 0, 100_001)
+	for i := range 100_000 {
+		names = append(names, strconv.Itoa(i))
+	}
+	many := zipped(t, "", append(names, "META-INF/MANIFEST.MF")...)
+	if len(many) < maxZipDirectory {
+		t.Fatalf("the ZIP is %d bytes, too few to try the bound", len(many))
+	}
+	c := &countingReader{r: bytes.NewReader(many)}
+	if got := Sniff(c, int64(len(many)), "photos.zip"); got.MIME != "application/zip" || got.Class != ClassArchive {
+		t.Fatalf("Sniff = %s (%s)", got.MIME, got.Class)
+	}
+	if c.read > maxZipDirectory+sniffLen {
+		t.Fatalf("read %d bytes of a ZIP to sniff it", c.read)
+	}
+	few := zipped(t, "", append(names[:1000], "META-INF/MANIFEST.MF")...)
+	if got := Sniff(bytes.NewReader(few), int64(len(few)), "photos.zip"); got.Class != ClassBlocked {
+		t.Fatalf("a JAR of a thousand entries is %s (%s)", got.MIME, got.Class)
 	}
 }
 

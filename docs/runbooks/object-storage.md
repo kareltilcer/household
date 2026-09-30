@@ -75,8 +75,10 @@ GROUP BY module, content_type;
 - Jobs piling up with `run_at` in the past: no worker is running them. Every instance runs them; check
   the API's log for `files: find the jobs due`, which fails when the meter role's connection does.
 - `attempts` climbing for office documents and PDFs: the converter. `GET /healthz` on it; its log names
-  each conversion that failed or ran out of time. A job gives up after five attempts, over about two
-  and a half hours.
+  each conversion that failed or ran out of time, by its command and how it ended, never by what the
+  command printed, which quotes the document. A job gives up after five attempts, over about two and a
+  half hours; one that runs past its ten-minute lease, a store or a converter that stopped answering,
+  counts as a failed attempt.
 - Many `failed` of one type: a converter that cannot read it answers `422`, which is not retried. Try
   one by hand: `curl --data-binary @file.docx 'http://converter:3100/pdf?ext=docx' -o out.pdf`.
 

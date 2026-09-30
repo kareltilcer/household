@@ -55,12 +55,23 @@ func Record(ctx context.Context, tx pgx.Tx, st Stored, a Attribution) error {
 // that deletes the entity, and queues the purge of their bytes, which runs once tx commits; Nudge
 // runs it at once. An entity with no objects is left as it is. Bytes a failed upload left, which no
 // row records, go with the sweep.
+//
+// The original's row is locked first, as Attribute locks it and for the same reason: the workers
+// hold it while they record the variants they derived (recordVariants), and a delete that waited on
+// it in the one statement would still delete only the rows of the snapshot it took before it
+// waited. The variants the worker committed meanwhile would outlive their original, rows no link,
+// no purge and no storage picture reaches, billed to the household for good.
 func Remove(ctx context.Context, tx pgx.Tx, module string, entity uuid.UUID) error {
 	scope := tenant.From(ctx)
 	if scope == nil {
 		return tenant.ErrNoTenant
 	}
 	household := scope.HouseholdID()
+	if _, err := tx.Exec(ctx, `
+		SELECT FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3 AND variant = 'original' FOR UPDATE`,
+		household, module, entity); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx, "DELETE FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3",
 		household, module, entity)
 	if err != nil || tag.RowsAffected() == 0 {

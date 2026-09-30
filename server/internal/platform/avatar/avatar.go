@@ -41,8 +41,8 @@ const (
 	MaxBytes int64 = 20_000_000
 	// Side is the side of the square a picture is kept as, in pixels.
 	Side = 512
-	// maxPixels caps the image a picture is decoded from.
-	maxPixels = 64 << 20
+	// maxPixels caps the image a picture is decoded from: the contract's 64 megapixels.
+	maxPixels = 64_000_000
 )
 
 // Accept takes what the contract's AvatarUpload takes: a JPEG, a PNG, a GIF or a WebP. A HEIC

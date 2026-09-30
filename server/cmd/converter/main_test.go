@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -26,13 +27,18 @@ func TestMain(m *testing.M) {
 }
 
 // fake stands in for soffice or pdftoppm with args: "ok" writes what the command writes, "nothing"
-// writes nothing and fails, and "hang" never ends.
+// writes nothing and fails, "quoting" fails as nothing does, printing what it read of the document
+// as poppler's diagnostics do, and "hang" never ends.
 func fake(mode string, args []string) int {
 	switch mode {
 	case "hang":
 		time.Sleep(time.Minute)
 		return 0
 	case "nothing":
+		return 1
+	case "quoting":
+		_, _ = fmt.Fprintln(os.Stdout, "convert "+args[len(args)-1])
+		_, _ = fmt.Fprintln(os.Stderr, "Syntax Error (412): Unknown operator 'Smlouva'")
 		return 1
 	}
 	if i := slices.Index(args, "--outdir"); i >= 0 {
@@ -126,6 +132,20 @@ func TestTheConvertersRefusals(t *testing.T) {
 				t.Fatalf("%d %s, want %d", rec.Code, rec.Body.String(), tc.status)
 			}
 		})
+	}
+}
+
+// A conversion that fails is logged by its command and how it ended, never by what the command
+// printed, which quotes the document (FR-NF5).
+func TestAFailedConversionLogsNoContent(t *testing.T) {
+	c := newConverter(t, "quoting", 10*time.Second)
+	var log bytes.Buffer
+	c.log = slog.New(slog.NewJSONHandler(&log, nil))
+	if rec := post(t, c, "/page?side=800", []byte("%PDF-1.4 Smlouva")); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(log.String(), "a conversion failed") || strings.Contains(log.String(), "Smlouva") {
+		t.Fatalf("logged %s", log.String())
 	}
 }
 
