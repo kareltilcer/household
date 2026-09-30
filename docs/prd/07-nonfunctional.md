@@ -79,7 +79,9 @@ first response is to fix the query; a cache requires an explicit decision record
 | **Degradation** | The mobile apps stay fully usable offline during an outage; a queued mutation is not lost by a server being down |
 
 **FR-NF3 — Every dependency has a defined failure behaviour.** Object storage unavailable ⇒
-uploads fail with a clear, retryable message; existing metadata still reads. Push provider
+uploads fail with a clear, retryable message (`502 storage_unavailable`, nothing committed); existing
+metadata still reads. The converter unavailable ⇒ a file's variants are retried, and the file is
+linked, and downloadable, meanwhile. Push provider
 unavailable ⇒ delivery is retried, never lost, and never blocks the mutation. Payment processor
 unavailable ⇒ entitlement state is held at its last value, never downgraded on a timeout. Weather
 provider unavailable ⇒ Garden renders from cache with no error the member can act on. PowerSync

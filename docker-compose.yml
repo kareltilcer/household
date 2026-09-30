@@ -1,7 +1,9 @@
 # Local development services (PL-8). `pnpm run up` starts them and waits until each is
 # healthy; `pnpm run down` stops them and keeps their volumes. PowerSync (ADR 0001) is in the `sync`
 # profile: it replicates only once `pnpm run db:setup` has made its role, its publication and its
-# storage, and `pnpm run up:sync` starts it then.
+# storage, and `pnpm run up:sync` starts it then. The converter sidecar (ADR 0015) is in the
+# `convert` profile, built here from deploy/converter: `pnpm run up:convert` builds and starts it,
+# and without it an office document or a PDF is kept download-only, with no preview.
 #
 # Every credential here is a public, well-known development default, so every port is
 # published on 127.0.0.1 only. Override the ports in a `.env` beside this file
@@ -44,7 +46,10 @@ services:
       retries: 30
 
   # S3-compatible object storage. PL-8 named MinIO, whose repository is archived and
-  # whose images are no longer published; RustFS speaks the same S3 API.
+  # whose images are no longer published; RustFS speaks the same S3 API. The server makes its
+  # bucket, `household`, when it starts in development; the Go tests make one of their own each.
+  # The CI service container in .github/workflows/ci.yml runs this same image with these
+  # credentials, and tooling/src/workspace.test.ts fails when the two disagree.
   objectstore:
     image: rustfs/rustfs:1.0.0
     environment:
@@ -64,6 +69,19 @@ services:
       interval: 2s
       timeout: 5s
       retries: 30
+
+  # LibreOffice headless and poppler behind the converter's own HTTP server (server/cmd/converter),
+  # which the files pipeline derives an office document's PDF and a PDF's first page through. A
+  # deployment runs it with no route out, since a document may name remote resources; here the API
+  # runs on the host and reaches it at its published port.
+  converter:
+    build:
+      context: .
+      dockerfile: deploy/converter/Dockerfile
+    image: household-converter:dev
+    profiles: [convert]
+    ports:
+      - 127.0.0.1:${HOUSEHOLD_CONVERTER_PORT:-3100}:3100
 
   # Catches every email the server sends; nothing leaves the machine.
   mail:

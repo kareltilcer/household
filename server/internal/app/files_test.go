@@ -634,7 +634,7 @@ func TestAnOfficeDocumentsVariantsComeFromTheConverter(t *testing.T) {
 		rows[files.Preview].contentType != "image/jpeg" || rows[files.Thumbnail].contentType != "image/jpeg" {
 		t.Fatalf("rows %+v", rows)
 	}
-	if !slices.Equal(stand.calls, []string{"/pdf?ext=docx", "/page?width=1600"}) {
+	if !slices.Equal(stand.calls, []string{"/pdf?ext=docx", "/page?side=1600"}) {
 		t.Fatalf("converter calls %v", stand.calls)
 	}
 	l := w.link(h, item, jana, files.PDF)

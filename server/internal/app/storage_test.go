@@ -22,6 +22,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/storage"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
@@ -165,6 +166,20 @@ func TestTheSampleBreaksDownByModuleAndMember(t *testing.T) {
 	}
 	if got, ok := w.sample(empty, day); !ok || got.stored != 0 || got.objects != 0 || len(got.modules) != 0 || len(got.members) != 0 {
 		t.Errorf("a household that keeps nothing: %+v, %v", got, ok)
+	}
+
+	// The same counts, live, in the household's own context: what fair use compares with before a
+	// write (PRD 04 §5).
+	registry, err := module.NewRegistry(probe.Module{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	live, err := storage.Count(tenant.Assume(t.Context(), testsupport.Open(t).Pool(t, db.RoleApp), a, uuid.Nil, access.Owner), registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live.Objects != objects || len(live.Rows) != 1 || live.Rows["probe"] != 4 {
+		t.Errorf("live counts %+v, want %d objects and 4 probe rows", live, objects)
 	}
 
 	// Sampled again the same day, after another upload: the day's sample is replaced.

@@ -37,9 +37,26 @@ jobs:
           --health-interval 2s
           --health-timeout 5s
           --health-retries 30
+      objectstore:
+        # The image and the credentials docker-compose.yml runs; tooling/src/workspace.test.ts
+        # fails when the two disagree. Each test makes a bucket of its own.
+        image: rustfs/rustfs:1.0.0
+        env:
+          RUSTFS_ACCESS_KEY: household
+          RUSTFS_SECRET_KEY: household-local-only
+          RUSTFS_VOLUMES: /data
+          RUSTFS_ADDRESS: 0.0.0.0:9000
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl --fail --silent --show-error http://127.0.0.1:9000/health"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     env:
       # 127.0.0.1, not localhost, for the reason testsupport.DefaultDatabaseURL gives.
       HOUSEHOLD_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/household?sslmode=disable
+      HOUSEHOLD_TEST_OBJECT_STORE_URL: http://household:household-local-only@127.0.0.1:9000
     defaults:
       run:
         working-directory: server
@@ -120,6 +137,37 @@ jobs:
       - name: The stack's logs
         if: failure()
         run: docker compose --file packages/sync/conformance/stack/docker-compose.yml logs --tail 200
+
+  converter:
+    name: Converter — the sidecar's image, converting for real
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      # The image deploy/converter builds, started once its health check passes.
+      - name: Build and start the converter
+        run: |
+          docker build --file deploy/converter/Dockerfile --tag household-converter .
+          docker run --detach --name converter --publish 127.0.0.1:3100:3100 household-converter
+          for _ in $(seq 60); do
+            [ "$(docker inspect --format '{{.State.Health.Status}}' converter)" = healthy ] && break
+            sleep 2
+          done
+          docker inspect --format '{{.State.Health.Status}}' converter | grep -qx healthy
+      - name: Convert a document and draw its page
+        working-directory: server
+        env:
+          HOUSEHOLD_TEST_CONVERTER_URL: http://127.0.0.1:3100
+        run: go test -count=1 -run TestTheSidecarConverts -v ./internal/platform/convert/
+      - name: The converter's logs
+        if: failure()
+        run: docker logs converter
 
   openapi:
     name: OpenAPI — openapi-spec-validator and Redocly

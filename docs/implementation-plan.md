@@ -172,7 +172,7 @@ you**, not from the implementing session.
 | Q11 | **Contract gaps**: no route serves the Calendar ICS feed; no receiver for Google push notifications; Chores rewards and Shopping categories/staples have no PATCH or DELETE; no path for the reference-data reads or the Garden region bundle; `POST …/notifications/broadcast` has no PRD requirement (implement it with a PRD entry, or remove it with a decision entry). Three creates accept a client id without requiring it (D-91): `postTasksCardsByCardIdChecklist` (`id`), `postShoppingListsByListIdItems` (`ids`) and `postChoresRedemptions` (`id`); architecture test 9 fails each once its entity names it among its creates. No operation lists a household's clients and their versions, which C-57 shows (FR-HA18); item 9 records each device's version. No operation takes the ID token that native Sign in with Apple and Google's native SDK hand the client, in place of a code and a PKCE verifier. **The reference-data reads: settled by item 7** (`/reference/countries`, `/reference/units`) | `openapi.yaml` vs PRD | 76, 77, 49, 31, 7, 68, 53, 40, 27, 29 |
 | Q12 | **Reading anchors** (FR-UT9): a conversion change also blocks, and each service has its own reading cadence | design/v1 `utilities.js` | 57 |
 | Q13 | **Tokens**: emit resolved values or add primitives? Many semantic tokens in the prototype sit off the primitive ramp | design/v1 `foundations.js` | 23 |
-| Q14 | **Vendors not named in the PRD**, each EU-established: weather provider, email provider, analytics store, error aggregation, and an IP-to-place source for the session and device lists and the takeover notice (FR-ID7; items 8 and 9 answer `approximate_location` null, and item 9 moved the choice to item 30). The office-to-PDF converter (LibreOffice headless is assumed) | 05 §10, 07 §5 | 71, 30/88, 92, 30, 30, 14 |
+| Q14 | **Vendors not named in the PRD**, each EU-established: weather provider, email provider, analytics store, error aggregation, and an IP-to-place source for the session and device lists and the takeover notice (FR-ID7; items 8 and 9 answer `approximate_location` null, and item 9 moved the choice to item 30). The office-to-PDF converter: **settled by item 14**, LibreOffice headless and poppler in a sidecar of our own, built from Debian's packages (`deploy/converter`, [ADR 0015](adr/0015-files-object-storage-the-meter-and-pictures.md)) | 05 §10, 07 §5 | 71, 30/88, 92, 30, 30, 14 |
 | Q15 ★ | **UK Online Safety Act** (OQ-1). Counsel's answer decides whether Chat ships disabled in the UK. Item 85 ships a per-country switch either way | 05 §11, DD-11 | counsel → 85 |
 | Q16 | **Fixture drifts** to fix when porting the seed: Stage 8 has Property and Pets toggled off; the vehicles widget date; the washing-machine warranty date; `garden.task_due` names the wrong bed and crop; Petr's persona note is stale | design/v1 `github.md` | 30 and each module |
 | Q17 | **Subscribe flow.** The PRD says Stripe Elements / PaymentSheet; the contract's `billing/checkout-session` and `billing/portal-session` describe a hosted checkout and a hosted portal. The PRD wins, so those operations are amended in `openapi.yaml` before the client is generated | 04 §6; `openapi.yaml` tag `billing` | 19 |
@@ -563,7 +563,7 @@ Phase 0 · after 9, 12 · size XL
 - **Done when** the suite passes scenarios 1, 3, 4, 5, 8, 9, 10, 15 and 17, plus the `state_set` half of 13.
 - **PR:** [#16](https://github.com/kareltilcer/household/pull/16)
 
-### 14 · Files and storage metering · `planned`
+### 14 · Files and storage metering · `done`
 
 Phase 0 · after 4, 10 · size L
 
@@ -604,7 +604,7 @@ Phase 0 · after 10, 6 · size L
     - Household-timezone resolution that is DST-safe.
     - The expiry sweep with [03 §5](prd/03-platform-strands.md)'s retention table, and item 8's tables: ended `sessions`, spent and expired `email_tokens`, `auth_throttles` whose window and block have passed, and `account_idempotency_keys` past seven days. And item 9's: `refresh_tokens` used a month ago, `device_sessions` revoked and without tokens, ended or expired `mfa_challenges`, expired `mfa_trusts`, and used or expired `oauth_states`.
     - Invitation and token expiry.
-    - Item 14's usage sampling, nightly (FR-ST2).
+    - Item 14's usage sampling (`storage.Sampler`), nightly (FR-ST2), and its sweeps of the objects no row records, a household's (`files.Service.SweepAll`) and the accounts' pictures (`avatar.Service.Sweep`), each night after it.
   - **Transports**:
     - Web Push (VAPID) subscriptions on `/push/*`.
     - Expo push tokens per device, in item 9's `devices.push_token`, which `Device.push_enabled` reads.
@@ -639,7 +639,7 @@ Phase 0 · after 10, 13, 15 · size M
   - **Retention**: a 12-month countdown with three warnings, then deletion handed to item 20.
   - **Queued mutations** (FR-BI2): `entitlement` rejections are held and replayed if the subscription resumes (scenario 14).
   - **`suspended` on the replicated path** ([D-93](prd/09-decisions.md)): PowerSync's reads pass no tenant middleware, so the Sync ✗ of [04 §3](prd/04-billing-and-entitlements.md) is held on item 13's credentials and streams as well, and a suspended household replicates nothing further to any device, a new one included. Whether its replicas are also emptied, which [03 §2.6](prd/03-platform-strands.md) does not list as access loss, is decided here and recorded in the PRD.
-  - **Fair-use ceilings** ([04 §5](prd/04-billing-and-entitlements.md)): a warning at 80 %, then `429`.
+  - **Fair-use ceilings** ([04 §5](prd/04-billing-and-entitlements.md)): a warning at 80 %, then `429`. The objects and the rows each module holds are item 14's counters, sampled daily (`usage_samples`, `usage_sample_modules`) and counted live from `files` and each module's `StorageTables`; the 100 MB file ceiling is item 14's `413`. The `402` an upload past the storage ceiling answers names the household's state through item 14's `files.Config.State`, which reports `trialing` until this item fills it in.
   - **Banner API.**
   - **The conformance suite** ([ADR 0013](adr/0013-conformance-suite-stand-ins-and-the-oracle.md)): switches on scenario 14 and `no-loss-lapse`, with the target's `setEntitlement`, and settles the code an entitlement rejection carries, `entitlement` in PRD 10 §4 and `entitlement_read_only` among the problem codes; the suite's connector holds either.
 - **Inputs**
@@ -743,7 +743,7 @@ Phase 0 · after 16, 14 · size L
     - Must be verified.
     - Take-over handshake (FR-BI6).
     - Proration.
-  - **Storage blocks**: blocks = ceil(max(0, daily-average − 5 GB) / 10 GB), capped at 20, beyond which uploads get `402`. They are reported as metered usage.
+  - **Storage blocks**: blocks = ceil(max(0, daily-average − 5 GB) / 10 GB), capped at 20, beyond which uploads get `402`. They are reported as metered usage. The average is of item 14's daily samples (`usage_samples.stored_bytes`), the ceiling item 14's `storage.Allowance`, and `StorageReport.included_bytes`, the base allowance until now, adds the blocks in effect.
   - **Transparency**: the projected charge (FR-BI4) and notices at 80 % and 100 %. Members and children never see billing (FR-BI5).
   - **Support actions** for item 21: extend trial, credit, re-issue invoice.
 - **Inputs**
@@ -767,9 +767,9 @@ Phase 0 · after 14, 15, 17 · size L
   - **Account deletion** (FR-PR3–4):
     - Each household is resolved first.
     - A 30-day window: the account is disabled and revoked immediately, and an email carries a cancel link. A disabled account's sign-in fails as a wrong password does (`401 invalid_credentials`, FR-ID3), and its sessions end. `POST /me/deletion` keeps no `Idempotency-Key`, since its body carries the password ([D-97](prd/09-decisions.md)).
-    - A nightly job then runs `EraseSource` everywhere, deletes object prefixes, writes an identity tombstone, and relabels authorship as *Former member*.
+    - A nightly job then runs `EraseSource` everywhere, deletes object prefixes, the account's pictures under `u/{user_id}/` among them ([D-107](prd/09-decisions.md)), writes an identity tombstone, and relabels authorship as *Former member*.
     - PowerSync's compaction (item 17) runs after that job each night, so an erased row's superseded data leaves bucket storage with it ([05 §6](prd/05-privacy-and-compliance.md), [D-93](prd/09-decisions.md)).
-  - **Household deletion** (FR-PR6): the owner types the household name, every member is notified, and the same 30-day window applies.
+  - **Household deletion** (FR-PR6): the owner types the household name, every member is notified, and the same 30-day window applies. Its erasure deletes the prefix `h/{household_id}/`, every module's objects and their variants, with its `files` rows (item 14).
   - **Private roots** when a member leaves (FR-PR7), from item 10's `household.Hooks.Lost` with the cause `left` or `removed`. Admin's tables, the platform's (item 10), are exported and erased with the household.
   - **A child profile removed from its household** (item 11) is an account nobody can sign in to, since it is nothing outside its household: it is erased as a deleted account is, from the same hook.
   - **Lapsed deletion**: households past item 16's retention window.
@@ -1065,6 +1065,7 @@ Phase 0 · after 27, 29, 20 · size L · **Phase 0 exit**
     - the web build on nginx with strict CSP and HSTS;
     - Postgres 17 and S3-compatible storage;
     - PowerSync with its bucket storage, the Postgres at `wal_level=logical` (item 13);
+    - the object store's bucket, its edge adding `nosniff`, and the converter sidecar with no route out, per [item 14's runbook](runbooks/object-storage.md), with `HOUSEHOLD_METER_DATABASE_URL`, which `serve` reads since item 14;
     - EU SMTP (Q14) and Stripe test mode;
     - item 8's settings: `HOUSEHOLD_WEB_URL`, the proxies to trust, and the breached-password corpus, built per [the runbook](runbooks/breached-passwords.md);
     - item 9's: `HOUSEHOLD_TOKEN_KEYS`, `HOUSEHOLD_MFA_KEYS`, the redirect URIs and the Google and Apple credentials, per [their runbook](runbooks/sign-in-keys-and-providers.md), and the IP-to-place source for `approximate_location` (Q14), which item 9 left null;
@@ -1435,7 +1436,7 @@ Phase 2 · after 43, 14, 35, 36 · size XL
     - an immutable ETag and Range support;
     - `409` while a preview is pending;
     - active types download-only.
-  - **Derived variants**: office conversion, metered separately.
+  - **Derived variants**: office conversion, metered separately. Item 14's workers derive them and mark the original's `variants`; a document's `preview_status` is on its own row, which replicates, so this item adds the pipeline's hook that tells a module its variants are done, in a mutation of its own ([ADR 0015](adr/0015-files-object-storage-the-meter-and-pictures.md)).
   - **Document types**: 11 types as reference data, with a lead time and scope per type, per country ([D-53](prd/09-decisions.md)). They go through item 7's pipeline, each country's set under the key its profile's `document_type_set` names (`cz`, `sk`, `de`, `pl`, `gb`). `expires_on` feeds the `documents.expiry` kind.
   - **References** ([D-40](prd/09-decisions.md)):
     - documents registered as a reference target with item 36's resolver;
@@ -2284,7 +2285,7 @@ Phase 5 · after 1–87 (the Phase 4 exit, crop catalog included) · size L
     - encrypted backups kept 35 days, with separately managed keys;
     - logical replication for PowerSync ([D-93](prd/09-decisions.md)): a provider whose administrator can create a role with `REPLICATION` and `BYPASSRLS` (item 13), and a replication slot that survives a failover.
   - **Compute**: at least two API instances behind a load balancer, and PowerSync, its image pinned, with its bucket storage (item 13).
-  - **Object storage**: versioning plus cross-account EU replication.
+  - **Object storage**: versioning plus cross-account EU replication, the edge in front of it adding `nosniff`, and the converter sidecar beside the API with no route out ([runbook](runbooks/object-storage.md)).
   - **Secrets and edge**:
     - A managed secret store.
     - TLS 1.3, HSTS preload, and certificate-transparency monitoring.
@@ -2462,3 +2463,4 @@ Tracked here so they are not forgotten. None of them takes a numbered slot.
 | 2026-09-30 | 14–18 | Renumbered by build order, old → new: 16 → 14 (Files and storage metering), 17 → 15 (Scheduler and notification transports), 18 → 16 (Entitlements and the 402 gate), 14 → 17 (Sync engine II) and 15 → 18 (`@household/sync`). Sync engine II waited for Files and Entitlements from the plan's first commit, since G-B's scenarios need the upload (scenario 12) and the entitlement gate (scenario 14), so its number put it before two items it could not start without. The new order is the stable topological one: no other item moves. Every reference follows the new numbers, in done items and earlier Change log rows as well as the ADRs, the PRD, the design handoff, the contract's descriptions, code comments and the conformance suite's `enabledBy`, since a number names an item and records nothing of its history. Rule 6 keeps every **after** list to lower numbers, and `tooling/src/plan.test.ts` fails a plan that breaks it |
 | 2026-09-30 | 16 | Item 16 waits for item 15: its hourly transitions run on item 15's scheduler, and its retention warnings go out through item 15's transports |
 | 2026-09-30 | 14, 15 | Item 14 builds the usage sampler and item 15 schedules it nightly, as it does item 8's and item 9's sweeps, since item 14 comes first and has no scheduler to register with |
+| 2026-09-30 | 14, 15, 16, 19, 20, 30, 46, 88, Q14 | Item 14: every module's upload goes through one pipeline (`internal/platform/files`): the body spooled under the 100 MB cap, its type sniffed from its bytes and a program refused `415` by its bytes or its name, the storage ceiling checked (`402 storage_ceiling_reached`), and the bytes written once to `h/{household}/{module}/{entity}/original` with `If-None-Match`, before the row that records them commits in the module's mutation with the attribution the module declares; derived variants come from workers in every instance, LibreOffice and poppler in a sidecar of our own settling Q14; links are pre-signed for one object for ten to fifteen minutes. The meter role reads every household's counting columns through a policy of its own, which architecture test 2 accepts and the new test 11 holds to its columns; it measures, and the request role writes each household's sample ([ADR 0015](adr/0015-files-object-storage-the-meter-and-pictures.md); PRD 01 §2.3, §2.4, §8, §10, 03 §3, §8, 07 FR-NF3 amended; D-107 pictures are the account's, D-108 the storage picture's largest items leave out what the reader could not open). The contract gains `putMeAvatar`, `putChildrenByUserIdAvatar`, `deleteChildrenByUserIdAvatar`, `storage_ceiling_reached`, `storage_unavailable` and a reusable `502` on every upload, and its `StorageReport.trend` becomes an array of days. Item 15 schedules the sweeps beside the sampler; item 16 names the state in the ceiling's `402` and reads the counters; item 19 averages the samples and adds the blocks to `included_bytes`; item 20 erases both prefixes; items 30 and 88 run the bucket's `nosniff` edge and the converter; item 46 adds the hook that tells a module its variants are done |

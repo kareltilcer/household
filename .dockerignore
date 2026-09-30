@@ -1,0 +1,10 @@
+# The one image built from the repository's root is the converter sidecar's
+# (deploy/converter/Dockerfile): only the Go module it builds from goes into its context, and the
+# go.mod of each module that module replaces with a directory.
+*
+!server/
+!docs/api/go.mod
+!packages/i18n/go.mod
+!reference-data/go.mod
+server/**/testdata/
+server/*.exe

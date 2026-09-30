@@ -7,7 +7,7 @@
 // The sidecar takes the bytes as the body of a POST and answers with the result:
 //
 //	POST /pdf?ext=docx     an office document → application/pdf
-//	POST /page?width=1600  a PDF → its first page as image/png, width pixels wide at most
+//	POST /page?side=1600   a PDF → its first page as image/png, its longer side side pixels
 //
 // It answers 422 for a document it cannot convert and 413 for one larger than it takes, which are
 // the document's and will not change, and 503 or 504 for a sidecar too busy or a conversion that
@@ -50,10 +50,10 @@ func (c *Client) PDF(ctx context.Context, body io.Reader, size int64, ext string
 	return c.post(ctx, "pdf", url.Values{"ext": {ext}}, body, size, w, limit)
 }
 
-// Page draws the first page of the PDF body reads, width pixels wide at most, as a PNG it copies to
-// w, up to limit bytes.
-func (c *Client) Page(ctx context.Context, body io.Reader, size int64, width int, w io.Writer, limit int64) error {
-	return c.post(ctx, "page", url.Values{"width": {strconv.Itoa(width)}}, body, size, w, limit)
+// Page draws the first page of the PDF body reads, its longer side side pixels, as a PNG it copies
+// to w, up to limit bytes.
+func (c *Client) Page(ctx context.Context, body io.Reader, size int64, side int, w io.Writer, limit int64) error {
+	return c.post(ctx, "page", url.Values{"side": {strconv.Itoa(side)}}, body, size, w, limit)
 }
 
 func (c *Client) post(ctx context.Context, path string, query url.Values, body io.Reader, size int64, w io.Writer, limit int64) error {

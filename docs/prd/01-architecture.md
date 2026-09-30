@@ -126,7 +126,14 @@ an empty set, not another family's data. A handler that writes a row with the wr
 |---|---|---|
 | `household_migrate` | Migrations only, at deploy time | Bypasses (owns the tables) |
 | `household_app` | Every request | **Enforced** — no bypass exists |
-| `household_meter` | The nightly storage/usage sampler | Enforced; reads aggregate columns only |
+| `household_meter` | The nightly storage/usage sampler, and the files workers' search for households with work due | Enforced; reads aggregate columns only |
+
+The meter role is the one that reads across households, and what it reads is held to that: every
+tenant table has, beside the tenant isolation, a `FOR SELECT` policy of the meter role's own, and the
+role holds `SELECT` on the column that names the household and on the few that count, size or
+schedule rows (a file's module, variant, size and attributed member, a job's time), and no other
+privilege. It measures and never writes: what it finds is written in each household's own context by
+the request role (architecture tests 2 and 11, [ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md)).
 
 There is deliberately **no support role and no bypass role**. Platform staff have no database
 credential that can read household content, which is how [G8](00-overview.md) is made a
@@ -149,9 +156,9 @@ property of the system rather than a policy (**D-3**, and see
 
 | Table group | Scope | Notes |
 |---|---|---|
-| `users`, `credentials`, `sessions`, `devices` | Global | A user exists independently of any household and may be in several |
+| `users`, `credentials`, `sessions`, `devices`, `avatars` | Global | A user exists independently of any household and may be in several. Their picture is theirs, not a household's (**D-107**) |
 | `households`, `memberships`, `invitations` | Household-keyed but not RLS-isolated the same way | The membership table is how tenancy is *resolved*, so it is read before a tenant context exists; it has its own policy keyed on `user_id` |
-| `plans`, `subscriptions`, `invoices`, `usage_samples` | Household-keyed, billing schema | Readable by the billing service role; contains no content |
+| `plans`, `subscriptions`, `invoices` | Household-keyed, billing schema | Readable by the billing service role; contains no content. The daily usage samples billing averages are tenant tables, written in each household's context (FR-ST2) |
 | `country_profiles`, `unit_dimensions`, `units`, `crop_catalog`, `tariff_presets` | Global reference data | Curated by the platform, read-only to tenants, versioned. Loaded from sourced files in `reference-data/` as the server migrates ([ADR 0008](../adr/0008-reference-data-pipeline.md)). The languages are not a table: they ship with the catalogs (§9 of [03](03-platform-strands.md)) |
 | `platform_audit` | Global | Append-only record of platform-staff actions |
 
@@ -311,14 +318,18 @@ platform work in the product.
 | | |
 |---|---|
 | **Store** | S3-compatible, EU region, private buckets, no public access under any condition |
-| **Key shape** | `h/{household_id}/{module}/{entity_id}/{variant}` — the tenant is the first path segment, so a bucket policy, a lifecycle rule, a usage listing and a tenant erasure are all prefix operations |
+| **Key shape** | `h/{household_id}/{module}/{entity_id}/{variant}` — the tenant is the first path segment, so a bucket policy, a lifecycle rule, a usage listing and a tenant erasure are all prefix operations. A user's picture is the account's, `u/{user_id}/avatar/{id}/picture`, and so is its erasure (**D-107**) |
 | **Access** | Never direct. Uploads go through the API (which sniffs the type, enforces the size cap and the storage quota); downloads are served as short-lived pre-signed URLs the API issues after authorizing the caller |
-| **Immutability** | Document bytes are write-once, as in `home`. A changed file is a new document |
+| **Immutability** | Bytes are write-once, as in `home`: the store refuses a second write to a key (`If-None-Match`), whoever races for it. A changed file is a new entity |
 | **Backups** | Object versioning plus cross-account replication within the EU |
 | **Metering** | The per-prefix byte total is the billable quantity — see [04](04-billing-and-entitlements.md) |
 
 **Pre-signed URLs carry the authorization decision, not the authorization.** They are issued
-for a single object, expire in minutes, and are never handed out for a prefix. **D-9.**
+for a single object, expire in minutes, and are never handed out for a prefix. **D-9.** Each is
+signed as of the start of the five minutes it is issued in and lasts fifteen, so every link to an
+object issued in the same five minutes is one URL, which a client's cache keeps. The store cannot set
+`X-Content-Type-Options` on what it serves; the edge in front of it does
+([runbook](../runbooks/object-storage.md)).
 
 ## 9. Environments and deployment
 
@@ -357,6 +368,8 @@ broken product for everyone who has not updated. **D-11.**
 10. A committed sync configuration that is not the one the entity registry generates, a table a
     generated stream reads that is not published for PowerSync, and a table PowerSync's replication
     role may `SELECT` that no stream needs (**D-93**; plan item 13).
+11. A privilege of the meter role's beyond `SELECT` on a column that names a household or counts,
+    sizes or schedules rows (§2.3; plan item 14).
 
 Numbers 1, 4 and 6 exist in `home` already and paid for themselves. Numbers 2, 3, 5, 7, 8 and 9
 are the ones that make commercial and multi-tenant correctness structural instead of
@@ -365,7 +378,9 @@ replication role reads past it, so the streams generated from the entities' decl
 tenant boundary, and the role may query no table that no stream was generated for. It bounds the
 role's queries, not its `REPLICATION`: logical decoding checks no table's privileges, so the role's
 credential could decode every table's changes through a replication slot of its own, which is why
-that credential is the sync service's alone (§2.3, **D-3**).
+that credential is the sync service's alone (§2.3, **D-3**). Number 11 holds §2.3's promise for the
+one role that reads every household: it counts, sizes and schedules their rows and never reads what
+they say.
 
 **Number 9 is the one that would otherwise be discovered late.** D-23 makes client-generated ids
 mandatory because an offline create needs a stable identity immediately — but the requirement is

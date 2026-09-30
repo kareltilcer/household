@@ -1,0 +1,104 @@
+# Object storage and the converter
+
+Households' files and users' pictures live in one private bucket of an S3-compatible store; the
+API writes them, once each, and hands out links pre-signed for one object for fifteen minutes at
+most ([ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md), PRD 01 §8). The
+converter sidecar derives an office document's PDF and a PDF's first page. Read this before an
+environment's first deploy, when uploads fail with `502 storage_unavailable`, when previews stop
+appearing, and when the sweep or a household's storage figures look wrong.
+
+## What is where
+
+| | |
+|---|---|
+| The bucket | `HOUSEHOLD_OBJECT_STORE_URL`'s path: `http(s)://ACCESS_KEY:SECRET@host:port/bucket?region=…`. `household` on the compose RustFS in development, which the server makes when it starts; a deployment's is provisioned, never made by the server |
+| A household's files | `h/{household_id}/{module}/{entity_id}/{variant}`: `original` as uploaded, `thumbnail`, `preview` and `pdf` derived. Their rows are `files`, in the household |
+| Users' pictures | `u/{user_id}/avatar/{id}/picture`. Their rows are `avatars`, global. Metered to no household (D-107) |
+| Work after a commit | `file_jobs`: `variants` for an original's variants, `purge` for a deleted entity's bytes. Every API instance runs the workers |
+| The converter | `HOUSEHOLD_CONVERTER_URL`, the image `deploy/converter` builds; `pnpm run up:convert` in development |
+| The samples | `usage_samples`, `usage_sample_modules`, `usage_sample_members`, one set per household per UTC day |
+| The meter role | `household_meter`, `HOUSEHOLD_METER_DATABASE_URL`, which `serve` now reads: it lists the households with work due and measures them for the sample |
+
+## Before the first deploy
+
+1. **Provision the bucket** in the EU region the environment runs in (PL-8), private, with no public
+   access policy of any kind: every read is a pre-signed link.
+2. **Turn versioning on**, with a lifecycle rule that expires noncurrent versions and delete markers
+   after 35 days, the backups' retention (PRD 07 §2). A purge or a sweep then removes an object at
+   once for everyone, and the store keeps its previous version for the backups' window only.
+3. **Replicate it** to a second account in the EU (PRD 01 §8).
+4. **Give the API a key of its own**, allowed `GetObject`, `PutObject` (conditional writes included),
+   `DeleteObject`, `ListBucket` and `HeadBucket` on this bucket and nothing else. The URL carrying it is
+   a secret, like the database's; outside development the server refuses the compose store's
+   published one and plain http.
+5. **Put an edge in front of the bucket that adds `X-Content-Type-Options: nosniff`** to every
+   response (FR-FL2). The store cannot: a pre-signed URL sets the response's type and disposition, and
+   no other header. Name the edge's scheme and host in `HOUSEHOLD_OBJECT_STORE_PUBLIC_URL` when
+   clients reach the bucket there rather than where the API does; the links are signed for the host
+   they name.
+6. **Run the converter beside the API with no route out**: a document may name remote resources,
+   which LibreOffice would fetch. It needs no volume and no secret; give it two CPUs per concurrent
+   conversion (`HOUSEHOLD_CONVERTER_JOBS`, 2) and a gigabyte of memory each.
+7. Give the API a disk for `HOUSEHOLD_UPLOAD_DIR` large enough for its concurrent uploads at 100 MB
+   each; the server clears what a process that died left there when it starts.
+
+## Uploads fail with `502 storage_unavailable`
+
+The API could not write to the store, and committed nothing: the client sends the upload again. Reads
+of what is already stored, and their links, still work (FR-NF3).
+
+1. Look for `files: the object store refused an upload` or `avatar: the object store refused a
+   picture` in the API's log, with the error.
+2. From an API instance, check the store answers and the bucket is there: `HEAD` the bucket with the
+   API's key. A `403` is the key or its policy; a `404` is the bucket's name or region; a timeout is
+   the network.
+3. A `412` is not an outage: it is the store refusing to overwrite a key, which the API answers
+   itself. If the store answers every conditional write with `501`, it does not support `If-None-Match`
+   on `PutObject`, and uploads cannot be write-once there: change stores rather than drop the
+   condition.
+
+## Previews stop appearing
+
+A file whose variants could not be derived stays download-only; its upload is never lost (FR-FL3).
+
+```sql
+-- As the database's administrator: the jobs waiting, and those retried.
+SELECT kind, module, count(*), max(attempts), min(run_at)
+FROM file_jobs GROUP BY kind, module;
+
+-- The originals whose variants failed today.
+SELECT module, content_type, count(*)
+FROM files WHERE variant = 'original' AND variants = 'failed' AND created_at > now() - interval '1 day'
+GROUP BY module, content_type;
+```
+
+- Jobs piling up with `run_at` in the past: no worker is running them. Every instance runs them; check
+  the API's log for `files: find the jobs due`, which fails when the meter role's connection does.
+- `attempts` climbing for office documents and PDFs: the converter. `GET /healthz` on it; its log names
+  each conversion that failed or ran out of time. A job gives up after five attempts, over about two
+  and a half hours.
+- Many `failed` of one type: a converter that cannot read it answers `422`, which is not retried. Try
+  one by hand: `curl --data-binary @file.docx 'http://converter:3100/pdf?ext=docx' -o out.pdf`.
+
+To derive a failed file's variants again, once the cause is fixed, put its job back:
+
+```sql
+-- As the migrate role, in the household's context.
+SELECT set_config('app.household_id', '<household>', false);
+UPDATE files SET variants = 'pending'
+WHERE household_id = '<household>' AND module = '<module>' AND entity_id = '<entity>' AND variant = 'original';
+INSERT INTO file_jobs (household_id, kind, module, entity_id) VALUES ('<household>', 'variants', '<module>', '<entity>');
+```
+
+## Storage figures look wrong
+
+The storage picture's totals are live, from `files`; billing and the trend read the samples. Bytes no
+row records are billed to nobody and are swept once a day old, so the bucket may briefly hold more
+than the samples say.
+
+- Compare a household's rows with its prefix: `SELECT sum(byte_size), count(*) FROM files WHERE
+  household_id = …` against a listing of `h/{household_id}/`. More objects than rows is what the
+  sweep removes; more rows than objects is a missing object, which a link answers `404` from the
+  store: find the upload's request in the log, and restore the object from the store's versions.
+- A household with no sample for a day: the sampler logs `storage: write a usage sample` with the
+  error for each household it could not write, and samples the rest.

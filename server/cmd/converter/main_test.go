@@ -1,0 +1,147 @@
+package main
+
+import (
+	"bytes"
+	"image"
+	"image/png"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+)
+
+// The tests run the converter with this test binary standing in for LibreOffice and pdftoppm: run
+// with CONVERTER_FAKE set, it does what the command it stands for would, as CONVERTER_FAKE says.
+func TestMain(m *testing.M) {
+	if mode := os.Getenv("CONVERTER_FAKE"); mode != "" {
+		os.Exit(fake(mode, os.Args[1:]))
+	}
+	os.Exit(m.Run())
+}
+
+// fake stands in for soffice or pdftoppm with args: "ok" writes what the command writes, "nothing"
+// writes nothing and fails, and "hang" never ends.
+func fake(mode string, args []string) int {
+	switch mode {
+	case "hang":
+		time.Sleep(time.Minute)
+		return 0
+	case "nothing":
+		return 1
+	}
+	if i := slices.Index(args, "--outdir"); i >= 0 {
+		in := args[len(args)-1]
+		out := filepath.Join(args[i+1], strings.TrimSuffix(filepath.Base(in), filepath.Ext(in))+".pdf")
+		if err := os.MkdirAll(args[i+1], 0o700); err != nil { //nolint:gosec // G703: the converter's own arguments, in a test.
+			return 1
+		}
+		if err := os.WriteFile(out, []byte("%PDF-1.4 converted\n"), 0o600); err != nil { //nolint:gosec // G703: as above.
+			return 1
+		}
+		return 0
+	}
+	f, err := os.Create(args[len(args)-1] + ".png") //nolint:gosec // G703: the converter's own arguments, in a test.
+	if err != nil {
+		return 1
+	}
+	defer func() { _ = f.Close() }()
+	if err := png.Encode(f, image.NewGray(image.Rect(0, 0, 3, 4))); err != nil {
+		return 1
+	}
+	return 0
+}
+
+// newConverter is a converter whose commands are this test binary, faking as mode, with a
+// conversion's timeout of timeout.
+func newConverter(t *testing.T, mode string, timeout time.Duration) *converter {
+	t.Helper()
+	t.Setenv("CONVERTER_FAKE", mode)
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &converter{
+		soffice: []string{self}, pdftoppm: []string{self}, office: timeout, page: timeout,
+		slots: make(chan struct{}, 1), dir: t.TempDir(), log: slog.New(slog.DiscardHandler),
+	}
+}
+
+func post(t *testing.T, c *converter, path string, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, path, bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	c.routes().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestAnOfficeDocumentBecomesAPDF(t *testing.T) {
+	c := newConverter(t, "ok", 10*time.Second)
+	rec := post(t, c, "/pdf?ext=docx", []byte("PK\x03\x04 a document"))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" ||
+		!strings.HasPrefix(rec.Body.String(), "%PDF-") {
+		t.Fatalf("%d %s %q", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	// Each conversion's directory goes with it.
+	if entries, _ := os.ReadDir(c.dir); len(entries) != 0 {
+		t.Fatalf("left %v", entries)
+	}
+}
+
+func TestAPDFsFirstPageIsDrawn(t *testing.T) {
+	c := newConverter(t, "ok", 10*time.Second)
+	rec := post(t, c, "/page?side=1600", []byte("%PDF-1.4 a document"))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("%d %s", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	if _, err := png.Decode(rec.Body); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// What the converter cannot convert is 422, which the pipeline takes for good; what it may not be
+// asked is 422 or 413 before any command runs; and a conversion that runs out of time is 504.
+func TestTheConvertersRefusals(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mode, path string
+		body       []byte
+		status     int
+	}{
+		"a document no command converts": {"nothing", "/pdf?ext=docx", []byte("junk"), http.StatusUnprocessableEntity},
+		"a page no command draws":        {"nothing", "/page?side=800", []byte("junk"), http.StatusUnprocessableEntity},
+		"a type it does not read":        {"ok", "/pdf?ext=exe", []byte("MZ"), http.StatusUnprocessableEntity},
+		"no type":                        {"ok", "/pdf", []byte("PK"), http.StatusUnprocessableEntity},
+		"a side too large":               {"ok", "/page?side=100000", []byte("%PDF"), http.StatusUnprocessableEntity},
+		"an empty document":              {"ok", "/pdf?ext=docx", nil, http.StatusUnprocessableEntity},
+		"a conversion out of time":       {"hang", "/pdf?ext=docx", []byte("PK"), http.StatusGatewayTimeout},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := newConverter(t, tc.mode, 300*time.Millisecond)
+			if rec := post(t, c, tc.path, tc.body); rec.Code != tc.status {
+				t.Fatalf("%d %s, want %d", rec.Code, rec.Body.String(), tc.status)
+			}
+		})
+	}
+}
+
+func TestADocumentTooLargeIsRefused(t *testing.T) {
+	c := newConverter(t, "ok", 10*time.Second)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/pdf?ext=docx", io.LimitReader(zeros{}, maxBytes+1))
+	rec := httptest.NewRecorder()
+	c.routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("%d", rec.Code)
+	}
+}
+
+type zeros struct{}
+
+func (zeros) Read(p []byte) (int, error) {
+	clear(p)
+	return len(p), nil
+}
