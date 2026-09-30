@@ -4,10 +4,11 @@
 // u/{user_id}/avatar/{id}/picture, and is metered to no household (D-107).
 //
 // What is kept is not what was uploaded: the upload is decoded, cropped to its centred square,
-// scaled to Side pixels, turned upright and written again, so a picture carries no camera, no time
-// and no place, whatever the photograph it came from did, and every member's app loads a few
-// kilobytes rather than the photograph. A new picture has a new id, and so a new key, which the
-// store writes once; the one it replaces is purged once the replacement commits.
+// scaled down to Side pixels when it is larger and never enlarged, turned upright and written again,
+// so a picture carries no camera, no time and no place, whatever the photograph it came from did,
+// and every member's app loads a few kilobytes rather than the photograph. A new picture has a new
+// id, and so a new key, which the store writes once; the one it replaces is purged once the
+// replacement commits.
 //
 // A picture's URL is pre-signed, valid for minutes (D-9), and issued in a response to whoever that
 // response is for: the user themselves, a member of a household the user is in, or, in the child
@@ -21,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -39,7 +41,8 @@ import (
 const (
 	// MaxBytes caps an uploaded picture: a phone's photograph, with room to spare.
 	MaxBytes int64 = 20_000_000
-	// Side is the side of the square a picture is kept as, in pixels.
+	// Side is the side of the square a picture is kept as, in pixels, at most: a smaller square is
+	// kept as it is, never enlarged.
 	Side = 512
 	// maxPixels caps the image a picture is decoded from: the contract's 64 megapixels.
 	maxPixels = 64_000_000
@@ -226,31 +229,50 @@ func (s *Service) URL(ctx context.Context, user uuid.UUID, ref Ref) *string {
 // files.SweepGrace: one replaced whose purge failed, or one put by an upload whose transaction did
 // not commit. pool reads the pictures users have, as the request role; the table is no household's.
 // It returns how many it removed. Item 15's scheduler runs it nightly.
-func (s *Service) Sweep(ctx context.Context, pool interface {
-	Query(context.Context, string, ...any) (pgx.Rows, error)
-},
-) (int, error) {
-	rows, err := pool.Query(ctx, "SELECT user_id, id FROM avatars")
-	if err != nil {
-		return 0, err
-	}
-	kept := map[string]bool{}
-	var user, id uuid.UUID
-	if _, err := pgx.ForEachRow(rows, []any{&user, &id}, func() error {
-		kept[Key(user, id)] = true
-		return nil
-	}); err != nil {
-		return 0, err
-	}
+//
+// It lists the old pictures first and asks the table about those alone, as a household's sweep lists
+// before it reads (files.Service.Sweep): a night finds a handful to remove, and the table holds a row
+// for every user who has a picture, which read whole would be held in memory to decide about them.
+func (s *Service) Sweep(ctx context.Context, pool files.Querier) (int, error) {
 	cutoff := s.now().Add(-files.SweepGrace)
-	var keys []string
+	old := map[string]bool{}
+	var ids []uuid.UUID
 	if err := s.store.List(ctx, "u/", func(o objectstore.Info) error {
-		if strings.Contains(o.Key, "/avatar/") && !kept[o.Key] && o.LastModified.Before(cutoff) {
-			keys = append(keys, o.Key)
+		if !strings.Contains(o.Key, "/avatar/") || !o.LastModified.Before(cutoff) {
+			return nil
+		}
+		old[o.Key] = true
+		if id, ok := pictureID(o.Key); ok {
+			ids = append(ids, id)
 		}
 		return nil
 	}); err != nil {
 		return 0, err
 	}
+	if len(ids) > 0 {
+		rows, err := pool.Query(ctx, "SELECT user_id, id FROM avatars WHERE id = ANY($1)", ids)
+		if err != nil {
+			return 0, err
+		}
+		var user, id uuid.UUID
+		if _, err := pgx.ForEachRow(rows, []any{&user, &id}, func() error {
+			delete(old, Key(user, id))
+			return nil
+		}); err != nil {
+			return 0, err
+		}
+	}
+	keys := slices.Sorted(maps.Keys(old))
 	return len(keys), s.store.Delete(ctx, keys...)
+}
+
+// pictureID returns the picture's id that key names, u/{user_id}/avatar/{id}/picture, and false for a
+// key of another form, which no user's picture is.
+func pictureID(key string) (uuid.UUID, bool) {
+	parts := strings.Split(key, "/")
+	if len(parts) != 5 || parts[0] != "u" || parts[2] != "avatar" || parts[4] != "picture" {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(parts[3])
+	return id, err == nil
 }

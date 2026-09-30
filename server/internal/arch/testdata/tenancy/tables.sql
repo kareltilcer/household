@@ -27,10 +27,16 @@ CREATE TABLE arch_testdata.loose_child (
 );
 SELECT enable_tenant_isolation('arch_testdata.loose_child');
 
--- Keeps it: the template, narrowed by a restrictive policy.
+-- Keeps it: the template, narrowed for the request role by a restrictive policy.
 CREATE TABLE arch_testdata.narrowed (id uuid PRIMARY KEY, household_id uuid NOT NULL, owner_id uuid NOT NULL);
 SELECT enable_tenant_isolation('arch_testdata.narrowed');
-CREATE POLICY own_items ON arch_testdata.narrowed AS RESTRICTIVE USING (owner_id = app_user_id());
+CREATE POLICY own_items ON arch_testdata.narrowed AS RESTRICTIVE TO household_app USING (owner_id = app_user_id());
+
+-- The same rule for every role, the meter's among them, which reads with no caller: it would count
+-- none of the table's rows.
+CREATE TABLE arch_testdata.narrowed_everyone (id uuid PRIMARY KEY, household_id uuid NOT NULL, owner_id uuid NOT NULL);
+SELECT enable_tenant_isolation('arch_testdata.narrowed_everyone');
+CREATE POLICY own_items ON arch_testdata.narrowed_everyone AS RESTRICTIVE USING (owner_id = app_user_id());
 
 -- No household_id at all.
 CREATE TABLE arch_testdata.no_household (id uuid PRIMARY KEY);

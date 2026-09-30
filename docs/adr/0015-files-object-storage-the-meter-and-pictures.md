@@ -60,7 +60,8 @@ authorised the caller, in three steps:
   the ceiling an upload always succeeds, D-33) and writes the bytes to
   `h/{household}/{module}/{entity}/original` with `If-None-Match: *`, the digest in the object's
   metadata. **The store is what keeps bytes write-once**: a second write to a key is refused by the
-  store itself (RustFS answers `412`, as S3 does), whoever races for it; a retry finds the same
+  store itself (RustFS answers `412`, as S3 does, and S3 `409` to a write racing another still in
+  flight, which is the same refusal), whoever races for it; a retry finds the same
   digest there and succeeds, and other bytes for the entity are `422` naming the field that named the
   entity. A store that cannot be reached is `502 storage_unavailable`, and nothing is recorded
   (FR-NF3).
@@ -120,8 +121,12 @@ both to every table isolated before it and to the three tables with policies of 
 (`households.id`). The role holds `SELECT` on no other column but the few the sampler sums and the
 workers schedule by (`files.module, variant, byte_size, owner_id`, `file_jobs.run_at`) and no other
 privilege. **Architecture test 2** accepts that one policy beside the tenant isolation, exactly as
-`enable_metering` makes it; **test 11** holds the role to its columns, against deliberate violations
-of its own. The meter measures; it never writes: the sample of each household is written in that
+`enable_metering` makes it, and refuses a restrictive policy that reaches the meter role: a
+restrictive policy is ANDed with every permissive one, so the narrower rule ADR 0005 prescribes, a
+private item's `owner_id = app_user_id()` written for every role, would hide every such row from a
+role that reads with no caller, and the sample would count none of them. A restrictive policy names
+the roles it narrows, `TO household_app`. **Test 11** holds the role to its columns, against
+deliberate violations of its own. The meter measures; it never writes: the sample of each household is written in that
 household's context by the request role (`tenant.Assume` with no caller, `tenant.InWriteTx`), and a
 worker, once the meter has named the household, claims and records its jobs the same way.
 
@@ -180,6 +185,15 @@ holder of the household code that lists a child's profile.
   and implements `module.StorageSource`; none touches the store. A module whose entity carries a
   preview state reads the original's `variants` (a hook to change its own row when the workers finish
   is the first such module's to add, item 46).
+- An attachment made offline (D-25) keeps its state on the module's own row, never in `files`: the
+  row a client created offline replicates with the module's `attachment_status: pending` before its
+  bytes have moved; when connectivity returns, the upload is `Receive`, `Put` and `Record` for that
+  entity's id, in a mutation that sets its `attachment_status` to `ready` with the file it records;
+  and a refusal no retry will mend, `402 storage_ceiling_reached`, `413` or `415`, is recorded on the
+  row as `failed`, with the reason its `code` names, in a mutation of the module's own (PRD 10 §4,
+  scenario 12, which item 17 switches on). The pending `files` row rejected above is not D-25's
+  pending row: `files` names bytes once they are in the store, whatever the module's row says of
+  them.
 - A file's attribution names one member and whether the entity is private to them, and no audience
   between that and the whole module: `Link` refuses a private file to everyone but its owner, and the
   storage picture lists a shared one to every reader who can see its module. A module whose entities

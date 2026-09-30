@@ -18,7 +18,8 @@ import (
 // tenant isolation that enable_tenant_isolation creates and the meter role's read beside it
 // (enable_metering), which reaches that role alone. Another permissive policy would widen what a
 // household can read, since permissive policies are ORed; a rule narrower than the tenant's is a
-// restrictive policy, which is ANDed with it. A materialized view cannot hold a
+// restrictive policy, which is ANDed with it, and names the roles it narrows, since one that
+// reached the meter role would hide rows from the usage sample. A materialized view cannot hold a
 // policy at all, so none may hold a household's rows. A table exempted for a policy of its own
 // may read more widely than its household, but only in a FOR SELECT policy: it is written only
 // in its household's context. No global table's row, deleted or updated by the request role,
@@ -269,6 +270,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 		case exempted:
 			out = append(out, rlsViolations(tb)...)
 			out = append(out, partitionViolations(tb)...)
+			out = append(out, meterNarrowedViolations(tb, policies[tb.oid])...)
 			if len(policies[tb.oid]) == 0 {
 				out = append(out, tb.name+" has no policy, so the request role reads none of it")
 			}
@@ -290,6 +292,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 		}
 		out = append(out, rlsViolations(tb)...)
 		out = append(out, partitionViolations(tb)...)
+		out = append(out, meterNarrowedViolations(tb, policies[tb.oid])...)
 		isolated := false
 		for _, p := range policies[tb.oid] {
 			switch {
@@ -388,6 +391,25 @@ func globalActionViolations(tb table, fks []foreignKey, exempt map[string]exempt
 		if acts(fk.onUpdate) && fk.canUpdate {
 			out = append(out, fmt.Sprintf("%s has foreign key %s, which acts on an update of %s, a global table the request "+
 				"role updates; the action runs past row-level security, into every household", tb.name, fk.name, fk.references))
+		}
+	}
+	return out
+}
+
+// meterNarrowedViolations reports each restrictive policy on tb that applies to the meter role, as
+// one for every role does. A restrictive policy is ANDed with every permissive one, the meter's read
+// among them, so a rule written to narrow what a member reads narrows what the meter counts too: a
+// private item's owner, owner_id = app_user_id(), hides every such row from a role that reads with
+// no caller, and the usage sample and the fair-use counters would miss them, or bill none of a
+// narrowed table's bytes. The meter reads only the columns that name, count, size or schedule rows
+// (test 11), so a policy that names the roles it narrows, the request role's, keeps nothing from it
+// that a member's rule protects.
+func meterNarrowedViolations(tb table, policies []policy) []string {
+	var out []string
+	for _, p := range policies {
+		if !p.permissive && (slices.Contains(p.roles, "public") || slices.Contains(p.roles, db.RoleMeter)) {
+			out = append(out, fmt.Sprintf("%s has restrictive policy %s, which narrows the meter role's reads too, so the usage "+
+				"sample would miss the rows it hides; name the roles it narrows, TO %s", tb.name, p.name, db.RoleApp))
 		}
 	}
 	return out

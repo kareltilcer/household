@@ -185,16 +185,18 @@ func (p *Picture) picture(w http.ResponseWriter, r *http.Request) {
 }
 
 // largest fills in the household's largest items the reader may open: by what deleting each would
-// recover, its original and every variant derived from it.
+// recover, its original and every variant derived from it, summed for every entity in one pass over
+// the household's rows rather than once for each of its originals.
 func (p *Picture) largest(ctx context.Context, tx pgx.Tx, household, reader uuid.UUID, visible []string, out *report) error {
 	rows, err := tx.Query(ctx, `
-		SELECT o.module, o.entity_id, coalesce(o.filename, ''), o.byte_size,
-		  (SELECT sum(v.byte_size)::bigint FROM files v
-		   WHERE v.household_id = o.household_id AND v.module = o.module AND v.entity_id = o.entity_id)
+		SELECT o.module, o.entity_id, coalesce(o.filename, ''), o.byte_size, e.bytes
 		FROM files o
+		JOIN (SELECT module, entity_id, sum(byte_size)::bigint AS bytes FROM files
+		      WHERE household_id = $1 AND module = ANY($2) GROUP BY module, entity_id) e
+		  ON e.module = o.module AND e.entity_id = o.entity_id
 		WHERE o.household_id = $1 AND o.variant = 'original' AND o.module = ANY($2)
 		  AND (NOT o.private OR o.owner_id = $3)
-		ORDER BY 5 DESC, o.entity_id
+		ORDER BY e.bytes DESC, o.entity_id
 		LIMIT $4`, household, visible, reader, Largest)
 	if err != nil {
 		return err

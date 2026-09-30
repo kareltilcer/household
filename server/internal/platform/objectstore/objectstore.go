@@ -33,7 +33,8 @@ import (
 )
 
 var (
-	// ErrExists is PutOnce's answer for a key that already holds an object.
+	// ErrExists is PutOnce's answer for a key that already holds an object, or that another write
+	// is writing at that moment.
 	ErrExists = errors.New("objectstore: the key already holds an object")
 	// ErrNotFound is the answer for a key that holds none.
 	ErrNotFound = errors.New("objectstore: no object at the key")
@@ -183,6 +184,12 @@ const sha256Meta = "sha256"
 
 // PutOnce writes size bytes from body to k, which must hold no object yet: ErrExists when it does,
 // whoever wrote it. body is read again from its start should a request be retried.
+//
+// A conditional write that races another write to k is answered 409 ConditionalRequestConflict
+// rather than 412, as S3 answers it: one of the two writes lands and the other is refused, which is
+// the write-once refusal, not an outage. It is ErrExists too, and the caller asks the store which
+// bytes landed as it does for a 412 (PutSame): they are there once the other write has finished,
+// and until then the key holds none, which the caller's retry meets again.
 func (s *Store) PutOnce(ctx context.Context, k string, body io.ReadSeeker, size int64, o Object) error {
 	if !ValidKey(k) {
 		return fmt.Errorf("objectstore: %q is not a key", k)
@@ -198,7 +205,7 @@ func (s *Store) PutOnce(ctx context.Context, k string, body io.ReadSeeker, size 
 		IfNoneMatch:   aws.String("*"),
 	})
 	switch {
-	case status(err) == http.StatusPreconditionFailed:
+	case status(err) == http.StatusPreconditionFailed, status(err) == http.StatusConflict:
 		return ErrExists
 	case err != nil:
 		return fmt.Errorf("objectstore: put %s: %w", k, err)
@@ -209,7 +216,8 @@ func (s *Store) PutOnce(ctx context.Context, k string, body io.ReadSeeker, size 
 // PutSame is PutOnce for a caller whose own bytes may be at k already: a write the store kept but
 // whose answer was lost, sent again by the store's client or by a retry of the request that wrote
 // it. Bytes there with o's digest are that write, and PutSame succeeds; bytes with another digest,
-// or with none, are another's, and it answers ErrExists.
+// or with none, are another's, and it answers ErrExists. A key refused while another write to it was
+// in flight, which has not landed yet, holds no bytes to tell, and is a failure to try again.
 func (s *Store) PutSame(ctx context.Context, k string, body io.ReadSeeker, size int64, o Object) error {
 	err := s.PutOnce(ctx, k, body, size, o)
 	if !errors.Is(err, ErrExists) {
@@ -217,6 +225,8 @@ func (s *Store) PutSame(ctx context.Context, k string, body io.ReadSeeker, size 
 	}
 	info, err := s.Head(ctx, k)
 	switch {
+	case errors.Is(err, ErrNotFound):
+		return fmt.Errorf("objectstore: put %s: the store refused the write, and holds no object there yet", k)
 	case err != nil:
 		return err
 	case !info.HasSHA256 || info.SHA256 != o.SHA256:
@@ -304,7 +314,7 @@ func (s *Store) List(ctx context.Context, prefix string, fn func(Info) error) er
 	return nil
 }
 
-// Check asks the store whether the bucket is there, for a log line at start.
+// Check asks the store whether the bucket is there: CreateBucket asks it before it makes one.
 func (s *Store) Check(ctx context.Context) error {
 	if _, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)}); err != nil {
 		return fmt.Errorf("objectstore: bucket %s: %w", s.bucket, err)

@@ -110,7 +110,8 @@ func taken(field string) *problem.Problem {
 	return problem.Validation(problem.FieldError{Field: field, Code: problem.FieldInvalid})
 }
 
-// Remedy is what the 402 for the ceiling tells a client to do (the contract's EntitlementProblem).
+// freeStorage is the remedy the 402 for the ceiling tells a client of (the contract's
+// EntitlementProblem): freeing storage.
 const freeStorage = "free_storage"
 
 // defaultState is the entitlement state a 402 names before item 16 keeps one: a household's trial

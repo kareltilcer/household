@@ -102,8 +102,8 @@ func fetchPicture(t *testing.T, link *string) (string, image.Config, []byte) {
 	return res.header.Get("Content-Type"), cfg, res.body
 }
 
-// A member's picture is made from what they upload: its centred square, 512 pixels a side, without
-// its metadata, a PNG when it is transparent. It replaces the one before, whose object goes; PATCH
+// A member's picture is made from what they upload: its centred square, scaled down to 512 pixels a
+// side and never enlarged, without its metadata, a PNG when it is transparent. It replaces the one before, whose object goes; PATCH
 // /me with null removes it, and nothing else may be set there. It is the account's, under its own
 // prefix, and in no household's files (D-107).
 func TestAMembersPicture(t *testing.T) {

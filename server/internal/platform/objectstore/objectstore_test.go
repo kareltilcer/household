@@ -3,10 +3,13 @@ package objectstore_test
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +72,66 @@ func TestPutSameTakesItsOwnBytesForItsOwn(t *testing.T) {
 	}
 	if err := same("h/a/documents/b/original", []byte("other bytes")); !errors.Is(err, objectstore.ErrExists) {
 		t.Fatalf("other bytes at the key = %v, want ErrExists", err)
+	}
+}
+
+// racing is a store that answers every write as S3 answers a conditional write racing another to
+// its key, 409 ConditionalRequestConflict, and holds at the key what landed: held's bytes, or none
+// while the other write is still in flight.
+func racing(t *testing.T, held []byte) *objectstore.Store {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPut:
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?>`+
+				`<Error><Code>ConditionalRequestConflict</Code><Message>A conflicting operation occurred.</Message></Error>`)
+		case r.Method == http.MethodHead && held != nil:
+			digest := sha256.Sum256(held)
+			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set("Content-Length", strconv.Itoa(len(held)))
+			w.Header().Set("X-Amz-Meta-Sha256", hex.EncodeToString(digest[:]))
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	endpoint, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := objectstore.New(objectstore.Config{
+		Location: objectstore.Location{Endpoint: endpoint, Bucket: "racing", AccessKey: "tester", Secret: "racing"},
+		Attempts: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// A write refused because another write to its key was in flight is the store keeping the key
+// write-once, as a 412 is, never an outage: PutSame asks which bytes landed, and takes its own for its
+// own, refuses another's, and fails, to be tried again, while nothing has landed yet.
+func TestAWriteRacingAnotherIsTheKeyTaken(t *testing.T) {
+	mine := []byte("Smlouva ČEZ — elektřina")
+	object := objectstore.Object{ContentType: "text/plain", SHA256: sha256.Sum256(mine)}
+	same := func(s *objectstore.Store) error {
+		return s.PutSame(t.Context(), "h/a/documents/b/original", bytes.NewReader(mine), int64(len(mine)), object)
+	}
+	if err := put(t, racing(t, nil), "h/a/documents/b/original", mine, "text/plain"); !errors.Is(err, objectstore.ErrExists) {
+		t.Fatalf("a write racing another = %v, want ErrExists", err)
+	}
+	if err := same(racing(t, mine)); err != nil {
+		t.Fatalf("a write racing its own = %v, want the write", err)
+	}
+	if err := same(racing(t, []byte("other bytes"))); !errors.Is(err, objectstore.ErrExists) {
+		t.Fatalf("a write racing another's = %v, want ErrExists", err)
+	}
+	if err := same(racing(t, nil)); err == nil || errors.Is(err, objectstore.ErrExists) {
+		t.Fatalf("a write racing one still in flight = %v, want a failure to try again", err)
 	}
 }
 

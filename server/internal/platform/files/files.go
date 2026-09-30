@@ -185,9 +185,6 @@ func New(cfg Config) (*Service, error) {
 // Store is the object store the pipeline writes.
 func (s *Service) Store() *objectstore.Store { return s.store }
 
-// MaxBytes is the pipeline's cap on a file.
-func (s *Service) MaxBytes() int64 { return s.maxBytes }
-
 // Nudge wakes the workers: a mutation that recorded an upload or a deletion calls it once it has
 // committed, so that its job runs now rather than at the next poll.
 func (s *Service) Nudge() {

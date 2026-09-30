@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -75,5 +76,18 @@ func TestAJobThatPanicsFailsForGood(t *testing.T) {
 	}
 	if err := s.guard(t.Context(), job{kind: "purge"}, func(context.Context, job) error { return errGone }); !errors.Is(err, errGone) {
 		t.Fatalf("a job that did not panic = %v, want what it answered", err)
+	}
+}
+
+// A job's time runs from before the claim that took it, never from once the claim has committed:
+// its lease, past which another worker may take it, runs from the claim's now(), so a job timed from
+// the commit would still be running when another worker could take it, and run twice at once.
+func TestAJobEndsNoLaterThanItsLease(t *testing.T) {
+	s := &Service{lease: 10 * time.Minute}
+	claimed := time.Now().Add(-time.Minute)
+	ctx, stop := s.leased(t.Context(), job{claimed: claimed})
+	defer stop()
+	if deadline, ok := ctx.Deadline(); !ok || !deadline.Equal(claimed.Add(s.lease)) {
+		t.Fatalf("a job claimed at %s runs until %s, %t, with a lease of %s", claimed, deadline, ok, s.lease)
 	}
 }

@@ -38,6 +38,10 @@ type job struct {
 	entity    uuid.UUID
 	attempts  int
 	claim     uuid.UUID
+	// claimed is when the worker began to claim the job, before the transaction whose now() its
+	// lease runs from: the job's own time runs from here (leased), so that it ends no later than the
+	// lease another worker may take the job at.
+	claimed time.Time
 }
 
 // errPermanent marks a failure a retry will not mend: a file that cannot be decoded or converted.
@@ -151,7 +155,7 @@ func (s *Service) Drain(ctx context.Context, household uuid.UUID) {
 
 // claim takes household's next job due, moving it past its lease.
 func (s *Service) claim(ctx context.Context, household uuid.UUID) (job, bool, error) {
-	j := job{household: household, claim: idgen.New()}
+	j := job{household: household, claim: idgen.New(), claimed: time.Now()}
 	found := false
 	err := tenant.InWriteTx(s.system(ctx, household), func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
@@ -182,7 +186,7 @@ func (s *Service) claim(ctx context.Context, household uuid.UUID) (job, bool, er
 // settle it, killed for the memory it took or by what else it did. Tried again, it would take down
 // each instance that claimed it, one lease after another.
 func (s *Service) run(ctx context.Context, j job) {
-	running, stop := context.WithTimeout(ctx, s.lease)
+	running, stop := s.leased(ctx, j)
 	defer stop()
 	var err error
 	switch {
@@ -213,6 +217,14 @@ func (s *Service) run(ctx context.Context, j job) {
 	if err != nil {
 		s.log.LogAttrs(ctx, slog.LevelError, "files: settle a job", slog.Any("error", err))
 	}
+}
+
+// leased returns ctx for as long as j's lease lasts. The lease runs from the now() of the transaction
+// that claimed the job, and the job's time from before that transaction began (job.claimed), never
+// from once it has committed: counted from the commit, the job would still be running for as long
+// as the commit took past the moment its lease let another worker take it, and run twice at once.
+func (s *Service) leased(ctx context.Context, j job) (context.Context, context.CancelFunc) {
+	return context.WithDeadline(ctx, j.claimed.Add(s.lease))
 }
 
 // guard runs fn on j, and answers a panic in it as a failure a retry will not mend. The workers

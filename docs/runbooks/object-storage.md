@@ -53,7 +53,8 @@ of what is already stored, and their links, still work (FR-NF3).
    API's key. A `403` is the key or its policy; a `404` is the bucket's name or region; a timeout is
    the network.
 3. A `412` is not an outage: it is the store refusing to overwrite a key, which the API answers
-   itself. If the store answers every conditional write with `501`, it does not support `If-None-Match`
+   itself, and nor is a `409` `ConditionalRequestConflict`, a write that raced another to its key,
+   which the API answers once it knows which of the two landed. If the store answers every conditional write with `501`, it does not support `If-None-Match`
    on `PutObject`, and uploads cannot be write-once there: change stores rather than drop the
    condition.
 
