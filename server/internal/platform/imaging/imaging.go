@@ -33,7 +33,8 @@ var (
 	ErrUnsupported = errors.New("imaging: not an image type this server reads")
 	// ErrTooLarge is Decode's answer for an image with more pixels than it was allowed.
 	ErrTooLarge = errors.New("imaging: the image has too many pixels")
-	// ErrEmpty is Decode's answer for an image that decodes to no pixels at all.
+	// ErrEmpty is Decode's answer for an image of no pixels at all, as its header says or as it
+	// decodes.
 	ErrEmpty = errors.New("imaging: the image has no pixels")
 )
 
@@ -138,7 +139,12 @@ func Decode(ctx context.Context, r io.ReadSeeker, contentType string, maxPixels 
 	if err != nil {
 		return Image{}, fmt.Errorf("imaging: %w", err)
 	}
-	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > maxPixels/cfg.Height {
+	switch {
+	case cfg.Width <= 0 || cfg.Height <= 0:
+		// A header of no width or height, a GIF's screen of none, has no pixels to decode, and is no
+		// image too large to: said to be one, it would send an operator after a bomb that is not there.
+		return Image{}, ErrEmpty
+	case cfg.Width > maxPixels/cfg.Height:
 		return Image{}, ErrTooLarge
 	}
 	need, held := min(footprint(contentType, cfg), budget), decoding

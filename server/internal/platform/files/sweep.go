@@ -81,11 +81,11 @@ func (s *Service) SweepAll(ctx context.Context) error {
 		n, err := s.Sweep(ctx, h)
 		switch {
 		case err != nil:
-			s.log.LogAttrs(ctx, slog.LevelError, "files: sweep a household", slog.String("household_id", h.String()), slog.Any("error", err))
+			s.log.LogAttrs(ctx, slog.LevelError, "files: sweep a household", householdAttr(h), slog.Any("error", err))
 			failed = errors.Join(failed, err)
 		case n > 0:
 			s.log.LogAttrs(ctx, slog.LevelInfo, "files: swept objects no row records",
-				slog.String("household_id", h.String()), slog.Int("objects", n))
+				householdAttr(h), slog.Int("objects", n))
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()

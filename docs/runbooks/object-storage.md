@@ -47,7 +47,8 @@ appearing, and when the sweep or a household's storage figures look wrong.
 The API could not write to the store, and committed nothing: the client sends the upload again. Reads
 of what is already stored, and their links, still work (FR-NF3). Each instance's `/readyz` answers
 `degraded`, still `200`, with `object_store: down` while it cannot reach the bucket, and a store that
-stops answering fails a request once a minute has passed without an answer beginning.
+stops answering fails a request once each of the client's three attempts has waited a minute for an
+answer to begin, about three minutes in all.
 
 1. Look for `files: the object store refused an upload` or `avatar: the object store refused a
    picture` in the API's log, with the error.
@@ -69,7 +70,8 @@ A file whose variants could not be derived stays download-only; its upload is ne
 SELECT kind, module, count(*), max(attempts), min(run_at)
 FROM file_jobs GROUP BY kind, module;
 
--- The originals whose variants failed today.
+-- The originals uploaded in the last day whose variants failed: a file records when it was uploaded,
+-- not when its job gave up, which may be hours later.
 SELECT module, content_type, count(*)
 FROM files WHERE variant = 'original' AND variants = 'failed' AND created_at > now() - interval '1 day'
 GROUP BY module, content_type;

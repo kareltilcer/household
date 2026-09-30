@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -171,6 +172,43 @@ func TestAStoreThatStopsAnsweringFailsTheRequest(t *testing.T) {
 	}
 	if took := time.Since(start); took > 10*time.Second {
 		t.Fatalf("the store's silence held the requests %s", took)
+	}
+}
+
+// The response timeout bounds each attempt, and a store that stops answering is tried three times
+// when the configuration names no other number, as the SDK does: a request fails after three of the
+// timeouts and the backoff between them, about three minutes in production, which is what ADR 0015
+// and the runbook tell an operator to expect, never after the one.
+func TestAStoreThatStopsAnsweringIsTriedThreeTimes(t *testing.T) {
+	var attempts atomic.Int32
+	stop := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		_, _ = io.Copy(io.Discard, r.Body)
+		select {
+		case <-stop:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+	// Before the server closes, which waits for its handlers.
+	t.Cleanup(func() { close(stop) })
+	endpoint, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := objectstore.New(objectstore.Config{
+		Location:        objectstore.Location{Endpoint: endpoint, Bucket: "stalled", AccessKey: "tester", Secret: "stalled"},
+		ResponseTimeout: 100 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := put(t, s, "h/a/documents/b/original", []byte("a photograph"), "image/jpeg"); err == nil || errors.Is(err, objectstore.ErrExists) {
+		t.Fatalf("a write the store never answers = %v, want a failure", err)
+	}
+	if n := attempts.Load(); n != 3 {
+		t.Fatalf("the write was tried %d times, want 3", n)
 	}
 }
 

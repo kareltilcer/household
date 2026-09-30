@@ -344,12 +344,14 @@ server time is clamped and flagged. **D-26.**
 ## 3. Storage and metering
 
 **FR-ST1 — The storage catalog.** Each module declares the tables it owns and, if it holds bytes,
-the object prefixes it owns with an attribution function mapping a prefix to `(owner_id,
-visibility, objects, bytes)`. Only the module can do this: only `documents` knows that
-`h/{hh}/documents/{id}/original` maps to that document's creator. The attribution travels with each
-object: the module declares its member and whether its entity is private when it records the upload,
-and keeps both current as the entity moves, so the sampler splits bytes by member without reading any
-module's table ([ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md)).
+whom each of its objects is attributed to, `(owner_id, visibility)`: the member its bytes count
+against and whether its entity is private to them. Only the module can do this: only `documents`
+knows that `h/{hh}/documents/{id}/original` maps to that document's creator. The attribution travels
+with each object, never computed from a prefix when the bytes are counted: the module declares its
+member and whether its entity is private when it records the upload, and keeps both current as the
+entity moves, so the sampler splits bytes by member, and counts objects and bytes, from the objects'
+own rows without reading any module's table
+([ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md)).
 
 **FR-ST2 — Daily sampling.** A nightly job per household records a `usage_sample`:
 `stored_bytes` broken down by module and by member, `object_count`, plus row counts per module for

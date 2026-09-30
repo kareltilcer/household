@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -168,19 +169,40 @@ func TestTheSampleBreaksDownByModuleAndMember(t *testing.T) {
 		t.Errorf("a household that keeps nothing: %+v, %v", got, ok)
 	}
 
-	// The same counts, live, in the household's own context: what fair use compares with before a
-	// write (PRD 04 §5).
+	// The same counts, live: what fair use compares with before a write (PRD 04 §5), read as the
+	// meter role, as the sample is.
 	registry, err := module.NewRegistry(probe.Module{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	live, err := storage.Count(tenant.Assume(t.Context(), testsupport.Open(t).Pool(t, db.RoleApp), a, uuid.Nil, access.Owner), registry)
+	meter := testsupport.Open(t).Pool(t, db.RoleMeter)
+	live, err := storage.Count(t.Context(), meter, a, registry)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if live.Objects != objects || len(live.Rows) != 1 || live.Rows["probe"] != 4 {
 		t.Errorf("live counts %+v, want %d objects and 4 probe rows", live, objects)
 	}
+
+	// A module's restrictive policy, a private item's owner's (ADR 0005), keeps from the request role
+	// the rows its caller may not read, here every one of them, even from an owner. The household
+	// holds them all the same, and the live counts count them all, as the sample does: counted as the
+	// caller, another member's private rows would count for nothing against the household's ceiling.
+	t.Cleanup(func() {
+		// t.Context() is already cancelled when cleanups run.
+		_, _ = w.admin.Exec(context.Background(), "DROP POLICY IF EXISTS private_items ON probe_items")
+	})
+	w.exec("CREATE POLICY private_items ON probe_items AS RESTRICTIVE FOR SELECT TO household_app USING (false)")
+	var seen int64
+	if err := tenant.InTx(tenant.Assume(t.Context(), testsupport.Open(t).Pool(t, db.RoleApp), a, jana, access.Owner), func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), "SELECT count(*) FROM probe_items WHERE household_id = $1", a).Scan(&seen)
+	}); err != nil || seen != 0 {
+		t.Fatalf("the request role reads %d of the probe's rows past the restrictive policy, %v; want none", seen, err)
+	}
+	if live, err := storage.Count(t.Context(), meter, a, registry); err != nil || live.Objects != objects || live.Rows["probe"] != 4 {
+		t.Errorf("live counts past a restrictive policy %+v, %v; want %d objects and 4 probe rows", live, err, objects)
+	}
+	w.exec("DROP POLICY private_items ON probe_items")
 
 	// Sampled again the same day, after another upload: the day's sample is replaced.
 	expect(t, w.upload(b, milos, "e.txt", make([]byte, 20), map[string]string{"id": idgen.New().String()}), http.StatusCreated, "")

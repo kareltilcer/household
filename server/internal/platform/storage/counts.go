@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/module"
@@ -16,17 +17,24 @@ type Counts struct {
 	Rows    map[string]int64
 }
 
-// Count counts, now, what ctx's household holds, reading in its context as the request role: the
-// counters item 16's fair-use ceilings compare with, before a write, where the daily sample holds the
-// same figures as of the night.
-func Count(ctx context.Context, modules *module.Registry) (Counts, error) {
+// Count counts, now, what household holds, as meter, the meter role's pool, reads it from one
+// snapshot: the counters item 16's fair-use ceilings compare with, before a write, where the daily
+// sample holds the same figures as of the night, read the same way (Sampler).
+//
+// It reads as the meter role, never in the caller's context as the request role: a module narrows
+// what the request role reads with a restrictive policy, a private item's owner's (ADR 0005), which
+// keeps every other member's private rows from the caller, and every private row from a context
+// with no caller. The household's rows are all of them, whoever may read them: counted as the
+// caller, another member's private notes would count for nothing against the household's ceiling,
+// and the figure would differ with each member who asked. The meter's policy admits it to every row,
+// and it reads only the column that names the household (architecture tests 2 and 11).
+func Count(ctx context.Context, meter tenant.Beginner, household uuid.UUID, modules *module.Registry) (Counts, error) {
 	tables, err := declaredTables(modules)
 	if err != nil {
 		return Counts{}, err
 	}
 	out := Counts{Rows: map[string]int64{}}
-	err = tenant.InTx(ctx, func(tx pgx.Tx) error {
-		household := tenant.From(ctx).HouseholdID()
+	err = pgx.BeginTxFunc(ctx, meter, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, "SELECT count(*) FROM files WHERE household_id = $1", household).Scan(&out.Objects); err != nil {
 			return err
 		}

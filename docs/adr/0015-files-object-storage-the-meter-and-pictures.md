@@ -65,10 +65,10 @@ authorised the caller, in three steps:
   flight, which is the same refusal), whoever races for it; a retry finds the same
   digest there and succeeds, and other bytes for the entity are `422` naming the field that named the
   entity. A store that cannot be reached is `502 storage_unavailable`, and nothing is recorded
-  (FR-NF3); so is one that stops answering, whose client waits a minute at most for an answer to
-  begin once its request is sent. Readiness reports the store, and an instance without it is
-  `degraded`, still `200`, rather than taken out of rotation with every other instance over the
-  one thing none of them can do.
+  (FR-NF3); so is one that stops answering, whose client waits a minute for an answer to begin once
+  each of its three attempts is sent, about three minutes in all. Readiness reports the store, and
+  an instance without it is `degraded`, still `200`, rather than taken out of rotation with every
+  other instance over the one thing none of them can do.
 - `Record`, in the transaction of the module's mutation, writes the `files` row with the attribution
   the module declares (`owner_id`, `private`) and, for a type with variants, the job that derives
   them, so both commit with the audit event and the change or neither does. `Remove` deletes an
@@ -144,7 +144,11 @@ worker, once the meter has named the household, claims and records its jobs the 
 objects, and the rows of each table a module declares (`module.StorageSource.StorageTables`), and
 replaces the household's sample of the UTC day (D-109; `usage_samples`, `usage_sample_modules`,
 `usage_sample_members`). A household that keeps nothing is sampled at nothing, so a period's average
-counts its empty days. Item 15's scheduler runs it nightly, with the sweeps.
+counts its empty days. Item 15's scheduler runs it nightly, with the sweeps. The same counts, live,
+which item 16's fair-use ceilings compare with before a write (`storage.Count`), are read the same
+way, as the meter: the request role reads a module's table through the restrictive policy that keeps
+a member's private items from everyone else, and a household's ceiling counts every row it holds,
+whoever may read it.
 
 **Attribution travels with each object.** A module declares, when it records an upload, the member the
 bytes count against and whether the entity is private to them, and keeps it current with

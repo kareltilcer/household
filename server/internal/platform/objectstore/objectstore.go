@@ -100,11 +100,11 @@ type Config struct {
 	// Public is the scheme and host a client reaches the store at, which the URLs Presign issues
 	// name; nil for the endpoint the server reaches it at.
 	Public *url.URL
-	// Attempts caps how many times a request is tried; the SDK's default when zero.
+	// Attempts caps how many times a request is tried; the SDK's default, three, when zero.
 	Attempts int
 	// ResponseTimeout is how long the store may take to begin answering a request once the request
-	// is sent, its body included, DefaultResponseTimeout when zero; it bounds the SDK's own client,
-	// and HTTPClient's is its own.
+	// is sent, its body included, DefaultResponseTimeout when zero, each attempt of it; it bounds the
+	// SDK's own client, and HTTPClient's is its own.
 	ResponseTimeout time.Duration
 	// HTTPClient sends the requests; the SDK's own when nil.
 	HTTPClient *http.Client
@@ -116,7 +116,9 @@ type Config struct {
 // answered the 502 that says to send it again (FR-NF3), and a worker for the rest of its lease. A
 // minute is far longer than a store takes to answer a 100 MB write it has received, and the time
 // runs from once the request is sent, its body included, so a large write's transfer never counts
-// against it.
+// against it. It bounds each attempt: the SDK takes a store that did not answer for one that may
+// answer the next, and tries a request three times (Config.Attempts), so a store that stops
+// answering fails a request after about three minutes, its backoff between the attempts included.
 const DefaultResponseTimeout = time.Minute
 
 // Store is one bucket of an S3-compatible store.

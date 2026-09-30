@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
@@ -66,7 +67,7 @@ func (s *Sampler) Sample(ctx context.Context) (int, error) {
 		for _, u := range samples {
 			if err := s.write(ctx, day, at, u); err != nil {
 				s.Log.LogAttrs(ctx, slog.LevelError, "storage: write a usage sample",
-					slog.String("household_id", u.household.String()), slog.Any("error", err))
+					slog.String(logging.KeyHouseholdID, u.household.String()), slog.Any("error", err))
 				failed = errors.Join(failed, err)
 				continue
 			}

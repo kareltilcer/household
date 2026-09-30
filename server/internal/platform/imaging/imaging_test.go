@@ -229,6 +229,12 @@ func TestAnImageOfNoPixelsIsRefused(t *testing.T) {
 			t.Fatalf("decode of a frame of no pixels = %v, want ErrEmpty", err)
 		}
 	}
+	// A header that says the image has no pixels, a screen none wide, is refused by it as one of no
+	// pixels, never as one of too many.
+	if m, err := imaging.Decode(t.Context(), bytes.NewReader(emptyFrame(0, 5)), "image/gif", 1<<20); !errors.Is(err, imaging.ErrEmpty) {
+		m.Release()
+		t.Fatalf("decode of a screen of no pixels = %v, want ErrEmpty", err)
+	}
 }
 
 // A decoder that panics on the bytes it is given gives the image's share of the budget back as the
@@ -246,6 +252,9 @@ func TestADecoderThatPanicsGivesItsShareBack(t *testing.T) {
 	restore := imaging.SetBudget(imaging.Footprint("image/png", cfg))
 	defer restore()
 	restoreDecoder := imaging.SetDecoder("image/png", func(io.Reader) (image.Image, error) { panic("a decoder's bug") })
+	// Put back however the test ends, as well as below once the panic has passed: left in place by a
+	// failure, the stub would decode every PNG the package's later tests decode.
+	defer restoreDecoder()
 	func() {
 		defer func() {
 			if recover() == nil {
