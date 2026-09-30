@@ -34,7 +34,7 @@ type Result struct {
 
 // The outcomes of a mutation (PRD 03 §2.4). This item's push answers applied, rejected and
 // deferred, and conflict when a module refuses a mutation on its row's version; merged, and the
-// policies that merge or conflict on a base version, are item 14's.
+// policies that merge or conflict on a base version, are item 17's.
 const (
 	Applied  = "applied"
 	Merged   = "merged"

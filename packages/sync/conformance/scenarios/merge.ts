@@ -50,7 +50,7 @@ export const merge: readonly Scenario[] = [
     expected:
       'One wins by server receipt; the loser is surfaced, not silently dropped: the later write answers merged, ' +
       'carrying the row, and the earlier value is not what either replica ends with',
-    enabledBy: 14,
+    enabledBy: 17,
     needs: ['conformance.item'],
     async run(w) {
       const f = await family(w)
@@ -163,7 +163,7 @@ export const merge: readonly Scenario[] = [
     key: '11',
     title: 'strict_version mismatch',
     expected: "Conflict carrying the server's current row; the member's change kept to re-present",
-    enabledBy: 14,
+    enabledBy: 17,
     needs: ['conformance.budget'],
     async run(w) {
       const f = await family(w)
@@ -236,7 +236,7 @@ export const merge: readonly Scenario[] = [
     key: '13-rotation',
     title: 'Two rotating-chore completions offline: the rotation',
     expected: 'Rotation advances once (D-52: from the occurrence, not from the mutation)',
-    enabledBy: 14,
+    enabledBy: 17,
     needs: ['conformance.completion', 'conformance.chore'],
     async run(w) {
       const f = await family(w)

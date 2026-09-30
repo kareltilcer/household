@@ -113,10 +113,10 @@ creation, whether or not a module's package is built yet: `household.Modules`, w
   invitations reach the members granted `admin`, as their `GET` does.
 - Plan item 67 turns on offline writes for every `strict_version` entity merged before it; admin's stay
   off (D-80).
-- Items 14, 17, 18 and 20 fill in `household.Hooks`: the retraction a lowered grant, a disabled module or
-  a member's removal or leaving needs (`Lost`), the notice of an access change (`Changed`, D-78), and the
-  trial (`Created`). Until item 17's notification transport exists, the inviter of a declined invitation
-  is told by email.
+- Items 15, 16, 17 and 20 fill in `household.Hooks`: the notice of an access change (`Changed`, D-78),
+  the trial (`Created`), and the retraction a lowered grant, a disabled module or a member's removal or
+  leaving needs (`Lost`). Until item 15's notification transport exists, the inviter of a declined
+  invitation is told by email.
 - A membership's version moves with its grants, so an owner editing one member's grants while another
   owner edits their role meets a `409`, which the grants editor resolves as any `strict_version` conflict.
 - Revisit the lock on the household's row if an owner's changes to members ever queue visibly behind one

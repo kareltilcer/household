@@ -59,7 +59,7 @@ type Deps struct {
 	// Modules are the modules served, each under /households/{household_id}/<name>.
 	Modules *module.Registry
 	// Entitlement is the tenant middleware's entitlement check (tenant.Config), nil until item
-	// 18 fills it in.
+	// 16 fills it in.
 	Entitlement func(*http.Request) error
 	// MaxBodyBytes caps a JSON request body at the edge.
 	MaxBodyBytes int64
@@ -289,7 +289,7 @@ func Serve(ctx context.Context, log *slog.Logger, srv *http.Server, ln net.Liste
 
 // NewServer returns the http.Server for handler. Reading a request's headers is bounded,
 // against slow-loris clients. Reading a body and writing a response are not bounded here:
-// an upload over a slow connection (item 16) and the sync stream (item 14) legitimately
+// an upload over a slow connection (item 14) and the sync stream (item 17) legitimately
 // take minutes, which a server-wide timeout would cut off. A body is bounded per request
 // instead, by httpx.BodyDeadline (Deps.BodyTimeout), which such a handler extends through
 // http.ResponseController.

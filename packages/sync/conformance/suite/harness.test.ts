@@ -1,7 +1,7 @@
 // The harness proves itself against the engine (plan items 12 and 13): it drives real PowerSync
 // clients through every kind of fault it scripts and finds every invariant held, and it fails a
 // deliberately broken connector and a deliberately broken stream, which shows the suite can fail. The
-// scenarios themselves (scenarios.test.ts) are switched on as items 13, 14 and 18 build their engine.
+// scenarios themselves (scenarios.test.ts) are switched on as items 13, 16 and 17 build their engine.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Admin } from '../harness/admin.ts'

@@ -29,7 +29,7 @@ CREATE TABLE sync_mutations (
   CHECK ((outcome = 'applied') = (code IS NULL))
 );
 
--- The expiry sweep (item 17) deletes answers past their 7 days.
+-- The expiry sweep (item 15) deletes answers past their 7 days.
 CREATE INDEX sync_mutations_created_at ON sync_mutations (created_at);
 
 SELECT enable_tenant_isolation('sync_mutations');

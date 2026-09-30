@@ -116,10 +116,10 @@ root's owner-readable case (items 43 and 46) read.
 - Plan item 29 builds the child's screens on `postAuthChildProfiles` and `postAuthChildLogin`, and
   the tablet's switcher over the sign-ins it holds; item 25 builds the web page a graduation's link
   opens, which posts `postAuthGraduationConfirm`.
-- Plan item 16 lets a child profile's `avatar_url` be set, which its making refuses until uploads
+- Plan item 14 lets a child profile's `avatar_url` be set, which its making refuses until uploads
   exist, as `PATCH /me` does.
-- Plan item 17 may tell the owners that a profile locked (A-18's *ask Jana*), from its
-  `admin.child.lock` event; item 17's sweep deletes spent and expired `graduate` tokens with the rest.
+- Plan item 15 may tell the owners that a profile locked (A-18's *ask Jana*), from its
+  `admin.child.lock` event; item 15's sweep deletes spent and expired `graduate` tokens with the rest.
 - Plan item 20 erases the account of a child profile removed from its household: it is nothing
   outside it, and signs nobody in. Its removal already signs it out of every device.
 - Plan item 13's membership stream carries a child's `pin_locked` and `dashboard_locked`, never its

@@ -18,7 +18,7 @@ CREATE UNIQUE INDEX credentials_subject ON credentials (type, subject) WHERE sub
 -- A mobile installation a user has signed in on (FR-ID3, FR-ID7): the client names it with an id it
 -- keeps for the installation, which is unique per user, not globally, since a shared tablet is
 -- signed in on by several profiles, and one client's id says nothing about another's. push_token is
--- the slot plan item 17 fills with the installation's Expo push token.
+-- the slot plan item 15 fills with the installation's Expo push token.
 CREATE TABLE devices (
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   id uuid NOT NULL,
@@ -52,7 +52,7 @@ CREATE INDEX device_sessions_user ON device_sessions (user_id);
 -- A refresh token, single use and kept as its SHA-256 (FR-ID4). Each use marks it used and names the
 -- token it was exchanged for, so that a token presented again is known for a reuse, and one
 -- presented again moments after its use, while the token it was exchanged for is still unused, for
--- a retry whose answer was lost (D-98). Kept while its family lives; the expiry sweep (item 17)
+-- a retry whose answer was lost (D-98). Kept while its family lives; the expiry sweep (item 15)
 -- deletes used tokens a month old, which no longer tell a theft from a stale token.
 CREATE TABLE refresh_tokens (
   id uuid PRIMARY KEY,

@@ -4,7 +4,7 @@
 - **Date:** 2026-09-29
 - **Plan item:** 12
 - **Decides for:** [10-sync-risk](../prd/10-sync-risk.md) §4 (the scenarios, the invariants and the
-  fuzzer, under D-93); plan items 13, 14, 15 and 18's use of the suite; [ADR 0001](0001-sync-engine.md)'s
+  fuzzer, under D-93); plan items 13, 16, 17 and 18's use of the suite; [ADR 0001](0001-sync-engine.md)'s
   harness, stand-ins and connector
 
 ## Context
@@ -12,7 +12,7 @@
 PRD 10 §4 asks for an executable falsifier before the engine: eighteen scenarios with six invariants
 checked after each, and a fuzzer over the same invariants. D-93 turned it from an in-process simulator
 into a suite that drives PowerSync clients against the real stack, and plan item 12 builds it before
-items 13 and 14 build the engine it tests: until they land, it runs against stand-ins of its own, as
+items 13 and 17 build the engine it tests: until they land, it runs against stand-ins of its own, as
 the spike's harness did, and its scenarios start skipped. Item 12 must also show the suite can fail,
 with a connector and a stream broken on purpose.
 
@@ -21,7 +21,7 @@ Seven questions were left:
 1. **Where the suite and its stack live.** The repository's compose PostgreSQL runs without
    `wal_level=logical` and serves the Go tests; PowerSync's deployment is item 13's.
 2. **What the scenarios write.** No feature module exists before item 30's `proof` and item 31's
-   Shopping, and items 13 and 14 must pass scenarios before either.
+   Shopping, and items 13 and 17 must pass scenarios before either.
 3. **What the stand-ins are, and how the engine replaces them** without the scenarios being rewritten.
 4. **What a replica is judged against.** Two replicas that agree with each other, or with the
    server's whole table, pass a stream that leaks.
@@ -33,7 +33,7 @@ Seven questions were left:
 
 ## Decision
 
-**The suite is `packages/sync/conformance`, beside the client library item 15 builds, with a stack of
+**The suite is `packages/sync/conformance`, beside the client library item 18 builds, with a stack of
 its own.** `conformance/stack/docker-compose.yml` runs the repository's PostgreSQL image with
 `wal_level=logical` and PowerSync, pinned, on ports of their own; `conformance:up` prepares the
 database as a deploy does (`household-api bootstrap` and `migrate`), then the suite's part
@@ -118,13 +118,13 @@ rather than throwing, so that a negative control can assert which one failed:
    `applied` carries a code; every answer is the contract's. A rejection for the entitlement holds
    its mutation to replay, as `deferred` does, and ends nothing.
 
-**A scenario waits for the engine it tests.** Each names the item that switches it on (13, 14 or 18),
+**A scenario waits for the engine it tests.** Each names the item that switches it on (13, 16 or 17),
 the entities its target's push must write, the tables its streams must replicate (those entities'
 own and any other it reads), and any capability beyond them (`compact`, `setEntitlement`,
 `uploadAttachment`). It is skipped until its key is in
 `scenarios/index.ts`'s `enabled`; one switched on that its target cannot run fails rather than
 skipping. Scenario 13 is two keys, `13` (the completion, item 13's half) and `13-rotation` (item
-14's), and the five causes of access loss item 14 proves, with the lapse that is not one (item 18),
+17's), and the five causes of access loss item 17 proves, with the lapse that is not one (item 16),
 are keys of their own. `CONFORMANCE_SCENARIOS=all` runs every scenario the target can, for the item
 building its engine.
 
@@ -139,7 +139,7 @@ household's rows (`isolation`).
 
 | Alternative | Why not |
 |---|---|
-| **Scenarios green against the stand-ins now**, the stand-in push building every merge policy | It would be item 13 and 14's push written twice, once to throw away; a scenario green against a stand-in says nothing of the engine. The stand-in writes what the harness's own proof needs, and the scenarios wait. Forced on, the thirteen the stand-in can run pass but scenario 2, whose `merged` answer is item 14's, which shows they are runnable |
+| **Scenarios green against the stand-ins now**, the stand-in push building every merge policy | It would be item 13 and 17's push written twice, once to throw away; a scenario green against a stand-in says nothing of the engine. The stand-in writes what the harness's own proof needs, and the scenarios wait. Forced on, the thirteen the stand-in can run pass but scenario 2, whose `merged` answer is item 17's, which shows they are runnable |
 | **Judging replicas against each other, or against the server's whole table** | Two replicas fed by the same leaking stream agree with each other, and a replica holding another household's rows still holds every row of its own. Only the predicate, stated apart from the streams, catches a stream that disagrees with it |
 | **The suite's stack in the repository's compose file** | Its PostgreSQL would run with logical replication under every developer's Go tests, and PowerSync's deployment, credentials and configuration there are item 13's. Item 13 may move the suite onto what it deploys |
 | **Access changes through item 10's routes** | The routes grant only the contract's modules, and the suite's module is not one; adding it to `ModuleKeyValue` would put a test module in the contract |
@@ -157,15 +157,15 @@ household's rows (`isolation`).
   table a subquery reads by the caller or the subscribed household: PowerSync refuses a connection
   whose parameter results pass 1000 (`PSYNC_S2305`), which the stand-in streams, looking up the module's
   enablement by the module alone, reached once 250 households enabled it.
-- **Item 14** switches on 2, 6, 7, 11, 12, `13-rotation`, 16, 18 and the five `loss-*` cases, with the
-  target's `compact` and `uploadAttachment` (item 16's upload). Scenario 2 reads *the loser is surfaced*
+- **Item 17** switches on 2, 6, 7, 11, 12, `13-rotation`, 16, 18 and the five `loss-*` cases, with the
+  target's `compact` and `uploadAttachment` (item 14's upload). Scenario 2 reads *the loser is surfaced*
   as the later write answered `merged`, carrying the row, since the earlier write was answered before
-  the later one existed; item 14 confirms that or rewrites the scenario. Its readers and visibility
+  the later one existed; item 17 confirms that or rewrites the scenario. Its readers and visibility
   rewrites replace the administrator's in `Admin`.
-- **Item 18** switches on 14 and `no-loss-lapse`, with the target's `setEntitlement`. A mutation's
+- **Item 16** switches on 14 and `no-loss-lapse`, with the target's `setEntitlement`. A mutation's
   entitlement code is spelled `entitlement` in PRD 10 §4 and `entitlement_read_only` among the problem
-  codes; the connector holds either, and item 18 settles which the push sends.
-- **Item 15's connector replaces the suite's**, and may take its `_metadata` convention; the suite's
+  codes; the connector holds either, and item 16 settles which the push sends.
+- **Item 18's connector replaces the suite's**, and may take its `_metadata` convention; the suite's
   unit tests are the connector's behaviour as ADR 0001 states it.
 - **The fuzzer's schedule is the seed's, not PowerSync's timing**: a failing seed replays what the
   clients did and when, and may interleave differently with replication. Every step draws as often

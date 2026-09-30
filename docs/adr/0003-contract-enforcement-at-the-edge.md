@@ -105,7 +105,7 @@ be enforced rather than intended:
 | Commit a copy of `openapi.yaml` inside `server/`, with a drift test | Every contract change lands twice, 680 KB each time, and a reviewer reads both diffs |
 | Read `openapi.yaml` from disk at run time | The binary then depends on a file beside it; a deploy that ships the wrong one validates against the wrong contract |
 | Refuse a `readOnly` member with a located `422` | kin-openapi's refusal is a bare error with no path, so locating it means a second walk of the body against the schema; and a client echoing an unchanged `updated_at` has not tried to modify anything |
-| A server-wide `ReadTimeout` against slow bodies | It bounds the whole request, so an upload (item 16) could not take the minutes it needs without every handler that reads a body extending it |
+| A server-wide `ReadTimeout` against slow bodies | It bounds the whole request, so an upload (item 14) could not take the minutes it needs without every handler that reads a body extending it |
 | The body deadline set only by the edge, for the JSON bodies it reads | Every other body is then read by net/http with no deadline at all, before it answers a `404`, a `405`, a `415` or a body on an operation that takes none |
 | kin-openapi's JSON Schema 2020-12 path, as it chooses for 3.1 | A schema compiled per request, errors with no location, and a silent fallback to the built-in validator on every body that uses a `$ref` |
 | libopenapi-validator (pb33f) | Also validates 3.1, but PL-2 chose kin-openapi and kin's built-in validator covers every construct the contract uses; changing library would be a decision without a failing requirement behind it |

@@ -172,7 +172,7 @@ type Config struct {
 	// Logger records a resolution that failed.
 	Logger *slog.Logger
 	// Entitlement, when not nil, is asked once the tenant is resolved whether the household's
-	// entitlement state permits the request (item 18). The request goes on when it returns nil
+	// entitlement state permits the request (item 16). The request goes on when it returns nil
 	// and is answered with the problem it returns otherwise, or with 500 for an error that is
 	// not a problem.
 	Entitlement func(*http.Request) error

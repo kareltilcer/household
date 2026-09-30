@@ -73,10 +73,10 @@ into the suite's stack for the suite, with a manifest of the suite's streams:
   which PostgreSQL 17 leaves out of the changes it streams, so a stream filtering on it would lose
   each row at its first update.
 - Soft-deleted rows stay in their streams, tombstones, so that a client tells a row another member
-  deleted (it holds the tombstone) from one it lost access to (it leaves its buckets) — item 15's
+  deleted (it holds the tombstone) from one it lost access to (it leaves its buckets) — item 18's
   withdrawn state.
 - An entity whose rows may be private (`Owner`) or an audience's (`Audience`) is not replicated yet:
-  item 14 generates its visibility and audience streams, and until then it reaches no replica,
+  item 17 generates its visibility and audience streams, and until then it reaches no replica,
   which withholds it rather than leaking it.
 
 A membership now carries its member's **grants** as the member list shows them (an owner's `manage`
@@ -117,7 +117,7 @@ REST routes with, which the push reads as one: its code, the fields it names, an
 the batch. A caller removed from the household, or leaving it, while their batch runs has their
 answers go with their membership, and the batch is answered `404`, as their next request is.
 `lww_row` and `strict_version` writes, and the `merged` and `conflict` their policies answer on a
-base version, are item 14's.
+base version, are item 17's.
 
 **Each mutation that ends is answered once** (FR-SY5, D-106): its answer is kept in `sync_mutations` for 7
 days under its household, **its sender** and its `mutation_id`, with a fingerprint of what it
@@ -167,17 +167,17 @@ since the queue is the device's and the push the API's. The runbook
 
 ## Consequences
 
-- **Item 14** generates the visibility and audience streams for `Owner` and `Audience` entities
+- **Item 17** generates the visibility and audience streams for `Owner` and `Audience` entities
   (withheld until then), declares redacted projections as column lists beside `Columns`, answers
   `merged` and `conflict`, and decides the fate of the push's `seq`.
-- **Item 15**'s client library needs the served streams' names: it generates them from the registry,
+- **Item 18**'s client library needs the served streams' names: it generates them from the registry,
   as the suite's manifest is, or reads them from `deploy/powersync/sync-config.yaml`.
-- **Item 18** gates the push and the credentials on the entitlement (PRD 04 §3).
+- **Item 16** gates the push and the credentials on the entitlement (PRD 04 §3).
 - **Items 30 and 88** deploy PowerSync with credentials of their own, reach the API's JWKS over the
   network they share, and keep the bucket storage under the database's residency and encryption.
   Development on Linux has the API listen where the container reaches it (`.env.example`).
 - **Item 89** tests D-105's failure behaviour and the slot's recovery; **item 90** measures the
   service and the per-series lock.
-- A member's display name is not replicated: `users` is global, no household's. Items 15 and 25
+- A member's display name is not replicated: `users` is global, no household's. Items 18 and 25
   decide whether the client needs it offline, and how it reaches the replica if so.
 - The push's per-device budget is per instance, as every API bucket is (ADR 0009).

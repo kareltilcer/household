@@ -69,7 +69,7 @@ plan for it is a rewrite; planning for it costs four columns and a discipline.
 > bucket a member holds. §2.3's predicate is stream definitions generated from the entity registry:
 > the floor is a reader set kept on each row rather than a term, and a redacted projection reaches
 > its owner as well, in a table of its own. Where §2.2–§2.3 and FR-SY7 describe the feed's own
-> mechanics, they describe the design D-93 replaced; plan items 13 and 14 amend them as they build.
+> mechanics, they describe the design D-93 replaced; plan items 13 and 17 amend them as they build.
 
 ### 2.1 What is promised
 
@@ -149,7 +149,7 @@ rule, same enforcement, same architecture test.
 > enables the module; admin's settings, memberships and module enablement reach every member of the
 > household; each stream sends the columns its entity names, and a soft-deleted row stays in it, so
 > that a client tells a row another member deleted from one it lost access to. The predicate below
-> is what the streams express; its visibility and audience terms are plan item 14's streams, and
+> is what the streams express; its visibility and audience terms are plan item 17's streams, and
 > until then an entity whose rows may be private or an audience's reaches no replica. The feed's
 > `seq`, cursor and horizon describe the design D-93 replaced; FR-SY2's pruning is PowerSync's
 > compaction, and FR-SY3's bootstrap is a replica's initial sync.

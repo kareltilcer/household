@@ -1,6 +1,6 @@
 // Package health serves the liveness and readiness probes (getHealthz, getReadyz).
 // Liveness says the process answers; readiness says whether it can serve, by checking the
-// dependencies a request needs. Item 2 checks the database; item 16 adds the object store.
+// dependencies a request needs. Item 2 checks the database; item 14 adds the object store.
 package health
 
 import (

@@ -1,9 +1,9 @@
 // PRD 10 §4's scenarios about access (7, 16 and 18), and the causes of access loss PRD 03 §2.6
-// lists, which item 14 proves each retract as a row leaving every bucket a member holds, and the
-// one cause that is not on the list, a lapsed entitlement (FR-BI2, item 18).
+// lists, which item 17 proves each retract as a row leaving every bucket a member holds, and the
+// one cause that is not on the list, a lapsed entitlement (FR-BI2, item 16).
 //
 // The access changes are the administrator's, standing in for item 10's routes and for the
-// audience mutations items 14 and 85 build (Admin).
+// audience mutations items 17 and 85 build (Admin).
 
 import { expect } from 'vitest'
 import type { Household, Member } from '../harness/admin.ts'
@@ -41,7 +41,7 @@ export const access: readonly Scenario[] = [
     expected:
       'On reconnect, retractions delete the local rows; queued mutations against them are rejected, surfaced once, ' +
       'and not retried forever',
-    enabledBy: 14,
+    enabledBy: 17,
     needs: ['conformance.item'],
     async run(w) {
       const f = await family(w)
@@ -71,7 +71,7 @@ export const access: readonly Scenario[] = [
     title: 'Member removed from a conversation while offline',
     expected:
       'Messages retracted; the floor still holds for everyone else; a message queued in it is rejected once',
-    enabledBy: 14,
+    enabledBy: 17,
     needs: ['conformance.message'],
     async run(w) {
       const f = await family(w)
@@ -101,7 +101,7 @@ export const access: readonly Scenario[] = [
     expected:
       'Nothing before their floor reaches their replica, because they are not among the readers of any earlier ' +
       'message: asserted on the count of message rows received',
-    enabledBy: 14,
+    enabledBy: 17,
     needs: [],
     replicates: ['conformance_messages'],
     async run(w) {
@@ -119,7 +119,7 @@ export const access: readonly Scenario[] = [
     key: 'loss-grant',
     title: 'Access loss: a grant lowered to none, while connected',
     expected: "The member's rows leave their replica; they come back when the grant does",
-    enabledBy: 14,
+    enabledBy: 17,
     needs: [],
     replicates: ['conformance_items'],
     async run(w) {
@@ -138,7 +138,7 @@ export const access: readonly Scenario[] = [
     key: 'loss-audience',
     title: 'Access loss: removal from an audience, while connected',
     expected: "The conversation's messages leave the removed member's replica, and no one else's",
-    enabledBy: 14,
+    enabledBy: 17,
     needs: [],
     replicates: ['conformance_messages'],
     async run(w) {
@@ -158,7 +158,7 @@ export const access: readonly Scenario[] = [
     title: 'Access loss: an item moved from shared to private, while connected',
     expected:
       "The note leaves every other member's replica, whose redacted form arrives in its place (D-88); its owner keeps it whole",
-    enabledBy: 14,
+    enabledBy: 17,
     needs: [],
     replicates: ['conformance_notes', 'conformance_notes_redacted'],
     async run(w) {
@@ -184,7 +184,7 @@ export const access: readonly Scenario[] = [
     key: 'loss-removal',
     title: 'Access loss: removal from the household, while connected',
     expected: "Every row of the household leaves the removed member's replica",
-    enabledBy: 14,
+    enabledBy: 17,
     needs: [],
     replicates: ['conformance_items'],
     async run(w) {
@@ -201,7 +201,7 @@ export const access: readonly Scenario[] = [
     title: 'Access loss: a module disabled household-wide, while connected',
     expected:
       "The module's rows leave every replica, the owner's included; they come back when it is enabled again",
-    enabledBy: 14,
+    enabledBy: 17,
     needs: [],
     replicates: ['conformance_items'],
     async run(w) {
@@ -223,7 +223,7 @@ export const access: readonly Scenario[] = [
     title: 'Not access loss: a lapsed entitlement',
     expected:
       'A household that may no longer write keeps every replica exactly where it is (PRD 03 §2.6, FR-BI2)',
-    enabledBy: 18,
+    enabledBy: 16,
     needs: [],
     replicates: ['conformance_items'],
     capabilities: ['setEntitlement'],

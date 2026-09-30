@@ -18,7 +18,7 @@ export interface Scenario {
   /** PRD 10 §4's expected outcome, as this scenario asserts it. */
   readonly expected: string
   /** The plan item whose engine the scenario waits for, and which switches it on. */
-  readonly enabledBy: 13 | 14 | 18
+  readonly enabledBy: 13 | 16 | 17
   /** The entities the target's push must write. */
   readonly needs: readonly EntityType[]
   /** The tables the target's streams must replicate beyond those of the entities it needs. */

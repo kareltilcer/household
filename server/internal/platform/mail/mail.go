@@ -1,6 +1,6 @@
 // Package mail sends the server's email (PRD 03 §4, §9): a message rendered from translation keys
 // in its recipient's language, never a stored sentence, and delivered over SMTP. Item 8's account
-// emails are the first; item 17 makes this a notification transport.
+// emails are the first; item 15 makes this a notification transport.
 //
 // A message is plain text, UTF-8 and quoted-printable. Its headers are built here from values
 // checked here: an address or a subject that carries a line break is refused, since it would

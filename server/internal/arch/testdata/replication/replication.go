@@ -19,7 +19,7 @@ func Streams() []sync.Stream {
 }
 
 // Entities are kept in the testdata's tables, one replicating a column its table does not have, and
-// one whose table no stream reads yet, as an entity's whose streams plan item 14 generates.
+// one whose table no stream reads yet, as an entity's whose streams plan item 17 generates.
 func Entities() []sync.Entity {
 	return []sync.Entity{
 		{Name: "probe.published", Table: "arch_testdata.published_items", Columns: []string{"id", "title", "colour"}},

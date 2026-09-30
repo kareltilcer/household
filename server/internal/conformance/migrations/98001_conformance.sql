@@ -1,7 +1,7 @@
 -- The conformance module's tables (plan item 12): the entities the sync conformance suite
 -- (packages/sync/conformance) drives, one for each shape PRD 10 §4's scenarios need, made as a
 -- module makes its own (add_entity_columns, enable_tenant_isolation). No feature module exists
--- before item 30's proof and item 31's Shopping, and items 13 and 14 must pass the scenarios
+-- before item 30's proof and item 31's Shopping, and items 13 and 17 must pass the scenarios
 -- before either, so the suite brings its own. Block 98 is the suite's: no module the server serves
 -- numbers its block 98, and the server's own registry never holds this one.
 

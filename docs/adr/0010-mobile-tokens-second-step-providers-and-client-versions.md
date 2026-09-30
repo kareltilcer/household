@@ -48,7 +48,7 @@ presented again revokes the sign-in, and the owner is sent the takeover notice, 
 within a minute of its use while its successor is unused (D-98): then a new pair is issued and the
 unused successor is retired, so that a thief who beat the device to it meets a reuse at the device's
 next refresh. Refreshes of one family take turns on the sign-in's row lock. A sign-in has no expiry
-of its own (D-99). Used tokens are kept while their family lives; the expiry sweep (item 17) deletes
+of its own (D-99). Used tokens are kept while their family lives; the expiry sweep (item 15) deletes
 those a month old.
 
 **The keys are lists in the environment, the first signing or sealing and every one verifying or
@@ -153,7 +153,7 @@ say what each does to devices, trusts and keys.
 - Item 13 signs PowerSync's tokens with the same keys and publishes `JWKS()`; its tokens carry an
   audience, which this API refuses.
 - Item 11's child sign-in ends in the same `admit`, for a device's token pair.
-- Item 17 fills `devices.push_token` and sweeps `refresh_tokens`, `device_sessions`, `mfa_challenges`,
+- Item 15 fills `devices.push_token` and sweeps `refresh_tokens`, `device_sessions`, `mfa_challenges`,
   `mfa_trusts` and `oauth_states`.
 - Items 25 and 29 build the screens on operations that already say what each answer means.
 

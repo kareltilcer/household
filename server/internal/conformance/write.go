@@ -23,7 +23,7 @@ import (
 // caller's grant and any invariant: an item's fields, lww_field by server receipt, its soft delete a
 // field like the others (PRD modules/05 Sync, B); an item's checked state and a chore's completion,
 // state_set on their keys resolved by the latest client time; and a meter's reading, additive. The
-// module's other entities are item 14's.
+// module's other entities are item 17's.
 func (Module) WriteSync(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, error) {
 	switch m.Entity.Name {
 	case Item:
@@ -35,7 +35,7 @@ func (Module) WriteSync(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.W
 	case Completion:
 		return writeCompletion(ctx, tx, m)
 	}
-	return push.Written{}, push.Refuse(problem.CodeValidationFailed, "%s is written through the push from plan item 14", m.Entity.Name)
+	return push.Written{}, push.Refuse(problem.CodeValidationFailed, "%s is written through the push from plan item 17", m.Entity.Name)
 }
 
 // written is what a write that recorded ev and changed row came to.
@@ -332,7 +332,7 @@ type completionFields struct {
 
 // writeCompletion writes the state a completion wants, keyed on its chore and its occurrence (D-52):
 // two members completing one occurrence offline make one row, applied once, whatever id each gave
-// it, resolved by client time as a check is. The rotation it advances is item 14's.
+// it, resolved by client time as a check is. The rotation it advances is item 17's.
 func writeCompletion(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, error) {
 	if m.Op != push.Create && m.Op != push.Update {
 		return push.Written{}, push.Refuse(problem.CodeValidationFailed, "%s takes create and update", Completion)

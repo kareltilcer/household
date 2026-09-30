@@ -53,7 +53,7 @@ type Stream struct {
 // a row another member deleted from one it lost access to, which leaves its buckets.
 //
 // An entity whose rows may be private to their owner or bounded by an audience is not replicated
-// yet: plan item 14 generates its visibility and audience streams, and until then it reaches no
+// yet: plan item 17 generates its visibility and audience streams, and until then it reaches no
 // replica, which withholds it rather than leaking it.
 func Streams(entities []Entity) ([]Stream, error) {
 	var out []Stream

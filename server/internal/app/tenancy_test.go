@@ -475,7 +475,7 @@ func TestAGrantChangeTakesEffectOnTheNextRequest(t *testing.T) {
 	expect(t, w.do(http.MethodGet, items(h), u, ""), http.StatusNotFound, problem.CodeNotFound)
 }
 
-// The entitlement hook (item 18) is asked once the tenant is resolved, with the tenant in the
+// The entitlement hook (item 16) is asked once the tenant is resolved, with the tenant in the
 // request's context, and its problem is the answer.
 func TestTheEntitlementHookAnswersForTheHousehold(t *testing.T) {
 	var asked []uuid.UUID

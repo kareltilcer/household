@@ -29,7 +29,7 @@ CREATE TABLE idempotency_keys (
   CHECK ((state = 'completed') = (status IS NOT NULL))
 );
 
--- The expiry sweep (item 17) deletes keys past their 7 days.
+-- The expiry sweep (item 15) deletes keys past their 7 days.
 CREATE INDEX idempotency_keys_created_at ON idempotency_keys (created_at);
 
 SELECT enable_tenant_isolation('idempotency_keys');

@@ -50,7 +50,7 @@ type Change struct {
 	Row any
 	// Visibility is Shared when empty. A Private change is the owner's; the redacted rows that
 	// stand in for it for everyone else are the platform's to write, from the entity's own
-	// projection (item 14).
+	// projection (item 17).
 	Visibility Visibility
 	// Owner is the member a private row belongs to, and is set exactly when it is private.
 	Owner uuid.UUID

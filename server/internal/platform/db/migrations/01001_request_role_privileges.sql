@@ -2,7 +2,7 @@
 -- migrate role owns the database, and so the public schema, whose owner is
 -- pg_database_owner. The request role reads and writes rows and creates nothing; row-level
 -- security, which every tenant table enables and forces, decides which rows. The meter
--- role gets its columns one grant at a time, from item 16.
+-- role gets its columns one grant at a time, from item 14.
 
 -- +goose Up
 GRANT USAGE ON SCHEMA public TO household_app, household_meter;

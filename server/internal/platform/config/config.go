@@ -144,7 +144,7 @@ type Config struct {
 	// MigrateDatabaseURL connects as the migrate role.
 	MigrateDatabaseURL string
 	// MeterDatabaseURL connects as the meter role. Bootstrap sets the role's password from
-	// it; the sampler (item 16) connects with it.
+	// it; the sampler (item 14) connects with it.
 	MeterDatabaseURL string
 	// AdminDatabaseURL connects as a role that may create roles, for Bootstrap only. The
 	// serving process never holds it.

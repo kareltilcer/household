@@ -15,7 +15,7 @@ var declared = []sync.Entity{
 	{Name: "admin.household_settings", Table: sync.TenantRoot, Policy: sync.StrictVersion, Access: sync.Members,
 		Columns: []string{"id", "name"}},
 	{Name: "admin.membership", Table: "memberships", Policy: sync.StrictVersion, Access: sync.Members},
-	// Item 14's: private, and bounded by an audience.
+	// Item 17's: private, and bounded by an audience.
 	{Name: "notes.note", Table: "notes", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner},
 	{Name: "chat.message", Table: "chat_messages", Policy: sync.Additive, Access: sync.Grant | sync.Audience},
 }

@@ -40,7 +40,7 @@ remote cluster with a published password.
 schema. The platform block's first migration grants the request role `USAGE` on the schema and,
 by default privileges, `SELECT, INSERT, UPDATE, DELETE` on every table the migrate role creates.
 The request role creates, alters, drops and truncates nothing; the meter role is granted its
-columns one at a time (item 16).
+columns one at a time (item 14).
 
 **Migration blocks.** A block has a two-digit number and its files are named
 `NNSSS_description.sql`: block 01 (the platform) runs `01001`, `01002`, …. All blocks share one
