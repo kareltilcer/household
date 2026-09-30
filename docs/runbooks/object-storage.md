@@ -24,7 +24,7 @@ appearing, and when the sweep or a household's storage figures look wrong.
 1. **Provision the bucket** in the EU region the environment runs in (PL-8), private, with no public
    access policy of any kind: every read is a pre-signed link.
 2. **Turn versioning on**, with a lifecycle rule that expires noncurrent versions and delete markers
-   after 35 days, the backups' retention (PRD 07 §2). A purge or a sweep then removes an object at
+   after 35 days, the backups' retention (PRD 07 §3). A purge or a sweep then removes an object at
    once for everyone, and the store keeps its previous version for the backups' window only.
 3. **Replicate it** to a second account in the EU (PRD 01 §8).
 4. **Give the API a key of its own**, allowed `GetObject`, `PutObject` (conditional writes included),

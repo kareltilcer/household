@@ -359,9 +359,12 @@ nothing, so a period's average counts its empty days. The meter role measures ev
 household's sample is written in its own context.
 
 **FR-ST3 — What is billed.** `stored_bytes` = object-storage bytes attributed to the household,
-including all derived variants (previews, thumbnails) and all versions retained for backup within
-the household's own retention. Database rows are **not** billed; they are subject to per-plan
-fair-use ceilings. See [04](04-billing-and-entitlements.md).
+including all derived variants (previews, thumbnails): every object the household's files record.
+The versions the store keeps of a deleted or replaced object, for the backups' 35 days
+([07](07-nonfunctional.md) §3), are the platform's backup and not the household's storage, and are
+not billed: counted, a file uploaded and deleted the same day would be billed for five weeks, which
+**D-31** and FR-BI3's worked example rule out. Database rows are **not** billed; they are subject to
+per-plan fair-use ceilings. See [04](04-billing-and-entitlements.md).
 
 **FR-ST4 — The household can see it.** A storage screen shows total, the trend, the split by
 module and by member, the largest items, and what deleting something would actually recover. A

@@ -1013,6 +1013,70 @@ func TestTheWorkersRunWhatCommitsLeave(t *testing.T) {
 	}
 }
 
+// The households due take turns: a worker lets a household go once its turn is over, and the others
+// found due with it take theirs before it takes more. A household with a backlog, an archive of
+// documents each waiting on the converter, would otherwise keep every other household's previews
+// waiting behind the whole of it. With one worker and a turn of one job, the household that uploaded
+// last has its picture's variants derived before the backlog uploaded first is through.
+func TestTheHouseholdsDueTakeTurns(t *testing.T) {
+	w := newFileWorld(t, func(c *files.Config) {
+		c.Workers, c.Turn, c.Poll = 1, time.Nanosecond, 50*time.Millisecond
+	})
+	busy, quiet := w.household(true), w.household(true)
+	jana, petr := w.member(busy, access.Owner, nil), w.member(quiet, access.Owner, nil)
+	var backlog []uuid.UUID
+	for range 3 {
+		item := idgen.New()
+		backlog = append(backlog, item)
+		expect(t, w.upload(busy, jana, "a.png", picture(t, 100, 100), map[string]string{"id": item.String()}), http.StatusCreated, "")
+	}
+	late := idgen.New()
+	expect(t, w.upload(quiet, petr, "b.png", picture(t, 100, 100), map[string]string{"id": late.String()}), http.StatusCreated, "")
+
+	stop := make(chan struct{})
+	ctx, cancel := context.WithCancel(t.Context())
+	go func() {
+		defer close(stop)
+		w.files.Run(ctx)
+	}()
+	ready := func() bool {
+		for _, item := range backlog {
+			if w.variantsOf(busy, item) != "ready" {
+				return false
+			}
+		}
+		return w.variantsOf(quiet, late) == "ready"
+	}
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline) && !ready(); {
+		time.Sleep(20 * time.Millisecond)
+	}
+	cancel()
+	<-stop
+	if !ready() {
+		t.Fatal("the workers left variants underived")
+	}
+	// When each was derived: its thumbnail's row is recorded in the transaction that marks its
+	// original ready, one job after another with one worker.
+	derived := func(household, item uuid.UUID) time.Time {
+		var at time.Time
+		if err := w.admin.QueryRow(t.Context(), `
+			SELECT created_at FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3 AND variant = 'thumbnail'`,
+			household, probe.Name, item).Scan(&at); err != nil {
+			t.Fatal(err)
+		}
+		return at
+	}
+	after := 0
+	for _, item := range backlog {
+		if derived(busy, item).After(derived(quiet, late)) {
+			after++
+		}
+	}
+	if after == 0 {
+		t.Fatal("the household that uploaded last waited for the whole of the other's backlog")
+	}
+}
+
 // emptyFrame is a GIF whose logical screen is 10 by 5000 pixels and whose one frame is none of it
 // wide: its header is an image's, and its frame decodes to no pixels at all.
 func emptyFrame() []byte {

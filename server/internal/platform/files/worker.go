@@ -52,7 +52,9 @@ var errGone = errors.New("files: the entity is gone")
 
 // Run runs the workers until ctx ends, then waits for the jobs they hold to be released. It looks
 // for households with work due when a commit of this instance wakes it (Nudge), and every Poll for
-// the rest; each household's jobs are run by one worker at a time, and at most Workers at once.
+// the rest; each household's jobs are run by one worker at a time, and at most Workers at once. The
+// households due take turns (Config.Turn): a worker lets a household go once its turn is over, and
+// the others found due with it take theirs before it is looked at again.
 func (s *Service) Run(ctx context.Context) {
 	var running sync.WaitGroup
 	slots := make(chan struct{}, s.workers)
@@ -70,18 +72,19 @@ func (s *Service) Run(ctx context.Context) {
 			select {
 			case slots <- struct{}{}:
 			case <-ctx.Done():
-				s.release(h)
+				s.release(h, false)
 				running.Wait()
 				return
 			}
 			running.Add(1)
 			go func() {
+				more := false
 				defer func() {
 					<-slots
-					s.release(h)
+					s.release(h, more)
 					running.Done()
 				}()
-				s.drain(ctx, h)
+				more = s.drain(ctx, h)
 			}()
 		}
 		select {
@@ -109,10 +112,12 @@ func (s *Service) hold(household uuid.UUID) bool {
 	return true
 }
 
-// release lets household go, and wakes the workers when it was found due while it was held.
-func (s *Service) release(household uuid.UUID) {
+// release lets household go, and wakes the workers when it was found due while it was held, or when
+// its worker's turn ended with jobs perhaps left (more): the loop reaches the other households found
+// due first, and then looks for this one again.
+func (s *Service) release(household uuid.UUID, more bool) {
 	s.mu.Lock()
-	again := s.busy[household]
+	again := s.busy[household] || more
 	delete(s.busy, household)
 	s.mu.Unlock()
 	if again {
@@ -121,36 +126,53 @@ func (s *Service) release(household uuid.UUID) {
 }
 
 // due returns the households with a job due, as the meter role reads them: no one household's
-// context can see another's jobs.
+// context can see another's jobs. The household whose oldest job has waited longest comes first, so
+// that every instance serves them in the order they have waited, and a household past the first
+// thousand is reached as the ones before it are served.
 func (s *Service) due(ctx context.Context) ([]uuid.UUID, error) {
-	rows, err := s.meter.Query(ctx, "SELECT DISTINCT household_id FROM file_jobs WHERE run_at <= now() LIMIT 1000")
+	rows, err := s.meter.Query(ctx, `
+		SELECT household_id FROM file_jobs WHERE run_at <= now()
+		GROUP BY household_id ORDER BY min(run_at), household_id LIMIT 1000`)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }
 
-// drain runs household's jobs due until none is left or ctx ends.
-func (s *Service) drain(ctx context.Context, household uuid.UUID) {
+// drain runs household's jobs due, one after another, until none is left, ctx ends, or the worker's
+// turn at the household is over (Config.Turn), and reports whether it stopped for its turn, with jobs
+// perhaps left. The job running when the turn ends runs to its end, within its lease. A worker that
+// ran one household's jobs until none was left would hold its slot for as long as that took: a
+// household that uploaded an archive of documents, each waiting its minutes on the converter, would
+// keep every other household's thumbnails and previews waiting behind the whole of it, in every
+// instance, whose workers find the households due in the same order.
+func (s *Service) drain(ctx context.Context, household uuid.UUID) bool {
+	began := time.Now()
 	for ctx.Err() == nil {
 		j, ok, err := s.claim(ctx, household)
 		if err != nil {
 			if ctx.Err() == nil {
 				s.log.LogAttrs(ctx, slog.LevelError, "files: claim a job", householdAttr(household), slog.Any("error", err))
 			}
-			return
+			return false
 		}
 		if !ok {
-			return
+			return false
 		}
 		s.run(ctx, j)
+		if time.Since(began) >= s.turn {
+			return true
+		}
 	}
+	return false
 }
 
-// Drain runs household's jobs due now, in the caller's goroutine: what the workers would, for a test
-// that waits for it.
+// Drain runs household's jobs due now, in the caller's goroutine, turn after turn until none is left:
+// what the workers would, for a test that waits for it.
 func (s *Service) Drain(ctx context.Context, household uuid.UUID) {
-	s.drain(ctx, household)
+	for more := true; more; {
+		more = s.drain(ctx, household)
+	}
 }
 
 // claim takes household's next job due, moving it past its lease.
@@ -308,6 +330,15 @@ func (s *Service) settle(ctx context.Context, j job, status string, retry time.D
 
 // purge deletes the objects of j's entity that no row records: every one, once the mutation that
 // deleted the entity has committed.
+//
+// It reads the rows before it lists the objects, so that an upload recorded again under the entity's
+// id before the purge ran keeps its bytes. One recorded between the read and the delete is a window
+// of moments, the sweep's (Sweep), which it does not close: its bytes, the same as the deleted
+// entity's and so never written again (Put), would go with the purge while its row stayed. Closing
+// it would take a delete conditional on the row, which the store cannot be asked, or the purge's
+// claim held across the store's deletes for the upload's mutation to wait on, and it needs an id that
+// was deleted sent again with the same bytes in the moment its purge runs. The purge is not delayed
+// by the sweep's day instead: a deleted file's bytes go when it does.
 func (s *Service) purge(ctx context.Context, j job) error {
 	recorded := map[string]bool{}
 	err := tenant.InTx(s.system(ctx, j.household), func(tx pgx.Tx) error {

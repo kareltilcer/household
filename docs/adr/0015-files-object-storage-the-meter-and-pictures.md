@@ -91,7 +91,11 @@ anything unrecognised are downloads.
 
 **Variants are derived by workers in every instance**, from `file_jobs` rows the upload's own
 transaction wrote. A commit wakes its instance's workers (`Nudge`); the others find due jobs every
-30 seconds. A worker claims a household's next due job with `FOR UPDATE SKIP LOCKED`, moving its
+30 seconds, the household whose oldest job has waited longest first. The households due take turns:
+a worker takes one household's jobs for ten seconds at most, finishing the one it is running, and
+lets it go for the others to take theirs, so that a household's backlog, an archive of documents
+each waiting on the converter, keeps no other household's previews waiting behind the whole of it.
+A worker claims a household's next due job with `FOR UPDATE SKIP LOCKED`, moving its
 `run_at` past a ten-minute lease, so a job whose worker died runs again once the lease passes, and a
 job runs no longer than its lease, since the store's client bounds only how long an answer takes
 to begin, not a transfer that stalls; one that fails for a reason a retry may mend waits 1, 5, 30

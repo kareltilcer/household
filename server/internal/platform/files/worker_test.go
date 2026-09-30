@@ -35,7 +35,7 @@ func TestAHouseholdFoundDueWhileHeldIsLookedAtAgain(t *testing.T) {
 	if !s.hold(h) {
 		t.Fatal("a household nobody drains was not held")
 	}
-	s.release(h)
+	s.release(h, false)
 	if woken(s) {
 		t.Fatal("letting go of a household nobody asked for again woke the workers")
 	}
@@ -46,16 +46,34 @@ func TestAHouseholdFoundDueWhileHeldIsLookedAtAgain(t *testing.T) {
 	if s.hold(h) {
 		t.Fatal("a household a worker drains was held twice")
 	}
-	s.release(h)
+	s.release(h, false)
 	if !woken(s) {
 		t.Fatal("a household found due while it was held was left to the next poll")
 	}
 	if !s.hold(h) {
 		t.Fatal("a household let go was not held again")
 	}
-	s.release(h)
+	s.release(h, false)
 	if woken(s) {
 		t.Fatal("the second drain was asked for again too")
+	}
+}
+
+// A household whose worker's turn ended with jobs perhaps left is looked at again once the others
+// found due with it have had theirs: letting it go wakes the workers, though nothing found it due
+// while it was held, rather than leaving the rest of its jobs to the next poll.
+func TestAHouseholdWhoseTurnEndedIsLookedAtAgain(t *testing.T) {
+	s := &Service{wake: make(chan struct{}, 1), busy: map[uuid.UUID]bool{}}
+	h := idgen.New()
+	if !s.hold(h) {
+		t.Fatal("a household nobody drains was not held")
+	}
+	s.release(h, true)
+	if !woken(s) {
+		t.Fatal("a household whose turn ended was left to the next poll")
+	}
+	if !s.hold(h) {
+		t.Fatal("a household let go was not held again")
 	}
 }
 

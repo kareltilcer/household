@@ -150,8 +150,14 @@ func Sniff(r io.ReaderAt, size int64, name string) Type {
 // ksh, csh), a macOS command Terminal runs, or its settings, which name one to run (tool,
 // terminal), a launcher a Linux desktop runs what it names from (desktop), an Access database's
 // compiled form or its add-in, as mde is (accde, mda), a sandbox's configuration, which names the
-// command it runs at sign-in (wsb), an installer's setup information (inf), and a pinned site or a
-// search, which open what they name (website, search-ms, searchconnector-ms).
+// command it runs at sign-in (wsb), an installer's setup information (inf), a pinned site or a
+// search, which open what they name (website, search-ms, searchconnector-ms), a Windows theme or
+// theme pack, which Windows applies when it is opened and which has run code it named
+// (CVE-2023-38146; theme, themepack, deskthemepack), a printer migration, which installs the
+// drivers it carries (printerexport), PowerShell's cmdlet definitions and session configurations
+// (cdxml, pssc), beside its other formats above, Visual Studio's macros (vsmacros), a shell link to
+// a place as settingcontent-ms is (appcontent-ms), an Exchange shortcut (xnk), and a remote desktop
+// connection, which signs in to the machine it names and hands it the drives it lists (rdp).
 var programExtensions = []string{
 	"exe", "com", "scr", "msi", "msp", "dll", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh",
 	"hta", "cpl", "lnk", "jar", "apk", "aab", "ipa", "appx", "msix", "app", "dmg", "pkg", "deb", "rpm", "sh", "run",
@@ -161,6 +167,7 @@ var programExtensions = []string{
 	"mshxml", "msh1xml", "msh2xml", "vb", "bas", "sys", "vxd", "xll", "appxbundle", "msixbundle", "appinstaller", "iso",
 	"img", "vhd", "vhdx", "msu", "appref-ms", "py", "pyw", "pyc", "pyo", "pyz", "pyzw", "pl", "bash", "zsh", "ksh",
 	"csh", "tool", "terminal", "desktop", "accde", "mda", "wsb", "inf", "website", "search-ms", "searchconnector-ms",
+	"theme", "themepack", "deskthemepack", "printerexport", "cdxml", "pssc", "vsmacros", "appcontent-ms", "xnk", "rdp",
 }
 
 // signatures are the types known by their first bytes, the programs among them.
