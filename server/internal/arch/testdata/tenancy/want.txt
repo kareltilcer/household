@@ -9,6 +9,7 @@ arch_testdata.feed_open is a partition the request role can reach directly; revo
 arch_testdata.linked has foreign key linked_partner_id_fkey, which references arch_testdata.roots without pairing household_id with its id; a foreign key is checked past row-level security, so it can name another household's row
 arch_testdata.loose_child has foreign key loose_child_parent_id_fkey, which references arch_testdata.compliant without pairing household_id with its household_id; a foreign key is checked past row-level security, so it can name another household's row
 arch_testdata.members_writable has permissive policy member_access, which writes beyond the household; a wider rule is a FOR SELECT policy
+arch_testdata.meter_writes has permissive policy meter_all, which is not the tenant isolation; a narrower rule is a restrictive policy
 arch_testdata.no_household has no household_id column
 arch_testdata.no_household has no tenant isolation policy; create it with enable_tenant_isolation
 arch_testdata.no_policy has no tenant isolation policy; create it with enable_tenant_isolation

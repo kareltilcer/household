@@ -26,6 +26,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
+	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
@@ -66,6 +67,7 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 		Pool: pool, MaxBodyBytes: 1 << 10, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
+		Storage:    &storage.Picture{Log: log},
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
@@ -337,6 +339,7 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 		Pool: pool, MaxBodyBytes: 1 << 10, BodyTimeout: timeout, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
+		Storage:    &storage.Picture{Log: log},
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

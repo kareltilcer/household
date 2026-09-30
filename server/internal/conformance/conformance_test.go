@@ -34,6 +34,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 	"github.com/kareltilcer/household/server/internal/syncconfig"
@@ -87,6 +88,7 @@ func newWorldOf(t *testing.T, o apptest.Options, m module.Module) *world {
 		MaxBodyBytes: 1 << 20, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, outbox, o),
 		Sync:       apptest.Sync(t, log, o),
+		Storage:    &storage.Picture{Log: log},
 	})
 	if err != nil {
 		t.Fatal(err)

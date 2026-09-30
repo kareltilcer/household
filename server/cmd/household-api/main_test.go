@@ -52,6 +52,10 @@ func env(t *testing.T) config.Getenv {
 		config.BreachCorpusVar:           corpus,
 		config.TokenKeysVar:              base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
 		config.MFAKeysVar:                base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
+		// The files pipeline's store and converter, which serving asks nothing of until a file comes.
+		config.ObjectStoreURLVar: "https://tester:" + "not-published" + "@objects.household.test/household",
+		config.ConverterURLVar:   "http://127.0.0.1:1",
+		config.UploadDirVar:      t.TempDir(),
 	}
 	return func(key string) (string, bool) {
 		v, ok := vars[key]

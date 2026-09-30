@@ -62,6 +62,8 @@ paths:
   /me:
     get: { operationId: getMe, responses: { '200': { description: The user }, default: { $ref: '#/components/responses/Problem' } } }
     patch: { operationId: patchMe, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/avatar:
+    put: { operationId: putMeAvatar, requestBody: { $ref: '#/components/requestBodies/Upload' }, responses: { '200': { description: The user }, default: { $ref: '#/components/responses/Problem' } } }
   /me/sessions:
     get: { operationId: getMeSessions, responses: { '200': { description: Sessions }, default: { $ref: '#/components/responses/Problem' } } }
     delete: { operationId: deleteMeSessions, responses: { '204': { description: Done }, default: { $ref: '#/components/responses/Problem' } } }
@@ -137,6 +139,13 @@ paths:
   /households/{household_id}/children/{user_id}/graduate:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
     post: { operationId: postChildrenByUserIdGraduate, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Sent }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/children/{user_id}/avatar:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    put: { operationId: putChildrenByUserIdAvatar, requestBody: { $ref: '#/components/requestBodies/Upload' }, responses: { '200': { description: Set }, default: { $ref: '#/components/responses/Problem' } } }
+    delete: { operationId: deleteChildrenByUserIdAvatar, responses: { '200': { description: Removed }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/storage:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getStorage, responses: { '200': { description: The picture }, default: { $ref: '#/components/responses/Problem' } } }
   /me/invitations:
     get: { operationId: getMeInvitations, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
   /me/invitations/{token}:
@@ -181,12 +190,36 @@ paths:
         '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '429': { $ref: '#/components/responses/Problem' }
+  /households/{household_id}/probe/files:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post:
+      operationId: postProbeFiles
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/Upload' }
+      responses:
+        '201': { description: Uploaded, content: { application/json: { schema: { $ref: '#/components/schemas/ProbeFile' } } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /households/{household_id}/probe/files/{item_id}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: item_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    get:
+      operationId: getProbeFilesByItemId
+      parameters: [{ name: variant, in: query, required: false, schema: { type: string } }]
+      responses:
+        '200': { description: A link, content: { application/json: { schema: { type: object, required: [url, expires_at, content_type, byte_size, disposition, etag] } } } }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteProbeFilesByItemId
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '204': { description: Deleted }
+        default: { $ref: '#/components/responses/Problem' }
 components:
   parameters:
     HouseholdId: { name: household_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string, minLength: 1, maxLength: 128 } }
   requestBodies:
     Any: { required: true, content: { application/json: { schema: { type: object } } } }
+    Upload: { required: true, content: { multipart/form-data: { schema: { type: object } } } }
   responses:
     Problem:
       description: A problem.
@@ -201,6 +234,14 @@ components:
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         household_id: { $ref: '#/components/schemas/Uuid' }
+    ProbeFile:
+      type: object
+      required: [id, household_id, content_type, byte_size]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        household_id: { $ref: '#/components/schemas/Uuid' }
+        content_type: { type: string }
+        byte_size: { type: integer }
     ProbeItems:
       type: object
       required: [items]

@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
@@ -66,11 +67,16 @@ type MetricSource interface{ Metrics() []Metric }
 // ListSource contributes the itemised forms of metrics (item 36).
 type ListSource interface{ Lists() []List }
 
-// StorageSource declares the tables and object prefixes a module owns, and how its blob bytes
-// are attributed (item 14).
+// StorageSource declares what a module keeps (FR-ST1, item 14): the tables it owns, whose rows the
+// daily sample counts per household for fair use (FR-ST2, PRD 04 §5), each a tenant table of its own
+// block, and the label the storage picture shows for each entity it keeps files for (FR-ST4), read
+// in the caller's household, which may be an entity's title rather than its file's name. Its objects
+// live under h/{household}/{module}/, and each is attributed to a member as the module declares when
+// it records the upload and keeps current as the entity moves (files.Record, files.Attribute): only
+// the module knows whose its entity is.
 type StorageSource interface {
-	Tables() []string
-	Blobs(ctx context.Context, householdID uuid.UUID) ([]BlobUsage, error)
+	StorageTables() []string
+	StorageLabels(ctx context.Context, tx pgx.Tx, entities []uuid.UUID) (map[uuid.UUID]string, error)
 }
 
 // SyncSource declares the entities that replicate offline, each with its merge policy and its
@@ -104,12 +110,6 @@ type Metric struct{ Key string }
 
 // List is the itemised form of a metric.
 type List struct{ Key string }
-
-// BlobUsage is the bytes a module holds under one object prefix.
-type BlobUsage struct {
-	Prefix string
-	Bytes  int64
-}
 
 // ReminderKind is a kind of date-bearing thing a member may be reminded about.
 type ReminderKind struct{ Key string }

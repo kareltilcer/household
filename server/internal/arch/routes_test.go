@@ -23,6 +23,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
@@ -49,6 +50,7 @@ func TestRoutesMatchTheContract(t *testing.T) {
 		Pool: pool, Modules: mods, MaxBodyBytes: 1, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
+		Storage:    &storage.Picture{Log: log},
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

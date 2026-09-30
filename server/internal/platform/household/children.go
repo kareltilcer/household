@@ -15,6 +15,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/audit"
+	"github.com/kareltilcer/household/server/internal/platform/avatar"
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/etag"
@@ -75,7 +76,7 @@ func (s *Service) network(r *http.Request) string {
 	return clientip.Network(s.Accounts.ClientIP.Addr(r))
 }
 
-// childEntry is one child profile of the contract's ChildProfileList.
+// childEntry is one child profile of the contract's ChildProfileList, with a link to its picture.
 type childEntry struct {
 	ID          uuid.UUID `json:"id"`
 	DisplayName string    `json:"display_name"`
@@ -129,15 +130,21 @@ func (s *Service) childProfiles(w http.ResponseWriter, r *http.Request) {
 	items := []childEntry{}
 	err = s.readTx(ctx, household, uuid.Nil, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			SELECT m.user_id, u.display_name FROM memberships m JOIN users u ON u.id = m.user_id
+			SELECT m.user_id, u.display_name, `+avatar.Columns("m.user_id")+`
+			FROM memberships m JOIN users u ON u.id = m.user_id
 			WHERE m.household_id = $1 AND m.role = 'child'
 			ORDER BY m.created_at, m.id`, household)
 		if err != nil {
 			return err
 		}
 		items, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (childEntry, error) {
-			var e childEntry
-			err := row.Scan(&e.ID, &e.DisplayName)
+			var (
+				e       childEntry
+				picture avatar.Ref
+			)
+			err := row.Scan(&e.ID, &e.DisplayName, &picture.ID, &picture.ContentType)
+			// The code opened the household, which is what lets its holder see its profiles to pick one.
+			e.AvatarURL = s.Accounts.Avatars.URL(ctx, e.ID, picture)
 			return e, err
 		})
 		return err
@@ -408,9 +415,9 @@ type childCreate struct {
 
 // check canonicalises the name req gives and refuses what is wrong with it, each field by its
 // pointer: a name with nothing in it or a control character, a birth year after thisYear, the
-// household's, an avatar, which waits for uploads (item 14), and a level above a child's ceiling
-// (FR-AC4). The edge has checked the types, the name's length, the earliest year and the PIN's
-// digits.
+// household's, an avatar other than none, since a picture is uploaded once the profile exists
+// (putChildAvatar) and never named by a URL, and a level above a child's ceiling (FR-AC4). The edge
+// has checked the types, the name's length, the earliest year and the PIN's digits.
 func (req *childCreate) check(thisYear int) error {
 	var errs []problem.FieldError
 	name, ok := text.Name(req.DisplayName)
@@ -527,7 +534,7 @@ func (s *Service) createChild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag.Set(w, m.version)
-	httpx.WriteJSON(w, http.StatusCreated, m.body(scope, payer, modules))
+	httpx.WriteJSON(w, http.StatusCreated, s.member(ctx, scope, payer, modules, m))
 }
 
 // childOf reads the membership of the child profile the request's {user_id} names, locked for tx,
@@ -652,6 +659,120 @@ func (s *Service) unlockChild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// putChildAvatar is putChildrenByUserIdAvatar: an owner gives a child profile a picture, made from an
+// image they upload (avatar.Upload), in place of any it had, which goes once the new one is recorded.
+// The picture is the child's account's, as a member's own is theirs (D-107), and counts against no
+// household's storage; the membership's version moves with it, so an owner's edit made against the
+// profile as it was is refused as a conflict. A member who is not a child profile is not found, and
+// is looked for before the upload is read.
+func (s *Service) putChildAvatar(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	scope := tenant.From(ctx)
+	if err := owner(ctx); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	user, err := pathUUID(r, "user_id")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	household := scope.HouseholdID()
+	if err := tenant.InTx(ctx, func(tx pgx.Tx) error {
+		m, err := readMembership(ctx, tx, household, user, false)
+		if err == nil && m.child == nil {
+			err = problem.NotFound()
+		}
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	picture, err := s.Accounts.Avatars.Upload(w, r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.Accounts.Avatars.Put(ctx, user, picture); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var (
+		body     memberBody
+		replaced uuid.UUID
+	)
+	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		m, payer, err := childOf(ctx, tx, user)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		if replaced, err = avatar.Set(ctx, tx, user, picture); err != nil {
+			return mutation.Record{}, err
+		}
+		if m, err = touch(ctx, tx, m, m.role, m.grants); err != nil {
+			return mutation.Record{}, err
+		}
+		m.picture = avatar.Ref{ID: &picture.ID, ContentType: &picture.ContentType}
+		body = s.member(ctx, scope, payer, Modules, m)
+		rec := childRecord(household, payer, m, actionChildAvatar)
+		rec.Event.SummaryArgs["change"] = "set"
+		return rec, nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.Accounts.Avatars.Purge(ctx, user, replaced)
+	etag.Set(w, body.Version)
+	httpx.WriteJSON(w, http.StatusOK, body)
+}
+
+// clearChildAvatar is deleteChildrenByUserIdAvatar: an owner takes a child profile's picture away. A
+// profile with none is answered as it is, and nothing is recorded.
+func (s *Service) clearChildAvatar(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	scope := tenant.From(ctx)
+	if err := owner(ctx); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	user, err := pathUUID(r, "user_id")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	household := scope.HouseholdID()
+	var (
+		body    memberBody
+		cleared uuid.UUID
+	)
+	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
+		m, payer, err := childOf(ctx, tx, user)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		if cleared, err = avatar.Clear(ctx, tx, user); err != nil || cleared == uuid.Nil {
+			body = s.member(ctx, scope, payer, Modules, m)
+			return mutation.Record{}, err
+		}
+		if m, err = touch(ctx, tx, m, m.role, m.grants); err != nil {
+			return mutation.Record{}, err
+		}
+		m.picture = avatar.Ref{}
+		body = s.member(ctx, scope, payer, Modules, m)
+		rec := childRecord(household, payer, m, actionChildAvatar)
+		rec.Event.SummaryArgs["change"] = "cleared"
+		return rec, nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.Accounts.Avatars.Purge(ctx, user, cleared)
+	etag.Set(w, body.Version)
+	httpx.WriteJSON(w, http.StatusOK, body)
 }
 
 // graduate is postChildrenByUserIdGraduate (FR-CH4): an owner sends the address a child profile is to

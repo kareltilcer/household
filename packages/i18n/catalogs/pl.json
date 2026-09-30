@@ -1,4 +1,5 @@
 {
+  "admin.child.avatar": "{change, select, cleared {Usunięcie obrazka dla {member}} other {Nowy obrazek dla {member}}}",
   "admin.child.create": "Dodanie profilu dziecka: {member}",
   "admin.child.lock": "Zablokowanie profilu {member} po dziesięciu błędnych PIN-ach",
   "admin.child.pin": "Nowy PIN dla {member}",

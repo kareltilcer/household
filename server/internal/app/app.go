@@ -31,6 +31,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/reference"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
@@ -73,6 +74,8 @@ type Deps struct {
 	Households *household.Service
 	// Sync is the sync surfaces (item 13), every one of which the router needs.
 	Sync Sync
+	// Storage is the storage picture (item 14).
+	Storage *storage.Picture
 }
 
 // Sync is the sync surfaces (item 13, ADR 0014): the credentials a client's replica connects to
@@ -135,6 +138,9 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	}
 	if d.Sync.Replica == nil || d.Sync.PushLimit == nil {
 		return nil, errors.New("app: the router needs every sync surface")
+	}
+	if d.Storage == nil {
+		return nil, errors.New("app: the router needs the storage picture")
 	}
 	registry, err := d.Modules.WithPlatform(household.Admin())
 	if err != nil {
@@ -211,6 +217,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Households.HouseholdRoutes)
 			// A replica's credentials keep no key: a credential is never kept to be answered with.
 			inHousehold.Group(d.Sync.Replica.HouseholdRoutes)
+			inHousehold.Group(d.Storage.Routes)
 			inHousehold.With(perDevice, idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(pushes.Routes)
 			// A child profile's PIN keeps no key, as a password does not (D-97).
 			inHousehold.Group(d.Households.PINRoutes)

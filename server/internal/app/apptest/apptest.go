@@ -1,8 +1,8 @@
 // Package apptest builds what a test's router needs beyond the platform's pool and contract: the
 // account surfaces (app.Accounts), with password hashing cheap enough for a test, a
 // breached-password corpus of the test's choosing, mail kept in memory, keys of the test's own for
-// access tokens and the second step, and every job the identity service defers run before the
-// request that deferred it returns.
+// access tokens and the second step, every job the identity service defers run before the request
+// that deferred it returns, and the files pipeline the users' pictures go through.
 package apptest
 
 import (
@@ -18,20 +18,26 @@ import (
 	"time"
 
 	"github.com/kareltilcer/household/server/internal/app"
+	"github.com/kareltilcer/household/server/internal/platform/avatar"
 	"github.com/kareltilcer/household/server/internal/platform/breach"
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/federation"
+	"github.com/kareltilcer/household/server/internal/platform/files"
 	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mfa"
+	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
+	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 	"github.com/kareltilcer/household/server/internal/platform/token"
 )
 
@@ -99,6 +105,48 @@ type Options struct {
 	Hooks household.Hooks
 	// PushLimit is the push's limit per device, no limit a test would meet when zero.
 	PushLimit ratelimit.Rate
+	// Files is the files pipeline, which the users' pictures go through (Files). When nil, a
+	// pipeline over a bucket nobody made stands in: a link to a picture is signed without asking the
+	// store, and an upload fails 502.
+	Files *files.Service
+}
+
+// Files returns the files pipeline over pool, with a bucket of t's own on the test object store,
+// on the clock of o, whose workers a test runs with its Drain; limits adjusts its configuration.
+func Files(t testing.TB, pool session.Pool, log *slog.Logger, o Options, limits ...func(*files.Config)) *files.Service {
+	t.Helper()
+	return pipeline(t, pool, log, o, testsupport.ObjectStore(t), limits...)
+}
+
+// pipeline returns the files pipeline over pool, store and the meter role's pool.
+func pipeline(t testing.TB, pool session.Pool, log *slog.Logger, o Options, store *objectstore.Store, limits ...func(*files.Config)) *files.Service {
+	t.Helper()
+	beginner, ok := pool.(tenant.Beginner)
+	if !ok {
+		t.Fatalf("apptest: %T opens no transactions", pool)
+	}
+	cfg := files.Config{
+		Pool: beginner, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Store: store, Log: log,
+		Dir: t.TempDir(), Now: o.Now,
+	}
+	for _, limit := range limits {
+		limit(&cfg)
+	}
+	s, err := files.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// unmade is a store over a bucket nobody made, which signs links without asking it anything.
+func unmade(t testing.TB) *objectstore.Store {
+	t.Helper()
+	store, err := objectstore.New(objectstore.Config{Location: testsupport.ObjectStoreLocation(t, "unmade-bucket")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store
 }
 
 // PowerSyncURL is where the tests' replicas reach PowerSync, which the sync credentials name.
@@ -196,6 +244,14 @@ func Accounts(t testing.TB, pool session.Pool, log *slog.Logger, o Options) (app
 	sessions := session.NewStore(pool, origins, log, o.Now)
 	devices := device.NewStore(pool, TokenKeys, log, o.Now)
 	outbox := &Outbox{}
+	fs := o.Files
+	if fs == nil {
+		fs = pipeline(t, pool, log, o, unmade(t))
+	}
+	avatars, err := avatar.New(fs, log, o.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
 	breached := func(pw string) (bool, error) {
 		if o.Screening != nil {
 			o.Screening(pw)
@@ -207,7 +263,7 @@ func Accounts(t testing.TB, pool session.Pool, log *slog.Logger, o Options) (app
 		Throttles: ratelimit.NewThrottles(pool, o.Now), Sessions: sessions, Mail: outbox, Catalogs: catalogs,
 		WebURL: web, ClientIP: clientip.New(proxies),
 		Later:   func(ctx context.Context, fn func(context.Context)) { fn(context.WithoutCancel(ctx)) },
-		Devices: devices, MFA: MFAKeys, Providers: o.Providers, RedirectURIs: o.RedirectURIs,
+		Devices: devices, MFA: MFAKeys, Providers: o.Providers, RedirectURIs: o.RedirectURIs, Avatars: avatars,
 	})
 	if err != nil {
 		t.Fatal(err)

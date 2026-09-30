@@ -15,6 +15,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/audit"
+	"github.com/kareltilcer/household/server/internal/platform/avatar"
 	"github.com/kareltilcer/household/server/internal/platform/etag"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
@@ -38,6 +39,8 @@ type membership struct {
 	grants map[string]access.Level
 	// child is what a child profile's membership says of it, and nil for any other member's.
 	child *childProfile
+	// picture is the member's picture, which the member list links to (item 14).
+	picture avatar.Ref
 }
 
 // childProfile is what a child profile's membership says of it (FR-CH1, FR-CH5).
@@ -58,7 +61,7 @@ var membershipColumns = `m.id, m.user_id, m.role::text, m.version, m.created_at,
 	(SELECT max(e.occurred_at) FROM audit_events e WHERE e.household_id = m.household_id AND e.actor_id = m.user_id),
 	m.year_of_birth, m.dashboard_locked,
 	coalesce((SELECT c.failures FROM credentials c WHERE c.user_id = m.user_id AND c.type = 'child_pin'), 0) >= ` +
-	strconv.Itoa(LockAfter)
+	strconv.Itoa(LockAfter) + ", " + avatar.Columns("m.user_id")
 
 func scanMembership(row pgx.CollectableRow) (membership, error) {
 	var (
@@ -67,7 +70,7 @@ func scanMembership(row pgx.CollectableRow) (membership, error) {
 		yearOfBirth *int16
 	)
 	err := row.Scan(&m.id, &m.user, &m.role, &m.version, &m.joined, &m.name, &m.email, &m.lastActive,
-		&yearOfBirth, &p.dashboardLocked, &p.pinLocked)
+		&yearOfBirth, &p.dashboardLocked, &p.pinLocked, &m.picture.ID, &m.picture.ContentType)
 	m.grants = map[string]access.Level{}
 	if m.role == access.Child {
 		if yearOfBirth != nil {
@@ -248,6 +251,14 @@ func (m membership) body(scope *tenant.Scope, payer *uuid.UUID, modules []string
 	return b
 }
 
+// member is m as scope's caller reads it (body), with a link to the member's picture, which every
+// member of the household may see.
+func (s *Service) member(ctx context.Context, scope *tenant.Scope, payer *uuid.UUID, modules []string, m membership) memberBody {
+	b := m.body(scope, payer, modules)
+	b.AvatarURL = s.Accounts.Avatars.URL(ctx, m.user, m.picture)
+	return b
+}
+
 // change is the sync change of m, as it stands after a mutation.
 func (m membership) change(household uuid.UUID, payer *uuid.UUID, modules []string) sync.Change {
 	return sync.Change{Entity: entityMembership, ID: m.id, Op: sync.Upsert, Version: m.version, Row: m.row(household, payer, modules)}
@@ -387,7 +398,7 @@ func (s *Service) listMembers(w http.ResponseWriter, r *http.Request) {
 		}
 		items = make([]memberBody, 0, len(members))
 		for _, m := range members {
-			items = append(items, m.body(scope, h.payer, modules))
+			items = append(items, s.member(ctx, scope, h.payer, modules, m))
 		}
 		return nil
 	})
@@ -418,7 +429,7 @@ func (s *Service) getMember(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		body = m.body(scope, h.payer, modules)
+		body = s.member(ctx, scope, h.payer, modules, m)
 		return nil
 	})
 	if err != nil {
@@ -516,7 +527,7 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		}
 		m = old
 		if !precondition.Allows(old.version) {
-			return mutation.Record{}, problem.Conflict(old.body(scope, payer, modules), old.version)
+			return mutation.Record{}, problem.Conflict(s.member(ctx, scope, payer, modules, old), old.version)
 		}
 		role := old.role
 		if req.Role != nil {
@@ -590,7 +601,7 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		s.changed(ctx, Change{Household: household, Member: user, Cause: CauseGrant})
 	}
 	etag.Set(w, m.version)
-	httpx.WriteJSON(w, http.StatusOK, m.body(scope, payer, modules))
+	httpx.WriteJSON(w, http.StatusOK, s.member(ctx, scope, payer, modules, m))
 }
 
 // changedGrants are the levels of next that differ from old's.
@@ -853,5 +864,5 @@ func (s *Service) promote(w http.ResponseWriter, r *http.Request) {
 		s.changed(ctx, Change{Household: household, Member: req.UserID, Cause: CauseGrant})
 	}
 	etag.Set(w, m.version)
-	httpx.WriteJSON(w, http.StatusOK, m.body(scope, payer, modules))
+	httpx.WriteJSON(w, http.StatusOK, s.member(ctx, scope, payer, modules, m))
 }

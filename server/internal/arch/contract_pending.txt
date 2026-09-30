@@ -40,7 +40,6 @@ postSyncReset
 postSyncDigest
 getStream
 getSearch
-getStorage
 getActivity
 getActivityByEventId
 getActivityEntityByEntityTypeByEntityId

@@ -32,6 +32,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
@@ -70,6 +71,8 @@ type site struct {
 	// domain, peer and other are this test's own: its addresses end in the first, its browsers come
 	// from the second, and the third is another network, for a limit one network has used up.
 	domain, peer, other string
+	// contract is what the site's responses are checked against, the committed contract when nil.
+	contract *contract.Contract
 }
 
 // newSite is a site whose surfaces o adjusts, and whose router each of options adjusts further.
@@ -91,6 +94,7 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 		Pool: pool, MaxBodyBytes: 1 << 16, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, outbox, o),
 		Sync:       apptest.Sync(t, log, o),
+		Storage:    &storage.Picture{Log: log},
 	}
 	for _, option := range options {
 		option(&deps)
@@ -134,8 +138,13 @@ func (s *site) browser() *browser {
 // with the CSRF token when it holds one, unless the test says otherwise.
 type request struct {
 	method, path, body string
-	header             http.Header
-	noOrigin, noCSRF   bool
+	// contentType is the body's, JSON when "".
+	contentType string
+	// length is the Content-Length the request claims, whatever its body holds, when not zero: a
+	// body the server refuses by its length is never read.
+	length           int64
+	header           http.Header
+	noOrigin, noCSRF bool
 }
 
 func (b *browser) send(req request) *httptest.ResponseRecorder {
@@ -146,8 +155,15 @@ func (b *browser) send(req request) *httptest.ResponseRecorder {
 	}
 	r := httptest.NewRequestWithContext(b.s.t.Context(), req.method, "/api/v1"+req.path, body)
 	r.RemoteAddr = b.peer
+	if req.length != 0 {
+		r.ContentLength = req.length
+	}
 	if req.body != "" {
-		r.Header.Set("Content-Type", "application/json")
+		contentType := req.contentType
+		if contentType == "" {
+			contentType = "application/json"
+		}
+		r.Header.Set("Content-Type", contentType)
 	}
 	if !req.noOrigin {
 		r.Header.Set("Origin", apptest.WebOrigin)
@@ -164,7 +180,12 @@ func (b *browser) send(req request) *httptest.ResponseRecorder {
 			r.Header.Add(key, v)
 		}
 	}
-	rec := testsupport.Serve(b.s.t, b.s.router, r)
+	var rec *httptest.ResponseRecorder
+	if b.s.contract != nil {
+		rec = testsupport.ServeContract(b.s.t, b.s.contract, b.s.router, r)
+	} else {
+		rec = testsupport.Serve(b.s.t, b.s.router, r)
+	}
 	for _, c := range rec.Result().Cookies() {
 		if c.MaxAge < 0 {
 			delete(b.cookies, c.Name)

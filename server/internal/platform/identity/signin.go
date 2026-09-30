@@ -146,7 +146,7 @@ func (s *Service) admit(ctx context.Context, tx pgx.Tx, r *http.Request, user uu
 		}
 	}
 	var err error
-	adm.me, err = loadMe(ctx, tx, user)
+	adm.me, err = s.loadMe(ctx, tx, user)
 	return adm, err
 }
 

@@ -68,6 +68,11 @@ CREATE TABLE arch_testdata.widened (id uuid PRIMARY KEY, household_id uuid NOT N
 SELECT enable_tenant_isolation('arch_testdata.widened');
 CREATE POLICY everyone_reads ON arch_testdata.widened FOR SELECT USING (true);
 
+-- The meter role's read, widened to writing: the role reads across households, and writes none.
+CREATE TABLE arch_testdata.meter_writes (id uuid PRIMARY KEY, household_id uuid NOT NULL);
+SELECT enable_tenant_isolation('arch_testdata.meter_writes');
+CREATE POLICY meter_all ON arch_testdata.meter_writes TO household_meter USING (true) WITH CHECK (true);
+
 -- The template's expression, for reading only.
 CREATE TABLE arch_testdata.select_only (id uuid PRIMARY KEY, household_id uuid NOT NULL);
 ALTER TABLE arch_testdata.select_only ENABLE ROW LEVEL SECURITY;

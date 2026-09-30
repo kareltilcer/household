@@ -34,6 +34,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/text/language"
 
+	"github.com/kareltilcer/household/server/internal/platform/avatar"
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
 	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/federation"
@@ -100,6 +101,8 @@ type Config struct {
 	Providers map[string]*federation.Provider
 	// RedirectURIs are the URIs a provider may send a person back to, each matched exactly.
 	RedirectURIs []string
+	// Avatars keep the users' pictures (item 14).
+	Avatars *avatar.Service
 }
 
 // Service serves the routes.
@@ -113,7 +116,7 @@ type Service struct {
 func New(cfg Config) (*Service, error) {
 	if cfg.Pool == nil || cfg.Log == nil || cfg.Hasher == nil || cfg.Throttles == nil || cfg.Sessions == nil ||
 		cfg.Mail == nil || cfg.Catalogs == nil || cfg.WebURL == nil || cfg.ClientIP == nil || cfg.Later == nil ||
-		cfg.Devices == nil || cfg.MFA == nil {
+		cfg.Devices == nil || cfg.MFA == nil || cfg.Avatars == nil {
 		return nil, errors.New("identity: the service is missing a dependency")
 	}
 	return &Service{Config: cfg}, nil
@@ -147,6 +150,7 @@ func (s *Service) AccountRoutes(r chi.Router) {
 	r.Post("/auth/logout", s.logout)
 	r.Get("/me", s.me)
 	r.Patch("/me", s.updateMe)
+	r.Put("/me/avatar", s.putAvatar)
 	r.Get("/me/sessions", s.sessions)
 	r.Delete("/me/sessions", s.signOutEverywhere)
 	r.Delete("/me/sessions/{session_id}", s.revokeSession)

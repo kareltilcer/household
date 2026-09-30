@@ -46,6 +46,7 @@ const (
 	actionChildPIN      = "child.pin"
 	actionChildLock     = "child.lock"
 	actionChildUnlock   = "child.unlock"
+	actionChildAvatar   = "child.avatar"
 	actionGraduate      = "member.graduate"
 )
 
@@ -57,7 +58,7 @@ func Admin() module.PlatformModule {
 		actionMemberJoin, actionMemberUpdate, actionMemberPromote, actionMemberRemove, actionMemberLeave,
 		actionInviteCreate, actionInviteResend, actionInviteRevoke, actionInviteDecline,
 		actionModuleEnable, actionModuleDisable,
-		actionChildCreate, actionChildPIN, actionChildLock, actionChildUnlock, actionGraduate,
+		actionChildCreate, actionChildPIN, actionChildLock, actionChildUnlock, actionChildAvatar, actionGraduate,
 	}
 	p := module.PlatformModule{Name: Name}
 	for _, a := range actions {

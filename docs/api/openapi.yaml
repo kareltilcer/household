@@ -835,6 +835,34 @@ paths:
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /me/avatar:
+    put:
+      operationId: putMeAvatar
+      tags: [me]
+      summary: Upload the signed-in user's picture
+      description: |
+        The picture is made from the image uploaded: its centred square, 512 pixels a side, turned
+        upright and written again without its metadata, so that no camera, time or place survives
+        it. A JPEG, PNG, GIF or WebP image is taken, up to 20 MB and 64 megapixels; the app converts
+        a HEIC photograph first. The type is sniffed from the bytes, never taken from the part's
+        header. The picture replaces any the user had, and is the account's, counting against no
+        household's storage (D-107). `avatar_url`, here and wherever the user appears, is a link
+        pre-signed for minutes (D-9); `PATCH /me` with `avatar_url: null` removes the picture.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/AvatarUpload' }
+      responses:
+        '200': { description: The user with their new picture, content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { description: Over 20 MB, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '415': { description: Not an image this server reads, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '502': { $ref: '#/components/responses/StorageUnavailable' }
+
   /me/deletion:
     post:
       operationId: postMeDeletion
@@ -1533,7 +1561,7 @@ paths:
         than `view` on `finance`, is refused `422` naming `/grants/<module>`. It speaks the household's
         language, and its dashboard is locked unless `lock_dashboard` is false. A `year_of_birth`
         after this year in the household's timezone is refused `422`, and so is an `avatar_url` other
-        than null until uploads exist (plan item 14). An `id` another account or profile has is refused `422` naming `/id`.
+        than null: a picture is uploaded with `putChildrenByUserIdAvatar` once the profile exists. An `id` another account or profile has is refused `422` naming `/id`.
         No `Idempotency-Key` is kept, since its fingerprint would be a fast hash of the PIN: a repeat
         of one that was created answers `422` naming `/id`, and the profile is read at
         `getMembersByUserId`.
@@ -1625,6 +1653,48 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: 'That address belongs to an account (`email_taken`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /households/{household_id}/children/{user_id}/avatar:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { $ref: '#/components/parameters/UserId' }]
+    put:
+      operationId: putChildrenByUserIdAvatar
+      tags: [households]
+      summary: Upload a child profile's picture
+      description: |
+        Owner only. The picture is made as `putMeAvatar` makes one, and is the child's account's, as a
+        member's own picture is theirs: it counts against no household's storage (D-107). It replaces
+        any picture the profile had, and moves the membership's version. A member who is not a child
+        profile is not found.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/AvatarUpload' }
+      responses:
+        '200': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: The profile with its new picture, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { description: Over 20 MB, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '415': { description: Not an image this server reads, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '502': { $ref: '#/components/responses/StorageUnavailable' }
+    delete:
+      operationId: deleteChildrenByUserIdAvatar
+      tags: [households]
+      summary: Remove a child profile's picture
+      description: Owner only. The membership's version moves with it; a profile with no picture is answered as it is.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: The profile without a picture, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /households/{household_id}/modules:
@@ -2056,7 +2126,11 @@ paths:
       operationId: getStorage
       tags: [platform-services]
       summary: The storage picture
-      description: Total against the allowance, the split by module and by member, derived-variant overhead, and the largest items.
+      description: |
+        Total against the allowance, the split by module and by member, derived-variant overhead, the
+        largest items with what deleting each would recover, and the trend of the daily samples
+        (FR-ST4, FR-HA14). Read with `view` on the household settings (`admin`); for anyone else the
+        screen is absent, `404`.
       responses:
         '200': { description: Storage, content: { application/json: { schema: { $ref: '#/components/schemas/StorageReport' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -4179,7 +4253,9 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '413': { description: Over the size cap, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '415': { description: Not an accepted image type, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '502': { $ref: '#/components/responses/StorageUnavailable' }
 
   /households/{household_id}/notes/folders:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
@@ -4295,7 +4371,7 @@ paths:
         '415': { description: A blocked type, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
-        '502': { description: Object storage unreachable; nothing was committed, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '502': { $ref: '#/components/responses/StorageUnavailable' }
 
   /households/{household_id}/documents/tree:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { $ref: '#/components/parameters/RootScope' }, { $ref: '#/components/parameters/IncludeArchived' }]
@@ -6879,7 +6955,10 @@ paths:
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '404': { $ref: '#/components/responses/NotFound' }
         '413': { description: Over the size cap, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '415': { description: Not an accepted image type, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '502': { $ref: '#/components/responses/StorageUnavailable' }
 
   /households/{household_id}/garden/export:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
@@ -7970,7 +8049,10 @@ paths:
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '404': { $ref: '#/components/responses/NotFound' }
         '413': { description: Over the size cap, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '415': { description: A blocked type, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '502': { $ref: '#/components/responses/StorageUnavailable' }
 
   /households/{household_id}/chat/attachments/{attachment_id}:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: attachment_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
@@ -8495,11 +8577,18 @@ components:
         uploads and writes respectively; `restricted` blocks writes at the owner's own request
         (GDPR Art. 18); over-quota blocks uploads. Switch on `code` to tell them apart —
         `entitlement_read_only` is "somebody needs to pay", `entitlement_restricted` is "an owner
-        turned this off and can turn it back on".
+        turned this off and can turn it back on", and `storage_ceiling_reached` is "the household
+        stores as much as it may": an upload that would take it past the storage ceiling (FR-FL4,
+        D-33), with `over_by_bytes` and `blocks_at_ceiling`, whose remedy is `free_storage`.
 
         **Reads, downloads and exports are never blocked, in any state**, and neither are billing,
         export, household deletion, leaving, or lifting a restriction.
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/EntitlementProblem' } } }
+    StorageUnavailable:
+      description: |
+        The object store could not be reached, and nothing was committed: the upload may be sent
+        again (FR-NF3). What is already stored still reads, and its links still work.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     RateLimited:
       description: Too many requests. Limits are per user **and** per household, so one tenant cannot degrade another.
       headers:
@@ -8626,6 +8715,7 @@ components:
         - household_limit_reached
         - last_owner
         - billing_payer
+        - storage_ceiling_reached
         - account_deletion_blocked
         - layout_locked
         - read_only_participation
@@ -8657,6 +8747,7 @@ components:
         # Payloads
         - payload_too_large
         - unsupported_media_type
+        - storage_unavailable
 
     Problem:
       type: object
@@ -8947,7 +9038,7 @@ components:
             properties:
               id: { $ref: '#/components/schemas/Uuid', description: 'The profile, which the sign-in names as its `profile_id`.' }
               display_name: { type: string }
-              avatar_url: { type: [string, 'null'] }
+              avatar_url: { type: [string, 'null'], description: 'A link to the profile''s picture, pre-signed for minutes (D-9); null for none.' }
 
     LoginResult:
       type: object
@@ -9008,7 +9099,7 @@ components:
         email: { oneOf: [{ type: string, format: email }, { type: 'null' }], description: 'Null for a managed child profile — no email is required and none is collected.' }
         email_verified: { type: boolean }
         display_name: { type: string }
-        avatar_url: { type: [string, 'null'] }
+        avatar_url: { type: [string, 'null'], description: 'A link to the user''s picture, pre-signed for minutes (D-9); null for none. Uploaded with `putMeAvatar`.' }
         locale: { type: string, description: 'A BCP 47 language tag: the language the member reads, and the formatting of dates, numbers and money.' }
         timezone: { type: [string, 'null'], description: 'The member''s own IANA timezone, overriding each household''s; null follows the household''s (PRD 03 §9).' }
         first_day_of_week: { type: [integer, 'null'], minimum: 0, maximum: 6, description: 'The member''s own first day of the week, 0 for Sunday to 6 for Saturday; null follows their locale.' }
@@ -9026,7 +9117,7 @@ components:
         locale: { type: string, description: 'A BCP 47 language tag.' }
         timezone: { type: [string, 'null'], description: 'An IANA timezone name, or null to follow each household''s.' }
         first_day_of_week: { type: [integer, 'null'], minimum: 0, maximum: 6, description: '0 for Sunday to 6 for Saturday, or null to follow the locale.' }
-        avatar_url: { type: [string, 'null'], description: 'Only null, which clears it, until avatars are uploaded as files; any other value is refused `422`.' }
+        avatar_url: { type: [string, 'null'], description: 'Only null, which removes the picture: one is uploaded with `putMeAvatar`. Any other value is refused `422`.' }
 
     Session:
       type: object
@@ -9206,13 +9297,13 @@ components:
         household_id: { $ref: '#/components/schemas/Uuid' }
         display_name: { type: string }
         email: { type: [string, 'null'] }
-        avatar_url: { type: [string, 'null'] }
+        avatar_url: { type: [string, 'null'], description: 'A link to the member''s picture, pre-signed for minutes (D-9); null for none.' }
         role: { $ref: '#/components/schemas/HouseholdRole' }
         grants: { type: object, additionalProperties: { $ref: '#/components/schemas/AccessLevel' } }
         is_billing_payer: { type: boolean }
         joined_at: { type: string, format: date-time }
         last_active_at: { type: [string, 'null'], format: date-time, description: 'When the member last changed anything in the household, from its activity log.' }
-        version: { type: integer, format: int64, description: 'The membership''s version, its `ETag`, which moves with its role and its grants, and with a child profile''s PIN, its lock and its graduation.' }
+        version: { type: integer, format: int64, description: 'The membership''s version, its `ETag`, which moves with its role and its grants, and with a child profile''s PIN, its lock, its picture and its graduation.' }
         child:
           description: What the membership says of a child profile; null for any other member.
           oneOf:
@@ -9289,7 +9380,7 @@ components:
         id: { $ref: '#/components/schemas/Uuid', description: 'The profile''s: its account''s and its membership''s alike.' }
         display_name: { type: string, maxLength: 80 }
         year_of_birth: { type: [integer, 'null'], minimum: 1900, description: 'Optional, and a year rather than a full date — used only for age-appropriate defaults. A year after this one in the household''s timezone is refused.' }
-        avatar_url: { type: [string, 'null'], description: 'Refused unless null until uploads exist (plan item 14), as `Me.avatar_url` is.' }
+        avatar_url: { type: [string, 'null'], description: 'Refused unless null: a picture is uploaded with `putChildrenByUserIdAvatar` once the profile exists.' }
         pin: { type: string, pattern: '^[0-9]{4,6}$' }
         grants: { type: object, additionalProperties: { $ref: '#/components/schemas/AccessLevel' } }
         lock_dashboard: { type: boolean, default: true }
@@ -9407,39 +9498,57 @@ components:
 
     StorageReport:
       type: object
+      required: [total_bytes, included_bytes, object_count, by_module, by_member, largest, trend]
+      description: |
+        What the household keeps now, as its files record it, beside the trend of its daily samples.
+        Every member's bytes count in the totals and in the split by member, which say how much and
+        whose, never what. `largest` leaves out what the reader could not open: another member's
+        private item, and anything in a module they cannot see (D-108).
       properties:
-        total_bytes: { type: integer, format: int64 }
-        included_bytes: { type: integer, format: int64 }
-        object_count: { type: integer }
+        total_bytes: { type: integer, format: int64, description: 'Every byte stored, derived variants included (FR-ST3).' }
+        included_bytes: { type: integer, format: int64, description: 'The base allowance. Billing adds the blocks in effect (plan item 19).' }
+        object_count: { type: integer, format: int64 }
         by_module:
           type: array
+          description: 'The modules that keep files, the largest first.'
           items:
             type: object
+            required: [module, bytes, derived_bytes, object_count]
             properties:
               module: { $ref: '#/components/schemas/ModuleKeyValue' }
-              bytes: { type: integer, format: int64 }
+              bytes: { type: integer, format: int64, description: 'The originals, as uploaded.' }
               derived_bytes: { type: integer, format: int64, description: 'Thumbnails and preview PDFs, shown separately because "why is my 2 MB file using 3 MB" is otherwise a support ticket.' }
-              object_count: { type: integer }
+              object_count: { type: integer, format: int64 }
         by_member:
           type: array
+          description: 'The members the files count against, as their modules attribute them (FR-ST1), the largest first; a former member''s stay until the files go.'
           items:
             type: object
+            required: [user, bytes]
             properties:
               user: { $ref: '#/components/schemas/ActorRef' }
               bytes: { type: integer, format: int64 }
         largest:
           type: array
+          description: 'The ten largest items the reader may open, by what deleting each would recover.'
           items:
             type: object
+            required: [module, entity_id, label, bytes, recoverable_bytes]
             properties:
               module: { $ref: '#/components/schemas/ModuleKeyValue' }
               entity_id: { $ref: '#/components/schemas/Uuid' }
-              label: { type: string }
-              bytes: { type: integer, format: int64 }
-              recoverable_bytes: { type: integer, format: int64 }
+              label: { type: string, description: 'As the module names the item, or its file''s name; empty for neither.' }
+              bytes: { type: integer, format: int64, description: 'The original, as uploaded.' }
+              recoverable_bytes: { type: integer, format: int64, description: 'The original and every variant derived from it: what deleting the item frees.' }
         trend:
           type: array
-          items: { type: object, properties: { date: { type: string, format: date }, bytes: { type: integer, format: int64 } } }
+          description: 'The daily samples of the last 90 days, oldest first. A day with no sample is absent.'
+          items:
+            type: object
+            required: [date, bytes]
+            properties:
+              date: { type: string, format: date }
+              bytes: { type: integer, format: int64, description: 'Every byte stored when the day was sampled.' }
 
     PlatformHousehold:
       type: object
@@ -10294,6 +10403,12 @@ components:
               ok: { type: boolean }
               code: { type: [string, 'null'] }
               message: { type: [string, 'null'] }
+
+    AvatarUpload:
+      type: object
+      required: [file]
+      properties:
+        file: { type: string, format: binary, description: 'A JPEG, PNG, GIF or WebP image, up to 20 MB.' }
 
     ContentLink:
       type: object

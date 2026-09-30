@@ -934,7 +934,7 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, m.body(tenant.From(scoped), payer, modules))
+	httpx.WriteJSON(w, http.StatusOK, s.member(ctx, tenant.From(scoped), payer, modules, m))
 }
 
 // declineInvitation records that the caller declines an invitation (FR-HH3), and tells the owner who
