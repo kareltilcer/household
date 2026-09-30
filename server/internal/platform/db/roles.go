@@ -57,6 +57,16 @@ var managed = []struct {
 	{RolePowerSync, roleAttributes{login: true, replication: true, bypassRLS: true}},
 }
 
+// ManagedRoles lists the roles CreateRoles makes, in the order it makes them: the three the server
+// runs as, and PowerSync's.
+func ManagedRoles() []string {
+	out := make([]string, len(managed))
+	for i, m := range managed {
+		out[i] = m.role
+	}
+	return out
+}
+
 // Passwords are the login passwords Bootstrap sets, one per role.
 type Passwords struct {
 	Migrate, App, Meter, PowerSync string
@@ -308,12 +318,13 @@ type Storage struct {
 // PrepareStorage makes storage's role, or brings it up to what it should be and sets its
 // password, and its database, owned by it, unless the database exists; only the role and the
 // caller may connect to it. It runs on the cluster admin connects to, as a role that may create
-// roles and databases, and is safe to run again. A database cannot be created in a transaction,
-// so it runs outside one. It refuses a role of the server's, PowerSync's replication role and the
-// administrator's own, each of which it would bring down to the storage role's attributes and
-// password; and, before it changes anything, a database that exists and is not the role's, the
-// cluster's maintenance database or another application's, whose connections through PUBLIC it
-// would revoke and in which PowerSync could keep no buckets.
+// roles and databases, and is safe to run again, and twice at once. A database cannot be created
+// in a transaction, so it runs outside one, under the lock CreateRoles takes, which admin's session
+// holds from the look-up to the database made. It refuses a role of the server's, PowerSync's
+// replication role and the administrator's own, each of which it would bring down to the storage
+// role's attributes and password; and, before it changes anything, a database that exists and is
+// not the role's, the cluster's maintenance database or another application's, whose connections
+// through PUBLIC it would revoke and in which PowerSync could keep no buckets.
 func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error {
 	switch {
 	case storage.Role == "" || storage.Database == "":
@@ -326,6 +337,14 @@ func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error
 			return fmt.Errorf("db: prepare storage: %s is a role CreateRoles makes; the bucket storage is owned by a role of its own", storage.Role)
 		}
 	}
+	// The session holds CatalogLock until the database is made, which no transaction may hold: taken
+	// by the transaction below alone, two preparations at once would both find the database missing,
+	// and the second fail to make it. The transaction takes it again, as CreateRoles does, which a
+	// session holding it is granted at once.
+	if _, err := admin.Exec(ctx, "SELECT pg_advisory_lock($1)", CatalogLock); err != nil {
+		return fmt.Errorf("db: prepare storage: lock: %w", err)
+	}
+	defer func() { _, _ = admin.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", CatalogLock) }()
 	var owner *string
 	err := pgx.BeginFunc(ctx, admin, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", CatalogLock); err != nil {

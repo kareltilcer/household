@@ -101,10 +101,14 @@ names by its id (`deferred`, `dependency_failed`); that the entity's policy admi
 `additive` row is only created, and a `state_set` write is never a delete; `validation_failed`); and
 that its module writes the entity. An `additive` series' declared invariant is checked generically
 before the write, from the entity's declaration, its series serialised by an advisory lock, and a
-breach answers `monotonicity_violation` naming the neighbour, as `row` and in the message. The
-client's clock is clamped to 24 hours and flagged, and handed to the writer, which keeps it where its
-policy resolves by it. `lww_row` and `strict_version` writes, and `merged` and `conflict`, are item
-14's.
+breach answers `monotonicity_violation` naming the neighbour, as `row` and in the message; of several
+rows at the neighbour's place in the order, the one furthest that way. The client's clock is clamped
+to 24 hours and flagged, and handed to the writer, which keeps it where its policy resolves by it. A
+writer refuses with a `push.Refusal`, or with the problem its module's service layer answers the
+REST routes with, which the push reads as one: its code, the fields it names, and a
+`version_conflict` answered `conflict` with the row as it stands; a problem of the server's own fails
+the batch. `lww_row` and `strict_version` writes, and the `merged` and `conflict` their policies
+answer on a base version, are item 14's.
 
 **Each mutation that ends is answered once** (FR-SY5, D-106): its answer is kept in `sync_mutations` for 7
 days under its household, **its sender** and its `mutation_id`, with a fingerprint of what it

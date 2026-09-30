@@ -160,7 +160,7 @@ func bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) error 
 	if err := db.Bootstrap(ctx, admin, database, passwords); err != nil {
 		return err
 	}
-	for _, role := range append(db.Roles, db.RolePowerSync) {
+	for _, role := range db.ManagedRoles() {
 		log.LogAttrs(ctx, slog.LevelInfo, "role ready", slog.String("role", role))
 	}
 	if cfg.PowerSyncStorageURL == "" {

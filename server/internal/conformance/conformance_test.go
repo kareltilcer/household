@@ -29,6 +29,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/push"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
@@ -491,6 +492,58 @@ func TestPushHoldsAnAdditiveSeriesToItsInvariant(t *testing.T) {
 	}
 }
 
+// Rows at one place in a series' order are no neighbours of each other, so a place may hold several,
+// whatever their values; a reading beside that place is held to every one of them, the greatest of
+// those before it and the least of those after it, whichever of them was written first.
+func TestPushHoldsAReadingToEveryRowAtItsNeighboursPlace(t *testing.T) {
+	w := newWorld(t, apptest.Options{})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	day := func(n int) string { return time.Date(2026, 9, n, 7, 0, 0, 0, time.UTC).Format(time.RFC3339) }
+	// Four meters, each with two readings at one time, 100 and 300: the day before the new reading
+	// or the day after it, each written low first and high first.
+	type series struct {
+		meter, low, high uuid.UUID
+		day              int
+	}
+	var all []series
+	var batch []map[string]any
+	for _, d := range []int{1, 3} {
+		for _, lowFirst := range []bool{true, false} {
+			s := series{meter: idgen.New(), low: idgen.New(), high: idgen.New(), day: d}
+			first, second := []any{s.low, 100}, []any{s.high, 300}
+			if !lowFirst {
+				first, second = second, first
+			}
+			for _, r := range [][]any{first, second} {
+				w.exec("INSERT INTO conformance_readings (id, household_id, meter_id, read_at, value) VALUES ($1, $2, $3, $4, $5)",
+					r[0], household, s.meter, day(d), r[1])
+			}
+			all = append(all, s)
+			batch = append(batch, mutationOf(conformance.Reading, "create", idgen.New(),
+				map[string]any{"meter_id": s.meter.String(), "read_at": day(2), "value": 200}))
+		}
+	}
+	got := w.results(w.push(household, token, key(), batch...))
+	answers := outcomes(got)
+	for i, s := range all {
+		// Before it, the 300 is what it falls below; after it, the 100 is what it rises above.
+		neighbour, message := s.high, ""
+		if s.day == 3 {
+			neighbour = s.low
+		}
+		if m := got.Results[i].Message; m != nil {
+			message = *m
+		}
+		if answers[i] != "rejected monotonicity_violation" || !strings.Contains(message, neighbour.String()) {
+			t.Errorf("a reading of 200 beside day %d's 100 and 300: %s, %q", s.day, answers[i], message)
+		}
+	}
+	if n := w.count("SELECT count(*) FROM conformance_readings WHERE household_id = $1", household); n != 8 {
+		t.Errorf("%d readings, want the 8 there were", n)
+	}
+}
+
 // A batch delivered again under its key is answered as it was the first time and writes nothing
 // more; a batch without a key is refused at the edge.
 func TestPushAnswersABatchDeliveredAgain(t *testing.T) {
@@ -689,6 +742,68 @@ func TestPushAnswersABatchWhoseKeyWasTakenOver(t *testing.T) {
 	}
 	if n := w.failures.Load(); n != 0 {
 		t.Errorf("%d failures logged, want none", n)
+	}
+}
+
+// serviceLayer is the conformance module with a writer that refuses as a module's REST service layer
+// does, with a problem: an item titled Refused as a validation_failed naming its title, one titled
+// Stale as the version_conflict of an item written since, and one titled Broken as a failure of the
+// server's own.
+type serviceLayer struct{ conformance.Module }
+
+func (m serviceLayer) WriteSync(ctx context.Context, tx pgx.Tx, mut push.Mutation) (push.Written, error) {
+	switch string(mut.Fields["title"]) {
+	case `"Refused"`:
+		return push.Written{}, problem.Validation(problem.FieldError{Field: "/title", Code: "max_length"})
+	case `"Stale"`:
+		return push.Written{}, problem.Conflict(map[string]any{"id": mut.EntityID, "title": "Fresh", "version": 3}, 3)
+	case `"Broken"`:
+		return push.Written{}, problem.Internal()
+	}
+	return m.Module.WriteSync(ctx, tx, mut)
+}
+
+// A writer that writes through its module's service layer refuses as that layer answers the REST
+// routes, with a problem, and the push answers it as a refusal, never failing the batch: rejected
+// with the problem's code, naming the fields it names, and a version_conflict as a conflict carrying
+// the row as it stands. A later mutation of the row is deferred behind it, as behind any refusal, and
+// each answer is kept, so that the batch delivered again is answered as it was. A problem of the
+// server's own fails the batch.
+func TestPushAnswersTheProblemsAWritersServiceLayerRefusesWith(t *testing.T) {
+	w := newWorldOf(t, apptest.Options{}, serviceLayer{})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	refused := idgen.New()
+	batch := []map[string]any{
+		mutationOf(conformance.Item, "create", refused, map[string]any{"title": "Refused"}),
+		mutationOf(conformance.Item, "update", refused, map[string]any{"note": "later"}),
+		mutationOf(conformance.Item, "create", idgen.New(), map[string]any{"title": "Stale"}),
+		mutationOf(conformance.Item, "create", idgen.New(), map[string]any{"title": "Milk"}),
+	}
+	want := fmt.Sprint([]string{"rejected validation_failed", "deferred " + push.DependencyFailed, "conflict version_conflict", push.Applied})
+	got := w.results(w.push(household, token, key(), batch...))
+	if fmt.Sprint(outcomes(got)) != want {
+		t.Fatalf("outcomes\n  %v\nwant\n  %v", outcomes(got), want)
+	}
+	if m := got.Results[0].Message; m == nil || !strings.Contains(*m, "/title max_length") {
+		t.Errorf("a refusal naming the title: %v", m)
+	}
+	if row, _ := json.Marshal(got.Results[2].Row); !strings.Contains(string(row), `"title":"Fresh"`) {
+		t.Errorf("a conflict's row: %s", row)
+	}
+	// Delivered again under a fresh key, as a client retries a batch whole.
+	if again := w.results(w.push(household, token, key(), batch...)); fmt.Sprint(outcomes(again)) != want {
+		t.Errorf("the batch delivered again: %v, want %v", outcomes(again), want)
+	}
+	if n := w.count("SELECT count(*) FROM sync_mutations WHERE household_id = $1", household); n != 3 {
+		t.Errorf("%d answers kept, want 3: every one but the deferred", n)
+	}
+	if n := w.failures.Load(); n != 0 {
+		t.Errorf("%d failures logged, want none", n)
+	}
+	rec := w.push(household, token, key(), mutationOf(conformance.Item, "create", idgen.New(), map[string]any{"title": "Broken"}))
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("a problem of the server's own: %d %s", rec.Code, rec.Body)
 	}
 }
 

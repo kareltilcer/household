@@ -256,7 +256,7 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 		}
 		var err error
 		if written, err = writer.WriteSync(ctx, tx, m); err != nil {
-			return mutation.Record{}, err
+			return mutation.Record{}, asRefusal(err, e.Name)
 		}
 		if len(written.Record.Changes) == 0 && written.Record.Event.Module == "" {
 			return mutation.Record{}, nil
@@ -334,8 +334,14 @@ func appliedResult(res Result, w Written) Result {
 	return res
 }
 
+// reject returns res answering a refusal: rejected, or conflict when it refused the mutation on the
+// row's version, the row as it stands attached so that the member's change can be re-presented (the
+// contract's SyncMutationResult).
 func reject(res Result, no *Refusal) Result {
 	res.Outcome = Rejected
+	if no.Code == problem.CodeVersionConflict {
+		res.Outcome = Conflict
+	}
 	res.Code = ptr(string(no.Code))
 	res.Message = ptr(no.Message)
 	res.Row = no.Row

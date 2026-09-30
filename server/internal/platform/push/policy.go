@@ -46,7 +46,9 @@ const invariantLock int32 = 0x696e7672
 // whose series no other household's creates can break, and on the series' values as their columns
 // hold them, so that two spellings of one value, a meter's id in upper case and in lower, take the
 // same lock. A soft-deleted row is no neighbour, nor is one at the same place in the order, nor one
-// without a value to compare.
+// without a value to compare. A place may so hold several rows, whatever their values: the neighbour
+// at the nearest place before the new row is then the greatest there, and after it the least, the
+// one it breaks against if any does.
 func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) error {
 	inv := e.Invariant
 	if inv == nil || e.Policy != sync.Additive || m.Op != Create {
@@ -94,7 +96,9 @@ func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) e
 	}
 	at, value := param(inv.Order), param(inv.Field)
 	// The nearest row on each side of the new one: before it, one whose value is greater breaks the
-	// series; after it, one whose value is less.
+	// series; after it, one whose value is less. Of several rows at the nearest place, the one
+	// furthest that way is read, ordered by its value as by its place: another at that place, read
+	// by chance, could pass where it breaks.
 	for _, side := range []struct{ where, direction, breaks, says string }{
 		{"<", "DESC", ">", "falls below that of %s, the row before it"},
 		{">", "ASC", "<", "rises above that of %s, the row after it"},
@@ -106,10 +110,10 @@ func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) e
 		err := tx.QueryRow(ctx, fmt.Sprintf(`
 			SELECT jsonb_build_object(%s), %s %s %s
 			FROM %s WHERE %s AND %s %s %s
-			ORDER BY %s %s LIMIT 1`,
+			ORDER BY %s %s, %s %s LIMIT 1`,
 			strings.Join(named, ", "), field, side.breaks, value,
 			pgx.Identifier{e.Table}.Sanitize(), strings.Join(conditions, " AND "), order, side.where, at,
-			order, side.direction), args...).Scan(&nearest, &broken)
+			order, side.direction, field, side.direction), args...).Scan(&nearest, &broken)
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			continue

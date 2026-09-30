@@ -579,7 +579,7 @@ func (l *loader) storage(c *Config, named bool) {
 	case !written(c.PowerSyncStorageURL, cfg):
 		l.fail("%s carries no role or no password of its own; write both in its postgres:// URL, which otherwise logs in as the environment's",
 			PowerSyncStorageURLVar)
-	case slices.Contains(append(db.Roles, db.RolePowerSync), cfg.User):
+	case slices.Contains(db.ManagedRoles(), cfg.User):
 		l.fail("%s logs in as %s; the bucket storage is owned by a role of its own", PowerSyncStorageURLVar, cfg.User)
 	case err == nil && cfg.User == admin.User:
 		l.fail("%s logs in as %s, the administrator %s names; the bucket storage is owned by a role of its own",

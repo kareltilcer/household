@@ -195,7 +195,7 @@ func TestCreateRolesSendsNoPassword(t *testing.T) {
 			t.Errorf("a statement carries a password: %s", s)
 		}
 	}
-	for _, role := range append(db.Roles, db.RolePowerSync) {
+	for _, role := range db.ManagedRoles() {
 		var stored string
 		if err := tx.QueryRow(t.Context(), "SELECT rolpassword FROM pg_authid WHERE rolname = $1", role).Scan(&stored); err != nil {
 			t.Fatal(err)
@@ -306,7 +306,7 @@ func TestPrepareStorageMakesADatabaseOfItsOwn(t *testing.T) {
 			t.Errorf("PUBLIC keeps %q on the bucket storage", entry)
 		}
 	}
-	for _, role := range append(db.Roles, db.RolePowerSync) {
+	for _, role := range db.ManagedRoles() {
 		var can bool
 		if err := admin.QueryRow(t.Context(), "SELECT has_database_privilege($1, $2, 'CONNECT')", role, storage.Database).Scan(&can); err != nil || can {
 			t.Errorf("%s may connect to the bucket storage (%v)", role, err)
@@ -316,6 +316,34 @@ func TestPrepareStorageMakesADatabaseOfItsOwn(t *testing.T) {
 	if err := admin.QueryRow(t.Context(), "SELECT rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1", storage.Role).
 		Scan(&replication, &bypass); err != nil || replication || bypass {
 		t.Errorf("the storage's role: replication %t, bypassrls %t (%v)", replication, bypass, err)
+	}
+}
+
+// Two bootstraps at once prepare one bucket storage: the database is made outside any transaction,
+// and the second preparation waits for the first rather than finding it missing too and failing to
+// make it again. The role and the database are the cluster's, so they go once the test is done.
+func TestPrepareStorageTwiceAtOnce(t *testing.T) {
+	admins := []*pgx.Conn{connect(t, testsupport.AdminURL()), connect(t, testsupport.AdminURL()), connect(t, testsupport.AdminURL())}
+	suffix := strconv.FormatInt(int64(os.Getpid()), 10) + "_" + strconv.FormatInt(time.Now().UnixNano()%1_000_000, 10)
+	storage := db.Storage{Role: "household_test_storage_" + suffix, Password: "storage", Database: "household_test_racing_" + suffix}
+	t.Cleanup(func() {
+		ctx := context.Background()
+		_, _ = admins[0].Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{storage.Database}.Sanitize()+" WITH (FORCE)")
+		_, _ = admins[0].Exec(ctx, "DROP ROLE IF EXISTS "+pgx.Identifier{storage.Role}.Sanitize())
+	})
+	errs := make(chan error, len(admins))
+	for _, admin := range admins {
+		go func() { errs <- db.PrepareStorage(t.Context(), admin, storage) }()
+	}
+	for range admins {
+		if err := <-errs; err != nil {
+			t.Errorf("a preparation beside another: %v", err)
+		}
+	}
+	var owner string
+	if err := admins[0].QueryRow(t.Context(), "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = $1", storage.Database).
+		Scan(&owner); err != nil || owner != storage.Role {
+		t.Errorf("the bucket storage is owned by %q, want %s (%v)", owner, storage.Role, err)
 	}
 }
 

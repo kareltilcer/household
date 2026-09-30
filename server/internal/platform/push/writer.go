@@ -15,6 +15,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
@@ -30,8 +33,10 @@ import (
 // Writer is what a module implements to take the mutations clients push to its entities. The push
 // calls WriteSync inside mutation.Apply's transaction, tx, of the caller's household, once it has
 // checked m against its entity's declaration, the caller's grant on the module and the entity's
-// cross-row invariant: the write is all that is left. A refusal is a *Refusal, and a constraint the
-// database enforces is refused as FromDatabase reads it; any other error fails the batch.
+// cross-row invariant: the write is all that is left. A refusal is a *Refusal, or the problem the
+// module's service layer answers its REST routes with, which the push reads as one (asRefusal); a
+// constraint the database enforces is refused as FromDatabase reads it; any other error, a problem
+// of the server's own among them, fails the batch.
 type Writer interface {
 	WriteSync(ctx context.Context, tx pgx.Tx, m Mutation) (Written, error)
 }
@@ -81,7 +86,9 @@ type Written struct {
 }
 
 // Refusal is a mutation a module refuses: it is answered rejected, with Code and Message, and
-// Row when the refusal names a row, such as the neighbour a reading breaks its series against.
+// Row when the refusal names a row, such as the neighbour a reading breaks its series against. A
+// refusal on the row's version, version_conflict, is answered conflict, with the row as it stands
+// (the contract's SyncMutationResult).
 type Refusal struct {
 	Code    problem.Code
 	Message string
@@ -122,15 +129,34 @@ func FromDatabase(err error) *Refusal {
 	return nil
 }
 
+// asRefusal returns err, what entity's writer answered, as the refusal it stands for when it is a
+// problem the client is answered for, below 500, as the module's service layer answers its REST
+// routes: the problem's code, the fields it names, and a conflict's representation of the row as it
+// stands, which it answers the mutation with. Read as an error instead, it would fail the whole
+// batch, and every retry of it, at that mutation, and each module would have to translate its
+// service layer's answers itself. Any other error is returned as it is: one of the server's own, and
+// the claim on the request's Idempotency-Key lost, which answers the batch.
+func asRefusal(err error, entity string) error {
+	var p *problem.Problem
+	if !errors.As(err, &p) || p.Status >= http.StatusInternalServerError || errors.Is(err, idempotency.ErrClaimLost) {
+		return err
+	}
+	message := entity + " refused it: " + string(p.Code)
+	if len(p.Errors) > 0 {
+		fields := make([]string, len(p.Errors))
+		for i, f := range p.Errors {
+			fields[i] = f.Field + " " + f.Code
+		}
+		message += " (" + strings.Join(fields, ", ") + ")"
+	}
+	return &Refusal{Code: p.Code, Message: message, Row: p.Extensions["current"]}
+}
+
 // Decode decodes fields into into, a pointer to a struct whose JSON names the fields an entity
 // takes, and refuses a field allowed does not name, or one of the wrong type.
 func Decode(fields map[string]json.RawMessage, allowed []string, into any) error {
 	for name := range fields {
-		found := false
-		for _, a := range allowed {
-			found = found || a == name
-		}
-		if !found {
+		if !slices.Contains(allowed, name) {
 			return Refuse(problem.CodeValidationFailed, "%s is not a field this entity takes", name)
 		}
 	}
