@@ -496,10 +496,11 @@ never rendered in the app's origin. `X-Content-Type-Options: nosniff` on everyth
 **FR-FL3 — Derived variants** — thumbnails, image scaling, PDF first-page previews, and office
 document conversion — are generated asynchronously after commit, once, and cached forever, because
 the bytes never change. A failure leaves the file download-only and never loses the upload. A raster
-image gets a 320-pixel thumbnail and, when larger than 1600 pixels or not upright, a preview, both
-without the original's metadata; a PDF its first page as a preview and a thumbnail; an office document
-a PDF and that PDF's page, through a LibreOffice sidecar with a timeout. A failure a retry may mend is
-retried for about two and a half hours; a file that cannot be decoded or converted is left at once.
+image gets a 320-pixel thumbnail and, when larger than 1600 pixels, not upright, or of a type browsers
+do not show (BMP, TIFF), a preview, both without the original's metadata; a PDF its first page as a
+preview and a thumbnail; an office document a PDF and that PDF's page, through a LibreOffice sidecar
+with a timeout. A failure a retry may mend is retried for about two and a half hours; a file that
+cannot be decoded or converted is left at once.
 
 **FR-FL4 — Quota enforcement is on upload, never on read and never by deletion.** Over quota, an
 upload returns `402` with the amount over; existing files remain readable and downloadable forever.

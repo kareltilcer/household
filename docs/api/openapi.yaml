@@ -9502,7 +9502,8 @@ components:
       description: |
         What the household keeps now, as its files record it, beside the trend of its daily samples.
         Every member's bytes count in the totals and in the split by member, which say how much and
-        whose, never what. `largest` leaves out what the reader could not open: another member's
+        whose, never what. `by_module` leaves out every module the reader cannot see, which is absent
+        for them (FR-AC2, D-16), and `largest` what the reader could not open: another member's
         private item, and anything in a module they cannot see (D-108).
       properties:
         total_bytes: { type: integer, format: int64, description: 'Every byte stored, derived variants included (FR-ST3).' }
@@ -9510,7 +9511,7 @@ components:
         object_count: { type: integer, format: int64 }
         by_module:
           type: array
-          description: 'The modules that keep files, the largest first.'
+          description: 'The modules that keep files and the reader can see, the largest first. A module they hold `none` on, or the household disables, has no line, though its bytes count in the totals.'
           items:
             type: object
             required: [module, bytes, derived_bytes, object_count]

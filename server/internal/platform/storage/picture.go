@@ -95,9 +95,11 @@ type trendDay struct {
 // picture is getStorage. A member without view on the household settings is answered 404: the
 // screen is absent for them (C-54). The totals are what the household keeps now; the trend is its
 // samples. Every member's bytes count in the totals and the split by member, which say how much and
-// whose, never what; the largest items leave out what the reader could not open, another member's
-// private item and anything in a module they cannot see (D-108), and name each as its module labels
-// it, by its file's name where the module gives no label.
+// whose, never what. The split by module leaves out every module the reader cannot see, which is
+// absent for them (FR-AC2): its line would tell a member kept out of Finance that the household keeps
+// Finance's files, and how many (D-16). The largest items leave out what the reader could not open,
+// another member's private item and anything in a module they cannot see (D-108), and name each as
+// its module labels it, by its file's name where the module gives no label.
 func (p *Picture) picture(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if err := grant.Require(ctx, Admin, access.View); err != nil {
@@ -125,15 +127,19 @@ func (p *Picture) picture(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if out.ByModule, err = pgx.CollectRows(rows, pgx.RowToStructByPos[moduleLine]); err != nil {
+		modules, err := pgx.CollectRows(rows, pgx.RowToStructByPos[moduleLine])
+		if err != nil {
 			return err
 		}
 		visible := []string{}
-		for _, m := range out.ByModule {
+		for _, m := range modules {
 			out.TotalBytes += m.Bytes + m.DerivedBytes
 			out.ObjectCount += m.ObjectCount
+			// A module the reader cannot see, by their grant or because the household disables it,
+			// counts in the totals, the household's against its allowance, and has no line of its own.
 			if scope.Level(m.Module) >= access.View {
 				visible = append(visible, m.Module)
+				out.ByModule = append(out.ByModule, m)
 			}
 		}
 

@@ -46,7 +46,7 @@ func (s *Sampler) Sample(ctx context.Context) (int, error) {
 	}
 	at := now().UTC()
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC)
-	tables, err := s.tables()
+	tables, err := declaredTables(s.Modules)
 	if err != nil {
 		return 0, err
 	}
@@ -99,10 +99,11 @@ type countedTable struct {
 	name   pgx.Identifier
 }
 
-// tables returns the tables the modules declare.
-func (s *Sampler) tables() ([]countedTable, error) {
+// declaredTables returns the tables modules declare, whose rows the sample and the live counts
+// count as each declaring module's.
+func declaredTables(modules *module.Registry) ([]countedTable, error) {
 	var out []countedTable
-	for _, m := range s.Modules.All() {
+	for _, m := range modules.All() {
 		src, ok := m.(module.StorageSource)
 		if !ok {
 			continue

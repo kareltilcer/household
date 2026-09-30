@@ -20,8 +20,7 @@ type Counts struct {
 // counters item 16's fair-use ceilings compare with, before a write, where the daily sample holds the
 // same figures as of the night.
 func Count(ctx context.Context, modules *module.Registry) (Counts, error) {
-	s := &Sampler{Modules: modules}
-	tables, err := s.tables()
+	tables, err := declaredTables(modules)
 	if err != nil {
 		return Counts{}, err
 	}

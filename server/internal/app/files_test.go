@@ -54,6 +54,8 @@ import (
 type fileWorld struct {
 	*world
 	files *files.Service
+	// workLog is what the pipeline logs, its workers among it.
+	workLog *syncBuffer
 }
 
 // newFileWorld builds a file world, whose pipeline each of limits adjusts. Its storage picture
@@ -61,7 +63,8 @@ type fileWorld struct {
 func newFileWorld(t *testing.T, limits ...func(*files.Config)) *fileWorld {
 	t.Helper()
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
-	fs := apptest.Files(t, pool, logging.New(io.Discard, slog.LevelDebug), apptest.Options{}, limits...)
+	workLog := &syncBuffer{}
+	fs := apptest.Files(t, pool, logging.New(workLog, slog.LevelDebug), apptest.Options{}, limits...)
 	w := newWorld(t, func(d *app.Deps) {
 		registry, err := module.NewRegistry(probe.Module{Log: d.Logger, Files: fs})
 		if err != nil {
@@ -69,7 +72,7 @@ func newFileWorld(t *testing.T, limits ...func(*files.Config)) *fileWorld {
 		}
 		d.Modules = registry
 	})
-	return &fileWorld{world: w, files: fs}
+	return &fileWorld{world: w, files: fs, workLog: workLog}
 }
 
 func uploads(household uuid.UUID) string {
@@ -648,6 +651,47 @@ func TestADeleteBesideAWorkerTakesWhatItRecorded(t *testing.T) {
 	}
 	if jobs := w.jobs(h, item); !slices.Equal(jobs, []string{"purge"}) {
 		t.Fatalf("jobs %v", jobs)
+	}
+}
+
+// A job that fails for good beside the delete of its entity waits for the delete, and the delete for
+// nothing: the worker takes the original's row before the job's, the order the delete takes them in.
+// The other way round, the worker held the job the delete removes while it waited for the original
+// the delete held, and PostgreSQL broke the deadlock by aborting one of them, the member's delete or
+// the worker's settling.
+func TestAJobFailingBesideADeleteWaitsForIt(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	item := idgen.New()
+	// An original whose bytes the store does not hold: its job fails for good.
+	w.exec(`INSERT INTO files (household_id, module, entity_id, variant, content_type, byte_size, sha256, variants)
+		VALUES ($1, $2, $3, 'original', 'image/png', 10, $4, 'pending')`, h, probe.Name, item, make([]byte, 32))
+	w.exec("INSERT INTO file_jobs (household_id, kind, module, entity_id) VALUES ($1, 'variants', $2, $3)", h, probe.Name, item)
+	scoped := tenant.Assume(t.Context(), testsupport.Open(t).Pool(t, db.RoleApp), h, uuid.Nil, "")
+
+	drained := make(chan struct{})
+	if err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error {
+		// The delete's first step (Remove), taken before the worker settles the job.
+		if _, err := tx.Exec(scoped, `
+			SELECT FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3 AND variant = 'original' FOR UPDATE`,
+			h, probe.Name, item); err != nil {
+			return err
+		}
+		go func() {
+			defer close(drained)
+			w.files.Drain(t.Context(), h)
+		}()
+		waitForALock(t, w)
+		return files.Remove(scoped, tx, probe.Name, item)
+	}); err != nil {
+		t.Fatalf("the delete beside a job failing for good: %v", err)
+	}
+	<-drained
+	if logged := w.workLog.String(); strings.Contains(logged, "files: settle a job") {
+		t.Fatalf("the worker could not settle the job beside the delete: %s", logged)
+	}
+	if rows, jobs := w.rows(h, item), w.jobs(h, item); len(rows) != 0 || len(jobs) != 0 {
+		t.Fatalf("after the delete and the drain: rows %+v, jobs %v", rows, jobs)
 	}
 }
 

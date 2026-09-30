@@ -55,14 +55,17 @@ var meterColumns = map[string][]string{
 
 // meterViolations returns each privilege the meter role holds in schema, or in every schema that
 // is not PostgreSQL's own when schema is "", that allowed does not name: allowed names a table's
-// readable columns, household_id for one it does not name.
+// readable columns, household_id for one it does not name. A sequence's USAGE is among them, since
+// it draws the sequence's next value, a write; the CASE asks each relation only for the privileges
+// its kind has, which PostgreSQL's functions refuse to be asked for otherwise.
 func meterViolations(t *testing.T, tx pgx.Tx, schema string, allowed map[string][]string) []string {
 	t.Helper()
 	rows, err := tx.Query(t.Context(), `
 		SELECT n.nspname || '.' || c.relname,
-		  array(SELECT p FROM unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p
-		        WHERE c.relkind <> 'S' AND has_table_privilege($2::name, c.oid, p)
-		           OR c.relkind = 'S' AND p IN ('SELECT', 'UPDATE') AND has_sequence_privilege($2::name, c.oid, p)),
+		  array(SELECT p FROM unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER', 'USAGE']) AS p
+		        WHERE CASE WHEN c.relkind = 'S' AND p IN ('SELECT', 'UPDATE', 'USAGE') THEN has_sequence_privilege($2::name, c.oid, p)
+		                   WHEN c.relkind <> 'S' AND p <> 'USAGE' THEN has_table_privilege($2::name, c.oid, p)
+		                   ELSE false END),
 		  array(SELECT a.attname || ' ' || p
 		        FROM pg_attribute a, unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'REFERENCES']) AS p
 		        WHERE c.relkind <> 'S' AND a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped

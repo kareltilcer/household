@@ -173,6 +173,12 @@ holder of the household code that lists a child's profile.
   and implements `module.StorageSource`; none touches the store. A module whose entity carries a
   preview state reads the original's `variants` (a hook to change its own row when the workers finish
   is the first such module's to add, item 46).
+- A file's attribution names one member and whether the entity is private to them, and no audience
+  between that and the whole module: `Link` refuses a private file to everyone but its owner, and the
+  storage picture lists a shared one to every reader who can see its module. A module whose entities
+  some of its members may not open, though they are no one member's, Chat's conversations (item 85),
+  extends the attribution with that audience before it records a file; recorded as shared, its
+  attachments would be named in the picture to members who are not in the conversation (D-108).
 - `nosniff` cannot be set on what the store serves: S3 lets a pre-signed URL override the type and
   the disposition, not other headers. The edge in front of the bucket adds it in a deployment
   (`docs/runbooks/object-storage.md`); in development RustFS serves without it, from an origin other

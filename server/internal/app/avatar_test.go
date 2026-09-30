@@ -3,6 +3,7 @@ package app_test
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -207,6 +208,47 @@ func TestAPictureNoUserHasIsSwept(t *testing.T) {
 	}
 	if now := pictures(t, fs, id); len(kept) != 1 || !slices.Equal(now, kept) {
 		t.Fatalf("left %v, kept %v", now, kept)
+	}
+}
+
+// A picture written again, as the store's client sends again a write whose answer was lost, finds its
+// own bytes at its key, which is the picture's alone: the second write is the first, not an outage,
+// and the picture is kept once. Other bytes at its key are no write of its own, and are the store's
+// failure still.
+func TestAPictureWrittenAgainIsKeptOnce(t *testing.T) {
+	log := logging.New(io.Discard, slog.LevelDebug)
+	fs := apptest.Files(t, testsupport.Open(t).Pool(t, db.RoleApp), log, apptest.Options{})
+	avatars, err := avatar.New(fs, log, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, contentType := form(t, "photo.png", picture(t, 64, 64), nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/v1/me/avatar", strings.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+	p, err := avatars.Upload(httptest.NewRecorder(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	user := idgen.New()
+	for attempt := range 2 {
+		if err := avatars.Put(t.Context(), user, p); err != nil {
+			t.Fatalf("write %d of the picture: %v", attempt+1, err)
+		}
+	}
+	if keys := pictures(t, fs, user); len(keys) != 1 || keys[0] != avatar.Key(user, p.ID) {
+		t.Fatalf("kept %v", keys)
+	}
+
+	other := idgen.New()
+	left := []byte("not the picture")
+	if err := fs.Store().PutOnce(t.Context(), avatar.Key(other, p.ID), bytes.NewReader(left), int64(len(left)),
+		objectstore.Object{ContentType: "image/png", SHA256: sha256.Sum256(left)}); err != nil {
+		t.Fatal(err)
+	}
+	var refused *problem.Problem
+	if err := avatars.Put(t.Context(), other, p); !errors.As(err, &refused) || refused.Code != problem.CodeStorageUnavailable {
+		t.Fatalf("a picture over other bytes: %v", err)
 	}
 }
 

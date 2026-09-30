@@ -260,9 +260,9 @@ func (b *browser) storage(h uuid.UUID) reportDoc {
 // The storage picture is what the household keeps, against the contract's StorageReport: its totals,
 // split by module with the derived overhead apart, and by member, a former one among them; its
 // largest items, labelled by their files' names, with what deleting each recovers; and its samples.
-// It is read with view on the household settings, and is absent for anyone else. The largest items
-// leave out what the reader could not open: another member's private item, and anything in a module
-// they cannot see (D-108).
+// It is read with view on the household settings, and is absent for anyone else. The split by module
+// leaves out a module the reader cannot see, and the largest items what the reader could not open:
+// another member's private item, and anything in a module they cannot see (D-108).
 func TestTheStoragePicture(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
@@ -347,9 +347,18 @@ func TestTheStoragePicture(t *testing.T) {
 	}
 
 	// Petr, who holds none on Finance, sees his own private item and not Jana's, and nothing of
-	// Finance's.
-	if got := largest(petr.storage(h)); !slices.Equal(got, []string{"a former members", "janas shared", "petrs private", "petrs note"}) {
+	// Finance's: no item, and no line of its own that would say the household keeps its files, though
+	// its bytes count in the household's totals (FR-AC2, D-16).
+	theirs := petr.storage(h)
+	if got := largest(theirs); !slices.Equal(got, []string{"a former members", "janas shared", "petrs private", "petrs note"}) {
 		t.Fatalf("Petr's largest %v", got)
+	}
+	modules = nil
+	for _, m := range theirs.ByModule {
+		modules = append(modules, m.Module)
+	}
+	if !slices.Equal(modules, []string{"documents", "chat", "notes"}) || theirs.TotalBytes != r.TotalBytes || theirs.ObjectCount != r.ObjectCount {
+		t.Fatalf("Petr's picture: by module %v, %d bytes in %d objects", modules, theirs.TotalBytes, theirs.ObjectCount)
 	}
 	expect(t, klara.get(householdPath(h, "/storage")), http.StatusNotFound, problem.CodeNotFound)
 }

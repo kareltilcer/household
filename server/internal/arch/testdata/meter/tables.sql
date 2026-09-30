@@ -27,6 +27,10 @@ CREATE TABLE arch_testdata.written (id uuid PRIMARY KEY, household_id uuid NOT N
 SELECT enable_tenant_isolation('arch_testdata.written');
 GRANT UPDATE (household_id) ON arch_testdata.written TO household_meter;
 
--- A sequence it may draw from.
+-- A sequence it may read and draw from.
 CREATE SEQUENCE arch_testdata.counter;
 GRANT USAGE, SELECT ON SEQUENCE arch_testdata.counter TO household_meter;
+
+-- A sequence it may only draw from: nextval is a write, whatever it reads.
+CREATE SEQUENCE arch_testdata.drawn;
+GRANT USAGE ON SEQUENCE arch_testdata.drawn TO household_meter;

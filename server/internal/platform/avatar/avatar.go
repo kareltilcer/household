@@ -114,9 +114,20 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) (Picture, error
 
 // Put writes p to the store as user's, before the transaction that records it: a store that cannot
 // be reached is 502 storage_unavailable (FR-NF3).
+//
+// The key is the picture's alone, its id drawn for it, so bytes already there with its digest are
+// its own: a write the store kept but whose answer was lost, which the store's client sent again and
+// the store refused as a second write to the key. That is the picture put, not an outage.
 func (s *Service) Put(ctx context.Context, user uuid.UUID, p Picture) error {
-	err := s.store.PutOnce(ctx, Key(user, p.ID), bytes.NewReader(p.bytes), int64(len(p.bytes)),
+	key := Key(user, p.ID)
+	err := s.store.PutOnce(ctx, key, bytes.NewReader(p.bytes), int64(len(p.bytes)),
 		objectstore.Object{ContentType: p.ContentType, SHA256: p.sha256})
+	if errors.Is(err, objectstore.ErrExists) {
+		var info objectstore.Info
+		if info, err = s.store.Head(ctx, key); err == nil && (!info.HasSHA256 || info.SHA256 != p.sha256) {
+			err = objectstore.ErrExists
+		}
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()

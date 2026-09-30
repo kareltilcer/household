@@ -209,8 +209,20 @@ func (s *Service) run(ctx context.Context, j job) {
 // deleted, when retry is zero; put back at once with its attempt uncounted when retry is negative;
 // otherwise run again after retry. A job another worker took meanwhile, once its lease had passed,
 // is that worker's to settle.
+//
+// A job that marks its original takes the original's row before the job's, the order the entity's
+// delete takes them in (Remove): the other way round, a job failing for good beside the delete would
+// hold the job the delete removes while it waited for the original the delete holds, and PostgreSQL
+// would break the deadlock by aborting one of the two, which may be the member's delete.
 func (s *Service) settle(ctx context.Context, j job, status string, retry time.Duration) error {
 	return tenant.InWriteTx(s.system(ctx, j.household), func(tx pgx.Tx) error {
+		if status != "" {
+			if _, err := tx.Exec(ctx, `
+				SELECT FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3 AND variant = 'original' FOR UPDATE`,
+				j.household, j.module, j.entity); err != nil {
+				return err
+			}
+		}
 		switch {
 		case retry < 0:
 			_, err := tx.Exec(ctx, `

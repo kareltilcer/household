@@ -60,7 +60,9 @@ func Record(ctx context.Context, tx pgx.Tx, st Stored, a Attribution) error {
 // hold it while they record the variants they derived (recordVariants), and a delete that waited on
 // it in the one statement would still delete only the rows of the snapshot it took before it
 // waited. The variants the worker committed meanwhile would outlive their original, rows no link,
-// no purge and no storage picture reaches, billed to the household for good.
+// no purge and no storage picture reaches, billed to the household for good. The job it removes is
+// taken after the original, as a worker that marks the original's variants failed takes them
+// (settle), so that the two wait for each other in one order and never deadlock.
 func Remove(ctx context.Context, tx pgx.Tx, module string, entity uuid.UUID) error {
 	scope := tenant.From(ctx)
 	if scope == nil {
