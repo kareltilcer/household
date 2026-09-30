@@ -17,6 +17,13 @@ export type Role = 'owner' | 'member' | 'child'
 /** The module whose grant holds every conformance entity. */
 export const moduleId = 'conformance'
 
+/** Admin's tables every member of the household sees, whatever their grant (PRD modules/17 Sync). */
+const membersSee: ReadonlySet<TableName> = new Set([
+  'households',
+  'memberships',
+  'module_enablement',
+])
+
 export interface Member {
   readonly id: string
   readonly name: string
@@ -304,11 +311,14 @@ export class Admin {
   }
 
   /**
-   * The rows of table member may see in household (PRD 03 §2.3): while the module is enabled, an
-   * owner's, or a member's whose grant is above none; a private note only to its owner, and its
-   * redacted form to everyone with the grant; a message to its readers. Tombstones are the target's
-   * to keep or drop. This is the suite's own statement of the predicate, never a stream's, so that
-   * a stream that disagrees with it is caught.
+   * The rows of table member may see in household (PRD 03 §2.3): a conformance module's row while
+   * the module is enabled, to an owner, or to a member whose grant is above none; a private note
+   * only to its owner, and its redacted form to everyone with the grant; a message to its readers.
+   * Admin's (PRD modules/17 Sync): the household's settings, its memberships and which modules it
+   * enables to every member, whatever their grant; its invitations as a module's rows, admin's
+   * grant holding them. Tombstones are the target's to keep or drop. This is the suite's own
+   * statement of the predicate, never a stream's, so that a stream that disagrees with it is
+   * caught.
    */
   async visible(
     table: TableName,
@@ -318,12 +328,17 @@ export class Admin {
   ): Promise<Map<string, CanonicalRow>> {
     const spec = tableSpec(table)
     const { from, where } = sourceOf(table)
-    const conditions = [
-      't.household_id = $1',
-      `EXISTS (SELECT FROM module_enablement e WHERE e.household_id = $1 AND e.module = '${moduleId}' AND e.enabled)`,
+    const granted = (module: string): string[] => [
+      `EXISTS (SELECT FROM module_enablement e WHERE e.household_id = $1 AND e.module = '${module}' AND e.enabled)`,
       `(EXISTS (SELECT FROM memberships m WHERE m.household_id = $1 AND m.user_id = $2 AND m.role = 'owner')
         OR EXISTS (SELECT FROM module_grants g WHERE g.household_id = $1 AND g.user_id = $2
-                     AND g.module = '${moduleId}' AND g.level <> 'none'))`,
+                     AND g.module = '${module}' AND g.level <> 'none'))`,
+    ]
+    const conditions = [
+      't.household_id = $1',
+      ...(membersSee.has(table)
+        ? ['EXISTS (SELECT FROM memberships m WHERE m.household_id = $1 AND m.user_id = $2)']
+        : granted(table === 'invitations' ? 'admin' : moduleId)),
     ]
     if (tombstones === 'dropped') conditions.push('t.deleted_at IS NULL')
     if (where !== null) conditions.push(`(${where})`)

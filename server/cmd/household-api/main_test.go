@@ -42,13 +42,16 @@ func env(t *testing.T) config.Getenv {
 		config.MigrateDatabaseURLVar: d.URL(db.RoleMigrate),
 		config.MeterDatabaseURLVar:   d.URL(db.RoleMeter),
 		config.AdminDatabaseURLVar:   testsupport.AdminURL(),
-		config.WebURLVar:             "https://app.household.test",
-		config.TrustedProxiesVar:     config.NoProxies,
-		config.SMTPURLVar:            "smtp://127.0.0.1:1",
-		config.MailFromVar:           "Household <no-reply@household.test>",
-		config.BreachCorpusVar:       corpus,
-		config.TokenKeysVar:          base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
-		config.MFAKeysVar:            base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
+		// PowerSync's replication role; its bucket storage, unnamed outside development, is left be.
+		config.ReplicationDatabaseURLVar: d.URL(db.RolePowerSync),
+		config.PowerSyncURLVar:           "https://powersync.household.test",
+		config.WebURLVar:                 "https://app.household.test",
+		config.TrustedProxiesVar:         config.NoProxies,
+		config.SMTPURLVar:                "smtp://127.0.0.1:1",
+		config.MailFromVar:               "Household <no-reply@household.test>",
+		config.BreachCorpusVar:           corpus,
+		config.TokenKeysVar:              base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
+		config.MFAKeysVar:                base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
 	}
 	return func(key string) (string, bool) {
 		v, ok := vars[key]

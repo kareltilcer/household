@@ -26,8 +26,10 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/push"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/reference"
+	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
@@ -69,6 +71,16 @@ type Deps struct {
 	// Households is the household surface (item 10): households, their members, invitations and
 	// modules.
 	Households *household.Service
+	// Sync is the sync surfaces (item 13), every one of which the router needs.
+	Sync Sync
+}
+
+// Sync is the sync surfaces (item 13, ADR 0014): the credentials a client's replica connects to
+// PowerSync with and the keys PowerSync verifies them by, and the push's limit per device (PRD 02
+// §9). The push itself is built from the module registry the router carries.
+type Sync struct {
+	Replica   *replica.Service
+	PushLimit *ratelimit.Buckets
 }
 
 // NewRouter returns the server's whole HTTP surface: the platform middleware, and under
@@ -93,13 +105,19 @@ type Deps struct {
 // sign-in and the link that finishes its graduation (item 11) are reached before signing in, carrying
 // the registry for the changes they record.
 //
+// PowerSync's keys under /sync/jwks answer anyone, PowerSync among them, which verifies with them
+// the tokens a replica's credentials carry (item 13).
+//
 // Everything under /households/{household_id} passes the tenant middleware, which answers a
 // caller who is not a member of the household before any route does, and carries the module
 // registry the mutation spine checks each mutation against, and the household's API limit, which
 // its members share. The household's own routes are there, behind the member's Idempotency-Key,
 // but leaving, whose key is the account's and answers a repeat before the tenant middleware looks
 // for the membership leaving ended: a member's keys go with their membership; and the two whose body
-// carries a child profile's PIN, which keep none (D-97). Each module's
+// carries a child profile's PIN, which keep none (D-97). A replica's credentials are there too, and
+// keep no key either, since a credential is never kept to be answered with; and the push, behind
+// the household's Idempotency-Key and the device's limit, which a web session's requests share as
+// a device's do (PRD 02 §9). Each module's
 // routes are mounted there at /<name>, behind the gate that answers 404 to a member who cannot see
 // the module (PRD modules/00 §1), and behind the Idempotency-Key middleware, which answers a
 // repeated unsafe request with its first response.
@@ -115,11 +133,29 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	if d.Households == nil {
 		return nil, errors.New("app: the router needs the household surface")
 	}
+	if d.Sync.Replica == nil || d.Sync.PushLimit == nil {
+		return nil, errors.New("app: the router needs every sync surface")
+	}
 	registry, err := d.Modules.WithPlatform(household.Admin())
 	if err != nil {
 		return nil, fmt.Errorf("app: %w", err)
 	}
 	catalog := mutation.Catalog(registry)
+	pushes, err := push.New(push.Config{Registry: registry, Logger: d.Logger})
+	if err != nil {
+		return nil, fmt.Errorf("app: %w", err)
+	}
+	// Behind the tenant middleware: a device's batches, or a web session's, share one budget.
+	perDevice := ratelimit.Middleware(d.Sync.PushLimit, func(r *http.Request) (string, bool) {
+		user, ok := auth.User(r.Context())
+		if current, signedIn := device.From(r.Context()); signedIn {
+			return "device:" + user.String() + ":" + current.Device.String(), ok
+		}
+		if sid, signedIn := session.Current(r.Context()); signedIn {
+			return "session:" + sid.String(), ok
+		}
+		return "user:" + user.String(), ok
+	})
 	perUser := ratelimit.Middleware(a.UserLimit, func(r *http.Request) (string, bool) {
 		user, ok := auth.User(r.Context())
 		return user.String(), ok
@@ -146,6 +182,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 
 	api.Get("/healthz", d.Health.Liveness)
 	api.Get("/readyz", d.Health.Readiness)
+	d.Sync.Replica.PublicRoutes(api)
 	a.Identity.PublicRoutes(api)
 	api.With(catalog).Group(d.Households.PublicRoutes)
 
@@ -172,6 +209,9 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		signedIn.Group(func(inHousehold chi.Router) {
 			inHousehold.Use(tenancy, perHousehold, catalog)
 			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Households.HouseholdRoutes)
+			// A replica's credentials keep no key: a credential is never kept to be answered with.
+			inHousehold.Group(d.Sync.Replica.HouseholdRoutes)
+			inHousehold.With(perDevice, idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(pushes.Routes)
 			// A child profile's PIN keeps no key, as a password does not (D-97).
 			inHousehold.Group(d.Households.PINRoutes)
 			for _, m := range d.Modules.All() {

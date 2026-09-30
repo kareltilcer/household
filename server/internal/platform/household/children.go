@@ -357,7 +357,7 @@ func (s *Service) lockChild(ctx context.Context, household, profile uuid.UUID, s
 			return mutation.Record{}, err
 		}
 		m.child.pinLocked, locked = true, true
-		if m, err = touch(ctx, tx, m, m.role); err != nil {
+		if m, err = touch(ctx, tx, m, m.role, m.grants); err != nil {
 			return mutation.Record{}, err
 		}
 		return childRecord(household, payer, m, actionChildLock), nil
@@ -596,7 +596,7 @@ func (s *Service) setPIN(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		}
 		m.child.pinLocked = false
-		if m, err = touch(ctx, tx, m, m.role); err != nil {
+		if m, err = touch(ctx, tx, m, m.role, m.grants); err != nil {
 			return mutation.Record{}, err
 		}
 		return childRecord(household, payer, m, actionChildPIN), nil
@@ -642,7 +642,7 @@ func (s *Service) unlockChild(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		}
 		m.child.pinLocked = false
-		if m, err = touch(ctx, tx, m, m.role); err != nil {
+		if m, err = touch(ctx, tx, m, m.role, m.grants); err != nil {
 			return mutation.Record{}, err
 		}
 		return childRecord(household, payer, m, actionChildUnlock), nil
@@ -880,9 +880,14 @@ func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
 		if err := s.Accounts.Graduate(ctx, tx, m.user, link.email, secret); err != nil {
 			return mutation.Record{}, err
 		}
+		shown, err := shownGrants(access.Member, m.grants)
+		if err != nil {
+			return mutation.Record{}, err
+		}
 		if err := tx.QueryRow(ctx, `
-			UPDATE memberships SET role = 'member', year_of_birth = NULL, dashboard_locked = false WHERE id = $1 RETURNING version`,
-			m.id).Scan(&m.version); err != nil {
+			UPDATE memberships SET role = 'member', year_of_birth = NULL, dashboard_locked = false, pin_locked = false, grants = $2
+			WHERE id = $1 RETURNING version`,
+			m.id, shown).Scan(&m.version); err != nil {
 			return mutation.Record{}, err
 		}
 		m.role, m.child = access.Member, nil

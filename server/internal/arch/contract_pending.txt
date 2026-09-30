@@ -35,9 +35,6 @@ postBillingTransferAccept
 getBillingInvoices
 getBillingInvoicesByInvoiceId
 getBillingUsage
-getSyncChanges
-postSyncSnapshot
-postSyncMutations
 getSyncState
 postSyncReset
 postSyncDigest

@@ -3,10 +3,10 @@
 # both, waits until each is healthy, and prepares the database; `conformance:down` removes them.
 #
 # It is the suite's own, apart from the development services in the repository's
-# docker-compose.yml, whose PostgreSQL runs without wal_level=logical. Item 13 deploys PowerSync
-# beside that one, and the suite moves onto it then. Every credential here is a loopback
-# development value, as in powersync/powersync.yaml, and every port is published on 127.0.0.1
-# only.
+# docker-compose.yml: a fresh database for each run, on ports of its own, which CI starts from.
+# Its PowerSync runs the deployed configuration (deploy/powersync) with the suite's streams and
+# credentials. Every credential here is a loopback development value, as in
+# powersync/powersync.yaml, and every port is published on 127.0.0.1 only.
 name: household-conformance
 
 services:
@@ -22,6 +22,8 @@ services:
       - max_replication_slots=10
       - -c
       - max_wal_senders=10
+      - -c
+      - max_slot_wal_keep_size=2GB
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -49,6 +51,11 @@ services:
       - ./powersync:/config:ro
     ports:
       - 127.0.0.1:${HOUSEHOLD_CONFORMANCE_POWERSYNC_PORT:-8090}:8080
+    # It fetches the keys it verifies a client's token with from the API the suite starts on the
+    # host (conformance-api), which listens where the container reaches it: CI has it listen on
+    # every interface, since a Linux host's loopback is not the container's way in.
+    extra_hosts:
+      - host.docker.internal:host-gateway
     # It replicates only once `conformance:up` has made its role, its publication and its
     # storage, and it restarts until then.
     restart: on-failure

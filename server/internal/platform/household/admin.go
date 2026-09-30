@@ -63,17 +63,31 @@ func Admin() module.PlatformModule {
 	for _, a := range actions {
 		p.Actions = append(p.Actions, module.AuditAction{Key: Name + "." + a, SummaryKey: Name + "." + a})
 	}
+	// The settings, the memberships and the modules' enablement reach every member, whatever their
+	// grant on admin, since every member's app works from them; the invitations reach the members
+	// granted admin (PRD modules/17 Sync). Each replicates the columns its sync row carries: a
+	// household without its code, which only its owners read, a membership without a child's birth
+	// year, and an invitation without its token.
 	p.Entities = []sync.Entity{
-		{Name: entitySettings, Table: "households", Policy: sync.StrictVersion, Access: sync.Grant,
+		{Name: entitySettings, Table: "households", Policy: sync.StrictVersion, Access: sync.Members,
+			Columns: append([]string{"id", "name", "country", "timezone", "base_currency", "locale", "units",
+				"first_day_of_week", "billing_payer_id"}, baseColumns...),
 			Creates: []string{"postHouseholds"}},
-		{Name: entityMembership, Table: "memberships", Policy: sync.StrictVersion, Access: sync.Grant,
+		{Name: entityMembership, Table: "memberships", Policy: sync.StrictVersion, Access: sync.Members,
+			Columns: append([]string{"id", "household_id", "user_id", "role", "grants", "dashboard_locked", "pin_locked"}, baseColumns...),
 			Creates: []string{"postChildren"}},
-		{Name: entityModule, Table: "module_enablement", Policy: sync.StrictVersion, Access: sync.Grant},
+		{Name: entityModule, Table: "module_enablement", Policy: sync.StrictVersion, Access: sync.Members},
 		{Name: entityInvitation, Table: "invitations", Policy: sync.StrictVersion, Access: sync.Grant,
+			Columns: append([]string{"id", "household_id", "kind", "email", "role", "grants", "dashboard_layout", "message",
+				"invited_by", "expires_at", "max_uses", "uses", "status"}, baseColumns...),
 			Creates: []string{"postInvitations"}},
 	}
 	return p
 }
+
+// baseColumns are the columns add_entity_columns gives every entity's table but its id and its
+// household's, as each of admin's streams replicates them.
+var baseColumns = []string{"version", "created_by", "created_at", "updated_by", "updated_at", "deleted_at"}
 
 // Modules are the modules a household enables and grants, in the order of the contract's
 // ModuleKeyValue, which lists are answered in and a test holds them to. Every one is enabled and

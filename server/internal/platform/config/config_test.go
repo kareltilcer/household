@@ -49,8 +49,13 @@ func TestEachCommandGetsOnlyTheConnectionsItUses(t *testing.T) {
 		t.Errorf("migrate: %+v", migrate)
 	}
 	bootstrap, _ := config.Load(config.Bootstrap, env(nil))
-	if bootstrap.AdminDatabaseURL == "" || bootstrap.DatabaseURL == "" || bootstrap.MigrateDatabaseURL == "" || bootstrap.MeterDatabaseURL == "" {
+	if bootstrap.AdminDatabaseURL == "" || bootstrap.DatabaseURL == "" || bootstrap.MigrateDatabaseURL == "" || bootstrap.MeterDatabaseURL == "" ||
+		bootstrap.ReplicationDatabaseURL == "" || bootstrap.PowerSyncStorageURL == "" {
 		t.Errorf("bootstrap: %+v", bootstrap)
+	}
+	// PowerSync's credentials are the service's, and bootstrap's to set: never the serving process's.
+	if serve.ReplicationDatabaseURL != "" || serve.PowerSyncStorageURL != "" || serve.PowerSyncURL == "" {
+		t.Errorf("serve: %+v", serve)
 	}
 }
 
@@ -60,7 +65,8 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%s: loaded with no connection strings", e)
 		}
-		for _, key := range []string{config.DatabaseURLVar, config.MigrateDatabaseURLVar, config.MeterDatabaseURLVar, config.AdminDatabaseURLVar} {
+		for _, key := range []string{config.DatabaseURLVar, config.MigrateDatabaseURLVar, config.MeterDatabaseURLVar, config.AdminDatabaseURLVar,
+			config.ReplicationDatabaseURLVar} {
 			if !strings.Contains(err.Error(), key) {
 				t.Errorf("%s: the error does not name %s: %v", e, key, err)
 			}
@@ -72,7 +78,7 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
 	}))
 	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachCorpusVar,
-		config.TokenKeysVar, config.MFAKeysVar} {
+		config.TokenKeysVar, config.MFAKeysVar, config.PowerSyncURLVar} {
 		if err == nil || !strings.Contains(err.Error(), key) {
 			t.Errorf("serving in production without %s: %v", key, err)
 		}
@@ -100,6 +106,7 @@ func serving(vars map[string]string) map[string]string {
 		config.BreachCorpusVar:   "/var/lib/household/breached.bin",
 		config.TokenKeysVar:      base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
 		config.MFAKeysVar:        base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
+		config.PowerSyncURLVar:   "https://sync.household.example",
 	} {
 		if _, ok := vars[key]; !ok {
 			vars[key] = value
@@ -233,6 +240,12 @@ func TestADefaultedPasswordIsSetOnlyOnALocalCluster(t *testing.T) {
 	}
 
 	remote[config.MeterDatabaseURLVar] = dsn("household_meter", "r", "db.internal:5432", "household")
+	remote[config.ReplicationDatabaseURLVar] = dsn("household_powersync", "p", "db.internal:5432", "household")
+	_, err = config.Load(config.Bootstrap, env(remote))
+	if err == nil || !strings.Contains(err.Error(), config.PowerSyncStorageURLVar) {
+		t.Fatalf("a remote cluster with the bucket storage's password defaulted: %v", err)
+	}
+	remote[config.PowerSyncStorageURLVar] = dsn("powersync_storage", "b", "db.internal:5432", "powersync_storage")
 	if _, err := config.Load(config.Bootstrap, env(remote)); err != nil {
 		t.Fatalf("a remote cluster with every string set: %v", err)
 	}
@@ -241,6 +254,79 @@ func TestADefaultedPasswordIsSetOnlyOnALocalCluster(t *testing.T) {
 		if _, err := config.Load(config.Bootstrap, env(local)); err != nil {
 			t.Errorf("a cluster at %s with the roles' strings defaulted: %v", host, err)
 		}
+	}
+}
+
+// PowerSync's bucket storage is a database of its own, owned by a role of its own: it holds every
+// household's replicated rows outside row-level security. Bootstrap prepares it on the
+// administrator's cluster, so one named on another cluster is refused; outside development it is
+// prepared only when named, since it may be kept on a cluster of its own.
+func TestPowerSyncsStorageIsADatabaseOfItsOwn(t *testing.T) {
+	t.Setenv("PGPASSWORD", "")
+	t.Setenv("PGPASSFILE", t.TempDir()+"/none")
+	for name, tc := range map[string]struct{ storage, want string }{
+		"the household's database": {dsn("powersync_storage", "b", "127.0.0.1", "household"), "a database of its own"},
+		"a role of the server's":   {dsn("household_app", "b", "127.0.0.1", "powersync_storage"), "a role of its own"},
+		"PowerSync's replication":  {dsn("household_powersync", "b", "127.0.0.1", "powersync_storage"), "a role of its own"},
+		"the administrator's role": {dsn("postgres", "b", "127.0.0.1", "powersync_storage"), "the administrator"},
+		"no password":              {dsn("powersync_storage", "", "127.0.0.1", "powersync_storage"), "no role or no password"},
+		"a role a parameter swaps": {dsn("powersync_storage", "b", "127.0.0.1", "powersync_storage") + "?user=someone_else", "no role or no password"},
+		"another cluster":          {dsn("powersync_storage", "b", "buckets.internal:5432", "powersync_storage"), "leave it unset"},
+		"another port":             {dsn("powersync_storage", "b", "127.0.0.1:5433", "powersync_storage"), "leave it unset"},
+	} {
+		_, err := config.Load(config.Bootstrap, env(map[string]string{config.PowerSyncStorageURLVar: tc.storage}))
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error %v, want one containing %q", name, err, tc.want)
+		}
+	}
+	// A string that names no role nor password is not given the environment's: pgconn would log in as
+	// PGUSER, or the operating system's user, with PGPASSWORD, and bootstrap would bring that role down
+	// to a storage role's attributes and password.
+	t.Setenv("PGUSER", "someone_else")
+	t.Setenv("PGPASSWORD", "theirs")
+	if _, err := config.Load(config.Bootstrap, env(map[string]string{
+		config.PowerSyncStorageURLVar: "postgres://127.0.0.1:5432/powersync_storage",
+	})); err == nil || !strings.Contains(err.Error(), "no role or no password") {
+		t.Errorf("the environment's role and password: %v", err)
+	}
+	t.Setenv("PGUSER", "")
+	t.Setenv("PGPASSWORD", "")
+	// The administrator's cluster, at the loopback however it is spelled.
+	if _, err := config.Load(config.Bootstrap, env(map[string]string{
+		config.PowerSyncStorageURLVar: dsn("powersync_storage", "b", "localhost:5432", "powersync_storage"),
+	})); err != nil {
+		t.Errorf("the administrator's cluster as localhost: %v", err)
+	}
+	c, err := config.Load(config.Bootstrap, env(map[string]string{
+		config.EnvVar:                    "production",
+		config.AdminDatabaseURLVar:       dsn("postgres", "s3cret", "db.internal:5432", "household"),
+		config.DatabaseURLVar:            dsn("household_app", "a", "db.internal:5432", "household"),
+		config.MigrateDatabaseURLVar:     dsn("household_migrate", "m", "db.internal:5432", "household"),
+		config.MeterDatabaseURLVar:       dsn("household_meter", "r", "db.internal:5432", "household"),
+		config.ReplicationDatabaseURLVar: dsn("household_powersync", "p", "db.internal:5432", "household"),
+	}))
+	if err != nil || c.PowerSyncStorageURL != "" {
+		t.Fatalf("production, the storage unnamed: %+v %v", c, err)
+	}
+}
+
+// Outside development PowerSync is reached over https: its URL is where a client sends the token its
+// credentials carry.
+func TestOutsideDevelopmentPowerSyncIsReachedOverHTTPS(t *testing.T) {
+	_, err := config.Load(config.Serve, env(serving(map[string]string{
+		config.EnvVar:          "production",
+		config.DatabaseURLVar:  dsn("household_app", "s3cret", "db.internal:5432", "household"),
+		config.PowerSyncURLVar: "http://sync.household.example",
+	})))
+	if err == nil || !strings.Contains(err.Error(), config.PowerSyncURLVar) {
+		t.Fatalf("PowerSync over http in production: %v", err)
+	}
+	c, err := config.Load(config.Serve, env(map[string]string{config.PowerSyncURLVar: "http://127.0.0.1:9999/"}))
+	if err != nil || c.PowerSyncURL != "http://127.0.0.1:9999" {
+		t.Fatalf("PowerSync over http in development: %+v %v", c, err)
+	}
+	if _, err := config.Load(config.Serve, env(map[string]string{config.PowerSyncURLVar: "sync.household.example"})); err == nil {
+		t.Fatal("a PowerSync URL that is not absolute")
 	}
 }
 

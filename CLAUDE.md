@@ -26,8 +26,9 @@ downloads the version `devEngines.runtime` names and runs every script on it.
 
 ```bash
 pnpm install          # workspace dependencies
-pnpm run up           # Postgres 17, RustFS (S3) and Mailpit, waiting until healthy
-pnpm run db:setup     # create the three database roles, then apply the migrations
+pnpm run up           # Postgres 17 (logical replication), RustFS (S3) and Mailpit, waiting until healthy
+pnpm run db:setup     # create the database roles and PowerSync's storage, then apply the migrations
+pnpm run up:sync      # PowerSync, once db:setup has made its role, its publication and its storage
 pnpm run dev:api      # serve the API on 127.0.0.1:8080 (/api/v1/healthz, /api/v1/readyz)
 pnpm test             # Vitest through turbo, then go test against the compose Postgres
 pnpm run lint         # ESLint, golangci-lint, Redocly and Prettier
@@ -55,6 +56,11 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   contract disagree; `server/internal/arch/contract_pending.txt` lists the operations not
   built yet, and the PR that builds one deletes its line. `pnpm run gen` regenerates the Go
   `ProblemCode` enum after a contract change, and a test fails until it has.
+- **The sync configuration is generated and committed**: `pnpm run gen` (`go generate`) writes
+  PowerSync's streams from the entity registry into `deploy/powersync/sync-config.yaml` and the
+  conformance suite's stack, and architecture test 10 fails a committed one that is not what the
+  registry generates, a table a stream reads that its migration did not publish with `replicate`,
+  and a table the replication role may `SELECT` that no stream needs ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
 - **Generated, never committed:** `packages/api/src/generated/` (the typed client, from
   `openapi.yaml`) and `packages/i18n/src/generated/` (message keys and arguments, from
   `catalogs/en.json`). turbo writes them before every typecheck, lint and test; after a
@@ -77,6 +83,7 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
 | `packages/*` | `api` (generated client), `i18n`, `tokens`, `icons`, `domain`, `sync`, `test-vectors` |
 | `tooling/` | Guards over the workspace itself: strictness, catalog pins, local/CI parity |
 | `reference-data/`, `fixtures/` | Sourced reference content, and the seed ported from `design/v1` |
+| `deploy/` | What runs beside the server: PowerSync's configuration and its generated streams |
 | `docs/adr/`, `docs/runbooks/` | Architecture decision records, and operational procedures |
 
 ## Conventions that are never negotiated
@@ -113,13 +120,21 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   it and may not do this to it".
 - **The mutation spine.** Every mutation writes its row, an audit event and a sync change
   in one transaction, through one service-layer entry point, `mutation.Apply`, which commits
-  only what it records. REST and sync both write through it. An entity's table
+  only what it records. REST and sync both write through it: a module whose entities a client
+  writes offline implements `push.Writer`, and the push (`internal/platform/push`) hands it each
+  mutation once it has checked the declaration, the grant and the batch. An entity's table
   calls `add_entity_columns` for the base columns (`version`, `created_*`, `updated_*`,
-  `deleted_at`), and its module declares it through `SyncSource` with its merge policy and
-  access (architecture tests 5 and 9; [ADR 0006](docs/adr/0006-sync-ready-schema-and-the-mutation-spine.md)).
+  `deleted_at`), and `replicate` once a generated stream reads it; its module declares it through
+  `SyncSource` with its merge policy and access (architecture tests 5, 9 and 10;
+  [ADR 0006](docs/adr/0006-sync-ready-schema-and-the-mutation-spine.md), [ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
   The one other write path is the platform's own, for the global account tables (a user's
   profile, credentials and sessions), which are no household's history: `tenant.AccountTx`,
   which architecture test 4 keeps out of every module ([ADR 0009](docs/adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md)).
+  Beside it, the platform keeps its own record of what it answered, no entity's history, through
+  `tenant.InWriteTx`, which test 4 also keeps out of modules: the Idempotency-Key middleware's
+  keys, and the push's answer to each mutation (`sync_mutations`), kept in the effect's own
+  transaction when the mutation took one and in a transaction of its own when it took none
+  ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
   The household surface (`internal/platform/household`) is `admin`, a module the platform
   serves itself: it writes through `mutation.Apply` with the actions and entities
   `module.PlatformModule` declares, and holds a household its caller is not yet in, creating

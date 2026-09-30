@@ -94,7 +94,9 @@ info:
       current password being the new one. Nor do the two requests whose body carries a child
       profile's PIN, `POST /households/{household_id}/children` and
       `PUT /households/{household_id}/children/{user_id}/pin`: a repeat of a profile that was made
-      answers `422` naming `/id`, and a repeat of a new PIN sets it again.
+      answers `422` naming `/id`, and a repeat of a new PIN sets it again. Nor does
+      `POST /households/{household_id}/sync/credentials`, whose token is never kept to be answered
+      with: a repeat is handed another.
     - A request that ended the session it was made with, `POST /auth/logout`, `DELETE /me/sessions`
       and `DELETE /me/sessions/{session_id}` naming the current session, keeps its key, but a
       repeat of it arrives with a session that has ended and answers `401` (`unauthenticated`), as
@@ -130,9 +132,13 @@ info:
 
     ## Offline
 
-    Clients generate `UUIDv7` identifiers for entities they create. The sync endpoints
-    (`/sync/changes`, `/sync/mutations`, `/sync/snapshot`) are the offline-first data path; the
-    per-module REST endpoints are the online path. Both write through the same service layer.
+    Clients generate `UUIDv7` identifiers for entities they create. The offline-first data path is
+    PowerSync's for reads and `POST /households/{household_id}/sync/mutations` for writes (D-93):
+    a client's replica connects to PowerSync with the URL and the token
+    `POST /households/{household_id}/sync/credentials` hands it, and replicates the rows of the
+    household that the caller may see, which streams generated from the server's entity registry
+    define; its queued writes are pushed to the API. The per-module REST endpoints are the online
+    path. Both write through the same service layer.
   contact:
     name: Household
     url: https://household.example
@@ -163,7 +169,7 @@ tags:
   - name: billing
     description: Subscription, invoices and metered usage
   - name: sync
-    description: The offline-first change feed and mutation queue
+    description: The offline-first data path — PowerSync's credentials and keys, and the push of queued mutations
   - name: platform-services
     description: Cross-module platform surfaces — search, storage, activity, reminders, notifications
   - name: dashboard
@@ -875,7 +881,7 @@ paths:
       operationId: deleteMeSessions
       tags: [me]
       summary: Sign out everywhere
-      description: 'Revokes every session and every refresh-token family, and so every device''s sign-in and its sync cursor, and trusts no browser or device to skip the second step any longer.'
+      description: 'Revokes every session and every refresh-token family, and so every device''s sign-in, which is then handed no PowerSync credentials (`POST …/sync/credentials`), and trusts no browser or device to skip the second step any longer.'
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Done }
@@ -925,7 +931,7 @@ paths:
       operationId: deleteMeDevicesByDeviceId
       tags: [me]
       summary: Revoke a device
-      description: 'Invalidates its refresh-token family and its sync cursor, so its local replica is discarded rather than resumed: its access tokens stop at once, and its next refresh answers `401` (`refresh_token_invalid`). Since it may be lost with a trust to skip the second step in it, no browser or device stays trusted. A device the account is not signed in on is not found.'
+      description: 'Invalidates its refresh-token family, so its local replica is discarded rather than resumed: its access tokens stop at once, its next refresh answers `401` (`refresh_token_invalid`), and it is handed no further PowerSync credentials (`POST …/sync/credentials`), so that it syncs no longer than the token it holds lasts, five minutes at most. Since it may be lost with a trust to skip the second step in it, no browser or device stays trusted. A device the account is not signed in on is not found.'
       parameters: [{ $ref: '#/components/parameters/DeviceId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Revoked }
@@ -1839,61 +1845,54 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
-  /households/{household_id}/sync/changes:
-    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+  /sync/jwks:
     get:
-      operationId: getSyncChanges
+      operationId: getSyncJwks
       tags: [sync]
-      summary: Pull the change feed
+      summary: The keys PowerSync verifies a replica's token with
       description: |
-        Returns changes with `seq` greater than the cursor that the caller may see, in `seq` order.
-        The visibility predicate is applied from fields denormalised onto each change row —
-        `module`, `visibility`, `owner_id`, `audience_id`, `for_user_id` — so authorisation is one
-        indexed scan rather than a join per module.
-
-        A cursor below the household's compaction horizon answers **`410`** with
-        `{"action":"resnapshot"}`.
-      parameters:
-        - { name: since, in: query, required: false, schema: { type: integer, format: int64 }, description: Sequence exclusive lower bound. Omit for the beginning of the retained feed. }
-        - { name: modules, in: query, required: false, schema: { type: array, items: { $ref: '#/components/schemas/ModuleKeyValue' } }, style: form, explode: false }
-        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 1000, default: 500 } }
-      responses:
-        '200': { description: Changes, content: { application/json: { schema: { $ref: '#/components/schemas/SyncChangePage' } } } }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '410': { description: The cursor is below the compaction horizon; re-snapshot, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ResnapshotRequired' } } } }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-
-  /households/{household_id}/sync/snapshot:
-    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
-    post:
-      operationId: postSyncSnapshot
-      tags: [sync]
-      summary: Bootstrap a replica
-      description: |
-        A consistent snapshot of everything the caller may see in the requested modules, taken at a
-        stated `seq`, streamed as newline-delimited JSON so a large household need not be buffered.
-        The client applies it, sets its cursor to that `seq`, and continues with incremental pulls.
-      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { type: object, properties: { modules: { type: array, items: { $ref: '#/components/schemas/ModuleKeyValue' } } } } } }
+        The public keys, as a JSON Web Key Set (RFC 7517), that sign the tokens
+        `POST …/sync/credentials` hands out, the signing key first: the keys that sign a device's
+        access tokens, each named by its RFC 7638 thumbprint. PowerSync fetches them, caches them for
+        minutes, and fetches them again at once for a token signed by a key it does not hold, so a
+        key rotated in front of the others verifies from its first token (D-93).
+      security: []
       responses:
         '200':
-          description: >-
-            The snapshot stream. The first line is a `SyncSnapshotHeader`; every subsequent
-            line is a `SyncChange` whose `op` is `upsert`.
-          headers:
-            X-Sync-Seq: { description: The sequence at which the snapshot was taken, schema: { type: integer, format: int64 } }
+          description: The keys
           content:
-            application/x-ndjson:
-              schema:
-                description: One line of the stream. The first is the header; every later line is a `SyncChange` whose `op` is `upsert`.
-                oneOf:
-                  - { $ref: '#/components/schemas/SyncSnapshotHeader' }
-                  - { $ref: '#/components/schemas/SyncChange' }
+            application/json:
+              schema: { $ref: '#/components/schemas/JsonWebKeySet' }
+
+  /households/{household_id}/sync/credentials:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post:
+      operationId: postSyncCredentials
+      tags: [sync]
+      summary: Credentials for PowerSync
+      description: |
+        PowerSync's URL and a token of PowerSync's own for the caller (D-93), which a client's replica
+        connects with, subscribing to each stream with the household as its parameter: one replica
+        per household (D-4). The token names the caller alone; the streams hold them to what they
+        may see in the household they subscribe with, and to the households they are in.
+
+        It is signed EdDSA with the keys `GET /sync/jwks` publishes, and carries the audience
+        PowerSync is configured with, which the API refuses: a PowerSync token opens no route of the
+        API. It lasts five minutes, which bounds how long a device that was revoked, or a member who
+        was removed, keeps syncing on the connection it holds: the client asks again before it
+        expires, and a revoked device, a session that has ended or a caller no longer in the household
+        is refused here. A web session is handed credentials as a device is. Nothing is kept under an
+        `Idempotency-Key`: a repeat is handed another token.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200':
+          description: PowerSync's URL and a token
+          headers:
+            Cache-Control: { description: '`no-store`: a credential is not kept by any cache on the way.', schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncCredentials' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '402': { $ref: '#/components/responses/PaymentRequired' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -1904,13 +1903,31 @@ paths:
       tags: [sync]
       summary: Push a batch of client mutations
       description: |
-        Mutations apply **in order, each in its own transaction**. A failure does not abort the
-        batch; later mutations depending on a failed one answer `deferred`. Per-mutation
-        idempotency is keyed on `mutation_id` and retained 7 days, which is what makes wholesale
-        client retry safe.
+        Mutations apply **in order, each in its own transaction**, through the service layer the
+        module's REST routes write through, and each is recorded `via: sync`. A failure does not
+        abort the batch; a later mutation that writes the entity a failed one did, or names it in a
+        field, answers `deferred` (`dependency_failed`), and the client replays it once the queue it
+        holds has drained. Per-mutation idempotency is keyed on the caller and `mutation_id` and
+        retained 7 days, which is what makes wholesale client retry safe: a mutation sent again, in a
+        batch retried under a fresh `Idempotency-Key`, is answered as it was the first time and takes
+        no second effect; a `mutation_id` sent again with anything else is `rejected`
+        (`validation_failed`).
 
         The HTTP status is `200` whenever the batch was processed at all — **per-mutation outcomes
-        are in the body**, and a client must read them rather than the status.
+        are in the body**, and a client must read them rather than the status. Every outcome but
+        `applied` carries a `code`. A mutation is `rejected` when its entity is not one that syncs
+        (`validation_failed`), when the caller cannot see the entity's module (`not_found`) or may
+        not contribute to it (`forbidden`), when the entity is read-only offline (`forbidden`: its
+        merge policy does not yet take offline writes, D-84), when its policy does not take its op
+        (`validation_failed`: an `additive` row is only created, and a `state_set` write is never a
+        delete), when a field is refused (`validation_failed`), when it names a row that is not there
+        (`not_found`), and when an `additive` create breaks its series' cross-row invariant
+        (`monotonicity_violation`, with the neighbour it breaks against as `row`). A `client_time`
+        more than 24 hours from the server's clock is clamped to it and flagged.
+
+        A batch holds at most 500 mutations: a larger one is refused whole, `413`
+        (`batch_too_large`), for the client to send in smaller ones. A device, or a web session,
+        sends at most 60 batches a minute, and is answered `429` past them.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKeyRequired' }]
       requestBody:
         required: true
@@ -1920,7 +1937,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '413': { description: Batch too large; the ceiling is 500 mutations, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '413': { description: 'More than 500 mutations (`batch_too_large`), or a body larger than the edge takes (`payload_too_large`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /households/{household_id}/sync/state:
@@ -8040,7 +8057,10 @@ paths:
       description: |
         **No endpoint under `/platform` returns household content.** There is no impersonation, no
         "view as", no content-reading endpoint, and no database role that bypasses row-level
-        security for content tables. This is enforced by the absence of a mechanism, not by policy.
+        security for content tables but one, which no staff member, staff tool or support system
+        connects with: PowerSync's replication role, the sync service's own credential (D-3, D-93),
+        whose reach the generated streams and a read-path isolation test hold instead. This is
+        enforced by the absence of a mechanism, not by policy.
       parameters:
         - { name: q, in: query, required: false, schema: { type: string }, description: 'Matches household id, name, or a member email.' }
         - { name: state, in: query, required: false, schema: { $ref: '#/components/schemas/EntitlementState' } }
@@ -9029,7 +9049,6 @@ components:
         app_version: { type: string }
         last_seen_at: { type: string, format: date-time, description: 'When it last signed in or refreshed its tokens.' }
         push_enabled: { type: boolean }
-        sync_cursor: { type: [integer, 'null'], format: int64 }
         is_current: { type: boolean, description: 'Whether the request came from this device.' }
 
     NotificationCategory:
@@ -9504,62 +9523,30 @@ components:
               target_user_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }
               reason: { type: [string, 'null'] }
         meta: { $ref: '#/components/schemas/PageMeta' }
-    SyncOp:
-      type: string
-      enum: [upsert, delete, retract]
-      description: |
-        `retract` is addressed to one member (`for_user_id`) and carries **no payload**, so the act
-        of retracting leaks nothing. It is emitted when a member loses access to data they already
-        hold locally — a grant lowered, removal from a conversation, an item made private, removal
-        from the household, a module disabled.
-
-    SyncChange:
+    SyncCredentials:
       type: object
-      required: [seq, entity_type, entity_id, op, occurred_at]
+      required: [endpoint, token, expires_at]
       properties:
-        seq: { type: integer, format: int64 }
-        entity_type: { type: string, description: 'Module-qualified, e.g. `garden.planting`.' }
-        entity_id: { $ref: '#/components/schemas/Uuid' }
-        op: { $ref: '#/components/schemas/SyncOp' }
-        row_version: { type: [integer, 'null'], format: int64 }
-        occurred_at: { type: string, format: date-time }
-        actor_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }], description: So a client can suppress the echo of its own writes. }
-        module: { $ref: '#/components/schemas/ModuleKeyValue' }
-        visibility:
-          type: string
-          enum: [shared, private, redacted]
-          description: |
-            `redacted` marks a **projection** of an entity the caller may see only partly — a busy
-            block standing in for a private calendar event (D-88). Its payload carries only the
-            fields the entity declared safe to reveal, and the owner receives the `private` row with
-            the same `entity_id` instead. Exactly one of the pair ever reaches a given caller.
-        payload: { description: 'The row as the API would serialise it. Null on `delete` and `retract`.' }
+        endpoint: { type: string, format: uri, description: Where the client reaches PowerSync. }
+        token: { type: string, description: 'A JWT PowerSync verifies: EdDSA, carrying `sub`, `aud`, `iat` and `exp`.' }
+        expires_at: { type: string, format: date-time, description: When the token expires; the client asks for another before then. }
 
-    SyncChangePage:
+    JsonWebKeySet:
       type: object
-      required: [items, has_more, compaction_horizon]
+      required: [keys]
       properties:
-        items: { type: array, items: { $ref: '#/components/schemas/SyncChange' } }
-        next_cursor: { type: integer, format: int64 }
-        has_more: { type: boolean }
-        compaction_horizon: { type: integer, format: int64, description: 'A cursor below this is `410` — changes older than 90 days are pruned, which bounds the feed and makes "the phone that was in a drawer for a year" a defined case.' }
-
-    SyncSnapshotHeader:
-      type: object
-      required: [seq, modules]
-      description: The first line of the snapshot stream.
-      properties:
-        seq: { type: integer, format: int64 }
-        modules: { type: array, items: { $ref: '#/components/schemas/ModuleKeyValue' } }
-        estimated_rows: { type: integer }
-
-    ResnapshotRequired:
-      allOf:
-        - { $ref: '#/components/schemas/Problem' }
-        - type: object
-          properties:
-            action: { const: resnapshot }
-            compaction_horizon: { type: integer, format: int64 }
+        keys:
+          type: array
+          items:
+            type: object
+            required: [kty, crv, x, kid, alg, use]
+            properties:
+              kty: { const: OKP }
+              crv: { const: Ed25519 }
+              x: { type: string, description: 'The public key, base64url.' }
+              kid: { type: string, description: 'Its RFC 7638 thumbprint, which a token''s header names.' }
+              alg: { const: EdDSA }
+              use: { const: sig }
 
     SyncMutationOp:
       type: string
@@ -9583,7 +9570,11 @@ components:
       required: [mutations]
       properties:
         device_id: { $ref: '#/components/schemas/Uuid' }
-        mutations: { type: array, minItems: 1, maxItems: 500, items: { $ref: '#/components/schemas/SyncMutation' } }
+        mutations:
+          type: array
+          minItems: 1
+          description: At most 500; a larger batch is refused whole, `413` (`batch_too_large`).
+          items: { $ref: '#/components/schemas/SyncMutation' }
 
     SyncMutationResult:
       type: object
@@ -9608,7 +9599,7 @@ components:
       required: [results, seq]
       properties:
         results: { type: array, items: { $ref: '#/components/schemas/SyncMutationResult' } }
-        seq: { type: integer, format: int64, description: The feed sequence after this batch. }
+        seq: { type: integer, format: int64, description: 'The feed sequence after this batch: the household''s latest change once the batch is answered. Plan item 14 decides its fate, since under D-93 no client pulls the feed.' }
 
     ReplicaDigest:
       type: object

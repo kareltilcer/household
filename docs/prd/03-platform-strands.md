@@ -137,7 +137,24 @@ rule, same enforcement, same architecture test.
 
 ### 2.3 Pull
 
-`GET /api/v1/households/{id}/sync/changes?since={cursor}&limit=`
+> **Under D-93 there is no pull endpoint of ours** (plan item 13,
+> [ADR 0014](../adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)):
+> `GET …/sync/changes` and `POST …/sync/snapshot` are gone from the contract. A client asks
+> `POST /api/v1/households/{id}/sync/credentials` for PowerSync's URL and a token of PowerSync's own,
+> which lasts five minutes and names only the caller, and its replica subscribes to the household's
+> streams with the household as the subscription's parameter, one replica per household (D-4).
+> PowerSync verifies the token with the keys the API publishes at `GET /api/v1/sync/jwks`. The
+> streams are generated from the entity registry (D-22): an entity held to the grant reaches an owner
+> of the household, and a member whose grant on its module is above `none`, while the household
+> enables the module; admin's settings, memberships and module enablement reach every member of the
+> household; each stream sends the columns its entity names, and a soft-deleted row stays in it, so
+> that a client tells a row another member deleted from one it lost access to. The predicate below
+> is what the streams express; its visibility and audience terms are plan item 14's streams, and
+> until then an entity whose rows may be private or an audience's reaches no replica. The feed's
+> `seq`, cursor and horizon describe the design D-93 replaced; FR-SY2's pruning is PowerSync's
+> compaction, and FR-SY3's bootstrap is a replica's initial sync.
+
+`GET /api/v1/households/{id}/sync/changes?since={cursor}&limit=` *(replaced, D-93)*
 
 Returns changes with `seq > cursor` that the caller may see, in `seq` order, plus a
 `next_cursor` and a `has_more` flag. The visibility predicate is:
@@ -219,12 +236,20 @@ id remapping pass across every table, which is where offline systems go to die. 
 
 **FR-SY5 — Idempotency is per mutation, not per batch.** `mutation_id` is stored per household
 for **7 days**; replaying it returns the stored result. Batches are retried wholesale by clients
-on network failure, so per-mutation idempotency is what makes retry safe.
+on network failure, so per-mutation idempotency is what makes retry safe. The result is kept under
+the member who sent the mutation as well as its household, so that a member sending another's
+`mutation_id` is never answered with the other's result, and its row; a `mutation_id` sent again
+carrying another mutation is `rejected`. A result that commits an effect is kept in the effect's
+transaction, so a mutation that took effect is never applied twice however its answer was lost; a
+`deferred` mutation keeps none, since its replay runs it (**D-106**, plan item 13).
 
 **FR-SY6 — Batch ordering.** Mutations within a batch apply in order, each in its own
 transaction. A failure does not abort the batch; later mutations that depend on a failed one
 come back `deferred`. Whole-batch atomicity would mean one bad row blocks a week of a member's
-work.
+work. A mutation depends on a failed one when it writes the row the failed one did, or names it by
+its id in a field. Every outcome but `applied` carries a machine-readable `code` (PRD 10 §6). A batch
+holds at most 500 mutations, a larger one refused whole (`413`, `batch_too_large`), and a device, or a
+web session, sends at most 60 batches a minute (02 §9).
 
 ### 2.5 Merge policy
 

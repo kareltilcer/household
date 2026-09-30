@@ -141,7 +141,6 @@ type deviceItem struct {
 	AppVersion  string    `json:"app_version"`
 	LastSeenAt  time.Time `json:"last_seen_at"`
 	PushEnabled bool      `json:"push_enabled"`
-	SyncCursor  *int64    `json:"sync_cursor"`
 	IsCurrent   bool      `json:"is_current"`
 }
 
@@ -180,7 +179,7 @@ func TestAMobileSignInIssuesATokenPairForItsDevice(t *testing.T) {
 	}
 	list := p.devices()
 	if len(list) != 1 || list[0].ID != p.id || list[0].Label != "Jana's iPhone" || list[0].Platform != "ios" ||
-		list[0].AppVersion != "1.0.0" || !list[0].IsCurrent || list[0].PushEnabled || list[0].SyncCursor != nil {
+		list[0].AppVersion != "1.0.0" || !list[0].IsCurrent || list[0].PushEnabled {
 		t.Fatalf("%+v", list)
 	}
 	// Past its fifteen minutes the access token signs nobody in; the refresh token still works.

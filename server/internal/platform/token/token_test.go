@@ -175,6 +175,72 @@ func TestAForgedOrForeignTokenIsRefused(t *testing.T) {
 	}
 }
 
+// A replica's token is PowerSync's (plan item 13): sub, aud, iat and exp, and nothing else, signed
+// EdDSA by the signing key its JWKS names, which the public key published verifies; and the API's
+// own authentication refuses it, as it refuses every token with an audience.
+func TestAReplicaTokenIsPowerSyncsAndNotTheAPIs(t *testing.T) {
+	k := keys(t, seed(2), seed(1))
+	user := uuid.New()
+	raw, expires, err := k.Replica(user, "powersync", now, 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !expires.Equal(now.Add(5 * time.Minute)) {
+		t.Errorf("expires %s", expires)
+	}
+	if _, err := k.Verify(raw, now); !errors.Is(err, token.ErrInvalid) {
+		t.Errorf("the API took PowerSync's token: %v", err)
+	}
+	jwks, err := k.JWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var set struct {
+		Keys []struct {
+			Kid string `json:"kid"`
+			X   string `json:"x"`
+			Alg string `json:"alg"`
+		} `json:"keys"`
+	}
+	if err := json.Unmarshal(jwks, &set); err != nil || len(set.Keys) != 2 {
+		t.Fatalf("%s: %v", jwks, err)
+	}
+	claims := jwt.MapClaims{}
+	parsed, err := jwt.NewParser(jwt.WithValidMethods([]string{"EdDSA"}), jwt.WithAudience("powersync"),
+		jwt.WithTimeFunc(func() time.Time { return now })).
+		ParseWithClaims(raw, claims, func(tok *jwt.Token) (any, error) {
+			// As PowerSync reads the set: the key its kid names.
+			for _, key := range set.Keys {
+				if key.Kid == tok.Header["kid"] {
+					x, err := base64.RawURLEncoding.DecodeString(key.X)
+					return ed25519.PublicKey(x), err
+				}
+			}
+			return nil, errors.New("no key names the token's kid")
+		})
+	if err != nil || !parsed.Valid {
+		t.Fatalf("the JWKS does not verify the token: %v", err)
+	}
+	if parsed.Header["kid"] != set.Keys[0].Kid || parsed.Header["typ"] != token.ReplicaType {
+		t.Errorf("header %v; want the signing key's kid, %s, and typ %s", parsed.Header, set.Keys[0].Kid, token.ReplicaType)
+	}
+	if claims["sub"] != user.String() {
+		t.Errorf("sub %v", claims["sub"])
+	}
+	for _, name := range []string{"sub", "aud", "iat", "exp"} {
+		if _, ok := claims[name]; !ok {
+			t.Errorf("no %s", name)
+		}
+		delete(claims, name)
+	}
+	if len(claims) > 0 {
+		t.Errorf("further claims: %v", claims)
+	}
+	if _, _, err := k.Replica(user, "", now, time.Minute); err == nil {
+		t.Error("a replica's token without an audience")
+	}
+}
+
 func TestKeysAreReadFromBase64Seeds(t *testing.T) {
 	a, b := seed(3), seed(4)
 	k, err := token.ParseKeys(" " + base64.StdEncoding.EncodeToString(a) + ", " + base64.RawURLEncoding.EncodeToString(b) + ",")

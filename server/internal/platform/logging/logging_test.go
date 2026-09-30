@@ -199,7 +199,7 @@ func secretFrame(amount int) (raw, elided string) {
 }
 
 func TestAllowed(t *testing.T) {
-	for key, want := range map[string]bool{"request_id": true, "route": true, "email": false, "path": false, "query": false} {
+	for key, want := range map[string]bool{"request_id": true, "route": true, "mutation_id": true, "email": false, "path": false, "query": false} {
 		if logging.Allowed(key) != want {
 			t.Errorf("Allowed(%q) = %t, want %t", key, !want, want)
 		}

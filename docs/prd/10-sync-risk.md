@@ -230,8 +230,10 @@ Three consequences, all requirements rather than observations:
    is the replica's last checkpoint, and the mismatches are its bucket-checksum failures and any
    digest item 14 keeps. That makes it metadata, which means it can be sent without the member
    having to expose content.
-3. **Mutation outcomes carry a machine-readable `code`, always.** "Rejected" with no reason is
-   undebuggable by anyone, and here there is no second route to the answer.
+3. **Every mutation outcome but `applied` carries a machine-readable `code`, always.** "Rejected"
+   with no reason is undebuggable by anyone, and here there is no second route to the answer. An
+   `applied` mutation took the effect it asked for, has no reason to give, and carries none
+   ([03](03-platform-strands.md) FR-SY6, plan item 13).
 
 ## 7. Gates
 

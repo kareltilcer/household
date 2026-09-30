@@ -2,6 +2,7 @@ package household
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"net/http"
@@ -268,14 +269,18 @@ func insertMembership(ctx context.Context, tx pgx.Tx, household, user uuid.UUID,
 func insertProfile(ctx context.Context, tx pgx.Tx, id, household, user uuid.UUID, role access.Role, grants map[string]access.Level,
 	p childProfile,
 ) (membership, error) {
+	shown, err := shownGrants(role, grants)
+	if err != nil {
+		return membership{}, err
+	}
 	rows, err := tx.Query(ctx, `
 		WITH m AS (
-		  INSERT INTO memberships (id, household_id, user_id, role, year_of_birth, dashboard_locked)
-		  VALUES ($1, $2, $3, $4, $5, $6)
+		  INSERT INTO memberships (id, household_id, user_id, role, year_of_birth, dashboard_locked, grants)
+		  VALUES ($1, $2, $3, $4, $5, $6, $7)
 		  RETURNING id, household_id, user_id, role, version, created_at, year_of_birth, dashboard_locked
 		)
 		SELECT `+membershipColumns+` FROM m JOIN users u ON u.id = m.user_id`,
-		id, household, user, string(role), p.yearOfBirth, p.dashboardLocked)
+		id, household, user, string(role), p.yearOfBirth, p.dashboardLocked, shown)
 	if err != nil {
 		return membership{}, err
 	}
@@ -306,14 +311,28 @@ func writeGrants(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, gran
 }
 
 // touch bumps m's version for a change of what its row carries, its role, its grants or a child
-// profile's lock, which a new PIN, a lock and an unlock change, and returns m as it stands with role.
-func touch(ctx context.Context, tx pgx.Tx, m membership, role access.Role) (membership, error) {
-	if err := tx.QueryRow(ctx, "UPDATE memberships SET role = $2 WHERE id = $1 RETURNING version", m.id, string(role)).
-		Scan(&m.version); err != nil {
+// profile's lock, which a new PIN, a lock and an unlock change, and returns m as it stands with role
+// and grants, the member's stored levels, which the row carries as the member list shows them, beside
+// the lock m.child says the profile is under, which a lock or its end has set.
+func touch(ctx context.Context, tx pgx.Tx, m membership, role access.Role, grants map[string]access.Level) (membership, error) {
+	shown, err := shownGrants(role, grants)
+	if err != nil {
 		return membership{}, err
 	}
-	m.role = role
+	locked := m.child != nil && m.child.pinLocked
+	if err := tx.QueryRow(ctx, "UPDATE memberships SET role = $2, grants = $3, pin_locked = $4 WHERE id = $1 RETURNING version",
+		m.id, string(role), shown, locked).Scan(&m.version); err != nil {
+		return membership{}, err
+	}
+	m.role, m.grants = role, grants
 	return m, nil
+}
+
+// shownGrants is the grants a membership's row carries to every member's replica, derived
+// capability state (PRD modules/17 Sync): the levels role and stored give on every module, as the
+// member list shows them (grantsOf).
+func shownGrants(role access.Role, stored map[string]access.Level) ([]byte, error) {
+	return json.Marshal(grantsOf(role, stored, Modules))
 }
 
 // enabledModules reads which of the household's modules it enables.
@@ -533,10 +552,9 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		if err := writeGrants(ctx, tx, household, user, changedGrants(old.grants, grants, modules)); err != nil {
 			return mutation.Record{}, err
 		}
-		if m, err = touch(ctx, tx, old, role); err != nil {
+		if m, err = touch(ctx, tx, old, role, grants); err != nil {
 			return mutation.Record{}, err
 		}
-		m.grants = grants
 		enabled, err := enabledModules(ctx, tx, household)
 		if err != nil {
 			return mutation.Record{}, err
@@ -814,10 +832,9 @@ func (s *Service) promote(w http.ResponseWriter, r *http.Request) {
 		if err := writeGrants(ctx, tx, household, old.user, grants); err != nil {
 			return mutation.Record{}, err
 		}
-		if m, err = touch(ctx, tx, old, access.Owner); err != nil {
+		if m, err = touch(ctx, tx, old, access.Owner, grants); err != nil {
 			return mutation.Record{}, err
 		}
-		m.grants = grants
 		promoted = true
 		return mutation.Record{
 			Event: audit.Event{

@@ -48,6 +48,7 @@ func TestRoutesMatchTheContract(t *testing.T) {
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Modules: mods, MaxBodyBytes: 1, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
+		Sync:       apptest.Sync(t, log, apptest.Options{}),
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

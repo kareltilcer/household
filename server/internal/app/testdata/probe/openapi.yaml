@@ -76,6 +76,15 @@ paths:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get: { operationId: getHouseholdsByHouseholdId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
     patch: { operationId: patchHouseholdsByHouseholdId, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  # The sync routes the router always serves (item 13), declared as loosely as the tests need.
+  /sync/jwks:
+    get: { operationId: getSyncJwks, security: [], responses: { '200': { description: The keys } } }
+  /households/{household_id}/sync/credentials:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postSyncCredentials, responses: { '200': { description: Credentials }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/sync/mutations:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postSyncMutations, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Answered }, default: { $ref: '#/components/responses/Problem' } } }
   /households/{household_id}/join-code:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     post: { operationId: postHouseholdsByHouseholdIdJoinCode, responses: { '200': { description: Made }, default: { $ref: '#/components/responses/Problem' } } }

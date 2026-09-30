@@ -83,7 +83,6 @@ type deviceJSONOut struct {
 	AppVersion  string    `json:"app_version"`
 	LastSeenAt  time.Time `json:"last_seen_at"`
 	PushEnabled bool      `json:"push_enabled"`
-	SyncCursor  *int64    `json:"sync_cursor"`
 	IsCurrent   bool      `json:"is_current"`
 }
 

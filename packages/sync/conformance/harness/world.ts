@@ -21,7 +21,7 @@ import { Recorder } from './recorder.ts'
 import { Rng } from './rng.ts'
 import { ends, type SyncMutationResult } from './mutation.ts'
 import type { Target } from './target.ts'
-import { until } from './wait.ts'
+import { sleep, until } from './wait.ts'
 
 /** How long a run waits for its clients to settle before the invariants judge what it has. */
 export const settleMs = 20_000
@@ -178,6 +178,14 @@ export class World {
       // in past the client's network, as its connector would renew it.
       await response.body?.cancel()
       response = await send(await this.target.signIn(client.member.id, fetch))
+    }
+    // The device's batches are limited (PRD 02 §9), and every batch of a long run delivered again
+    // at its end spends them: a 429 is waited out, as the connector waits it out.
+    for (let waited = 0; response.status === 429 && waited < 120; waited++) {
+      const after = Number(response.headers.get('retry-after') ?? '1')
+      await response.body?.cancel()
+      await sleep(Math.min(60, Number.isFinite(after) ? after : 1) * 1000)
+      response = await send(await client.credentialNow())
     }
     const text = await response.text()
     const report = (detail: string): Violation[] => [

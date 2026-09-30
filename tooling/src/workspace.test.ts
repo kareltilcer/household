@@ -348,12 +348,35 @@ describe('a developer machine and CI', () => {
   // replication, beside PowerSync. The two PostgreSQLs are one image, and PowerSync is pinned to a
   // release, never a moving tag: the suite is what tells an upgrade apart.
   it('run the same PostgreSQL image in the conformance stack, beside a pinned PowerSync', () => {
-    const local = field(readRecord('docker-compose.yml'), 'services', 'postgres', 'image')
+    const compose = readRecord('docker-compose.yml')
+    const local = field(compose, 'services', 'postgres', 'image')
     const stack = readRecord('packages/sync/conformance/stack/docker-compose.yml')
     expect(field(stack, 'services', 'postgres', 'image')).toBe(local)
     expect(field(stack, 'services', 'powersync', 'image')).toMatch(
       /^journeyapps\/powersync-service:\d+\.\d+\.\d+$/,
     )
+    // The development PowerSync (item 13) is the one the suite proves.
+    expect(field(compose, 'services', 'powersync', 'image')).toBe(
+      field(stack, 'services', 'powersync', 'image'),
+    )
+  })
+
+  // PowerSync shares anonymous usage by default, and its replication connection's debug API opens
+  // execute-sql, which reads the database as its replication role, past row-level security (ADR
+  // 0014): every configuration of it says both are off, in so many words.
+  it('run PowerSync with its telemetry and its debug API off', () => {
+    for (const path of [
+      'deploy/powersync/powersync.yaml',
+      'packages/sync/conformance/stack/powersync/powersync.yaml',
+    ]) {
+      const config = readRecord(path)
+      expect(field(config, 'telemetry', 'disable_telemetry_sharing'), path).toBe(true)
+      const connections = field(config, 'replication', 'connections')
+      expect(Array.isArray(connections) && connections.length > 0, path).toBe(true)
+      for (const connection of Array.isArray(connections) ? connections : []) {
+        expect(field(connection, 'debug_api'), path).toBe(false)
+      }
+    }
   })
 
   // A cached `go test` result passes a database test without running it: CI restores Go's

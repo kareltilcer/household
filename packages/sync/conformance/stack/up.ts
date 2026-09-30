@@ -1,9 +1,9 @@
-// `pnpm --filter @household/sync conformance:up`: starts the suite's stack and prepares it. The
-// database first, then the platform's roles and migrations as a deploy runs them, then the
-// conformance module and what PowerSync needs of the database, and PowerSync last, once its
-// role, publication and storage exist. It can be run again on a stack that is up: PowerSync is
-// started afresh each time, so that it runs on the configuration and the streams in the working
-// tree (stack/powersync), not on the ones it was first started with.
+// `pnpm --filter @household/sync conformance:up`: starts the suite's stack and prepares it as a
+// deploy does. The database first, then the platform's roles, PowerSync's among them, its bucket
+// storage and the migrations, which publish the tables PowerSync replicates, then the conformance
+// module, and PowerSync last, once its role, publication and storage exist. It can be run again on a
+// stack that is up: PowerSync is started afresh each time, so that it runs on the configuration
+// and the streams in the working tree (stack/powersync), not on the ones it was first started with.
 
 import { execFileSync } from 'node:child_process'
 import { powerSyncUrl } from '../harness/env.ts'
@@ -17,7 +17,7 @@ function run(command: string, args: readonly string[], cwd?: string): void {
 run('docker', ['compose', '--file', composeFile, 'up', '--detach', '--wait', 'postgres'])
 run('go', ['run', './cmd/household-api', 'bootstrap'], serverDir)
 run('go', ['run', './cmd/household-api', 'migrate'], serverDir)
-run('go', ['run', './cmd/conformance-standin', 'setup'], serverDir)
+run('go', ['run', './cmd/conformance-api', 'setup'], serverDir)
 run('docker', ['compose', '--file', composeFile, 'up', '--detach', '--force-recreate', 'powersync'])
 
 const ready = await until(() => answers(`${powerSyncUrl}/probes/readiness`), 120_000)

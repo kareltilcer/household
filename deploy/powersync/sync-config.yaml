@@ -1,0 +1,57 @@
+# PowerSync's sync configuration (ADR 0001, ADR 0014): a stream for each way an entity the server's
+# modules and the platform declare reaches a member, generated from the entity registry by
+# server/internal/syncconfig. Do not edit it: `pnpm run gen` writes it, and architecture test 10 fails it
+# when it is not what the registry generates.
+config:
+  edition: 3
+
+streams:
+  admin_household_settings:
+    query: |
+      SELECT id, name, country, timezone, base_currency, locale, units, first_day_of_week, billing_payer_id, version, created_by, created_at, updated_by, updated_at, deleted_at FROM households
+      WHERE id = subscription.parameter('household_id')
+        AND id IN (
+          SELECT m.household_id FROM memberships m
+          WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
+        )
+
+  admin_invitation_owner:
+    query: |
+      SELECT id, household_id, kind, email, role, grants, dashboard_layout, message, invited_by, expires_at, max_uses, uses, status, version, created_by, created_at, updated_by, updated_at, deleted_at FROM invitations
+      WHERE household_id = subscription.parameter('household_id')
+        AND household_id IN (
+          SELECT m.household_id FROM memberships m
+            JOIN module_enablement e ON e.household_id = m.household_id
+          WHERE m.user_id = auth.user_id() AND m.role = 'owner'
+            AND e.household_id = subscription.parameter('household_id')
+            AND e.module = 'admin' AND e.enabled
+        )
+
+  admin_invitation_granted:
+    query: |
+      SELECT id, household_id, kind, email, role, grants, dashboard_layout, message, invited_by, expires_at, max_uses, uses, status, version, created_by, created_at, updated_by, updated_at, deleted_at FROM invitations
+      WHERE household_id = subscription.parameter('household_id')
+        AND household_id IN (
+          SELECT g.household_id FROM module_grants g
+            JOIN module_enablement e ON e.household_id = g.household_id AND e.module = g.module
+          WHERE g.user_id = auth.user_id() AND g.module = 'admin' AND g.level <> 'none'
+            AND e.household_id = subscription.parameter('household_id') AND e.enabled
+        )
+
+  admin_membership:
+    query: |
+      SELECT id, household_id, user_id, role, grants, dashboard_locked, pin_locked, version, created_by, created_at, updated_by, updated_at, deleted_at FROM memberships
+      WHERE household_id = subscription.parameter('household_id')
+        AND household_id IN (
+          SELECT m.household_id FROM memberships m
+          WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
+        )
+
+  admin_module_enablement:
+    query: |
+      SELECT * FROM module_enablement
+      WHERE household_id = subscription.parameter('household_id')
+        AND household_id IN (
+          SELECT m.household_id FROM memberships m
+          WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
+        )

@@ -72,6 +72,10 @@ var allowed = map[string]bool{
 	// An email that was not sent (internal/platform/identity): the template's key, never the
 	// address or anything rendered into it.
 	"template": true,
+
+	// A mutation the push could not answer (internal/platform/push): the UUID its device drew for
+	// it, which names it in the device's queue and carries none of its fields.
+	"mutation_id": true,
 }
 
 // The correlation keys the logger adds from the request's scope.

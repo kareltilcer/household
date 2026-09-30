@@ -1,14 +1,14 @@
-// The harness proves itself against the stand-ins (plan item 12): it drives real PowerSync clients
-// through every kind of fault it scripts and finds every invariant held, and it fails a
-// deliberately broken connector and a deliberately broken stream, which shows the suite can fail.
-// The scenarios themselves (scenarios.test.ts) wait for the engine items 13, 14 and 18 build.
+// The harness proves itself against the engine (plan items 12 and 13): it drives real PowerSync
+// clients through every kind of fault it scripts and finds every invariant held, and it fails a
+// deliberately broken connector and a deliberately broken stream, which shows the suite can fail. The
+// scenarios themselves (scenarios.test.ts) are switched on as items 13, 14 and 18 build their engine.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Admin } from '../harness/admin.ts'
 import { adminDatabaseUrl } from '../harness/env.ts'
 import type { Violation } from '../harness/invariants.ts'
 import { push } from '../harness/network.ts'
-import { leakyStream, standIn } from '../harness/target.ts'
+import { engine, leakyStream } from '../harness/target.ts'
 import { sleep } from '../harness/wait.ts'
 import { World } from '../harness/world.ts'
 import { family } from '../scenarios/scenario.ts'
@@ -24,7 +24,7 @@ afterAll(async () => {
 })
 
 async function run(name: string, seed: number, body: (w: World) => Promise<void>): Promise<void> {
-  const w = new World(standIn, admin, seed, name)
+  const w = new World(engine, admin, seed, name)
   try {
     await body(w)
   } finally {
@@ -38,7 +38,7 @@ async function run(name: string, seed: number, body: (w: World) => Promise<void>
 const kinds = (violations: readonly Violation[]): string[] =>
   [...new Set(violations.map((v) => v.invariant))].sort()
 
-describe('the harness, against the stand-ins', () => {
+describe('the harness, against the engine', () => {
   it('drives clients through partitions, lost answers, duplicates and skew, and finds every invariant held', async () => {
     await run('control', 12_001, async (w) => {
       const f = await family(w)
@@ -122,7 +122,7 @@ describe('the harness, against the stand-ins', () => {
     })
   })
 
-  it('follows each access loss the stand-in streams express, and the access coming back', async () => {
+  it("follows each access loss the grant's streams express, and the access coming back", async () => {
     await run('access-loss', 12_002, async (w) => {
       const f = await family(w)
       const jana = w.client({ name: 'jana', member: f.jana, household: f.home })
@@ -153,6 +153,11 @@ describe('the harness, against the stand-ins', () => {
     })
   })
 
+  // The read path's tenant isolation (FR-NF4's twin, ADR 0001): the replication role reads past
+  // row-level security, so the generated streams alone keep a household's rows to it. A member of two
+  // households, connected to one, holds none of the other's rows, of any table, admin's included, nor
+  // any row of a household they are not in; every row a replica holds of another household is an
+  // isolation violation.
   it('keeps a member of two households to the household each replica subscribed to', async () => {
     await run('isolation', 12_003, async (w) => {
       const f = await family(w)
@@ -161,12 +166,21 @@ describe('the harness, against the stand-ins', () => {
         { member: f.jana, role: 'member', level: 'view' },
       ])
       await admin.insert('conformance_items', cottage, [{ id: w.rng.uuid(), title: 'Firewood' }])
+      // A household Petr is not in, with Eva, who is in his.
+      const neighbours = await w.household('Soused', [{ member: f.eva, role: 'owner' }])
+      await admin.insert('conformance_items', neighbours, [{ id: w.rng.uuid(), title: 'Salt' }])
       const home = w.client({ name: 'petr-home', member: f.petr, household: f.home })
       const away = w.client({ name: 'petr-cottage', member: f.petr, household: cottage })
       await Promise.all([home.online(), away.online()])
       expect(await w.settle()).toBe(true)
       expect(await home.rows('conformance_items')).toHaveLength(3)
       expect(await away.rows('conformance_items')).toHaveLength(1)
+      expect((await home.rows('memberships')).map((m) => m['household_id'])).toEqual([
+        f.home.id,
+        f.home.id,
+        f.home.id,
+      ])
+      expect((await away.rows('households')).map((h) => h['id'])).toEqual([cottage.id])
       expect(await w.violations()).toEqual([])
     })
   })

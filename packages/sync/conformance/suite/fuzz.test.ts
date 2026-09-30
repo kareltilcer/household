@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Admin } from '../harness/admin.ts'
 import { adminDatabaseUrl, fuzz as settings } from '../harness/env.ts'
 import { fuzz } from '../harness/fuzz.ts'
-import { standIn } from '../harness/target.ts'
+import { engine } from '../harness/target.ts'
 
 let admin: Admin
 
@@ -18,11 +18,11 @@ afterAll(async () => {
   await admin.close()
 })
 
-describe(`the fuzzer, against the ${standIn.name}`, () => {
+describe(`the fuzzer, against the ${engine.name}`, () => {
   for (let i = 0; i < settings.runs; i++) {
     const seed = settings.seed + i
     it(`seed ${String(seed)}, ${String(settings.steps)} steps`, async () => {
-      const result = await fuzz({ seed, steps: settings.steps, target: standIn, admin })
+      const result = await fuzz({ seed, steps: settings.steps, target: engine, admin })
       // A run that never settled is judged mid-flight, and fails whatever its invariants see.
       expect(
         { settled: result.settled, violations: result.violations },

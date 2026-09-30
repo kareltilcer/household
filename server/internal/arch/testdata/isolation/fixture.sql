@@ -62,3 +62,10 @@ INSERT INTO idempotency_keys (household_id, user_id, key, fingerprint, state, cl
   ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000a1', 'k1', '\x01', 'in_flight', '01900000-0000-7000-8000-0000000000d1', now()),
   ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000b1', 'k1', '\x02', 'in_flight', '01900000-0000-7000-8000-0000000000d2', now()),
   ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000b1', 'k1', '\x03', 'in_flight', '01900000-0000-7000-8000-0000000000d3', now());
+
+-- Household B's owner's answer to a mutation they pushed in each household, and household A's owner's
+-- in theirs.
+INSERT INTO sync_mutations (household_id, user_id, mutation_id, fingerprint, outcome, version, row) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000a1', '01900000-0000-7000-8000-0000000000d4', decode(repeat('a1', 32), 'hex'), 'applied', 1, '{"title": "Milk"}'),
+  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-0000000000d5', decode(repeat('a2', 32), 'hex'), 'applied', 1, '{"title": "Eggs"}'),
+  ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-0000000000d6', decode(repeat('b1', 32), 'hex'), 'applied', 1, '{"title": "Bread"}');
