@@ -268,6 +268,7 @@ func TestPowerSyncsStorageIsADatabaseOfItsOwn(t *testing.T) {
 		"the household's database": {dsn("powersync_storage", "b", "127.0.0.1", "household"), "a database of its own"},
 		"a role of the server's":   {dsn("household_app", "b", "127.0.0.1", "powersync_storage"), "a role of its own"},
 		"PowerSync's replication":  {dsn("household_powersync", "b", "127.0.0.1", "powersync_storage"), "a role of its own"},
+		"the administrator's role": {dsn("postgres", "b", "127.0.0.1", "powersync_storage"), "the administrator"},
 		"no password":              {dsn("powersync_storage", "", "127.0.0.1", "powersync_storage"), "no role or no password"},
 		"another cluster":          {dsn("powersync_storage", "b", "buckets.internal:5432", "powersync_storage"), "leave it unset"},
 		"another port":             {dsn("powersync_storage", "b", "127.0.0.1:5433", "powersync_storage"), "leave it unset"},

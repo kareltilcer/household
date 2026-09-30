@@ -309,7 +309,9 @@ type Storage struct {
 // password, and its database, owned by it, unless the database exists; only the role and the
 // caller may connect to it. It runs on the cluster admin connects to, as a role that may create
 // roles and databases, and is safe to run again. A database cannot be created in a transaction,
-// so it runs outside one.
+// so it runs outside one. It refuses a role of the server's, PowerSync's replication role and the
+// administrator's own, each of which it would bring down to the storage role's attributes and
+// password.
 func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error {
 	switch {
 	case storage.Role == "" || storage.Database == "":
@@ -317,9 +319,21 @@ func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error
 	case storage.Password == "":
 		return fmt.Errorf("db: prepare storage: no password for %s", storage.Role)
 	}
+	for _, m := range managed {
+		if m.role == storage.Role {
+			return fmt.Errorf("db: prepare storage: %s is a role CreateRoles makes; the bucket storage is owned by a role of its own", storage.Role)
+		}
+	}
 	err := pgx.BeginFunc(ctx, admin, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", CatalogLock); err != nil {
 			return fmt.Errorf("lock: %w", err)
+		}
+		var administrator bool
+		if err := tx.QueryRow(ctx, "SELECT $1 IN (current_user::text, session_user::text)", storage.Role).Scan(&administrator); err != nil {
+			return fmt.Errorf("look up the administrator: %w", err)
+		}
+		if administrator {
+			return fmt.Errorf("%s is the administrator's role; the bucket storage is owned by a role of its own", storage.Role)
 		}
 		return setRole(ctx, tx, storage.Role, roleAttributes{login: true}, storage.Password)
 	})

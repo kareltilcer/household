@@ -554,10 +554,12 @@ func local(url string) bool {
 // storage checks PowerSync's bucket storage is a database of its own, beside the household's, owned
 // by a role of its own that logs in with a password: it holds every household's replicated rows
 // outside row-level security, so neither the household database nor any role of the server's is
-// it. Bootstrap prepares it on the administrator's cluster, so a storage named, rather than
-// defaulted, on another cluster is refused: bootstrap would make its role and its database where
-// PowerSync never looks, and leave the cluster PowerSync connects to unprepared. A storage kept on a
-// cluster of its own is left unnamed, and prepared there.
+// it. Nor is the administrator's role, which bootstrap would otherwise bring down to the storage
+// role's attributes and password; a connection string that names no role logs in as the operating
+// system's user, which may be the administrator's name. Bootstrap prepares it on the administrator's
+// cluster, so a storage named, rather than defaulted, on another cluster is refused: bootstrap would
+// make its role and its database where PowerSync never looks, and leave the cluster PowerSync
+// connects to unprepared. A storage kept on a cluster of its own is left unnamed, and prepared there.
 func (l *loader) storage(c *Config, named bool) {
 	if c.PowerSyncStorageURL == "" {
 		return
@@ -575,6 +577,9 @@ func (l *loader) storage(c *Config, named bool) {
 		l.fail("%s carries no role or no password", PowerSyncStorageURLVar)
 	case slices.Contains(append(db.Roles, db.RolePowerSync), cfg.User):
 		l.fail("%s logs in as %s; the bucket storage is owned by a role of its own", PowerSyncStorageURLVar, cfg.User)
+	case err == nil && cfg.User == admin.User:
+		l.fail("%s logs in as %s, the administrator %s names; the bucket storage is owned by a role of its own",
+			PowerSyncStorageURLVar, cfg.User, AdminDatabaseURLVar)
 	case named && err == nil && !sameCluster(cfg, admin):
 		l.fail("%s names the cluster at %s, and bootstrap prepares the bucket storage on the administrator's, at %s (%s); leave it unset when the storage is kept on a cluster of its own",
 			PowerSyncStorageURLVar, net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))),

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -54,9 +55,17 @@ type world struct {
 	pool     *pgxpool.Pool
 	accounts app.Accounts
 	router   chi.Router
+	// failures counts the records the API logged at ERROR.
+	failures *atomic.Int64
 }
 
 func newWorld(t *testing.T, o apptest.Options) *world {
+	t.Helper()
+	return newWorldOf(t, o, conformance.Module{})
+}
+
+// newWorldOf is newWorld with m registered in the conformance module's place.
+func newWorldOf(t *testing.T, o apptest.Options, m module.Module) *world {
 	t.Helper()
 	d := testsupport.Open(t)
 	c, err := contract.Load()
@@ -64,9 +73,10 @@ func newWorld(t *testing.T, o apptest.Options) *world {
 		t.Fatal(err)
 	}
 	// What a request could not do is the test's to read, when it fails.
-	log := slog.New(slog.NewTextHandler(testLog{t}, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	failures := &atomic.Int64{}
+	log := slog.New(slog.NewTextHandler(testLog{t, failures}, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	pool := d.Pool(t, db.RoleApp)
-	registry, err := module.NewRegistry(conformance.Module{})
+	registry, err := module.NewRegistry(m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,13 +98,20 @@ func newWorld(t *testing.T, o apptest.Options) *world {
 	if !ok {
 		t.Fatalf("Around answered a %T", around)
 	}
-	return &world{t: t, admin: d.Pool(t, ""), pool: pool, accounts: accounts, router: root}
+	return &world{t: t, admin: d.Pool(t, ""), pool: pool, accounts: accounts, router: root, failures: failures}
 }
 
-// testLog writes a log's lines to the test's.
-type testLog struct{ t *testing.T }
+// testLog writes a log's lines to the test's, and counts those at ERROR in failures: the handler
+// writes each record in one call.
+type testLog struct {
+	t        *testing.T
+	failures *atomic.Int64
+}
 
 func (l testLog) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte(" level=ERROR ")) {
+		l.failures.Add(1)
+	}
 	l.t.Log(strings.TrimRight(string(p), "\n"))
 	return len(p), nil
 }
@@ -604,6 +621,47 @@ func TestPushLimitsABatchAndADevice(t *testing.T) {
 	// Another device of the member's has a budget of its own.
 	if rec := w.push(household, w.signIn(member, 0), key(), big[2]); rec.Code != http.StatusOK {
 		t.Errorf("another device's batch: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// takeover is the conformance module with a writer that runs take before each write: a test's way in
+// between the Idempotency-Key's claim and the mutation's commit.
+type takeover struct {
+	conformance.Module
+	take func()
+}
+
+func (m takeover) WriteSync(ctx context.Context, tx pgx.Tx, mut push.Mutation) (push.Written, error) {
+	m.take()
+	return m.Module.WriteSync(ctx, tx, mut)
+}
+
+// A batch whose Idempotency-Key a repeat of the request took over, once the key's lease had passed,
+// can no longer commit: its mutation is rolled back, it keeps no answer, and it is answered as a
+// repeat of a request still running is, 409 idempotency_in_progress, with nothing logged as a
+// failure, since nothing on the server failed.
+func TestPushAnswersABatchWhoseKeyWasTakenOver(t *testing.T) {
+	var take func()
+	w := newWorldOf(t, apptest.Options{}, takeover{take: func() { take() }})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	k, milk := key(), idgen.New()
+	// As take does to a claim past its lease: the repeat holds the key under a claim of its own.
+	take = func() {
+		w.exec("UPDATE idempotency_keys SET claim = gen_random_uuid(), claimed_at = now() WHERE household_id = $1 AND key = $2", household, k)
+	}
+	rec := w.push(household, token, k, mutationOf(conformance.Item, "create", milk, map[string]any{"title": "Milk"}))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"idempotency_in_progress"`) {
+		t.Fatalf("a batch whose key was taken over: %d %s", rec.Code, rec.Body)
+	}
+	if n := w.count("SELECT count(*) FROM conformance_items WHERE id = $1", milk); n != 0 {
+		t.Errorf("%d items written, want none", n)
+	}
+	if n := w.count("SELECT count(*) FROM sync_mutations WHERE household_id = $1", household); n != 0 {
+		t.Errorf("%d answers kept, want none", n)
+	}
+	if n := w.failures.Load(); n != 0 {
+		t.Errorf("%d failures logged, want none", n)
 	}
 }
 

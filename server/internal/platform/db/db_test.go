@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -315,6 +316,42 @@ func TestPrepareStorageMakesADatabaseOfItsOwn(t *testing.T) {
 	if err := admin.QueryRow(t.Context(), "SELECT rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1", storage.Role).
 		Scan(&replication, &bypass); err != nil || replication || bypass {
 		t.Errorf("the storage's role: replication %t, bypassrls %t (%v)", replication, bypass, err)
+	}
+}
+
+// The bucket storage's role is its own: PrepareStorage brings the role it is given down to a storage
+// role's attributes and password, so it refuses the administrator's, which would lose what it
+// prepares the cluster with, and a role the server or PowerSync's replication logs in as, before it
+// alters anything.
+func TestPrepareStorageRefusesARoleThatIsNotItsOwn(t *testing.T) {
+	admin := connect(t, testsupport.AdminURL())
+	var administrator string
+	var attributes []bool
+	read := func() []bool {
+		var super, createRole, createDB bool
+		if err := admin.QueryRow(t.Context(), "SELECT rolsuper, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname = $1", administrator).
+			Scan(&super, &createRole, &createDB); err != nil {
+			t.Fatal(err)
+		}
+		return []bool{super, createRole, createDB}
+	}
+	if err := admin.QueryRow(t.Context(), "SELECT current_user::text").Scan(&administrator); err != nil {
+		t.Fatal(err)
+	}
+	attributes = read()
+	database := "household_test_refused_" + strconv.FormatInt(int64(os.Getpid()), 10)
+	for _, role := range []string{administrator, db.RolePowerSync, db.RoleApp} {
+		err := db.PrepareStorage(t.Context(), admin, db.Storage{Role: role, Password: "storage", Database: database})
+		if err == nil || !strings.Contains(err.Error(), "a role of its own") {
+			t.Errorf("the bucket storage owned by %s: %v", role, err)
+		}
+	}
+	if got := read(); !slices.Equal(got, attributes) {
+		t.Errorf("the administrator's superuser, createrole and createdb went from %v to %v", attributes, got)
+	}
+	var exists bool
+	if err := admin.QueryRow(t.Context(), "SELECT EXISTS (SELECT FROM pg_database WHERE datname = $1)", database).Scan(&exists); err != nil || exists {
+		t.Errorf("a refused storage made its database (%v)", err)
 	}
 }
 
