@@ -2,7 +2,7 @@
 // of the entities that replicate, each with the merge policy and the access it declares; the
 // streams PowerSync replicates them through, generated from those declarations (Streams, D-93,
 // ADR 0014); and the writer of the change feed, sync_changes, which the mutation spine calls in
-// every mutation's transaction and whose fate plan item 14 decides. The push that applies a
+// every mutation's transaction and whose fate plan item 17 decides. The push that applies a
 // client's mutations is internal/platform/push.
 package sync
 

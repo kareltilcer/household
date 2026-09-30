@@ -162,15 +162,15 @@ module exists (D-82), enforced by architecture tests. None of them says:
   answering `problem.Conflict` on a mismatch.
 - Items 8, 9 and 13 set `via` (`web`, `mobile`, `sync`) where they let a request in, and item 8
   fills `actor_label`; until then a mutation outside the tests fails with `ErrNoVia`, loudly.
-- Item 14's partition maintenance moves any rows that reached the default partition into their
+- Item 17's partition maintenance moves any rows that reached the default partition into their
   month's partition before creating it, which PostgreSQL otherwise refuses, and adds D-88's
   redacted rows to the spine from each entity's `Redact`.
-- Item 17's expiry sweep deletes `idempotency_keys` past seven days (PRD 03 §5).
+- Item 15's expiry sweep deletes `idempotency_keys` past seven days (PRD 03 §5).
 - A key whose effect committed but whose response was never stored, because the process died
   between the two, the response was larger than the 1 MiB a key keeps, or the request was
   answered other than `2xx` after its effect committed, answers `409` until it expires: running it
   again would repeat the effect, the one thing the key exists to prevent. The contract says so. An
-  upload that takes longer than the lease needs its claim renewed (item 16).
+  upload that takes longer than the lease needs its claim renewed (item 14).
 - The Idempotency-Key middleware is mounted on module routes. A household-scoped route outside a
   module (item 10's members, invitations and grants) mounts it as well. A route outside any
   household (`/auth`, `/me`, creating a household) has no household to hold its key in, since a

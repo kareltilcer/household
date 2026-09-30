@@ -155,7 +155,7 @@ read path, which adoption gives up; the generated streams and the isolation test
   client learns of a retraction only as the row leaving its replica, which is also how a row
   another member deleted leaves it when a stream drops tombstones, as the spike's did. The design's
   withdrawn state tells the two apart (design 03-patterns, *When access is withdrawn*), so items 13
-  and 15 must give the client a way to tell them apart.
+  and 18 must give the client a way to tell them apart.
 - **The tenant boundary on the read path is the generated streams.** PowerSync's replication role
   holds `REPLICATION` and `BYPASSRLS`. Every tenant table forces row-level security and the engine
   sets no tenant, so without `BYPASSRLS` it could read no table's initial snapshot (the spike never
@@ -176,7 +176,7 @@ read path, which adoption gives up; the generated streams and the isolation test
 
 | Alternative | Why not |
 |---|---|
-| **Build PRD 03 §2's engine**: the feed pull, the snapshot, the `retract` rows, the digest, the realtime nudge, and a TypeScript client with two storage adapters (plan items 12–15 as first written: sizes L, XL, XL and L). Whether the digest and the nudge keep endpoints beside PowerSync is a separate question, left to item 14 | The spike's hardest cases, retraction for every cause and a queue that outlives going offline and whose refusals are surfaced once, came from PowerSync with no client code but the connector, on item 4's schema, with members' writes still through the spine. Building keeps two things adoption gives up: row-level security under the read path, and the floor as one term of the predicate. Each has a replacement that a test holds (above), and neither is worth building replication, retraction and the client replica ourselves, the riskiest work in the programme. Items 12–15 stay four items at the same sizes, but they build around PowerSync rather than that |
+| **Build PRD 03 §2's engine**: the feed pull, the snapshot, the `retract` rows, the digest, the realtime nudge, and a TypeScript client with two storage adapters (plan items 12, 13, 17 and 18 as first written: sizes L, XL, XL and L). Whether the digest and the nudge keep endpoints beside PowerSync is a separate question, left to item 17 | The spike's hardest cases, retraction for every cause and a queue that outlives going offline and whose refusals are surfaced once, came from PowerSync with no client code but the connector, on item 4's schema, with members' writes still through the spine. Building keeps two things adoption gives up: row-level security under the read path, and the floor as one term of the predicate. Each has a replacement that a test holds (above), and neither is worth building replication, retraction and the client replica ourselves, the riskiest work in the programme. Items 12, 13, 17 and 18 stay four items at the same sizes, but they build around PowerSync rather than that |
 | **Electric** | It replicates reads only, so the outbox, its persistence and the optimistic state are ours to build, as the spike did. Its own client (1.5.28) ignores the `move-out` events that carry access loss, so a revoked grant leaves the rows on the device; a correct replica has to evaluate its positional tag protocol, which is the kind of client code the adoption was meant to avoid. Its React Native persistence is pre-1.0 |
 | **Zero** | No offline writes |
 | **Replicache** | In maintenance mode; no maintained React Native binding; no per-mutation outcomes on push |
@@ -184,32 +184,32 @@ read path, which adoption gives up; the generated streams and the isolation test
 
 ## Consequences
 
-- **Plan items 12–15 are rewritten** in the same PR: the conformance suite drives PowerSync
+- **Plan items 12, 13, 17 and 18 are rewritten** in the same PR: the conformance suite drives PowerSync
   clients against the real stack instead of an in-process engine; item 13 deploys the service and
-  generates the streams; item 14 adds conflicts, the visibility and audience streams, retraction
-  for all five causes and the observability; item 15 wraps the PowerSync SDKs. PL-5's replica is
+  generates the streams; item 17 adds conflicts, the visibility and audience streams, retraction
+  for all five causes and the observability; item 18 wraps the PowerSync SDKs. PL-5's replica is
   op-sqlite in a dev build rather than expo-sqlite, and PL-6 says PowerSync.
 - **The contract changes later, not here.** `getSyncChanges` and `postSyncSnapshot` describe the
   replaced pull and bootstrap; item 13 removes them from `openapi.yaml` and `contract_pending` and
   adds the endpoint that hands a client PowerSync's URL and a token of its own. PowerSync checks a
   token's `aud` against the audience it is configured with, and item 9's access token carries no
   `aud` (only `sub`, `sid`, `iat`, `exp` and `client`), so the API's own token is never the one
-  PowerSync reads. Item 14 decides the fate of `postSyncDigest`, `postSyncReset`, `getSyncState`
+  PowerSync reads. Item 17 decides the fate of `postSyncDigest`, `postSyncReset`, `getSyncState`
   and `…/stream`, whose frames carry entitlement and access changes as well as Chat's payloads.
 - **`sync_changes` has no reader**, and neither has the `seq` the push's response carries. Item 4's
   spine still writes it, under a per-household lock that serialises a household's commits, so its
-  monthly partitions still have to be made while it does. Item 14 either names a consumer or stops
+  monthly partitions still have to be made while it does. Item 17 either names a consumer or stops
   the write and drops the table through an expand/contract migration, recording the choice in a new
   ADR (ADR 0006 is accepted, so it is not rewritten) and amending PRD 03 §2.2, 07 §1, CLAUDE.md
   and the push's response, and PRD 01 §3 and §10's check 4 if the write stops.
 - **The tenant middleware is not on the read path.** It resolves the entitlement state on every
   request, and PRD 04 §3 gives a `suspended` household no sync at all. The credentials and the
-  streams hold that instead, which item 18 adds.
+  streams hold that instead, which item 16 adds.
 - **D-85's digest is partly the engine's now.** PowerSync verifies each bucket's checksum at every
   checkpoint and downloads it again on a mismatch. That holds a replica to PowerSync's buckets, not
   the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an
   entity's declared access, passes every checksum. A digest computed from PostgreSQL still sees
-  that, and item 14 decides whether its endpoint stays for it and, since PRD 10 §5 evaluates it at
+  that, and item 17 decides whether its endpoint stays for it and, since PRD 10 §5 evaluates it at
   the client's feed cursor and a PowerSync client has none, the point it is computed at. A local
   write the server never took is not such a case: PowerSync drops it at the next checkpoint, as it
   dropped the spike's rejected Butter.
@@ -221,25 +221,25 @@ read path, which adoption gives up; the generated streams and the isolation test
   so the production provider chosen in item 88 must allow it; items 30 and 88 deploy the service.
   PowerSync's deployment guidance caps one API process at 200 concurrent client connections and
   recommends 100, so the service scales out with connected devices. PRD 07 §1's Year-3 connection
-  target names only the socket (40 000), so item 14 restates it for PowerSync when it decides the
+  target names only the socket (40 000), so item 17 restates it for PowerSync when it decides the
   socket's fate, and item 90 measures the service against it. It is also a dependency that can fail
   on its own, so item 13 defines its failure behaviour (PRD 07 FR-NF3) and item 89 tests it.
 - **Removing a member from an audience rewrites every row of that audience**, to take the member
   out of each row's readers, and removal from the household does so for every audience they were
   in. The rewrite is not an edit of the row: item 4's `touch_entity` bumps `version` on every
   update, which would turn each queued or `If-Match` edit to a row of the audience into a conflict
-  or a preserved loser, so item 14 keeps the readers out of the version, a change to ADR 0006's
+  or a preserved loser, so item 17 keeps the readers out of the version, a change to ADR 0006's
   trigger that a new ADR records and PRD 01 §3 already notes, or in a table of their own, which the
   probes accepted only alone: never beside the grant's subquery, and against a table the spike
   never created. A household's conversations are small enough that this is cheap. A
   `member_shared` calendar's audience is every event of the calendar, which can be many more rows;
-  it has no floor, so item 14 may resolve it through the calendar's member list in the stream
+  it has no floor, so item 17 may resolve it through the calendar's member list in the stream
   instead, which the probes accepted though never beside the grant's subquery. Item 90's load tests
   measure whichever remains.
 - **A private row's owner holds its redacted form as well**, in a separate table. The client never
   shows it where the full row exists; nothing leaks, since the owner may see the full row anyway.
-  Item 14 declares each projection as the column list its stream selects, in place of the `Redact`
-  function ADR 0006 gave `sync.Entity` and the redacted feed rows it left to item 14.
+  Item 17 declares each projection as the column list its stream selects, in place of the `Redact`
+  function ADR 0006 gave `sync.Entity` and the redacted feed rows it left to item 17.
 - **The licence** permits this use, and each release becomes Apache-2.0 two years after it ships.
   A later release under different terms can be declined: the pinned version keeps working.
 - **What would make this worth revisiting**: gate G-C failing on PowerSync, whose fallback is now to
@@ -247,7 +247,7 @@ read path, which adoption gives up; the generated streams and the isolation test
   a module whose access the stream language cannot express; a change in PowerSync's licence or
   maintenance.
 - **Not verified by the spike**: a restart, since offline was `disconnect()` on a database left
-  open, so a queue that survives the app being killed rests on the SDK's persistence until item 15
+  open, so a queue that survives the app being killed rests on the SDK's persistence until item 18
   tests it; tokens signed EdDSA, with the key PowerSync fetches from a JWKS the API publishes (the
   spike signed HS256, with the key inline in PowerSync's configuration); the per-household
   subscription parameter, which the probes compiled and no scenario ran; scenario 16 as PRD 10 §4

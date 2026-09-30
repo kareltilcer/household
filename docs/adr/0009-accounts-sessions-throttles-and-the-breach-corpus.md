@@ -159,7 +159,7 @@ gone; and the descriptions say what the limits and the pre-sign-in keys do.
 | A password change keeping its key on the account, as every other account request does | The same fast hash, of the new password and the old, kept seven days |
 | A password change ending every reset link already sent | Someone who knows the password could change it again as each link arrived, and the owner would never finish a reset. Whoever holds a link holds the mailbox, which can ask for a new one anyway |
 | Checking a sign-in's throttle, and counting it only once the password failed | Every attempt already sent passes the check before the first failure is counted: a burst is checked whole |
-| A durable email outbox | The outbox would hold every verification and reset token in the clear until sent. Item 17's notification transport owns durability, and a lost email is asked for again |
+| A durable email outbox | The outbox would hold every verification and reset token in the clear until sent. Item 15's notification transport owns durability, and a lost email is asked for again |
 | Sending the email before answering | The time an SMTP server takes to answer would tell an address that gets mail from one that does not |
 | The token in the link's query string | It would be in the web server's access log and every `Referer` the page sends |
 | An absolute session lifetime | Rejected in D-95: a household app in daily use would sign its members out on a date that means nothing to them |
@@ -170,7 +170,7 @@ gone; and the descriptions say what the limits and the pre-sign-in keys do.
 - Items 9 and 11 add credentials (`google`, `apple`, `child_pin`) to the table and the enum this item
   made, and hash a PIN with the same `password.Hasher`.
 - Item 10 counts invitations with the same throttles (20 a day per household) and checks
-  `users.email_verified_at` before an invitation leaves; item 17 sends through `mail.SMTP` and
+  `users.email_verified_at` before an invitation leaves; item 15 sends through `mail.SMTP` and
   sweeps `sessions`, `email_tokens`, `auth_throttles` and `account_idempotency_keys`.
 - Any later limit on a surface an attacker cares about is a `ratelimit.Limit` and two calls.
 
@@ -185,5 +185,5 @@ gone; and the descriptions say what the limits and the pre-sign-in keys do.
 - An email queued when the process stops is lost.
 
 **Revisit this when** the API runs as more than a handful of processes (the in-memory buckets), when
-item 17 builds a durable transport (the background runner), or when the corpus outgrows a file
+item 15 builds a durable transport (the background runner), or when the corpus outgrows a file
 lookup.

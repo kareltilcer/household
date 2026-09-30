@@ -408,7 +408,7 @@ type childCreate struct {
 
 // check canonicalises the name req gives and refuses what is wrong with it, each field by its
 // pointer: a name with nothing in it or a control character, a birth year after thisYear, the
-// household's, an avatar, which waits for uploads (item 16), and a level above a child's ceiling
+// household's, an avatar, which waits for uploads (item 14), and a level above a child's ceiling
 // (FR-AC4). The edge has checked the types, the name's length, the earliest year and the PIN's
 // digits.
 func (req *childCreate) check(thisYear int) error {

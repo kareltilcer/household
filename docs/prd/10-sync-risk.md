@@ -22,7 +22,7 @@ imprecision is what makes it feel unmanageable. There are two distinct things:
 | **The sync engine** | **Contained** — one package, one protocol version, no data migration | The change feed, the mutation queue, conflict resolution, retraction, compaction, the client replica |
 
 > **Under D-93** the replicated path reads no change row: PowerSync's streams read the access fields
-> on each entity's own row, and plan item 14 decides how a row that a private item or an audience
+> on each entity's own row, and plan item 17 decides how a row that a private item or an audience
 > bounds carries them ([ADR 0001](../adr/0001-sync-engine.md)).
 
 The schema half is **cheap to get right and must be right on day one**. It is four columns, an id
@@ -208,7 +208,7 @@ alerting metric** ([07-nonfunctional.md](07-nonfunctional.md) §5), not a suppor
 > hold the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an
 > entity's declared access, passes every checksum. The digest, computed from PostgreSQL, remains
 > the check on that, but it is evaluated above at the client's cursor, and a PowerSync client holds
-> no feed cursor. Plan item 14 decides whether it keeps an endpoint of its own and, if it does, the
+> no feed cursor. Plan item 17 decides whether it keeps an endpoint of its own and, if it does, the
 > point it is computed at.
 
 ## 6. The interaction with the no-content-access guarantee
@@ -228,7 +228,7 @@ Three consequences, all requirements rather than observations:
 2. **The diagnostic bundle carries sync state** — cursor, queue depth, per-entity digest mismatch,
    the last N mutation outcomes and their reasons, with **no field values**. Under D-93 the cursor
    is the replica's last checkpoint, and the mismatches are its bucket-checksum failures and any
-   digest item 14 keeps. That makes it metadata, which means it can be sent without the member
+   digest item 17 keeps. That makes it metadata, which means it can be sent without the member
    having to expose content.
 3. **Every mutation outcome but `applied` carries a machine-readable `code`, always.** "Rejected"
    with no reason is undebuggable by anyone, and here there is no second route to the answer. An

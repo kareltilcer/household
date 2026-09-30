@@ -43,12 +43,12 @@ export interface Target {
    * fresh one as well, by per-mutation idempotency (FR-SY5, item 13).
    */
   readonly replay: 'same-key' | 'fresh-key'
-  /** Runs PowerSync's compact job (item 14), which scenario 6 needs. */
+  /** Runs PowerSync's compact job (item 17), which scenario 6 needs. */
   readonly compact?: () => Promise<void>
-  /** Sets household's entitlement (item 18), which scenario 14 needs. */
+  /** Sets household's entitlement (item 16), which scenario 14 needs. */
   readonly setEntitlement?: (household: string, state: 'active' | 'read_only') => Promise<void>
   /**
-   * Uploads an attachment's bytes (item 16), which scenario 12 needs, and answers the upload's
+   * Uploads an attachment's bytes (item 14), which scenario 12 needs, and answers the upload's
    * status.
    */
   readonly uploadAttachment?: (

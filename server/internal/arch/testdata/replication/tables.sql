@@ -18,6 +18,6 @@ ALTER PUBLICATION powersync ADD TABLE arch_testdata.halfway_items;
 CREATE TABLE arch_testdata.exposed_items (id uuid PRIMARY KEY, household_id uuid NOT NULL);
 GRANT SELECT ON arch_testdata.exposed_items TO household_powersync;
 
--- Published, and no stream reads it yet: an entity's, whose streams plan item 14 generates.
+-- Published, and no stream reads it yet: an entity's, whose streams plan item 17 generates.
 CREATE TABLE arch_testdata.withheld_items (id uuid PRIMARY KEY, household_id uuid NOT NULL);
 SELECT replicate('arch_testdata.withheld_items');

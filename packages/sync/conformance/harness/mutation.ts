@@ -92,7 +92,7 @@ export const terminal: ReadonlySet<Outcome> = new Set(['applied', 'merged', 'con
  * Whether a rejection is the household's entitlement refusing it (FR-BI2), which is held and
  * replayed rather than ended: PRD 10 §4's scenario 14 names the code `entitlement`, and the
  * contract's problem codes spell the household's states `entitlement_read_only` and
- * `entitlement_restricted`. Item 18 settles which a mutation carries.
+ * `entitlement_restricted`. Item 16 settles which a mutation carries.
  */
 export function isEntitlement(code: string | null | undefined): boolean {
   return code === 'entitlement' || (code?.startsWith('entitlement_') ?? false)

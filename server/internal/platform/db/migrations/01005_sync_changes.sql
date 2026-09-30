@@ -1,6 +1,6 @@
 -- The change feed (PRD 03 §2.2, FR-SY1, D-22): one append-only table for the deployment, keyed
 -- by household and ordered by seq, which the mutation spine writes in each mutation's own
--- transaction and the sync engine (items 13 and 14) pulls from. Each row carries every field
+-- transaction and the sync engine (items 13 and 17) pulls from. Each row carries every field
 -- the pull needs to authorise it (module, visibility, owner_id, audience_id, for_user_id), so a
 -- pull is one indexed scan with one WHERE and no join into a module's tables.
 
@@ -13,7 +13,7 @@ CREATE TYPE sync_op AS ENUM ('upsert', 'delete', 'retract');
 CREATE TYPE sync_visibility AS ENUM ('shared', 'private', 'redacted');
 
 -- Partitioned by month on occurred_at, so that compaction past the 90-day horizon (FR-SY2,
--- item 14) drops a partition rather than deleting rows. A partitioned table's primary key must
+-- item 17) drops a partition rather than deleting rows. A partitioned table's primary key must
 -- hold the partition key, so seq alone cannot be it; (household_id, seq, occurred_at) is the
 -- key and is also the (household_id, seq) index a pull scans. seq comes from one sequence, so
 -- it is unique on its own, and the spine takes the household's feed lock before drawing one,
@@ -77,7 +77,7 @@ $$;
 
 -- sync_changes_add_partitions makes sure a monthly partition exists for the month holding now()
 -- and for each of the months_ahead after it. A partition's bounds are UTC midnights on the
--- first of the month, named sync_changes_yYYYYmMM. Item 14's maintenance calls it ahead of the
+-- first of the month, named sync_changes_yYYYYmMM. Item 17's maintenance calls it ahead of the
 -- calendar; the default partition below catches a row whose month has none, so that a lapse
 -- delays compaction rather than refusing every mutation, and the maintenance moves such rows
 -- into their month's partition before creating it, which PostgreSQL otherwise refuses.

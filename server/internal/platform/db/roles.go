@@ -29,7 +29,7 @@ const (
 	// writes rows through the privileges the platform migration block grants it.
 	RoleApp = "household_app"
 	// RoleMeter is the nightly storage and usage sampler, which reads aggregate columns
-	// only (item 16 grants them).
+	// only (item 14 grants them).
 	RoleMeter = "household_meter"
 )
 

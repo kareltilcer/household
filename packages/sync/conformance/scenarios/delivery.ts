@@ -19,7 +19,7 @@ export const delivery: readonly Scenario[] = [
     expected:
       "Under D-93: the client catches up from PowerSync's compacted buckets, downloading again any bucket whose " +
       'checksum no longer matches, and converges with its queue intact',
-    enabledBy: 14,
+    enabledBy: 17,
     needs: ['conformance.item'],
     capabilities: ['compact'],
     async run(w) {

@@ -36,7 +36,7 @@ type meJSON struct {
 	DeletionScheduledAt  *time.Time `json:"deletion_scheduled_at"`
 }
 
-// loadMe reads user as the contract's Me. Avatars (item 16) and a scheduled deletion (item 20) are
+// loadMe reads user as the contract's Me. Avatars (item 14) and a scheduled deletion (item 20) are
 // later items'; until then each reads as absent.
 func loadMe(ctx context.Context, tx pgx.Tx, user uuid.UUID) (meJSON, error) {
 	me := meJSON{ID: user}
@@ -139,7 +139,7 @@ func readUpdate(r *http.Request) (profileUpdate, error) {
 			u.firstDayOfWeek = &day
 		}
 	}
-	// Only clearing an avatar is possible until avatars are uploaded as files (item 16), and there
+	// Only clearing an avatar is possible until avatars are uploaded as files (item 14), and there
 	// is none to clear yet.
 	if raw, ok := members["avatar_url"]; ok && !null(raw) {
 		errs = append(errs, problem.FieldError{Field: "/avatar_url", Code: problem.FieldInvalid})

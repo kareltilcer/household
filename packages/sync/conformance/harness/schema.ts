@@ -138,7 +138,7 @@ export const tables = [
     writes: ['visibility', 'owner_id', 'title', 'body'],
   },
   {
-    // A private note's redacted form (D-88), which item 14's stream writes to a client table of its
+    // A private note's redacted form (D-88), which item 17's stream writes to a client table of its
     // own for everyone with the grant, its owner included (D-93, ADR 0001; Admin.visible).
     table: 'conformance_notes_redacted',
     entity: null,

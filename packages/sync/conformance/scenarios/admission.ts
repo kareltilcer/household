@@ -9,7 +9,7 @@ export const admission: readonly Scenario[] = [
     title: 'Attachment row syncs, bytes fail permanently',
     expected:
       'The row is marked failed with a reason a member can act on; the row is never lost (D-25)',
-    enabledBy: 14,
+    enabledBy: 17,
     needs: ['conformance.attachment'],
     capabilities: ['uploadAttachment'],
     async run(w) {
@@ -53,7 +53,7 @@ export const admission: readonly Scenario[] = [
     expected:
       'Rejected with entitlement, held locally, and replayed once the subscription resumes; nothing is retracted in ' +
       'the meantime (FR-BI2)',
-    enabledBy: 18,
+    enabledBy: 16,
     needs: ['conformance.item'],
     capabilities: ['setEntitlement'],
     allowHeld: ['entitlement'],

@@ -1,5 +1,5 @@
 // The suite's own connector (plan item 12): it drains a client's upload queue to the push the way
-// item 15's will (ADR 0001), until item 15's replaces it. PowerSync applies no checkpoint while
+// item 18's will (ADR 0001), until item 18's replaces it. PowerSync applies no checkpoint while
 // the queue holds anything, so the connector ends every mutation the server answers, whatever the
 // answer, and throws (so that PowerSync retries it) only when nothing answered the mutations: a
 // transport failure, a 5xx, a 401, a 409 or a 429. A response outside the contract (a 200 that

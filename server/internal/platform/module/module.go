@@ -67,7 +67,7 @@ type MetricSource interface{ Metrics() []Metric }
 type ListSource interface{ Lists() []List }
 
 // StorageSource declares the tables and object prefixes a module owns, and how its blob bytes
-// are attributed (item 16).
+// are attributed (item 14).
 type StorageSource interface {
 	Tables() []string
 	Blobs(ctx context.Context, householdID uuid.UUID) ([]BlobUsage, error)

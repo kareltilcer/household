@@ -170,7 +170,7 @@ Applied by every module without exception; stated once here.
 |---|---|
 | **Primary keys** | `uuid` holding a **UUIDv7**. Clients generate them (the sync engine requires client-side id generation so an offline create has a stable identity) |
 | **Tenant key** | `household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE` on every tenant row |
-| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token. Under D-93 a rewrite alone of the access fields a row carries for its stream does not count as an update: an audience's readers ([modules/15-chat.md](modules/15-chat.md) Sync), or the visibility and owner a row takes from the private item that bounds it. Plan item 14 keeps such a rewrite out of the version, or keeps those fields off the row |
+| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token. Under D-93 a rewrite alone of the access fields a row carries for its stream does not count as an update: an audience's readers ([modules/15-chat.md](modules/15-chat.md) Sync), or the visibility and owner a row takes from the private item that bounds it. Plan item 17 keeps such a rewrite out of the version, or keeps those fields off the row |
 | **Audit columns** | `created_by`, `created_at`, `updated_by`, `updated_at` — `timestamptz`, never local time |
 | **Soft delete** | `deleted_at timestamptz NULL`. Hard delete is reserved for the destructive-operation gate and for erasure |
 | **Ordering** | Lexorank `position text` where users order things by hand |
@@ -299,7 +299,7 @@ Household has **one** realtime channel and it exists to serve the sync engine.
 > **Under D-93 replication is PowerSync's**, over its own connection from each client to the
 > PowerSync service, so a client neither pulls `GET …/sync/changes` nor needs a nudge to learn that
 > the feed advanced. Whether this socket stays, for Chat's payload exception and for the
-> entitlement and access changes the contract also sends on it, is plan item 14's decision, and
+> entitlement and access changes the contract also sends on it, is plan item 17's decision, and
 > this section is amended with it ([ADR 0001](../adr/0001-sync-engine.md)).
 
 The full design of the change feed, the mutation queue, retractions and conflict policy is in

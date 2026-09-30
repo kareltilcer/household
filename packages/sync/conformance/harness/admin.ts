@@ -222,7 +222,7 @@ export class Admin {
 
   /**
    * A message at seq in conversation, whose readers are the members whose floor it is at or above,
-   * as item 14's mutation will write them (ADR 0001).
+   * as item 17's mutation will write them (ADR 0001).
    */
   async message(
     rng: Rng,

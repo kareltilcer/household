@@ -3,7 +3,7 @@
 // A scenario runs once the item named by its enabledBy has built the engine it tests, and that item
 // switches it on by adding its key to `enabled` below: before then its expectations are the
 // specification the item is built to, and it is reported as skipped (plan item 12). Item 13 moved
-// the suite onto the engine (harness/target.ts), and items 14 and 18 add to it.
+// the suite onto the engine (harness/target.ts), and items 16 and 17 add to it.
 
 import { access } from './access.ts'
 import { admission } from './admission.ts'

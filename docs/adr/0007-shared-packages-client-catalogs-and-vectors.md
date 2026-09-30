@@ -79,10 +79,10 @@ Plan item 6 fills four packages the rest of the plan builds on. Several choices 
 | Committing the generated client | A PR that changes the contract and forgets to regenerate would pass review, and the build would compile the clients against the old contract. That is the drift 06 §1 exists to prevent |
 | Copying the catalogs into `server/` with `go generate`, with a drift test | Every UI PR would edit two copies of every string. The nested module has one copy |
 | A third-party Go MessageFormat library | The vectors would still have to hold its quoting, `#` and rounding to FormatJS's. The subset the catalogs need is small enough to own outright, and owning it keeps the two sides' refusals the same |
-| Full ICU on the server (dates, currency and number skeletons) | It needs CLDR date and currency data for five languages in Go, and nothing server-rendered needs it yet. Plan item 17 adds what its messages need to both renderers and to the vectors |
+| Full ICU on the server (dates, currency and number skeletons) | It needs CLDR date and currency data for five languages in Go, and nothing server-rendered needs it yet. Plan item 15 adds what its messages need to both renderers and to the vectors |
 | Largest-remainder assignment of the units left over in a split | FR-FI12 assigns them one each in the household's stable order. Largest remainder would move the extra unit between members as the weights change |
 | Reading the ISO table from `packages/domain` at run time, or embedding it through another nested module | The binary must not read the checkout, and a Go module for one JSON file is overhead. Generation with a drift test is the pattern `ProblemCode` already uses |
-| Retrying `409 idempotency_in_progress` in the transport | It can last up to five minutes (D-92). Whether to wait is the caller's decision, and the sync connector (item 15) makes it differently from a form |
+| Retrying `409 idempotency_in_progress` in the transport | It can last up to five minutes (D-92). Whether to wait is the caller's decision, and the sync connector (item 18) makes it differently from a form |
 
 ## Consequences
 

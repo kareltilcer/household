@@ -9,7 +9,7 @@
 // (internal/syncconfig), and the push writes them as it writes any module's, through this module's
 // Writer: the entities whose policies item 13 builds, an item's fields (lww_field), its checked
 // state and a chore's completion (state_set) and a meter's readings (additive, with their
-// invariant). The others are item 14's.
+// invariant). The others are item 17's.
 //
 // The suite signs its members in through Around, which stands in for a device's sign-in (item 9):
 // the suite's members have no address and no password, and a client needs only an access token.

@@ -138,6 +138,6 @@ tenant table, compares each row's `household_id` with the setting. It says the m
   household's context those rows read as a tenant table's. Item 10's `invitations`, the third
   table PRD 01 §2.4 gives a policy of its own, takes the same shape, and test 2 holds it to it.
 - Item 4's mutation spine builds on `InTx`; item 10 writes enablement rows and grant defaults;
-  item 18 fills in the entitlement hook (`tenant.Config.Entitlement`).
+  item 16 fills in the entitlement hook (`tenant.Config.Entitlement`).
 - Revisit the two-transaction resolution if its round trips show in latency at real load
   (item 90): the membership and grant reads can move into the first `InTx` of a request.

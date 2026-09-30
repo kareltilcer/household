@@ -44,7 +44,7 @@ CREATE TABLE credentials (
 -- A web session (FR-ID3, FR-ID7): the cookie's token and the CSRF token bound to it, each kept as
 -- its SHA-256, so the tokens themselves are only ever in the browser. A session lasts until
 -- expires_at, which each use pushes 30 days on (D-95), or until it is revoked; a revoked or expired
--- row is kept for the expiry sweep (item 17) to delete.
+-- row is kept for the expiry sweep (item 15) to delete.
 CREATE TABLE sessions (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -94,7 +94,7 @@ CREATE TABLE auth_throttles (
   blocked_until timestamptz
 );
 
--- The expiry sweep (item 17) deletes rows whose window and block have both ended.
+-- The expiry sweep (item 15) deletes rows whose window and block have both ended.
 CREATE INDEX auth_throttles_window_ends_at ON auth_throttles (window_ends_at);
 
 -- Idempotency-Key storage for a signed-in user's own requests, the /auth and /me routes that act
@@ -116,5 +116,5 @@ CREATE TABLE account_idempotency_keys (
   CHECK ((state = 'completed') = (status IS NOT NULL))
 );
 
--- The expiry sweep (item 17) deletes keys past their 7 days.
+-- The expiry sweep (item 15) deletes keys past their 7 days.
 CREATE INDEX account_idempotency_keys_created_at ON account_idempotency_keys (created_at);
