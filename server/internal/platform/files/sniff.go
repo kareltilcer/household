@@ -146,9 +146,14 @@ func Sniff(r io.ReaderAt, size int64, name string) Type {
 // (iso, img, vhd, vhdx), a Windows update package, which installs itself when it is opened (msu), a
 // ClickOnce application's reference, which fetches and starts it (appref-ms), a Python program, its
 // source, its bytecode or its zipped application, which the Python launcher runs when it is opened
-// (py, pyw, pyc, pyo, pyz, pyzw), a Perl program (pl), a script of the shells beside sh (bash, zsh,
-// ksh, csh), a macOS command Terminal runs, or its settings, which name one to run (tool,
-// terminal), a launcher a Linux desktop runs what it names from (desktop), an Access database's
+// (py, pyw, pyc, pyo, pyz, pyzw), a Perl program (pl), a script of another interpreter whose
+// installer has it run when it is opened, as Python's launcher does, Ruby's with or without its
+// window (rb, rbw), AutoHotkey's (ahk), AutoIt's as source or compiled (au3, a3x) and Tcl's (tcl), a
+// script of the shells beside sh (bash, zsh, ksh, csh), a macOS command Terminal runs, or its
+// settings, which name one to run (tool, terminal), macOS's shortcuts to a place, which open what
+// they name as url and website do on Windows (webloc, inetloc, fileloc), its installer's
+// metapackage, a package as pkg is (mpkg), a launcher a Linux desktop runs what it names from
+// (desktop), an Access database's
 // compiled form or its add-in, as mde is (accde, mda), a sandbox's configuration, which names the
 // command it runs at sign-in (wsb), an installer's setup information (inf), a pinned site or a
 // search, which open what they name (website, search-ms, searchconnector-ms), a Windows theme or
@@ -168,6 +173,7 @@ var programExtensions = []string{
 	"img", "vhd", "vhdx", "msu", "appref-ms", "py", "pyw", "pyc", "pyo", "pyz", "pyzw", "pl", "bash", "zsh", "ksh",
 	"csh", "tool", "terminal", "desktop", "accde", "mda", "wsb", "inf", "website", "search-ms", "searchconnector-ms",
 	"theme", "themepack", "deskthemepack", "printerexport", "cdxml", "pssc", "vsmacros", "appcontent-ms", "xnk", "rdp",
+	"rb", "rbw", "ahk", "au3", "a3x", "tcl", "webloc", "inetloc", "fileloc", "mpkg",
 }
 
 // signatures are the types known by their first bytes, the programs among them.

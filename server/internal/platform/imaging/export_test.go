@@ -29,3 +29,6 @@ func SetDecoder(contentType string, decode func(io.Reader) (image.Image, error))
 
 // Footprint is footprint, for the test that sizes its budget by it.
 var Footprint = footprint
+
+// Upright is upright, for the test that turns an NRGBA image both ways it can be turned.
+var Upright = upright

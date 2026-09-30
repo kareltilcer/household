@@ -234,6 +234,11 @@ func scale(src image.Image, sr image.Rectangle, w, h int) image.Image {
 
 // upright turns src as EXIF orientation o says: 2 mirrored, 3 turned half round, 4 flipped, 5
 // transposed, 6 turned a quarter clockwise, 7 transversed, 8 turned a quarter anticlockwise.
+//
+// What it turns is nearly always NRGBA, the scaled image Fit and Square draw, and most phone
+// photographs are stored turned a quarter: such an image's pixels are copied as they are, four bytes
+// each, rather than each read as a colour and converted back, which for a preview's two and a half
+// million pixels is as many allocations. Any other image goes through its colour model.
 func upright(src image.Image, o int) image.Image {
 	if o < 2 || o > 8 {
 		return src
@@ -245,29 +250,41 @@ func upright(src image.Image, o int) image.Image {
 		dw, dh = h, w
 	}
 	dst := image.NewNRGBA(image.Rect(0, 0, dw, dh))
+	nrgba, direct := src.(*image.NRGBA)
 	for y := range h {
 		for x := range w {
-			var dx, dy int
-			switch o {
-			case 2:
-				dx, dy = w-1-x, y
-			case 3:
-				dx, dy = w-1-x, h-1-y
-			case 4:
-				dx, dy = x, h-1-y
-			case 5:
-				dx, dy = y, x
-			case 6:
-				dx, dy = h-1-y, x
-			case 7:
-				dx, dy = h-1-y, w-1-x
-			case 8:
-				dx, dy = y, w-1-x
+			dx, dy := turned(o, x, y, w, h)
+			if direct {
+				from, to := nrgba.PixOffset(b.Min.X+x, b.Min.Y+y), dst.PixOffset(dx, dy)
+				copy(dst.Pix[to:to+4], nrgba.Pix[from:from+4])
+				continue
 			}
 			dst.Set(dx, dy, src.At(b.Min.X+x, b.Min.Y+y))
 		}
 	}
 	return dst
+}
+
+// turned is where orientation o puts the pixel at x, y of a w by h image, 2 to 8 as upright takes
+// them.
+func turned(o, x, y, w, h int) (dx, dy int) {
+	switch o {
+	case 2:
+		return w - 1 - x, y
+	case 3:
+		return w - 1 - x, h - 1 - y
+	case 4:
+		return x, h - 1 - y
+	case 5:
+		return y, x
+	case 6:
+		return h - 1 - y, x
+	case 7:
+		return h - 1 - y, w - 1 - x
+	case 8:
+		return y, w - 1 - x
+	}
+	return x, y
 }
 
 // Encoded is an image as Encode wrote it.

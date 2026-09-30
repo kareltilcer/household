@@ -158,6 +158,23 @@ func TestSniff(t *testing.T) {
 			"Invoice.RDP", "application/octet-stream", ClassBlocked},
 		{"a printer migration by its name", []byte("MSCF\x00\x00\x00\x00"), "printers.printerexport", "application/octet-stream",
 			ClassBlocked},
+		// The scripts other interpreters' installers have run when they are opened, as Python's launcher
+		// runs a .py, and macOS's shortcuts to a place and its metapackages, blocked as a .url and a .pkg
+		// are.
+		{"a Ruby program by its name", []byte("FileUtils.rm_rf(Dir.home)\n"), "tidy.rb", "application/octet-stream", ClassBlocked},
+		{"a windowless Ruby program by its name", []byte("require 'fileutils'\n"), "tray.RBW", "application/octet-stream", ClassBlocked},
+		{"an AutoHotkey script by its name", []byte("Run, calc.exe\n"), "holiday.ahk", "application/octet-stream", ClassBlocked},
+		{"an AutoIt script by its name", []byte("Run(\"calc.exe\")\n"), "invoice.au3", "application/octet-stream", ClassBlocked},
+		{"a compiled AutoIt script by its name", []byte("\xa3\x48\x4b\xbe\x98\x6c\x4a\xa9"), "invoice.a3x", "application/octet-stream",
+			ClassBlocked},
+		{"a Tcl program by its name", []byte("exec calc.exe\n"), "garden.tcl", "application/octet-stream", ClassBlocked},
+		{"a macOS shortcut to a place by its name", []byte(`<?xml version="1.0"?><plist><dict><key>URL</key></dict></plist>`),
+			"Invoice.webloc", "application/octet-stream", ClassBlocked},
+		{"a macOS shortcut to a file by its name", []byte(`<?xml version="1.0"?><plist><dict><key>URL</key></dict></plist>`),
+			"Invoice.fileloc", "application/octet-stream", ClassBlocked},
+		{"an older macOS shortcut by its name", []byte("[InternetShortcut]\n"), "Invoice.inetloc", "application/octet-stream",
+			ClassBlocked},
+		{"a macOS metapackage by its name", []byte("xar!\x00\x1c\x00\x01"), "Setup.mpkg", "application/octet-stream", ClassBlocked},
 		{"a name that only ends in dots", []byte("Milk, eggs\n"), "list...", "text/plain; charset=utf-8", ClassText},
 		{"html", []byte("<!DOCTYPE html><html><body>hi</body></html>"), "page.txt", "text/html", ClassActive},
 		{"html deep in text", []byte("Dear Jana,\n\nsee <script>alert(1)</script>"), "letter.txt", "text/html", ClassActive},

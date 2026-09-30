@@ -17,7 +17,7 @@ appearing, and when the sweep or a household's storage figures look wrong.
 | Work after a commit | `file_jobs`: `variants` for an original's variants, `purge` for a deleted entity's bytes. Every API instance runs the workers |
 | The converter | `HOUSEHOLD_CONVERTER_URL`, the image `deploy/converter` builds; `pnpm run up:convert` in development |
 | The samples | `usage_samples`, `usage_sample_modules`, `usage_sample_members`, one set per household per UTC day |
-| The meter role | `household_meter`, `HOUSEHOLD_METER_DATABASE_URL`, which `serve` now reads: it lists the households with work due and measures them for the sample |
+| The meter role | `household_meter`, `HOUSEHOLD_METER_DATABASE_URL`, which `serve` now reads: it lists the households with work due, measures them for the sample, and counts a household's objects and rows live for fair use (`storage.Count`, item 16's) |
 
 ## Before the first deploy
 

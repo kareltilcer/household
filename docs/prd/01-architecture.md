@@ -126,7 +126,7 @@ an empty set, not another family's data. A handler that writes a row with the wr
 |---|---|---|
 | `household_migrate` | Migrations only, at deploy time | Bypasses (owns the tables) |
 | `household_app` | Every request | **Enforced** — no bypass exists |
-| `household_meter` | The nightly storage/usage sampler, and the files workers' search for households with work due | Enforced; reads aggregate columns only |
+| `household_meter` | The nightly storage/usage sampler, the files workers' search for households with work due, and the live counts fair use compares with before a write | Enforced; reads aggregate columns only |
 
 The meter role is the one that reads across households, and what it reads is held to that: every
 tenant table has, beside the tenant isolation, a `FOR SELECT` policy of the meter role's own, and the

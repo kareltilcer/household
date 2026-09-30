@@ -103,6 +103,39 @@ func TestEveryOrientationKeepsItsSize(t *testing.T) {
 	}
 }
 
+// An NRGBA image, what Fit and Square scale to, is turned by copying its pixels, and comes out as the
+// same image turned through its colour model does, half-transparent pixels and an image that does not
+// start at the origin included: the copy is only the cheaper way to the same pixels.
+func TestAnNRGBAImageIsTurnedAsAnyOtherIs(t *testing.T) {
+	whole := image.NewNRGBA(image.Rect(0, 0, 7, 5))
+	for y := range 5 {
+		for x := range 7 {
+			whole.SetNRGBA(x, y, color.NRGBA{R: uint8(30 * x), G: uint8(40 * y), B: uint8(x * y), A: uint8(255 - 20*x - 10*y)}) //nolint:gosec // G115: small coordinates.
+		}
+	}
+	src, ok := whole.SubImage(image.Rect(1, 1, 7, 5)).(*image.NRGBA)
+	if !ok {
+		t.Fatal("a part of an NRGBA image is not NRGBA")
+	}
+	for o := 1; o <= 8; o++ {
+		direct := imaging.Upright(src, o)
+		// The same image, hidden behind an interface that is not NRGBA, is turned pixel by pixel.
+		viaModel := imaging.Upright(struct{ image.Image }{src}, o)
+		if direct.Bounds().Size() != viaModel.Bounds().Size() {
+			t.Fatalf("orientation %d: %v copied, %v through the colour model", o, direct.Bounds(), viaModel.Bounds())
+		}
+		b := direct.Bounds()
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			for x := b.Min.X; x < b.Max.X; x++ {
+				vb := viaModel.Bounds()
+				if got, want := direct.At(x, y), viaModel.At(vb.Min.X+x-b.Min.X, vb.Min.Y+y-b.Min.Y); got != want {
+					t.Fatalf("orientation %d at %d,%d: %v copied, %v through the colour model", o, x, y, got, want)
+				}
+			}
+		}
+	}
+}
+
 func TestSquareIsTheCentreAsHeld(t *testing.T) {
 	m, err := imaging.Decode(t.Context(), bytes.NewReader(photo(t, 60, 20, 0)), "image/jpeg", 1<<20)
 	if err != nil {

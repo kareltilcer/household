@@ -159,7 +159,8 @@ type Config struct {
 	// MigrateDatabaseURL connects as the migrate role.
 	MigrateDatabaseURL string
 	// MeterDatabaseURL connects as the meter role. Bootstrap sets the role's password from
-	// it; Serve reads across households with it, the usage sampler and the files workers (item 14).
+	// it; Serve reads across households with it, the usage sampler, the files workers and the live
+	// counts fair use compares with (item 14).
 	MeterDatabaseURL string
 	// AdminDatabaseURL connects as a role that may create roles, for Bootstrap only. The
 	// serving process never holds it.
@@ -316,17 +317,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 
 // serving reads what serving the accounts needs (item 8).
 func (l *loader) serving(c *Config, dev bool) {
-	required := func(key, devDefault string) string {
-		value, ok := l.getenv(key)
-		if ok && value != "" {
-			return value
-		}
-		if !dev {
-			l.fail("%s is required outside development", key)
-			return ""
-		}
-		return devDefault
-	}
+	required := func(key, devDefault string) string { return l.required(key, devDefault, dev) }
 
 	if web := required(WebURLVar, devWebURL); web != "" {
 		u, err := url.Parse(web)
@@ -438,14 +429,7 @@ func (l *loader) serving(c *Config, dev bool) {
 // with the compose store's published secret; where clients reach it, when that is not where the
 // server does; the converter sidecar; and where and for how long an upload's body is read.
 func (l *loader) files(c *Config, dev bool) {
-	raw, ok := l.getenv(ObjectStoreURLVar)
-	switch {
-	case (!ok || raw == "") && !dev:
-		l.fail("%s is required outside development", ObjectStoreURLVar)
-	case !ok || raw == "":
-		raw = devObjectStoreURL
-	}
-	if raw != "" {
+	if raw := l.required(ObjectStoreURLVar, devObjectStoreURL, dev); raw != "" {
 		loc, err := objectstore.ParseURL(raw)
 		switch {
 		case err != nil:
@@ -470,14 +454,7 @@ func (l *loader) files(c *Config, dev bool) {
 			c.ObjectStorePublic = &url.URL{Scheme: u.Scheme, Host: u.Host}
 		}
 	}
-	converter, ok := l.getenv(ConverterURLVar)
-	switch {
-	case (!ok || converter == "") && !dev:
-		l.fail("%s is required outside development", ConverterURLVar)
-	case !ok || converter == "":
-		converter = devConverterURL
-	}
-	if converter != "" {
+	if converter := l.required(ConverterURLVar, devConverterURL, dev); converter != "" {
 		if u, err := url.Parse(converter); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
 			l.fail("%s is %s; want the converter's absolute http(s) URL", ConverterURLVar, quotedURL(converter))
 		} else {
@@ -567,6 +544,19 @@ type loader struct {
 
 func (l *loader) fail(format string, args ...any) {
 	l.errs = append(l.errs, fmt.Errorf(format, args...))
+}
+
+// required reads a setting serving needs: devDefault in development when it is not set, and outside
+// development a failure, and "", since nothing is defaulted there.
+func (l *loader) required(key, devDefault string, dev bool) string {
+	if value, ok := l.getenv(key); ok && value != "" {
+		return value
+	}
+	if !dev {
+		l.fail("%s is required outside development", key)
+		return ""
+	}
+	return devDefault
 }
 
 func (l *loader) str(key, def string) string {

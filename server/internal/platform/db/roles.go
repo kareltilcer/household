@@ -30,8 +30,8 @@ const (
 	RoleApp = "household_app"
 	// RoleMeter reads across households, and only the columns that name, count, size or
 	// schedule their rows (item 14 grants them, architecture test 11): the nightly storage and
-	// usage sampler, and every API instance's files workers, looking for the households with
-	// work due.
+	// usage sampler, every API instance's files workers, looking for the households with work
+	// due, and the live counts fair use compares with before a write (storage.Count).
 	RoleMeter = "household_meter"
 )
 
