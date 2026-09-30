@@ -9543,7 +9543,7 @@ components:
               recoverable_bytes: { type: integer, format: int64, description: 'The original and every variant derived from it: what deleting the item frees.' }
         trend:
           type: array
-          description: 'The daily samples of the last 90 days, oldest first. A day with no sample is absent.'
+          description: 'The daily samples of the last 90 days, oldest first, each dated by the UTC day it was taken on, never a day in the household''s timezone (D-109). A day with no sample is absent.'
           items:
             type: object
             required: [date, bytes]

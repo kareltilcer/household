@@ -53,6 +53,25 @@ func TestPutOnceWritesAKeyOnce(t *testing.T) {
 	}
 }
 
+// PutSame takes bytes already at a key with the same digest for the caller's own write, whose answer
+// was lost, and succeeds; bytes with another digest are another's.
+func TestPutSameTakesItsOwnBytesForItsOwn(t *testing.T) {
+	s := testsupport.ObjectStore(t)
+	same := func(key string, body []byte) error {
+		return s.PutSame(t.Context(), key, bytes.NewReader(body), int64(len(body)),
+			objectstore.Object{ContentType: "text/plain", SHA256: sha256.Sum256(body)})
+	}
+	first := []byte("Smlouva ČEZ — elektřina")
+	for range 2 {
+		if err := same("h/a/documents/b/original", first); err != nil {
+			t.Fatalf("the same bytes put again = %v", err)
+		}
+	}
+	if err := same("h/a/documents/b/original", []byte("other bytes")); !errors.Is(err, objectstore.ErrExists) {
+		t.Fatalf("other bytes at the key = %v, want ErrExists", err)
+	}
+}
+
 func TestAMissingObjectIsNotFound(t *testing.T) {
 	s := testsupport.ObjectStore(t)
 	if _, err := s.Head(t.Context(), "h/a/documents/none/original"); !errors.Is(err, objectstore.ErrNotFound) {

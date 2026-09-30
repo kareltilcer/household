@@ -78,7 +78,9 @@ GROUP BY module, content_type;
   each conversion that failed or ran out of time, by its command and how it ended, never by what the
   command printed, which quotes the document. A job gives up after five attempts, over about two and a
   half hours; one that runs past its ten-minute lease, a store or a converter that stopped answering,
-  counts as a failed attempt.
+  counts as a failed attempt. A job that panicked fails at once, logged as `files: a job panicked`
+  with the panic's type and stack; one whose workers ended with their process five times, killed for
+  the memory it took, is given up at its next claim. Either is a bug to report with the file's type.
 - Many `failed` of one type: a converter that cannot read it answers `422`, which is not retried. Try
   one by hand: `curl --data-binary @file.docx 'http://converter:3100/pdf?ext=docx' -o out.pdf`.
 

@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -154,21 +155,36 @@ func TestAMembersPicture(t *testing.T) {
 }
 
 // A picture sent again with its Idempotency-Key is answered as it was the first time, though the
-// form was built again, as a client builds it for every attempt, with a boundary of its own; and
-// only the first is kept.
+// form was built again, as a client builds it for every attempt, with a boundary of its own, and one
+// of another length, as Firefox draws them, which makes the form a few bytes shorter; and only the
+// first picture is kept.
 func TestAPictureSentAgainWithItsKeyIsKeptOnce(t *testing.T) {
 	s, fs := newPictureSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
 	id := jana.me().ID
 	content := picture(t, 64, 64)
-	send := func() *httptest.ResponseRecorder {
-		body, contentType := form(t, "photo.png", content, nil)
-		return jana.send(request{method: http.MethodPut, path: "/me/avatar", body: body, contentType: contentType,
+	send := func(boundary string) *httptest.ResponseRecorder {
+		var body bytes.Buffer
+		w := multipart.NewWriter(&body)
+		if err := w.SetBoundary(boundary); err != nil {
+			t.Fatal(err)
+		}
+		part, err := w.CreateFormFile(files.FileField, "photo.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(content); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return jana.send(request{method: http.MethodPut, path: "/me/avatar", body: body.String(), contentType: w.FormDataContentType(),
 			header: http.Header{idempotency.Header: {"picture-1"}}})
 	}
-	first := send()
+	first := send("---------------------------1904221783")
 	expect(t, first, http.StatusOK, "")
-	again := send()
+	again := send("---------------------------62734921")
 	expect(t, again, http.StatusOK, "")
 	if again.Body.String() != first.Body.String() {
 		t.Fatalf("the repeat was answered %s, the first %s", again.Body.String(), first.Body.String())

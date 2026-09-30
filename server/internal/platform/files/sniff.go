@@ -390,7 +390,7 @@ func sniffZip(r io.ReaderAt, size int64) Type {
 			if slices.Contains(prefixes, o.dir) {
 				t := o.typ
 				if macro {
-					t.MIME = o.macro
+					t.MIME, t.Ext = o.macro, o.macroExt
 				}
 				return t
 			}
@@ -408,18 +408,19 @@ var odfTypes = map[string]Type{
 	"application/epub+zip":                            {MIME: "application/epub+zip", Class: ClassBinary, Ext: "epub"},
 }
 
-// ooxml are the Office Open XML types, by the directory their parts are in.
+// ooxml are the Office Open XML types, by the directory their parts are in, each with the type and
+// the extension of its macro-enabled kind, which the converter is told as it is told any other.
 var ooxml = []struct {
-	dir   string
-	typ   Type
-	macro string
+	dir             string
+	typ             Type
+	macro, macroExt string
 }{
 	{"word", Type{MIME: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Class: ClassOffice, Ext: "docx"},
-		"application/vnd.ms-word.document.macroEnabled.12"},
+		"application/vnd.ms-word.document.macroEnabled.12", "docm"},
 	{"xl", Type{MIME: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Class: ClassOffice, Ext: "xlsx"},
-		"application/vnd.ms-excel.sheet.macroEnabled.12"},
+		"application/vnd.ms-excel.sheet.macroEnabled.12", "xlsm"},
 	{"ppt", Type{MIME: "application/vnd.openxmlformats-officedocument.presentationml.presentation", Class: ClassOffice, Ext: "pptx"},
-		"application/vnd.ms-powerpoint.presentation.macroEnabled.12"},
+		"application/vnd.ms-powerpoint.presentation.macroEnabled.12", "pptm"},
 }
 
 // zipText reads a small entry of z, "" when it cannot.

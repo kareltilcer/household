@@ -59,6 +59,8 @@ type Service struct {
 	store *objectstore.Store
 	log   *slog.Logger
 	now   func() time.Time
+	// purgeLimit bounds Purge: purgeTimeout, but in the test that waits it out.
+	purgeLimit time.Duration
 }
 
 // New returns the service, which receives uploads through fs and keeps pictures in its store; now
@@ -70,7 +72,7 @@ func New(fs *files.Service, log *slog.Logger, now func() time.Time) (*Service, e
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{files: fs, store: fs.Store(), log: log, now: now}, nil
+	return &Service{files: fs, store: fs.Store(), log: log, now: now, purgeLimit: purgeTimeout}, nil
 }
 
 // Picture is a picture made from an upload, ready to be kept.
@@ -119,15 +121,8 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) (Picture, error
 // its own: a write the store kept but whose answer was lost, which the store's client sent again and
 // the store refused as a second write to the key. That is the picture put, not an outage.
 func (s *Service) Put(ctx context.Context, user uuid.UUID, p Picture) error {
-	key := Key(user, p.ID)
-	err := s.store.PutOnce(ctx, key, bytes.NewReader(p.bytes), int64(len(p.bytes)),
+	err := s.store.PutSame(ctx, Key(user, p.ID), bytes.NewReader(p.bytes), int64(len(p.bytes)),
 		objectstore.Object{ContentType: p.ContentType, SHA256: p.sha256})
-	if errors.Is(err, objectstore.ErrExists) {
-		var info objectstore.Info
-		if info, err = s.store.Head(ctx, key); err == nil && (!info.HasSHA256 || info.SHA256 != p.sha256) {
-			err = objectstore.ErrExists
-		}
-	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -174,13 +169,21 @@ func current(ctx context.Context, tx pgx.Tx, user uuid.UUID) (uuid.UUID, error) 
 	return id, err
 }
 
+// purgeTimeout bounds the removal of a replaced picture. Its callers purge once their change has
+// committed and before they answer, and the store's client waits on a store that stops answering for
+// as long as it is let: past this, the change is answered, and the picture is left to the sweep.
+const purgeTimeout = 10 * time.Second
+
 // Purge removes the object of user's picture id, once the transaction that replaced or cleared it
-// has committed; uuid.Nil is none. A failure is logged and left to the sweep.
+// has committed; uuid.Nil is none. It runs past the request's end, since the change it follows has
+// committed, but for no longer than purgeTimeout. A failure is logged and left to the sweep.
 func (s *Service) Purge(ctx context.Context, user, id uuid.UUID) {
 	if id == uuid.Nil {
 		return
 	}
-	if err := s.store.Delete(context.WithoutCancel(ctx), Key(user, id)); err != nil {
+	purging, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.purgeLimit)
+	defer cancel()
+	if err := s.store.Delete(purging, Key(user, id)); err != nil {
 		s.log.LogAttrs(ctx, slog.LevelWarn, "avatar: purge a replaced picture", slog.Any("error", err))
 	}
 }

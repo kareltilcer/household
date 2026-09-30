@@ -354,7 +354,7 @@ module's table ([ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictur
 **FR-ST2 — Daily sampling.** A nightly job per household records a `usage_sample`:
 `stored_bytes` broken down by module and by member, `object_count`, plus row counts per module for
 fair-use monitoring. The sample is what billing reads; nothing bills off a live scan. It is the UTC
-day's, a second one that day replacing the first, and a household that keeps nothing is sampled at
+day's (**D-109**), a second one that day replacing the first, and a household that keeps nothing is sampled at
 nothing, so a period's average counts its empty days. The meter role measures every household; each
 household's sample is written in its own context.
 

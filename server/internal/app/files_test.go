@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -165,6 +166,15 @@ func (w *fileWorld) rows(household, item uuid.UUID) map[string]fileRow {
 		out[variant] = r
 	}
 	return out
+}
+
+// variantsOf is the state of the variants of item's original, "" for none.
+func (w *fileWorld) variantsOf(household, item uuid.UUID) string {
+	w.t.Helper()
+	if v := w.rows(household, item)[files.Original].variants; v != nil {
+		return *v
+	}
+	return ""
 }
 
 // jobs returns the kinds of the jobs waiting for item.
@@ -882,8 +892,6 @@ func TestAnOfficeDocumentsVariantsComeFromTheConverter(t *testing.T) {
 	}
 }
 
-// The workers run the jobs every instance's commits leave: woken by their own, and finding the rest
-// through the meter role, which alone reads across households.
 // A job runs for its lease at most: one whose store stops answering fails, and is tried again later,
 // rather than holding its worker for as long as the process lives.
 func TestAJobPastItsLeaseIsTriedAgain(t *testing.T) {
@@ -932,6 +940,8 @@ func TestAJobPastItsLeaseIsTriedAgain(t *testing.T) {
 	}
 }
 
+// The workers run the jobs every instance's commits leave: woken by their own, and finding the rest
+// through the meter role, which alone reads across households.
 func TestTheWorkersRunWhatCommitsLeave(t *testing.T) {
 	w := newFileWorld(t, func(c *files.Config) { c.Poll = 50 * time.Millisecond })
 	h := w.household(true)
@@ -956,5 +966,59 @@ func TestTheWorkersRunWhatCommitsLeave(t *testing.T) {
 	<-stop
 	if v := w.rows(h, item)[files.Original].variants; v == nil || *v != "ready" {
 		t.Fatalf("the workers left the variants %v", v)
+	}
+}
+
+// emptyFrame is a GIF whose logical screen is 10 by 5000 pixels and whose one frame is none of it
+// wide: its header is an image's, and its frame decodes to no pixels at all.
+func emptyFrame() []byte {
+	b := []byte("GIF89a")
+	b = binary.LittleEndian.AppendUint16(b, 10)
+	b = binary.LittleEndian.AppendUint16(b, 5000)
+	b = append(b, 0x80, 0, 0, 0, 0, 0, 255, 255, 255)
+	b = append(b, 0x2C, 0, 0, 0, 0, 0, 0)
+	b = binary.LittleEndian.AppendUint16(b, 5000)
+	return append(b, 0, 2, 1, 0x2C, 0, 0x3B)
+}
+
+// An image that decodes to no pixels is kept, and its variants fail for good, leaving it
+// download-only: it was scaled by dividing by its width, which took down the process whose worker
+// derived it, and after each lease the next instance to claim its job.
+func TestAnImageOfNoPixelsIsKeptWithoutVariants(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	jana := w.member(h, access.Owner, nil)
+	item := idgen.New()
+	expect(t, w.upload(h, jana, "blank.gif", emptyFrame(), map[string]string{"id": item.String()}), http.StatusCreated, "")
+	w.files.Drain(t.Context(), h)
+	if v := w.variantsOf(h, item); v != "failed" {
+		t.Fatalf("the variants of an image of no pixels are %q", v)
+	}
+	if keys := w.objects(files.Key(h, probe.Name, item, "")); len(keys) != 1 || len(w.jobs(h, item)) != 0 {
+		t.Fatalf("kept %v, jobs %v", keys, w.jobs(h, item))
+	}
+}
+
+// A job claimed more times than it may be tried is given up without running: each claim counts an
+// attempt, and one past the last is a job whose workers ended with their process before they could
+// settle it, which run again would end the next instance to claim it, one lease after another.
+func TestAJobItsWorkersNeverSettledIsGivenUp(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	jana := w.member(h, access.Owner, nil)
+	item := idgen.New()
+	expect(t, w.upload(h, jana, "a.png", picture(t, 100, 100), map[string]string{"id": item.String()}), http.StatusCreated, "")
+	// The worker of its fifth and last attempt died holding it, and its lease has passed.
+	w.exec("UPDATE file_jobs SET attempts = 5, run_at = now() - interval '1 second' WHERE household_id = $1 AND entity_id = $2", h, item)
+
+	w.files.Drain(t.Context(), h)
+	if v := w.variantsOf(h, item); v != "failed" {
+		t.Fatalf("the variants of a job never settled are %q", v)
+	}
+	if keys := w.objects(files.Key(h, probe.Name, item, "")); len(keys) != 1 || len(w.jobs(h, item)) != 0 {
+		t.Fatalf("a job given up derived %v, jobs %v", keys, w.jobs(h, item))
+	}
+	if !strings.Contains(w.workLog.String(), "files: a job failed for good") {
+		t.Fatalf("a job given up was not logged: %s", w.workLog.String())
 	}
 }

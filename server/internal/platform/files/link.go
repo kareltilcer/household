@@ -129,7 +129,7 @@ var stored = func() map[string]Type {
 	for _, o := range ooxml {
 		add(o.typ)
 		macro := o.typ
-		macro.MIME = o.macro
+		macro.MIME, macro.Ext = o.macro, o.macroExt
 		add(macro)
 	}
 	for _, t := range cfbClasses {

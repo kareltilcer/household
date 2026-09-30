@@ -97,7 +97,9 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   **requires** `id` in its body. A server-minted id online and a client id offline is the
   dual identity D-23 exists to prevent.
 - **Instants** are `timestamptz`, RFC 3339 with an explicit offset on the wire. **Calendar
-  days** are `date` (`YYYY-MM-DD`) in the household's timezone, which is never assumed.
+  days** are `date` (`YYYY-MM-DD`) in the household's timezone, which is never assumed. The one
+  exception is the usage sample's day, a metering bucket every household shares, which is UTC's
+  ([D-109](docs/prd/09-decisions.md)).
 - **English is the source language** of every identifier, enum value, log message and
   comment. No user-visible string is a literal: it is a translation key, present in all five
   catalogs (`en`, `cs`, `sk`, `de`, `pl`) in `packages/i18n/catalogs/`, and architecture test 7

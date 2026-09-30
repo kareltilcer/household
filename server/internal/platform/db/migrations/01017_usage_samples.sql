@@ -5,7 +5,8 @@
 -- sample in its own context (internal/platform/storage), so no role both reads across households
 -- and writes.
 --
--- sampled_on is the UTC day the sample was taken on, and a second sample that day replaces the first.
+-- sampled_on is the UTC day the sample was taken on, and a second sample that day replaces the first:
+-- a metering bucket every household shares, never a day in the household's timezone (D-109).
 
 -- +goose Up
 

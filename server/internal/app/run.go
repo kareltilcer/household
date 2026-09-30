@@ -163,7 +163,10 @@ func newFiles(ctx context.Context, cfg *config.Config, log *slog.Logger, pool, m
 			log.LogAttrs(ctx, slog.LevelWarn, "the object store's bucket is not there; uploads fail until it is", slog.Any("error", err))
 		}
 	}
-	converter, err := convert.New(cfg.ConverterURL, 3*time.Minute)
+	// The sidecar waits up to two minutes for a slot and gives a document two more once it has one:
+	// the client waits longer than both, so that the sidecar's answer, a 503 or a 504, arrives first,
+	// and well within a job's ten-minute lease, which a document's PDF and its page share.
+	converter, err := convert.New(cfg.ConverterURL, 5*time.Minute)
 	if err != nil {
 		return nil, err
 	}

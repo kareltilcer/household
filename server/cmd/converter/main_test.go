@@ -26,14 +26,16 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// fake stands in for soffice or pdftoppm with args: "ok" writes what the command writes, "nothing"
-// writes nothing and fails, "quoting" fails as nothing does, printing what it read of the document
-// as poppler's diagnostics do, and "hang" never ends.
+// fake stands in for soffice or pdftoppm with args: "ok" writes what the command writes, "slow" does
+// so after half a second, "nothing" writes nothing and fails, "quoting" fails as nothing does,
+// printing what it read of the document as poppler's diagnostics do, and "hang" never ends.
 func fake(mode string, args []string) int {
 	switch mode {
 	case "hang":
 		time.Sleep(time.Minute)
 		return 0
+	case "slow":
+		time.Sleep(500 * time.Millisecond)
 	case "nothing":
 		return 1
 	case "quoting":
@@ -132,6 +134,27 @@ func TestTheConvertersRefusals(t *testing.T) {
 				t.Fatalf("%d %s, want %d", rec.Code, rec.Body.String(), tc.status)
 			}
 		})
+	}
+}
+
+// A conversion's time is its own, counted once it has a slot: a document that waited its turn behind
+// another is given the whole of its timeout, not what the wait left of it, and one that waits longer
+// than a conversion may take finds the converter busy, 503, which the pipeline tries again later.
+func TestAConversionsTimeStartsWithItsSlot(t *testing.T) {
+	c := newConverter(t, "slow", 1500*time.Millisecond)
+	c.slots <- struct{}{}
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- post(t, c, "/pdf?ext=docx", []byte("PK\x03\x04 a document")) }()
+	time.Sleep(1200 * time.Millisecond)
+	<-c.slots
+	if rec := <-done; rec.Code != http.StatusOK {
+		t.Fatalf("a document that waited for its slot: %d %s", rec.Code, rec.Body.String())
+	}
+
+	c.slots <- struct{}{}
+	defer func() { <-c.slots }()
+	if rec := post(t, c, "/pdf?ext=docx", []byte("PK\x03\x04 a document")); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("a document that waited longer than a conversion may take: %d %s", rec.Code, rec.Body.String())
 	}
 }
 

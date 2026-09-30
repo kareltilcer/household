@@ -33,6 +33,8 @@ var (
 	ErrUnsupported = errors.New("imaging: not an image type this server reads")
 	// ErrTooLarge is Decode's answer for an image with more pixels than it was allowed.
 	ErrTooLarge = errors.New("imaging: the image has too many pixels")
+	// ErrEmpty is Decode's answer for an image that decodes to no pixels at all.
+	ErrEmpty = errors.New("imaging: the image has no pixels")
 )
 
 // Budget is the memory the images decoded at once, in every request and every files worker of the
@@ -117,9 +119,16 @@ func (m Image) Release() {
 	}
 }
 
-// Decode reads an image of contentType from r, refusing one of more than maxPixels. It waits, for as
-// long as ctx lets it, until the images decoded meanwhile leave room for this one in Budget; the
-// caller releases what it returns. A GIF is read as its first frame.
+// Decode reads an image of contentType from r, refusing one of more than maxPixels, and one that
+// decodes to no pixels. It waits, for as long as ctx lets it, until the images decoded meanwhile
+// leave room for this one in Budget; the caller releases what it returns. A GIF is read as its first
+// frame.
+//
+// The dimensions a format's header gives are not always those of what it decodes to: a GIF's are
+// its logical screen's, and its first frame may lie anywhere within it, as little as none of it wide
+// or high. Such a frame decodes without error to an image with no pixels, which nothing can be
+// scaled from or cut a square of, so it is refused as an image that does not decode: scaled, it
+// would divide by its width.
 func Decode(ctx context.Context, r io.ReadSeeker, contentType string, maxPixels int) (Image, error) {
 	d, ok := decoders[contentType]
 	if !ok {
@@ -147,11 +156,23 @@ func Decode(ctx context.Context, r io.ReadSeeker, contentType string, maxPixels 
 		return Image{}, err
 	}
 	release := sync.OnceFunc(func() { held.Release(need) })
+	// The share goes back unless the image is handed on, a decoder's panic on bytes a member sent
+	// included: the files workers recover from one and go on, and a share it kept would be gone from
+	// the budget for as long as the process lives, until nothing could be decoded at all.
+	kept := false
+	defer func() {
+		if !kept {
+			release()
+		}
+	}()
 	img, err := d.decode(r)
-	if err != nil {
-		release()
+	switch {
+	case err != nil:
 		return Image{}, fmt.Errorf("imaging: %w", err)
+	case img.Bounds().Empty():
+		return Image{}, ErrEmpty
 	}
+	kept = true
 	return Image{Image: img, Orientation: orientation, release: release}, nil
 }
 

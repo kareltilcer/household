@@ -1,11 +1,17 @@
 package files
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
+	"github.com/kareltilcer/household/server/internal/platform/logging"
 )
 
 // woken reports whether s's workers were woken, and takes the wake.
@@ -49,5 +55,25 @@ func TestAHouseholdFoundDueWhileHeldIsLookedAtAgain(t *testing.T) {
 	s.release(h)
 	if woken(s) {
 		t.Fatal("the second drain was asked for again too")
+	}
+}
+
+// A panic in what a job runs, a decoder's on a member's upload, fails the job for good rather than
+// ending the process that runs it, and is logged by its type and the stack, never by its value,
+// which may quote the file.
+func TestAJobThatPanicsFailsForGood(t *testing.T) {
+	var logged bytes.Buffer
+	s := &Service{log: logging.New(&logged, slog.LevelDebug)}
+	err := s.guard(t.Context(), job{kind: "variants", module: "probe"}, func(context.Context, job) error {
+		panic("Smlouva o dílo, strana 1")
+	})
+	if !errors.Is(err, errPermanent) {
+		t.Fatalf("a job that panicked = %v, want a failure for good", err)
+	}
+	if out := logged.String(); !strings.Contains(out, "files: a job panicked") || strings.Contains(out, "Smlouva") {
+		t.Fatalf("logged %s", out)
+	}
+	if err := s.guard(t.Context(), job{kind: "purge"}, func(context.Context, job) error { return errGone }); !errors.Is(err, errGone) {
+		t.Fatalf("a job that did not panic = %v, want what it answered", err)
 	}
 }

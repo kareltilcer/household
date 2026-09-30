@@ -35,7 +35,8 @@ type Client struct {
 }
 
 // New returns the client of the sidecar at base, whose requests each give up after timeout, which
-// is longer than the sidecar's own so that the sidecar's answer arrives first.
+// is longer than the sidecar's own wait for a slot and its conversion's together, so that the
+// sidecar's answer arrives first.
 func New(base string, timeout time.Duration) (*Client, error) {
 	u, err := url.Parse(base)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

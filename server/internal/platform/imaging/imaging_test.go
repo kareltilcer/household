@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"testing"
 	"time"
 
@@ -189,6 +190,78 @@ func TestTheImagesDecodedAtOnceHoldNoMoreThanTheBudget(t *testing.T) {
 		t.Fatalf("an image once the budget is free = %v", err)
 	}
 	last.Release()
+}
+
+// emptyFrame is a GIF whose logical screen is w by h and whose one frame, at its origin, is none of it
+// wide and all of it high: Go's decoder takes the frame as fitting the screen, and decodes it to an
+// image with no pixels.
+func emptyFrame(w, h uint16) []byte {
+	b := []byte("GIF89a")
+	b = binary.LittleEndian.AppendUint16(b, w)
+	b = binary.LittleEndian.AppendUint16(b, h)
+	// A global colour table of two, black and white.
+	b = append(b, 0x80, 0, 0, 0, 0, 0, 255, 255, 255)
+	// The frame: at the origin, 0 wide, h high, with no table of its own.
+	b = append(b, 0x2C, 0, 0, 0, 0, 0, 0)
+	b = binary.LittleEndian.AppendUint16(b, h)
+	// Its pixels: LZW of two bits, a clear code and the end code in one sub-block; then the trailer.
+	return append(b, 0, 2, 1, 0x2C, 0, 0x3B)
+}
+
+// An image that decodes to no pixels, a GIF whose first frame is none of its screen wide, is refused
+// as one that does not decode, and gives its share of the budget back: scaled, it would divide by its
+// width, and the files worker scaling it would take the process down with it.
+func TestAnImageOfNoPixelsIsRefused(t *testing.T) {
+	gif := emptyFrame(10, 5000)
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(gif))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := imaging.SetBudget(imaging.Footprint("image/gif", cfg))
+	defer restore()
+	for range 2 {
+		// The second waits for the whole budget: it is there only if the first gave it back.
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		m, err := imaging.Decode(ctx, bytes.NewReader(gif), "image/gif", 1<<20)
+		cancel()
+		if !errors.Is(err, imaging.ErrEmpty) {
+			m.Release()
+			t.Fatalf("decode of a frame of no pixels = %v, want ErrEmpty", err)
+		}
+	}
+}
+
+// A decoder that panics on the bytes it is given gives the image's share of the budget back as the
+// panic passes: the files workers recover from it and go on, and a share it kept would be gone from
+// the budget for good, until nothing could be decoded at all.
+func TestADecoderThatPanicsGivesItsShareBack(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewGray(image.Rect(0, 0, 100, 100))); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := png.DecodeConfig(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := imaging.SetBudget(imaging.Footprint("image/png", cfg))
+	defer restore()
+	restoreDecoder := imaging.SetDecoder("image/png", func(io.Reader) (image.Image, error) { panic("a decoder's bug") })
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("the decoder's panic did not pass")
+			}
+		}()
+		_, _ = imaging.Decode(t.Context(), bytes.NewReader(buf.Bytes()), "image/png", 1<<20)
+	}()
+	restoreDecoder()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	m, err := imaging.Decode(ctx, bytes.NewReader(buf.Bytes()), "image/png", 1<<20)
+	if err != nil {
+		t.Fatalf("an image after a decoder panicked = %v, want its share of the budget back", err)
+	}
+	m.Release()
 }
 
 // What is derived carries no metadata: the EXIF segment does not survive, and a transparent image

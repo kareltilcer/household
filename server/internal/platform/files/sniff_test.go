@@ -68,6 +68,24 @@ func ftyp(major string, compatible ...string) []byte {
 	return append(append(out, body...), make([]byte, 16)...)
 }
 
+// A macro-enabled document is the macro-enabled kind by its extension as well as its type, as it is
+// sniffed and as it is read back from what it was stored as: the converter is told the document's
+// kind by the extension, and one it is told is plain is not the document it is sent.
+func TestAMacroEnabledDocumentKeepsItsExtension(t *testing.T) {
+	for _, tc := range []struct {
+		dir, ext string
+	}{{"word", "docm"}, {"xl", "xlsm"}, {"ppt", "pptm"}} {
+		content := zipped(t, "", "[Content_Types].xml", tc.dir+"/document.xml", tc.dir+"/vbaProject.bin")
+		got := Sniff(bytes.NewReader(content), int64(len(content)), "")
+		if got.Ext != tc.ext || got.Class != ClassOffice {
+			t.Errorf("%s with macros: %+v, want the extension %s", tc.dir, got, tc.ext)
+		}
+		if stored := typeOf(got.MIME); stored != got {
+			t.Errorf("%s with macros, as stored: %+v, want %+v", tc.dir, stored, got)
+		}
+	}
+}
+
 // Every type is sniffed from the bytes: a name makes no type, it only says which kind of text text
 // is, and blocks a program whatever its bytes are.
 func TestSniff(t *testing.T) {

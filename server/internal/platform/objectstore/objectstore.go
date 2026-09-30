@@ -206,6 +206,25 @@ func (s *Store) PutOnce(ctx context.Context, k string, body io.ReadSeeker, size 
 	return nil
 }
 
+// PutSame is PutOnce for a caller whose own bytes may be at k already: a write the store kept but
+// whose answer was lost, sent again by the store's client or by a retry of the request that wrote
+// it. Bytes there with o's digest are that write, and PutSame succeeds; bytes with another digest,
+// or with none, are another's, and it answers ErrExists.
+func (s *Store) PutSame(ctx context.Context, k string, body io.ReadSeeker, size int64, o Object) error {
+	err := s.PutOnce(ctx, k, body, size, o)
+	if !errors.Is(err, ErrExists) {
+		return err
+	}
+	info, err := s.Head(ctx, k)
+	switch {
+	case err != nil:
+		return err
+	case !info.HasSHA256 || info.SHA256 != o.SHA256:
+		return ErrExists
+	}
+	return nil
+}
+
 // Info is what the store holds about an object.
 type Info struct {
 	Key          string

@@ -16,10 +16,10 @@
 //	HOUSEHOLD_CONVERTER_JOBS       how many conversions run at once (2)
 //
 // Each conversion has a directory of its own, LibreOffice's profile among it, so that two may run at
-// once, and a timeout, past which the process and every process it started are killed. What the
-// converter cannot convert, a damaged document or one no filter reads, it answers 422, which the
-// pipeline takes for good; a conversion that ran out of time is 504, and one waiting for a slot
-// longer than that 503, which it tries again later.
+// once, and a timeout, counted from when it has a slot, past which the process and every process it
+// started are killed. What the converter cannot convert, a damaged document or one no filter reads,
+// it answers 422, which the pipeline takes for good; a conversion that ran out of time is 504, and
+// one waiting for a slot longer than its timeout 503, which it tries again later.
 package main
 
 import (
@@ -204,15 +204,21 @@ func (c *converter) convert(w http.ResponseWriter, r *http.Request, name string,
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
-	defer cancel()
+	// A slot is waited for as long as a conversion may take, and past that the converter is busy.
+	// The conversion's own time starts once it has one: a document that waited its turn behind others
+	// gets the whole of its timeout, rather than what the wait left of it, and is not killed as one
+	// that took too long for the time it spent in the queue.
+	waiting, stopWaiting := context.WithTimeout(r.Context(), timeout)
+	defer stopWaiting()
 	select {
 	case c.slots <- struct{}{}:
 		defer func() { <-c.slots }()
-	case <-ctx.Done():
+	case <-waiting.Done():
 		http.Error(w, "busy", http.StatusServiceUnavailable)
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
 	out, argv := command(dir, in)
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // G204: the commands are the converter's own configuration.
 	cmd.Dir = dir

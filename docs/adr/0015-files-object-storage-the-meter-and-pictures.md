@@ -5,7 +5,7 @@
 - **Plan item:** 14
 - **Decides for:** [PRD 01](../prd/01-architecture.md) §2.3 (the meter role) and §8; [PRD 03](../prd/03-platform-strands.md)
   §3 (FR-ST1–ST4) and §8 (FR-FL1–FL4); [PRD 07](../prd/07-nonfunctional.md) FR-NF3 for object storage;
-  [modules/17](../prd/modules/17-household-admin.md) FR-HA14; D-9, D-25, D-28, D-107, D-108; plan Q14
+  [modules/17](../prd/modules/17-household-admin.md) FR-HA14; D-9, D-25, D-28, D-107, D-108, D-109; plan Q14
 
 ## Context
 
@@ -51,7 +51,10 @@ authorised the caller, in three steps:
   lists; one larger is an archive. The upload's body may take `HOUSEHOLD_UPLOAD_TIMEOUT` (15 minutes)
   to arrive, extended past the server's body deadline through `http.ResponseController`; a spool the
   server cannot write is its own `500`, never the body's `422`. The Idempotency-Key's fingerprint of
-  a multipart body leaves out its boundary, which a client draws afresh for every attempt.
+  a multipart body leaves out its boundary, which a client draws afresh for every attempt, and its
+  length, which carries the boundary once for each part and once more, and differs when a client
+  draws boundaries of more than one length, as Firefox does: a form is known by its route, its
+  precondition and its media type.
 - `Put` checks the storage ceiling against the rows the household has now (`402
   storage_ceiling_reached`, with `over_by_bytes` and `blocks_at_ceiling`, remedy `free_storage`; below
   the ceiling an upload always succeeds, D-33) and writes the bytes to
@@ -88,10 +91,14 @@ transaction wrote. A commit wakes its instance's workers (`Nudge`); the others f
 job runs no longer than its lease, since the store's client gives up on nothing by itself; one
 that fails for a reason a retry may mend waits 1, 5, 30 and 120 minutes, and after five tries, or at
 once for a file that cannot be decoded or converted, the original's `variants` is `failed` and the
-file stays download-only, its upload never lost. A variant is put `If-None-Match` too; one a
+file stays download-only, its upload never lost. A panic in deriving, a decoder's on the bytes a
+member sent, is such a failure and never the process's end; and a job claimed a sixth time, its
+workers having each ended with their process before they could settle it, is given up without
+running, rather than taking down one instance after another, a lease apart. A variant is put `If-None-Match` too; one a
 previous attempt stored is kept as it is, since a conversion need not give the same bytes twice.
 What is derived carries no metadata: an image is decoded, turned upright by its EXIF orientation,
-scaled and written again. An image of more than 64 million pixels is not decoded, and the images a
+scaled and written again. An image of more than 64 million pixels is not decoded, nor one that decodes to none (a GIF whose
+first frame is none of its screen wide), and the images a
 process decodes at once, its workers' and its requests' pictures alike, hold a gigabyte between them
 at most (`imaging.Budget`): each waits for room, since a PNG of a few hundred kilobytes may decode to
 half a gigabyte, and a handful sent at once would otherwise take the process's memory.
@@ -121,7 +128,7 @@ worker, once the meter has named the household, claims and records its jobs the 
 **The sample** (`storage.Sampler`) reads, as the meter, from one repeatable-read snapshot per batch of
 500 households, each household's bytes by module (originals and derived apart) and by member, its
 objects, and the rows of each table a module declares (`module.StorageSource.StorageTables`), and
-replaces the household's sample of the UTC day (`usage_samples`, `usage_sample_modules`,
+replaces the household's sample of the UTC day (D-109; `usage_samples`, `usage_sample_modules`,
 `usage_sample_members`). A household that keeps nothing is sampled at nothing, so a period's average
 counts its empty days. Item 15's scheduler runs it nightly, with the sweeps.
 

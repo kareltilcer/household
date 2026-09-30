@@ -88,15 +88,12 @@ func (s *Service) Put(ctx context.Context, u *Upload, t Target) (Stored, error) 
 	if ceiling := s.allowance.Ceiling(); used+u.Size > ceiling {
 		return Stored{}, s.overCeiling(ctx, household, used+u.Size-ceiling)
 	}
+	// Bytes the same as these, written before and never recorded, are a retry's of an upload whose
+	// mutation did not commit.
 	key := Key(household, t.Module, t.Entity, Original)
-	err = s.store.PutOnce(ctx, key, u.Reader(), u.Size, objectstore.Object{ContentType: u.Type.MIME, SHA256: u.SHA256})
+	err = s.store.PutSame(ctx, key, u.Reader(), u.Size, objectstore.Object{ContentType: u.Type.MIME, SHA256: u.SHA256})
 	if errors.Is(err, objectstore.ErrExists) {
-		// Written before and never recorded: a retry of an upload whose mutation did not commit, when
-		// the bytes are the same.
-		var info objectstore.Info
-		if info, err = s.store.Head(ctx, key); err == nil && (!info.HasSHA256 || info.SHA256 != u.SHA256) {
-			return Stored{}, taken(t.Field)
-		}
+		return Stored{}, taken(t.Field)
 	}
 	if err != nil {
 		if ctx.Err() != nil {

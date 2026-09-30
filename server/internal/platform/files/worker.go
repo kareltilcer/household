@@ -3,6 +3,7 @@ package files
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -11,7 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
+	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
@@ -173,15 +176,22 @@ func (s *Service) claim(ctx context.Context, household uuid.UUID) (job, bool, er
 // The job runs for its lease at most, and past it fails as any job does, to be tried again: another
 // worker may take it then, and a store that stops answering would otherwise hold this worker for as
 // long as the process lives, since the store's client gives up on nothing by itself.
+//
+// A job claimed more times than it may be tried is given up without running: each claim counts an
+// attempt, and one past the last is a job whose workers ended with the process before they could
+// settle it, killed for the memory it took or by what else it did. Tried again, it would take down
+// each instance that claimed it, one lease after another.
 func (s *Service) run(ctx context.Context, j job) {
 	running, stop := context.WithTimeout(ctx, s.lease)
 	defer stop()
 	var err error
-	switch j.kind {
-	case "variants":
-		err = s.derive(running, j)
-	case "purge":
-		err = s.purge(running, j)
+	switch {
+	case j.attempts > maxAttempts:
+		err = fmt.Errorf("%w: claimed %d times, and never settled", errPermanent, j.attempts)
+	case j.kind == "variants":
+		err = s.guard(running, j, s.derive)
+	case j.kind == "purge":
+		err = s.guard(running, j, s.purge)
 	}
 	// The job is settled even when ctx has ended: a job left claimed waits out its lease.
 	settle := context.WithoutCancel(ctx)
@@ -203,6 +213,22 @@ func (s *Service) run(ctx context.Context, j job) {
 	if err != nil {
 		s.log.LogAttrs(ctx, slog.LevelError, "files: settle a job", slog.Any("error", err))
 	}
+}
+
+// guard runs fn on j, and answers a panic in it as a failure a retry will not mend. The workers
+// decode and convert what members upload, through decoders that are not ours, in goroutines of the
+// server's own: a panic left to pass would end the process, the requests it was serving with it, and
+// the job, never settled, would end the next instance that claimed it once its lease had passed. The
+// panic is logged by its value's type and the stack, never the value, which may quote the file.
+func (s *Service) guard(ctx context.Context, j job, fn func(context.Context, job) error) (err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			s.log.LogAttrs(ctx, slog.LevelError, "files: a job panicked", slog.String("kind", j.kind),
+				slog.String("module", j.module), slog.String("panic", httpx.TypeName(v)), slog.String("stack", logging.Stack()))
+			err = fmt.Errorf("%w: it panicked", errPermanent)
+		}
+	}()
+	return fn(ctx, j)
 }
 
 // settle ends j: with its original's variants marked failed when status says so, and the job
