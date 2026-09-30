@@ -557,7 +557,7 @@ Phase 0 · after 9, 12 · size XL
   - ADR: [0001](adr/0001-sync-engine.md)
   - API: tag `sync`
 - **Done when** the suite passes scenarios 1, 3, 4, 5, 8, 9, 10, 15 and 17, plus the `state_set` half of 13.
-- **PR:** —
+- **PR:** [#16](https://github.com/kareltilcer/household/pull/16)
 
 ### 14 · Sync engine II — conflicts, retraction, visibility, audiences, observability · `planned`
 
