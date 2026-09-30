@@ -17,6 +17,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/grant"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
+	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
@@ -105,7 +106,13 @@ func (s *Service) Routes(r chi.Router) {
 // and answers every one (FR-SY6): a mutation that fails does not stop the ones after it, and one
 // that writes a row an earlier mutation of the batch failed to, or names one in a field, is
 // deferred. The answer is 200 whenever the batch was processed at all; each mutation's outcome is in
-// the body.
+// the body, and seq is the household's latest change once the batch is answered, the batch's own or
+// another member's since.
+//
+// The answers kept for the batch's mutations are read at once, before the first is applied. A
+// mutation id the batch repeats is looked up again when it recurs, since its first delivery has kept
+// its answer since; a delivery of the same mutation in another request, racing this one, is caught
+// where each keeps its answer (keep), and answered with the other's.
 func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 	ctx := mutation.WithVia(r.Context(), audit.ViaSync)
 	requestID := reqctx.RequestID(ctx)
@@ -118,69 +125,80 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, requestID, problem.New(http.StatusRequestEntityTooLarge, problem.CodeBatchTooLarge))
 		return
 	}
+	fail := func(err error, attrs ...slog.Attr) {
+		// A repeat of the request took its Idempotency-Key over once the key's lease had passed, and
+		// runs the batch itself: this one can no longer commit, and is answered as a repeat of a
+		// request still running is, 409 idempotency_in_progress. Nothing on the server failed.
+		if errors.Is(err, idempotency.ErrClaimLost) {
+			problem.Write(w, requestID, idempotency.ErrClaimLost)
+			return
+		}
+		s.log.LogAttrs(ctx, slog.LevelError, "push: the batch could not be answered", append(attrs, slog.Any("error", err))...)
+		problem.Write(w, requestID, problem.Internal())
+	}
+	ids := make([]uuid.UUID, len(batch.Mutations))
+	for i, m := range batch.Mutations {
+		ids[i] = m.MutationID
+	}
+	answers, err := keptAnswers(ctx, ids)
+	if err != nil {
+		fail(err)
+		return
+	}
 	now := s.now()
 	failed := map[uuid.UUID]bool{}
+	seen := make(map[uuid.UUID]bool, len(ids))
 	out := BatchResult{Results: make([]Result, 0, len(batch.Mutations))}
 	for _, m := range batch.Mutations {
-		res, seq, err := s.apply(ctx, m, now, failed)
+		if seen[m.MutationID] {
+			again, err := keptAnswers(ctx, []uuid.UUID{m.MutationID})
+			if err != nil {
+				fail(err, slog.String("mutation_id", m.MutationID.String()))
+				return
+			}
+			answers[m.MutationID] = again[m.MutationID]
+		}
+		seen[m.MutationID] = true
+		res, err := s.apply(ctx, m, now, failed, answers[m.MutationID])
 		if err != nil {
-			s.log.LogAttrs(ctx, slog.LevelError, "push: a mutation could not be answered",
-				slog.String("mutation_id", m.MutationID.String()), slog.Any("error", err))
-			problem.Write(w, requestID, problem.Internal())
+			fail(err, slog.String("mutation_id", m.MutationID.String()))
 			return
 		}
 		if res.Outcome != Applied && res.Outcome != Merged {
 			failed[m.EntityID] = true
 		}
-		out.Seq = max(out.Seq, seq)
 		out.Results = append(out.Results, res)
 	}
-	if out.Seq == 0 {
-		err := tenant.InTx(ctx, func(tx pgx.Tx) error {
-			return tx.QueryRow(ctx, "SELECT coalesce(max(seq), 0) FROM sync_changes WHERE household_id = $1",
-				tenant.From(ctx).HouseholdID()).Scan(&out.Seq)
-		})
-		if err != nil {
-			s.log.LogAttrs(ctx, slog.LevelError, "push: read the feed", slog.Any("error", err))
-			problem.Write(w, requestID, problem.Internal())
-			return
-		}
+	if err := tenant.InTx(ctx, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, "SELECT coalesce(max(seq), 0) FROM sync_changes WHERE household_id = $1",
+			tenant.From(ctx).HouseholdID()).Scan(&out.Seq)
+	}); err != nil {
+		fail(fmt.Errorf("push: read the feed: %w", err))
+		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
-// apply answers one mutation, and returns the feed seq it wrote, zero for none. An error is one the
-// push cannot answer the mutation for.
+// apply answers one mutation, whose kept answer, when it was answered before within its answer's
+// retention, is found, nil when it was not. An error is one the push cannot answer the mutation for.
 //
-// A mutation answered before, within its answer's retention, is answered as it was, and takes no
-// second effect (FR-SY5); one sent again with anything else under its id is refused. Otherwise it is
-// checked in this order, the first failure answering it: its entity is one the registry holds; the
-// caller may contribute to the entity's module, a caller who may not see it answered not_found as
-// its REST routes are; the entity may be written offline (D-84); no earlier mutation of the batch
-// failed on what it depends on, else it is deferred, and kept for its replay; its entity's policy
-// admits its op; and its module writes the entity through the push. Then it is written, the client's
-// clock held to ClockClamp, in mutation.Apply's transaction, with an additive series' invariant
-// checked first. Every answer but deferred is kept.
-func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uuid.UUID]bool) (Result, int64, error) {
+// A mutation answered before is answered as it was, and takes no second effect (FR-SY5); one sent
+// again with anything else under its id is refused. Otherwise it is checked in this order, the first
+// failure answering it: its entity is one the registry holds; the caller may contribute to the
+// entity's module, a caller who may not see it answered not_found as its REST routes are; the entity
+// may be written offline (D-84); no earlier mutation of the batch failed on what it depends on, else
+// it is deferred, and kept for its replay; its entity's policy admits its op; and its module writes
+// the entity through the push. Then it is written, the client's clock held to ClockClamp, in
+// mutation.Apply's transaction, with an additive series' invariant checked first. Every answer but
+// deferred is kept.
+func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uuid.UUID]bool, found *kept) (Result, error) {
 	res := Result{MutationID: in.MutationID}
 	fp, err := fingerprint(in)
 	if err != nil {
-		return res, 0, err
+		return res, err
 	}
-	var found kept
-	var answered bool
-	if err := tenant.InTx(ctx, func(tx pgx.Tx) error {
-		found, answered, err = lookup(ctx, tx, in.MutationID)
-		return err
-	}); err != nil {
-		return res, 0, err
-	}
-	if answered {
-		if string(found.fingerprint) != string(fp) {
-			return reject(res, Refuse(problem.CodeValidationFailed,
-				"mutation %s was sent before carrying another mutation", in.MutationID)), 0, nil
-		}
-		return found.result, 0, nil
+	if found != nil {
+		return found.answer(res, fp), nil
 	}
 
 	e, known := s.registry.Entity(in.EntityType)
@@ -195,7 +213,7 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 		if err := grant.Require(ctx, e.Module(), access.Contribute); err != nil {
 			var p *problem.Problem
 			if !errors.As(err, &p) {
-				return res, 0, err
+				return res, err
 			}
 			refused = Refuse(p.Code, "the caller may not write %s", e.Module())
 		}
@@ -207,7 +225,7 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 		res.Outcome = Deferred
 		res.Code = ptr(DependencyFailed)
 		res.Message = ptr("an earlier mutation of this batch, to what this one depends on, was not applied")
-		return res, 0, nil
+		return res, nil
 	}
 	if refused == nil {
 		refused = admits(e, Op(in.Op))
@@ -264,12 +282,12 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 		if no = FromDatabase(err); no != nil {
 			return s.end(ctx, fp, reject(res, no))
 		}
-		return res, 0, err
+		return res, err
 	case applied.Seq == 0:
 		// Nothing written: the state the mutation asks for is in place.
 		return s.end(ctx, fp, appliedResult(res, written))
 	}
-	return appliedResult(res, written), applied.Seq, nil
+	return appliedResult(res, written), nil
 }
 
 // errAnswered rolls back a mutation whose answer another delivery of it kept first, while this one
@@ -278,7 +296,10 @@ var errAnswered = errors.New("push: another delivery of the mutation was answere
 
 // end keeps res, the answer that ends a mutation that took no effect, and returns it; or returns
 // the answer another delivery of the mutation kept first, which stands.
-func (s *Service) end(ctx context.Context, fp []byte, res Result) (Result, int64, error) {
+//
+// The answer is kept in a transaction of its own, outside the mutation spine: it is the push's own
+// record of what it answered, as an Idempotency-Key is the platform's, and no entity's history.
+func (s *Service) end(ctx context.Context, fp []byte, res Result) (Result, error) {
 	var stored bool
 	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
 		var err error
@@ -287,34 +308,24 @@ func (s *Service) end(ctx context.Context, fp []byte, res Result) (Result, int64
 	})
 	switch {
 	case err != nil:
-		return res, 0, err
+		return res, err
 	case !stored:
 		return s.answered(ctx, res, fp)
 	}
-	return res, 0, nil
+	return res, nil
 }
 
 // answered returns the answer another delivery of res's mutation kept.
-func (s *Service) answered(ctx context.Context, res Result, fp []byte) (Result, int64, error) {
-	var (
-		found kept
-		ok    bool
-	)
-	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
-		var err error
-		found, ok, err = lookup(ctx, tx, res.MutationID)
-		return err
-	})
-	switch {
-	case err != nil:
-		return res, 0, err
-	case !ok:
-		return res, 0, fmt.Errorf("push: mutation %s was answered, and its answer is not kept", res.MutationID)
-	case string(found.fingerprint) != string(fp):
-		return reject(res, Refuse(problem.CodeValidationFailed,
-			"mutation %s was sent before carrying another mutation", res.MutationID)), 0, nil
+func (s *Service) answered(ctx context.Context, res Result, fp []byte) (Result, error) {
+	answers, err := keptAnswers(ctx, []uuid.UUID{res.MutationID})
+	if err != nil {
+		return res, err
 	}
-	return found.result, 0, nil
+	found := answers[res.MutationID]
+	if found == nil {
+		return res, fmt.Errorf("push: mutation %s was answered, and its answer is not kept", res.MutationID)
+	}
+	return found.answer(res, fp), nil
 }
 
 func appliedResult(res Result, w Written) Result {

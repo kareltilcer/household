@@ -258,8 +258,9 @@ func TestADefaultedPasswordIsSetOnlyOnALocalCluster(t *testing.T) {
 }
 
 // PowerSync's bucket storage is a database of its own, owned by a role of its own: it holds every
-// household's replicated rows outside row-level security. Outside development it is prepared only when
-// named, since it may be kept on a cluster of its own.
+// household's replicated rows outside row-level security. Bootstrap prepares it on the
+// administrator's cluster, so one named on another cluster is refused; outside development it is
+// prepared only when named, since it may be kept on a cluster of its own.
 func TestPowerSyncsStorageIsADatabaseOfItsOwn(t *testing.T) {
 	t.Setenv("PGPASSWORD", "")
 	t.Setenv("PGPASSFILE", t.TempDir()+"/none")
@@ -268,11 +269,19 @@ func TestPowerSyncsStorageIsADatabaseOfItsOwn(t *testing.T) {
 		"a role of the server's":   {dsn("household_app", "b", "127.0.0.1", "powersync_storage"), "a role of its own"},
 		"PowerSync's replication":  {dsn("household_powersync", "b", "127.0.0.1", "powersync_storage"), "a role of its own"},
 		"no password":              {dsn("powersync_storage", "", "127.0.0.1", "powersync_storage"), "no role or no password"},
+		"another cluster":          {dsn("powersync_storage", "b", "buckets.internal:5432", "powersync_storage"), "leave it unset"},
+		"another port":             {dsn("powersync_storage", "b", "127.0.0.1:5433", "powersync_storage"), "leave it unset"},
 	} {
 		_, err := config.Load(config.Bootstrap, env(map[string]string{config.PowerSyncStorageURLVar: tc.storage}))
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: error %v, want one containing %q", name, err, tc.want)
 		}
+	}
+	// The administrator's cluster, at the loopback however it is spelled.
+	if _, err := config.Load(config.Bootstrap, env(map[string]string{
+		config.PowerSyncStorageURLVar: dsn("powersync_storage", "b", "localhost:5432", "powersync_storage"),
+	})); err != nil {
+		t.Errorf("the administrator's cluster as localhost: %v", err)
 	}
 	c, err := config.Load(config.Bootstrap, env(map[string]string{
 		config.EnvVar:                    "production",

@@ -424,8 +424,9 @@ func TestPushKeysACompletionOnItsChoreAndOccurrence(t *testing.T) {
 
 // An additive series holds its invariant on arrival (scenario 17): a reading that falls below the
 // one before it, or rises above the one after it, is rejected monotonicity_violation, naming the
-// neighbour, and writes nothing; one between its neighbours is applied. An additive row is only
-// created, and a state_set write is never a delete.
+// neighbour, and writes nothing; one between its neighbours is applied. A meter named in upper case
+// is the same series, and a meter that is no id is refused as the database refuses it. An additive
+// row is only created, and a state_set write is never a delete.
 func TestPushHoldsAnAdditiveSeriesToItsInvariant(t *testing.T) {
 	w := newWorld(t, apptest.Options{})
 	household, member := w.household("contribute")
@@ -434,17 +435,19 @@ func TestPushHoldsAnAdditiveSeriesToItsInvariant(t *testing.T) {
 	day := func(n int) string { return time.Date(2026, 9, n, 7, 0, 0, 0, time.UTC).Format(time.RFC3339) }
 	w.exec("INSERT INTO conformance_readings (id, household_id, meter_id, read_at, value) VALUES ($1, $3, $4, $5, 100), ($2, $3, $4, $6, 300)",
 		before, after, household, meter, day(1), day(3))
-	reading := func(n, value int) map[string]any {
-		return mutationOf(conformance.Reading, "create", idgen.New(), map[string]any{"meter_id": meter.String(), "read_at": day(n), "value": value})
+	readingOf := func(meter string, n, value int) map[string]any {
+		return mutationOf(conformance.Reading, "create", idgen.New(), map[string]any{"meter_id": meter, "read_at": day(n), "value": value})
 	}
+	reading := func(n, value int) map[string]any { return readingOf(meter.String(), n, value) }
 	got := w.results(w.push(household, token, key(),
 		reading(2, 50), reading(2, 400), reading(2, 200), reading(4, 250),
 		mutationOf(conformance.Reading, "update", before, map[string]any{"value": 110}),
 		mutationOf(conformance.ItemChecked, "delete", idgen.New(), nil),
+		readingOf(strings.ToUpper(meter.String()), 4, 250), readingOf("the kitchen meter", 4, 350),
 	))
 	want := []string{
 		"rejected monotonicity_violation", "rejected monotonicity_violation", push.Applied, "rejected monotonicity_violation",
-		"rejected validation_failed", "rejected validation_failed",
+		"rejected validation_failed", "rejected validation_failed", "rejected monotonicity_violation", "rejected validation_failed",
 	}
 	if fmt.Sprint(outcomes(got)) != fmt.Sprint(want) {
 		t.Fatalf("outcomes\n  %v\nwant\n  %v", outcomes(got), want)
@@ -542,6 +545,29 @@ func TestPushAnswersEachMutationAsItWasAnsweredFirst(t *testing.T) {
 	got := w.results(w.push(household, w.signIn(other, 0), key(), theirs))
 	if outcomes(got)[0] != push.Applied || got.Results[0].Version == nil || *got.Results[0].Version != 2 {
 		t.Errorf("another member's mutation under the same id: %v", outcomes(got))
+	}
+}
+
+// A mutation id a batch repeats is answered as its first delivery in the batch was, the answers
+// having been read before the batch began: a write is answered with the version it committed and
+// takes no second effect, and a refusal is answered as a refusal, never deferred behind itself.
+func TestPushAnswersAMutationTheBatchRepeatsAsItsFirstDelivery(t *testing.T) {
+	w := newWorld(t, apptest.Options{})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	milk := idgen.New()
+	create := mutationOf(conformance.Item, "create", milk, map[string]any{"title": "Milk"})
+	refused := mutationOf(conformance.Item, "update", milk, map[string]any{"quantity": 0})
+	got := w.results(w.push(household, token, key(), create, create, refused, refused))
+	want := []string{push.Applied, push.Applied, "rejected validation_failed", "rejected validation_failed"}
+	if fmt.Sprint(outcomes(got)) != fmt.Sprint(want) {
+		t.Fatalf("outcomes %v, want %v", outcomes(got), want)
+	}
+	if answered(got.Results[1]) != answered(got.Results[0]) {
+		t.Errorf("the repeat: %s, first %s", answered(got.Results[1]), answered(got.Results[0]))
+	}
+	if n := w.count("SELECT count(*) FROM audit_events WHERE entity_id = $1", milk); n != 1 {
+		t.Errorf("%d audit events, want 1", n)
 	}
 }
 

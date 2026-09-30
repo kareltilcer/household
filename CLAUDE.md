@@ -130,6 +130,11 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   The one other write path is the platform's own, for the global account tables (a user's
   profile, credentials and sessions), which are no household's history: `tenant.AccountTx`,
   which architecture test 4 keeps out of every module ([ADR 0009](docs/adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md)).
+  Beside it, the platform keeps its own record of what it answered, no entity's history, through
+  `tenant.InWriteTx`, which test 4 also keeps out of modules: the Idempotency-Key middleware's
+  keys, and the push's answer to each mutation (`sync_mutations`), kept in the effect's own
+  transaction when the mutation took one and in a transaction of its own when it took none
+  ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
   The household surface (`internal/platform/household`) is `admin`, a module the platform
   serves itself: it writes through `mutation.Apply` with the actions and entities
   `module.PlatformModule` declares, and holds a household its caller is not yet in, creating

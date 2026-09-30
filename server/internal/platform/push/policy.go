@@ -42,8 +42,10 @@ const invariantLock int32 = 0x696e7672
 // neighbour it breaks against by its id, its series, its place in the order and its value. Only the
 // server can decide it, since a replica may not hold that neighbour (scenario 17). The creates of
 // one series are serialised by an advisory lock held until tx ends, so that two arriving at once
-// cannot each pass against the rows the other has not written. A soft-deleted row is no neighbour,
-// and nor is one at the same place in the order.
+// cannot each pass against the rows the other has not written; the lock is keyed on the series'
+// values as their columns hold them, so that two spellings of one value, a meter's id in upper case
+// and in lower, take the same lock. A soft-deleted row is no neighbour, nor is one at the same place
+// in the order, nor one without a value to compare.
 func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) error {
 	inv := e.Invariant
 	if inv == nil || e.Policy != sync.Additive || m.Op != Create {
@@ -62,11 +64,15 @@ func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) e
 	if err != nil {
 		return err
 	}
-	series := []string{e.Table}
+	// A value its column's type cannot read fails the cast here, and is refused as the database
+	// refuses it (FromDatabase).
+	lockArgs, series := []any{invariantLock, e.Table}, []string{"$2::text"}
 	for _, s := range inv.Series {
-		series = append(series, values[s])
+		lockArgs = append(lockArgs, values[s])
+		series = append(series, "$"+strconv.Itoa(len(lockArgs))+"::"+types[s]+"::text")
 	}
-	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, hashtext($2))", invariantLock, strings.Join(series, "\x1f")); err != nil {
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, hashtext(concat_ws(E'\\x1f', "+strings.Join(series, ", ")+")))",
+		lockArgs...); err != nil {
 		return fmt.Errorf("push: lock the series: %w", err)
 	}
 
@@ -75,7 +81,8 @@ func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) e
 		args = append(args, values[name])
 		return "$" + strconv.Itoa(len(args)) + "::" + types[name]
 	}
-	conditions := []string{"household_id = $1", "deleted_at IS NULL"}
+	order, field := pgx.Identifier{inv.Order}.Sanitize(), pgx.Identifier{inv.Field}.Sanitize()
+	conditions := []string{"household_id = $1", "deleted_at IS NULL", field + " IS NOT NULL"}
 	named := []string{"'id', id"}
 	for _, s := range inv.Series {
 		conditions = append(conditions, pgx.Identifier{s}.Sanitize()+" = "+param(s))
@@ -83,7 +90,6 @@ func checkInvariant(ctx context.Context, tx pgx.Tx, e sync.Entity, m Mutation) e
 	for _, n := range names {
 		named = append(named, literal(n)+", "+pgx.Identifier{n}.Sanitize())
 	}
-	order, field := pgx.Identifier{inv.Order}.Sanitize(), pgx.Identifier{inv.Field}.Sanitize()
 	at, value := param(inv.Order), param(inv.Field)
 	// The nearest row on each side of the new one: before it, one whose value is greater breaks the
 	// series; after it, one whose value is less.

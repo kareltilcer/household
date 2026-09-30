@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/text/secure/precis"
 )
 
@@ -127,10 +128,10 @@ func roleClauses(wants, have roleAttributes, create bool) string {
 	return out
 }
 
-// grantable returns why the administrator tx is connected as cannot give a role REPLICATION and
+// grantable returns why the administrator tx is connected as cannot give role REPLICATION and
 // BYPASSRLS, "" when it can: PostgreSQL lets only a superuser, or a role holding each attribute,
 // grant it (ADR 0004), and a managed database's administrator may hold neither.
-func grantable(ctx context.Context, tx pgx.Tx) (string, error) {
+func grantable(ctx context.Context, tx pgx.Tx, role string) (string, error) {
 	var admin string
 	var a roleAttributes
 	if err := tx.QueryRow(ctx,
@@ -152,7 +153,7 @@ func grantable(ctx context.Context, tx pgx.Tx) (string, error) {
 		return "", nil
 	}
 	return fmt.Sprintf("%s needs REPLICATION and BYPASSRLS, which only an administrator holding them may give, and %s lacks %s",
-		RolePowerSync, admin, strings.Join(missing, " and ")), nil
+		role, admin, strings.Join(missing, " and ")), nil
 }
 
 // Bootstrap creates the three roles and PowerSync's, or restores an existing one's attributes
@@ -187,42 +188,50 @@ func CreateRoles(ctx context.Context, tx pgx.Tx, passwords Passwords) error {
 		return fmt.Errorf("lock: %w", err)
 	}
 	for _, m := range managed {
-		role := m.role
-		password := passwords.Of(role)
-		if password == "" {
-			return fmt.Errorf("no password for %s", role)
+		if err := setRole(ctx, tx, m.role, m.wants, passwords.Of(m.role)); err != nil {
+			return err
 		}
-		var a roleAttributes
-		err := tx.QueryRow(ctx,
-			"SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1", role,
-		).Scan(&a.login, &a.super, &a.createDB, &a.createRole, &a.replication, &a.bypassRLS)
-		create := errors.Is(err, pgx.ErrNoRows)
-		if err != nil && !create {
-			return fmt.Errorf("look up %s: %w", role, err)
-		}
-		verb, clauses := "ALTER", roleClauses(m.wants, a, create)
-		if create {
-			verb = "CREATE"
-		}
-		if (m.wants.replication && (create || !a.replication)) || (m.wants.bypassRLS && (create || !a.bypassRLS)) {
-			why, err := grantable(ctx, tx)
-			if err != nil {
-				return err
-			}
-			if why != "" {
-				return errors.New(why)
-			}
-		}
-		salt := make([]byte, scramSaltBytes)
-		_, _ = rand.Read(salt) // It never fails: the process ends first.
-		secret, err := scramSecret(password, salt, scramIterations)
+	}
+	return nil
+}
+
+// setRole creates role with wants and password, or restores an existing role's drifted attributes
+// to wants and sets its password, in tx, which holds CatalogLock. It refuses, naming what is
+// missing, to give REPLICATION or BYPASSRLS as an administrator that may not (grantable).
+func setRole(ctx context.Context, tx pgx.Tx, role string, wants roleAttributes, password string) error {
+	if password == "" {
+		return fmt.Errorf("no password for %s", role)
+	}
+	var a roleAttributes
+	err := tx.QueryRow(ctx,
+		"SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1", role,
+	).Scan(&a.login, &a.super, &a.createDB, &a.createRole, &a.replication, &a.bypassRLS)
+	create := errors.Is(err, pgx.ErrNoRows)
+	if err != nil && !create {
+		return fmt.Errorf("look up %s: %w", role, err)
+	}
+	verb, clauses := "ALTER", roleClauses(wants, a, create)
+	if create {
+		verb = "CREATE"
+	}
+	if (wants.replication && (create || !a.replication)) || (wants.bypassRLS && (create || !a.bypassRLS)) {
+		why, err := grantable(ctx, tx, role)
 		if err != nil {
-			return fmt.Errorf("the SCRAM secret for %s: %w", role, err)
+			return err
 		}
-		// format() quotes the role as an identifier and the secret as a literal.
-		if err := execFormatted(ctx, tx, "%s ROLE %I WITH "+clauses+"PASSWORD %L", verb, role, secret); err != nil {
-			return fmt.Errorf("%s ROLE %s: %w", verb, role, err)
+		if why != "" {
+			return errors.New(why)
 		}
+	}
+	salt := make([]byte, scramSaltBytes)
+	_, _ = rand.Read(salt) // It never fails: the process ends first.
+	secret, err := scramSecret(password, salt, scramIterations)
+	if err != nil {
+		return fmt.Errorf("the SCRAM secret for %s: %w", role, err)
+	}
+	// format() quotes the role as an identifier and the secret as a literal.
+	if err := execFormatted(ctx, tx, "%s ROLE %I WITH "+clauses+"PASSWORD %L", verb, role, secret); err != nil {
+		return fmt.Errorf("%s ROLE %s: %w", verb, role, err)
 	}
 	return nil
 }
@@ -312,26 +321,7 @@ func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", CatalogLock); err != nil {
 			return fmt.Errorf("lock: %w", err)
 		}
-		var a roleAttributes
-		err := tx.QueryRow(ctx,
-			"SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1",
-			storage.Role).Scan(&a.login, &a.super, &a.createDB, &a.createRole, &a.replication, &a.bypassRLS)
-		create := errors.Is(err, pgx.ErrNoRows)
-		if err != nil && !create {
-			return fmt.Errorf("look up %s: %w", storage.Role, err)
-		}
-		verb := "ALTER"
-		if create {
-			verb = "CREATE"
-		}
-		salt := make([]byte, scramSaltBytes)
-		_, _ = rand.Read(salt)
-		secret, err := scramSecret(storage.Password, salt, scramIterations)
-		if err != nil {
-			return fmt.Errorf("the SCRAM secret for %s: %w", storage.Role, err)
-		}
-		return execFormatted(ctx, tx, "%s ROLE %I WITH "+roleClauses(roleAttributes{login: true}, a, create)+"PASSWORD %L",
-			verb, storage.Role, secret)
+		return setRole(ctx, tx, storage.Role, roleAttributes{login: true}, storage.Password)
 	})
 	if err != nil {
 		return fmt.Errorf("db: prepare storage: %w", err)
@@ -348,20 +338,23 @@ func PrepareStorage(ctx context.Context, admin *pgx.Conn, storage Storage) error
 		statements = append([]string{"CREATE DATABASE %I OWNER %I"}, statements...)
 	}
 	for _, s := range statements {
-		var stmt string
-		if err := admin.QueryRow(ctx, "SELECT format($1::text, $2::text, $3::text)", s, storage.Database, storage.Role).Scan(&stmt); err != nil {
-			return fmt.Errorf("db: prepare storage: %w", err)
-		}
-		if _, err := admin.Exec(ctx, stmt); err != nil {
-			return fmt.Errorf("db: prepare storage: %s: %w", stmt, err)
+		if err := execFormatted(ctx, admin, s, storage.Database, storage.Role); err != nil {
+			return fmt.Errorf("db: prepare storage %s: %w", storage.Database, err)
 		}
 	}
 	return nil
 }
 
+// executor is what execFormatted runs a statement on: a transaction, or a connection outside one,
+// for a statement no transaction may hold, CREATE DATABASE.
+type executor interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
 // execFormatted builds a statement with PostgreSQL's format(), which quotes %I as an
 // identifier and %L as a literal, and executes it. DDL takes no bind parameters.
-func execFormatted(ctx context.Context, tx pgx.Tx, format string, args ...any) error {
+func execFormatted(ctx context.Context, tx executor, format string, args ...any) error {
 	placeholders := ""
 	params := []any{format}
 	for i, arg := range args {

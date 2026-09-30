@@ -270,7 +270,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 		// outside development it is prepared here only when it is named.
 		if value := l.str(PowerSyncStorageURLVar, ""); value != "" || dev {
 			c.PowerSyncStorageURL = url(PowerSyncStorageURLVar, devPowerSyncStorageURL, "")
-			l.storage(c)
+			l.storage(c, value != "")
 		}
 		l.localDefaults(defaulted, c.AdminDatabaseURL)
 	default:
@@ -544,7 +544,7 @@ func local(url string) bool {
 		hosts = append(hosts, fallback.Host)
 	}
 	for _, host := range hosts {
-		if ip := net.ParseIP(host); host != "localhost" && !strings.HasPrefix(host, "/") && (ip == nil || !ip.IsLoopback()) {
+		if !loopback(host) && !strings.HasPrefix(host, "/") {
 			return false
 		}
 	}
@@ -554,8 +554,11 @@ func local(url string) bool {
 // storage checks PowerSync's bucket storage is a database of its own, beside the household's, owned
 // by a role of its own that logs in with a password: it holds every household's replicated rows
 // outside row-level security, so neither the household database nor any role of the server's is
-// it.
-func (l *loader) storage(c *Config) {
+// it. Bootstrap prepares it on the administrator's cluster, so a storage named, rather than
+// defaulted, on another cluster is refused: bootstrap would make its role and its database where
+// PowerSync never looks, and leave the cluster PowerSync connects to unprepared. A storage kept on a
+// cluster of its own is left unnamed, and prepared there.
+func (l *loader) storage(c *Config, named bool) {
 	if c.PowerSyncStorageURL == "" {
 		return
 	}
@@ -564,6 +567,7 @@ func (l *loader) storage(c *Config) {
 		return // url has reported it.
 	}
 	household, _ := Database(c.DatabaseURL)
+	admin, err := pgconn.ParseConfig(c.AdminDatabaseURL)
 	switch {
 	case cfg.Database == "" || cfg.Database == household:
 		l.fail("%s names the database %q; PowerSync's bucket storage is a database of its own", PowerSyncStorageURLVar, cfg.Database)
@@ -571,7 +575,24 @@ func (l *loader) storage(c *Config) {
 		l.fail("%s carries no role or no password", PowerSyncStorageURLVar)
 	case slices.Contains(append(db.Roles, db.RolePowerSync), cfg.User):
 		l.fail("%s logs in as %s; the bucket storage is owned by a role of its own", PowerSyncStorageURLVar, cfg.User)
+	case named && err == nil && !sameCluster(cfg, admin):
+		l.fail("%s names the cluster at %s, and bootstrap prepares the bucket storage on the administrator's, at %s (%s); leave it unset when the storage is kept on a cluster of its own",
+			PowerSyncStorageURLVar, net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))),
+			net.JoinHostPort(admin.Host, strconv.Itoa(int(admin.Port))), AdminDatabaseURLVar)
 	}
+}
+
+// sameCluster reports whether a and b reach one PostgreSQL: at one port, of one host, or of the
+// loopback however each spells it.
+func sameCluster(a, b *pgconn.Config) bool {
+	return a.Port == b.Port && (a.Host == b.Host || (loopback(a.Host) && loopback(b.Host)))
+}
+
+// loopback reports whether host is this machine's, over the network: localhost, or a loopback
+// address.
+func loopback(host string) bool {
+	ip := net.ParseIP(host)
+	return host == "localhost" || (ip != nil && ip.IsLoopback())
 }
 
 // sameDatabase checks the role connection strings Bootstrap reads all name one database,

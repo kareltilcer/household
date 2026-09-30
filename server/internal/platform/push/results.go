@@ -1,10 +1,10 @@
 package push
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
@@ -73,32 +74,50 @@ type kept struct {
 	result      Result
 }
 
-// lookup returns the answer kept for the caller's mutation id in ctx's household, within its
-// retention, and false when there is none.
-func lookup(ctx context.Context, tx pgx.Tx, id uuid.UUID) (kept, bool, error) {
+// answer is the answer to res's mutation, which carries what fp fingerprints, when k was kept for
+// its id: k's own, when the mutation is the one k answered, and a refusal when the id was sent
+// before carrying another mutation.
+func (k kept) answer(res Result, fp []byte) Result {
+	if !bytes.Equal(k.fingerprint, fp) {
+		return reject(res, Refuse(problem.CodeValidationFailed, "mutation %s was sent before carrying another mutation", res.MutationID))
+	}
+	return k.result
+}
+
+// keptAnswers returns the answers kept for the caller's mutation ids in ctx's household, within
+// their retention, by id, read in one transaction; an id with none kept has no entry.
+func keptAnswers(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*kept, error) {
 	scope := tenant.From(ctx)
-	var (
-		k       kept
-		row     []byte
-		version *int64
-	)
-	k.result.MutationID = id
-	err := tx.QueryRow(ctx, `
-		SELECT fingerprint, outcome, version, code, message, row FROM sync_mutations
-		WHERE household_id = $1 AND user_id = $2 AND mutation_id = $3 AND created_at > now() - make_interval(secs => $4)`,
-		scope.HouseholdID(), scope.UserID(), id, Retention.Seconds()).
-		Scan(&k.fingerprint, &k.result.Outcome, &version, &k.result.Code, &k.result.Message, &row)
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		return kept{}, false, nil
-	case err != nil:
-		return kept{}, false, fmt.Errorf("push: read a kept answer: %w", err)
+	out := make(map[uuid.UUID]*kept, len(ids))
+	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT mutation_id, fingerprint, outcome, version, code, message, row FROM sync_mutations
+			WHERE household_id = $1 AND user_id = $2 AND mutation_id = ANY($3) AND created_at > now() - make_interval(secs => $4)`,
+			scope.HouseholdID(), scope.UserID(), ids, Retention.Seconds())
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var (
+				k   kept
+				row []byte
+			)
+			if err := rows.Scan(&k.result.MutationID, &k.fingerprint, &k.result.Outcome, &k.result.Version, &k.result.Code,
+				&k.result.Message, &row); err != nil {
+				return err
+			}
+			if row != nil {
+				k.result.Row = json.RawMessage(row)
+			}
+			out[k.result.MutationID] = &k
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("push: read the kept answers: %w", err)
 	}
-	k.result.Version = version
-	if row != nil {
-		k.result.Row = json.RawMessage(row)
-	}
-	return k, true, nil
+	return out, nil
 }
 
 // keep writes res, the answer that ended the caller's mutation, with the mutation's fingerprint, in
