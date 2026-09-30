@@ -3,6 +3,13 @@ packages:
   - packages/*
   - tooling
 
+# No dependency runs a script as it installs unless it is named here. better-sqlite3, the
+# SQLite the conformance suite's PowerSync clients run on (@household/sync), ships a prebuilt
+# binary for every platform CI and development use, so the node-gyp build pnpm would infer
+# from its binding.gyp, which needs a C++ toolchain, is refused rather than run.
+allowBuilds:
+  better-sqlite3: false
+
 # One version of every shared tool across the workspace. A package names a tool as
 # `catalog:` instead of a range, so two packages cannot drift onto different compilers
 # or linters and disagree about what the same source means.

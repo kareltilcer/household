@@ -87,6 +87,35 @@ jobs:
       - name: Format (Prettier)
         run: pnpm run format:check
 
+  conformance:
+    name: Sync conformance — PowerSync clients against the stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          cache: true
+          require-lockfile: true
+      # PostgreSQL with logical replication and PowerSync, each pinned in the stack's compose
+      # file (packages/sync/conformance/stack), prepared as a deploy prepares a database.
+      - name: Start the conformance stack
+        run: pnpm --filter @household/sync conformance:up
+      # The harness's self-tests and negative controls against the stand-ins, the scenarios that
+      # items 13, 14 and 18 have switched on, and a short fuzz run (the nightly workflow runs a
+      # long one).
+      - name: Conformance suite
+        run: pnpm --filter @household/sync conformance
+      - name: The stack's logs
+        if: failure()
+        run: docker compose --file packages/sync/conformance/stack/docker-compose.yml logs --tail 200
+
   openapi:
     name: OpenAPI — openapi-spec-validator and Redocly
     runs-on: ubuntu-latest

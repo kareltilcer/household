@@ -35,6 +35,8 @@ pnpm typecheck        # tsc in every package
 pnpm run gen          # code generation (turbo run gen + go generate)
 pnpm run format       # Prettier and gofmt/goimports, rewriting files
 pnpm run down         # stop the services; volumes are kept
+pnpm --filter @household/sync conformance:up   # the sync conformance stack: PostgreSQL with logical replication, PowerSync
+pnpm --filter @household/sync conformance      # the conformance suite against it (packages/sync/conformance)
 ```
 
 - **`pnpm run up`, never `pnpm up`.** `pnpm up` is pnpm's own `update` command and rewrites
@@ -62,7 +64,9 @@ pnpm run down         # stop the services; volumes are kept
 - CI ([`.github/workflows/`](.github/workflows/)) runs the checks above (typecheck, lint,
   format check and test), plus openapi-spec-validator, govulncheck, pnpm audit, gitleaks
   and CodeQL. Typecheck, lint and test depend on each package's `gen` in turbo, so CI
-  runs every package's `gen` script too; it does not run `go generate`.
+  runs every package's `gen` script too; it does not run `go generate`. It also runs the
+  sync conformance suite against its own stack, with a short fuzz run; a nightly workflow
+  runs a long one ([ADR 0013](docs/adr/0013-conformance-suite-stand-ins-and-the-oracle.md)).
 
 ## Layout
 

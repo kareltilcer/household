@@ -139,7 +139,12 @@ is the single most valuable artefact produced in Phase 0.
 > with a later write to the same row. It is slower and less deterministic than an in-process
 > simulator, so the fuzz run on each change is short and the long one nightly. The scenarios and
 > the invariants below stand. Where one names a mechanism of the replaced feed, its D-93 form is
-> given beside it (scenarios 6 and 18, and invariant 5).
+> given beside it (scenarios 6 and 18, and invariant 5). The suite (plan item 12,
+> [ADR 0013](../adr/0013-conformance-suite-stand-ins-and-the-oracle.md)) holds each replica to the
+> rows its member may see, computed from PostgreSQL apart from the streams, so that a stream that
+> disagrees with an entity's declared access fails convergence or retraction; and it reads invariant
+> 5 bucket by bucket, a bucket made again, when access returns or a checksum fails, starting from
+> nothing.
 
 ### The scenarios it must cover
 

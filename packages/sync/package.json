@@ -8,10 +8,24 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run src conformance/harness",
+    "conformance:up": "node conformance/stack/up.ts",
+    "conformance:down": "docker compose --file conformance/stack/docker-compose.yml down --volumes",
+    "conformance": "vitest run --config conformance/vitest.config.ts",
+    "conformance:fuzz": "vitest run --config conformance/vitest.config.ts conformance/suite/fuzz.test.ts"
   },
   "devDependencies": {
+    "@household/api": "workspace:*",
+    "@powersync/common": "2.3.0",
+    "@powersync/node": "1.1.0",
+    "@types/node": "catalog:",
+    "@types/pg": "8.23.1",
+    "better-sqlite3": "13.0.3",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "pg": "8.23.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }
