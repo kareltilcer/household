@@ -1212,3 +1212,43 @@ func TestAPurgeGivenUpLeavesAnotherUploadsVariants(t *testing.T) {
 		t.Fatalf("the file recorded again keeps %v", keys)
 	}
 }
+
+// A purge that finds its entity recorded again, the same file sent again under the deleted id before
+// the purge ran, leaves every object of it to the upload, the variants its job has not recorded yet
+// among them: that job keeps a variant it finds in place rather than derive it again, and one that
+// had found the thumbnail, in another instance, would otherwise record it once the purge had deleted
+// its bytes, a row whose link fetches nothing, for good.
+func TestAPurgeLeavesAnEntityRecordedAgain(t *testing.T) {
+	w := newFileWorld(t)
+	h := w.household(true)
+	jana := w.member(h, access.Owner, nil)
+	item := idgen.New()
+	content := picture(t, 100, 100)
+	expect(t, w.upload(h, jana, "a.png", content, map[string]string{"id": item.String()}), http.StatusCreated, "")
+	w.files.Drain(t.Context(), h)
+	prefix := files.Key(h, probe.Name, item, "")
+	if keys := w.objects(prefix); len(keys) != 2 {
+		t.Fatalf("stored %v", keys)
+	}
+	expect(t, w.do(http.MethodDelete, filePath(h, item), jana, ""), http.StatusNoContent, "")
+	// The purge waits while the same file is recorded again under the id; then it runs, before the
+	// upload's variants job records the thumbnail it will find in place.
+	w.exec("UPDATE file_jobs SET run_at = now() + interval '1 hour' WHERE household_id = $1 AND kind = 'purge'", h)
+	expect(t, w.upload(h, jana, "a.png", content, map[string]string{"id": item.String()}), http.StatusCreated, "")
+	w.exec(`UPDATE file_jobs SET run_at = CASE kind WHEN 'purge' THEN now() - interval '1 second' ELSE now() + interval '1 hour' END
+		WHERE household_id = $1`, h)
+
+	w.files.Drain(t.Context(), h)
+	if keys, jobs := w.objects(prefix), w.jobs(h, item); len(keys) != 2 || !slices.Equal(jobs, []string{"variants"}) {
+		t.Fatalf("after the purge: %v, jobs %v", keys, jobs)
+	}
+
+	w.exec("UPDATE file_jobs SET run_at = now() - interval '1 second' WHERE household_id = $1", h)
+	w.files.Drain(t.Context(), h)
+	if v := w.variantsOf(h, item); v != "ready" {
+		t.Fatalf("the variants of the file recorded again are %q", v)
+	}
+	if got := fetchLink(t, w.link(h, item, jana, files.Thumbnail).URL); got.status != http.StatusOK {
+		t.Fatalf("the thumbnail's link fetches %d", got.status)
+	}
+}

@@ -86,8 +86,11 @@ GROUP BY module, content_type;
   counts as a failed attempt. A job that panicked fails at once, logged as `files: a job panicked`
   with the panic's type and stack; one whose workers ended with their process five times, killed for
   the memory it took, is given up at its next claim. Either is a bug to report with the file's type.
-- Many `failed` of one type: a converter that cannot read it answers `422`, which is not retried. Try
-  one by hand: `curl --data-binary @file.docx 'http://converter:3100/pdf?ext=docx' -o out.pdf`.
+- Many `failed` of one type: a converter that cannot read it answers `422`, which is not retried. A
+  converter that could not start its command answers `500`, and one whose command the system killed
+  for its memory `503`, both of which are retried; its log names each (`conversion failed`, `a
+  conversion was killed`). Try one by hand:
+  `curl --data-binary @file.docx 'http://converter:3100/pdf?ext=docx' -o out.pdf`.
 
 To derive a failed file's variants again, once the cause is fixed, put its job back:
 

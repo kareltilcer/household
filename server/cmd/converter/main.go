@@ -18,8 +18,10 @@
 // Each conversion has a directory of its own, LibreOffice's profile among it, so that two may run at
 // once, and a timeout, counted from when it has a slot, past which the process and every process it
 // started are killed. What the converter cannot convert, a damaged document or one no filter reads,
-// it answers 422, which the pipeline takes for good; a conversion that ran out of time is 504, and
-// one waiting for a slot longer than its timeout 503, which it tries again later.
+// it answers 422, which the pipeline takes for good; a conversion that ran out of time is 504, one
+// waiting for a slot longer than its timeout 503, one whose command the system killed 503 too, and
+// one whose command could not be started 500, each of which it tries again later: they are the
+// converter's failures, and say nothing of the document.
 package main
 
 import (
@@ -229,6 +231,7 @@ func (c *converter) convert(w http.ResponseWriter, r *http.Request, name string,
 	// operator it could not read from the page's text, and no log line carries content (FR-NF5). A
 	// failure is logged by the command and how it ended.
 	err = cmd.Run()
+	var exited *exec.ExitError
 	switch {
 	case r.Context().Err() != nil:
 		// The pipeline stopped waiting, its job's lease over or its process ending, and the commands
@@ -239,6 +242,19 @@ func (c *converter) convert(w http.ResponseWriter, r *http.Request, name string,
 	case ctx.Err() != nil:
 		c.log.LogAttrs(r.Context(), slog.LevelWarn, "a conversion ran out of time", slog.String("command", filepath.Base(argv[0])))
 		http.Error(w, "the conversion ran out of time", http.StatusGatewayTimeout)
+		return
+	case err != nil && !errors.As(err, &exited):
+		// The command never ran: it is not where the converter's configuration says, or the system had
+		// no process or memory to start it with. That is the converter's failure and says nothing of
+		// the document, which answered 422, as a document the command could not convert, would be left
+		// download-only for good; a 500 is tried again later, once the converter is mended.
+		c.fail(w, r, err)
+		return
+	case err != nil && killed(exited):
+		// Killed, and not by its timeout, which is ctx's, above: by the system, for the memory it took
+		// beside the conversions running with it. The document may convert once they are done.
+		c.log.LogAttrs(r.Context(), slog.LevelWarn, "a conversion was killed", slog.String("command", filepath.Base(argv[0])))
+		http.Error(w, "the conversion was killed", http.StatusServiceUnavailable)
 		return
 	case err != nil:
 		c.log.LogAttrs(r.Context(), slog.LevelWarn, "a conversion failed", slog.String("command", filepath.Base(argv[0])),

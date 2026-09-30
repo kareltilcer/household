@@ -29,12 +29,19 @@ func TestMain(m *testing.M) {
 
 // fake stands in for soffice or pdftoppm with args: "ok" writes what the command writes, "slow" does
 // so after half a second, "nothing" writes nothing and fails, "quoting" fails as nothing does,
-// printing what it read of the document as poppler's diagnostics do, and "hang" never ends.
+// printing what it read of the document as poppler's diagnostics do, "hang" never ends, and "killed"
+// is killed, as the kernel kills a command for the memory it took: by SIGKILL where there are signals.
 func fake(mode string, args []string) int {
 	switch mode {
 	case "hang":
 		time.Sleep(time.Minute)
 		return 0
+	case "killed":
+		if self, err := os.FindProcess(os.Getpid()); err == nil {
+			_ = self.Kill()
+		}
+		time.Sleep(time.Minute)
+		return 1
 	case "slow":
 		time.Sleep(500 * time.Millisecond)
 	case "nothing":
@@ -135,6 +142,29 @@ func TestTheConvertersRefusals(t *testing.T) {
 				t.Fatalf("%d %s, want %d", rec.Code, rec.Body.String(), tc.status)
 			}
 		})
+	}
+}
+
+// A command the converter cannot start, not where its configuration says or refused a process by the
+// system, is the converter's failure and not the document's: 500, which the pipeline tries again
+// later, never the 422 it takes for a document that cannot be converted and leaves download-only for
+// good. It is logged, and the document's directory goes with it all the same.
+func TestACommandThatCannotStartIsNoDocumentsFault(t *testing.T) {
+	c := newConverter(t, "ok", 10*time.Second)
+	missing := filepath.Join(t.TempDir(), "no-such-command")
+	c.soffice, c.pdftoppm = []string{missing}, []string{missing}
+	var log bytes.Buffer
+	c.log = slog.New(slog.NewJSONHandler(&log, nil))
+	for _, path := range []string{"/pdf?ext=docx", "/page?side=800"} {
+		if rec := post(t, c, path, []byte("PK\x03\x04 a document")); rec.Code != http.StatusInternalServerError {
+			t.Fatalf("%s with a command that cannot start: %d %s, want 500", path, rec.Code, rec.Body.String())
+		}
+	}
+	if !strings.Contains(log.String(), "conversion failed") {
+		t.Fatalf("logged %s", log.String())
+	}
+	if entries, _ := os.ReadDir(c.dir); len(entries) != 0 {
+		t.Fatalf("left %v", entries)
 	}
 }
 

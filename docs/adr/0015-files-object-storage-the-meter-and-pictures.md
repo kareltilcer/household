@@ -119,9 +119,11 @@ module, built into `deploy/converter`'s image over Debian's LibreOffice (`*-nogu
 PDF's first page with `pdftoppm`; each conversion has a directory and a LibreOffice profile of its
 own, so two run at once, and a timeout (two minutes, thirty seconds) past which its whole process
 group is killed. What the commands print is discarded, since a damaged document's diagnostics quote
-it (FR-NF5). What it cannot convert is `422`, which the pipeline takes for good; a timeout `504`
-and a wait for a slot `503`, which it retries. It runs with no route out in a deployment, since a
-document may name remote resources. CI builds the image and converts a real document through it.
+it (FR-NF5). What it cannot convert is `422`, which the pipeline takes for good; a timeout `504`,
+a wait for a slot `503`, a command the system killed `503` and one it could not start `500`, the
+converter's failures and not the document's, which it retries. It runs with no route out in a
+deployment, since a document may name remote resources. CI builds the image and converts a real
+document through it.
 
 **The meter role reads across households, and only counting columns.** `enable_tenant_isolation`
 now also calls `enable_metering`, which creates `meter_read`, a permissive `FOR SELECT` policy `TO

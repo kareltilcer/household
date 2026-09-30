@@ -10,8 +10,9 @@
 //	POST /page?side=1600   a PDF → its first page as image/png, its longer side side pixels
 //
 // It answers 422 for a document it cannot convert and 413 for one larger than it takes, which are
-// the document's and will not change, and 503 or 504 for a sidecar too busy or a conversion that
-// ran out of time, which a retry may not meet.
+// the document's and will not change, and 503 or 504 for a sidecar too busy, a conversion the system
+// killed or one that ran out of time, and 500 for a command it could not start, which a retry may
+// not meet.
 package convert
 
 import (

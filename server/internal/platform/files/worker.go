@@ -339,6 +339,13 @@ func (s *Service) settle(ctx context.Context, j job, status string, retry time.D
 // claim held across the store's deletes for the upload's mutation to wait on, and it needs an id that
 // was deleted sent again with the same bytes in the moment its purge runs. The purge is not delayed
 // by the sweep's day instead: a deleted file's bytes go when it does.
+//
+// An entity whose original is recorded again is the upload's, and the purge leaves every object of
+// it, the variants no row records yet among them: they are the deleted entity's, derived from the
+// same bytes, and the upload's own variants job keeps each it finds in place rather than derive it
+// again (putVariant). That job, in another instance, may have found one and not yet recorded it; the
+// purge deleting it then would leave the job to record a variant whose bytes are gone, which a link
+// answers 404 for good. What the job never records is the sweep's.
 func (s *Service) purge(ctx context.Context, j job) error {
 	recorded := map[string]bool{}
 	err := tenant.InTx(s.system(ctx, j.household), func(tx pgx.Tx) error {
@@ -353,7 +360,7 @@ func (s *Service) purge(ctx context.Context, j job) error {
 		}
 		return err
 	})
-	if err != nil {
+	if err != nil || recorded[Original] {
 		return err
 	}
 	prefix := Key(j.household, j.module, j.entity, "")
