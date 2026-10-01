@@ -440,7 +440,9 @@ PostgreSQL advisory lock leads, and each job's next slot is kept in the database
 statement that matches only while it is due, so that a slot fires once even while a leader whose
 connection died has not yet noticed ([ADR 0016](../adr/0016-scheduler-and-notification-transports.md)).
 A failed job, or one whose instance ended while it ran, is tried again after fifteen minutes or at
-its next slot, whichever comes first.
+its next slot, whichever comes first, four tries a slot at most: a job that fails every time, a
+nightly one that one household fails, then waits for its next slot rather than running every fifteen
+minutes until it.
 
 | Job | Cadence | Owner |
 |---|---|---|

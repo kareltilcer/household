@@ -202,12 +202,16 @@ func (s *Sweeper) households(ctx context.Context, h household) (int64, error) {
 		failed error
 	)
 	for _, id := range found {
+		var n int64
 		err := tenant.InWriteTx(tenant.Assume(ctx, s.cfg.Pool, id, uuid.Nil, ""), func(tx pgx.Tx) error {
 			tag, err := tx.Exec(ctx, h.statement, append([]any{id}, h.args...)...)
-			total += tag.RowsAffected()
+			n = tag.RowsAffected()
 			return err
 		})
-		if err != nil {
+		if err == nil {
+			// Counted once committed: a household whose commit failed deleted nothing.
+			total += n
+		} else {
 			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "expiry: sweep a household", slog.String("retention", h.what),
 				slog.String(logging.KeyHouseholdID, id.String()), slog.Any("error", err))
 			failed = errors.Join(failed, err)

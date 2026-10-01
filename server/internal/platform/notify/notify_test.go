@@ -970,6 +970,30 @@ func TestRepeatsCoalesce(t *testing.T) {
 	if category != string(notify.Household) || message != latest.Message || count != 2 {
 		t.Fatalf("merged: %s, %s, %d; want the latest's, counting both", category, message, count)
 	}
+
+	// The latest word has had no try of its own: merged into one waiting out its backoff after its
+	// fourth, it goes now and has its own five, while one held for quiet hours stays held.
+	fourth := w.household()
+	w.member(fourth, jana, "member", nil)
+	if err := w.s.Send(t.Context(), fourth, n); err != nil {
+		t.Fatal(err)
+	}
+	w.exec(`UPDATE notifications SET attempts = 4, reason = 'push_unavailable', run_at = now() + interval '2 hours'
+	        WHERE household_id = $1`, fourth)
+	if err := w.s.Send(t.Context(), fourth, n); err != nil {
+		t.Fatal(err)
+	}
+	if q := w.one(fourth); q.count != 2 || q.attempts != 0 || q.reason != nil || time.Until(q.runAt) > time.Minute {
+		t.Fatalf("merged into one in backoff: %+v", q)
+	}
+	w.exec(`UPDATE notifications SET attempts = 2, reason = 'quiet_hours', run_at = now() + interval '6 hours'
+	        WHERE household_id = $1`, fourth)
+	if err := w.s.Send(t.Context(), fourth, n); err != nil {
+		t.Fatal(err)
+	}
+	if q := w.one(fourth); q.count != 3 || q.attempts != 0 || q.why() != "quiet_hours" || time.Until(q.runAt) < 5*time.Hour {
+		t.Fatalf("merged into one held for quiet hours: %+v", q)
+	}
 }
 
 // Two transactions queueing one member's repeats under one key at once still merge them: the second

@@ -316,6 +316,57 @@ func TestAMembersPreferences(t *testing.T) {
 	}
 }
 
+// Two changes to a member's preferences at once both hold: the second waits for the first and applies
+// its own to what the first wrote, rather than writing back what it read before.
+func TestTwoPreferenceChangesAtOnceBothHold(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	user := jana.me().ID
+	for _, c := range []struct{ query, table, where string }{
+		{"", "notification_defaults", "user_id = $1"},
+		{"?household_id=" + h.ID.String(), "notification_preferences", "user_id = $1 AND household_id = '" + h.ID.String() + "'"},
+	} {
+		expect(t, jana.patch("/me/notification-preferences"+c.query, `{"enabled": true, "categories": {"digest": false, "direct": true}}`, nil),
+			http.StatusOK, "")
+		// The first change, under way: it has written the row and not yet committed.
+		first, err := s.admin.Begin(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := first.Exec(t.Context(), "UPDATE "+c.table+" SET direct = false WHERE "+c.where, user); err != nil {
+			t.Fatal(err)
+		}
+		second := make(chan int, 1)
+		go func() {
+			second <- jana.patch("/me/notification-preferences"+c.query, `{"enabled": false}`, nil).Code
+		}()
+		for deadline, waiting := time.Now().Add(10*time.Second), 0; waiting == 0; {
+			if err := s.admin.QueryRow(t.Context(), `
+				SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`).
+				Scan(&waiting); err != nil {
+				t.Fatal(err)
+			}
+			if waiting == 0 && time.Now().After(deadline) {
+				_ = first.Rollback(t.Context())
+				t.Fatalf("the second change did not wait for the first: %d", <-second)
+			}
+			if waiting == 0 {
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
+		if err := first.Commit(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if code := <-second; code != http.StatusOK {
+			t.Fatalf("the second change: %d", code)
+		}
+		if p := jana.preferences(c.query); p.Enabled || p.Categories["direct"] || p.Categories["digest"] {
+			t.Fatalf("after both changes%s: %+v", c.query, p)
+		}
+	}
+}
+
 // A member is told when their access changes (D-78): by a push when their grants or their role
 // change, those an owner makes in the minutes after the first merging into one, and by email when
 // they are removed.

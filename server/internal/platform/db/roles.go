@@ -93,18 +93,6 @@ func (p Passwords) Of(role string) string {
 	return ""
 }
 
-// CatalogLock is the advisory lock key that serialises changes to the three roles and to
-// the databases they own. CreateRoles and PrepareDatabase hold it for their transaction;
-// the tests hold it while they create and drop databases. PostgreSQL does not queue these
-// behind one another: two ALTER ROLEs on one role, or an ALTER ROLE beside a CREATE or DROP
-// DATABASE, fail with "tuple concurrently updated".
-//
-// An advisory lock is scoped to the database of the session that takes it, so it
-// serialises only sessions connected to the same database. Every administrator connection
-// that alters roles connects to one: the database of HOUSEHOLD_ADMIN_DATABASE_URL, and in
-// the tests the maintenance database HOUSEHOLD_TEST_DATABASE_URL names.
-const CatalogLock int64 = 0x686f7573_65686f6c // "househol"
-
 // roleAttributes are a role's attributes, as pg_roles reports them: those a role holds, and those
 // CreateRoles gives each role it makes (managed), whatever it held before. Bootstrap creates a
 // role with them and restores any that drifted on a role that already exists, so a BYPASSRLS

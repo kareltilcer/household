@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdh"
 	"encoding/base64"
@@ -88,7 +89,7 @@ type webPushMessage struct {
 // there. No answer, a 429, a 5xx or a redirect says nothing of the subscription: the push service, or
 // the way to it, is what failed (Unavailable); nor does a refusal of the server's own VAPID signature,
 // as a clock gone wrong or a subject a push service will not take would refuse every push it signed:
-// a 401 (RFC 8292 §4), or Apple's 403 with the reason BadJwtToken (refusesSignature).
+// a 401 (RFC 8292 §4), or Apple's or Google's 403 saying so (refusesSignature).
 func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 	payload, err := json.Marshal(webPushMessage{
 		Title: cut(m.Title, maxTitle), Body: cut(m.Body, maxBody), URL: m.Link, Tag: m.Tag,
@@ -128,13 +129,18 @@ func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 
 // refusesSignature reports whether body, a push service's 403, refuses the server's VAPID token rather
 // than the subscription: Apple's, which answers a token it does not take, its subject neither an https
-// URL nor a mailto: address, or its expiry past or more than a day off, with the reason BadJwtToken.
-// Another push service's 403, Google's for a subscription made with another key, is the subscription's.
+// URL nor a mailto: address, or its expiry past or more than a day off, with the reason BadJwtToken,
+// and Google's, which answers one it cannot verify, or whose expiry it will not take, in plain text:
+// "invalid JWT provided". Another 403, Google's for a subscription made with another key, is the
+// subscription's.
 func refusesSignature(body []byte) bool {
 	var answer struct {
 		Reason string `json:"reason"`
 	}
-	return json.Unmarshal(body, &answer) == nil && answer.Reason == "BadJwtToken"
+	if json.Unmarshal(body, &answer) == nil {
+		return answer.Reason == "BadJwtToken"
+	}
+	return bytes.Contains(bytes.ToLower(body), []byte("invalid jwt"))
 }
 
 // cut returns s cut to at most n characters, an ellipsis ending one it cut.

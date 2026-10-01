@@ -45,13 +45,13 @@ var expoServiceErrors = map[string]bool{
 }
 
 // expoStatus is what an error Expo reports of a push, in its ticket or its receipt, says of the device's
-// token: DeviceNotRegistered that it is gone, one of expoServiceErrors nothing, and any other that the
-// push failed there.
+// token: DeviceNotRegistered that it is gone, one of expoServiceErrors nothing, nor does one that names
+// no error at all, which lays the failure on no device, and any other that the push failed there.
 func expoStatus(code string) Status {
 	switch {
 	case code == deviceNotRegistered:
 		return Gone
-	case expoServiceErrors[code]:
+	case code == "" || expoServiceErrors[code]:
 		return Unavailable
 	default:
 		return Failed

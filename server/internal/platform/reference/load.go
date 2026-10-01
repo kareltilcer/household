@@ -7,6 +7,8 @@ import (
 	"io/fs"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/kareltilcer/household/server/internal/platform/db"
 )
 
 // Report is what one load did to one dataset.
@@ -33,7 +35,7 @@ type Beginner interface {
 
 // loadLock is the advisory lock key that serialises loads, so that two instances deploying at
 // once apply one load after the other rather than racing to insert the same rows.
-const loadLock int64 = 0x72656665_72656e63 // "referenc"
+const loadLock = db.ReferenceLock
 
 // Load reads the reference data in fsys (Read) and writes it into the reference tables in one
 // transaction, which commits all of it or none, returning what it did to each dataset. It runs as

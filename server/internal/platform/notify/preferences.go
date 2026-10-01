@@ -288,6 +288,10 @@ func (s *Service) getPreferences(w http.ResponseWriter, r *http.Request) {
 // account's the first time they are set, and are the member's own there from then on; the account's
 // change nothing in a household that has its own. They are the member's settings, no household's
 // history, so they are neither audited nor synced: the client reads them here.
+//
+// Two changes at once, two switches flipped one after the other, take turns on the row: each makes it
+// first when there is none, from what applies until then, and reads it locked, so that neither writes
+// back over the other's what it read before the other's was written.
 func (s *Service) patchPreferences(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -304,17 +308,27 @@ func (s *Service) patchPreferences(w http.ResponseWriter, r *http.Request) {
 	var p Preferences
 	if household == uuid.Nil {
 		err = tenant.AccountTx(ctx, s.cfg.Pool, user, func(tx pgx.Tx) error {
-			if p, err = accountPreferences(ctx, tx, user); err != nil {
+			if u.empty() {
+				p, err = accountPreferences(ctx, tx, user)
+				if err != nil {
+					return err
+				}
+				return idempotency.Commit(ctx, tx)
+			}
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO notification_defaults (user_id, `+preferenceColumns+`) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				ON CONFLICT (user_id) DO NOTHING`, append([]any{user}, Defaults().values()...)...); err != nil {
 				return err
 			}
-			if u.empty() {
-				return idempotency.Commit(ctx, tx)
+			if p, err = scanPreferences(tx.QueryRow(ctx,
+				"SELECT "+preferenceColumns+" FROM notification_defaults WHERE user_id = $1 FOR UPDATE", user)); err != nil {
+				return err
 			}
 			p = u.apply(p)
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO notification_defaults (user_id, `+preferenceColumns+`) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-				ON CONFLICT (user_id) DO UPDATE SET enabled = $2, direct = $3, household = $4, reminders = $5, digest = $6,
-				  quiet_from = $7, quiet_to = $8, updated_at = now()`, append([]any{user}, p.values()...)...); err != nil {
+				UPDATE notification_defaults SET enabled = $2, direct = $3, household = $4, reminders = $5, digest = $6,
+				  quiet_from = $7, quiet_to = $8, updated_at = now()
+				WHERE user_id = $1`, append([]any{user}, p.values()...)...); err != nil {
 				return err
 			}
 			return idempotency.Commit(ctx, tx)
@@ -324,18 +338,33 @@ func (s *Service) patchPreferences(w http.ResponseWriter, r *http.Request) {
 			if err := member(ctx, tx, household, user, true); err != nil {
 				return err
 			}
-			if p, err = householdPreferences(ctx, tx, household, user); err != nil {
-				return err
-			}
 			if u.empty() {
+				p, err = householdPreferences(ctx, tx, household, user)
+				if err != nil {
+					return err
+				}
 				return idempotency.Commit(ctx, tx)
 			}
-			p = u.apply(p)
+			start, err := accountPreferences(ctx, tx, user)
+			if err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO notification_preferences (household_id, user_id, `+preferenceColumns+`)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-				ON CONFLICT (household_id, user_id) DO UPDATE SET enabled = $3, direct = $4, household = $5, reminders = $6,
-				  digest = $7, quiet_from = $8, quiet_to = $9, updated_at = now()`, append([]any{household, user}, p.values()...)...); err != nil {
+				ON CONFLICT (household_id, user_id) DO NOTHING`, append([]any{household, user}, start.values()...)...); err != nil {
+				return err
+			}
+			if p, err = scanPreferences(tx.QueryRow(ctx,
+				"SELECT "+preferenceColumns+" FROM notification_preferences WHERE household_id = $1 AND user_id = $2 FOR UPDATE",
+				household, user)); err != nil {
+				return err
+			}
+			p = u.apply(p)
+			if _, err := tx.Exec(ctx, `
+				UPDATE notification_preferences SET enabled = $3, direct = $4, household = $5, reminders = $6, digest = $7,
+				  quiet_from = $8, quiet_to = $9, updated_at = now()
+				WHERE household_id = $1 AND user_id = $2`, append([]any{household, user}, p.values()...)...); err != nil {
 				return err
 			}
 			return idempotency.Commit(ctx, tx)

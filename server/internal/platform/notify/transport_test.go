@@ -39,8 +39,8 @@ func browserTarget(t *testing.T, endpoint string) notify.Target {
 // A Web Push is encrypted to the browser's keys and signed with the VAPID key, which names its
 // public half, with a day to live, the urgency of who it is for and its tag as the topic; a push
 // service's 404 and 410 say the subscription is gone, another refusal that the push failed there, and
-// a refusal of the server's own signature, a 401 or Apple's 403 BadJwtToken, a 429, a 5xx, a redirect
-// or no answer at all nothing of the subscription.
+// a refusal of the server's own signature, a 401 or Apple's or Google's 403 saying so, a 429, a 5xx, a
+// redirect or no answer at all nothing of the subscription.
 func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 	var (
 		mu     sync.Mutex
@@ -97,8 +97,10 @@ func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 		}
 	}
 	for refusal, want := range map[string]notify.Status{
-		// Apple's refusal of the server's token, which it would refuse for every subscription.
+		// Apple's refusal of the server's token, and Google's, which each would refuse for every
+		// subscription.
 		`{"reason": "BadJwtToken"}`: notify.Unavailable,
+		"invalid JWT provided\n":    notify.Unavailable,
 		// Google's for a subscription made with another VAPID key, and Apple's of the subscription.
 		"the key in the authorization header does not correspond to the sender ID used to subscribe this user": notify.Failed,
 		`{"reason": "BadDeviceToken"}`: notify.Failed,
@@ -148,7 +150,8 @@ func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 				"c": {"status": "error", "message": "MessageRateExceeded", "details": {"error": "MessageRateExceeded"}},
 				"e": {"status": "error", "message": "?", "details": {"error": "SomethingOfTheDevices"}},
 				"f": {"status": "error", "message": "?", "details": {"error": "ProviderError"}},
-				"g": {"status": "error", "message": "?", "details": {"error": "ExpoError"}}}}`)
+				"g": {"status": "error", "message": "?", "details": {"error": "ExpoError"}},
+				"h": {"status": "error", "message": "?"}}}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -181,6 +184,7 @@ func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 		`{"errors": [{"code": "INTERNAL"}]}`: notify.Unavailable,
 		`{"data": [{"status": "error", "message": "?", "details": {"error": "InvalidCredentials"}}]}`:    notify.Unavailable,
 		`{"data": [{"status": "error", "message": "?", "details": {"error": "DeveloperError"}}]}`:        notify.Unavailable,
+		`{"data": [{"status": "error", "message": "?"}]}`:                                                notify.Unavailable,
 		`{"data": [{"status": "error", "message": "?", "details": {"error": "SomethingOfTheDevices"}}]}`: notify.Failed,
 	} {
 		mu.Lock()
@@ -191,13 +195,15 @@ func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 		}
 	}
 
-	got, err := expo.Receipts(t.Context(), []string{"a", "b", "c", "d", "e", "f", "g"})
+	got, err := expo.Receipts(t.Context(), []string{"a", "b", "c", "d", "e", "f", "g", "h"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Apple's or Google's failure, or Expo's own, is a service's, not the device's.
-	if len(got) != 6 || got["a"] != notify.Accepted || got["b"] != notify.Gone || got["c"] != notify.Unavailable ||
-		got["e"] != notify.Failed || got["f"] != notify.Unavailable || got["g"] != notify.Unavailable || len(receipt) != 7 {
+	// Apple's or Google's failure, or Expo's own, is a service's, not the device's, as is an error that
+	// names none.
+	if len(got) != 7 || got["a"] != notify.Accepted || got["b"] != notify.Gone || got["c"] != notify.Unavailable ||
+		got["e"] != notify.Failed || got["f"] != notify.Unavailable || got["g"] != notify.Unavailable ||
+		got["h"] != notify.Unavailable || len(receipt) != 8 {
 		t.Fatalf("receipts: %v for %v", got, receipt)
 	}
 }

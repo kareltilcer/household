@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
@@ -33,8 +34,8 @@ func admits(e sync.Entity, op Op) *Refusal {
 }
 
 // invariantLock is the namespace of the locks that serialise the creates of one series, the first
-// key of the two-key advisory lock whose second is the series' hash: "invr".
-const invariantLock int32 = 0x696e7672
+// key of the two-key advisory lock whose second is the series' hash.
+const invariantLock = db.InvariantLock
 
 // checkInvariant refuses m, an additive create of e, when it breaks the cross-row invariant e
 // declares (PRD 03 §2.5, D-24): a non_decreasing series whose value would fall below the row before

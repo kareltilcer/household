@@ -17,14 +17,18 @@
 // A job that fails is tried again after Config.Retry, or at its next slot when that comes first, and
 // one that panics is recovered and counted as failed. So is one whose instance ended while it ran,
 // with its process or its host, which recorded no end: taking a slot moves the job's due time only
-// Retry on, and the run's end moves it to the next slot. Timing is a slot's, not an appointment's: a
-// slot missed while no instance led fires once when one does, and the slots it missed are not made
-// up. A job that runs past its next slot is not started again until it has ended. An instance that
-// finds it no longer leads ends the jobs it started, as a failure, so that they do not run on beside
-// the next leader's; it finds out within a tick and a ping, and until it does, the next leader may
-// start one of those jobs whose retry or next slot has come. The leader's session ends at the server
+// Retry on, and the run's end moves it to the next slot. A slot is tried Config.Tries times at most,
+// so that a nightly job that one household fails every night runs a few times a night, not every
+// Retry until the next. Timing is a slot's, not an appointment's: a slot missed while no instance led
+// fires once when one does, and the slots it missed are not made up. A job that runs past its next
+// slot is not started again until it has ended. An instance that finds it no longer leads ends the
+// jobs it started, as a failure, so that they do not run on beside the next leader's; it finds out
+// within a tick and a ping, and until it does, the next leader may start one of those jobs whose retry
+// or next slot has come. The leader's session ends at the server
 // once the leader has not pinged for a few ticks, so that a leader whose host went without closing its
-// connection releases the lead within a minute or so, not once the server's TCP keepalive gives up.
+// connection releases the lead within a minute or so, not once the server's TCP keepalive gives up;
+// what a tick asks of the database waits a tick at most, so that a pool slow to hand out a connection
+// never holds the next ping off that long.
 package scheduler
 
 import (
@@ -40,6 +44,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/localtime"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
@@ -48,7 +53,7 @@ import (
 
 // lockKey is the advisory lock the leader holds. An advisory lock is the database's, so each
 // database has a leader of its own.
-const lockKey int64 = 0x686f757365686f6c // "househol"
+const lockKey = db.SchedulerLock
 
 // recordWithin bounds what the scheduler writes past its context's end: how a job a shutdown stopped
 // ended, and the lead it gives up. A database that does not answer then holds the process no longer.
@@ -65,8 +70,9 @@ func detached(ctx context.Context) (context.Context, context.CancelFunc) {
 
 // Cadence says when a job falls due.
 type Cadence interface {
-	// next returns the job's first slot after t.
+	// next returns the job's first slot after t, and slot its last at or before t.
 	next(t time.Time) time.Time
+	slot(t time.Time) time.Time
 	fmt.Stringer
 }
 
@@ -82,6 +88,8 @@ func (e every) next(t time.Time) time.Time {
 	return t.UTC().Truncate(d).Add(d)
 }
 
+func (e every) slot(t time.Time) time.Time { return t.UTC().Truncate(time.Duration(e)) }
+
 func (e every) String() string { return "every " + time.Duration(e).String() }
 
 type daily localtime.Clock
@@ -94,6 +102,9 @@ func Daily(c localtime.Clock) Cadence { return daily(c) }
 func (d daily) next(t time.Time) time.Time {
 	return localtime.Next(t, localtime.Clock(d), time.UTC)
 }
+
+// slot is the day before next's: UTC's days, which no DST shortens, are 24 hours each.
+func (d daily) slot(t time.Time) time.Time { return d.next(t).AddDate(0, 0, -1) }
 
 func (d daily) String() string { return "daily at " + localtime.Clock(d).String() + " UTC" }
 
@@ -125,6 +136,9 @@ type Config struct {
 	// Retry is how soon a failed job is tried again, at the latest at its next slot: 15 minutes when
 	// zero.
 	Retry time.Duration
+	// Tries is how many times a job is tried for one slot, its first try included, after which it waits
+	// for its next slot: 4 when zero.
+	Tries int
 	// Now is the clock, time.Now when nil.
 	Now func() time.Time
 }
@@ -162,6 +176,9 @@ func New(cfg Config, jobs ...Job) (*Scheduler, error) {
 	}
 	if cfg.Retry <= 0 {
 		cfg.Retry = 15 * time.Minute
+	}
+	if cfg.Tries <= 0 {
+		cfg.Tries = 4
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -217,7 +234,12 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		return
 	}
 	now := s.cfg.Now()
-	due, err := s.due(ctx, now)
+	// What the tick asks of the database waits a tick at most: a pool every connection of which is taken
+	// would otherwise hold the tick, and the next one's ping, until the server ended the lead's session as
+	// idle, and with it every job the lead runs.
+	working, cancel := context.WithTimeout(ctx, s.cfg.Tick)
+	defer cancel()
+	due, err := s.due(working, now)
 	if err != nil {
 		if ctx.Err() == nil {
 			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "scheduler: read the jobs due", slog.Any("error", err))
@@ -228,7 +250,7 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		if !due[j.Name] || !s.start(j.Name) {
 			continue
 		}
-		took, err := s.take(ctx, j, now)
+		took, err := s.take(working, j, now)
 		if err != nil || !took {
 			if err != nil && ctx.Err() == nil {
 				s.cfg.Log.LogAttrs(ctx, slog.LevelError, "scheduler: take a job's slot", slog.String("job", j.Name), slog.Any("error", err))
@@ -411,18 +433,24 @@ func (s *Scheduler) due(ctx context.Context, now time.Time) (map[string]bool, er
 // take takes j's slot when one is due at now, and reports whether it did. It moves the job's due time
 // to Retry from now, or to its next slot when that comes first, which run moves on to the next slot
 // once the job has run: a leader whose process ended while the job ran, which recorded no end, leaves
-// it due again after Retry, for the next leader to try again as it would one that failed. A job whose
-// row is gone takes nothing, and due registers it again.
+// it due again after Retry, for the next leader to try again as it would one that failed. It counts
+// the slot's tries, and the last that Tries allows moves the due time to the next slot outright. A job
+// whose row is gone takes nothing, and due registers it again.
 func (s *Scheduler) take(ctx context.Context, j Job, now time.Time) (bool, error) {
 	took := false
+	next := j.Cadence.next(now)
 	held := now.Add(s.cfg.Retry)
-	if next := j.Cadence.next(now); next.Before(held) {
+	if next.Before(held) {
 		held = next
 	}
 	err := tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
-			UPDATE scheduler_jobs SET next_run_at = $3, last_started_at = $2
-			WHERE name = $1 AND next_run_at <= $2`, j.Name, now, held)
+			UPDATE scheduler_jobs SET
+			  tries = CASE WHEN slot_at = $4 THEN tries + 1 ELSE 1 END,
+			  slot_at = $4,
+			  next_run_at = CASE WHEN (CASE WHEN slot_at = $4 THEN tries + 1 ELSE 1 END) >= $6 THEN $5::timestamptz ELSE $3::timestamptz END,
+			  last_started_at = $2
+			WHERE name = $1 AND next_run_at <= $2`, j.Name, now, held, j.Cadence.slot(now), next, s.cfg.Tries)
 		took = err == nil && tag.RowsAffected() == 1
 		return err
 	})
@@ -430,8 +458,9 @@ func (s *Scheduler) take(ctx context.Context, j Job, now time.Time) (bool, error
 }
 
 // run runs j, whose slot was taken at took, recovering a panic, and records how it ended: its due time
-// moves on to its next slot, or for a failure to Retry from its end, unless its next slot comes first.
-// It records nothing once another instance has taken the job since, whose run the row then tells of.
+// moves on to its next slot, or for a failure to Retry from its end, unless its next slot comes first
+// or the slot has had its Tries. It records nothing once another instance has taken the job since, whose
+// run the row then tells of.
 func (s *Scheduler) run(ctx context.Context, j Job, took time.Time) {
 	began := s.cfg.Now()
 	err := s.guard(ctx, j)
@@ -449,8 +478,9 @@ func (s *Scheduler) run(ctx context.Context, j Job, took time.Time) {
 		_, err := tx.Exec(record, `
 			UPDATE scheduler_jobs SET last_finished_at = $2,
 			  last_failed_at = CASE WHEN $3 THEN $2 ELSE last_failed_at END,
-			  next_run_at = CASE WHEN $3 THEN least($5::timestamptz, $4::timestamptz) ELSE $5 END
-			WHERE name = $1 AND last_started_at = $6`, j.Name, ended, err != nil, ended.Add(s.cfg.Retry), j.Cadence.next(took), took)
+			  next_run_at = CASE WHEN $3 AND tries < $7 THEN least($5::timestamptz, $4::timestamptz) ELSE $5 END
+			WHERE name = $1 AND last_started_at = $6`, j.Name, ended, err != nil, ended.Add(s.cfg.Retry), j.Cadence.next(took), took,
+			s.cfg.Tries)
 		return err
 	}); rerr != nil {
 		s.cfg.Log.LogAttrs(record, slog.LevelError, "scheduler: record how a job ended", slog.String("job", j.Name), slog.Any("error", rerr))

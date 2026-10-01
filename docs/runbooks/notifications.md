@@ -93,14 +93,15 @@ WHERE household_id = $1 ORDER BY sent_at DESC LIMIT 50;
   Google's answers only in a ticket's receipt, read every fifteen minutes; a receipt saying Apple or
   Google took a push ends the device's run.
 - `push_unavailable`: the push service did not take the push for a reason of its own: no answer, `429`,
-  a `5xx`, a browser's push service refusing the server's VAPID signature (`401`, or Apple's `403`
-  with the reason `BadJwtToken`), or Expo's `InvalidCredentials`, `MismatchSenderId`, `MessageTooBig`,
-  `MessageRateExceeded`, `DeveloperError`, `ExpoError` or `ProviderError`; or the server's own push
+  a `5xx`, a browser's push service refusing the server's VAPID signature (`401`, Apple's `403`
+  with the reason `BadJwtToken`, or Google's `403` saying `invalid JWT provided`), or Expo's
+  `InvalidCredentials`, `MismatchSenderId`, `MessageTooBig`, `MessageRateExceeded`, `DeveloperError`,
+  `ExpoError` or `ProviderError`, or an error of Expo's that names none; or the server's own push
   client panicked (`notify: a push panicked`
   in the log). It counts against no target, and a notification no push service took is tried again
   with an email's backoff, five times in all. Many at once are an outage, or the Expo project's
   credentials; check `HOUSEHOLD_EXPO_ACCESS_TOKEN` and the project's push credentials. Many browsers'
-  at once, a `401` each, or a `403` each from Safari, are the VAPID signature: the server's clock, or
+  at once, a `401` each, or a `403` each from Safari or Chrome, are the VAPID signature: the server's clock, or
   `HOUSEHOLD_MAIL_FROM`, its subject.
 - `muted`, `category_muted`: the member's own preferences, which win (FR-NT2).
 - `no_grant`, `not_member`, `private`: the member may not see what it is about (FR-NT5).
@@ -114,18 +115,20 @@ WHERE household_id = $1 ORDER BY sent_at DESC LIMIT 50;
 ## The scheduler
 
 `scheduler_jobs` holds each job's next slot and how its last run ended. The leader holds a PostgreSQL
-advisory lock; `pg_locks` shows it, `locktype = 'advisory'`, on the leader's connection, which is one
+advisory lock, `db.SchedulerLock` ("schedule", `classid` 1935894629 and `objid` 1685417061 in
+`pg_locks`); `pg_locks` shows it, `locktype = 'advisory'`, on the leader's connection, which is one
 more than its pool's for as long as it leads. That session ends at the server once the leader has not
 pinged it for a minute (four ticks, `idle_session_timeout`), so that a leader whose host went releases
 the lead then; a leader that finds its connection gone ends the jobs it was running, each logged as
 `scheduler: a job failed`, and the next leader runs them again at their retry.
 
 ```sql
-SELECT name, next_run_at, last_started_at, last_finished_at, last_failed_at FROM scheduler_jobs ORDER BY name;
+SELECT name, next_run_at, slot_at, tries, last_started_at, last_finished_at, last_failed_at FROM scheduler_jobs ORDER BY name;
 ```
 
-A job whose `last_failed_at` is its last run is tried again within fifteen minutes; its error is in
-the log as `scheduler: a job failed`. A job whose `last_finished_at` is older than its
+A job whose `last_failed_at` is its last run is tried again within fifteen minutes, four tries a slot
+(`tries` for `slot_at`) at most, and then at its next slot; its error is in the log as
+`scheduler: a job failed`. A job whose `last_finished_at` is older than its
 `last_started_at` is running, or its instance ended while it ran, with its process or its host; the
 next leader then runs it again fifteen minutes after it started. To run a job sooner, set its
 `next_run_at` to `now()`; the leader takes it at its next tick, fifteen seconds at most.

@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/auth"
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
@@ -161,6 +162,11 @@ func (s *Service) subscribeBrowser(r *http.Request, req subscriptionCreate) (sub
 	sub := subscriptionJSON{Transport: "web_push"}
 	var created bool
 	err := tenant.AccountTx(ctx, s.cfg.Pool, user, func(tx pgx.Tx) error {
+		// Two registrations from one session at once take turns: each would otherwise delete the session's
+		// other subscriptions without the other's, not yet committed, and both would stay.
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, hashtext($2))", db.PushTargetLock, sid.String()); err != nil {
+			return err
+		}
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO push_subscriptions (id, user_id, session_id, endpoint, p256dh, auth)
 			VALUES ($1, $2, $3, $4, $5, $6)
@@ -201,6 +207,11 @@ func (s *Service) subscribeDevice(r *http.Request, req subscriptionCreate) (subs
 	sub := subscriptionJSON{ID: current.Device, Transport: "expo"}
 	var created bool
 	err := tenant.AccountTx(ctx, s.cfg.Pool, user, func(tx pgx.Tx) error {
+		// Two installations registering one token at once take turns: each would otherwise clear it from
+		// the others without the other's registration, not yet committed, and both would keep it.
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, hashtext($2))", db.PushTargetLock, req.Endpoint); err != nil {
+			return err
+		}
 		if err := tx.QueryRow(ctx, `
 			WITH before AS (SELECT push_token FROM devices WHERE user_id = $1 AND id = $2 FOR UPDATE)
 			UPDATE devices d SET push_token = $3,

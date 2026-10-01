@@ -259,6 +259,53 @@ func TestAFailedJobIsTriedAgainBeforeItsNextSlot(t *testing.T) {
 	}
 }
 
+// A job that fails every time is tried Tries times for a slot, and then not until its next: one
+// household that fails a nightly job every night does not have it run every Retry until the next night.
+func TestAJobThatKeepsFailingWaitsForItsNextSlot(t *testing.T) {
+	c := &clock{t: time.Date(2026, 10, 1, 0, 30, 0, 0, time.UTC)}
+	var runs atomic.Int32
+	job := scheduler.Job{Name: name(), Cadence: scheduler.Daily(mustClock(t, "01:00")), Run: func(context.Context) error {
+		runs.Add(1)
+		return errors.New("it always fails")
+	}}
+	s := instance(t, c, job)
+	tick(s)
+	c.advance(time.Hour) // 01:30: the 01:00 slot is due.
+	for range 10 {
+		tick(s)
+		c.advance(2 * time.Minute) // Past Retry.
+	}
+	if n := runs.Load(); n != 4 {
+		t.Fatalf("runs for one slot: %d; want 4", n)
+	}
+	c.advance(24 * time.Hour)
+	tick(s)
+	if n := runs.Load(); n != 5 {
+		t.Fatalf("the next slot: %d runs in all; want 5", n)
+	}
+	c.advance(2 * time.Minute)
+	tick(s)
+	if n := runs.Load(); n != 6 {
+		t.Fatalf("the next slot's tries are its own: %d runs in all; want 6", n)
+	}
+
+	// An instance that ends while it runs the slot's last try leaves the job to its next slot too.
+	other := scheduler.Job{Name: name(), Cadence: scheduler.Daily(mustClock(t, "01:00")), Run: func(context.Context) error { return nil }}
+	s2 := instance(t, c, other)
+	s.Resign(t.Context())
+	tick(s2)
+	c.advance(24 * time.Hour)
+	for range 4 {
+		if took, err := s2.Take(t.Context(), other, c.now()); err != nil || !took {
+			t.Fatalf("a try of the slot was not taken: %v, %v", took, err)
+		}
+		c.advance(2 * time.Minute)
+	}
+	if took, err := s2.Take(t.Context(), other, c.now()); err != nil || took {
+		t.Fatalf("a fifth try of the slot was taken: %v, %v", took, err)
+	}
+}
+
 // A job whose instance ended while it ran, with its process or its host, recorded no end: it is tried
 // again after Retry, as a failed one is, not left until its next slot.
 func TestAJobWhoseInstanceEndedWhileItRanIsTriedAgain(t *testing.T) {

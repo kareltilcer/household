@@ -35,8 +35,11 @@ What had to be settled:
 ## Decision
 
 **The scheduler** (`internal/platform/scheduler`) runs in every instance. Each tick, fifteen seconds,
-it holds or takes a session-level advisory lock on a connection it takes from the pool and, leading,
-takes out of it (`Hijack`), so that the pool makes another for the requests and the workers in its
+it holds or takes a session-level advisory lock (`db.SchedulerLock`, declared with every advisory lock
+key the server takes in `internal/platform/db/locks.go`, whose test fails two alike: the lead once
+shared the catalog's key, and held every bootstrap and test run up for as long as it led) on a
+connection it takes from the pool and, leading, takes out of it (`Hijack`), so that the pool makes
+another for the requests and the workers in its
 place; a leader whose connection no longer answers a ping within five seconds has lost the lock with
 its session, or will once the server ends it as idle: it closes the connection, and ends the jobs it
 started, which would otherwise run on beside the next leader's, each recorded as failed for its
@@ -50,7 +53,12 @@ row, and the second matches nothing, so a slot fires once even when two instance
 lead. The run's end moves `next_run_at` on to the next slot, so that a run whose instance ended
 before it could record that, with its process or its host, is tried again by the next leader as a
 failed one is. A slot missed while no instance led fires once; the slots it missed are not made up.
-A failed or panicking job is tried again after fifteen minutes, or at its next slot if sooner.
+A failed or panicking job is tried again after fifteen minutes, or at its next slot if sooner, four
+tries a slot at most (`tries` for `slot_at`): the last moves `next_run_at` to the next slot outright,
+so that a nightly job that one household fails every night, whose run samples every household and
+lists the whole object store, runs four times that night, not ninety. What a tick asks of the
+database, the jobs due and the slots it takes, waits a tick at most, so that a request pool every
+connection of which is taken never holds the next ping past the leader's idle timeout.
 Cadences are `Every(d)`, counted from the zero time so every instance computes the same slots, and
 `Daily(hh:mm)` in UTC, the clock of the
 jobs that belong to no household's day (D-109); a job about a household's own day, item 53's
@@ -119,8 +127,9 @@ its ticket waits in `push_receipts` (global) until `notify.receipts` reads its r
 or Expo's `DeviceNotRegistered`, deletes a subscription or clears a token; five failures in a row mark
 a target stale until it registers again (FR-NT6). A failure is one the push service lays on the
 target, another 4xx or another of Expo's errors; no answer, a 429, a 5xx, a redirect, a refusal of
-the server's VAPID signature (a 401, or Apple's 403 `BadJwtToken`), or an error of the project's
-credentials, of the message, or of Expo's or Apple's or Google's own
+the server's VAPID signature (a 401, Apple's 403 `BadJwtToken`, or Google's 403 "invalid JWT"), an
+error of Expo's that names no code, or an error of the project's credentials, of the message, or of
+Expo's or Apple's or Google's own
 (`Unavailable`, logged `push_unavailable`) counts against none, or an
 outage would leave every target it reached stale; so does a push whose client panicked, while what
 the other targets' services took stands. A ticket waits for its receipt a day at most, read or not. A device's run of failures ends with a receipt saying Apple or Google took a push, not with

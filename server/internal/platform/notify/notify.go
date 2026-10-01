@@ -37,6 +37,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
@@ -229,8 +230,8 @@ func New(cfg Config) (*Service, error) {
 
 // coalesceLock is the namespace of the locks that serialise queueing a recipient's repeats under one
 // coalescing key, the first key of the two-key advisory lock whose second is the hash of the
-// household, the recipient and the key: "ntfy".
-const coalesceLock int32 = 0x6e746679
+// household, the recipient and the key.
+const coalesceLock = db.CoalesceLock
 
 // Queue queues ns in tx, the transaction of what caused them, in ctx's household: they exist exactly
 // when it commits. A notification whose Coalesce matches one still waiting for its recipient merges
@@ -279,14 +280,20 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 			// repeat merged into both would go twice, each counting it. The outer conditions are read
 			// again on a row a worker claims meanwhile, which then takes nothing, and the repeat is
 			// queued to wait Window as one going out makes it. The merged one says what the repeat says,
-			// the latest word, counting the repeats.
+			// the latest word, counting the repeats, and has had no try of its own: what it waited on
+			// stands, quiet hours or the window since one went, but the backoff and the tries of what it
+			// said before do not, which would hold the latest word hours and give it up at its first
+			// failure.
 			tag, err := tx.Exec(ctx, `
-				UPDATE notifications SET count = count + 1, category = $8, message = $9, args = $4, link = $5, module = $6, owner_id = $7
+				UPDATE notifications SET count = count + 1, category = $8, message = $9, args = $4, link = $5, module = $6, owner_id = $7,
+				  attempts = 0, run_at = CASE WHEN reason = $10 THEN least(run_at, now()) ELSE run_at END,
+				  reason = CASE WHEN reason = $10 THEN NULL ELSE reason END
 				WHERE household_id = $1 AND status = 'queued' AND claim IS NULL AND id = (
 				  SELECT id FROM notifications
 				  WHERE household_id = $1 AND user_id = $2 AND coalesce_key = $3 AND status = 'queued' AND claim IS NULL
 				  ORDER BY created_at DESC, id DESC LIMIT 1)`,
-				household, n.To, n.Coalesce, args, nullable(n.Link), nullable(n.Module), nullableID(n.Owner), string(n.Category), n.Message)
+				household, n.To, n.Coalesce, args, nullable(n.Link), nullable(n.Module), nullableID(n.Owner), string(n.Category), n.Message,
+				reasonPushUnavailable)
 			if err != nil {
 				return fmt.Errorf("notify: coalesce: %w", err)
 			}
