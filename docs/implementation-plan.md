@@ -591,7 +591,7 @@ Phase 0 · after 4, 10 · size L
   - The refusal matrix is tested: `413`, `415`, `422`, `402`, `502`.
   - Samples break down by module and member.
   - No URL is issued before authorisation.
-- **PR:** —
+- **PR:** [#18](https://github.com/kareltilcer/household/pull/18)
 
 ### 15 · Scheduler and notification transports · `planned`
 
