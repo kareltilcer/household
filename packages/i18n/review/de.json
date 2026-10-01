@@ -9,6 +9,7 @@
   "admin.household.update": "Changed the household’s settings",
   "admin.invitation.create": "{kind, select, email {Invited {email}} other {Made an invitation link}}",
   "admin.invitation.decline": "Declined the invitation",
+  "admin.invitation.purge": "{kind, select, email {Cleared the invitation to {email} a month after it ended} other {Cleared an invitation link a month after it ended}}",
   "admin.invitation.resend": "Sent the invitation to {email} again",
   "admin.invitation.revoke": "{kind, select, email {Withdrew the invitation to {email}} other {Withdrew an invitation link}}",
   "admin.member.graduate": "Became a member, no longer a child profile",
@@ -25,8 +26,8 @@
   "email.identity_linked.subject": "{provider} can now sign you in to Household",
   "email.invitation.body": "Hello,\n\n{inviter} invited you to join {household} on Household.{hasMessage, select, yes {\n\nTheir message:\n\n{message}} other {}}\n\nTo see exactly what you’re being given, and to join or decline, open the link below. It works for 14 days.\n\n{link}\n\nIf you don’t know {inviter}, you can ignore this email. Nothing happens unless you join.",
   "email.invitation.subject": "{inviter} invited you to {household} on Household",
-  "email.invitation_declined.body": "Hello,\n\n{invitee} declined your invitation to join {household} on Household. The invitation is closed, and nothing in the household changed.\n\nIf you’d like to ask again, you can send the invitation again from the household’s members.",
-  "email.invitation_declined.subject": "{invitee} declined your invitation to {household}",
+  "email.member_removed.body": "Hello,\n\nAn owner of {household} removed you from the household on Household. You no longer see anything in it, and the other households you belong to are as they were. What you made there stays with the household.\n\nIf you think this was a mistake, ask one of its owners to invite you again.",
+  "email.member_removed.subject": "You were removed from {household} on Household",
   "email.mfa_disabled.body": "Hello,\n\nThe second step for your Household account, the code from your authenticator app, was just turned off. Signing in now needs only your password.\n\nIf you did this, there’s nothing more to do. If you didn’t, reset your password now, then turn the second step on again:\n\n{link}",
   "email.mfa_disabled.subject": "The second step was turned off for your Household account",
   "email.password_changed.body": "Hello,\n\nThe password for your Household account was just changed.\n\nIf you did this, there’s nothing more to do. If you didn’t, reset your password now:\n\n{link}",
@@ -57,5 +58,11 @@
   "module.shopping.name": "Shopping",
   "module.tasks.name": "Tasks",
   "module.utilities.name": "Utilities",
-  "module.vehicles.name": "Vehicles"
+  "module.vehicles.name": "Vehicles",
+  "notification.access_changed.body": "An owner changed what you can see and do in {household}. Open it to see what you have now.",
+  "notification.access_changed.title": "Your access in {household} changed",
+  "notification.child_locked.body": "Ten wrong PINs in a row locked {member}’s profile in {household}. Unlock it, or set a new PIN, from the household’s members.",
+  "notification.child_locked.title": "{member}’s profile is locked",
+  "notification.invitation_declined.body": "{invitee} won’t be joining {household}. The invitation is closed; you can send it again from the household’s members.",
+  "notification.invitation_declined.title": "{invitee} declined your invitation"
 }

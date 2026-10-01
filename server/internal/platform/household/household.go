@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -34,9 +33,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/access"
-	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
-	"github.com/kareltilcer/household/server/internal/platform/mail"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
@@ -50,12 +48,12 @@ type Config struct {
 	Log  *slog.Logger
 	// Throttles count the invitations a household sends (PRD 02 §9).
 	Throttles *ratelimit.Throttles
-	Mail      mail.Sender
-	Catalogs  *i18n.Catalogs
+	// Notify sends what the household surface tells people (item 15): an invitation's and a
+	// graduation's email, an inviter's notice of a decline, the owners' of a locked child profile, and
+	// a member's of a change of their access.
+	Notify *notify.Service
 	// WebURL is where the web client is served, which an invitation's link opens.
 	WebURL *url.URL
-	// Later runs fn after the response, with ctx's values: identity.Background.Run.
-	Later func(ctx context.Context, fn func(context.Context))
 	// Now is the clock; time.Now when nil.
 	Now func() time.Time
 	// Hooks are what later items plug in.
@@ -73,8 +71,8 @@ type Service struct {
 
 // New returns the service.
 func New(cfg Config) (*Service, error) {
-	if cfg.Pool == nil || cfg.Log == nil || cfg.Throttles == nil || cfg.Mail == nil || cfg.Catalogs == nil ||
-		cfg.WebURL == nil || cfg.Later == nil || cfg.Accounts == nil {
+	if cfg.Pool == nil || cfg.Log == nil || cfg.Throttles == nil || cfg.Notify == nil || cfg.WebURL == nil ||
+		cfg.Accounts == nil {
 		return nil, errors.New("household: the service is missing a dependency")
 	}
 	if cfg.Now == nil {
@@ -202,21 +200,6 @@ func pathUUID(r *http.Request, name string) (uuid.UUID, error) {
 		return uuid.Nil, problem.NotFound()
 	}
 	return id, nil
-}
-
-// email sends t to address in the language of locale, with args, after the response. A failure is
-// logged: nothing the request did depends on it.
-func (s *Service) email(ctx context.Context, address, locale string, t mail.Template, args i18n.Args) {
-	args = maps.Clone(args)
-	s.Later(ctx, func(ctx context.Context) {
-		m, err := mail.Render(s.Catalogs, i18n.Match(locale), t, args, address)
-		if err == nil {
-			err = s.Mail.Send(ctx, m)
-		}
-		if err != nil {
-			s.Log.LogAttrs(ctx, slog.LevelError, "email not sent", slog.String("template", string(t)), slog.Any("error", err))
-		}
-	})
 }
 
 // link is the web client's route, with token in its fragment, which a browser sends to no server,

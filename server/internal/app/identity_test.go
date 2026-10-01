@@ -26,8 +26,10 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
+	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
@@ -67,7 +69,12 @@ type site struct {
 	router *chi.Mux
 	admin  *pgxpool.Pool
 	outbox *apptest.Outbox
-	clock  *clock
+	// pushes are the pushes the site sent, and notifier the transport that sent them and its email.
+	pushes   *apptest.Pushes
+	notifier *notify.Service
+	// households is the household surface the site serves.
+	households *household.Service
+	clock      *clock
 	// domain, peer and other are this test's own: its addresses end in the first, its browsers come
 	// from the second, and the third is another network, for a limit one network has used up.
 	domain, peer, other string
@@ -89,10 +96,13 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 	o.Now = clk.now
 	o.Breached = append(o.Breached, breached)
 	accounts, outbox := apptest.Accounts(t, pool, log, o)
+	pushes := &apptest.Pushes{}
+	notifier := apptest.Notify(t, pool, log, outbox, pushes, o)
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, MaxBodyBytes: 1 << 16, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, accounts, outbox, o),
+		Households: apptest.Households(t, pool, log, accounts, notifier, o),
+		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, o),
 		Storage:    &storage.Picture{Log: log},
 	}
@@ -104,7 +114,7 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 		t.Fatal(err)
 	}
 	n := sites.Add(1)
-	return &site{t: t, router: r, admin: d.Pool(t, ""), outbox: outbox, clock: clk,
+	return &site{t: t, router: r, admin: d.Pool(t, ""), outbox: outbox, pushes: pushes, notifier: notifier, households: deps.Households, clock: clk,
 		domain: fmt.Sprintf("site%d.test", n), peer: fmt.Sprintf("198.51.%d.%d:4000", n/256, n%256),
 		other: fmt.Sprintf("198.18.%d.%d:5000", n/256, n%256)}
 }

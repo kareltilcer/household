@@ -378,13 +378,24 @@ Carried from `home` v5 in structure — the trigger/schedule/metric composition 
 extended for native push and for member-level control.
 
 **FR-NT1 — Three transports.** Web Push (VAPID) for the web app; **APNs and FCM via Expo Push**
-for the mobile apps; email for a defined, small set (security, billing, invitations) that must
-arrive even when push is off. A device registers its token on login and de-registers on logout.
+for the mobile apps; email for a defined, small set (security, billing, invitations, and a member's
+removal from a household, **D-111**) that must arrive even when push is off. A device registers its
+token on login and de-registers on logout. A browser's subscription is bound to the web session that
+registered it and reaches its user while that session lives; a device's token reaches it while its
+sign-in lives, so signing out, or being signed out everywhere, ends both. A browser's endpoint must
+be at a push service the server knows, so that no member can have the server send where they choose.
+A notification is queued in the transaction of what caused it and delivered once that commits, by a
+worker of any instance; an email's link token waits sealed under a key the database does not hold
+([ADR 0016](../adr/0016-scheduler-and-notification-transports.md)).
 
 **FR-NT2 — Four categories**, each independently mutable per member per household:
 `direct` (someone assigned you something, mentioned you, messaged you), `household` (something
 changed that you asked to hear about), `reminders` (a due date you subscribed to), `digest`
-(scheduled summaries). Plus a master switch and **quiet hours** in the member's own timezone.
+(scheduled summaries). Plus a master switch and **quiet hours** in the member's own timezone, or
+their household's when they set none. The account's defaults stand in for every household where the
+member has set nothing; their first change in a household starts from them, and from then on the
+household's are their own. Quiet hours **hold** a push until they end and never drop it; the email
+set of FR-NT1 ignores the switch, the categories and quiet hours alike (**D-112**).
 
 **FR-NT3 — Trigger rules.** An owner composes rules over the audit action catalog: match an action
 key or prefix, filter by module/entity/level, choose an audience, template a title and body from
@@ -397,16 +408,28 @@ clamping) resolves metric tokens **per recipient** and sends. Inherited unchange
 **FR-NT5 — Delivery is filtered by grant and by privacy, at send time, per recipient.** A rule
 matching a Finance action does not notify a member with `none` on Finance, and the redacted form
 of a private event is what renders — once, for the whole audience, never a second per-owner
-rendering that could be misdelivered.
+rendering that could be misdelivered. A notification about a private item reaches its owner and
+no one else, and a push reaches only someone who is still a member when it goes out. Repeats with
+one coalescing key merge: into one still waiting, or, within fifteen minutes of one that went, into
+one held until those fifteen minutes have passed.
 
-**FR-NT6 — Delivery log.** Every attempt recorded with outcome. `404`/`410` from a push service
-deletes the subscription. Repeated failure marks a device stale and stops trying. Support can read
-this log — it is metadata, not content, and it holds no rendered body.
+**FR-NT6 — Delivery log.** Every attempt recorded with outcome, and every notification dropped
+before any attempt with its reason. `404`/`410` from a push service deletes the subscription, and
+Expo's `DeviceNotRegistered`, in a ticket or in its receipt, clears the device's token. Five
+failures in a row mark a subscription or a device stale and stop trying until it registers again. A
+push is not retried, since its push service holds it for the device; an email the mail server does
+not take is tried again with backoff, five times in all. Support can read this log — it is metadata,
+not content. What a push said is kept seven days for the household's owners (FR-HA12, §5) and is not
+what support reads; an email keeps its subject, never its body, which may carry a link's token.
 
 ## 5. Scheduler
 
 A single in-process scheduler with a leader lock so that multiple API instances do not double-fire.
-Modules register jobs; the platform owns the timing.
+Modules register jobs; the platform owns the timing. Every instance runs it; the one holding a
+PostgreSQL advisory lock leads, and each job's next slot is kept in the database and taken by a
+statement that matches only while it is due, so that a slot fires once even while a leader whose
+connection died has not yet noticed ([ADR 0016](../adr/0016-scheduler-and-notification-transports.md)).
+A failed job is tried again after fifteen minutes or at its next slot, whichever comes first.
 
 | Job | Cadence | Owner |
 |---|---|---|
@@ -420,6 +443,7 @@ Modules register jobs; the platform owns the timing.
 | Invitation and token expiry | Hourly | Identity |
 | Erasure execution | Nightly | Privacy |
 | Expiry sweep | Nightly | Platform — see below |
+| Expo receipts | Every 15 minutes | Notifications |
 
 **The expiry sweep is one job, not six**, because every one of them is the same operation: delete
 rows past a retention the specification has already fixed. Listing them separately would be six
@@ -434,6 +458,20 @@ schedulers to forget one of.
 | Diagnostic bundles | 30 days | [02-identity-and-access.md](02-identity-and-access.md) FR-PS1 |
 | Rendered notification bodies in the delivery log | 7 days — the outcome is kept, the body is not | [modules/17-household-admin.md](modules/17-household-admin.md) FR-HA12 |
 | Soft-deleted rows past their module's undo window | Per module | Module pages |
+| Web sessions | Once ended, revoked or expired, with the browser subscriptions they registered | **D-113** |
+| `Idempotency-Key` records of account requests | 7 days | [01-architecture.md](01-architecture.md) §6 |
+| Used refresh tokens | 30 days after use | **D-113** |
+| Revoked device sign-ins | Once their refresh tokens are gone | **D-113** |
+| Trusts to skip the second step | Once expired | **D-113** |
+| Sign-in throttle counts | A day after their window and their block end | **D-113** |
+
+The hourly invitation and token expiry is the same operation on what expires within the hour:
+
+| What it drops | Retention | Stated in |
+|---|---|---|
+| Email links (verification, reset, graduation) | 7 days past their expiry, spent or not | **D-113** |
+| Second steps and provider sign-ins waiting | A day past their end or their expiry | **D-113** |
+| Invitations that stopped working | 30 days after they did, through the mutation spine | **D-110** |
 
 A retention this table does not name is a retention nobody decided, which is the reason it is a
 table rather than a sentence.

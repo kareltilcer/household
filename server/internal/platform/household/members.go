@@ -19,7 +19,9 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/etag"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
+	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
@@ -563,6 +565,9 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		if err := writeGrants(ctx, tx, household, user, changedGrants(old.grants, grants, modules)); err != nil {
 			return mutation.Record{}, err
 		}
+		if err := s.accessNotice(ctx, tx, household, user, CauseGrant); err != nil {
+			return mutation.Record{}, err
+		}
 		if m, err = touch(ctx, tx, old, role, grants); err != nil {
 			return mutation.Record{}, err
 		}
@@ -642,11 +647,34 @@ func joinDiffs(role access.Role, grants map[string]access.Level, modules []strin
 	return out
 }
 
-// changed tells the Changed hook of change, when one is set.
+// changed sends the notice of change its mutation queued (accessNotice), and tells the Changed hook
+// of it, when one is set.
 func (s *Service) changed(ctx context.Context, change Change) {
+	s.Notify.Nudge(ctx, change.Household)
 	if s.Hooks.Changed != nil {
 		s.Hooks.Changed(context.WithoutCancel(ctx), change)
 	}
+}
+
+// The notices of a change of a member's access (D-78).
+const (
+	messageAccessChanged               = "notification.access_changed"
+	emailRemoved         mail.Template = "email.member_removed"
+)
+
+// accessNotice queues, in tx, the notice that tells member their access in household changed (D-78,
+// FR-HA5): a push when their role or their grants changed, which merges with the others an owner
+// makes in the minutes after it, and an email when they were removed, since a push reaches a member,
+// which they no longer are (D-111).
+func (s *Service) accessNotice(ctx context.Context, tx pgx.Tx, household, member uuid.UUID, cause Cause) error {
+	n := notify.Notification{
+		To: member, Category: notify.Direct, Message: messageAccessChanged, Link: "/households/" + household.String(),
+		Coalesce: "access_changed",
+	}
+	if cause == CauseRemoved {
+		n = notify.Notification{To: member, Category: notify.Direct, Message: string(emailRemoved), Email: true}
+	}
+	return s.Notify.Queue(ctx, tx, n)
 }
 
 // removeMember removes a member (FR-HH5), an owner's to do, and never the caller, who leaves instead.
@@ -704,6 +732,9 @@ func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		rec, err := s.end(ctx, tx, household, m, CauseRemoved, actionMemberRemove)
+		if err == nil {
+			err = s.accessNotice(ctx, tx, household, user, CauseRemoved)
+		}
 		removed = err == nil
 		return rec, err
 	})
@@ -844,6 +875,9 @@ func (s *Service) promote(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		}
 		if m, err = touch(ctx, tx, old, access.Owner, grants); err != nil {
+			return mutation.Record{}, err
+		}
+		if err := s.accessNotice(ctx, tx, household, old.user, CauseGrant); err != nil {
 			return mutation.Record{}, err
 		}
 		promoted = true

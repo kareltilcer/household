@@ -63,10 +63,12 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 	log := logging.New(logs, slog.LevelDebug)
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
 	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
+	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second, checks...),
 		Pool: pool, MaxBodyBytes: 1 << 10, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
+		Households: apptest.Households(t, pool, log, accounts, notifier, apptest.Options{}),
+		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 	})
@@ -376,10 +378,12 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 	log := logging.New(io.Discard, slog.LevelError)
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
 	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
+	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, MaxBodyBytes: 1 << 10, BodyTimeout: timeout, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
+		Households: apptest.Households(t, pool, log, accounts, notifier, apptest.Options{}),
+		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 	})

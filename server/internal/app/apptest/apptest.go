@@ -8,6 +8,7 @@ package apptest
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"log/slog"
 	"net/url"
 	"path/filepath"
@@ -16,6 +17,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/platform/avatar"
@@ -31,6 +34,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mfa"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
@@ -171,7 +175,7 @@ func Sync(t testing.TB, log *slog.Logger, o Options) app.Sync {
 // another.
 var (
 	TokenKeys = mustTokenKeys()
-	MFAKeys   = mustMFAKeys()
+	MFAKeys   = mustMFAKeys(9)
 )
 
 func mustTokenKeys() *token.Keys {
@@ -182,8 +186,8 @@ func mustTokenKeys() *token.Keys {
 	return k
 }
 
-func mustMFAKeys() *mfa.Keys {
-	k, err := mfa.NewKeys(bytes.Repeat([]byte{9}, 32))
+func mustMFAKeys(b byte) *mfa.Keys {
+	k, err := mfa.NewKeys(bytes.Repeat([]byte{b}, 32))
 	if err != nil {
 		panic(err)
 	}
@@ -284,10 +288,86 @@ func Accounts(t testing.TB, pool session.Pool, log *slog.Logger, o Options) (app
 }
 
 // Households returns the household surface for a router over pool, logging to log, on the clock
-// and with the hooks of o, with accounts' identity service as its account half, sending its mail to
-// outbox and running what it defers before the request that deferred it returns.
-func Households(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.Accounts, outbox *Outbox, o Options) *household.Service {
+// and with the hooks of o, with accounts' identity service as its account half, telling people what
+// it tells them through notifier.
+func Households(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.Accounts, notifier *notify.Service, o Options) *household.Service {
 	t.Helper()
+	web, err := url.Parse(WebURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := household.New(household.Config{
+		Pool: pool, Log: log, Throttles: ratelimit.NewThrottles(pool, o.Now), Notify: notifier, WebURL: web,
+		Now: o.Now, Hooks: o.Hooks, Accounts: accounts.Identity,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// Pushed is a push a test's server sent: where to, and what it said.
+type Pushed struct {
+	Target notify.Target
+	Push   notify.Push
+}
+
+// Pushes keeps the pushes a test's server sends, Web Push's and Expo's alike, and answers each as
+// Answer says, every one accepted when it is nil.
+type Pushes struct {
+	mu     sync.Mutex
+	pushed []Pushed
+	// Answer is how the push service answers a push to a target.
+	Answer func(notify.Target) notify.Outcome
+}
+
+// Push keeps m.
+func (p *Pushes) Push(_ context.Context, t notify.Target, m notify.Push) notify.Outcome {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pushed = append(p.pushed, Pushed{Target: t, Push: m})
+	if p.Answer != nil {
+		return p.Answer(t)
+	}
+	return notify.Outcome{Status: notify.Accepted}
+}
+
+// To returns the pushes sent to user's targets, in the order they were sent.
+func (p *Pushes) To(user uuid.UUID) []Pushed {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []Pushed
+	for _, m := range p.pushed {
+		if m.Target.User == user {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// Receipts answers no receipt.
+func (p *Pushes) Receipts(context.Context, []string) (map[string]notify.Status, error) {
+	return map[string]notify.Status{}, nil
+}
+
+// NotifyKeys seal the tests' email links while they wait; VAPIDKey signs their Web Push.
+var (
+	NotifyKeys = mustMFAKeys(11)
+	VAPIDKey   = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{12}, 32))
+)
+
+// PushHost is the push service the tests' browsers subscribe at, beside the known ones.
+const PushHost = "push.household.test"
+
+// Notify returns the notification transport for a router over pool, logging to log, on the clock of
+// o: its email goes to outbox and its pushes to pushes, and it delivers what a commit queued before
+// the request that queued it returns.
+func Notify(t testing.TB, pool session.Pool, log *slog.Logger, outbox *Outbox, pushes *Pushes, o Options) *notify.Service {
+	t.Helper()
+	beginner, ok := pool.(tenant.Beginner)
+	if !ok {
+		t.Fatalf("apptest: %T opens no transactions", pool)
+	}
 	catalogs, err := i18n.Default()
 	if err != nil {
 		t.Fatal(err)
@@ -296,10 +376,14 @@ func Households(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := household.New(household.Config{
-		Pool: pool, Log: log, Throttles: ratelimit.NewThrottles(pool, o.Now), Mail: outbox, Catalogs: catalogs,
-		WebURL: web, Later: func(ctx context.Context, fn func(context.Context)) { fn(context.WithoutCancel(ctx)) },
-		Now: o.Now, Hooks: o.Hooks, Accounts: accounts.Identity,
+	public, err := notify.VAPIDPublicKey(VAPIDKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := notify.New(notify.Config{
+		Pool: beginner, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Log: log, Catalogs: catalogs, WebURL: web,
+		Keys: NotifyKeys, WebPush: pushes, Expo: pushes, Receipts: pushes, Mail: outbox, VAPIDKey: public,
+		PushHosts: []string{PushHost}, Inline: true, Now: o.Now,
 	})
 	if err != nil {
 		t.Fatal(err)

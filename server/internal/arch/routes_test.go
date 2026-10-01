@@ -40,6 +40,7 @@ func TestRoutesMatchTheContract(t *testing.T) {
 	log := logging.New(io.Discard, slog.LevelError)
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
 	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
+	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
 	// The modules, as the server's composition passes them: the router adds the platform's own.
 	mods, err := module.NewRegistry(modules.All()...)
 	if err != nil {
@@ -48,7 +49,8 @@ func TestRoutesMatchTheContract(t *testing.T) {
 	router, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Modules: mods, MaxBodyBytes: 1, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
+		Households: apptest.Households(t, pool, log, accounts, notifier, apptest.Options{}),
+		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 	})

@@ -93,3 +93,21 @@ INSERT INTO usage_sample_modules (household_id, sampled_on, module, stored_bytes
 INSERT INTO usage_sample_members (household_id, sampled_on, user_id, stored_bytes, object_count) VALUES
   ('01900000-0000-7000-8000-00000000000a', '2026-09-30', '01900000-0000-7000-8000-0000000000b1', 1024, 1),
   ('01900000-0000-7000-8000-00000000000b', '2026-09-30', '01900000-0000-7000-8000-0000000000b1', 2048, 1);
+
+-- Household B's owner's notification preferences in each household, a notification to them in each,
+-- and its delivery.
+INSERT INTO notification_preferences (household_id, user_id, enabled, direct, household, reminders, digest) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000b1', true, true, false, true, true),
+  ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000b1', true, true, true, true, true);
+
+INSERT INTO notifications (household_id, id, user_id, category, message, status, settled_at) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000e1', '01900000-0000-7000-8000-0000000000b1',
+   'direct', 'notification.access_changed', 'sent', now()),
+  ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000e2', '01900000-0000-7000-8000-0000000000b1',
+   'direct', 'notification.access_changed', 'sent', now());
+
+INSERT INTO notification_deliveries (household_id, id, notification_id, user_id, category, transport, status, title, body, body_expires_at) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000e3', '01900000-0000-7000-8000-0000000000e1',
+   '01900000-0000-7000-8000-0000000000b1', 'direct', 'web_push', 'sent', 'Milk', 'Milk', now()),
+  ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000e4', '01900000-0000-7000-8000-0000000000e2',
+   '01900000-0000-7000-8000-0000000000b1', 'direct', 'web_push', 'sent', 'Bread', 'Bread', now());

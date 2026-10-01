@@ -1,0 +1,127 @@
+package notify
+
+import (
+	"context"
+	"crypto/ecdh"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	webpush "github.com/SherClockHolmes/webpush-go"
+)
+
+// The longest title and body a push carries, in characters: a Web Push message is encrypted into a
+// record of 4 KB at most, and a device shows a few lines anyway. A longer one is cut, never dropped.
+const (
+	maxTitle = 80
+	maxBody  = 300
+)
+
+// pushTTL is how long a push service holds a push for a device that is offline: a day, after which
+// it is old news.
+const pushTTL = 24 * time.Hour
+
+// WebPush delivers to browsers (FR-NT1): RFC 8030 messages, encrypted to the subscription's keys (RFC
+// 8291) and signed with the server's VAPID key (RFC 8292).
+type WebPush struct {
+	private, public string
+	// subject is who the push services may contact about the pushes: the server's sender address.
+	subject string
+	client  *http.Client
+}
+
+// NewWebPush returns the Web Push transport signing with private, a P-256 private key as 32 bytes of
+// base64url, as subject, an email address, over client: nil for one of its own, which waits 15 seconds
+// for a push service and follows no redirect, since a push service is only ever an endpoint's own host.
+func NewWebPush(private, subject string, client *http.Client) (*WebPush, error) {
+	public, err := VAPIDPublicKey(private)
+	if err != nil {
+		return nil, err
+	}
+	if subject == "" {
+		return nil, errors.New("notify: Web Push needs a VAPID subject")
+	}
+	if client == nil {
+		client = &http.Client{
+			Timeout:       15 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		}
+	}
+	return &WebPush{private: strings.TrimRight(private, "="), public: public, subject: subject, client: client}, nil
+}
+
+// VAPIDPublicKey returns the public key of private, a P-256 private key as 32 bytes of base64url: the
+// uncompressed point, in base64url, as a browser takes its applicationServerKey.
+func VAPIDPublicKey(private string) (string, error) {
+	scalar, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(private, "="))
+	if err != nil || len(scalar) != 32 {
+		return "", errors.New("notify: the VAPID key is not 32 bytes of base64url")
+	}
+	key, err := ecdh.P256().NewPrivateKey(scalar)
+	if err != nil {
+		return "", errors.New("notify: the VAPID key is not a P-256 private key")
+	}
+	return base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()), nil
+}
+
+// PublicKey is the key browsers subscribe with.
+func (w *WebPush) PublicKey() string { return w.public }
+
+// webPushMessage is what the web client's service worker receives: what it shows, and where a tap on
+// it goes.
+type webPushMessage struct {
+	Title          string `json:"title"`
+	Body           string `json:"body"`
+	URL            string `json:"url,omitempty"`
+	Tag            string `json:"tag,omitempty"`
+	HouseholdID    string `json:"household_id"`
+	NotificationID string `json:"notification_id"`
+}
+
+// Push sends m to t's browser. A 404 or a 410 says the subscription is gone (RFC 8030 §7.3).
+func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
+	payload, err := json.Marshal(webPushMessage{
+		Title: cut(m.Title, maxTitle), Body: cut(m.Body, maxBody), URL: m.Link, Tag: m.Tag,
+		HouseholdID: m.Household.String(), NotificationID: m.Notification.String(),
+	})
+	if err != nil {
+		return Outcome{Status: Failed}
+	}
+	urgency := webpush.UrgencyNormal
+	if m.Urgent {
+		urgency = webpush.UrgencyHigh
+	}
+	resp, err := webpush.SendNotificationWithContext(ctx, payload,
+		&webpush.Subscription{Endpoint: t.Endpoint, Keys: webpush.Keys{P256dh: t.P256dh, Auth: t.Auth}},
+		&webpush.Options{
+			HTTPClient: w.client, Subscriber: w.subject, VAPIDPublicKey: w.public, VAPIDPrivateKey: w.private,
+			TTL: int(pushTTL.Seconds()), Urgency: urgency, Topic: m.Tag,
+		})
+	if err != nil {
+		return Outcome{Status: Failed}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	switch {
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		return Outcome{Status: Accepted}
+	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
+		return Outcome{Status: Gone}
+	default:
+		return Outcome{Status: Failed}
+	}
+}
+
+// cut returns s cut to at most n characters, an ellipsis ending one it cut.
+func cut(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	return strings.TrimSpace(string(r[:n-1])) + "…"
+}

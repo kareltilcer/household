@@ -155,6 +155,17 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   account's (D-107). What the platform keeps of the work after a commit is no entity's history
   either, and goes through `tenant.InWriteTx` in the household's context, with no caller: the
   workers' claims on `file_jobs` and the variants they record, and the usage sampler's samples.
+- **Notifications** go through `internal/platform/notify`: a module tells a member something by
+  queueing a `notify.Notification` in its mutation's transaction (`Queue`), a catalog key and
+  arguments, its category, the module whose view the recipient must hold and, for a private item, its
+  owner, and calls `Nudge` once it has committed. Whether it reaches them, by Web Push, Expo or the
+  fixed email set, is decided and rendered when it goes out: grant, privacy, their own mutes and their
+  quiet hours (FR-NT5, D-111, D-112). The queue, the delivery log and a member's preferences are no
+  entity's history and go through `tenant.InWriteTx`, as the expiry sweep's deletions in a household
+  do. The platform's jobs run on `internal/platform/scheduler`, which one instance leads; a job
+  registers in `app.newScheduler` with its cadence, and a retention is a row of
+  `internal/platform/expiry` and of PRD 03 §5's table
+  ([ADR 0016](docs/adr/0016-scheduler-and-notification-transports.md)).
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`
