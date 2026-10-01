@@ -132,6 +132,8 @@ func TestTheConvertersRefusals(t *testing.T) {
 		"a page no command draws":        {"nothing", "/page?side=800", []byte("junk"), http.StatusUnprocessableEntity},
 		"a type it does not read":        {"ok", "/pdf?ext=exe", []byte("MZ"), http.StatusUnprocessableEntity},
 		"no type":                        {"ok", "/pdf", []byte("PK"), http.StatusUnprocessableEntity},
+		"a path in place of a type":      {"ok", "/pdf?ext=..%2F..%2Fetc%2Fdocx", []byte("PK"), http.StatusUnprocessableEntity},
+		"a type and a path":              {"ok", "/pdf?ext=docx%2F..%2F..%2Fx", []byte("PK"), http.StatusUnprocessableEntity},
 		"a side too large":               {"ok", "/page?side=100000", []byte("%PDF"), http.StatusUnprocessableEntity},
 		"an empty document":              {"ok", "/pdf?ext=docx", nil, http.StatusUnprocessableEntity},
 		"a conversion out of time":       {"hang", "/pdf?ext=docx", []byte("PK"), http.StatusGatewayTimeout},

@@ -58,6 +58,18 @@ var officeExtensions = []string{
 	"doc", "docx", "docm", "xls", "xlsx", "xlsm", "ppt", "pptx", "pptm", "odt", "ods", "odp", "odg", "rtf",
 }
 
+// officeExtension returns the extension among officeExtensions that requested names, and false for
+// none. What it returns is the list's own string, never the request's: the document's file is named
+// by it, so no byte a client sent reaches a path, whatever a later change does to the check.
+func officeExtension(requested string) (string, bool) {
+	for _, ext := range officeExtensions {
+		if ext == requested {
+			return ext, true
+		}
+	}
+	return "", false
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	code := run(ctx, os.Args[1:], os.LookupEnv, os.Stderr)
@@ -159,8 +171,8 @@ func (c *converter) routes() http.Handler {
 
 // pdf converts the office document the body carries, whose extension the ext parameter names.
 func (c *converter) pdf(w http.ResponseWriter, r *http.Request) {
-	ext := r.URL.Query().Get("ext")
-	if !slices.Contains(officeExtensions, ext) {
+	ext, ok := officeExtension(r.URL.Query().Get("ext"))
+	if !ok {
 		http.Error(w, "not a type this converter reads", http.StatusUnprocessableEntity)
 		return
 	}
