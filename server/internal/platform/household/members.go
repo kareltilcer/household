@@ -19,7 +19,9 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/etag"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
+	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
@@ -489,8 +491,8 @@ func checkGrants(field string, grants map[string]access.Level, role access.Role,
 // and graduated rather than given a role (FR-CH1, FR-CH4); an owner made a member keeps the levels
 // they held, until the same or a later change lowers them, and the invitations they sent that are
 // still waiting are withdrawn (D-103). The last owner and the payer stay owners.
-// What the member can no longer see is retracted from their replica (Hooks.Lost), and they are told
-// (Hooks.Changed, D-78).
+// What the member can no longer see is retracted from their replica (Hooks.Lost), and they are told,
+// unless the change is their own (accessNotice, Hooks.Changed, D-78).
 func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -563,6 +565,13 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		if err := writeGrants(ctx, tx, household, user, changedGrants(old.grants, grants, modules)); err != nil {
 			return mutation.Record{}, err
 		}
+		// An owner who changed their own role or grants, as one of several owners may, is not told of
+		// what they just did.
+		if user != scope.UserID() {
+			if err := s.accessNotice(ctx, tx, household, user, CauseGrant); err != nil {
+				return mutation.Record{}, err
+			}
+		}
 		if m, err = touch(ctx, tx, old, role, grants); err != nil {
 			return mutation.Record{}, err
 		}
@@ -579,7 +588,7 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		}
 		changes := []sync.Change{m.change(household, payer, modules)}
 		if old.role == access.Owner && role != access.Owner {
-			withdrawn, err := withdraw(ctx, tx, household, user, s.Now())
+			withdrawn, err := s.withdraw(ctx, tx, household, user, s.Now())
 			if err != nil {
 				return mutation.Record{}, err
 			}
@@ -642,18 +651,42 @@ func joinDiffs(role access.Role, grants map[string]access.Level, modules []strin
 	return out
 }
 
-// changed tells the Changed hook of change, when one is set.
+// changed sends the notice of change its mutation queued (accessNotice), and tells the Changed hook
+// of it, when one is set.
 func (s *Service) changed(ctx context.Context, change Change) {
+	s.Notify.Nudge(ctx, change.Household)
 	if s.Hooks.Changed != nil {
 		s.Hooks.Changed(context.WithoutCancel(ctx), change)
 	}
+}
+
+// The notices of a change of a member's access (D-78).
+const (
+	messageAccessChanged               = "notification.access_changed"
+	emailRemoved         mail.Template = "email.member_removed"
+)
+
+// accessNotice queues, in tx, the notice that tells member their access in household changed (D-78,
+// FR-HA5): a push when their role or their grants changed, which merges with the others an owner
+// makes in the minutes after it, and an email when they were removed, since a push reaches a member,
+// which they no longer are (D-111).
+func (s *Service) accessNotice(ctx context.Context, tx pgx.Tx, household, member uuid.UUID, cause Cause) error {
+	n := notify.Notification{
+		To: member, Category: notify.Direct, Message: messageAccessChanged, Link: "/households/" + household.String(),
+		Coalesce: "access_changed",
+	}
+	if cause == CauseRemoved {
+		n = notify.Notification{To: member, Category: notify.Direct, Message: string(emailRemoved), Email: true}
+	}
+	return s.Notify.Queue(ctx, tx, n)
 }
 
 // removeMember removes a member (FR-HH5), an owner's to do, and never the caller, who leaves instead.
 // It is immediate: their next request finds no membership, their replica loses the household
 // (Hooks.Lost), no invitation they sent brings them back (withdraw), and they are told
 // (Hooks.Changed). The payer is refused until billing moves, and the content they made stays with
-// the household. A child profile removed is signed out of every device.
+// the household. A child profile removed is signed out of every device, and its graduation's link is
+// spent, its email withdrawn should it still wait for the mail server.
 func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -702,8 +735,20 @@ func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 			if err := s.Accounts.Devices.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
 				return mutation.Record{}, err
 			}
+			// A link to graduate a profile that is gone graduates nobody, and its email, held by a
+			// mail server that was down, would arrive with a link that no longer works.
+			if _, err := tx.Exec(ctx, "UPDATE email_tokens SET used_at = $2 WHERE user_id = $1 AND purpose = 'graduate' AND used_at IS NULL",
+				user, s.Now()); err != nil {
+				return mutation.Record{}, err
+			}
+			if err := s.Notify.Withdraw(ctx, tx, graduationKey(user)); err != nil {
+				return mutation.Record{}, err
+			}
 		}
 		rec, err := s.end(ctx, tx, household, m, CauseRemoved, actionMemberRemove)
+		if err == nil {
+			err = s.accessNotice(ctx, tx, household, user, CauseRemoved)
+		}
 		removed = err == nil
 		return rec, err
 	})
@@ -724,7 +769,7 @@ func (s *Service) end(ctx context.Context, tx pgx.Tx, household uuid.UUID, m mem
 	if _, err := tx.Exec(ctx, "DELETE FROM memberships WHERE id = $1", m.id); err != nil {
 		return mutation.Record{}, err
 	}
-	withdrawn, err := withdraw(ctx, tx, household, m.user, s.Now())
+	withdrawn, err := s.withdraw(ctx, tx, household, m.user, s.Now())
 	if err != nil {
 		return mutation.Record{}, err
 	}
@@ -844,6 +889,9 @@ func (s *Service) promote(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		}
 		if m, err = touch(ctx, tx, old, access.Owner, grants); err != nil {
+			return mutation.Record{}, err
+		}
+		if err := s.accessNotice(ctx, tx, household, old.user, CauseGrant); err != nil {
 			return mutation.Record{}, err
 		}
 		promoted = true

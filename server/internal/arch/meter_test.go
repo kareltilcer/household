@@ -51,6 +51,12 @@ var meterColumns = map[string][]string{
 	"public.households": {"id"},
 	"public.files":      {"household_id", "module", "variant", "byte_size", "owner_id"},
 	"public.file_jobs":  {"household_id", "run_at"},
+	// Item 15's: what the notification workers find due, and what the expiry sweep finds past its time.
+	"public.notifications":           {"household_id", "status", "run_at", "args_expires_at"},
+	"public.notification_deliveries": {"household_id", "body_expires_at"},
+	"public.idempotency_keys":        {"household_id", "created_at"},
+	"public.sync_mutations":          {"household_id", "created_at"},
+	"public.invitations":             {"household_id", "status", "expires_at", "updated_at"},
 }
 
 // meterViolations returns each privilege the meter role holds in schema, or in every schema that

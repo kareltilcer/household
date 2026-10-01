@@ -629,6 +629,7 @@ func TestALinkInvitation(t *testing.T) {
 func TestDecliningTellsTheInviter(t *testing.T) {
 	s, _ := newHouseholdSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	jana.subscribe()
 	h := jana.create("Tilcerovi")
 	petr := s.a("petr@tilcerovi.cz")
 	i := jana.invite(h.ID, map[string]any{"kind": "email", "email": petr, "role": "member"})
@@ -638,8 +639,10 @@ func TestDecliningTellsTheInviter(t *testing.T) {
 	expect(t, s.unverified("Mallory", s.a("mallory@example.com")).post("/me/invitations/"+link+"/decline", ""),
 		http.StatusNotFound, problem.CodeNotFound)
 	expect(t, petrs.post("/me/invitations/"+link+"/decline", ""), http.StatusNoContent, "")
-	told := s.outbox.To(s.a("jana@tilcerovi.cz"))
-	if len(told) == 0 || told[len(told)-1].Subject != "Petr declined your invitation to Tilcerovi" {
+	// By a push, as someone who means her (D-111), no longer by email.
+	told := s.pushes.To(jana.me().ID)
+	if len(told) != 1 || told[0].Push.Title != "Petr declined your invitation" ||
+		told[0].Push.Link != "/households/"+h.ID.String()+"/invitations" {
 		t.Fatalf("the inviter was told: %+v", told)
 	}
 	expect(t, petrs.post("/me/invitations/"+link+"/decline", ""), http.StatusNotFound, problem.CodeNotFound)

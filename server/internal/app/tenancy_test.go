@@ -75,10 +75,12 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 	}
 	pool := d.Pool(t, db.RoleApp)
 	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
+	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Modules: registry, MaxBodyBytes: 1 << 10, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
+		Households: apptest.Households(t, pool, log, accounts, notifier, apptest.Options{}),
+		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 	}

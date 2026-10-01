@@ -146,6 +146,15 @@ paths:
   /households/{household_id}/storage:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get: { operationId: getStorage, responses: { '200': { description: The picture }, default: { $ref: '#/components/responses/Problem' } } }
+  /push/vapid-key:
+    get: { operationId: getPushVapidKey, responses: { '200': { description: The key }, default: { $ref: '#/components/responses/Problem' } } }
+  /push/subscriptions:
+    post: { operationId: postPushSubscriptions, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, '201': { description: Created }, default: { $ref: '#/components/responses/Problem' } } }
+    delete: { operationId: deletePushSubscriptions, parameters: [{ name: endpoint, in: query, required: true, schema: { type: string } }], responses: { '204': { description: Removed }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/notification-preferences:
+    parameters: [{ name: household_id, in: query, required: false, schema: { $ref: '#/components/schemas/Uuid' } }]
+    get: { operationId: getMeNotificationPreferences, responses: { '200': { description: Preferences }, default: { $ref: '#/components/responses/Problem' } } }
+    patch: { operationId: patchMeNotificationPreferences, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
   /me/invitations:
     get: { operationId: getMeInvitations, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
   /me/invitations/{token}:

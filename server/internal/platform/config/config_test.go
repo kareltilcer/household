@@ -10,11 +10,13 @@ import (
 	"encoding/pem"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kareltilcer/household/server/internal/platform/config"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 )
 
 func env(vars map[string]string) config.Getenv {
@@ -80,7 +82,7 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 	}))
 	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachCorpusVar,
 		config.TokenKeysVar, config.MFAKeysVar, config.PowerSyncURLVar, config.MeterDatabaseURLVar, config.ObjectStoreURLVar,
-		config.ConverterURLVar} {
+		config.ConverterURLVar, config.NotifyKeysVar, config.VAPIDKeyVar} {
 		if err == nil || !strings.Contains(err.Error(), key) {
 			t.Errorf("serving in production without %s: %v", key, err)
 		}
@@ -112,6 +114,8 @@ func serving(vars map[string]string) map[string]string {
 		config.MeterDatabaseURLVar: dsn("household_meter", "m3ter", "db.internal:5432", "household"),
 		config.ObjectStoreURLVar:   "https://AKIA:" + "s3cret" + "@objects.household.example/household?region=eu-central-1",
 		config.ConverterURLVar:     "http://converter:3100",
+		config.NotifyKeysVar:       base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{4}, 32)),
+		config.VAPIDKeyVar:         base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{5}, 32)),
 	} {
 		if _, ok := vars[key]; !ok {
 			vars[key] = value
@@ -515,5 +519,65 @@ func TestProvidersAreConfiguredWhole(t *testing.T) {
 		if _, err := config.Load(config.Serve, env(vars)); err == nil {
 			t.Errorf("%s: loaded", name)
 		}
+	}
+}
+
+// In development the notification transport seals and signs with published keys, and reaches Expo's
+// own push service; elsewhere each key is named, a published one is refused, a VAPID key that is no
+// P-256 private key is refused without being quoted, and Expo is reached over https.
+func TestTheNotificationSettings(t *testing.T) {
+	c, err := config.Load(config.Serve, env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.NotifyKeys == nil || c.VAPIDKey == "" || c.ExpoPushURL != notify.DefaultExpoURL || c.ExpoAccessToken != "" || len(c.PushHosts) != 0 {
+		t.Fatalf("development: %+v", c)
+	}
+	if _, err := notify.VAPIDPublicKey(c.VAPIDKey); err != nil {
+		t.Fatalf("the development VAPID key: %v", err)
+	}
+
+	dev, err := config.Load(config.Serve, env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, key, value, want string
+	}{
+		{"the published notify key", config.NotifyKeysVar, base64.StdEncoding.EncodeToString([]byte("household development notify key")), "published"},
+		{"the published VAPID key", config.VAPIDKeyVar, dev.VAPIDKey, "published"},
+		{"a VAPID key of 31 bytes", config.VAPIDKeyVar, base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{5}, 31)), "32 bytes"},
+		{"a VAPID key past the curve's order", config.VAPIDKeyVar, base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0xff}, 32)), "P-256"},
+		{"Expo over http", config.ExpoPushURLVar, "http://exp.host/--/api/v2/push", "https"},
+		{"a push host with a scheme", config.PushHostsVar, "https://push.example", "not a host"},
+		// A host whose every subdomain is sent to: a top-level domain, or an address, is anyone's.
+		{"a top-level domain as a push host", config.PushHostsVar, "net", "not a host"},
+		{"an address as a push host", config.PushHostsVar, "10.0.0.5", "not a host"},
+	} {
+		_, err := config.Load(config.Serve, env(serving(map[string]string{
+			config.EnvVar:         "production",
+			config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
+			tc.key:                tc.value,
+		})))
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v; want an error saying %q", tc.name, err, tc.want)
+			continue
+		}
+		if tc.key == config.VAPIDKeyVar && strings.Contains(err.Error(), tc.value) {
+			t.Errorf("%s: the error quotes the key: %v", tc.name, err)
+		}
+	}
+
+	c, err = config.Load(config.Serve, env(serving(map[string]string{
+		config.EnvVar:             "production",
+		config.DatabaseURLVar:     dsn("household_app", "s3cret", "db.internal:5432", "household"),
+		config.PushHostsVar:       " Push.Example , ,other.example.",
+		config.ExpoAccessTokenVar: "expo-token",
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(c.PushHosts, []string{"push.example", "other.example"}) || c.ExpoAccessToken != "expo-token" {
+		t.Errorf("production: hosts %v, token %q", c.PushHosts, c.ExpoAccessToken)
 	}
 }

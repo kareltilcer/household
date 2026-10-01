@@ -786,8 +786,9 @@ paths:
       operationId: getPushVapidKey
       tags: [platform-services]
       summary: The Web Push VAPID public key
+      description: 'The public half of the key every Web Push the server sends is signed with (RFC 8292): a browser subscribes with it as its `applicationServerKey`.'
       responses:
-        '200': { description: The key, content: { application/json: { schema: { type: object, properties: { key: { type: string } } } } } }
+        '200': { description: The key, content: { application/json: { schema: { type: object, required: [key], properties: { key: { type: string, description: 'An uncompressed P-256 point in base64url.' } } } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -796,7 +797,22 @@ paths:
       operationId: postPushSubscriptions
       tags: [platform-services]
       summary: Register a push subscription or device token
-      description: Upserts on the endpoint or token. One row per endpoint; a user may have several devices.
+      description: |
+        Upserts on the endpoint or token. A browser's Web Push subscription (`web_push`) is registered
+        from its web session, and reaches its user while that session lives: signing out, or being
+        signed out everywhere, ends it. One subscription per endpoint, so a browser another user
+        subscribed moves to the caller, and one per web session, so the one a session registers
+        replaces the one it registered before. Its endpoint must be at a push service the server sends
+        to, and its `keys` are the browser's own. A phone's or tablet's Expo push token (`expo`) is
+        registered from the device's own sign-in, and reaches it while that sign-in lives; `device_id`,
+        when given, must be that device. A token is the phone's for the app: registering it clears it
+        from any other installation that held it, while the profiles signed in on one installation, a
+        shared tablet's, each keep it. `201` when the subscription or the token is new, `200` when it
+        was registered already. Registering again ends what failures had marked: a target marked
+        stale after five failures in a row is tried again (FR-NT6). A subscription that a push service
+        answers `404` or `410` is deleted, as is a token Expo reports as no longer registered. Either
+        transport from the other kind of sign-in, an endpoint at a push service the server does not
+        know, and keys that are not a browser's are refused `422`.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -811,7 +827,7 @@ paths:
       operationId: deletePushSubscriptions
       tags: [platform-services]
       summary: Remove a push subscription
-      description: Idempotent — `204` even when it was already gone.
+      description: 'Removes the caller''s browser subscription with this endpoint, or the Expo token of their device that it names. Idempotent: `204` even when it was already gone.'
       parameters:
         - { name: endpoint, in: query, required: true, schema: { type: string } }
         - { $ref: '#/components/parameters/IdempotencyKey' }
@@ -979,17 +995,27 @@ paths:
       operationId: getMeNotificationPreferences
       tags: [me]
       summary: Notification categories and quiet hours
-      description: Per household. Omit `household_id` for the account-wide defaults.
+      description: |
+        Per household. Omit `household_id` for the account-wide defaults, which a household has until
+        the caller sets their own there; the built-in defaults, everything on and no quiet hours, stand
+        in for an account that has set none. A household the caller is not a member of is `404`.
       parameters:
         - { name: household_id, in: query, required: false, schema: { $ref: '#/components/schemas/Uuid' } }
       responses:
         '200': { description: Preferences, content: { application/json: { schema: { $ref: '#/components/schemas/NotificationPreferences' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '401': { $ref: '#/components/responses/Unauthorized' }
     patch:
       operationId: patchMeNotificationPreferences
       tags: [me]
       summary: Update notification preferences
+      description: |
+        A JSON merge onto the preferences in force: a member left out is unchanged. With `household_id`,
+        the household's preferences become the caller's own there, starting from the account's the
+        first time, and a later change of the account's no longer reaches them. A household the caller
+        is not a member of is `404`; a category the contract does not name, and quiet hours that are
+        not two different times of day, are refused `422`.
       parameters:
         - { name: household_id, in: query, required: false, schema: { $ref: '#/components/schemas/Uuid' } }
         - { $ref: '#/components/parameters/IdempotencyKey' }
@@ -998,6 +1024,8 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/NotificationPreferencesUpdate' } } }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/NotificationPreferences' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -9150,7 +9178,7 @@ components:
         platform: { type: string, enum: [ios, android] }
         app_version: { type: string }
         last_seen_at: { type: string, format: date-time, description: 'When it last signed in or refreshed its tokens.' }
-        push_enabled: { type: boolean }
+        push_enabled: { type: boolean, description: 'Whether it has registered an Expo push token that has not been marked stale by five failures in a row (FR-NT6).' }
         is_current: { type: boolean, description: 'Whether the request came from this device.' }
 
     NotificationCategory:
@@ -9160,20 +9188,24 @@ components:
 
     NotificationPreferences:
       type: object
+      required: [household_id, enabled, categories, quiet_hours]
       properties:
-        household_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }
-        enabled: { type: boolean }
+        household_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }], description: 'The household they are for, null for the account-wide defaults.' }
+        enabled: { type: boolean, description: 'The master switch: off, no push reaches the member. The email of the fixed set (security, billing, invitations and a removal) arrives whatever it says (FR-NT1).' }
         categories:
           type: object
+          required: [direct, household, reminders, digest]
           properties:
             direct: { type: boolean }
             household: { type: boolean }
             reminders: { type: boolean }
             digest: { type: boolean }
         quiet_hours:
+          description: 'Read on the member''s own clock: their timezone, or the household''s. A window whose `to` is earlier than its `from` runs past midnight. A push due in it waits until it ends, and is never dropped for it.'
           oneOf:
             - { type: 'null' }
             - type: object
+              required: [from, to]
               properties:
                 from: { type: string, pattern: '^\d{2}:\d{2}$' }
                 to: { type: string, pattern: '^\d{2}:\d{2}$' }
@@ -9182,26 +9214,26 @@ components:
       type: object
       properties:
         enabled: { type: boolean }
-        categories: { type: object, additionalProperties: { type: boolean } }
-        quiet_hours: { oneOf: [{ type: 'null' }, { type: object, properties: { from: { type: string }, to: { type: string } } }] }
+        categories: { type: object, additionalProperties: { type: boolean }, description: 'Any of the four categories, each on or off.' }
+        quiet_hours: { oneOf: [{ type: 'null' }, { type: object, required: [from, to], properties: { from: { type: string }, to: { type: string } } }], description: 'Two different times of day as HH:MM, 00:00 to 23:59, or null for none.' }
 
     PushSubscriptionCreate:
       type: object
-      required: [transport]
+      required: [transport, endpoint]
       properties:
         transport: { type: string, enum: [web_push, expo] }
-        endpoint: { type: string, description: 'The Web Push endpoint, or the Expo push token.' }
-        keys: { type: object, properties: { p256dh: { type: string }, auth: { type: string } } }
-        device_id: { $ref: '#/components/schemas/Uuid' }
+        endpoint: { type: string, maxLength: 2048, description: 'The Web Push endpoint, an https URL at a push service, or the Expo push token.' }
+        keys: { type: object, required: [p256dh, auth], properties: { p256dh: { type: string }, auth: { type: string } }, description: 'A Web Push subscription''s keys, base64url, as the browser gives them; required for `web_push`.' }
+        device_id: { $ref: '#/components/schemas/Uuid', description: 'For `expo`: the device the request is signed in on, which is the one registered whether or not it is named.' }
 
     PushSubscription:
       type: object
-      required: [id]
+      required: [id, transport, created_at, last_seen_at]
       properties:
-        id: { $ref: '#/components/schemas/Uuid' }
+        id: { $ref: '#/components/schemas/Uuid', description: 'The subscription''s, or for `expo` the device''s.' }
         transport: { type: string, enum: [web_push, expo] }
-        created_at: { type: string, format: date-time }
-        last_seen_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time, description: 'When the subscription, or the token, was first registered.' }
+        last_seen_at: { type: string, format: date-time, description: 'When the subscription was last registered, or the device last signed in or refreshed its tokens.' }
 
     Consents:
       type: object

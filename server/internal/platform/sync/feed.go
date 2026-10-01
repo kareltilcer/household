@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/kareltilcer/household/server/internal/platform/db"
 )
 
 // Op is what a change does to an entity on a replica.
@@ -114,8 +116,8 @@ func (c Change) Check(e Entity) error {
 }
 
 // feedLock is the namespace of the household feed locks, the first key of the two-key advisory
-// lock whose second is the household's hash: "sync".
-const feedLock int32 = 0x73796e63
+// lock whose second is the household's hash.
+const feedLock = db.FeedLock
 
 // Emit writes changes to household's feed in tx, a transaction of that household, and returns
 // the seq of the last. The caller has checked each against its entity (Check). actor is who

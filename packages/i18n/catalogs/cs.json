@@ -9,6 +9,7 @@
   "admin.household.update": "Změna nastavení domácnosti",
   "admin.invitation.create": "{kind, select, email {Pozvánka pro {email}} other {Odkaz s pozvánkou}}",
   "admin.invitation.decline": "Odmítnutá pozvánka",
+  "admin.invitation.purge": "{kind, select, email {Odstraněná pozvánka pro {email}, měsíc po skončení} other {Odstraněný odkaz s pozvánkou, měsíc po skončení}}",
   "admin.invitation.resend": "Znovu odeslaná pozvánka pro {email}",
   "admin.invitation.revoke": "{kind, select, email {Zrušená pozvánka pro {email}} other {Zrušený odkaz s pozvánkou}}",
   "admin.member.graduate": "Přechod z dětského profilu na člena",
@@ -25,8 +26,8 @@
   "email.identity_linked.subject": "{provider} vás teď může přihlásit do aplikace Household",
   "email.invitation.body": "Dobrý den,\n\n{inviter} vás zve, abyste se připojili k domácnosti {household} v aplikaci Household.{hasMessage, select, yes {\n\nVzkaz:\n\n{message}} other {}}\n\nNa odkazu níže uvidíte, co přesně dostáváte, a můžete se připojit nebo pozvánku odmítnout. Odkaz platí 14 dní.\n\n{link}\n\nPokud {inviter} neznáte, můžete tento e-mail ignorovat. Dokud se nepřipojíte, nic se nestane.",
   "email.invitation.subject": "{inviter} vás zve do domácnosti {household} v aplikaci Household",
-  "email.invitation_declined.body": "Dobrý den,\n\n{invitee} odmítá vaši pozvánku do domácnosti {household} v aplikaci Household. Pozvánka je uzavřená a v domácnosti se nic nezměnilo.\n\nPokud se chcete zeptat znovu, můžete pozvánku znovu odeslat z přehledu členů domácnosti.",
-  "email.invitation_declined.subject": "{invitee} odmítá vaši pozvánku do domácnosti {household}",
+  "email.member_removed.body": "Dobrý den,\n\nVlastník domácnosti {household} vás z ní v aplikaci Household odebral. Nic z ní už neuvidíte a ostatní domácnosti, do kterých patříte, zůstávají beze změny. Co jste v ní vytvořili, zůstává domácnosti.\n\nPokud jde o omyl, požádejte některého z jejích vlastníků, aby vás znovu pozval.",
+  "email.member_removed.subject": "Byli jste odebráni z domácnosti {household} v aplikaci Household",
   "email.mfa_disabled.body": "Dobrý den,\n\nu vašeho účtu v aplikaci Household byl právě vypnut druhý krok přihlášení, kód z ověřovací aplikace. K přihlášení teď stačí jen heslo.\n\nPokud jste to byli vy, není třeba nic dělat. Pokud ne, obnovte si hned teď heslo a pak druhý krok znovu zapněte:\n\n{link}",
   "email.mfa_disabled.subject": "Druhý krok přihlášení k aplikaci Household byl vypnut",
   "email.password_changed.body": "Dobrý den,\n\nheslo k vašemu účtu v aplikaci Household bylo právě změněno.\n\nPokud jste to byli vy, není třeba nic dělat. Pokud ne, obnovte si heslo hned teď:\n\n{link}",
@@ -57,5 +58,11 @@
   "module.shopping.name": "Nákupy",
   "module.tasks.name": "Úkoly",
   "module.utilities.name": "Energie a služby",
-  "module.vehicles.name": "Vozidla"
+  "module.vehicles.name": "Vozidla",
+  "notification.access_changed.body": "Vlastník změnil, co v domácnosti {household} vidíte a můžete dělat. Otevřete ji a podívejte se, co máte teď.",
+  "notification.access_changed.title": "Vaše přístupy v domácnosti {household} se změnily",
+  "notification.child_locked.body": "Deset špatných PINů za sebou zamklo profil {member} v domácnosti {household}. Odemkněte ho nebo nastavte nový PIN v přehledu členů domácnosti.",
+  "notification.child_locked.title": "Profil {member} je zamčený",
+  "notification.invitation_declined.body": "{invitee} se k domácnosti {household} nepřipojí. Pozvánka je uzavřená; znovu ji můžete poslat z přehledu členů domácnosti.",
+  "notification.invitation_declined.title": "{invitee} odmítá vaši pozvánku"
 }

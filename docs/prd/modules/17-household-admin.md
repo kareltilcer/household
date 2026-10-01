@@ -44,8 +44,8 @@ matrix before the person exists, plus an optional starting dashboard layout
 
 **FR-HA5 — Change a member's role or grants.** Takes effect on their next request; lowering a grant
 emits sync retractions immediately. The member is notified when their access changes — **an access
-change a member discovers by finding something missing is a bug**, and telling them is one line.
-**D-78.**
+change a member discovers by finding something missing is a bug**, and telling them is one line. An
+owner who changes their own role or grants is not told of what they just did. **D-78.**
 
 **FR-HA6 — Remove a member**, with a clear statement of what happens to their content
 ([05](../05-privacy-and-compliance.md) §5).

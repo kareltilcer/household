@@ -69,9 +69,26 @@ var allowed = map[string]bool{
 	"updated":  true,
 	"kept":     true,
 
-	// An email that was not sent (internal/platform/identity): the template's key, never the
-	// address or anything rendered into it.
+	// An email that was not sent (internal/platform/identity), or a notification that failed
+	// (internal/platform/notify): the catalog key of its template, never the address or anything
+	// rendered into it.
 	"template": true,
+
+	// A notification's transport (internal/platform/notify): web_push, expo or email; and how many
+	// of Expo's receipts said a device's token was gone, or a push failed on it.
+	"transport": true,
+	"gone":      true,
+	"failed":    true,
+
+	// A scheduled job (internal/platform/scheduler): its registered name, and the instance leading,
+	// a UUID the process drew when it started.
+	"job":      true,
+	"instance": true,
+
+	// A retention of the expiry sweep (internal/platform/expiry): its name in the sweep's table, and
+	// how many rows it deleted.
+	"retention": true,
+	"rows":      true,
 
 	// A mutation the push could not answer (internal/platform/push): the UUID its device drew for
 	// it, which names it in the device's queue and carries none of its fields.

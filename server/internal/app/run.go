@@ -7,7 +7,10 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	netmail "net/mail"
 	"runtime"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,18 +23,22 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/convert"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/device"
+	"github.com/kareltilcer/household/server/internal/platform/expiry"
 	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/files"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
+	"github.com/kareltilcer/household/server/internal/platform/localtime"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/password"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
+	"github.com/kareltilcer/household/server/internal/platform/scheduler"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/storage"
 )
@@ -78,11 +85,19 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 		return err
 	}
 	background := identity.NewBackground(log, 4, 1024, time.Minute)
-	accounts, households, closeAccounts, err := newAccounts(ctx, cfg, log, pool, background, avatars)
+	accounts, households, notifier, closeAccounts, err := newAccounts(ctx, cfg, log, pool, meter, background, avatars)
 	if err != nil {
 		return err
 	}
 	defer closeAccounts()
+	catalog, err := registry.WithPlatform(household.Admin())
+	if err != nil {
+		return err
+	}
+	jobs, err := newScheduler(log, pool, meter, registry, catalog, pipeline, avatars, households, notifier)
+	if err != nil {
+		return err
+	}
 	replicas, err := replica.New(replica.Config{URL: cfg.PowerSyncURL, Keys: cfg.TokenKeys, Logger: log})
 	if err != nil {
 		return err
@@ -99,6 +114,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 		Households:   households,
 		Sync:         Sync{Replica: replicas, PushLimit: ratelimit.NewBuckets(ratelimit.PushPerDevice, nil)},
 		Storage:      &storage.Picture{Log: log},
+		Notify:       notifier,
 	})
 	if err != nil {
 		return err
@@ -109,18 +125,18 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 			return err
 		}
 	}
-	// The files workers run for as long as the API serves, and release the jobs they hold before
-	// the process ends.
+	// The files workers, the notification workers and the scheduler run for as long as the API
+	// serves, and release what they hold before the process ends: the jobs and the notifications
+	// claimed, and the scheduler's lead.
 	working, stopWorking := context.WithCancel(ctx)
 	defer stopWorking()
-	workers := make(chan struct{})
-	go func() {
-		defer close(workers)
-		pipeline.Run(working)
-	}()
+	var workers sync.WaitGroup
+	workers.Go(func() { pipeline.Run(working) })
+	workers.Go(func() { notifier.Run(working) })
+	workers.Go(func() { jobs.Run(working) })
 	defer func() {
 		stopWorking()
-		<-workers
+		workers.Wait()
 	}()
 
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
@@ -174,27 +190,28 @@ func newFiles(ctx context.Context, cfg *config.Config, log *slog.Logger, pool, m
 	})
 }
 
-// newAccounts builds the account surfaces (items 8 and 9) from cfg, and the household surface (item
-// 10), which sends its email as they do, and returns what closes them.
-func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool,
+// newAccounts builds the account surfaces (items 8 and 9) from cfg, the notification transport (item
+// 15), and the household surface (item 10), which sends what it tells people through it, and returns
+// what closes them.
+func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool,
 	background *identity.Background, avatars *avatar.Service,
-) (Accounts, *household.Service, func(), error) {
+) (Accounts, *household.Service, *notify.Service, func(), error) {
 	closeAll := func() {}
 	catalogs, err := i18n.Default()
 	if err != nil {
-		return Accounts{}, nil, closeAll, err
+		return Accounts{}, nil, nil, closeAll, err
 	}
 	// One hash at once per CPU the process may use: GOMAXPROCS follows a container's CPU limit,
 	// where NumCPU counts the host's, each hash holding 64 MiB.
 	hasher, err := password.New(password.Default, runtime.GOMAXPROCS(0))
 	if err != nil {
-		return Accounts{}, nil, closeAll, err
+		return Accounts{}, nil, nil, closeAll, err
 	}
 	var breached func(string) (bool, error)
 	if cfg.BreachCorpus != "" {
 		corpus, err := breach.Open(cfg.BreachCorpus)
 		if err != nil {
-			return Accounts{}, nil, closeAll, err
+			return Accounts{}, nil, nil, closeAll, err
 		}
 		closeAll = func() { _ = corpus.Close() }
 		breached = corpus.Contains
@@ -204,11 +221,15 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 	}
 	sender, err := mail.NewSMTP(cfg.SMTPURL, cfg.MailFrom)
 	if err != nil {
-		return Accounts{}, nil, closeAll, err
+		return Accounts{}, nil, nil, closeAll, err
+	}
+	notifier, err := newNotify(cfg, log, pool, meter, catalogs, sender)
+	if err != nil {
+		return Accounts{}, nil, nil, closeAll, err
 	}
 	origins, err := session.NewOrigins(cfg.AllowedOrigins...)
 	if err != nil {
-		return Accounts{}, nil, closeAll, err
+		return Accounts{}, nil, nil, closeAll, err
 	}
 	sessions := session.NewStore(pool, origins, log, nil)
 	devices := device.NewStore(pool, cfg.TokenKeys, log, nil)
@@ -218,7 +239,7 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 			continue
 		}
 		if providers[name], err = federation.New(name, *p); err != nil {
-			return Accounts{}, nil, closeAll, err
+			return Accounts{}, nil, nil, closeAll, err
 		}
 	}
 	throttles := ratelimit.NewThrottles(pool, nil)
@@ -229,18 +250,81 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 		Devices: devices, MFA: cfg.MFAKeys, Providers: providers, RedirectURIs: cfg.RedirectURIs, Avatars: avatars,
 	})
 	if err != nil {
-		return Accounts{}, nil, closeAll, err
+		return Accounts{}, nil, nil, closeAll, err
 	}
 	households, err := household.New(household.Config{
-		Pool: pool, Log: log, Throttles: throttles, Mail: sender, Catalogs: catalogs, WebURL: cfg.WebURL,
-		Later: background.Run, Accounts: id,
+		Pool: pool, Log: log, Throttles: throttles, Notify: notifier, WebURL: cfg.WebURL, Accounts: id,
 	})
 	if err != nil {
-		return Accounts{}, nil, closeAll, err
+		return Accounts{}, nil, nil, closeAll, err
 	}
 	return Accounts{
 		Identity: id, Sessions: sessions, Devices: devices, Origins: origins, MinClients: cfg.MinClients,
 		UserLimit:      ratelimit.NewBuckets(ratelimit.PerUser, nil),
 		HouseholdLimit: ratelimit.NewBuckets(ratelimit.PerHousehold, nil),
-	}, households, closeAll, nil
+	}, households, notifier, closeAll, nil
+}
+
+// newNotify builds the notification transport (item 15) from cfg: Web Push signed with the VAPID key,
+// as the server's sender address, Expo's push service, and email through sender.
+func newNotify(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool, catalogs *i18n.Catalogs, sender mail.Sender,
+) (*notify.Service, error) {
+	from, err := netmail.ParseAddress(cfg.MailFrom)
+	if err != nil {
+		return nil, err
+	}
+	webPush, err := notify.NewWebPush(cfg.VAPIDKey, from.Address, nil)
+	if err != nil {
+		return nil, err
+	}
+	expo, err := notify.NewExpo(cfg.ExpoPushURL, cfg.ExpoAccessToken, nil)
+	if err != nil {
+		return nil, err
+	}
+	return notify.New(notify.Config{
+		Pool: pool, Meter: meter, Log: log, Catalogs: catalogs, WebURL: cfg.WebURL, Keys: cfg.NotifyKeys,
+		WebPush: webPush, Expo: expo, Receipts: expo, Mail: sender, VAPIDKey: webPush.PublicKey(),
+		PushHosts: slices.Concat(notify.DefaultPushHosts, cfg.PushHosts),
+	})
+}
+
+// The scheduler's jobs' times (PRD 03 §5): the usage sample at 01:00 UTC, the day the sample is the
+// day of (D-109), the sweeps of the objects no row records an hour after it, and the expiry sweep at
+// 03:00 UTC, once they are done.
+const (
+	nightlySample = localtime.Clock(1 * 60)
+	nightlySweeps = localtime.Clock(2 * 60)
+	nightlyExpiry = localtime.Clock(3 * 60)
+)
+
+// newScheduler builds the scheduler of the platform's jobs (PRD 03 §5): nightly, the usage sample
+// (FR-ST2) and then the sweeps of the objects no row records, a household's and the accounts'
+// pictures (item 14), and the expiry sweep; hourly, the expiry of single-use tokens and of the
+// invitations that stopped working a month ago (D-110); and every fifteen minutes, Expo's receipts.
+// Each is a job of its own, so that one that fails is tried again alone, not with the others that ran.
+// catalog is the module registry with admin, which the invitations' deletions are checked against.
+func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog *module.Registry, pipeline *files.Service,
+	avatars *avatar.Service, households *household.Service, notifier *notify.Service,
+) (*scheduler.Scheduler, error) {
+	sampler := &storage.Sampler{Meter: meter, Pool: pool, Modules: registry, Log: log}
+	sweeper, err := expiry.New(expiry.Config{Pool: pool, Meter: meter, Log: log, Invitations: func(ctx context.Context) (int, error) {
+		return households.PurgeInvitations(ctx, meter, catalog)
+	}})
+	if err != nil {
+		return nil, err
+	}
+	return scheduler.New(scheduler.Config{Pool: pool, Log: log},
+		scheduler.Job{Name: "storage.sample", Cadence: scheduler.Daily(nightlySample), Run: func(ctx context.Context) error {
+			_, err := sampler.Sample(ctx)
+			return err
+		}},
+		scheduler.Job{Name: "files.sweep", Cadence: scheduler.Daily(nightlySweeps), Run: pipeline.SweepAll},
+		scheduler.Job{Name: "avatars.sweep", Cadence: scheduler.Daily(nightlySweeps), Run: func(ctx context.Context) error {
+			_, err := avatars.Sweep(ctx, pool)
+			return err
+		}},
+		scheduler.Job{Name: "expiry.sweep", Cadence: scheduler.Daily(nightlyExpiry), Run: sweeper.Sweep},
+		scheduler.Job{Name: "expiry.tokens", Cadence: scheduler.Every(time.Hour), Run: sweeper.Tokens},
+		scheduler.Job{Name: "notify.receipts", Cadence: scheduler.Every(15 * time.Minute), Run: notifier.CheckReceipts},
+	)
 }

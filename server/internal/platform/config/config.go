@@ -25,6 +25,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -38,6 +39,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mfa"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/token"
@@ -108,6 +110,12 @@ const (
 	ConverterURLVar         = "HOUSEHOLD_CONVERTER_URL"
 	UploadDirVar            = "HOUSEHOLD_UPLOAD_DIR"
 	UploadTimeoutVar        = "HOUSEHOLD_UPLOAD_TIMEOUT"
+
+	NotifyKeysVar      = "HOUSEHOLD_NOTIFY_KEYS"
+	VAPIDKeyVar        = "HOUSEHOLD_VAPID_KEY"
+	PushHostsVar       = "HOUSEHOLD_PUSH_HOSTS"
+	ExpoPushURLVar     = "HOUSEHOLD_EXPO_PUSH_URL"
+	ExpoAccessTokenVar = "HOUSEHOLD_EXPO_ACCESS_TOKEN"
 )
 
 // NoProxies is TrustedProxiesVar's value for a server its clients reach directly, with no proxy
@@ -146,6 +154,10 @@ const devObjectStoreSecret = "household-local-only"
 var (
 	devTokenKeys = base64.StdEncoding.EncodeToString([]byte("household development access key"))
 	devMFAKeys   = base64.StdEncoding.EncodeToString([]byte("household development mfa secret"))
+	// The key development seals an email's link with while it waits, and the VAPID key it signs Web
+	// Push with: a P-256 private key, which these 32 bytes are, read as a number below the curve's order.
+	devNotifyKeys = base64.StdEncoding.EncodeToString([]byte("household development notify key"))
+	devVAPIDKey   = base64.RawURLEncoding.EncodeToString([]byte("household development vapid key!"))
 )
 
 // Config is the validated configuration. A connection string a command does not use is
@@ -221,6 +233,17 @@ type Config struct {
 	// temporary one when "", and UploadTimeout how long an upload's body may take to arrive.
 	UploadDir     string
 	UploadTimeout time.Duration
+
+	// NotifyKeys seal the secret an email's link carries while it waits in the notification queue
+	// (internal/platform/notify), the first sealing.
+	NotifyKeys *mfa.Keys
+	// VAPIDKey is the P-256 private key Web Push is signed with, 32 bytes of base64url (RFC 8292).
+	VAPIDKey string
+	// PushHosts are the push services beyond notify.DefaultPushHosts a browser's subscription may name.
+	PushHosts []string
+	// ExpoPushURL is Expo's push service, and ExpoAccessToken the access token its requests carry, ""
+	// for none, when the project does not require one.
+	ExpoPushURL, ExpoAccessToken string
 }
 
 // Getenv looks a variable up, reporting whether it is set.
@@ -287,6 +310,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 		l.sameDatabase(c.DatabaseURL, c.MeterDatabaseURL)
 		l.serving(c, dev)
 		l.files(c, dev)
+		l.notifications(c, dev)
 	case Migrate:
 		c.MigrateDatabaseURL = url(MigrateDatabaseURLVar, devMigrateDatabaseURL, db.RoleMigrate)
 	case Bootstrap:
@@ -463,6 +487,58 @@ func (l *loader) files(c *Config, dev bool) {
 	}
 	c.UploadDir = l.str(UploadDirVar, "")
 	c.UploadTimeout = l.duration(UploadTimeoutVar, 15*time.Minute)
+}
+
+// pushHost is a host HOUSEHOLD_PUSH_HOSTS may name: a DNS name of two labels or more, whose last is no
+// number. A browser's endpoint at it or at any of its subdomains is sent to, so that a top-level
+// domain, or an address, would let a member have the server send to a host of their choosing.
+var pushHost = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$`)
+
+// notifications reads what the notification transport needs (item 15): the keys an email's link is
+// sealed with while it waits, and the VAPID key Web Push is signed with, both secrets an error never
+// quotes, and outside development never the published ones; the push services a browser may name
+// beyond the known ones; and Expo's push service, over https outside development, with its access
+// token when the project requires one.
+func (l *loader) notifications(c *Config, dev bool) {
+	if keys := l.required(NotifyKeysVar, devNotifyKeys, dev); keys != "" {
+		k, err := mfa.ParseKeys(keys)
+		switch {
+		case err != nil:
+			l.fail("%s: %v", NotifyKeysVar, err)
+		case !dev && strings.Contains(keys, strings.TrimRight(devNotifyKeys, "=")):
+			l.fail("%s holds the published development key, which only development may use", NotifyKeysVar)
+		}
+		c.NotifyKeys = k
+	}
+	if key := l.required(VAPIDKeyVar, devVAPIDKey, dev); key != "" {
+		_, err := notify.VAPIDPublicKey(key)
+		switch {
+		case err != nil:
+			l.fail("%s: %v", VAPIDKeyVar, err)
+		case !dev && strings.TrimRight(key, "=") == devVAPIDKey:
+			l.fail("%s holds the published development key, which only development may use", VAPIDKeyVar)
+		}
+		c.VAPIDKey = key
+	}
+	for _, host := range strings.Split(l.str(PushHostsVar, ""), ",") {
+		host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+		switch {
+		case host == "":
+		case !pushHost.MatchString(host):
+			l.fail("%s: %q is not a host name; want a push service's DNS name, of two labels or more", PushHostsVar, host)
+		default:
+			c.PushHosts = append(c.PushHosts, host)
+		}
+	}
+	expo := l.str(ExpoPushURLVar, notify.DefaultExpoURL)
+	if u, err := url.Parse(expo); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
+		u.RawQuery != "" || u.Fragment != "" {
+		l.fail("%s is %s; want Expo's push service's absolute http(s) URL", ExpoPushURLVar, quotedURL(expo))
+	} else if !dev && u.Scheme != "https" {
+		l.fail("%s is %s; outside development Expo is reached over https", ExpoPushURLVar, quotedURL(expo))
+	}
+	c.ExpoPushURL = expo
+	c.ExpoAccessToken = l.str(ExpoAccessTokenVar, "")
 }
 
 // quotedURL is raw as an error about it quotes it: its password replaced, since a setting that refuses

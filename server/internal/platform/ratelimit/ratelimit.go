@@ -111,6 +111,23 @@ func NewThrottles(pool Beginner, now func() time.Time) *Throttles {
 	return &Throttles{pool: pool, now: now}
 }
 
+// Forgotten is how long a throttle's row is kept once its window and its block have both ended
+// (D-113): a day, as long as the longest window any limit counts over. A row counts until its window
+// ends, and one that backed off until it has been quiet for its limit's window after its block, so
+// that a row kept Forgotten past both changes nothing any more.
+const Forgotten = 24 * time.Hour
+
+// Sweep deletes, in tx, the throttles' rows that change nothing any more, and returns how many: they
+// are personal data, kept no longer than they count (PRD 03 §5). The expiry sweep runs it nightly.
+func Sweep(ctx context.Context, tx pgx.Tx) (int64, error) {
+	tag, err := tx.Exec(ctx, `
+		DELETE FROM auth_throttles
+		WHERE window_ends_at <= now() - make_interval(secs => $1)
+		  AND (blocked_until IS NULL OR blocked_until <= now() - make_interval(secs => $1))`,
+		Forgotten.Seconds())
+	return tag.RowsAffected(), err
+}
+
 // key is where l counts subject: the SHA-256 of the two, so that no address is kept in the clear.
 // It is not keyed, so it hides an address only from someone who does not guess it: a row is still
 // personal data.

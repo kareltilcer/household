@@ -25,6 +25,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/session"
@@ -367,9 +368,44 @@ func (s *Service) lockChild(ctx context.Context, household, profile uuid.UUID, s
 		if m, err = touch(ctx, tx, m, m.role, m.grants); err != nil {
 			return mutation.Record{}, err
 		}
+		// The owners are told, since only they can unlock it (A-18).
+		notices, err := lockNotices(ctx, tx, household, m)
+		if err == nil {
+			err = s.Notify.Queue(scoped, tx, notices...)
+		}
+		if err != nil {
+			return mutation.Record{}, err
+		}
 		return childRecord(household, payer, m, actionChildLock), nil
 	})
+	if locked && err == nil {
+		s.Notify.Nudge(ctx, household)
+	}
 	return locked && err == nil, err
+}
+
+// messageChildLocked is the push that tells the owners a child profile locked.
+const messageChildLocked = "notification.child_locked"
+
+// lockNotices are the notices to each of household's owners, read in tx, that m, a child profile's
+// membership, locked: someone who means them, the child asking to be let in.
+func lockNotices(ctx context.Context, tx pgx.Tx, household uuid.UUID, m membership) ([]notify.Notification, error) {
+	rows, err := tx.Query(ctx, "SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'owner' ORDER BY user_id", household)
+	if err != nil {
+		return nil, err
+	}
+	owners, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	out := make([]notify.Notification, 0, len(owners))
+	for _, o := range owners {
+		out = append(out, notify.Notification{
+			To: o, Category: notify.Direct, Message: messageChildLocked, Args: i18n.Args{"member": m.name}, Module: Name,
+			Link: "/households/" + household.String() + "/members/" + m.user.String(), Coalesce: "child_locked:" + m.user.String(),
+		})
+	}
+	return out, nil
 }
 
 // lockPIN locks the PIN of m, a child profile's membership, in tx, and returns the wrong PINs it has
@@ -806,7 +842,7 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	household := scope.HouseholdID()
-	var letter outgoing
+	var letter notify.Notification
 	err = tenant.InTx(ctx, func(tx pgx.Tx) error {
 		m, err := readMembership(ctx, tx, household, user, false)
 		switch {
@@ -824,7 +860,12 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 			WHERE o.id = $1 AND h.id = $2 AND c.id = $3`, scope.UserID(), household, user).Scan(&owner, &name, &locale); err != nil {
 			return err
 		}
-		letter = outgoing{to: req.Email, locale: locale, args: i18n.Args{"owner": owner, "household": name, "member": m.name}}
+		// The link's email replaces the one still waiting for the profile, whose link this one retires.
+		letter = notify.Notification{
+			Address: req.Email, Locale: locale, Category: notify.Direct, Message: string(emailGraduate),
+			Args: i18n.Args{"owner": owner, "household": name, "member": m.name}, Email: true, Route: routeGraduate,
+			Replaces: graduationKey(user),
+		}
 		return nil
 	})
 	if err == nil {
@@ -835,8 +876,27 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, hash := newToken()
-	err = tenant.AccountTx(ctx, s.Pool, scope.UserID(), func(tx pgx.Tx) error {
-		// The profile's account first, as its graduation's confirmation locks it before its links, so
+	letter.Secret = token
+	// The link and its email are written in one transaction, so that the email is sent exactly when
+	// the link exists; in the household's context, where the email waits, and the link's row, which is
+	// the account's, is written as it is anywhere.
+	err = tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
+		// The household first, which every change of a member's role or membership locks, and under it
+		// the sender's ownership and the profile's membership read again: the profile's removal, or the
+		// end of the sender's ownership, that committed since the read above spent the links it found
+		// and withdrew their emails (removeMember, withdraw), and a link written after it would arrive
+		// with its email all the same, to open nothing.
+		if _, err := lockAsOwner(ctx, tx); err != nil {
+			return err
+		}
+		m, err := readMembership(ctx, tx, household, user, false)
+		switch {
+		case err != nil:
+			return err
+		case m.child == nil:
+			return problem.NotFound()
+		}
+		// The profile's account next, as its graduation's confirmation locks it before its links, so
 		// that two links sent at once are written one after the other, and the later retires the
 		// earlier: each statement reads what had committed when it began, and neither sending would
 		// otherwise see the other's link to retire it.
@@ -855,10 +915,12 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 			user, now); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO email_tokens (id, user_id, purpose, token_hash, email, created_at, expires_at, sent_by)
-			VALUES ($1, $2, 'graduate', $3, $4, $5, $6, $7)`, idgen.New(), user, hash, req.Email, now, now.Add(GraduateFor), scope.UserID())
-		return err
+			VALUES ($1, $2, 'graduate', $3, $4, $5, $6, $7)`, idgen.New(), user, hash, req.Email, now, now.Add(GraduateFor), scope.UserID()); err != nil {
+			return err
+		}
+		return s.Notify.Queue(ctx, tx, letter)
 	})
 	if err != nil {
 		// An address an account has keeps its count: its refusal is what the count limits.
@@ -868,8 +930,7 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	letter.args["link"] = s.link(routeGraduate, token)
-	s.email(ctx, letter.to, letter.locale, emailGraduate, letter.args)
+	s.Notify.Nudge(ctx, household)
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -882,7 +943,7 @@ type graduation struct {
 }
 
 // errLinkSpent is the answer to a graduation's link that was used, replaced by a newer one, or
-// withdrawn with its sender's ownership.
+// withdrawn with its sender's ownership or with its profile's removal.
 var errLinkSpent = problem.New(http.StatusGone, problem.CodeTokenAlreadyUsed)
 
 // findGraduation reads the graduation link token opens in tx, locked for it when lock, and refuses one
@@ -919,10 +980,9 @@ func findGraduation(ctx context.Context, tx pgx.Tx, token string, now time.Time,
 // removed, has left or has been made a member since is refused as spent, 410 token_already_used,
 // since whoever holds it would come into the household with the profile's account and everything it
 // made, at an address the owners who stay never chose. The ownership's end spends it, with the
-// sender's invitations (withdraw), so that it stays spent once they are an owner again; and it is
-// checked here too, under the household's lock, which every change of a role takes, for a link its
-// sender was sending when their ownership ended, which the withdrawal did not find: the sending read
-// their role before that.
+// sender's invitations (withdraw), so that it stays spent once they are an owner again, and the
+// sending reads their role under the household's lock, which every change of a role takes, so that
+// none is written after that; it is checked here too, under the same lock.
 func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {

@@ -52,6 +52,9 @@ func env(t *testing.T) config.Getenv {
 		config.BreachCorpusVar:           corpus,
 		config.TokenKeysVar:              base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
 		config.MFAKeysVar:                base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
+		// The notification transport's keys, which serving holds before any notification is sent.
+		config.NotifyKeysVar: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{3}, 32)),
+		config.VAPIDKeyVar:   base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{4}, 32)),
 		// The files pipeline's store and converter, which serving asks nothing of until a file comes
 		// but readiness, which finds no store there and answers degraded.
 		config.ObjectStoreURLVar: "https://tester:" + "not-published" + "@objects.household.test/household",

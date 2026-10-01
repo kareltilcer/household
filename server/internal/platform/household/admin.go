@@ -40,6 +40,7 @@ const (
 	actionInviteResend  = "invitation.resend"
 	actionInviteRevoke  = "invitation.revoke"
 	actionInviteDecline = "invitation.decline"
+	actionInvitePurge   = "invitation.purge"
 	actionModuleEnable  = "module.enable"
 	actionModuleDisable = "module.disable"
 	actionChildCreate   = "child.create"
@@ -56,7 +57,7 @@ func Admin() module.PlatformModule {
 	actions := []string{
 		actionCreate, actionUpdate, actionJoinCode,
 		actionMemberJoin, actionMemberUpdate, actionMemberPromote, actionMemberRemove, actionMemberLeave,
-		actionInviteCreate, actionInviteResend, actionInviteRevoke, actionInviteDecline,
+		actionInviteCreate, actionInviteResend, actionInviteRevoke, actionInviteDecline, actionInvitePurge,
 		actionModuleEnable, actionModuleDisable,
 		actionChildCreate, actionChildPIN, actionChildLock, actionChildUnlock, actionChildAvatar, actionGraduate,
 	}

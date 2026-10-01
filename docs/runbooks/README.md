@@ -10,6 +10,7 @@ someone who is doing it for the first time, under pressure.
 | [Sign-in keys, identity providers and the oldest client served](sign-in-keys-and-providers.md) | Before an environment's first deploy, when a key is rotated or leaks, when a provider is added, and when a release retires an old client |
 | [PowerSync's replication slot](replication-slot.md) | When replication lags, when write-ahead log fills the disk, and after a restore or a failover |
 | [Object storage and the converter](object-storage.md) | Before an environment's first deploy, when uploads fail with `502`, when previews stop appearing, and when storage figures look wrong |
+| [Notifications: keys, push services and the scheduler](notifications.md) | Before an environment's first deploy, when a notification key is rotated or leaks, when a browser's push service is refused, when notifications do not arrive, and when a nightly job did not run |
 
 The gate G-C acceptance protocol, `gate-g-c.md`, follows with plan item 34. Incident response,
 breach notification, restore and failover follow with the resilience drills (item 89), and secret

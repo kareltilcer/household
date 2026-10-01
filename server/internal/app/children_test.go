@@ -710,6 +710,53 @@ func TestGraduationLinksSentAtOnceLeaveOneWorking(t *testing.T) {
 	}
 }
 
+// A graduation's link sent while another owner removes the profile is neither written nor mailed: the
+// sending reads the profile's membership again under the household's lock, which the removal holds,
+// and finds it gone once the removal commits, where it would otherwise write a link and an email that
+// the removal's spending and withdrawal had already passed, to open nothing.
+func TestAGraduationRacingTheProfilesRemovalSendsNothing(t *testing.T) {
+	var during atomic.Pointer[func()]
+	s := newSite(t, apptest.Options{Hooks: household.Hooks{Lost: func(context.Context, pgx.Tx, household.Loss) error {
+		// In the removal's transaction, once the profile's links are spent and its email withdrawn, and
+		// before it commits.
+		if f := during.Swap(nil); f != nil {
+			(*f)()
+		}
+		return nil
+	}}})
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	adam := jana.child(h.ID, "Adam", "1234", nil)
+	petr, _ := s.joined(jana, h.ID, "Petr", s.a("petr@tilcerovi.cz"), "owner", nil)
+	address := s.a("adam@tilcerovi.cz")
+	body := jsonBody(t, map[string]string{"email": address})
+
+	done := make(chan *httptest.ResponseRecorder, 1)
+	race := func() {
+		go func() { done <- petr.post(householdPath(h.ID, "/children/"+adam.UserID.String()+"/graduate"), body) }()
+		// The sending either finishes while the removal is still open, or waits for the household.
+		for deadline := time.Now().Add(10 * time.Second); len(done) == 0 && s.count(`
+			SELECT count(*) FROM pg_stat_activity
+			WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%FROM households WHERE id%'`) < 1; {
+			if time.Now().After(deadline) {
+				t.Error("the sending neither finished nor waited for the household")
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	during.Store(&race)
+	expect(t, jana.delete(householdPath(h.ID, "/members/"+adam.UserID.String())), http.StatusNoContent, "")
+	expect(t, <-done, http.StatusNotFound, problem.CodeNotFound)
+	if sent := s.outbox.To(address); len(sent) != 0 {
+		t.Errorf("mailed a link to a removed profile: %+v", sent)
+	}
+	if n := s.count("SELECT count(*) FROM email_tokens WHERE user_id = $1 AND purpose = 'graduate' AND used_at IS NULL",
+		adam.UserID); n != 0 {
+		t.Errorf("%d links work for a removed profile", n)
+	}
+}
+
 // A child profile is managed by its household's owners (D-17, D-104): it cannot make a household of its
 // own, leave its household, or link a provider that would sign it in past its PIN; and, as item 10
 // has it, it cannot invite or change the household's settings. An owner removes it, which signs it

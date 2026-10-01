@@ -23,6 +23,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/session"
@@ -42,7 +43,8 @@ const (
 // The emails, and the web client's route an invitation's link opens (A-24).
 const (
 	emailInvitation mail.Template = "email.invitation"
-	emailDeclined   mail.Template = "email.invitation_declined"
+	// messageDeclined is the push that tells an inviter their invitation was declined.
+	messageDeclined = "notification.invitation_declined"
 
 	routeInvitation = "invitation"
 )
@@ -234,31 +236,36 @@ func proposed(role access.Role, requested map[string]access.Level, modules []str
 	return grants
 }
 
-// outgoing is an email about an invitation, its own or the notice of its decline: its address, the
-// language it is written in and its arguments, read in the transaction that writes the invitation
-// and sent once it commits.
-type outgoing struct {
-	to, locale string
-	args       i18n.Args
-}
-
-// letter reads what the email of invitation i, whose token is token, needs: the language of the
-// account with its address, else the household's, the inviter's and the household's names, and the
-// message.
-func (s *Service) letter(ctx context.Context, tx pgx.Tx, i invitation, token string) (outgoing, error) {
+// letter queues the email of invitation i, whose token is token, in tx, for the notification
+// transport to send once tx commits (Nudge): in the language of the account with its address, else
+// the household's, with the inviter's and the household's names and the message, and the link that
+// carries the token, which waits sealed. It replaces the invitation's email still waiting, whose link
+// this one's token ends.
+func (s *Service) letter(ctx context.Context, tx pgx.Tx, i invitation, token string) error {
 	var household, locale string
 	if err := tx.QueryRow(ctx, `
 		SELECT h.name, coalesce((SELECT u.locale FROM users u WHERE lower(u.email) = lower($2)), h.locale)
 		FROM households h WHERE h.id = $1`, i.household, *i.email).Scan(&household, &locale); err != nil {
-		return outgoing{}, err
+		return err
 	}
-	args := i18n.Args{"inviter": i.inviterName, "household": household, "link": s.link(routeInvitation, token),
-		"hasMessage": "no", "message": ""}
+	args := i18n.Args{"inviter": i.inviterName, "household": household, "hasMessage": "no", "message": ""}
 	if i.message != nil {
 		args["hasMessage"], args["message"] = "yes", *i.message
 	}
-	return outgoing{to: *i.email, locale: locale, args: args}, nil
+	return s.Notify.Queue(ctx, tx, notify.Notification{
+		Address: *i.email, Locale: locale, Category: notify.Direct, Message: string(emailInvitation), Args: args,
+		Email: true, Route: routeInvitation, Secret: token, Replaces: invitationKey(i.id),
+	})
 }
+
+// invitationKey is the key an invitation's email waits under (notify.Notification.Replaces): sending
+// it again replaces it, and the invitation's end withdraws it.
+func invitationKey(id uuid.UUID) string { return "invitation:" + id.String() }
+
+// graduationKey is the key the email of a child profile's graduation link waits under: a newer link
+// replaces it, and the link spent with its sender's ownership, or with the profile's removal,
+// withdraws it.
+func graduationKey(child uuid.UUID) string { return "graduation:" + child.String() }
 
 // throttle counts an invitation household sends, and refuses one past its twenty a day (PRD 02 §9).
 func (s *Service) throttle(ctx context.Context, household uuid.UUID) error {
@@ -337,10 +344,7 @@ func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.Now()
 	token, hash := newToken()
-	var (
-		i      invitation
-		letter outgoing
-	)
+	var i invitation
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		// Under the household's lock whatever the kind: an invitation is its owner's, and one sent by
 		// an owner whose ownership ended meanwhile would outlive its withdrawal (lockAsOwner).
@@ -396,7 +400,7 @@ func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		}
 		if i.kind == kindEmail {
-			if letter, err = s.letter(ctx, tx, i, token); err != nil {
+			if err := s.letter(ctx, tx, i, token); err != nil {
 				return mutation.Record{}, err
 			}
 		}
@@ -415,9 +419,9 @@ func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 	}
 	body := i.body(now)
 	if i.kind == kindEmail {
-		s.email(ctx, letter.to, letter.locale, emailInvitation, letter.args)
+		s.Notify.Nudge(ctx, household)
 	} else {
-		link := s.link(routeInvitation, token)
+		link := notify.Link(s.WebURL, routeInvitation, token)
 		body.URL = &link
 		idempotency.Unstorable(ctx)
 	}
@@ -524,6 +528,10 @@ func (s *Service) revokeInvitation(w http.ResponseWriter, r *http.Request) {
 		if i, err = setStatus(ctx, tx, i, statusRevoked); err != nil {
 			return mutation.Record{}, err
 		}
+		// Its email, if it still waits for the mail server, invites no one any more.
+		if err := s.Notify.Withdraw(ctx, tx, invitationKey(i.id)); err != nil {
+			return mutation.Record{}, err
+		}
 		return mutation.Record{
 			Event: audit.Event{
 				Module: Name, Action: actionInviteRevoke, EntityType: entityInvitation, EntityID: i.id,
@@ -558,18 +566,30 @@ func setStatus(ctx context.Context, tx pgx.Tx, i invitation, status string) (inv
 // The graduation links they sent for the household's child profiles are spent with them (D-104), so
 // that none works again once they are an owner again: its holder would come into the household with
 // the profile's account and everything it made. A link is no row of the household's, and changes
-// nothing its replicas hold. One whose sending read their role before this withdrawal committed is
-// written after it, and is refused at its confirmation instead, which reads its sender's role under
-// the household's lock (confirmGraduation).
-func withdraw(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, now time.Time) ([]sync.Change, error) {
-	if _, err := tx.Exec(ctx, `
+// nothing its replicas hold. A sending reads its sender's role again under the household's lock, which
+// this withdrawal's change of role holds, so that none is written after it (graduate); the
+// confirmation reads it there too (confirmGraduation).
+//
+// The emails of both that still wait for the mail server are withdrawn with them.
+func (s *Service) withdraw(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, now time.Time) ([]sync.Change, error) {
+	rows, err := tx.Query(ctx, `
 		UPDATE email_tokens SET used_at = $3
 		WHERE purpose = 'graduate' AND used_at IS NULL AND sent_by = $2
-		  AND user_id IN (SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'child')`,
-		household, user, now); err != nil {
+		  AND user_id IN (SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'child')
+		RETURNING user_id`,
+		household, user, now)
+	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `
+	spent, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(spent))
+	for _, child := range spent {
+		keys = append(keys, graduationKey(child))
+	}
+	rows, err = tx.Query(ctx, `
 		WITH i AS (
 		  UPDATE invitations SET status = 'revoked'
 		  WHERE household_id = $1 AND invited_by = $2 AND status = 'pending' AND expires_at > $3
@@ -581,11 +601,20 @@ func withdraw(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, now tim
 		return nil, err
 	}
 	withdrawn, err := pgx.CollectRows(rows, scanInvitation)
+	if err != nil {
+		return nil, err
+	}
 	changes := make([]sync.Change, 0, len(withdrawn))
 	for _, i := range withdrawn {
 		changes = append(changes, i.change())
+		if i.kind == kindEmail {
+			keys = append(keys, invitationKey(i.id))
+		}
 	}
-	return changes, err
+	if err := s.Notify.Withdraw(ctx, tx, keys...); err != nil {
+		return nil, err
+	}
+	return changes, nil
 }
 
 // resendInvitation sends an email invitation again, an owner's to do once their own address is
@@ -619,7 +648,6 @@ func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.Now()
 	token, hash := newToken()
-	var letter outgoing
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		if _, err := lockAsOwner(ctx, tx); err != nil {
 			return mutation.Record{}, err
@@ -656,7 +684,7 @@ func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return mutation.Record{}, err
 		}
-		if letter, err = s.letter(ctx, tx, i, token); err != nil {
+		if err := s.letter(ctx, tx, i, token); err != nil {
 			return mutation.Record{}, err
 		}
 		return mutation.Record{
@@ -672,7 +700,7 @@ func (s *Service) resendInvitation(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.email(ctx, letter.to, letter.locale, emailInvitation, letter.args)
+	s.Notify.Nudge(ctx, household)
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -921,6 +949,11 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		}
 		i.status = status
+		if i.kind == kindEmail && status == statusAccepted {
+			if err := s.Notify.Withdraw(scoped, tx, invitationKey(i.id)); err != nil {
+				return mutation.Record{}, err
+			}
+		}
 		return mutation.Record{
 			Event: audit.Event{
 				Module: Name, Action: actionMemberJoin, EntityType: entityMembership, EntityID: m.id,
@@ -959,7 +992,6 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scoped := tenant.Assume(ctx, s.Pool, held.household, user, held.role)
-	var told outgoing
 	_, err = mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
 		// Under the household's lock, which accepting takes too, so that whether the caller is a
 		// member already is read after any acceptance of theirs that was committing meanwhile.
@@ -983,15 +1015,24 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 		if i, err = setStatus(ctx, tx, i, statusDeclined); err != nil {
 			return mutation.Record{}, err
 		}
-		var invitee, household string
-		if err := tx.QueryRow(ctx, `
-			SELECT coalesce(nullif(u.display_name, ''), u.email, ''), h.name, coalesce(inviter.email, ''), inviter.locale
-			FROM users u, households h, users inviter
-			WHERE u.id = $1 AND h.id = $2 AND inviter.id = $3`, user, i.household, i.invitedBy).
-			Scan(&invitee, &household, &told.to, &told.locale); err != nil {
+		if i.kind == kindEmail {
+			if err := s.Notify.Withdraw(scoped, tx, invitationKey(i.id)); err != nil {
+				return mutation.Record{}, err
+			}
+		}
+		// The inviter is told by a push, as someone who means them (D-111): the invitations are admin's,
+		// which an owner who sent one sees.
+		var invitee string
+		if err := tx.QueryRow(ctx, "SELECT coalesce(nullif(display_name, ''), email, '') FROM users WHERE id = $1", user).
+			Scan(&invitee); err != nil {
 			return mutation.Record{}, err
 		}
-		told.args = i18n.Args{"invitee": invitee, "household": household}
+		if err := s.Notify.Queue(scoped, tx, notify.Notification{
+			To: i.invitedBy, Category: notify.Direct, Message: messageDeclined, Args: i18n.Args{"invitee": invitee},
+			Module: Name, Link: "/households/" + i.household.String() + "/invitations",
+		}); err != nil {
+			return mutation.Record{}, err
+		}
 		return mutation.Record{
 			Event: audit.Event{
 				Module: Name, Action: actionInviteDecline, EntityType: entityInvitation, EntityID: i.id,
@@ -1004,10 +1045,6 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if told.to != "" {
-		s.email(ctx, told.to, told.locale, emailDeclined, told.args)
-	} else {
-		s.Log.LogAttrs(ctx, slog.LevelInfo, "a declined invitation's inviter has no address to be told at")
-	}
+	s.Notify.Nudge(ctx, held.household)
 	w.WriteHeader(http.StatusNoContent)
 }

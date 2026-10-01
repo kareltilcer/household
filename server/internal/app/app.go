@@ -26,6 +26,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/push"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/reference"
@@ -77,6 +78,9 @@ type Deps struct {
 	// Storage is the storage picture (item 14). It labels the largest items by Modules when it names
 	// no modules of its own.
 	Storage *storage.Picture
+	// Notify is the notification transport (item 15), whose routes are the caller's own: where their
+	// browsers and devices are reached, and what they want to be told.
+	Notify *notify.Service
 }
 
 // Sync is the sync surfaces (item 13, ADR 0014): the credentials a client's replica connects to
@@ -100,7 +104,8 @@ type Sync struct {
 // the rest of /auth, keeps its Idempotency-Key on the account, except those whose body carries a
 // password (D-97). Beginning a sign-in with a provider is authenticated but needs no caller.
 //
-// The reference reads under /reference answer any authenticated caller, with no household.
+// The reference reads under /reference answer any authenticated caller, with no household, and the
+// caller's own push subscriptions and notification preferences (item 15) are the account's routes.
 //
 // The household surface (item 10) is admin's, the module the platform serves itself, which the
 // module registry the router carries declares beside the modules: a signed-in user's households,
@@ -142,6 +147,9 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	}
 	if d.Storage == nil {
 		return nil, errors.New("app: the router needs the storage picture")
+	}
+	if d.Notify == nil {
+		return nil, errors.New("app: the router needs the notification transport")
 	}
 	// The picture labels the largest items by the modules the router serves, unless it was given
 	// others: without them it would name each by its file, whatever its module calls it.
@@ -211,6 +219,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 				keyed.Use(idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes))
 				a.Identity.AccountRoutes(keyed)
 				keyed.With(catalog).Group(d.Households.AccountRoutes)
+				keyed.Group(d.Notify.AccountRoutes)
 			})
 		})
 		// Leaving keeps its key on the account, found before the membership it ended is looked for,

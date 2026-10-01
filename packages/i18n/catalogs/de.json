@@ -9,6 +9,7 @@
   "admin.household.update": "Haushaltseinstellungen geändert",
   "admin.invitation.create": "{kind, select, email {{email} eingeladen} other {Einladungslink erstellt}}",
   "admin.invitation.decline": "Einladung abgelehnt",
+  "admin.invitation.purge": "{kind, select, email {Einladung an {email} einen Monat nach ihrem Ende entfernt} other {Einladungslink einen Monat nach seinem Ende entfernt}}",
   "admin.invitation.resend": "Einladung an {email} erneut gesendet",
   "admin.invitation.revoke": "{kind, select, email {Einladung an {email} zurückgezogen} other {Einladungslink zurückgezogen}}",
   "admin.member.graduate": "Vom Kinderprofil zum Mitglied geworden",
@@ -25,8 +26,8 @@
   "email.identity_linked.subject": "{provider} kann Sie jetzt bei Household anmelden",
   "email.invitation.body": "Hallo,\n\n{inviter} lädt Sie ein, dem Haushalt {household} bei Household beizutreten.{hasMessage, select, yes {\n\nNachricht:\n\n{message}} other {}}\n\nÜber den Link unten sehen Sie genau, was Sie bekommen, und können beitreten oder ablehnen. Er ist 14 Tage gültig.\n\n{link}\n\nWenn Sie {inviter} nicht kennen, können Sie diese E-Mail ignorieren. Solange Sie nicht beitreten, passiert nichts.",
   "email.invitation.subject": "{inviter} lädt Sie in den Haushalt {household} bei Household ein",
-  "email.invitation_declined.body": "Hallo,\n\n{invitee} hat Ihre Einladung in den Haushalt {household} bei Household abgelehnt. Die Einladung ist geschlossen, und im Haushalt hat sich nichts geändert.\n\nWenn Sie noch einmal fragen möchten, können Sie die Einladung in der Mitgliederliste des Haushalts erneut senden.",
-  "email.invitation_declined.subject": "{invitee} hat Ihre Einladung in den Haushalt {household} abgelehnt",
+  "email.member_removed.body": "Hallo,\n\nEin Eigentümer des Haushalts {household} hat Sie bei Household aus dem Haushalt entfernt. Sie sehen darin nichts mehr, und die anderen Haushalte, zu denen Sie gehören, bleiben, wie sie waren. Was Sie dort erstellt haben, bleibt beim Haushalt.\n\nWenn Sie das für einen Irrtum halten, bitten Sie einen seiner Eigentümer, Sie erneut einzuladen.",
+  "email.member_removed.subject": "Sie wurden aus dem Haushalt {household} bei Household entfernt",
   "email.mfa_disabled.body": "Hallo,\n\nder zweite Schritt für Ihr Household-Konto, der Code aus Ihrer Authenticator-App, wurde soeben ausgeschaltet. Zum Anmelden genügt jetzt Ihr Passwort allein.\n\nWenn Sie das waren, müssen Sie nichts weiter tun. Wenn nicht, setzen Sie Ihr Passwort jetzt zurück und schalten Sie den zweiten Schritt danach wieder ein:\n\n{link}",
   "email.mfa_disabled.subject": "Der zweite Schritt für Ihr Household-Konto wurde ausgeschaltet",
   "email.password_changed.body": "Hallo,\n\ndas Passwort für Ihr Household-Konto wurde soeben geändert.\n\nWenn Sie das waren, müssen Sie nichts weiter tun. Wenn nicht, setzen Sie Ihr Passwort jetzt zurück:\n\n{link}",
@@ -57,5 +58,11 @@
   "module.shopping.name": "Einkaufen",
   "module.tasks.name": "Aufgaben",
   "module.utilities.name": "Energie und Dienste",
-  "module.vehicles.name": "Fahrzeuge"
+  "module.vehicles.name": "Fahrzeuge",
+  "notification.access_changed.body": "Ein Eigentümer hat geändert, was Sie im Haushalt {household} sehen und tun können. Öffnen Sie ihn, um zu sehen, was Sie jetzt haben.",
+  "notification.access_changed.title": "Ihr Zugriff im Haushalt {household} hat sich geändert",
+  "notification.child_locked.body": "Zehn falsche PINs hintereinander haben das Profil von {member} im Haushalt {household} gesperrt. Entsperren Sie es oder legen Sie eine neue PIN fest, in der Mitgliederliste des Haushalts.",
+  "notification.child_locked.title": "Das Profil von {member} ist gesperrt",
+  "notification.invitation_declined.body": "{invitee} tritt dem Haushalt {household} nicht bei. Die Einladung ist geschlossen; Sie können sie in der Mitgliederliste des Haushalts erneut senden.",
+  "notification.invitation_declined.title": "{invitee} hat Ihre Einladung abgelehnt"
 }

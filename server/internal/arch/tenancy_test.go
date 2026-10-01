@@ -114,6 +114,12 @@ var exemptions = map[string]exemption{
 	"public.oauth_states":       {why: "FR-ID2: a sign-in begun with an identity provider"},
 	// Item 14's: a user's picture is their account's, and no household's (D-107).
 	"public.avatars": {why: "PRD 01 §2.4: a user's picture, kept under their account's prefix and metered to no household"},
+	// Item 15's: the platform's jobs, and where a user's browsers and devices are reached and what they
+	// want by default, none of which is a household's.
+	"public.scheduler_jobs":        {why: "PRD 03 §5: the platform's jobs and when each next falls due"},
+	"public.push_subscriptions":    {why: "FR-NT1: a browser's Web Push subscription, its user's while their web session lives"},
+	"public.push_receipts":         {why: "FR-NT6: Expo's tickets for a user's device, awaiting their receipts"},
+	"public.notification_defaults": {why: "FR-NT2: a user's account-wide notification preferences"},
 	// PRD 01 §2.4's global reference data, which the request role only reads (item 7).
 	"public.reference_datasets": {why: "the version of each reference dataset the loader has loaded"},
 	"public.country_profiles":   {why: "PRD 01 §2.4: reference data, the same for every household"},
