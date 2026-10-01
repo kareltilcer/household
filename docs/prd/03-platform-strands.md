@@ -418,7 +418,9 @@ one held until those fifteen minutes have passed.
 **FR-NT6 — Delivery log.** Every attempt recorded with outcome, and every notification dropped,
 or given up, before any attempt with its reason. `404`/`410` from a push service deletes the subscription, and
 Expo's `DeviceNotRegistered`, in a ticket or in its receipt, clears the device's token. Five
-failures in a row mark a subscription or a device stale and stop trying until it registers again. A
+failures in a row mark a subscription or a device stale and stop trying until it registers again: a
+failure its push service lays on it, never one of the service's own (no answer, `429`, a `5xx`, the
+project's credentials refused), which an outage would otherwise turn into every target going stale. A
 push is not retried, since its push service holds it for the device; an email the mail server does
 not take is tried again with backoff, five times in all. Support can read this log — it is metadata,
 not content. What a push said is kept seven days for the household's owners (FR-HA12, §5) and is not
@@ -458,7 +460,7 @@ schedulers to forget one of.
 | Preserved note-body losers | 30 days | [modules/07-notes.md](modules/07-notes.md) FR-NO10 |
 | Generated export archives | 7 days after generation | [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §3 |
 | Diagnostic bundles | 30 days | [02-identity-and-access.md](02-identity-and-access.md) FR-PS1 |
-| Rendered notification bodies in the delivery log | 7 days — the outcome is kept, the body is not | [modules/17-household-admin.md](modules/17-household-admin.md) FR-HA12 |
+| Rendered notification bodies in the delivery log, and the arguments a settled notification was rendered from | 7 days — the outcome is kept, the body is not | [modules/17-household-admin.md](modules/17-household-admin.md) FR-HA12 |
 | Soft-deleted rows past their module's undo window | Per module | Module pages |
 | Web sessions | Once ended, revoked or expired, with the browser subscriptions they registered | **D-113** |
 | `Idempotency-Key` records of account requests | 7 days | [01-architecture.md](01-architecture.md) §6 |

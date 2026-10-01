@@ -283,7 +283,8 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 
 // Withdraw drops, in tx, what still waits in ctx's household under each of keys (Notification.Replaces),
 // once nothing should go: an invitation withdrawn, declined or accepted, a graduation's link spent.
-// Each drop is logged. One a worker is sending at this moment may still arrive, but is not sent again.
+// Each drop is logged. One a worker is sending at this moment may still arrive, and is then logged as
+// sent after its drop, but is not sent again.
 func (s *Service) Withdraw(ctx context.Context, tx pgx.Tx, keys ...string) error {
 	scope := tenant.From(ctx)
 	if scope == nil {
@@ -298,12 +299,15 @@ func (s *Service) Withdraw(ctx context.Context, tx pgx.Tx, keys ...string) error
 }
 
 // withdraw drops what waits in household under key, for reason, erasing its address and its sealed
-// secret and logging each drop. A worker that claimed one settles nothing of it.
+// secret and logging each drop. One a worker has claimed keeps its claim, for the worker, which read
+// all it sends when it claimed it, to settle it as what became of it: sent, when it went, which the log
+// then says after the drop, and otherwise left dropped, never tried again (retry).
 func withdraw(ctx context.Context, tx pgx.Tx, household uuid.UUID, key, reason string) error {
 	rows, err := tx.Query(ctx, `
-		UPDATE notifications SET status = 'dropped', reason = $3, settled_at = now(), claim = NULL, address = NULL, secret = NULL
+		UPDATE notifications SET status = 'dropped', reason = $3, settled_at = now(), address = NULL, secret = NULL,
+		  args_expires_at = now() + make_interval(secs => $4)
 		WHERE household_id = $1 AND replace_key = $2 AND status = 'queued'
-		RETURNING id, user_id, category::text, email`, household, key, reason)
+		RETURNING id, user_id, category::text, email`, household, key, reason, keepBodies.Seconds())
 	if err != nil {
 		return fmt.Errorf("notify: withdraw: %w", err)
 	}
@@ -320,17 +324,6 @@ func withdraw(ctx context.Context, tx pgx.Tx, household uuid.UUID, key, reason s
 			return err
 		}
 	}
-	return nil
-}
-
-// Send queues ns in a transaction of their own, in household's context, as the system, and wakes the
-// workers: what is told after a commit rather than in it, such as an access change (household.Hooks).
-func (s *Service) Send(ctx context.Context, household uuid.UUID, ns ...Notification) error {
-	scoped := s.system(ctx, household)
-	if err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error { return s.Queue(scoped, tx, ns...) }); err != nil {
-		return err
-	}
-	s.Nudge(ctx, household)
 	return nil
 }
 

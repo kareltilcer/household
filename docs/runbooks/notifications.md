@@ -86,6 +86,12 @@ WHERE household_id = $1 ORDER BY sent_at DESC LIMIT 50;
   failed five times in a row; registering it again from the app clears it.
 - `gone`: the push service answered `404` or `410`, or Expo `DeviceNotRegistered`; the subscription is
   deleted, or the device's token cleared, and the app registers again when it next opens.
+- `push_failed`: the push service refused the push for that target (another `4xx`, or another of
+  Expo's errors), which counts towards the five that mark it stale.
+- `push_unavailable`: the push service did not take the push for a reason of its own: no answer, `429`,
+  a `5xx`, or Expo's `InvalidCredentials`, `MismatchSenderId`, `MessageTooBig` or
+  `MessageRateExceeded`. It counts against no target. Many at once are an outage, or the Expo
+  project's credentials; check `HOUSEHOLD_EXPO_ACCESS_TOKEN` and the project's push credentials.
 - `muted`, `category_muted`: the member's own preferences, which win (FR-NT2).
 - `no_grant`, `not_member`, `private`: the member may not see what it is about (FR-NT5).
 - `replaced`, `withdrawn`: an email that waited for the mail server and no longer says what holds: its
@@ -98,7 +104,8 @@ WHERE household_id = $1 ORDER BY sent_at DESC LIMIT 50;
 ## The scheduler
 
 `scheduler_jobs` holds each job's next slot and how its last run ended. The leader holds a PostgreSQL
-advisory lock; `pg_locks` shows it, `locktype = 'advisory'`, on the leader's connection.
+advisory lock; `pg_locks` shows it, `locktype = 'advisory'`, on the leader's connection, which is one
+more than its pool's for as long as it leads.
 
 ```sql
 SELECT name, next_run_at, last_started_at, last_finished_at, last_failed_at FROM scheduler_jobs ORDER BY name;

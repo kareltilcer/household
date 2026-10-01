@@ -122,6 +122,13 @@ var (
 			`UPDATE notification_deliveries SET title = NULL, body = NULL, body_expires_at = NULL
 			 WHERE household_id = $1 AND body_expires_at <= now()`,
 			nil},
+		// And the arguments a settled notification was rendered from, as long: names and an invitation's
+		// message, which would otherwise say what the log no longer does.
+		{"notification arguments",
+			"SELECT DISTINCT household_id FROM notifications WHERE args_expires_at <= now()",
+			`UPDATE notifications SET args = '{}', args_expires_at = NULL
+			 WHERE household_id = $1 AND args_expires_at <= now()`,
+			nil},
 	}
 	// The single-use tokens past their time (PRD 03 §5, "Invitation and token expiry").
 	hourlyAccounts = []account{

@@ -4,9 +4,10 @@
 // Modules register jobs; the platform owns the timing.
 //
 // Every instance of the API runs a scheduler, and one leads: the one holding a PostgreSQL advisory
-// lock, on a connection it keeps for as long as it leads. Only the leader fires jobs, and an instance
-// that stops leading, whose process ended or whose connection the database gave up on, releases the
-// lock with its session, for another to take at its next tick. A job's due time is kept in
+// lock, on a connection it takes out of the pool and keeps for as long as it leads, so that the pool
+// makes another for the requests and the workers in its place. Only the leader fires jobs, and an
+// instance that stops leading, whose process ended or whose connection the database gave up on,
+// releases the lock with its session, for another to take at its next tick. A job's due time is kept in
 // scheduler_jobs, not in the leader's memory, so that a leader taking over fires what the last one
 // left due and nothing it fired already. Each slot is taken by moving its due time past it, in an
 // UPDATE that matches only while the slot is still due: for the moment two instances may both
@@ -97,7 +98,7 @@ type Job struct {
 var jobName = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$`)
 
 // Pool is what the scheduler needs of its database: transactions, as the request role, and a
-// connection of its own to hold the lock on.
+// connection to hold the lock on, which a leader takes out of the pool (pgxpool.Conn.Hijack).
 type Pool interface {
 	tenant.Beginner
 	Acquire(ctx context.Context) (*pgxpool.Conn, error)
@@ -124,8 +125,12 @@ type Scheduler struct {
 	// instance names this scheduler in the log.
 	instance uuid.UUID
 
+	// leading serialises taking, checking and giving up the lead, which talk to the database; mu
+	// guards what the jobs and Leading read, and is never held while the database is waited for.
+	leading sync.Mutex
 	mu      sync.Mutex
-	conn    *pgxpool.Conn
+	// conn is the leader's connection, its own and no longer the pool's, nil while it does not lead.
+	conn    *pgx.Conn
 	running map[string]bool
 	// registered is whether every job was found registered in scheduler_jobs (due).
 	registered bool
@@ -228,8 +233,11 @@ func (s *Scheduler) Leading() bool {
 	return s.conn != nil
 }
 
-// Resign gives up the lead, when this instance holds it.
+// Resign gives up the lead, when this instance holds it: it releases the lock, at once for another
+// instance to take, and closes the connection, whose session's end releases it in any case.
 func (s *Scheduler) Resign(ctx context.Context) {
+	s.leading.Lock()
+	defer s.leading.Unlock()
 	s.mu.Lock()
 	conn := s.conn
 	s.conn = nil
@@ -237,32 +245,35 @@ func (s *Scheduler) Resign(ctx context.Context) {
 	if conn == nil {
 		return
 	}
-	if _, err := conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", lockKey); err != nil {
-		// The session may hold the lock still: ending it releases it.
-		_ = conn.Conn().Close(ctx)
-	}
-	conn.Release()
+	_, _ = conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", lockKey)
+	_ = conn.Close(ctx)
 	s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "scheduler: no longer leading", slog.String("instance", s.instance.String()))
 }
 
 // lead reports whether this instance leads, taking the lead when no instance holds it. A leader whose
 // connection no longer answers has lost its session, and with it the lock: it drops the connection
-// and tries for the lead again.
+// and tries for the lead again. An instance that takes the lead takes the connection it took it on out
+// of the pool, which then counts it no longer: held for as long as the instance leads, it would be one
+// fewer for the requests and the workers.
 func (s *Scheduler) lead(ctx context.Context) bool {
+	s.leading.Lock()
+	defer s.leading.Unlock()
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.conn != nil {
-		if err := s.conn.Ping(ctx); err == nil {
+	conn := s.conn
+	s.mu.Unlock()
+	if conn != nil {
+		if err := conn.Ping(ctx); err == nil {
 			return true
 		}
 		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "scheduler: lost the lead with its connection", slog.String("instance", s.instance.String()))
-		closing, cancel := detached(ctx)
-		_ = s.conn.Conn().Close(closing)
-		cancel()
-		s.conn.Release()
+		s.mu.Lock()
 		s.conn = nil
+		s.mu.Unlock()
+		closing, cancel := detached(ctx)
+		_ = conn.Close(closing)
+		cancel()
 	}
-	conn, err := s.cfg.Pool.Acquire(ctx)
+	pooled, err := s.cfg.Pool.Acquire(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
 			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "scheduler: connect to take the lead", slog.Any("error", err))
@@ -270,11 +281,14 @@ func (s *Scheduler) lead(ctx context.Context) bool {
 		return false
 	}
 	var took bool
-	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", lockKey).Scan(&took); err != nil || !took {
-		conn.Release()
+	if err := pooled.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", lockKey).Scan(&took); err != nil || !took {
+		pooled.Release()
 		return false
 	}
+	conn = pooled.Hijack()
+	s.mu.Lock()
 	s.conn = conn
+	s.mu.Unlock()
 	s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "scheduler: leading", slog.String("instance", s.instance.String()))
 	return true
 }

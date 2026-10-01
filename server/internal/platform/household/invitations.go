@@ -263,7 +263,8 @@ func (s *Service) letter(ctx context.Context, tx pgx.Tx, i invitation, token str
 func invitationKey(id uuid.UUID) string { return "invitation:" + id.String() }
 
 // graduationKey is the key the email of a child profile's graduation link waits under: a newer link
-// replaces it, and the link spent with its sender's ownership withdraws it.
+// replaces it, and the link spent with its sender's ownership, or with the profile's removal,
+// withdraws it.
 func graduationKey(child uuid.UUID) string { return "graduation:" + child.String() }
 
 // throttle counts an invitation household sends, and refuses one past its twenty a day (PRD 02 §9).

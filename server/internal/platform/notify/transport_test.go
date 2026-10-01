@@ -38,7 +38,8 @@ func browserTarget(t *testing.T, endpoint string) notify.Target {
 
 // A Web Push is encrypted to the browser's keys and signed with the VAPID key, which names its
 // public half, with a day to live, the urgency of who it is for and its tag as the topic; a push
-// service's 404 and 410 say the subscription is gone, and any other failure is a failure.
+// service's 404 and 410 say the subscription is gone, another refusal that the push failed there, and
+// a 429, a 5xx, a redirect or no answer at all nothing of the subscription.
 func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 	var (
 		mu     sync.Mutex
@@ -80,8 +81,10 @@ func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 	mu.Unlock()
 
 	for code, want := range map[int]notify.Status{
-		http.StatusNotFound: notify.Gone, http.StatusGone: notify.Gone, http.StatusTooManyRequests: notify.Failed,
-		http.StatusInternalServerError: notify.Failed, http.StatusMovedPermanently: notify.Failed,
+		http.StatusNotFound: notify.Gone, http.StatusGone: notify.Gone, http.StatusBadRequest: notify.Failed,
+		http.StatusForbidden: notify.Failed, http.StatusTooManyRequests: notify.Unavailable,
+		http.StatusInternalServerError: notify.Unavailable, http.StatusServiceUnavailable: notify.Unavailable,
+		http.StatusMovedPermanently: notify.Unavailable,
 	} {
 		mu.Lock()
 		status = code
@@ -90,11 +93,16 @@ func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 			t.Errorf("a %d: %v; want %v", code, o.Status, want)
 		}
 	}
+	service.Close()
+	if o := push.Push(t.Context(), target, m); o.Status != notify.Unavailable {
+		t.Errorf("a push service that does not answer: %v", o.Status)
+	}
 }
 
 // An Expo push is the device's token, what it says and where it leads, with the access token the
-// project requires; Expo's ticket is kept for its receipt, its DeviceNotRegistered is a gone token,
-// and its receipts are read for the tickets it has them for.
+// project requires; Expo's ticket is kept for its receipt, its DeviceNotRegistered is a gone token, an
+// error of the project's or of Expo's own says nothing of the token, and its receipts are read for the
+// tickets it has them for.
 func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 	var (
 		mu      sync.Mutex
@@ -120,7 +128,8 @@ func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 			_ = json.NewDecoder(r.Body).Decode(&ids)
 			receipt = ids.IDs
 			_, _ = io.WriteString(w, `{"data": {"a": {"status": "ok"}, "b": {"status": "error", "details": {"error": "DeviceNotRegistered"}},
-				"c": {"status": "error", "message": "MessageRateExceeded", "details": {"error": "MessageRateExceeded"}}}}`)
+				"c": {"status": "error", "message": "MessageRateExceeded", "details": {"error": "MessageRateExceeded"}},
+				"e": {"status": "error", "message": "?", "details": {"error": "SomethingOfTheDevices"}}}}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -147,18 +156,25 @@ func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 	if o := expo.Push(t.Context(), target, notify.Push{}); o.Status != notify.Gone {
 		t.Fatalf("DeviceNotRegistered: %+v", o)
 	}
-	mu.Lock()
-	answer = `{"errors": [{"code": "INTERNAL"}]}`
-	mu.Unlock()
-	if o := expo.Push(t.Context(), target, notify.Push{}); o.Status != notify.Failed {
-		t.Fatalf("no ticket: %+v", o)
+	for body, want := range map[string]notify.Status{
+		`{"errors": [{"code": "INTERNAL"}]}`: notify.Unavailable,
+		`{"data": [{"status": "error", "message": "?", "details": {"error": "InvalidCredentials"}}]}`:    notify.Unavailable,
+		`{"data": [{"status": "error", "message": "?", "details": {"error": "SomethingOfTheDevices"}}]}`: notify.Failed,
+	} {
+		mu.Lock()
+		answer = body
+		mu.Unlock()
+		if o := expo.Push(t.Context(), target, notify.Push{}); o.Status != want {
+			t.Errorf("%s: %+v; want %v", body, o, want)
+		}
 	}
 
-	got, err := expo.Receipts(t.Context(), []string{"a", "b", "c", "d"})
+	got, err := expo.Receipts(t.Context(), []string{"a", "b", "c", "d", "e"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 3 || got["a"] != notify.Accepted || got["b"] != notify.Gone || got["c"] != notify.Failed || len(receipt) != 4 {
+	if len(got) != 4 || got["a"] != notify.Accepted || got["b"] != notify.Gone || got["c"] != notify.Unavailable ||
+		got["e"] != notify.Failed || len(receipt) != 5 {
 		t.Fatalf("receipts: %v for %v", got, receipt)
 	}
 }

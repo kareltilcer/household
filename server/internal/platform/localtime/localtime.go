@@ -8,6 +8,8 @@ package localtime
 
 import (
 	"fmt"
+	"slices"
+	"sync"
 	"time"
 	_ "time/tzdata" // A member's or a household's timezone is read from the zones the binary carries.
 )
@@ -46,8 +48,14 @@ func Of(t time.Time) Clock { return Clock(t.Hour()*60 + t.Minute()) }
 // in an hour the clocks repeat, and, for a time they skip, the instant they would read it had they
 // not, which their reading puts after the gap.
 func At(year int, month time.Month, day int, c Clock, loc *time.Location) time.Time {
+	return readings(year, month, day, c, loc)[0]
+}
+
+// readings returns the instants the wall clocks of loc read c on the day year-month-day, earliest
+// first: one, or two in an hour the clocks repeat; for a time they skip, the one At gives.
+func readings(year int, month time.Month, day int, c Clock, loc *time.Location) []time.Time {
 	wall := time.Date(year, month, day, int(c)/60, int(c)%60, 0, 0, time.UTC)
-	var first time.Time
+	var found []time.Time
 	// The offsets in force a day and a half either side of the time, and at it, are every offset
 	// the location has that day, however its transitions fall.
 	for _, probe := range []time.Duration{-36 * time.Hour, 0, 36 * time.Hour} {
@@ -55,21 +63,23 @@ func At(year int, month time.Month, day int, c Clock, loc *time.Location) time.T
 		t := wall.Add(-time.Duration(offset) * time.Second)
 		local := t.In(loc)
 		if local.Year() == year && local.Month() == month && local.Day() == day && Of(local) == c &&
-			(first.IsZero() || t.Before(first)) {
-			first = t
+			!slices.ContainsFunc(found, t.Equal) {
+			found = append(found, t)
 		}
 	}
-	if !first.IsZero() {
-		return first
+	if len(found) == 0 {
+		// Skipped: read on the offset before the gap, the instant lands as far after it as the time
+		// was into it.
+		_, before := wall.Add(-36 * time.Hour).In(loc).Zone()
+		return []time.Time{wall.Add(-time.Duration(before) * time.Second)}
 	}
-	// Skipped: read on the offset before the gap, the instant lands as far after it as the time
-	// was into it.
-	_, before := wall.Add(-36 * time.Hour).In(loc).Zone()
-	return wall.Add(-time.Duration(before) * time.Second)
+	slices.SortFunc(found, time.Time.Compare)
+	return found
 }
 
-// Next returns the first instant after now at which the wall clocks of loc read c: today's, when it
-// is still ahead, or tomorrow's.
+// Next returns the first instant after now at which the wall clocks of loc read c, as At reads it:
+// today's, when it is still ahead, or tomorrow's. A time the clocks repeat is the first of its two
+// readings, so that a daily slot comes once on the day they go back.
 func Next(now time.Time, c Clock, loc *time.Location) time.Time {
 	local := now.In(loc)
 	for i := range 3 {
@@ -97,14 +107,32 @@ func (w Window) Contains(c Clock) bool {
 	return c >= w.From || c < w.To
 }
 
-// End returns when w ends, read on loc's clocks, for now within it: its To, today's or tomorrow's,
-// whichever comes next. It returns false when now is not within w.
+// End returns when w ends, read on loc's clocks, for now within it: the first instant after now at
+// which they read its To, today or tomorrow. In an hour the clocks repeat, that is the reading of the
+// pass now is in: a window ending at 02:30 on the night the clocks go back from 03:00 to 02:00 ends at
+// the second 02:30 for a now at the second 02:10, not a day later. It returns false when now is not
+// within w.
 func (w Window) End(now time.Time, loc *time.Location) (time.Time, bool) {
-	if !w.Contains(Of(now.In(loc))) {
+	local := now.In(loc)
+	if !w.Contains(Of(local)) {
 		return time.Time{}, false
 	}
-	return Next(now, w.To, loc), true
+	for i := range 3 {
+		day := local.AddDate(0, 0, i)
+		for _, t := range readings(day.Year(), day.Month(), day.Day(), w.To, loc) {
+			if t.After(now) {
+				return t, true
+			}
+		}
+	}
+	// Unreachable, as for Next.
+	return now.Add(24 * time.Hour), true
 }
+
+// zones are the locations Zone has loaded, by name: time.LoadLocation reads a zone's rules again on
+// every call, and the notification workers ask for the same few for every push quiet hours may hold.
+// Only the zones the binary knows are kept, a few hundred at most.
+var zones sync.Map
 
 // Zone returns the location the first of names that is an IANA timezone the binary knows names, or
 // UTC when none is: the member's own timezone, then their household's. Local, the server's own, is
@@ -114,7 +142,11 @@ func Zone(names ...string) *time.Location {
 		if name == "" || name == "Local" {
 			continue
 		}
+		if loc, ok := zones.Load(name); ok {
+			return loc.(*time.Location)
+		}
 		if loc, err := time.LoadLocation(name); err == nil {
+			zones.Store(name, loc)
 			return loc
 		}
 	}

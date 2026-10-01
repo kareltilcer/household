@@ -37,12 +37,15 @@ const (
 	// turn is how long a worker delivers one household's notifications before letting the others found
 	// due with it take their turn.
 	turn = 30 * time.Second
-	// keepBodies is how long the delivery log keeps what it sent (PRD 03 §5, FR-HA12).
+	// keepBodies is how long the delivery log keeps what it sent, and a settled notification the
+	// arguments it was rendered from (PRD 03 §5, FR-HA12).
 	keepBodies = 7 * 24 * time.Hour
 	// stale is how many failures in a row mark a target stale (FR-NT6).
 	stale = 5
 	// holdAtLeast is the least a notification is held for its recipient's quiet hours (holdUntil).
 	holdAtLeast = time.Minute
+	// pushAtOnce is how many of a recipient's targets are pushed to at once (pushAll).
+	pushAtOnce = 8
 	// settleWithin bounds what a worker writes once a delivery is decided, which it writes past its
 	// context's end (detached), so that a shutdown neither waits on a database that does not answer
 	// nor leaves what was sent claimed, to be sent again once its lease has passed.
@@ -63,8 +66,11 @@ const (
 	reasonNoAddress     = "no_address"
 	reasonGone          = "gone"
 	reasonPushFailed    = "push_failed"
-	reasonEmailFailed   = "email_failed"
-	reasonGaveUp        = "gave_up"
+	// reasonPushUnavailable is a push its push service did not take for a reason of its own, which says
+	// nothing of the target (Unavailable).
+	reasonPushUnavailable = "push_unavailable"
+	reasonEmailFailed     = "email_failed"
+	reasonGaveUp          = "gave_up"
 	// reasonReplaced and reasonWithdrawn drop what waits under a key (Notification.Replaces): a newer
 	// one replaced it, or nothing should go any more (Withdraw).
 	reasonReplaced  = "replaced"
@@ -112,8 +118,14 @@ const (
 	Accepted Status = iota
 	// Gone is a target that no longer exists: a 404 or a 410, or Expo's DeviceNotRegistered.
 	Gone
-	// Failed is any other failure.
+	// Failed is a push its push service refused for the target: it counts towards the run of failures
+	// that marks the target stale (FR-NT6).
 	Failed
+	// Unavailable is a push its push service did not take for a reason of its own, or never answered:
+	// it was down or throttled the server, the way to it failed, or it refused the project's own
+	// credentials. It counts against no target, since it would fail a push to any, and counted, an
+	// outage would mark every target it reached stale until each registered again.
+	Unavailable
 )
 
 // Outcome is how an attempt at a target went.
@@ -523,13 +535,9 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 		// target's, and no attempt.
 		stopped bool
 	)
-	for _, t := range r.targets {
-		pusher := s.cfg.WebPush
-		if t.Transport == transportExpo {
-			pusher = s.cfg.Expo
-		}
-		o := pusher.Push(ctx, t, p)
-		if o.Status == Failed && ctx.Err() != nil {
+	for i, o := range s.pushAll(ctx, r.targets, p) {
+		t := r.targets[i]
+		if (o.Status == Failed || o.Status == Unavailable) && ctx.Err() != nil {
 			stopped = true
 			continue
 		}
@@ -541,6 +549,8 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 			a.status, a.reason = "failed", reasonGone
 		case Failed:
 			a.status, a.reason, allGone = "failed", reasonPushFailed, false
+		case Unavailable:
+			a.status, a.reason, allGone = "failed", reasonPushUnavailable, false
 		}
 		attempts = append(attempts, a)
 		healths = append(healths, func(ctx context.Context, tx pgx.Tx) error { return recordHealth(ctx, tx, t, o) })
@@ -556,6 +566,45 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 	default:
 		s.settle(ctx, q, "failed", reasonPushFailed, attempts, healths)
 	}
+}
+
+// pushAll pushes p to each of targets, pushAtOnce at a time, and returns how each went, in targets'
+// order: a push service slow to answer, which may take its client's whole timeout, then holds up none
+// of the others, nor the household's turn. A push that panics is raised again here once every push has
+// ended, for deliver to recover as it would one made in its own goroutine.
+func (s *Service) pushAll(ctx context.Context, targets []Target, p Push) []Outcome {
+	outcomes := make([]Outcome, len(targets))
+	slots := make(chan struct{}, pushAtOnce)
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		panicked any
+	)
+	for i, t := range targets {
+		pusher := s.cfg.WebPush
+		if t.Transport == transportExpo {
+			pusher = s.cfg.Expo
+		}
+		slots <- struct{}{}
+		wg.Go(func() {
+			defer func() {
+				<-slots
+				if v := recover(); v != nil {
+					mu.Lock()
+					if panicked == nil {
+						panicked = v
+					}
+					mu.Unlock()
+				}
+			}()
+			outcomes[i] = pusher.Push(ctx, t, p)
+		})
+	}
+	wg.Wait()
+	if panicked != nil {
+		panic(panicked)
+	}
+	return outcomes
 }
 
 // pushTag is the tag of household's pushes under the coalescing key key: a push service holds one
@@ -631,15 +680,17 @@ type attempt struct {
 	title, body *string
 }
 
-// health records what an attempt says of its target, in the transaction that settles it.
+// health records what an attempt says of its target, in the transaction that settles it, under a
+// savepoint of its own (settle).
 type health func(ctx context.Context, tx pgx.Tx) error
 
 // recordHealth records what o says of t (FR-NT6): a target that is gone is deleted, a failure counts
-// towards the run of them that marks it stale, an accepted push ends the run, and an Expo ticket waits
-// for its receipt.
+// towards the run of them that marks it stale, an accepted push ends the run, an Expo ticket waits
+// for its receipt, and a push service unavailable says nothing of it.
 func recordHealth(ctx context.Context, tx pgx.Tx, t Target, o Outcome) error {
 	var err error
 	switch {
+	case o.Status == Unavailable:
 	case t.Transport == transportWebPush && o.Status == Gone:
 		_, err = tx.Exec(ctx, "DELETE FROM push_subscriptions WHERE id = $1 AND endpoint = $2", t.ID, t.Endpoint)
 	case t.Transport == transportWebPush && o.Status == Failed:
@@ -708,12 +759,14 @@ func (s *Service) putBack(ctx context.Context, q queued) {
 // dropped (FR-NT2), and holding it is no failed attempt. It waits a minute at least, by the database's
 // clock, which decides what is due: were the instance's clock behind it, a hold ending before the
 // database's now would be claimed again at once, and held again, for as long as the two disagreed.
+// One withdrawn while it was claimed stays dropped, for the reason it was (withdraw).
 func (s *Service) holdUntil(ctx context.Context, q queued, until time.Time) {
 	ctx, cancel := detached(ctx)
 	defer cancel()
 	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
-			UPDATE notifications SET run_at = greatest($4, now() + make_interval(secs => $6)), reason = $5, attempts = 0, claim = NULL
+			UPDATE notifications SET run_at = greatest($4, now() + make_interval(secs => $6)),
+			  reason = CASE WHEN status = 'queued' THEN $5 ELSE reason END, attempts = 0, claim = NULL
 			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, until, reasonQuietHours, holdAtLeast.Seconds())
 		return err
 	})
@@ -723,7 +776,8 @@ func (s *Service) holdUntil(ctx context.Context, q queued, until time.Time) {
 }
 
 // retry puts q back for its next attempt after its backoff, recording a, the attempt that failed,
-// when there was one; q is failed once it has had maxAttempts.
+// when there was one; q is failed once it has had maxAttempts. One withdrawn while it was claimed is
+// not tried again: it stays dropped, for the reason it was (withdraw), and a is logged after its drop.
 func (s *Service) retry(ctx context.Context, q queued, a *attempt) {
 	var attempts []attempt
 	if a != nil {
@@ -745,7 +799,8 @@ func (s *Service) retry(ctx context.Context, q queued, a *attempt) {
 	wait := backoff[min(q.attempts, len(backoff))-1]
 	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
-			UPDATE notifications SET run_at = now() + make_interval(secs => $4), reason = $5, claim = NULL
+			UPDATE notifications SET run_at = now() + make_interval(secs => $4),
+			  reason = CASE WHEN status = 'queued' THEN $5 ELSE reason END, claim = NULL
 			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, wait.Seconds(), nullable(reasonOf(a)))
 		if err != nil || tag.RowsAffected() == 0 {
 			return err
@@ -775,22 +830,28 @@ func (q queued) gaveUp() attempt {
 }
 
 // settle ends q as status, for reason, recording its attempts and what they say of their targets, and
-// erases what it kept only until then: the address it went to and its email's sealed secret. A worker
-// whose lease another took settles nothing. It settles past ctx's end (detached): what went out and
-// stayed claimed would go again once its lease had passed.
+// erases what it kept only until then: the address it went to and its email's sealed secret, at once,
+// and the arguments it was rendered from once the delivery log no longer keeps what it said
+// (keepBodies). A worker whose lease another took settles nothing; one withdrawn while it was claimed
+// is settled as what became of it, after its drop (withdraw). It settles past ctx's end (detached):
+// what went out and stayed claimed would go again once its lease had passed. So nothing but the
+// settlement itself keeps it from settling: what an attempt says of its target is written under a
+// savepoint, and one that fails, a device deleted meanwhile, is logged and left out.
 func (s *Service) settle(ctx context.Context, q queued, status, reason string, attempts []attempt, healths []health) {
 	ctx, cancel := detached(ctx)
 	defer cancel()
 	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
-			UPDATE notifications SET status = $4, reason = $5, settled_at = now(), claim = NULL, address = NULL, secret = NULL
-			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, status, nullable(reason))
+			UPDATE notifications SET status = $4, reason = $5, settled_at = now(), claim = NULL, address = NULL, secret = NULL,
+			  args_expires_at = now() + make_interval(secs => $6)
+			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, status, nullable(reason), keepBodies.Seconds())
 		if err != nil || tag.RowsAffected() == 0 {
 			return err
 		}
 		for _, h := range healths {
-			if err := h(ctx, tx); err != nil {
-				return err
+			if err := pgx.BeginFunc(ctx, tx, func(savepoint pgx.Tx) error { return h(ctx, savepoint) }); err != nil {
+				s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "notify: record what a push says of its target", householdAttr(q.household),
+					slog.Any("error", err))
 			}
 		}
 		return logAttempts(ctx, tx, q, attempts)

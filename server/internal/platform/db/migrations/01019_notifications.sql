@@ -16,9 +16,10 @@
 -- reaches its user while that session lives, and goes with it, so that a browser whose user signed
 -- out, or was signed out everywhere, is told nothing more of theirs. One row per endpoint: a browser
 -- whose next user subscribes it moves it to them. p256dh and auth are the browser's keys as it gives
--- them, base64url. failures counts the deliveries that failed since the last that did not; at five in
--- a row the subscription is stale (stale_at) and nothing more is tried on it until it is registered
--- again (FR-NT6). A 404 or a 410 from the push service deletes it.
+-- them, base64url. failures counts the deliveries its push service refused for it since the last it
+-- took; at five in a row the subscription is stale (stale_at) and nothing more is tried on it until it
+-- is registered again (FR-NT6). A push service that did not answer, or failed on its own side, counts
+-- against no subscription. A 404 or a 410 from the push service deletes it.
 CREATE TABLE push_subscriptions (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -122,7 +123,9 @@ CREATE TYPE notification_status AS ENUM ('queued', 'sent', 'failed', 'dropped');
 -- its cause ending (reason withdrawn), so that an invitation's email whose link was sent again, or
 -- whose invitation was withdrawn, is never sent late. run_at is when it may next be tried: past quiet
 -- hours (reason quiet_hours), past a failed email's backoff, or past the lease of the worker that
--- claimed it.
+-- claimed it. Once it is settled, its args are kept as long as the delivery log keeps what it said,
+-- seven days (args_expires_at), and the expiry sweep empties them: an invitation's personal message,
+-- or a member's name, outlives neither (PRD 03 §5).
 CREATE TABLE notifications (
   household_id uuid NOT NULL REFERENCES households (id) ON DELETE CASCADE,
   id uuid NOT NULL,
@@ -148,8 +151,10 @@ CREATE TABLE notifications (
   claim uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
   settled_at timestamptz,
+  args_expires_at timestamptz,
   PRIMARY KEY (household_id, id),
   CHECK ((status = 'queued') = (settled_at IS NULL)),
+  CHECK (status <> 'queued' OR args_expires_at IS NULL),
   CHECK (status = 'queued' OR (address IS NULL AND secret IS NULL)),
   CHECK (status <> 'queued' OR user_id IS NOT NULL OR address IS NOT NULL),
   CHECK (email OR (address IS NULL AND secret IS NULL AND route IS NULL)),
@@ -164,9 +169,11 @@ CREATE INDEX notifications_coalesce ON notifications (household_id, user_id, coa
 CREATE INDEX notifications_replace ON notifications (household_id, replace_key)
   WHERE status = 'queued' AND replace_key IS NOT NULL;
 CREATE INDEX notifications_created ON notifications (household_id, created_at DESC);
+CREATE INDEX notifications_args ON notifications (args_expires_at) WHERE args_expires_at IS NOT NULL;
 
--- The workers find the households with a notification due, across households, as the meter role.
-GRANT SELECT (status, run_at) ON notifications TO household_meter;
+-- The workers find the households with a notification due, across households, as the meter role, and
+-- the expiry sweep those with arguments past their seven days.
+GRANT SELECT (status, run_at, args_expires_at) ON notifications TO household_meter;
 
 -- The delivery log (FR-NT6, FR-HA12): every attempt at a notification on one target, and every
 -- notification dropped, or a push given up, before any target, with no transport, with its outcome

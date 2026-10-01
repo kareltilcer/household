@@ -287,6 +287,46 @@ func TestAMemberIsToldWhenTheirAccessChanges(t *testing.T) {
 	}
 }
 
+// An owner who changes their own role, as one of two owners may, is not told of what they just did.
+func TestAnOwnerIsNotToldOfTheirOwnChange(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	petrs, petr := s.joined(jana, h.ID, "Petr", s.a("petr@tilcerovi.cz"), "owner", nil)
+	petrs.subscribe()
+	expect(t, petrs.patch(householdPath(h.ID, "/members/"+petr.String()), `{"role": "member"}`, nil), http.StatusOK, "")
+	if m := jana.members(h.ID)["Petr"]; m.Role != "member" {
+		t.Fatalf("Petr: %+v", m)
+	}
+	if told := s.pushes.To(petr); len(told) != 0 {
+		t.Fatalf("Petr was told of his own change: %+v", told)
+	}
+}
+
+// A child profile's graduation email that waits for the mail server goes with the profile: removing it
+// spends its link, and nothing arrives once the mail server takes mail again.
+func TestARemovedChildProfilesGraduationEmailGoesWithIt(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	adam := jana.child(h.ID, "Adam", "1234", nil)
+	address := s.a("adam@tilcerovi.cz")
+	s.outbox.Refuse(1)
+	expect(t, jana.post(householdPath(h.ID, "/children/"+adam.UserID.String()+"/graduate"), jsonBody(t, map[string]string{"email": address})),
+		http.StatusAccepted, "")
+	expect(t, jana.delete(householdPath(h.ID, "/members/"+adam.UserID.String())), http.StatusNoContent, "")
+	if _, err := s.admin.Exec(t.Context(), "UPDATE notifications SET run_at = now() WHERE household_id = $1 AND status = 'queued'", h.ID); err != nil {
+		t.Fatal(err)
+	}
+	s.notifier.Drain(t.Context(), h.ID)
+	if n := len(s.outbox.To(address)); n != 0 {
+		t.Fatalf("the removed profile's graduation was emailed %d times", n)
+	}
+	if n := s.count("SELECT count(*) FROM email_tokens WHERE user_id = $1 AND purpose = 'graduate' AND used_at IS NULL", adam.UserID); n != 0 {
+		t.Fatalf("%d of the removed profile's links still work", n)
+	}
+}
+
 // The owners are told when ten wrong PINs lock a child profile (A-18), whoever else is in the
 // household.
 func TestTheOwnersAreToldWhenAChildProfileLocks(t *testing.T) {

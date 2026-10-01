@@ -523,18 +523,3 @@ func TestARefusalWaitsAtLeastASecond(t *testing.T) {
 		}
 	}
 }
-
-// The expiry sweep deletes a throttle's row a day after its block ended (Sweep), which changes nothing
-// only while no limit counts over a longer window: a limit with a longer one moves Forgotten with it.
-func TestNoLimitOutlivesWhatTheSweepForgets(t *testing.T) {
-	for _, l := range []ratelimit.Limit{
-		ratelimit.LoginAccount, ratelimit.LoginNetwork, ratelimit.RegisterNetwork, ratelimit.RegisterNote,
-		ratelimit.ResetAccount, ratelimit.ResendMinute, ratelimit.ResendHour, ratelimit.ResetNetwork,
-		ratelimit.ResendNetwork, ratelimit.MFAAccount, ratelimit.OAuthStartNetwork, ratelimit.InvitationHousehold,
-		ratelimit.ChildCodeNetwork,
-	} {
-		if l.Window > ratelimit.Forgotten {
-			t.Errorf("%s counts over %s, longer than the %s the sweep keeps its rows past their block", l.Name, l.Window, ratelimit.Forgotten)
-		}
-	}
-}

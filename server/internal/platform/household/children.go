@@ -928,7 +928,7 @@ type graduation struct {
 }
 
 // errLinkSpent is the answer to a graduation's link that was used, replaced by a newer one, or
-// withdrawn with its sender's ownership.
+// withdrawn with its sender's ownership or with its profile's removal.
 var errLinkSpent = problem.New(http.StatusGone, problem.CodeTokenAlreadyUsed)
 
 // findGraduation reads the graduation link token opens in tx, locked for it when lock, and refuses one

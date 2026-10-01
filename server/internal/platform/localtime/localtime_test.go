@@ -131,6 +131,28 @@ func TestAWindowEndsOnTheWallClock(t *testing.T) {
 	}
 }
 
+// A window that ends in the hour the clocks repeat ends in the pass of it the clock is in: Prague's
+// go from 03:00 back to 02:00 on 25 October 2026, and read 02:10 twice, at 00:10 and at 01:10 UTC.
+func TestAWindowEndsInTheRepeatedHourItIsIn(t *testing.T) {
+	prague := zone(t, "Europe/Prague")
+	early := localtime.Window{From: clock(t, "01:00"), To: clock(t, "02:30")}
+	for _, tc := range []struct{ now, want string }{
+		{"2026-10-25T00:10:00Z", "2026-10-25T00:30:00Z"}, // 02:10 summer time, ending at the first 02:30
+		{"2026-10-25T01:10:00Z", "2026-10-25T01:30:00Z"}, // 02:10 winter time, ending at the second
+	} {
+		now, _ := time.Parse(time.RFC3339, tc.now)
+		end, in := early.End(now, prague)
+		if !in || end.UTC().Format(time.RFC3339) != tc.want {
+			t.Errorf("End(%s) = %s, %v; want %s", tc.now, end.UTC().Format(time.RFC3339), in, tc.want)
+		}
+	}
+	// A daily time is still its first reading alone, so that a slot comes once that day.
+	afterFirst, _ := time.Parse(time.RFC3339, "2026-10-25T00:40:00Z")
+	if got := localtime.Next(afterFirst, clock(t, "02:30"), prague).UTC().Format(time.RFC3339); got != "2026-10-26T01:30:00Z" {
+		t.Errorf("Next after the first 02:30 = %s; want the next day's", got)
+	}
+}
+
 func TestZoneFallsBackToTheHouseholdsThenUTC(t *testing.T) {
 	if got := localtime.Zone("", "Europe/Prague").String(); got != "Europe/Prague" {
 		t.Errorf("no member timezone: %s", got)

@@ -34,6 +34,28 @@ const (
 // device uninstalled the app, or its token changed. It is a 410's equivalent.
 const deviceNotRegistered = "DeviceNotRegistered"
 
+// expoServiceErrors are the errors Expo answers that say nothing of the device's token: the project's
+// credentials with Apple or Google, a message too big, or too many sent to the device at once. Each
+// would fail a push to any token, and counted against the tokens they reached, they would mark every
+// device stale while the project's settings were wrong.
+var expoServiceErrors = map[string]bool{
+	"InvalidCredentials": true, "MismatchSenderId": true, "MessageTooBig": true, "MessageRateExceeded": true,
+}
+
+// expoStatus is what an error Expo reports of a push, in its ticket or its receipt, says of the device's
+// token: DeviceNotRegistered that it is gone, one of expoServiceErrors nothing, and any other that the
+// push failed there.
+func expoStatus(code string) Status {
+	switch {
+	case code == deviceNotRegistered:
+		return Gone
+	case expoServiceErrors[code]:
+		return Unavailable
+	default:
+		return Failed
+	}
+}
+
 // Expo delivers to the mobile app through Expo's push service, which hands each push to Apple's or
 // Google's (FR-NT1). It takes a push with a ticket, and says only in the ticket's receipt, a few
 // minutes later, whether Apple or Google took it from there.
@@ -78,7 +100,8 @@ type expoTicket struct {
 	} `json:"details"`
 }
 
-// Push sends m to t's device.
+// Push sends m to t's device. Expo not answering, or answering anything but a ticket, says nothing of
+// the device (Unavailable).
 func (e *Expo) Push(ctx context.Context, t Target, m Push) Outcome {
 	msg := expoMessage{
 		To: t.Token, Title: cut(m.Title, maxTitle), Body: cut(m.Body, maxBody), Priority: "default", TTL: int(pushTTL.Seconds()),
@@ -94,20 +117,20 @@ func (e *Expo) Push(ctx context.Context, t Target, m Push) Outcome {
 		Data []expoTicket `json:"data"`
 	}
 	if err := e.post(ctx, e.send, []expoMessage{msg}, &answer); err != nil || len(answer.Data) != 1 {
-		return Outcome{Status: Failed}
+		return Outcome{Status: Unavailable}
 	}
 	switch ticket := answer.Data[0]; {
 	case ticket.Status == "ok" && ticket.ID != "":
 		return Outcome{Status: Accepted, Ticket: ticket.ID}
-	case ticket.Details.Error == deviceNotRegistered:
-		return Outcome{Status: Gone}
+	case ticket.Status == "error":
+		return Outcome{Status: expoStatus(ticket.Details.Error)}
 	default:
-		return Outcome{Status: Failed}
+		return Outcome{Status: Unavailable}
 	}
 }
 
-// Receipts returns the receipts of tickets Expo has, each Accepted, Gone or Failed: a ticket it has
-// none for yet is left out.
+// Receipts returns the receipts of tickets Expo has, each Accepted, or what its error says of its
+// device's token (expoStatus): a ticket it has none for yet is left out.
 func (e *Expo) Receipts(ctx context.Context, tickets []string) (map[string]Status, error) {
 	var answer struct {
 		Data map[string]expoTicket `json:"data"`
@@ -117,13 +140,10 @@ func (e *Expo) Receipts(ctx context.Context, tickets []string) (map[string]Statu
 	}
 	out := make(map[string]Status, len(answer.Data))
 	for id, r := range answer.Data {
-		switch {
-		case r.Status == "ok":
+		if r.Status == "ok" {
 			out[id] = Accepted
-		case r.Details.Error == deviceNotRegistered:
-			out[id] = Gone
-		default:
-			out[id] = Failed
+		} else {
+			out[id] = expoStatus(r.Details.Error)
 		}
 	}
 	return out, nil
@@ -163,7 +183,8 @@ type ReceiptReader interface {
 
 // CheckReceipts asks Expo for the receipts of the tickets old enough to have one, and records what each
 // says of its device's token (FR-NT6): DeviceNotRegistered clears it, as a 410 deletes a browser's
-// subscription, and any other error counts towards the run of failures that marks it stale. A ticket
+// subscription, an error of the push's there counts towards the run of failures that marks it stale,
+// and one of the project's or of Expo's own (Unavailable) towards nothing. A ticket
 // whose receipt came, or that is older than Expo keeps receipts, is done with. The scheduler runs it
 // every fifteen minutes.
 func (s *Service) CheckReceipts(ctx context.Context) error {

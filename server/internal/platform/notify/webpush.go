@@ -83,7 +83,10 @@ type webPushMessage struct {
 	NotificationID string `json:"notification_id"`
 }
 
-// Push sends m to t's browser. A 404 or a 410 says the subscription is gone (RFC 8030 §7.3).
+// Push sends m to t's browser. A 404 or a 410 says the subscription is gone (RFC 8030 §7.3), and another
+// refusal of the push, a 400 or a 403 for a subscription made with another VAPID key, that it failed
+// there. No answer, a 429, a 5xx or a redirect says nothing of the subscription: the push service, or
+// the way to it, is what failed (Unavailable).
 func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 	payload, err := json.Marshal(webPushMessage{
 		Title: cut(m.Title, maxTitle), Body: cut(m.Body, maxBody), URL: m.Link, Tag: m.Tag,
@@ -103,15 +106,17 @@ func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 			TTL: int(pushTTL.Seconds()), Urgency: urgency, Topic: m.Tag,
 		})
 	if err != nil {
-		return Outcome{Status: Failed}
+		return Outcome{Status: Unavailable}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
-	switch {
-	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+	switch code := resp.StatusCode; {
+	case code >= 200 && code < 300:
 		return Outcome{Status: Accepted}
-	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
+	case code == http.StatusNotFound || code == http.StatusGone:
 		return Outcome{Status: Gone}
+	case code == http.StatusTooManyRequests || code >= 500 || code < 400:
+		return Outcome{Status: Unavailable}
 	default:
 		return Outcome{Status: Failed}
 	}

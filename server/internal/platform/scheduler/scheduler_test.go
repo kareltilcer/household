@@ -106,6 +106,25 @@ func TestTwoInstancesFireAJobOnce(t *testing.T) {
 	}
 }
 
+// The leader's connection is no longer the pool's: held for as long as it leads, it leaves the pool
+// every connection it may make for the requests and the workers.
+func TestTheLeadersConnectionIsNotThePools(t *testing.T) {
+	c := &clock{t: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)}
+	pool := testsupport.Open(t).Pool(t, db.RoleApp)
+	s, err := scheduler.New(scheduler.Config{Pool: pool, Log: logging.New(io.Discard, slog.LevelDebug), Now: c.now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Resign(context.Background()) })
+	tick(s)
+	if !s.Leading() {
+		t.Fatal("it does not lead")
+	}
+	if n := pool.Stat().AcquiredConns(); n != 0 {
+		t.Fatalf("the pool counts %d connections taken while it leads", n)
+	}
+}
+
 // Two instances that both believe they lead, as one whose connection the database gave up on may for
 // a moment, still fire a slot once.
 func TestTwoLeadersStillFireASlotOnce(t *testing.T) {

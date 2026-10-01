@@ -35,9 +35,10 @@ What had to be settled:
 ## Decision
 
 **The scheduler** (`internal/platform/scheduler`) runs in every instance. Each tick, fifteen seconds,
-it holds or takes a session-level advisory lock on a pooled connection it keeps for as long as it
-leads; a leader whose connection no longer answers a ping has lost the lock with its session, and
-gives up the connection. The leader starts each job due that is not running already. A job's next
+it holds or takes a session-level advisory lock on a connection it takes from the pool and, leading,
+takes out of it (`Hijack`), so that the pool makes another for the requests and the workers in its
+place; a leader whose connection no longer answers a ping has lost the lock with its session, and
+closes the connection. The leader starts each job due that is not running already. A job's next
 slot is a row in `scheduler_jobs`, taken by `UPDATE … SET next_run_at = <next slot> WHERE name = $1
 AND next_run_at <= $now`: PostgreSQL serialises two such updates on the row, and the second matches
 nothing, so a slot fires once even when two instances both believe they lead. A slot missed while no
@@ -47,7 +48,8 @@ the zero time so every instance computes the same slots, and `Daily(hh:mm)` in U
 jobs that belong to no household's day (D-109); a job about a household's own day, item 53's
 digests, runs every minute and resolves each household's time with `internal/platform/localtime`,
 which turns a wall-clock time into an instant DST included: a time the clocks skip moves forward by
-the gap, and a time they repeat is its first occurrence.
+the gap, and a time they repeat is its first occurrence, but for the end of quiet hours, which is the
+reading of the pass the clock is in.
 
 The jobs this item registers (`app.newScheduler`): `storage.nightly` at 01:00 UTC, the usage sample
 and then the sweeps of objects no row records, a household's and the accounts' pictures (item 14);
@@ -55,8 +57,8 @@ and then the sweeps of objects no row records, a household's and the accounts' p
 
 **The expiry sweep** (`internal/platform/expiry`) holds PRD 03 §5's retention table as code, row for
 row, with the account tables' retentions D-113 decides. Account tables are deleted from by the request
-role outside any household. A household's rows, Idempotency-Keys, the push's answers and what a
-notification said, are found across households by the meter role, which is granted the columns that
+role outside any household. A household's rows, Idempotency-Keys, the push's answers, and what a
+notification said and was rendered from, are found across households by the meter role, which is granted the columns that
 say when they expire, and deleted in each household's context by the request role, as the usage
 sampler writes. The throttle's retention lives in `ratelimit.Sweep`, beside the semantics it depends
 on. Invitations that stopped working a month ago (D-110) are deleted by the household package
@@ -68,8 +70,9 @@ invitation's deletion.
 child's lock, the invitation's, the graduation's link. It exists exactly when its cause committed.
 It names its recipient, its category, a catalog key and arguments, never rendered text; the module
 whose view the recipient must hold, the owner a private item's notice may reach, the in-app path a
-push opens, and a coalescing key. `Send` queues in a transaction of its own, for what is told after a
-commit.
+push opens, and a coalescing key. Once it is settled, its arguments, which may hold names and an
+invitation's personal message, are kept as long as the delivery log keeps what it said, seven days
+(`args_expires_at`), and the expiry sweep empties them.
 
 **Workers in every instance deliver**, as item 14's files workers derive: the meter role finds the
 households with something due (`status`, `run_at`), a commit of the same instance wakes them, and
@@ -80,8 +83,10 @@ recipient's membership, their effective level on the notification's module (`ten
 item's owner, their preferences and their quiet hours, and drops, holds or sends accordingly
 (FR-NT5): every drop is logged with its reason. Then it renders the message in the recipient's own
 language, with the household's name, and the count of repeats merged into it, and sends to every live
-target. A notification is settled in one transaction with its log rows and what the attempts say of
-their targets; a worker whose lease another took settles nothing. What a worker decided is written
+target at once, so that a push service slow to answer holds up none of the others. A notification is
+settled in one transaction with its log rows and what the attempts say of their targets, each under a
+savepoint, so that failing to record a target's health never leaves what went claimed, to go again;
+a worker whose lease another took settles nothing. What a worker decided is written
 past its context's end, for ten seconds at most, so that a shutdown leaves nothing it sent claimed to
 go again once the lease has passed; one the shutdown stopped before it went is put back, its attempt
 not counted. A repeat queued while one with its key is going out waits the fifteen minutes, as it
@@ -96,7 +101,10 @@ sends. Web Push is RFC 8030 over `webpush-go` (PL-2): encrypted to the browser's
 coalescing key as its topic, following no redirect. Expo is its HTTP API with the project's access token when one is set;
 its ticket waits in `push_receipts` (global) until `notify.receipts` reads its receipt. A 404 or 410,
 or Expo's `DeviceNotRegistered`, deletes a subscription or clears a token; five failures in a row mark
-a target stale until it registers again (FR-NT6). A push is not retried, since its service holds it
+a target stale until it registers again (FR-NT6). A failure is one the push service lays on the
+target, another 4xx or another of Expo's errors; no answer, a 429, a 5xx, a redirect, or an error of
+the project's credentials or of the message (`Unavailable`, logged `push_unavailable`) counts against
+none, or an outage would leave every target it reached stale. A push is not retried, since its service holds it
 for the device; an email is, after a minute, five, thirty and two hours, and given up after the
 fifth.
 
@@ -107,7 +115,10 @@ settled. A backup holds a sealed token only for the minutes an email waits, and 
 without the key the database does not hold. An email waits under a key of what it says
 (`Notification.Replaces`): another queued under the key drops it, and its cause's end withdraws it
 (`Withdraw`), so that an invitation sent again, withdrawn, declined or accepted, or a graduation link
-sent again or spent, is not emailed late by a mail server that was down. The graduation's link, an
+sent again or spent, its profile's removal among what spends it, is not emailed late by a mail server
+that was down. One a worker is handing to the mail server as it is withdrawn keeps its claim, and the
+worker settles it as what became of it: sent, logged after its drop, or left dropped and never tried
+again. The graduation's link, an
 account row, is written in the household's `tenant.InWriteTx` with its email rather than in
 `tenant.AccountTx`, which refuses the tenant table the email waits in: the two commit together, and
 the account table admits the request role in either. The delivery log keeps an email's subject, never its
@@ -124,8 +135,8 @@ least by the database's clock, which decides what is due; the email set ignores 
 
 **What the household surface tells** (D-111): the invitation's and the graduation's emails, queued in
 their mutation's or their link's transaction; a decline, pushed to the inviter; a lock, pushed to
-every owner; a change of a member's role or grants, pushed to them, coalescing for fifteen minutes; a
-removal, emailed to the removed member. The access notice is queued in the change's own transaction
+every owner; a change of a member's role or grants, pushed to them unless the change is their own,
+coalescing for fifteen minutes; a removal, emailed to the removed member. The access notice is queued in the change's own transaction
 rather than from `household.Hooks.Changed` after the commit, which the plan named: the hook still runs
 after it, for any other consumer, and the commit and the notice can no longer part.
 
@@ -159,7 +170,7 @@ after it, for any other consumer, and the commit and the notice can no longer pa
 **What gets harder:**
 - A deployment carries two more secrets (`docs/runbooks/notifications.md`). The VAPID key cannot be
   rotated without every browser subscribing again.
-- The meter role reads seven more columns, each saying when something is due or expires
+- The meter role reads nine more columns, each saying when something is due or expires
   (architecture test 11).
 - A push to a recipient with several targets is settled as sent when one took it: the log shows
   each target's outcome, the queue only the notification's.

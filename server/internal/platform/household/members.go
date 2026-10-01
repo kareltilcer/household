@@ -491,8 +491,8 @@ func checkGrants(field string, grants map[string]access.Level, role access.Role,
 // and graduated rather than given a role (FR-CH1, FR-CH4); an owner made a member keeps the levels
 // they held, until the same or a later change lowers them, and the invitations they sent that are
 // still waiting are withdrawn (D-103). The last owner and the payer stay owners.
-// What the member can no longer see is retracted from their replica (Hooks.Lost), and they are told
-// (Hooks.Changed, D-78).
+// What the member can no longer see is retracted from their replica (Hooks.Lost), and they are told,
+// unless the change is their own (accessNotice, Hooks.Changed, D-78).
 func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -565,8 +565,12 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		if err := writeGrants(ctx, tx, household, user, changedGrants(old.grants, grants, modules)); err != nil {
 			return mutation.Record{}, err
 		}
-		if err := s.accessNotice(ctx, tx, household, user, CauseGrant); err != nil {
-			return mutation.Record{}, err
+		// An owner who changed their own role or grants, as one of several owners may, is not told of
+		// what they just did.
+		if user != scope.UserID() {
+			if err := s.accessNotice(ctx, tx, household, user, CauseGrant); err != nil {
+				return mutation.Record{}, err
+			}
 		}
 		if m, err = touch(ctx, tx, old, role, grants); err != nil {
 			return mutation.Record{}, err
@@ -681,7 +685,8 @@ func (s *Service) accessNotice(ctx context.Context, tx pgx.Tx, household, member
 // It is immediate: their next request finds no membership, their replica loses the household
 // (Hooks.Lost), no invitation they sent brings them back (withdraw), and they are told
 // (Hooks.Changed). The payer is refused until billing moves, and the content they made stays with
-// the household. A child profile removed is signed out of every device.
+// the household. A child profile removed is signed out of every device, and its graduation's link is
+// spent, its email withdrawn should it still wait for the mail server.
 func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -728,6 +733,15 @@ func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 				return mutation.Record{}, err
 			}
 			if err := s.Accounts.Devices.RevokeAll(ctx, tx, user, uuid.Nil); err != nil {
+				return mutation.Record{}, err
+			}
+			// A link to graduate a profile that is gone graduates nobody, and its email, held by a
+			// mail server that was down, would arrive with a link that no longer works.
+			if _, err := tx.Exec(ctx, "UPDATE email_tokens SET used_at = $2 WHERE user_id = $1 AND purpose = 'graduate' AND used_at IS NULL",
+				user, s.Now()); err != nil {
+				return mutation.Record{}, err
+			}
+			if err := s.Notify.Withdraw(ctx, tx, graduationKey(user)); err != nil {
 				return mutation.Record{}, err
 			}
 		}

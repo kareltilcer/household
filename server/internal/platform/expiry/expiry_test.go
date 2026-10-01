@@ -120,11 +120,14 @@ func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 	w.exec(`INSERT INTO mfa_trusts (id, user_id, token_hash, created_at, expires_at) VALUES
 	          ($1, $3, $4, now() - interval '31 days', now() - interval '1 day'), ($2, $3, $5, now() - interval '1 day', now() + interval '29 days')`,
 		expiredTrust, liveTrust, u, hash(expiredTrust), hash(liveTrust))
+	// A throttle's row is kept a day after its window and its block end (D-113).
 	throttles := map[string]string{
-		"counting": "now() + interval '1 minute', NULL",
-		"blocked":  "now() - interval '1 minute', now() - interval '1 hour'",
-		"done":     "now() - interval '1 minute', now() - interval '25 hours'",
-		"quiet":    "now() - interval '1 minute', NULL",
+		"counting":  "now() + interval '1 minute', NULL",
+		"blocked":   "now() - interval '1 minute', now() - interval '1 hour'",
+		"unblocked": "now() - interval '25 hours', now() - interval '1 hour'",
+		"quiet":     "now() - interval '1 minute', NULL",
+		"done":      "now() - interval '26 hours', now() - interval '25 hours'",
+		"forgotten": "now() - interval '25 hours', NULL",
 	}
 	for name, values := range throttles {
 		w.exec(`INSERT INTO auth_throttles (key, count, window_ends_at, blocked_until) VALUES (sha256($1::bytea), 1, `+values+`)`, []byte(name))
@@ -155,7 +158,7 @@ func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 	if got := w.left("SELECT EXISTS (SELECT FROM mfa_trusts WHERE id = $1)", expiredTrust, liveTrust); got[expiredTrust] || !got[liveTrust] {
 		t.Errorf("trusts: %v", got)
 	}
-	for name, want := range map[string]bool{"counting": true, "blocked": true, "done": false, "quiet": false} {
+	for name, want := range map[string]bool{"counting": true, "blocked": true, "unblocked": true, "quiet": true, "done": false, "forgotten": false} {
 		var found bool
 		if err := w.admin.QueryRow(t.Context(), "SELECT EXISTS (SELECT FROM auth_throttles WHERE key = sha256($1::bytea))", []byte(name)).
 			Scan(&found); err != nil {
@@ -168,8 +171,8 @@ func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 }
 
 // A household's own rows past their time are found by the meter role and deleted in their household:
-// Idempotency-Keys and the push's answers a week old, and what a notification said, after its seven
-// days, which leaves the outcome.
+// Idempotency-Keys and the push's answers a week old, and what a notification said and the arguments
+// it was rendered from, after their seven days, which leaves the outcome.
 func TestTheNightlySweepReachesEveryHousehold(t *testing.T) {
 	w := newWorld(t)
 	u := w.user()
@@ -184,9 +187,10 @@ func TestTheNightlySweepReachesEveryHousehold(t *testing.T) {
 			w.exec(`INSERT INTO sync_mutations (household_id, user_id, mutation_id, fingerprint, outcome, created_at)
 			        VALUES ($1, $2, gen_random_uuid(), decode(repeat('a1', 32), 'hex'), 'applied', now() - $3::interval)`, h, u, at)
 		}
-		n := idgen.New()
-		w.exec(`INSERT INTO notifications (household_id, id, user_id, category, message, status, settled_at)
-		        VALUES ($1, $2, $3, 'direct', 'notification.access_changed', 'sent', now())`, h, n, u)
+		n, kept := idgen.New(), idgen.New()
+		w.exec(`INSERT INTO notifications (household_id, id, user_id, category, message, args, status, settled_at, args_expires_at)
+		        VALUES ($1, $2, $4, 'direct', 'email.invitation', '{"message": "old"}', 'sent', now() - interval '8 days', now() - interval '1 second'),
+		               ($1, $3, $4, 'direct', 'email.invitation', '{"message": "new"}', 'sent', now(), now() + interval '7 days')`, h, n, kept, u)
 		w.exec(`INSERT INTO notification_deliveries (household_id, id, notification_id, user_id, category, transport, status, title, body, body_expires_at)
 		        VALUES ($1, gen_random_uuid(), $2, $3, 'direct', 'web_push', 'sent', 'old', 'old', now() - interval '1 second'),
 		               ($1, gen_random_uuid(), $2, $3, 'direct', 'web_push', 'sent', 'new', 'new', now() + interval '1 day')`, h, n, u)
@@ -198,14 +202,19 @@ func TestTheNightlySweepReachesEveryHousehold(t *testing.T) {
 	for _, h := range households {
 		var keys, answers int
 		var titles []*string
+		var args []string
 		if err := w.admin.QueryRow(t.Context(), `
 			SELECT (SELECT count(*) FROM idempotency_keys WHERE household_id = $1), (SELECT count(*) FROM sync_mutations WHERE household_id = $1),
-			  array(SELECT title FROM notification_deliveries WHERE household_id = $1 ORDER BY title NULLS FIRST)`, h).
-			Scan(&keys, &answers, &titles); err != nil {
+			  array(SELECT title FROM notification_deliveries WHERE household_id = $1 ORDER BY title NULLS FIRST),
+			  array(SELECT args::text || ' ' || (args_expires_at IS NOT NULL) FROM notifications WHERE household_id = $1 ORDER BY settled_at)`, h).
+			Scan(&keys, &answers, &titles, &args); err != nil {
 			t.Fatal(err)
 		}
 		if keys != 1 || answers != 1 || len(titles) != 2 || titles[0] != nil || titles[1] == nil || *titles[1] != "new" {
 			t.Errorf("household %s: %d keys, %d answers, titles %v", h, keys, answers, titles)
+		}
+		if len(args) != 2 || args[0] != "{} false" || args[1] != `{"message": "new"} true` {
+			t.Errorf("household %s: notifications' arguments %q", h, args)
 		}
 	}
 }
