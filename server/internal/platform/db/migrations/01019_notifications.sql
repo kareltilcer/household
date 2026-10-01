@@ -15,7 +15,8 @@
 -- A browser's Web Push subscription (FR-NT1), bound to the web session that registered it: it
 -- reaches its user while that session lives, and goes with it, so that a browser whose user signed
 -- out, or was signed out everywhere, is told nothing more of theirs. One row per endpoint: a browser
--- whose next user subscribes it moves it to them. p256dh and auth are the browser's keys as it gives
+-- whose next user subscribes it moves it to them. One per web session, a browser, whose next
+-- subscription replaces it. p256dh and auth are the browser's keys as it gives
 -- them, base64url. failures counts the deliveries its push service refused for it since the last it
 -- took; at five in a row the subscription is stale (stale_at) and nothing more is tried on it until it
 -- is registered again (FR-NT6). A push service that did not answer, or failed on its own side, counts
@@ -39,12 +40,16 @@ CREATE INDEX push_subscriptions_session ON push_subscriptions (session_id);
 -- A device's Expo push token (FR-NT1), which reaches it while its sign-in lives: push_registered_at
 -- is when it was last registered, and push_failures and push_stale_at are its health, as a
 -- subscription's are (FR-NT6), but for what ends a run of failures: a receipt saying Apple or Google
--- took a push, not Expo's ticket. An Expo receipt of DeviceNotRegistered clears the token.
+-- took a push, not Expo's ticket. An Expo receipt of DeviceNotRegistered clears the token. A token is
+-- the phone's for the app: one installation registering it clears it from every other, which the app
+-- installed again on that phone left behind, whoever was signed in there.
 ALTER TABLE devices
   ADD COLUMN push_registered_at timestamptz,
   ADD COLUMN push_failures smallint NOT NULL DEFAULT 0 CHECK (push_failures >= 0),
   ADD COLUMN push_stale_at timestamptz,
   ADD CHECK ((push_token IS NULL) = (push_registered_at IS NULL));
+
+CREATE INDEX devices_push_token ON devices (push_token) WHERE push_token IS NOT NULL;
 
 -- Expo answers a message it accepts with a ticket, and says only later, in the ticket's receipt,
 -- whether Apple or Google delivered it (FR-NT6): a receipt of DeviceNotRegistered is a 410's
@@ -165,8 +170,12 @@ CREATE TABLE notifications (
 SELECT enable_tenant_isolation('notifications');
 
 CREATE INDEX notifications_due ON notifications (household_id, run_at) WHERE status = 'queued';
-CREATE INDEX notifications_coalesce ON notifications (household_id, user_id, coalesce_key, created_at DESC)
-  WHERE coalesce_key IS NOT NULL;
+-- What a repeat under a coalescing key reads: the one still waiting, and the one gone out within the
+-- window, each among those alone, never the recipient's whole history under the key, which is kept.
+CREATE INDEX notifications_coalesce_waiting ON notifications (household_id, user_id, coalesce_key, created_at DESC)
+  WHERE status = 'queued' AND coalesce_key IS NOT NULL;
+CREATE INDEX notifications_coalesce_sent ON notifications (household_id, user_id, coalesce_key, settled_at)
+  WHERE status = 'sent' AND coalesce_key IS NOT NULL;
 CREATE INDEX notifications_replace ON notifications (household_id, replace_key)
   WHERE status = 'queued' AND replace_key IS NOT NULL;
 CREATE INDEX notifications_created ON notifications (household_id, created_at DESC);

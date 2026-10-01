@@ -86,8 +86,9 @@ type webPushMessage struct {
 // Push sends m to t's browser. A 404 or a 410 says the subscription is gone (RFC 8030 §7.3), and another
 // refusal of the push, a 400 or a 403 for a subscription made with another VAPID key, that it failed
 // there. No answer, a 429, a 5xx or a redirect says nothing of the subscription: the push service, or
-// the way to it, is what failed (Unavailable); nor does a 401, which refuses the server's own VAPID
-// signature (RFC 8292 §4), as a clock gone wrong or a malformed subject would every push it signed.
+// the way to it, is what failed (Unavailable); nor does a refusal of the server's own VAPID signature,
+// as a clock gone wrong or a subject a push service will not take would refuse every push it signed:
+// a 401 (RFC 8292 §4), or Apple's 403 with the reason BadJwtToken (refusesSignature).
 func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 	payload, err := json.Marshal(webPushMessage{
 		Title: cut(m.Title, maxTitle), Body: cut(m.Body, maxBody), URL: m.Link, Tag: m.Tag,
@@ -110,7 +111,7 @@ func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 		return Outcome{Status: Unavailable}
 	}
 	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	switch code := resp.StatusCode; {
 	case code >= 200 && code < 300:
 		return Outcome{Status: Accepted}
@@ -118,9 +119,22 @@ func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 		return Outcome{Status: Gone}
 	case code == http.StatusUnauthorized || code == http.StatusTooManyRequests || code >= 500 || code < 400:
 		return Outcome{Status: Unavailable}
+	case code == http.StatusForbidden && refusesSignature(body):
+		return Outcome{Status: Unavailable}
 	default:
 		return Outcome{Status: Failed}
 	}
+}
+
+// refusesSignature reports whether body, a push service's 403, refuses the server's VAPID token rather
+// than the subscription: Apple's, which answers a token it does not take, its subject neither an https
+// URL nor a mailto: address, or its expiry past or more than a day off, with the reason BadJwtToken.
+// Another push service's 403, Google's for a subscription made with another key, is the subscription's.
+func refusesSignature(body []byte) bool {
+	var answer struct {
+		Reason string `json:"reason"`
+	}
+	return json.Unmarshal(body, &answer) == nil && answer.Reason == "BadJwtToken"
 }
 
 // cut returns s cut to at most n characters, an ellipsis ending one it cut.

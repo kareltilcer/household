@@ -93,14 +93,15 @@ WHERE household_id = $1 ORDER BY sent_at DESC LIMIT 50;
   Google's answers only in a ticket's receipt, read every fifteen minutes; a receipt saying Apple or
   Google took a push ends the device's run.
 - `push_unavailable`: the push service did not take the push for a reason of its own: no answer, `429`,
-  a `5xx`, a browser's push service refusing the server's VAPID signature (`401`), or Expo's
-  `InvalidCredentials`, `MismatchSenderId`, `MessageTooBig`, `MessageRateExceeded`, `DeveloperError`,
-  `ExpoError` or `ProviderError`; or the server's own push client panicked (`notify: a push panicked`
+  a `5xx`, a browser's push service refusing the server's VAPID signature (`401`, or Apple's `403`
+  with the reason `BadJwtToken`), or Expo's `InvalidCredentials`, `MismatchSenderId`, `MessageTooBig`,
+  `MessageRateExceeded`, `DeveloperError`, `ExpoError` or `ProviderError`; or the server's own push
+  client panicked (`notify: a push panicked`
   in the log). It counts against no target, and a notification no push service took is tried again
   with an email's backoff, five times in all. Many at once are an outage, or the Expo project's
   credentials; check `HOUSEHOLD_EXPO_ACCESS_TOKEN` and the project's push credentials. Many browsers'
-  at once, a `401` each, are the VAPID signature: the server's clock, or `HOUSEHOLD_MAIL_FROM`, its
-  subject.
+  at once, a `401` each, or a `403` each from Safari, are the VAPID signature: the server's clock, or
+  `HOUSEHOLD_MAIL_FROM`, its subject.
 - `muted`, `category_muted`: the member's own preferences, which win (FR-NT2).
 - `no_grant`, `not_member`, `private`: the member may not see what it is about (FR-NT5).
 - `replaced`, `withdrawn`: an email that waited for the mail server and no longer says what holds: its
@@ -124,5 +125,7 @@ SELECT name, next_run_at, last_started_at, last_finished_at, last_failed_at FROM
 ```
 
 A job whose `last_failed_at` is its last run is tried again within fifteen minutes; its error is in
-the log as `scheduler: a job failed`. To run a job sooner, set its `next_run_at` to `now()`; the
-leader takes it at its next tick, fifteen seconds at most.
+the log as `scheduler: a job failed`. A job whose `last_finished_at` is older than its
+`last_started_at` is running, or its instance ended while it ran, with its process or its host; the
+next leader then runs it again fifteen minutes after it started. To run a job sooner, set its
+`next_run_at` to `now()`; the leader takes it at its next tick, fifteen seconds at most.

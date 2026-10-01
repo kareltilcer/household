@@ -261,33 +261,45 @@ func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Sc
 		if err := enter(ctx, tx, household.String(), user.String()); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `
-			SELECT e.module, e.enabled, coalesce(g.level::text, 'none')
-			FROM module_enablement e
-			LEFT JOIN module_grants g
-			  ON g.household_id = e.household_id AND g.module = e.module AND g.user_id = $2
-			WHERE e.household_id = $1`, household, user)
-		if err != nil {
-			return err
-		}
-		var (
-			module, level string
-			enabled       bool
-		)
-		_, err = pgx.ForEachRow(rows, []any{&module, &enabled, &level}, func() error {
-			granted, err := access.ParseLevel(level)
-			if err != nil {
-				return err
-			}
-			s.levels[module] = Effective(s.role, module, enabled, granted)
-			return nil
-		})
+		s.levels, err = Levels(ctx, tx, household, user, s.role)
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// Levels are user's effective levels on each of household's modules, whose role there is role
+// (Effective), read in tx in household's context: what a request of theirs is allowed, and what the
+// platform reads for them when it acts with no request, as a notification going out does (FR-NT5).
+func Levels(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, role access.Role) (map[string]access.Level, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT e.module, e.enabled, coalesce(g.level::text, 'none')
+		FROM module_enablement e
+		LEFT JOIN module_grants g
+		  ON g.household_id = e.household_id AND g.module = e.module AND g.user_id = $2
+		WHERE e.household_id = $1`, household, user)
+	if err != nil {
+		return nil, err
+	}
+	var (
+		levels        = map[string]access.Level{}
+		module, level string
+		enabled       bool
+	)
+	_, err = pgx.ForEachRow(rows, []any{&module, &enabled, &level}, func() error {
+		granted, err := access.ParseLevel(level)
+		if err != nil {
+			return err
+		}
+		levels[module] = Effective(role, module, enabled, granted)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return levels, nil
 }
 
 // Effective is a member's level on a module: the minimum of the household's enablement and the

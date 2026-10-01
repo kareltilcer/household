@@ -89,7 +89,8 @@ type Notification struct {
 	// shows a neutral message for when the member can no longer see it (PRD 06 §6).
 	Link string
 	// Coalesce, when set, is the key repeats merge under, for the same recipient: a member's access
-	// changed, by whichever owner and however many times in a few minutes.
+	// changed, by whichever owner and however many times in a few minutes. A push's: the merged one
+	// says what the latest repeat says, counting them all. An email merges with nothing.
 	Coalesce string
 	// Email sends it by email: one of the fixed set, security, billing, invitations and a member's
 	// removal, that arrives whatever the member muted, quiet hours or not (FR-NT1).
@@ -120,8 +121,10 @@ func (n Notification) check() error {
 		return errors.New("notify: a notification for a member and an address")
 	case n.Address != "" && (!n.Email || !mail.ValidAddress(n.Address)):
 		return errors.New("notify: an address that is not an email's")
-	case n.Address != "" && n.Coalesce != "":
-		return errors.New("notify: an email to an address coalesces with nothing")
+	case n.Email && n.Coalesce != "":
+		// An email is each one's own: one merged into another, or a push into it, would leave its link
+		// or the push unsent.
+		return errors.New("notify: an email coalesces with nothing")
 	case n.Secret != "" && (!n.Email || n.Route == ""):
 		return errors.New("notify: a secret that no email's link carries")
 	case n.Route != "" && (!n.Email || !routeName.MatchString(n.Route)):
@@ -132,13 +135,10 @@ func (n Notification) check() error {
 		return errors.New("notify: a key over 200 bytes")
 	case n.Coalesce != "" && n.Replaces != "":
 		return errors.New("notify: a notification that replaces another merges with none")
+	case !slices.Contains(Categories, n.Category):
+		return fmt.Errorf("notify: category %q", n.Category)
 	}
-	for _, c := range Categories {
-		if c == n.Category {
-			return nil
-		}
-	}
-	return fmt.Errorf("notify: category %q", n.Category)
+	return nil
 }
 
 // Querier runs a query: the meter role's pool.
@@ -278,14 +278,15 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 			// hold for quiet hours, a stopping worker) and the repeat queued while it was claimed, and a
 			// repeat merged into both would go twice, each counting it. The outer conditions are read
 			// again on a row a worker claims meanwhile, which then takes nothing, and the repeat is
-			// queued to wait Window as one going out makes it.
+			// queued to wait Window as one going out makes it. The merged one says what the repeat says,
+			// the latest word, counting the repeats.
 			tag, err := tx.Exec(ctx, `
-				UPDATE notifications SET count = count + 1, args = $4, link = $5, module = $6, owner_id = $7
+				UPDATE notifications SET count = count + 1, category = $8, message = $9, args = $4, link = $5, module = $6, owner_id = $7
 				WHERE household_id = $1 AND status = 'queued' AND claim IS NULL AND id = (
 				  SELECT id FROM notifications
 				  WHERE household_id = $1 AND user_id = $2 AND coalesce_key = $3 AND status = 'queued' AND claim IS NULL
 				  ORDER BY created_at DESC, id DESC LIMIT 1)`,
-				household, n.To, n.Coalesce, args, nullable(n.Link), nullable(n.Module), nullableID(n.Owner))
+				household, n.To, n.Coalesce, args, nullable(n.Link), nullable(n.Module), nullableID(n.Owner), string(n.Category), n.Message)
 			if err != nil {
 				return fmt.Errorf("notify: coalesce: %w", err)
 			}

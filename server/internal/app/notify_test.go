@@ -108,6 +108,20 @@ func TestRegisteringWhereAMemberIsReached(t *testing.T) {
 	if again.ID != first.ID {
 		t.Fatalf("registering again made another: %v, %v", first.ID, again.ID)
 	}
+	// The session's browser, subscribed anew at another endpoint, holds that subscription alone.
+	next := "https://" + apptest.PushHost + "/send/" + idgen.New().String()
+	expect(t, jana.post("/push/subscriptions", jsonBody(t, map[string]any{"transport": "web_push", "endpoint": next, "keys": browserKeys()})),
+		http.StatusCreated, "")
+	var before, after int
+	if err := s.admin.QueryRow(t.Context(), `
+		SELECT count(*) FILTER (WHERE endpoint = $1), count(*) FILTER (WHERE endpoint = $2) FROM push_subscriptions`,
+		endpoint, next).Scan(&before, &after); err != nil {
+		t.Fatal(err)
+	}
+	if before != 0 || after != 1 {
+		t.Fatalf("the session's subscriptions: %d at the endpoint before, %d at the next; want 0 and 1", before, after)
+	}
+	endpoint = next
 
 	for _, bad := range []map[string]any{
 		{"transport": "web_push", "endpoint": "https://attacker.example/push", "keys": browserKeys()},
@@ -177,6 +191,45 @@ func TestRegisteringWhereAMemberIsReached(t *testing.T) {
 	}
 	if code := register(token, nil); code != http.StatusOK || !pushEnabled() {
 		t.Fatalf("registered again: %d, push_enabled %v", code, pushEnabled())
+	}
+
+	// The profiles signed in on one installation, a shared tablet's, each keep its token (D-104); the
+	// app installed again on the phone registers it from an installation of its own, which takes it
+	// from every installation before, whoever signed in there.
+	holders := func() []uuid.UUID {
+		t.Helper()
+		rows, err := s.admin.Query(t.Context(), "SELECT id FROM devices WHERE push_token = $1 ORDER BY user_id", token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var ids []uuid.UUID
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				t.Fatal(err)
+			}
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	s.signUp(s.a("petr@tilcerovi.cz"), passphrase)
+	tablet := s.phone("Jana's phone")
+	tablet.id = phone.id
+	expect(t, tablet.login(s.a("petr@tilcerovi.cz"), passphrase), http.StatusOK, "")
+	if code := tablet.send(http.MethodPost, "/push/subscriptions", jsonBody(t, map[string]any{"transport": "expo", "endpoint": token}), nil).Code; code != http.StatusCreated {
+		t.Fatalf("another profile's token on the installation: %d", code)
+	}
+	if ids := holders(); len(ids) != 2 || ids[0] != phone.id || ids[1] != phone.id {
+		t.Fatalf("the installation's profiles hold the token on %v; want both on %v", ids, phone.id)
+	}
+	reinstalled := s.phone("Jana's phone")
+	expect(t, reinstalled.login(s.a("jana@tilcerovi.cz"), passphrase), http.StatusOK, "")
+	if code := reinstalled.send(http.MethodPost, "/push/subscriptions", jsonBody(t, map[string]any{"transport": "expo", "endpoint": token}), nil).Code; code != http.StatusCreated {
+		t.Fatalf("the token from the app installed again: %d", code)
+	}
+	if ids := holders(); len(ids) != 1 || ids[0] != reinstalled.id {
+		t.Fatalf("the token is held on %v; want the installation that registered it last, %v, alone", ids, reinstalled.id)
 	}
 
 	expect(t, jana.delete("/push/subscriptions?endpoint="+url.QueryEscape(endpoint)), http.StatusNoContent, "")

@@ -39,12 +39,13 @@ func browserTarget(t *testing.T, endpoint string) notify.Target {
 // A Web Push is encrypted to the browser's keys and signed with the VAPID key, which names its
 // public half, with a day to live, the urgency of who it is for and its tag as the topic; a push
 // service's 404 and 410 say the subscription is gone, another refusal that the push failed there, and
-// a 401 refusing the server's own signature, a 429, a 5xx, a redirect or no answer at all nothing of
-// the subscription.
+// a refusal of the server's own signature, a 401 or Apple's 403 BadJwtToken, a 429, a 5xx, a redirect
+// or no answer at all nothing of the subscription.
 func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 	var (
 		mu     sync.Mutex
 		status = http.StatusCreated
+		answer string
 		seen   *http.Request
 		body   []byte
 	)
@@ -54,6 +55,7 @@ func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 		seen, body = r.Clone(r.Context()), nil
 		body, _ = io.ReadAll(r.Body)
 		w.WriteHeader(status)
+		_, _ = io.WriteString(w, answer)
 	}))
 	defer service.Close()
 	push, err := notify.NewWebPush(vapidKey, "no-reply@household.example", service.Client())
@@ -92,6 +94,20 @@ func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 		mu.Unlock()
 		if o := push.Push(t.Context(), target, m); o.Status != want {
 			t.Errorf("a %d: %v; want %v", code, o.Status, want)
+		}
+	}
+	for refusal, want := range map[string]notify.Status{
+		// Apple's refusal of the server's token, which it would refuse for every subscription.
+		`{"reason": "BadJwtToken"}`: notify.Unavailable,
+		// Google's for a subscription made with another VAPID key, and Apple's of the subscription.
+		"the key in the authorization header does not correspond to the sender ID used to subscribe this user": notify.Failed,
+		`{"reason": "BadDeviceToken"}`: notify.Failed,
+	} {
+		mu.Lock()
+		status, answer = http.StatusForbidden, refusal
+		mu.Unlock()
+		if o := push.Push(t.Context(), target, m); o.Status != want {
+			t.Errorf("a 403 saying %s: %v; want %v", refusal, o.Status, want)
 		}
 	}
 	service.Close()

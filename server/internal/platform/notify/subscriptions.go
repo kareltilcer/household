@@ -124,7 +124,11 @@ func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 }
 
 // subscribeBrowser registers a Web Push subscription for the web session req came in on. A browser
-// that another user subscribed is moved to this one, who is now who uses it.
+// that another user subscribed is moved to this one, who is now who uses it. A web session is one
+// browser, which holds one subscription for the web client: the one it registers replaces the one it
+// registered before, whose endpoint the browser has given up, so that a member's targets are as many
+// as their live sessions, and no session can make each notification a push to as many endpoints as
+// it names.
 func (s *Service) subscribeBrowser(r *http.Request, req subscriptionCreate) (subscriptionJSON, bool, error) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -167,12 +171,20 @@ func (s *Service) subscribeBrowser(r *http.Request, req subscriptionCreate) (sub
 			base64.RawURLEncoding.EncodeToString(auth)).Scan(&sub.ID, &sub.CreatedAt, &sub.LastSeenAt, &created); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, "DELETE FROM push_subscriptions WHERE session_id = $1 AND id <> $2", sid, sub.ID); err != nil {
+			return err
+		}
 		return idempotency.Commit(ctx, tx)
 	})
 	return sub, created, err
 }
 
-// subscribeDevice registers the Expo push token of the device req is signed in on.
+// subscribeDevice registers the Expo push token of the device req is signed in on. The token is the
+// phone's for the app, and an installation of the app that registers it is the one on the phone now:
+// it is cleared from every other installation that held it, whoever signed in there, so that a phone
+// whose app was installed again, by its user or by someone else, is not pushed what the installation
+// before was signed in to, nor pushed it twice. The profiles signed in on one installation, a shared
+// tablet's (D-104), each keep it.
 func (s *Service) subscribeDevice(r *http.Request, req subscriptionCreate) (subscriptionJSON, bool, error) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -198,6 +210,11 @@ func (s *Service) subscribeDevice(r *http.Request, req subscriptionCreate) (subs
 			WHERE d.user_id = $1 AND d.id = $2
 			RETURNING d.push_registered_at, d.last_seen_at, before.push_token IS DISTINCT FROM $3`,
 			user, current.Device, req.Endpoint).Scan(&sub.CreatedAt, &sub.LastSeenAt, &created); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE devices SET push_token = NULL, push_registered_at = NULL, push_failures = 0, push_stale_at = NULL
+			WHERE push_token = $1 AND id <> $2`, req.Endpoint, current.Device); err != nil {
 			return err
 		}
 		return idempotency.Commit(ctx, tx)

@@ -413,11 +413,15 @@ func (s *Service) read(ctx context.Context, q queued) (recipient, verdict, error
 				v.drop = reasonNotMember
 				return nil
 			}
-			level, err := s.level(ctx, tx, q.household, user, access.Role(r.role), *q.module)
+			role, err := access.ParseRole(r.role)
 			if err != nil {
 				return err
 			}
-			if level < access.View {
+			levels, err := tenant.Levels(ctx, tx, q.household, user, role)
+			if err != nil {
+				return err
+			}
+			if levels[*q.module] < access.View {
 				v.drop = reasonNoGrant
 				return nil
 			}
@@ -458,30 +462,6 @@ func (s *Service) read(ctx context.Context, q queued) (recipient, verdict, error
 		return nil
 	})
 	return r, v, err
-}
-
-// level is user's effective level on module in household, whose role there is role (tenant.Effective).
-func (s *Service) level(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, role access.Role, module string) (access.Level, error) {
-	var (
-		enabled bool
-		granted string
-	)
-	err := tx.QueryRow(ctx, `
-		SELECT e.enabled, coalesce(g.level::text, 'none')
-		FROM module_enablement e
-		LEFT JOIN module_grants g ON g.household_id = e.household_id AND g.module = e.module AND g.user_id = $2
-		WHERE e.household_id = $1 AND e.module = $3`, household, user, module).Scan(&enabled, &granted)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return access.None, nil
-	}
-	if err != nil {
-		return access.None, err
-	}
-	level, err := access.ParseLevel(granted)
-	if err != nil {
-		return access.None, err
-	}
-	return tenant.Effective(role, module, enabled, level), nil
 }
 
 // targets are where user's pushes go: each browser subscription whose web session lives, and each

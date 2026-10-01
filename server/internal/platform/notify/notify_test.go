@@ -950,6 +950,26 @@ func TestRepeatsCoalesce(t *testing.T) {
 	if all = w.notifications(other); len(all) != 2 || all[0].count != 1 || all[1].count != 2 {
 		t.Fatalf("a repeat while two waited: %+v", all)
 	}
+
+	// The one a repeat merges into says what the repeat says, the latest word, counting both.
+	third := w.household()
+	w.member(third, jana, "member", nil)
+	latest := n
+	latest.Category, latest.Message, latest.Args = notify.Household, "notification.child_locked", i18n.Args{"member": "Petr"}
+	if err := w.s.Send(t.Context(), third, n, latest); err != nil {
+		t.Fatal(err)
+	}
+	var (
+		category, message string
+		count             int
+	)
+	if err := w.admin.QueryRow(t.Context(), "SELECT category::text, message, count FROM notifications WHERE household_id = $1", third).
+		Scan(&category, &message, &count); err != nil {
+		t.Fatal(err)
+	}
+	if category != string(notify.Household) || message != latest.Message || count != 2 {
+		t.Fatalf("merged: %s, %s, %d; want the latest's, counting both", category, message, count)
+	}
 }
 
 // Two transactions queueing one member's repeats under one key at once still merge them: the second
@@ -1252,6 +1272,9 @@ func TestANotificationIsForSomeoneAndSaysSomething(t *testing.T) {
 		{Address: "petr@example.test", Category: notify.Direct, Message: "email.invitation"},
 		{To: jana, Category: notify.Direct, Message: "notification.access_changed", Secret: "token"},
 		{To: jana, Category: notify.Direct, Message: "notification.access_changed", Link: "https://elsewhere.example"},
+		// An email is each one's own, and merges with nothing.
+		{To: jana, Category: notify.Direct, Message: "email.member_removed", Email: true, Coalesce: "removed"},
+		{Address: "petr@example.test", Category: notify.Direct, Message: "email.invitation", Email: true, Coalesce: "invited"},
 	} {
 		if err := w.s.Send(t.Context(), h, n); err == nil {
 			t.Errorf("queued %+v", n)

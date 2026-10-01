@@ -801,10 +801,13 @@ paths:
         Upserts on the endpoint or token. A browser's Web Push subscription (`web_push`) is registered
         from its web session, and reaches its user while that session lives: signing out, or being
         signed out everywhere, ends it. One subscription per endpoint, so a browser another user
-        subscribed moves to the caller. Its endpoint must be at a push service the server sends to,
-        and its `keys` are the browser's own. A phone's or tablet's Expo push token (`expo`) is
+        subscribed moves to the caller, and one per web session, so the one a session registers
+        replaces the one it registered before. Its endpoint must be at a push service the server sends
+        to, and its `keys` are the browser's own. A phone's or tablet's Expo push token (`expo`) is
         registered from the device's own sign-in, and reaches it while that sign-in lives; `device_id`,
-        when given, must be that device. `201` when the subscription or the token is new, `200` when it
+        when given, must be that device. A token is the phone's for the app: registering it clears it
+        from any other installation that held it, while the profiles signed in on one installation, a
+        shared tablet's, each keep it. `201` when the subscription or the token is new, `200` when it
         was registered already. Registering again ends what failures had marked: a target marked
         stale after five failures in a row is tried again (FR-NT6). A subscription that a push service
         answers `404` or `410` is deleted, as is a token Expo reports as no longer registered. Either

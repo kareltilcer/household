@@ -382,8 +382,11 @@ for the mobile apps; email for a defined, small set (security, billing, invitati
 removal from a household, **D-111**) that must arrive even when push is off. A device registers its
 token on login and de-registers on logout. A browser's subscription is bound to the web session that
 registered it and reaches its user while that session lives; a device's token reaches it while its
-sign-in lives, so signing out, or being signed out everywhere, ends both. A browser's endpoint must
-be at a push service the server knows, so that no member can have the server send where they choose.
+sign-in lives, so signing out, or being signed out everywhere, ends both. A web session holds one
+subscription, which the next it registers replaces; a token registered from one installation of the
+app is cleared from any other that held it, an earlier installation on the same phone, while the
+profiles signed in on one shared tablet each keep it (D-104). A browser's endpoint must be at a push
+service the server knows, so that no member can have the server send where they choose.
 A notification is queued in the transaction of what caused it and delivered once that commits, by a
 worker of any instance; an email's link token waits sealed under a key the database does not hold
 ([ADR 0016](../adr/0016-scheduler-and-notification-transports.md)). An email still waiting for the
@@ -436,7 +439,8 @@ Modules register jobs; the platform owns the timing. Every instance runs it; the
 PostgreSQL advisory lock leads, and each job's next slot is kept in the database and taken by a
 statement that matches only while it is due, so that a slot fires once even while a leader whose
 connection died has not yet noticed ([ADR 0016](../adr/0016-scheduler-and-notification-transports.md)).
-A failed job is tried again after fifteen minutes or at its next slot, whichever comes first.
+A failed job, or one whose instance ended while it ran, is tried again after fifteen minutes or at
+its next slot, whichever comes first.
 
 | Job | Cadence | Owner |
 |---|---|---|

@@ -44,12 +44,15 @@ retry. The leader's session has an
 `idle_session_timeout` of four ticks, a minute at least, so that a leader whose host went without
 closing its connection releases the lock then, not once the server's TCP keepalive gives up on it,
 two hours on by default. The leader starts each job due that is not running already. A job's next
-slot is a row in `scheduler_jobs`, taken by `UPDATE … SET next_run_at = <next slot> WHERE name = $1
-AND next_run_at <= $now`: PostgreSQL serialises two such updates on the row, and the second matches
-nothing, so a slot fires once even when two instances both believe they lead. A slot missed while no
-instance led fires once; the slots it missed are not made up. A failed or panicking job is tried
-again after fifteen minutes, or at its next slot if sooner. Cadences are `Every(d)`, counted from
-the zero time so every instance computes the same slots, and `Daily(hh:mm)` in UTC, the clock of the
+slot is a row in `scheduler_jobs`, taken by `UPDATE … SET next_run_at = <the retry, or the next slot
+if sooner> WHERE name = $1 AND next_run_at <= $now`: PostgreSQL serialises two such updates on the
+row, and the second matches nothing, so a slot fires once even when two instances both believe they
+lead. The run's end moves `next_run_at` on to the next slot, so that a run whose instance ended
+before it could record that, with its process or its host, is tried again by the next leader as a
+failed one is. A slot missed while no instance led fires once; the slots it missed are not made up.
+A failed or panicking job is tried again after fifteen minutes, or at its next slot if sooner.
+Cadences are `Every(d)`, counted from the zero time so every instance computes the same slots, and
+`Daily(hh:mm)` in UTC, the clock of the
 jobs that belong to no household's day (D-109); a job about a household's own day, item 53's
 digests, runs every minute and resolves each household's time with `internal/platform/localtime`,
 which turns a wall-clock time into an instant DST included: a time the clocks skip moves forward by
@@ -96,24 +99,29 @@ past its context's end, for ten seconds at most, so that a shutdown leaves nothi
 go again once the lease has passed; one the shutdown stopped before it went is put back, its attempt
 not counted. A repeat queued while one with its key is going out waits the fifteen minutes, as it
 would after one sent; should the one going out be put back rather than sent, two wait, and the next
-repeat merges into the later alone. Two transactions queueing one recipient's repeats under one key
-take turns under a transaction-scoped advisory lock, so that the second finds what the first
+repeat merges into the later alone, which then says what the repeat says. An email merges with
+nothing. Two transactions queueing one recipient's repeats under one key take turns under a
+transaction-scoped advisory lock, so that the second finds what the first
 committed rather than each queueing a notification of its own. A commit wakes its own instance's
 workers for its household alone; the meter role's look across every household is the poll's.
 
 **Targets** are the account's: `push_subscriptions` (global), one row per browser endpoint, bound to
-the web session that registered it, which takes it along when it is deleted; and `devices.push_token`,
-used while the device's sign-in lives. An endpoint must be https at a known push service
-(`notify.DefaultPushHosts`, extended by `HOUSEHOLD_PUSH_HOSTS`), since it decides where the server
-sends. Web Push is RFC 8030 over `webpush-go` (PL-2): encrypted to the browser's keys, signed with
+the web session that registered it, which takes it along when it is deleted, and one per web session,
+a browser, whose next subscription replaces it; and `devices.push_token`, used while the device's
+sign-in lives, and cleared from every other installation that held it when one registers it, since a
+token is the phone's for the app (the profiles of one installation, a shared tablet's, each keep it).
+An endpoint must be https at a known push service (`notify.DefaultPushHosts`, extended by
+`HOUSEHOLD_PUSH_HOSTS`), since it decides where the server sends.
+Web Push is RFC 8030 over `webpush-go` (PL-2): encrypted to the browser's keys, signed with
 `HOUSEHOLD_VAPID_KEY`, a day to live, the urgency of who it is for, the hash of its household and its
 coalescing key as its topic, following no redirect. Expo is its HTTP API with the project's access token when one is set;
 its ticket waits in `push_receipts` (global) until `notify.receipts` reads its receipt. A 404 or 410,
 or Expo's `DeviceNotRegistered`, deletes a subscription or clears a token; five failures in a row mark
 a target stale until it registers again (FR-NT6). A failure is one the push service lays on the
-target, another 4xx or another of Expo's errors; no answer, a 429, a 5xx, a redirect, a 401 refusing
-the server's VAPID signature, or an error of the project's credentials, of the message, or of Expo's
-or Apple's or Google's own (`Unavailable`, logged `push_unavailable`) counts against none, or an
+target, another 4xx or another of Expo's errors; no answer, a 429, a 5xx, a redirect, a refusal of
+the server's VAPID signature (a 401, or Apple's 403 `BadJwtToken`), or an error of the project's
+credentials, of the message, or of Expo's or Apple's or Google's own
+(`Unavailable`, logged `push_unavailable`) counts against none, or an
 outage would leave every target it reached stale; so does a push whose client panicked, while what
 the other targets' services took stands. A ticket waits for its receipt a day at most, read or not. A device's run of failures ends with a receipt saying Apple or Google took a push, not with
 Expo's ticket, which says only that Expo did. A push a push service took is not retried, since that

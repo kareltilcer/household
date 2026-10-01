@@ -15,13 +15,15 @@
 // two UPDATEs on the row, and the second matches nothing. So a slot fires once.
 //
 // A job that fails is tried again after Config.Retry, or at its next slot when that comes first, and
-// one that panics is recovered and counted as failed. Timing is a slot's, not an appointment's: a
+// one that panics is recovered and counted as failed. So is one whose instance ended while it ran,
+// with its process or its host, which recorded no end: taking a slot moves the job's due time only
+// Retry on, and the run's end moves it to the next slot. Timing is a slot's, not an appointment's: a
 // slot missed while no instance led fires once when one does, and the slots it missed are not made
 // up. A job that runs past its next slot is not started again until it has ended. An instance that
 // finds it no longer leads ends the jobs it started, as a failure, so that they do not run on beside
 // the next leader's; it finds out within a tick and a ping, and until it does, the next leader may
-// start one of those jobs whose next slot has come. The leader's session ends at the server once the
-// leader has not pinged for a few ticks, so that a leader whose host went without closing its
+// start one of those jobs whose retry or next slot has come. The leader's session ends at the server
+// once the leader has not pinged for a few ticks, so that a leader whose host went without closing its
 // connection releases the lead within a minute or so, not once the server's TCP keepalive gives up.
 package scheduler
 
@@ -243,7 +245,7 @@ func (s *Scheduler) Tick(ctx context.Context) {
 			defer s.finish(j.Name)
 			defer stop()
 			defer unbind()
-			s.run(running, j)
+			s.run(running, j, now)
 		}()
 	}
 }
@@ -406,23 +408,31 @@ func (s *Scheduler) due(ctx context.Context, now time.Time) (map[string]bool, er
 	return due, nil
 }
 
-// take takes j's slot when one is due at now, moving its due time to its next slot, and reports
-// whether it did. A job whose row is gone takes nothing, and due registers it again.
+// take takes j's slot when one is due at now, and reports whether it did. It moves the job's due time
+// to Retry from now, or to its next slot when that comes first, which run moves on to the next slot
+// once the job has run: a leader whose process ended while the job ran, which recorded no end, leaves
+// it due again after Retry, for the next leader to try again as it would one that failed. A job whose
+// row is gone takes nothing, and due registers it again.
 func (s *Scheduler) take(ctx context.Context, j Job, now time.Time) (bool, error) {
 	took := false
+	held := now.Add(s.cfg.Retry)
+	if next := j.Cadence.next(now); next.Before(held) {
+		held = next
+	}
 	err := tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE scheduler_jobs SET next_run_at = $3, last_started_at = $2
-			WHERE name = $1 AND next_run_at <= $2`, j.Name, now, j.Cadence.next(now))
+			WHERE name = $1 AND next_run_at <= $2`, j.Name, now, held)
 		took = err == nil && tag.RowsAffected() == 1
 		return err
 	})
 	return took, err
 }
 
-// run runs j, recovering a panic, and records how it ended: a failure makes its next try come after
-// Retry, unless its next slot comes first.
-func (s *Scheduler) run(ctx context.Context, j Job) {
+// run runs j, whose slot was taken at took, recovering a panic, and records how it ended: its due time
+// moves on to its next slot, or for a failure to Retry from its end, unless its next slot comes first.
+// It records nothing once another instance has taken the job since, whose run the row then tells of.
+func (s *Scheduler) run(ctx context.Context, j Job, took time.Time) {
 	began := s.cfg.Now()
 	err := s.guard(ctx, j)
 	ended := s.cfg.Now()
@@ -439,8 +449,8 @@ func (s *Scheduler) run(ctx context.Context, j Job) {
 		_, err := tx.Exec(record, `
 			UPDATE scheduler_jobs SET last_finished_at = $2,
 			  last_failed_at = CASE WHEN $3 THEN $2 ELSE last_failed_at END,
-			  next_run_at = CASE WHEN $3 THEN least(next_run_at, $4) ELSE next_run_at END
-			WHERE name = $1`, j.Name, ended, err != nil, ended.Add(s.cfg.Retry))
+			  next_run_at = CASE WHEN $3 THEN least($5::timestamptz, $4::timestamptz) ELSE $5 END
+			WHERE name = $1 AND last_started_at = $6`, j.Name, ended, err != nil, ended.Add(s.cfg.Retry), j.Cadence.next(took), took)
 		return err
 	}); rerr != nil {
 		s.cfg.Log.LogAttrs(record, slog.LevelError, "scheduler: record how a job ended", slog.String("job", j.Name), slog.Any("error", rerr))

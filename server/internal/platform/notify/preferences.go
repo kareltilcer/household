@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -128,9 +130,9 @@ type preferencesUpdate struct {
 
 // apply returns p with u applied.
 func (u preferencesUpdate) apply(p Preferences) Preferences {
-	out := Preferences{Enabled: p.Enabled, Muted: map[Category]bool{}, Quiet: p.Quiet}
-	for c, muted := range p.Muted {
-		out.Muted[c] = muted
+	out := Preferences{Enabled: p.Enabled, Muted: maps.Clone(p.Muted), Quiet: p.Quiet}
+	if out.Muted == nil {
+		out.Muted = map[Category]bool{}
 	}
 	if u.enabled != nil {
 		out.Enabled = *u.enabled
@@ -212,15 +214,7 @@ func readPreferencesUpdate(r *http.Request) (preferencesUpdate, error) {
 		}
 	}
 	if len(errs) > 0 {
-		slices.SortFunc(errs, func(a, b problem.FieldError) int {
-			if a.Field < b.Field {
-				return -1
-			}
-			if a.Field > b.Field {
-				return 1
-			}
-			return 0
-		})
+		slices.SortFunc(errs, func(a, b problem.FieldError) int { return strings.Compare(a.Field, b.Field) })
 		return u, problem.Validation(errs...)
 	}
 	return u, nil

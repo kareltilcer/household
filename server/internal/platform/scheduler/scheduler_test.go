@@ -259,6 +259,44 @@ func TestAFailedJobIsTriedAgainBeforeItsNextSlot(t *testing.T) {
 	}
 }
 
+// A job whose instance ended while it ran, with its process or its host, recorded no end: it is tried
+// again after Retry, as a failed one is, not left until its next slot.
+func TestAJobWhoseInstanceEndedWhileItRanIsTriedAgain(t *testing.T) {
+	c := &clock{t: time.Date(2026, 10, 1, 0, 30, 0, 0, time.UTC)}
+	var runs atomic.Int32
+	job := scheduler.Job{Name: name(), Cadence: scheduler.Daily(mustClock(t, "01:00")), Run: func(context.Context) error {
+		runs.Add(1)
+		return nil
+	}}
+	s := instance(t, c, job)
+	tick(s)
+	c.advance(time.Hour) // 01:30: the 01:00 slot is due.
+	// An instance takes the slot and ends before the job does, recording nothing.
+	if took, err := s.Take(t.Context(), job, c.now()); err != nil || !took {
+		t.Fatalf("the slot was not taken: %v, %v", took, err)
+	}
+	c.advance(30 * time.Second)
+	tick(s)
+	if n := runs.Load(); n != 0 {
+		t.Fatalf("the job ran again before its retry: %d runs", n)
+	}
+	c.advance(time.Minute) // Past Retry, a day before its next slot.
+	tick(s)
+	if n := runs.Load(); n != 1 {
+		t.Fatalf("the job its instance left was not tried again: %d runs", n)
+	}
+	c.advance(time.Hour)
+	tick(s)
+	if n := runs.Load(); n != 1 {
+		t.Fatalf("a job that ran at its retry ran again before its next slot: %d runs", n)
+	}
+	c.advance(24 * time.Hour)
+	tick(s)
+	if n := runs.Load(); n != 2 {
+		t.Fatalf("the next slot: %d runs; want 2", n)
+	}
+}
+
 func TestAPanickingJobFailsAndTheOthersRun(t *testing.T) {
 	c := &clock{t: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)}
 	var ran atomic.Bool
