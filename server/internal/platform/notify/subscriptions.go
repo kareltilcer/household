@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"crypto/ecdh"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -136,8 +137,14 @@ func (s *Service) subscribeBrowser(r *http.Request, req subscriptionCreate) (sub
 	if !s.pushEndpoint(req.Endpoint) {
 		errs = append(errs, problem.FieldError{Field: "/endpoint", Code: problem.FieldInvalid})
 	}
+	// The browser's key must be a point on P-256, uncompressed, as a browser makes it: one that is not
+	// could be encrypted to by no push, and each would fail before it reached the push service.
 	p256dh, ok := key(req.Keys.P256dh, 65)
-	if !ok || p256dh[0] != 4 {
+	if ok {
+		_, err := ecdh.P256().NewPublicKey(p256dh)
+		ok = err == nil
+	}
+	if !ok {
 		errs = append(errs, problem.FieldError{Field: "/keys/p256dh", Code: problem.FieldInvalid})
 	}
 	auth, ok := key(req.Keys.Auth, 16)

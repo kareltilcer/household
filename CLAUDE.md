@@ -162,9 +162,11 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   fixed email set, is decided and rendered when it goes out: grant, privacy, their own mutes and their
   quiet hours (FR-NT5, D-111, D-112). The queue, the delivery log and a member's preferences are no
   entity's history and go through `tenant.InWriteTx`, as the expiry sweep's deletions in a household
-  do. The platform's jobs run on `internal/platform/scheduler`, which one instance leads; a job
-  registers in `app.newScheduler` with its cadence, and a retention is a row of
-  `internal/platform/expiry` and of PRD 03 §5's table
+  do. Two account writes go there too, rather than through `tenant.AccountTx`, to commit with what
+  they belong to: what a delivery says of its targets' health, in the transaction that settles it, and
+  a graduation's link, in its email's. The platform's jobs run on `internal/platform/scheduler`, which
+  one instance leads; a job registers in `app.newScheduler` with its cadence, and a retention is a row
+  of `internal/platform/expiry` and of PRD 03 §5's table
   ([ADR 0016](docs/adr/0016-scheduler-and-notification-transports.md)).
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.

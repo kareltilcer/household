@@ -58,7 +58,9 @@ A browser's Web Push endpoint must be at a push service the server knows
 (`notify.DefaultPushHosts`: Google's, Mozilla's, Apple's and Microsoft's), so that no member can have
 the server send to a host of their choosing. A browser whose push service is not among them is refused
 `422` when it subscribes; add its host, without a scheme, to `HOUSEHOLD_PUSH_HOSTS`
-(comma-separated) and deploy, and say so in an issue so that the list learns it.
+(comma-separated) and deploy, and say so in an issue so that the list learns it. Every subdomain of a
+host named there is sent to, so the server refuses to start with a top-level domain or an address in
+it: name the push service's own DNS name.
 
 ## Expo
 
@@ -72,7 +74,7 @@ The queue and the log are each household's (`notifications`, `notification_deliv
 as the administrator, never through the API.
 
 ```sql
--- What waits, and why: quiet_hours holds until run_at; email_failed is tried again then.
+-- What waits, and why: quiet_hours holds until run_at; email_failed and push_unavailable are tried again then.
 SELECT id, user_id, message, status, reason, run_at, attempts FROM notifications
 WHERE household_id = $1 AND status = 'queued' ORDER BY run_at;
 
@@ -87,11 +89,15 @@ WHERE household_id = $1 ORDER BY sent_at DESC LIMIT 50;
 - `gone`: the push service answered `404` or `410`, or Expo `DeviceNotRegistered`; the subscription is
   deleted, or the device's token cleared, and the app registers again when it next opens.
 - `push_failed`: the push service refused the push for that target (another `4xx`, or another of
-  Expo's errors), which counts towards the five that mark it stale.
+  Expo's errors), which counts towards the five that mark it stale. Expo reports most of Apple's and
+  Google's answers only in a ticket's receipt, read every fifteen minutes; a receipt saying Apple or
+  Google took a push ends the device's run.
 - `push_unavailable`: the push service did not take the push for a reason of its own: no answer, `429`,
-  a `5xx`, or Expo's `InvalidCredentials`, `MismatchSenderId`, `MessageTooBig` or
-  `MessageRateExceeded`. It counts against no target. Many at once are an outage, or the Expo
-  project's credentials; check `HOUSEHOLD_EXPO_ACCESS_TOKEN` and the project's push credentials.
+  a `5xx`, or Expo's `InvalidCredentials`, `MismatchSenderId`, `MessageTooBig`,
+  `MessageRateExceeded`, `DeveloperError`, `ExpoError` or `ProviderError`. It counts against no
+  target, and a notification no push service took is tried again with an email's backoff, five times
+  in all. Many at once are an outage, or the Expo project's credentials; check
+  `HOUSEHOLD_EXPO_ACCESS_TOKEN` and the project's push credentials.
 - `muted`, `category_muted`: the member's own preferences, which win (FR-NT2).
 - `no_grant`, `not_member`, `private`: the member may not see what it is about (FR-NT5).
 - `replaced`, `withdrawn`: an email that waited for the mail server and no longer says what holds: its

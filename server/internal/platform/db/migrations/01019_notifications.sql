@@ -38,7 +38,8 @@ CREATE INDEX push_subscriptions_session ON push_subscriptions (session_id);
 
 -- A device's Expo push token (FR-NT1), which reaches it while its sign-in lives: push_registered_at
 -- is when it was last registered, and push_failures and push_stale_at are its health, as a
--- subscription's are (FR-NT6). An Expo receipt of DeviceNotRegistered clears the token.
+-- subscription's are (FR-NT6), but for what ends a run of failures: a receipt saying Apple or Google
+-- took a push, not Expo's ticket. An Expo receipt of DeviceNotRegistered clears the token.
 ALTER TABLE devices
   ADD COLUMN push_registered_at timestamptz,
   ADD COLUMN push_failures smallint NOT NULL DEFAULT 0 CHECK (push_failures >= 0),
@@ -122,8 +123,8 @@ CREATE TYPE notification_status AS ENUM ('queued', 'sent', 'failed', 'dropped');
 -- latest word on: one queued under the same key drops it while it waits (reason replaced), as does
 -- its cause ending (reason withdrawn), so that an invitation's email whose link was sent again, or
 -- whose invitation was withdrawn, is never sent late. run_at is when it may next be tried: past quiet
--- hours (reason quiet_hours), past a failed email's backoff, or past the lease of the worker that
--- claimed it. Once it is settled, its args are kept as long as the delivery log keeps what it said,
+-- hours (reason quiet_hours), past the backoff of a failed email or of a push no push service took, or
+-- past the lease of the worker that claimed it. Once it is settled, its args are kept as long as the delivery log keeps what it said,
 -- seven days (args_expires_at), and the expiry sweep empties them: an invitation's personal message,
 -- or a member's name, outlives neither (PRD 03 §5).
 CREATE TABLE notifications (

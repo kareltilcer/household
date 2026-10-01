@@ -129,7 +129,9 @@ func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 			receipt = ids.IDs
 			_, _ = io.WriteString(w, `{"data": {"a": {"status": "ok"}, "b": {"status": "error", "details": {"error": "DeviceNotRegistered"}},
 				"c": {"status": "error", "message": "MessageRateExceeded", "details": {"error": "MessageRateExceeded"}},
-				"e": {"status": "error", "message": "?", "details": {"error": "SomethingOfTheDevices"}}}}`)
+				"e": {"status": "error", "message": "?", "details": {"error": "SomethingOfTheDevices"}},
+				"f": {"status": "error", "message": "?", "details": {"error": "ProviderError"}},
+				"g": {"status": "error", "message": "?", "details": {"error": "ExpoError"}}}}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -159,6 +161,7 @@ func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 	for body, want := range map[string]notify.Status{
 		`{"errors": [{"code": "INTERNAL"}]}`: notify.Unavailable,
 		`{"data": [{"status": "error", "message": "?", "details": {"error": "InvalidCredentials"}}]}`:    notify.Unavailable,
+		`{"data": [{"status": "error", "message": "?", "details": {"error": "DeveloperError"}}]}`:        notify.Unavailable,
 		`{"data": [{"status": "error", "message": "?", "details": {"error": "SomethingOfTheDevices"}}]}`: notify.Failed,
 	} {
 		mu.Lock()
@@ -169,12 +172,13 @@ func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 		}
 	}
 
-	got, err := expo.Receipts(t.Context(), []string{"a", "b", "c", "d", "e"})
+	got, err := expo.Receipts(t.Context(), []string{"a", "b", "c", "d", "e", "f", "g"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 4 || got["a"] != notify.Accepted || got["b"] != notify.Gone || got["c"] != notify.Unavailable ||
-		got["e"] != notify.Failed || len(receipt) != 5 {
+	// Apple's or Google's failure, or Expo's own, is a service's, not the device's.
+	if len(got) != 6 || got["a"] != notify.Accepted || got["b"] != notify.Gone || got["c"] != notify.Unavailable ||
+		got["e"] != notify.Failed || got["f"] != notify.Unavailable || got["g"] != notify.Unavailable || len(receipt) != 7 {
 		t.Fatalf("receipts: %v for %v", got, receipt)
 	}
 }

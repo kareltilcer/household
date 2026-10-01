@@ -355,15 +355,10 @@ func (s *Scheduler) due(ctx context.Context, now time.Time) (map[string]bool, er
 }
 
 // take takes j's slot when one is due at now, moving its due time to its next slot, and reports
-// whether it did. A job seen for the first time is due at its first slot after now.
+// whether it did. A job whose row is gone takes nothing, and due registers it again.
 func (s *Scheduler) take(ctx context.Context, j Job, now time.Time) (bool, error) {
 	took := false
 	err := tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx,
-			"INSERT INTO scheduler_jobs (name, next_run_at) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
-			j.Name, j.Cadence.next(now)); err != nil {
-			return err
-		}
 		tag, err := tx.Exec(ctx, `
 			UPDATE scheduler_jobs SET next_run_at = $3, last_started_at = $2
 			WHERE name = $1 AND next_run_at <= $2`, j.Name, now, j.Cadence.next(now))

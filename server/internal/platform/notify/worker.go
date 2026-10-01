@@ -328,7 +328,7 @@ func (s *Service) deliver(ctx context.Context, q queued) {
 		if v := recover(); v != nil {
 			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: a delivery panicked", householdAttr(q.household),
 				slog.String("message", q.message), slog.String("panic", httpx.TypeName(v)), slog.String("stack", logging.Stack()))
-			s.retry(ctx, q, nil)
+			s.retry(ctx, q, "", nil, nil)
 		}
 	}()
 	if q.attempts > maxAttempts {
@@ -343,7 +343,7 @@ func (s *Service) deliver(ctx context.Context, q queued) {
 		s.putBack(ctx, q)
 	case err != nil:
 		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: read a notification's recipient", householdAttr(q.household), slog.Any("error", err))
-		s.retry(ctx, q, nil)
+		s.retry(ctx, q, "", nil, nil)
 	case v.drop != "":
 		s.settle(ctx, q, "dropped", v.drop, []attempt{{status: "dropped", reason: v.drop}}, nil)
 	case !v.until.IsZero():
@@ -501,8 +501,10 @@ func (q queued) render(r recipient) i18n.Args {
 }
 
 // sendPush renders q in its recipient's language and pushes it to each of their targets. It is sent
-// when one push service took it; a push is not tried again, since its service holds it for the
-// device already.
+// when one push service took it, and not tried again, since that service holds it for the device. One
+// that no service took, a service among them failing on its own side (Unavailable), is tried again
+// with the backoff an email's is, since none holds it: a push service's outage would otherwise drop
+// every push due while it lasted, held for quiet hours or not.
 func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 	locale := i18n.Match(r.locale)
 	args := q.render(r)
@@ -514,7 +516,7 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 	if err != nil {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: render a push", householdAttr(q.household),
 			slog.String("message", q.message), slog.Any("error", err))
-		s.retry(ctx, q, nil)
+		s.retry(ctx, q, "", nil, nil)
 		return
 	}
 	p := Push{Notification: q.id, Household: q.household, Title: title, Body: body, Urgent: q.category == Direct}
@@ -531,6 +533,8 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 		// allGone is whether every target that did not take it is gone, which is the notification's
 		// reason then.
 		allGone = true
+		// unavailable is whether a push service did not take it for a reason of its own.
+		unavailable bool
 		// stopped is whether ctx's end stopped a push before its service answered: no failure of the
 		// target's, and no attempt.
 		stopped bool
@@ -550,7 +554,7 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 		case Failed:
 			a.status, a.reason, allGone = "failed", reasonPushFailed, false
 		case Unavailable:
-			a.status, a.reason, allGone = "failed", reasonPushUnavailable, false
+			a.status, a.reason, allGone, unavailable = "failed", reasonPushUnavailable, false, true
 		}
 		attempts = append(attempts, a)
 		healths = append(healths, func(ctx context.Context, tx pgx.Tx) error { return recordHealth(ctx, tx, t, o) })
@@ -563,6 +567,8 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 		s.putBack(ctx, q)
 	case allGone:
 		s.settle(ctx, q, "failed", reasonGone, attempts, healths)
+	case unavailable:
+		s.retry(ctx, q, reasonPushUnavailable, attempts, healths)
 	default:
 		s.settle(ctx, q, "failed", reasonPushFailed, attempts, healths)
 	}
@@ -652,7 +658,7 @@ func (s *Service) sendEmail(ctx context.Context, q queued, r recipient) {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "notify: an email was not sent", householdAttr(q.household),
 			slog.String("message", q.message), slog.Int("attempt", q.attempts), slog.Any("error", err))
 		a.status, a.reason = "failed", reasonEmailFailed
-		s.retry(ctx, q, &a)
+		s.retry(ctx, q, reasonEmailFailed, []attempt{a}, nil)
 		return
 	}
 	s.settle(ctx, q, "sent", "", []attempt{a}, nil)
@@ -685,8 +691,10 @@ type attempt struct {
 type health func(ctx context.Context, tx pgx.Tx) error
 
 // recordHealth records what o says of t (FR-NT6): a target that is gone is deleted, a failure counts
-// towards the run of them that marks it stale, an accepted push ends the run, an Expo ticket waits
-// for its receipt, and a push service unavailable says nothing of it.
+// towards the run of them that marks it stale, a browser's push its service took ends the run, and a
+// push service unavailable says nothing of it. An Expo ticket says only that Expo took the push, not
+// that Apple or Google did: it waits for its receipt, which ends the run or counts in it
+// (CheckReceipts).
 func recordHealth(ctx context.Context, tx pgx.Tx, t Target, o Outcome) error {
 	var err error
 	switch {
@@ -704,15 +712,21 @@ func recordHealth(ctx context.Context, tx pgx.Tx, t Target, o Outcome) error {
 		err = forgetToken(ctx, tx, t.User, t.ID, t.Token)
 	case o.Status == Failed:
 		err = failToken(ctx, tx, t.User, t.ID, t.Token)
-	default:
-		if _, err = tx.Exec(ctx, `
-			UPDATE devices SET push_failures = 0 WHERE user_id = $1 AND id = $2 AND push_token = $3 AND push_failures > 0`,
-			t.User, t.ID, t.Token); err == nil && o.Ticket != "" {
-			_, err = tx.Exec(ctx, `
-				INSERT INTO push_receipts (ticket, user_id, device_id, token) VALUES ($1, $2, $3, $4)
-				ON CONFLICT (ticket) DO NOTHING`, o.Ticket, t.User, t.ID, t.Token)
-		}
+	case o.Ticket != "":
+		_, err = tx.Exec(ctx, `
+			INSERT INTO push_receipts (ticket, user_id, device_id, token) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (ticket) DO NOTHING`, o.Ticket, t.User, t.ID, t.Token)
 	}
+	return err
+}
+
+// deliveredToken ends the run of failures of a device's token whose push Apple or Google took, as its
+// receipt says, unless the run has already marked it stale or the device has registered another token
+// since.
+func deliveredToken(ctx context.Context, tx pgx.Tx, user, device uuid.UUID, token string) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE devices SET push_failures = 0
+		WHERE user_id = $1 AND id = $2 AND push_token = $3 AND push_failures > 0 AND push_stale_at IS NULL`, user, device, token)
 	return err
 }
 
@@ -775,23 +789,19 @@ func (s *Service) holdUntil(ctx context.Context, q queued, until time.Time) {
 	}
 }
 
-// retry puts q back for its next attempt after its backoff, recording a, the attempt that failed,
-// when there was one; q is failed once it has had maxAttempts. One withdrawn while it was claimed is
-// not tried again: it stays dropped, for the reason it was (withdraw), and a is logged after its drop.
-func (s *Service) retry(ctx context.Context, q queued, a *attempt) {
-	var attempts []attempt
-	if a != nil {
-		attempts = append(attempts, *a)
-	}
+// retry puts q back for its next attempt after its backoff, for reason, recording attempts, those that
+// failed, and what they say of their targets (settle), when there were any; q is failed, for reason,
+// once it has had maxAttempts, or given up when no attempt reached a target. One withdrawn while it was
+// claimed is not tried again: it stays dropped, for the reason it was (withdraw), and its attempts are
+// logged after its drop.
+func (s *Service) retry(ctx context.Context, q queued, reason string, attempts []attempt, healths []health) {
 	if q.attempts >= maxAttempts {
-		reason := reasonGaveUp
-		if a != nil {
-			reason = a.reason
-		} else {
+		if reason == "" {
 			// No attempt reached a target, and the log still says what became of it (FR-NT6).
+			reason = reasonGaveUp
 			attempts = append(attempts, q.gaveUp())
 		}
-		s.settle(ctx, q, "failed", reason, attempts, nil)
+		s.settle(ctx, q, "failed", reason, attempts, healths)
 		return
 	}
 	ctx, cancel := detached(ctx)
@@ -801,22 +811,16 @@ func (s *Service) retry(ctx context.Context, q queued, a *attempt) {
 		tag, err := tx.Exec(ctx, `
 			UPDATE notifications SET run_at = now() + make_interval(secs => $4),
 			  reason = CASE WHEN status = 'queued' THEN $5 ELSE reason END, claim = NULL
-			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, wait.Seconds(), nullable(reasonOf(a)))
+			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, wait.Seconds(), nullable(reason))
 		if err != nil || tag.RowsAffected() == 0 {
 			return err
 		}
+		s.recordHealths(ctx, tx, q, healths)
 		return logAttempts(ctx, tx, q, attempts)
 	})
 	if err != nil {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: put a notification back", householdAttr(q.household), slog.Any("error", err))
 	}
-}
-
-func reasonOf(a *attempt) string {
-	if a == nil {
-		return ""
-	}
-	return a.reason
 }
 
 // gaveUp is the delivery log's row of q given up with no attempt of its own to log: by its transport
@@ -833,31 +837,42 @@ func (q queued) gaveUp() attempt {
 // erases what it kept only until then: the address it went to and its email's sealed secret, at once,
 // and the arguments it was rendered from once the delivery log no longer keeps what it said
 // (keepBodies). A worker whose lease another took settles nothing; one withdrawn while it was claimed
-// is settled as what became of it, after its drop (withdraw). It settles past ctx's end (detached):
-// what went out and stayed claimed would go again once its lease had passed. So nothing but the
-// settlement itself keeps it from settling: what an attempt says of its target is written under a
-// savepoint, and one that fails, a device deleted meanwhile, is logged and left out.
+// is settled as what became of it, after its drop (withdraw): sent, when it went, and otherwise left
+// dropped for the reason it was, its attempts logged after the drop. It settles past ctx's end
+// (detached): what went out and stayed claimed would go again once its lease had passed. So nothing
+// but the settlement itself keeps it from settling: what an attempt says of its target is written
+// under a savepoint, and one that fails, a device deleted meanwhile, is logged and left out.
 func (s *Service) settle(ctx context.Context, q queued, status, reason string, attempts []attempt, healths []health) {
 	ctx, cancel := detached(ctx)
 	defer cancel()
 	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
-			UPDATE notifications SET status = $4, reason = $5, settled_at = now(), claim = NULL, address = NULL, secret = NULL,
-			  args_expires_at = now() + make_interval(secs => $6)
+			UPDATE notifications SET
+			  status = CASE WHEN status = 'queued' OR $4::notification_status = 'sent' THEN $4::notification_status ELSE status END,
+			  reason = CASE WHEN status = 'queued' OR $4::notification_status = 'sent' THEN $5 ELSE reason END,
+			  settled_at = CASE WHEN status = 'queued' OR $4::notification_status = 'sent' THEN now() ELSE settled_at END,
+			  claim = NULL, address = NULL, secret = NULL, args_expires_at = now() + make_interval(secs => $6)
 			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, status, nullable(reason), keepBodies.Seconds())
 		if err != nil || tag.RowsAffected() == 0 {
 			return err
 		}
-		for _, h := range healths {
-			if err := pgx.BeginFunc(ctx, tx, func(savepoint pgx.Tx) error { return h(ctx, savepoint) }); err != nil {
-				s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "notify: record what a push says of its target", householdAttr(q.household),
-					slog.Any("error", err))
-			}
-		}
+		s.recordHealths(ctx, tx, q, healths)
 		return logAttempts(ctx, tx, q, attempts)
 	})
 	if err != nil {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: settle a notification", householdAttr(q.household), slog.Any("error", err))
+	}
+}
+
+// recordHealths writes what q's attempts say of their targets in tx, which settles q or puts it back,
+// each under a savepoint of its own: one that fails, for a device deleted meanwhile, is logged and left
+// out, and keeps nothing else from being written.
+func (s *Service) recordHealths(ctx context.Context, tx pgx.Tx, q queued, healths []health) {
+	for _, h := range healths {
+		if err := pgx.BeginFunc(ctx, tx, func(savepoint pgx.Tx) error { return h(ctx, savepoint) }); err != nil {
+			s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "notify: record what a push says of its target", householdAttr(q.household),
+				slog.Any("error", err))
+		}
 	}
 }
 

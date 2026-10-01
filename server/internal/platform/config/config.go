@@ -25,6 +25,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -488,6 +489,11 @@ func (l *loader) files(c *Config, dev bool) {
 	c.UploadTimeout = l.duration(UploadTimeoutVar, 15*time.Minute)
 }
 
+// pushHost is a host HOUSEHOLD_PUSH_HOSTS may name: a DNS name of two labels or more, whose last is no
+// number. A browser's endpoint at it or at any of its subdomains is sent to, so that a top-level
+// domain, or an address, would let a member have the server send to a host of their choosing.
+var pushHost = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$`)
+
 // notifications reads what the notification transport needs (item 15): the keys an email's link is
 // sealed with while it waits, and the VAPID key Web Push is signed with, both secrets an error never
 // quotes, and outside development never the published ones; the push services a browser may name
@@ -515,11 +521,11 @@ func (l *loader) notifications(c *Config, dev bool) {
 		c.VAPIDKey = key
 	}
 	for _, host := range strings.Split(l.str(PushHostsVar, ""), ",") {
-		host = strings.ToLower(strings.TrimSpace(host))
+		host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
 		switch {
 		case host == "":
-		case strings.ContainsAny(host, "/:@ ") || strings.HasPrefix(host, "."):
-			l.fail("%s: %q is not a host name", PushHostsVar, host)
+		case !pushHost.MatchString(host):
+			l.fail("%s: %q is not a host name; want a push service's DNS name, of two labels or more", PushHostsVar, host)
 		default:
 			c.PushHosts = append(c.PushHosts, host)
 		}

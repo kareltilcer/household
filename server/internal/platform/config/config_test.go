@@ -550,6 +550,9 @@ func TestTheNotificationSettings(t *testing.T) {
 		{"a VAPID key past the curve's order", config.VAPIDKeyVar, base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0xff}, 32)), "P-256"},
 		{"Expo over http", config.ExpoPushURLVar, "http://exp.host/--/api/v2/push", "https"},
 		{"a push host with a scheme", config.PushHostsVar, "https://push.example", "not a host"},
+		// A host whose every subdomain is sent to: a top-level domain, or an address, is anyone's.
+		{"a top-level domain as a push host", config.PushHostsVar, "net", "not a host"},
+		{"an address as a push host", config.PushHostsVar, "10.0.0.5", "not a host"},
 	} {
 		_, err := config.Load(config.Serve, env(serving(map[string]string{
 			config.EnvVar:         "production",
@@ -568,7 +571,7 @@ func TestTheNotificationSettings(t *testing.T) {
 	c, err = config.Load(config.Serve, env(serving(map[string]string{
 		config.EnvVar:             "production",
 		config.DatabaseURLVar:     dsn("household_app", "s3cret", "db.internal:5432", "household"),
-		config.PushHostsVar:       " Push.Example , ,other.example",
+		config.PushHostsVar:       " Push.Example , ,other.example.",
 		config.ExpoAccessTokenVar: "expo-token",
 	})))
 	if err != nil {

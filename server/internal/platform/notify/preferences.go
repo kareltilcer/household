@@ -185,7 +185,10 @@ func readPreferencesUpdate(r *http.Request) (preferencesUpdate, error) {
 			if err := json.Unmarshal(body.Quiet, &q); err != nil {
 				return u, problem.Validation(problem.FieldError{Field: "/quiet_hours", Code: problem.FieldMalformed})
 			}
-			var w localtime.Window
+			var (
+				w      localtime.Window
+				parsed = true
+			)
 			for _, f := range []struct {
 				name  string
 				value *string
@@ -193,14 +196,16 @@ func readPreferencesUpdate(r *http.Request) (preferencesUpdate, error) {
 			}{{"from", q.From, &w.From}, {"to", q.To, &w.To}} {
 				if f.value == nil {
 					errs = append(errs, problem.FieldError{Field: "/quiet_hours/" + f.name, Code: "required"})
+					parsed = false
 					continue
 				}
 				var err error
 				if *f.into, err = localtime.ParseClock(*f.value); err != nil {
 					errs = append(errs, problem.FieldError{Field: "/quiet_hours/" + f.name, Code: "pattern"})
+					parsed = false
 				}
 			}
-			if len(errs) == 0 && w.From == w.To {
+			if parsed && w.From == w.To {
 				errs = append(errs, problem.FieldError{Field: "/quiet_hours/to", Code: problem.FieldInvalid})
 			}
 			u.quiet = &w

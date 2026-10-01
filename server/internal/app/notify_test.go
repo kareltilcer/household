@@ -1,6 +1,8 @@
 package app_test
 
 import (
+	"crypto/ecdh"
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -37,12 +39,24 @@ type subscription struct {
 
 // browserKeys are a browser's subscription keys: an uncompressed P-256 point and 16 bytes of secret.
 func browserKeys() map[string]string {
-	point := append([]byte{4}, make([]byte, 64)...)
-	point[1] = 7
+	key, err := ecdh.P256().GenerateKey(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
 	return map[string]string{
-		"p256dh": base64.RawURLEncoding.EncodeToString(point),
+		"p256dh": base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()),
 		"auth":   base64.RawURLEncoding.EncodeToString([]byte("0123456789abcdef")),
 	}
+}
+
+// offCurve are subscription keys whose p256dh is 65 bytes of an uncompressed point's form, which is
+// on no curve: no push could be encrypted to it.
+func offCurve() map[string]string {
+	point := append([]byte{4}, make([]byte, 64)...)
+	point[1] = 7
+	keys := browserKeys()
+	keys["p256dh"] = base64.RawURLEncoding.EncodeToString(point)
+	return keys
 }
 
 // subscribe subscribes the browser at a push service endpoint of its own, and returns the endpoint.
@@ -102,6 +116,7 @@ func TestRegisteringWhereAMemberIsReached(t *testing.T) {
 		// A scheme no browser spells, which the table would refuse.
 		{"transport": "web_push", "endpoint": "HTTPS://" + apptest.PushHost + "/send/4", "keys": browserKeys()},
 		{"transport": "web_push", "endpoint": "https://" + apptest.PushHost + "/send/2", "keys": map[string]string{"p256dh": "AAAA", "auth": "AAAA"}},
+		{"transport": "web_push", "endpoint": "https://" + apptest.PushHost + "/send/5", "keys": offCurve()},
 		{"transport": "web_push", "endpoint": "https://" + apptest.PushHost + "/send/3"},
 		// A browser's sign-in is reached through its subscription, not a device's token.
 		{"transport": "expo", "endpoint": "ExponentPushToken[abc]"},
@@ -239,6 +254,12 @@ func TestAMembersPreferences(t *testing.T) {
 		`{"quiet_hours": {"from": "08:00", "to": "08:00"}}`,
 	} {
 		expect(t, jana.patch("/me/notification-preferences", bad, nil), http.StatusUnprocessableEntity, problem.CodeValidationFailed)
+	}
+	// Every field that is wrong is named at once, quiet hours that are no window among them.
+	both := fieldErrorsOf(t, jana.patch("/me/notification-preferences",
+		`{"categories": {"chat": false}, "quiet_hours": {"from": "08:00", "to": "08:00"}}`, nil))
+	if fmt.Sprint(both) != "[{/categories/chat invalid} {/quiet_hours/to invalid}]" {
+		t.Fatalf("named: %v", both)
 	}
 }
 

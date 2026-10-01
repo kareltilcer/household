@@ -416,15 +416,18 @@ one coalescing key merge: into one still waiting, or, within fifteen minutes of 
 one held until those fifteen minutes have passed.
 
 **FR-NT6 — Delivery log.** Every attempt recorded with outcome, and every notification dropped,
-or given up, before any attempt with its reason. `404`/`410` from a push service deletes the subscription, and
-Expo's `DeviceNotRegistered`, in a ticket or in its receipt, clears the device's token. Five
-failures in a row mark a subscription or a device stale and stop trying until it registers again: a
-failure its push service lays on it, never one of the service's own (no answer, `429`, a `5xx`, the
-project's credentials refused), which an outage would otherwise turn into every target going stale. A
-push is not retried, since its push service holds it for the device; an email the mail server does
-not take is tried again with backoff, five times in all. Support can read this log — it is metadata,
-not content. What a push said is kept seven days for the household's owners (FR-HA12, §5) and is not
-what support reads; an email keeps its subject, never its body, which may carry a link's token.
+or given up, before any attempt with its reason. `404`/`410` from a push service deletes the
+subscription, and Expo's `DeviceNotRegistered`, in a ticket or in its receipt, clears the device's
+token. Five failures in a row mark a subscription or a device stale and stop trying until it
+registers again: a failure its push service lays on it, never one of the service's own (no answer,
+`429`, a `5xx`, the project's credentials refused, an error of Expo's or of Apple's or Google's own),
+which an outage would otherwise turn into every target going stale. A device's run of failures ends
+when Expo's receipt, not its ticket, says Apple or Google took a push. A push a push service took is
+not retried, since that service holds it for the device; one that no push service took, one failing
+on its own side, is tried again as an email the mail server does not take is: with backoff, five
+times in all (**D-112**). Support can read this log — it is metadata, not content. What a push said
+is kept seven days for the household's owners (FR-HA12, §5) and is not what support reads; an email
+keeps its subject, never its body, which may carry a link's token.
 
 ## 5. Scheduler
 

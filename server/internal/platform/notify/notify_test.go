@@ -32,10 +32,11 @@ import (
 
 func TestMain(m *testing.M) { testsupport.Main(m) }
 
-// pushed is a push the tests' push services took.
+// pushed is a push the tests' push services took, with the ticket it was answered with.
 type pushed struct {
 	target notify.Target
 	push   notify.Push
+	ticket string
 }
 
 // pushes keep the pushes sent, Web Push's and Expo's alike, and answer each as answer says: accepted,
@@ -50,14 +51,13 @@ type pushes struct {
 func (p *pushes) Push(_ context.Context, t notify.Target, m notify.Push) notify.Outcome {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.sent = append(p.sent, pushed{target: t, push: m})
-	if p.answer != nil {
-		return p.answer(t)
-	}
 	o := notify.Outcome{Status: notify.Accepted}
-	if t.Transport == "expo" {
+	if p.answer != nil {
+		o = p.answer(t)
+	} else if t.Transport == "expo" {
 		o.Ticket = "ticket-" + idgen.New().String()
 	}
+	p.sent = append(p.sent, pushed{target: t, push: m, ticket: o.Ticket})
 	return o
 }
 
@@ -534,8 +534,9 @@ func TestATargetMustBeLiveToBePushedTo(t *testing.T) {
 }
 
 // A push service's 404 or 410 deletes the subscription; five failures in a row mark a target stale,
-// and one success ends the run (FR-NT6). A push service that is down, or throttles the server, holds
-// nothing against the targets it did not take a push for, however long it lasts.
+// and one success ends the run (FR-NT6): a browser's push service taking it, and for a device Apple's
+// or Google's, as its receipt says, not Expo's ticket. A push service that is down, or throttles the
+// server, holds nothing against the targets it did not take a push for, however long it lasts.
 func TestAGoneTargetIsDeletedAndAFailingOneGoesStale(t *testing.T) {
 	w := newWorld(t)
 	h, jana, petr := w.household(), w.user("Jana"), w.user("Petr")
@@ -578,8 +579,23 @@ func TestAGoneTargetIsDeletedAndAFailingOneGoesStale(t *testing.T) {
 	}
 	w.pushes.answer = nil
 	w.send(h, accessChanged(petr))
+	if sf, ss, df, ds := failures(); sf != 0 || ss || df != 4 || ds {
+		t.Fatalf("after a success, before the device's receipt: %d %v %d %v", sf, ss, df, ds)
+	}
+	w.exec("UPDATE push_receipts SET sent_at = now() - interval '20 minutes' WHERE device_id = $1", device)
+	w.pushes.mu.Lock()
+	for _, p := range w.pushes.sent {
+		if p.target.ID == device && p.ticket != "" {
+			// Apple or Google took the push Expo ticketed.
+			w.pushes.receipts[p.ticket] = notify.Accepted
+		}
+	}
+	w.pushes.mu.Unlock()
+	if err := w.s.CheckReceipts(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if sf, ss, df, ds := failures(); sf != 0 || ss || df != 0 || ds {
-		t.Fatalf("after a success: %d %v %d %v", sf, ss, df, ds)
+		t.Fatalf("after the device's receipt: %d %v %d %v", sf, ss, df, ds)
 	}
 	w.pushes.answer = func(notify.Target) notify.Outcome { return notify.Outcome{Status: notify.Unavailable} }
 	for range 6 {
@@ -609,7 +625,8 @@ func TestAGoneTargetIsDeletedAndAFailingOneGoesStale(t *testing.T) {
 
 // Expo's receipt of DeviceNotRegistered clears the token it was sent to, unless the device registered
 // another since; an error of the push's on the device counts as a failure, and one of the project's
-// or of Expo's own as none; a ticket answered, or a day old, is done with.
+// or of Expo's own as none; a push Apple or Google took ends the device's run of failures; a ticket
+// answered, or a day old, is done with.
 func TestExposReceiptsAreRead(t *testing.T) {
 	w := newWorld(t)
 	jana := w.user("Jana")
@@ -617,6 +634,8 @@ func TestExposReceiptsAreRead(t *testing.T) {
 	failing, failingToken := w.phone(jana)
 	renewed, renewedToken := w.phone(jana)
 	throttled, throttledToken := w.phone(jana)
+	delivered, deliveredToken := w.phone(jana)
+	w.exec("UPDATE devices SET push_failures = 3 WHERE id IN ($1, $2)", throttled, delivered)
 	// Tickets are global: this run's are its own.
 	run := "-" + idgen.New().String()
 	w.exec(`INSERT INTO push_receipts (ticket, user_id, device_id, token, sent_at) VALUES
@@ -624,33 +643,36 @@ func TestExposReceiptsAreRead(t *testing.T) {
 	          ('t-failing' || $10, $1, $4, $5, now() - interval '20 minutes'),
 	          ('t-renewed' || $10, $1, $6, $7, now() - interval '20 minutes'),
 	          ('t-throttled' || $10, $1, $8, $9, now() - interval '20 minutes'),
+	          ('t-delivered' || $10, $1, $11, $12, now() - interval '20 minutes'),
 	          ('t-unread' || $10, $1, $2, $3, now() - interval '20 minutes'),
 	          ('t-old' || $10, $1, $2, $3, now() - interval '25 hours'),
 	          ('t-young' || $10, $1, $2, $3, now() - interval '1 minute')`,
-		jana, dead, deadToken, failing, failingToken, renewed, renewedToken, throttled, throttledToken, run)
+		jana, dead, deadToken, failing, failingToken, renewed, renewedToken, throttled, throttledToken, run, delivered, deliveredToken)
 	w.exec("UPDATE devices SET push_token = 'ExponentPushToken[new]' WHERE id = $1", renewed)
 	w.pushes.receipts = map[string]notify.Status{
 		"t-dead" + run: notify.Gone, "t-failing" + run: notify.Failed, "t-renewed" + run: notify.Gone, "t-throttled" + run: notify.Unavailable,
+		"t-delivered" + run: notify.Accepted,
 	}
 	if err := w.s.CheckReceipts(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	var (
-		deadTokenNow, renewedTokenNow *string
-		failures, throttledFailures   int
-		left                          []string
+		deadTokenNow, renewedTokenNow                  *string
+		failures, throttledFailures, deliveredFailures int
+		left                                           []string
 	)
 	if err := w.admin.QueryRow(t.Context(), `
 		SELECT (SELECT push_token FROM devices WHERE id = $1), (SELECT push_failures FROM devices WHERE id = $2),
 		  (SELECT push_token FROM devices WHERE id = $3), (SELECT push_failures FROM devices WHERE id = $5),
-		  array(SELECT ticket FROM push_receipts WHERE user_id = $4 ORDER BY ticket)`, dead, failing, renewed, jana, throttled).
-		Scan(&deadTokenNow, &failures, &renewedTokenNow, &throttledFailures, &left); err != nil {
+		  (SELECT push_failures FROM devices WHERE id = $6),
+		  array(SELECT ticket FROM push_receipts WHERE user_id = $4 ORDER BY ticket)`, dead, failing, renewed, jana, throttled, delivered).
+		Scan(&deadTokenNow, &failures, &renewedTokenNow, &throttledFailures, &deliveredFailures, &left); err != nil {
 		t.Fatal(err)
 	}
 	if deadTokenNow != nil || failures != 1 || renewedTokenNow == nil || *renewedTokenNow != "ExponentPushToken[new]" ||
-		throttledFailures != 0 || fmt.Sprint(left) != fmt.Sprintf("[t-unread%s t-young%s]", run, run) {
-		t.Fatalf("dead %v, failures %d, renewed %v, throttled's failures %d, left %v", deadTokenNow, failures, renewedTokenNow,
-			throttledFailures, left)
+		throttledFailures != 3 || deliveredFailures != 0 || fmt.Sprint(left) != fmt.Sprintf("[t-unread%s t-young%s]", run, run) {
+		t.Fatalf("dead %v, failures %d, renewed %v, throttled's failures %d, delivered's %d, left %v", deadTokenNow, failures,
+			renewedTokenNow, throttledFailures, deliveredFailures, left)
 	}
 }
 
@@ -692,6 +714,56 @@ func TestAPushThatPanicsIsTriedAgain(t *testing.T) {
 	w.send(h, accessChanged(jana))
 	if q := w.one(h); q.status != "queued" || q.attempts != 1 || time.Until(q.runAt) < 30*time.Second {
 		t.Fatalf("after a push panicked: %+v", q)
+	}
+}
+
+// A push no push service took, one failing on its own side, is tried again with an email's backoff,
+// since none holds it for the device, each attempt logged and what it says of its targets recorded,
+// and is failed after the fifth; one a service took is sent and not tried again.
+func TestAPushNoServiceTookIsTriedAgain(t *testing.T) {
+	w := newWorld(t)
+	h, jana := w.household(), w.user("Jana")
+	w.member(h, jana, "member", nil)
+	refusing := w.browser(jana)
+	w.phone(jana)
+	w.pushes.answer = func(t notify.Target) notify.Outcome {
+		if t.ID == refusing {
+			return notify.Outcome{Status: notify.Failed}
+		}
+		return notify.Outcome{Status: notify.Unavailable}
+	}
+	w.send(h, accessChanged(jana))
+	q := w.one(h)
+	if q.status != "queued" || q.why() != "push_unavailable" || q.attempts != 1 || time.Until(q.runAt) < 30*time.Second {
+		t.Fatalf("after no service took it: %+v", q)
+	}
+	var failures int
+	if err := w.admin.QueryRow(t.Context(), "SELECT failures FROM push_subscriptions WHERE id = $1", refusing).Scan(&failures); err != nil {
+		t.Fatal(err)
+	}
+	if logged := w.deliveries(h); len(logged) != 2 || failures != 1 {
+		t.Fatalf("after the first attempt: %d failures, logged %+v", failures, logged)
+	}
+	w.pushes.answer = nil
+	w.due(h)
+	w.s.Drain(t.Context(), h)
+	if q := w.one(h); q.status != "sent" || q.reason != nil || len(w.pushes.to(jana)) != 4 {
+		t.Fatalf("tried again: %+v, %d pushed", q, len(w.pushes.to(jana)))
+	}
+
+	other := w.household()
+	w.member(other, jana, "member", nil)
+	w.pushes.answer = func(notify.Target) notify.Outcome { return notify.Outcome{Status: notify.Unavailable} }
+	w.send(other, accessChanged(jana))
+	for range 6 {
+		w.due(other)
+		w.s.Drain(t.Context(), other)
+	}
+	if q := w.one(other); q.status != "failed" || q.why() != "push_unavailable" || q.attempts != 5 {
+		t.Fatalf("after five attempts: %+v", q)
+	}
+	if n := len(w.deliveries(other)); n != 10 {
+		t.Fatalf("%d attempts logged; want 5 at each of 2 targets", n)
 	}
 }
 
@@ -813,6 +885,56 @@ func TestRepeatsCoalesce(t *testing.T) {
 	if len(all) != 2 || all[0].count != 1 || all[1].status != "queued" || all[1].count != 1 ||
 		time.Until(all[1].runAt) < notify.Window-time.Minute {
 		t.Fatalf("a repeat while one went out: %+v", all)
+	}
+}
+
+// Two transactions queueing one member's repeats under one key at once still merge them: the second
+// waits for the first to commit, then finds its notification waiting.
+func TestRepeatsQueuedAtOnceCoalesce(t *testing.T) {
+	w := newWorld(t)
+	h, jana := w.household(), w.user("Jana")
+	w.member(h, jana, "member", nil)
+	n := accessChanged(jana)
+	n.Coalesce = "access_changed"
+	scoped := tenant.Assume(t.Context(), w.app, h, uuid.Nil, "")
+	queue := func(held func()) error {
+		return tenant.InWriteTx(scoped, func(tx pgx.Tx) error {
+			if err := w.s.Queue(scoped, tx, n); err != nil {
+				return err
+			}
+			held()
+			return nil
+		})
+	}
+	queued, commit := make(chan struct{}), make(chan struct{})
+	release := sync.OnceFunc(func() { close(commit) })
+	defer release()
+	first, second := make(chan error, 1), make(chan error, 1)
+	go func() { first <- queue(func() { close(queued); <-commit }) }()
+	<-queued
+	go func() { second <- queue(func() {}) }()
+	// The second waits on the first's lock before the first commits.
+	for deadline, waiting := time.Now().Add(10*time.Second), 0; waiting == 0; {
+		if err := w.admin.QueryRow(t.Context(), `
+			SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND wait_event = 'advisory'`).
+			Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting == 0 && time.Now().After(deadline) {
+			release()
+			<-first
+			t.Fatalf("the second did not wait for the first: %v", <-second)
+		}
+		if waiting == 0 {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	release()
+	if err := errors.Join(<-first, <-second); err != nil {
+		t.Fatal(err)
+	}
+	if q := w.one(h); q.count != 2 {
+		t.Fatalf("two queued at once: %+v", q)
 	}
 }
 
@@ -971,6 +1093,24 @@ func TestAnEmailWithdrawnAsItGoesIsLoggedAsWhatBecameOfIt(t *testing.T) {
 		t.Fatalf("an email the mail server refused as it was withdrawn: %+v, %d sent", q, len(w.mail.all()))
 	}
 	if logged := w.deliveries(other); len(logged) != 2 || logged[0].status != "dropped" || logged[1].status != "failed" ||
+		logged[1].reason != "email_failed" {
+		t.Fatalf("logged: %+v", logged)
+	}
+
+	// On its last attempt too, when a refusal would otherwise fail it.
+	last := w.household()
+	if err := w.s.Send(t.Context(), last, invite); err != nil {
+		t.Fatal(err)
+	}
+	w.exec("UPDATE notifications SET attempts = 4 WHERE household_id = $1", last)
+	w.mail.fail = 1
+	w.mail.during = func() { w.withdraw(last, "invitation:1") }
+	w.s.Drain(t.Context(), last)
+	w.mail.during = nil
+	if q := w.one(last); q.status != "dropped" || q.why() != "withdrawn" {
+		t.Fatalf("an email refused on its last attempt as it was withdrawn: %+v", q)
+	}
+	if logged := w.deliveries(last); len(logged) != 2 || logged[0].status != "dropped" || logged[1].status != "failed" ||
 		logged[1].reason != "email_failed" {
 		t.Fatalf("logged: %+v", logged)
 	}

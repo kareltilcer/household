@@ -90,7 +90,9 @@ a worker whose lease another took settles nothing. What a worker decided is writ
 past its context's end, for ten seconds at most, so that a shutdown leaves nothing it sent claimed to
 go again once the lease has passed; one the shutdown stopped before it went is put back, its attempt
 not counted. A repeat queued while one with its key is going out waits the fifteen minutes, as it
-would after one sent.
+would after one sent. Two transactions queueing one recipient's repeats under one key take turns
+under a transaction-scoped advisory lock, so that the second finds what the first committed rather
+than each queueing a notification of its own.
 
 **Targets** are the account's: `push_subscriptions` (global), one row per browser endpoint, bound to
 the web session that registered it, which takes it along when it is deleted; and `devices.push_token`,
@@ -103,10 +105,13 @@ its ticket waits in `push_receipts` (global) until `notify.receipts` reads its r
 or Expo's `DeviceNotRegistered`, deletes a subscription or clears a token; five failures in a row mark
 a target stale until it registers again (FR-NT6). A failure is one the push service lays on the
 target, another 4xx or another of Expo's errors; no answer, a 429, a 5xx, a redirect, or an error of
-the project's credentials or of the message (`Unavailable`, logged `push_unavailable`) counts against
-none, or an outage would leave every target it reached stale. A push is not retried, since its service holds it
-for the device; an email is, after a minute, five, thirty and two hours, and given up after the
-fifth.
+the project's credentials, of the message, or of Expo's or Apple's or Google's own (`Unavailable`,
+logged `push_unavailable`) counts against none, or an outage would leave every target it reached
+stale. A device's run of failures ends with a receipt saying Apple or Google took a push, not with
+Expo's ticket, which says only that Expo did. A push a push service took is not retried, since that
+service holds it for the device; one that none took, a service among its targets' unavailable, is
+tried again (D-112), its targets' health recorded with each attempt; so is an email, after a minute,
+five, thirty and two hours, each given up after the fifth.
 
 **An email's link token waits sealed**, under `HOUSEHOLD_NOTIFY_KEYS`, keys of its own built as
 item 9's MFA keys are (`mfa.Keys`: AES-256-GCM, the first seals, each opens), bound to the

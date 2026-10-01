@@ -35,11 +35,13 @@ const (
 const deviceNotRegistered = "DeviceNotRegistered"
 
 // expoServiceErrors are the errors Expo answers that say nothing of the device's token: the project's
-// credentials with Apple or Google, a message too big, or too many sent to the device at once. Each
-// would fail a push to any token, and counted against the tokens they reached, they would mark every
-// device stale while the project's settings were wrong.
+// credentials with Apple or Google, a message too big or not well made, too many sent to the device at
+// once, or a failure of Expo's own or of Apple's or Google's service. Each would fail a push to any
+// token, and counted against the tokens they reached, they would mark every device stale while the
+// project's settings were wrong or a service was down.
 var expoServiceErrors = map[string]bool{
 	"InvalidCredentials": true, "MismatchSenderId": true, "MessageTooBig": true, "MessageRateExceeded": true,
+	"DeveloperError": true, "ExpoError": true, "ProviderError": true,
 }
 
 // expoStatus is what an error Expo reports of a push, in its ticket or its receipt, says of the device's
@@ -182,11 +184,12 @@ type ReceiptReader interface {
 }
 
 // CheckReceipts asks Expo for the receipts of the tickets old enough to have one, and records what each
-// says of its device's token (FR-NT6): DeviceNotRegistered clears it, as a 410 deletes a browser's
-// subscription, an error of the push's there counts towards the run of failures that marks it stale,
-// and one of the project's or of Expo's own (Unavailable) towards nothing. A ticket
-// whose receipt came, or that is older than Expo keeps receipts, is done with. The scheduler runs it
-// every fifteen minutes.
+// says of its device's token (FR-NT6): a push Apple or Google took ends the run of failures, which a
+// ticket, saying only that Expo took it, does not; DeviceNotRegistered clears the token, as a 410
+// deletes a browser's subscription; an error of the push's there counts towards the run of failures
+// that marks it stale, and one of the project's or of a service's own (Unavailable) towards nothing. A
+// ticket whose receipt came, or that is older than Expo keeps receipts, is done with. The scheduler
+// runs it every fifteen minutes.
 func (s *Service) CheckReceipts(ctx context.Context) error {
 	type pending struct {
 		ticket       string
@@ -225,28 +228,30 @@ func (s *Service) CheckReceipts(ctx context.Context) error {
 		}
 		gone, failed := 0, 0
 		err = tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
+			var done []string
 			for _, p := range batch {
 				status, came := receipts[p.ticket]
 				if !came && time.Since(p.sentAt) < receiptKept {
 					continue
 				}
+				var err error
 				switch {
+				case came && status == Accepted:
+					err = deliveredToken(ctx, tx, p.user, p.device, p.token)
 				case came && status == Gone:
 					gone++
-					if err := forgetToken(ctx, tx, p.user, p.device, p.token); err != nil {
-						return err
-					}
+					err = forgetToken(ctx, tx, p.user, p.device, p.token)
 				case came && status == Failed:
 					failed++
-					if err := failToken(ctx, tx, p.user, p.device, p.token); err != nil {
-						return err
-					}
+					err = failToken(ctx, tx, p.user, p.device, p.token)
 				}
-				if _, err := tx.Exec(ctx, "DELETE FROM push_receipts WHERE ticket = $1", p.ticket); err != nil {
+				if err != nil {
 					return err
 				}
+				done = append(done, p.ticket)
 			}
-			return nil
+			_, err := tx.Exec(ctx, "DELETE FROM push_receipts WHERE ticket = ANY($1)", done)
+			return err
 		})
 		if err != nil {
 			return err

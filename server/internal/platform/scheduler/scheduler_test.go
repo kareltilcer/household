@@ -131,8 +131,10 @@ func TestTwoLeadersStillFireASlotOnce(t *testing.T) {
 	c := &clock{t: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)}
 	job := scheduler.Job{Name: name(), Cadence: scheduler.Every(time.Hour), Run: func(context.Context) error { return nil }}
 	s := instance(t, c, job)
+	// The first tick registers the job, due at its first slot after now.
+	tick(s)
 	if took, err := s.Take(t.Context(), job, c.now()); err != nil || took {
-		t.Fatalf("the first look took a slot: %v, %v", took, err)
+		t.Fatalf("a slot was taken before it was due: %v, %v", took, err)
 	}
 	due := c.now().Add(time.Hour)
 	var (

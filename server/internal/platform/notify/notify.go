@@ -16,7 +16,8 @@
 // LOCKED, so an instance's worker that dies leaves it for another. Every attempt is recorded in the
 // delivery log (FR-NT6): a target that answers 404 or 410 is deleted, and one that fails five times in
 // a row is marked stale and left alone until it is registered again. An email that fails is tried
-// again with backoff; a push is not, since its push service holds it for the device already.
+// again with backoff; a push is not once a push service took it, since that service holds it for the
+// device, and is, as an email is, when none did because a push service failed on its own side.
 //
 // Rules and digests (FR-NT3, FR-NT4) are item 53's, and queue through Queue as everything here does.
 package notify
@@ -28,6 +29,7 @@ import (
 	"log/slog"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -221,17 +223,39 @@ func New(cfg Config) (*Service, error) {
 	return &Service{cfg: cfg, wake: make(chan struct{}, 1), busy: map[uuid.UUID]bool{}}, nil
 }
 
+// coalesceLock is the namespace of the locks that serialise queueing a recipient's repeats under one
+// coalescing key, the first key of the two-key advisory lock whose second is the hash of the
+// household, the recipient and the key: "ntfy".
+const coalesceLock int32 = 0x6e746679
+
 // Queue queues ns in tx, the transaction of what caused them, in ctx's household: they exist exactly
 // when it commits. A notification whose Coalesce matches one still waiting for its recipient merges
 // into it; one that matches one going out now, or sent within Window, waits until Window has passed
 // since, and the repeats after it merge into it. One whose Replaces matches one still waiting drops
 // it. The caller calls Nudge once tx has committed.
+//
+// Two transactions queueing one recipient's repeats under one key at once take turns, under an
+// advisory lock held until tx ends: each would otherwise find none waiting that the other has not
+// committed yet, and both would go. The locks a call takes are taken in one order, so that two calls
+// with the same keys never wait on each other's.
 func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) error {
 	scope := tenant.From(ctx)
 	if scope == nil {
 		return tenant.ErrNoTenant
 	}
 	household := scope.HouseholdID()
+	var keys []string
+	for _, n := range ns {
+		if n.Coalesce != "" {
+			keys = append(keys, household.String()+"\x1f"+n.To.String()+"\x1f"+n.Coalesce)
+		}
+	}
+	slices.Sort(keys)
+	for _, key := range slices.Compact(keys) {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, hashtext($2))", coalesceLock, key); err != nil {
+			return fmt.Errorf("notify: coalesce: %w", err)
+		}
+	}
 	for _, n := range ns {
 		if err := n.check(); err != nil {
 			return err
