@@ -624,7 +624,7 @@ Phase 0 · after 10, 6 · size L
   - quiet hours defer delivery;
   - a grant of `none` suppresses delivery;
   - outcomes are logged.
-- **PR:** —
+- **PR:** [#19](https://github.com/kareltilcer/household/pull/19)
 
 ### 16 · Entitlements and the 402 gate · `planned`
 
