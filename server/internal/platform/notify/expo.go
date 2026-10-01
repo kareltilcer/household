@@ -103,7 +103,8 @@ type expoTicket struct {
 }
 
 // Push sends m to t's device. Expo not answering, or answering anything but a ticket, says nothing of
-// the device (Unavailable).
+// the device (Unavailable). An ok ticket is a push Expo took, holding it for the device, even one
+// without the id its receipt would be asked for by: tried again, it would arrive twice.
 func (e *Expo) Push(ctx context.Context, t Target, m Push) Outcome {
 	msg := expoMessage{
 		To: t.Token, Title: cut(m.Title, maxTitle), Body: cut(m.Body, maxBody), Priority: "default", TTL: int(pushTTL.Seconds()),
@@ -121,10 +122,10 @@ func (e *Expo) Push(ctx context.Context, t Target, m Push) Outcome {
 	if err := e.post(ctx, e.send, []expoMessage{msg}, &answer); err != nil || len(answer.Data) != 1 {
 		return Outcome{Status: Unavailable}
 	}
-	switch ticket := answer.Data[0]; {
-	case ticket.Status == "ok" && ticket.ID != "":
+	switch ticket := answer.Data[0]; ticket.Status {
+	case "ok":
 		return Outcome{Status: Accepted, Ticket: ticket.ID}
-	case ticket.Status == "error":
+	case "error":
 		return Outcome{Status: expoStatus(ticket.Details.Error)}
 	default:
 		return Outcome{Status: Unavailable}
@@ -188,8 +189,8 @@ type ReceiptReader interface {
 // ticket, saying only that Expo took it, does not; DeviceNotRegistered clears the token, as a 410
 // deletes a browser's subscription; an error of the push's there counts towards the run of failures
 // that marks it stale, and one of the project's or of a service's own (Unavailable) towards nothing. A
-// ticket whose receipt came, or that is older than Expo keeps receipts, is done with. The scheduler
-// runs it every fifteen minutes.
+// ticket whose receipt came, or that is older than Expo keeps receipts, is done with, the second
+// whether or not Expo answers. The scheduler runs it every fifteen minutes.
 func (s *Service) CheckReceipts(ctx context.Context) error {
 	type pending struct {
 		ticket       string
@@ -224,7 +225,10 @@ func (s *Service) CheckReceipts(ctx context.Context) error {
 		}
 		receipts, err := s.cfg.Receipts.Receipts(ctx, tickets)
 		if err != nil {
-			return err
+			// Expo did not answer, or refused the batch: the tickets older than it keeps receipts are
+			// done with all the same, so that an outage, or an access token getReceipts refuses, keeps
+			// none past its day, nor asks for the same oldest batch on every run for ever.
+			return errors.Join(err, s.forgetReceipts(ctx))
 		}
 		gone, failed := 0, 0
 		err = tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
@@ -265,4 +269,12 @@ func (s *Service) CheckReceipts(ctx context.Context) error {
 		last := batch[len(batch)-1]
 		after, afterTicket = last.sentAt, last.ticket
 	}
+}
+
+// forgetReceipts deletes the tickets older than Expo keeps receipts, unread.
+func (s *Service) forgetReceipts(ctx context.Context) error {
+	return tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, "DELETE FROM push_receipts WHERE sent_at < now() - make_interval(secs => $1)", receiptKept.Seconds())
+		return err
+	})
 }

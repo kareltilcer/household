@@ -159,13 +159,33 @@ func TestTwoLeadersStillFireASlotOnce(t *testing.T) {
 }
 
 // A leader whose connection is gone has lost its lock with its session: the other instance takes the
-// lead, and the old leader, finding its connection dead, does not believe it still leads.
+// lead, and the old leader, finding its connection dead, does not believe it still leads, and ends the
+// job it started, which would otherwise run on beside the new leader's.
 func TestALeaderWhoseConnectionDiesLosesTheLead(t *testing.T) {
 	c := &clock{t: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)}
-	a, b := instance(t, c), instance(t, c)
+	var (
+		runs    atomic.Int32
+		started = make(chan struct{}, 1)
+		ended   = make(chan error, 1)
+	)
+	job := scheduler.Job{Name: name(), Cadence: scheduler.Every(time.Hour), Run: func(ctx context.Context) error {
+		runs.Add(1)
+		started <- struct{}{}
+		<-ctx.Done()
+		ended <- ctx.Err()
+		return ctx.Err()
+	}}
+	a, b := instance(t, c, job), instance(t, c, job)
 	tick(a)
 	if !a.Leading() {
 		t.Fatal("a does not lead")
+	}
+	c.advance(time.Hour)
+	a.Tick(t.Context())
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the job did not start on a")
 	}
 	admin := testsupport.Open(t).Pool(t, "")
 	if _, err := admin.Exec(t.Context(), `
@@ -192,6 +212,17 @@ func TestALeaderWhoseConnectionDiesLosesTheLead(t *testing.T) {
 	tick(b, a)
 	if !b.Leading() || a.Leading() {
 		t.Fatalf("leading: a %v, b %v; want b alone", a.Leading(), b.Leading())
+	}
+	select {
+	case err := <-ended:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("the job on a ended with %v", err)
+		}
+	default:
+		t.Fatal("the job on a ran on once a no longer led")
+	}
+	if n := runs.Load(); n != 1 {
+		t.Fatalf("runs: %d; want 1, its slot taken", n)
 	}
 }
 

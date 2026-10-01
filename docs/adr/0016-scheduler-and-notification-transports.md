@@ -37,8 +37,13 @@ What had to be settled:
 **The scheduler** (`internal/platform/scheduler`) runs in every instance. Each tick, fifteen seconds,
 it holds or takes a session-level advisory lock on a connection it takes from the pool and, leading,
 takes out of it (`Hijack`), so that the pool makes another for the requests and the workers in its
-place; a leader whose connection no longer answers a ping has lost the lock with its session, and
-closes the connection. The leader starts each job due that is not running already. A job's next
+place; a leader whose connection no longer answers a ping within five seconds has lost the lock with
+its session, or will once the server ends it as idle: it closes the connection, and ends the jobs it
+started, which would otherwise run on beside the next leader's, each recorded as failed for its
+retry. The leader's session has an
+`idle_session_timeout` of four ticks, a minute at least, so that a leader whose host went without
+closing its connection releases the lock then, not once the server's TCP keepalive gives up on it,
+two hours on by default. The leader starts each job due that is not running already. A job's next
 slot is a row in `scheduler_jobs`, taken by `UPDATE … SET next_run_at = <next slot> WHERE name = $1
 AND next_run_at <= $now`: PostgreSQL serialises two such updates on the row, and the second matches
 nothing, so a slot fires once even when two instances both believe they lead. A slot missed while no
@@ -90,9 +95,11 @@ a worker whose lease another took settles nothing. What a worker decided is writ
 past its context's end, for ten seconds at most, so that a shutdown leaves nothing it sent claimed to
 go again once the lease has passed; one the shutdown stopped before it went is put back, its attempt
 not counted. A repeat queued while one with its key is going out waits the fifteen minutes, as it
-would after one sent. Two transactions queueing one recipient's repeats under one key take turns
-under a transaction-scoped advisory lock, so that the second finds what the first committed rather
-than each queueing a notification of its own.
+would after one sent; should the one going out be put back rather than sent, two wait, and the next
+repeat merges into the later alone. Two transactions queueing one recipient's repeats under one key
+take turns under a transaction-scoped advisory lock, so that the second finds what the first
+committed rather than each queueing a notification of its own. A commit wakes its own instance's
+workers for its household alone; the meter role's look across every household is the poll's.
 
 **Targets** are the account's: `push_subscriptions` (global), one row per browser endpoint, bound to
 the web session that registered it, which takes it along when it is deleted; and `devices.push_token`,
@@ -104,10 +111,11 @@ coalescing key as its topic, following no redirect. Expo is its HTTP API with th
 its ticket waits in `push_receipts` (global) until `notify.receipts` reads its receipt. A 404 or 410,
 or Expo's `DeviceNotRegistered`, deletes a subscription or clears a token; five failures in a row mark
 a target stale until it registers again (FR-NT6). A failure is one the push service lays on the
-target, another 4xx or another of Expo's errors; no answer, a 429, a 5xx, a redirect, or an error of
-the project's credentials, of the message, or of Expo's or Apple's or Google's own (`Unavailable`,
-logged `push_unavailable`) counts against none, or an outage would leave every target it reached
-stale. A device's run of failures ends with a receipt saying Apple or Google took a push, not with
+target, another 4xx or another of Expo's errors; no answer, a 429, a 5xx, a redirect, a 401 refusing
+the server's VAPID signature, or an error of the project's credentials, of the message, or of Expo's
+or Apple's or Google's own (`Unavailable`, logged `push_unavailable`) counts against none, or an
+outage would leave every target it reached stale; so does a push whose client panicked, while what
+the other targets' services took stands. A ticket waits for its receipt a day at most, read or not. A device's run of failures ends with a receipt saying Apple or Google took a push, not with
 Expo's ticket, which says only that Expo did. A push a push service took is not retried, since that
 service holds it for the device; one that none took, a service among its targets' unavailable, is
 tried again (D-112), its targets' health recorded with each attempt; so is an email, after a minute,

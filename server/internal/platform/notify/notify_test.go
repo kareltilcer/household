@@ -46,6 +46,8 @@ type pushes struct {
 	sent     []pushed
 	answer   func(notify.Target) notify.Outcome
 	receipts map[string]notify.Status
+	// unread, when set, is how Expo's getReceipts fails.
+	unread error
 }
 
 func (p *pushes) Push(_ context.Context, t notify.Target, m notify.Push) notify.Outcome {
@@ -64,6 +66,9 @@ func (p *pushes) Push(_ context.Context, t notify.Target, m notify.Push) notify.
 func (p *pushes) Receipts(_ context.Context, tickets []string) (map[string]notify.Status, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.unread != nil {
+		return nil, p.unread
+	}
 	out := map[string]notify.Status{}
 	for _, t := range tickets {
 		if s, ok := p.receipts[t]; ok {
@@ -413,6 +418,13 @@ func TestQuietHoursDeferDelivery(t *testing.T) {
 	if logged := w.deliveries(h); len(logged) != 0 {
 		t.Fatalf("logged while held: %+v", logged)
 	}
+	// Held again, its earlier failures still count: the hold uncounts its own claim alone.
+	w.exec("UPDATE notifications SET attempts = 3 WHERE household_id = $1", h)
+	w.due(h)
+	w.s.Drain(t.Context(), h)
+	if q := w.one(h); q.status != "queued" || q.why() != "quiet_hours" || q.attempts != 3 {
+		t.Fatalf("held after three failed attempts: %+v", q)
+	}
 
 	w.send(h, notify.Notification{To: jana, Category: notify.Direct, Message: "email.member_removed", Email: true})
 	if sent := w.mail.all(); len(sent) != 1 || sent[0].Subject != "You were removed from Test on Household" {
@@ -676,6 +688,30 @@ func TestExposReceiptsAreRead(t *testing.T) {
 	}
 }
 
+// A ticket a day old is done with even while Expo does not answer for receipts: none outlives the day
+// Expo keeps its receipt, and the oldest batch is not asked for again on every run.
+func TestATicketPastItsDayGoesWhileExpoDoesNotAnswer(t *testing.T) {
+	w := newWorld(t)
+	jana := w.user("Jana")
+	device, token := w.phone(jana)
+	run := "-" + idgen.New().String()
+	w.exec(`INSERT INTO push_receipts (ticket, user_id, device_id, token, sent_at) VALUES
+	          ('t-old' || $4, $1, $2, $3, now() - interval '25 hours'),
+	          ('t-unread' || $4, $1, $2, $3, now() - interval '20 minutes')`, jana, device, token, run)
+	w.pushes.unread = errors.New("the Expo push service answered 503")
+	if err := w.s.CheckReceipts(t.Context()); err == nil {
+		t.Fatal("Expo's failure was not reported")
+	}
+	var left []string
+	if err := w.admin.QueryRow(t.Context(), "SELECT array(SELECT ticket FROM push_receipts WHERE user_id = $1 ORDER BY ticket)", jana).
+		Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(left) != fmt.Sprintf("[t-unread%s]", run) {
+		t.Fatalf("left %v", left)
+	}
+}
+
 // What a push says of its target is written as the push is settled, and failing to write it, for a
 // device deleted meanwhile, keeps nothing from settling: the push is not left claimed, to go again
 // once its lease has passed.
@@ -697,23 +733,42 @@ func TestAPushSettlesWhenWhatItSaysOfItsTargetCannotBeWritten(t *testing.T) {
 	}
 }
 
-// A push that panics is recovered once every other push of its notification has ended, and the
-// notification is tried again later, as for any failure of the worker's.
-func TestAPushThatPanicsIsTriedAgain(t *testing.T) {
+// A push that panics is recovered, and is one its push service did not take: what another service
+// took is sent and not pushed again, and a notification no service took is tried again later.
+func TestAPushThatPanicsIsOneNoServiceTook(t *testing.T) {
 	w := newWorld(t)
 	h, jana := w.household(), w.user("Jana")
 	w.member(h, jana, "member", nil)
 	w.browser(jana)
 	w.phone(jana)
-	w.pushes.answer = func(t notify.Target) notify.Outcome {
+	panics := func(t notify.Target) notify.Outcome {
 		if t.Transport == "expo" {
 			panic("the push service's client went wrong")
 		}
 		return notify.Outcome{Status: notify.Accepted}
 	}
+	w.pushes.answer = panics
 	w.send(h, accessChanged(jana))
-	if q := w.one(h); q.status != "queued" || q.attempts != 1 || time.Until(q.runAt) < 30*time.Second {
-		t.Fatalf("after a push panicked: %+v", q)
+	if q := w.one(h); q.status != "sent" {
+		t.Fatalf("after a push panicked beside one its service took: %+v", q)
+	}
+	w.due(h)
+	w.s.Drain(t.Context(), h)
+	if n := len(w.pushes.to(jana)); n != 1 {
+		t.Fatalf("%d pushes; want the browser's alone, once", n)
+	}
+	logged := w.deliveries(h)
+	slices.SortFunc(logged, func(a, b delivery) int { return strings.Compare(a.transport, b.transport) })
+	if len(logged) != 2 || logged[0].transport != "expo" || logged[0].reason != "push_unavailable" || logged[1].status != "sent" {
+		t.Fatalf("logged: %+v", logged)
+	}
+
+	alone := w.household()
+	w.member(alone, jana, "member", nil)
+	w.exec("DELETE FROM push_subscriptions WHERE user_id = $1", jana)
+	w.send(alone, accessChanged(jana))
+	if q := w.one(alone); q.status != "queued" || q.why() != "push_unavailable" || q.attempts != 1 || time.Until(q.runAt) < 30*time.Second {
+		t.Fatalf("after the one push panicked: %+v", q)
 	}
 }
 
@@ -885,6 +940,15 @@ func TestRepeatsCoalesce(t *testing.T) {
 	if len(all) != 2 || all[0].count != 1 || all[1].status != "queued" || all[1].count != 1 ||
 		time.Until(all[1].runAt) < notify.Window-time.Minute {
 		t.Fatalf("a repeat while one went out: %+v", all)
+	}
+	// The one going out is put back, its push unavailable, and two wait: the next repeat merges into
+	// the latest alone, rather than into both, which would then each go counting it.
+	w.exec("UPDATE notifications SET claim = NULL WHERE household_id = $1 AND id = $2", other, all[0].id)
+	if err := w.s.Send(t.Context(), other, n); err != nil {
+		t.Fatal(err)
+	}
+	if all = w.notifications(other); len(all) != 2 || all[0].count != 1 || all[1].count != 2 {
+		t.Fatalf("a repeat while two waited: %+v", all)
 	}
 }
 
@@ -1139,12 +1203,15 @@ func TestANotificationNeverSettledIsGivenUpAndLogged(t *testing.T) {
 	}
 }
 
-// The workers find what is due in any household, as the meter role, and deliver it.
+// The workers deliver what a commit of their instance queued as soon as it nudges them, and find
+// what is due in any other household, as the meter role, every Poll.
 func TestTheWorkersDeliverWhatIsDue(t *testing.T) {
 	w := newWorld(t)
-	h, jana := w.household(), w.user("Jana")
+	h, other, jana, petr := w.household(), w.household(), w.user("Jana"), w.user("Petr")
 	w.member(h, jana, "member", nil)
+	w.member(other, petr, "member", nil)
 	w.browser(jana)
+	w.browser(petr)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
@@ -1161,6 +1228,16 @@ func TestTheWorkersDeliverWhatIsDue(t *testing.T) {
 	for deadline := time.Now().Add(10 * time.Second); len(w.pushes.to(jana)) == 0; time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatal("the workers delivered nothing")
+		}
+	}
+	// Queued by another instance, which nudges this one's workers not.
+	scoped := tenant.Assume(t.Context(), w.app, other, uuid.Nil, "")
+	if err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error { return w.s.Queue(scoped, tx, accessChanged(petr)) }); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(10 * time.Second); len(w.pushes.to(petr)) == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the workers did not find what another instance queued")
 		}
 	}
 }

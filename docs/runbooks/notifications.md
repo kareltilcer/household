@@ -93,11 +93,14 @@ WHERE household_id = $1 ORDER BY sent_at DESC LIMIT 50;
   Google's answers only in a ticket's receipt, read every fifteen minutes; a receipt saying Apple or
   Google took a push ends the device's run.
 - `push_unavailable`: the push service did not take the push for a reason of its own: no answer, `429`,
-  a `5xx`, or Expo's `InvalidCredentials`, `MismatchSenderId`, `MessageTooBig`,
-  `MessageRateExceeded`, `DeveloperError`, `ExpoError` or `ProviderError`. It counts against no
-  target, and a notification no push service took is tried again with an email's backoff, five times
-  in all. Many at once are an outage, or the Expo project's credentials; check
-  `HOUSEHOLD_EXPO_ACCESS_TOKEN` and the project's push credentials.
+  a `5xx`, a browser's push service refusing the server's VAPID signature (`401`), or Expo's
+  `InvalidCredentials`, `MismatchSenderId`, `MessageTooBig`, `MessageRateExceeded`, `DeveloperError`,
+  `ExpoError` or `ProviderError`; or the server's own push client panicked (`notify: a push panicked`
+  in the log). It counts against no target, and a notification no push service took is tried again
+  with an email's backoff, five times in all. Many at once are an outage, or the Expo project's
+  credentials; check `HOUSEHOLD_EXPO_ACCESS_TOKEN` and the project's push credentials. Many browsers'
+  at once, a `401` each, are the VAPID signature: the server's clock, or `HOUSEHOLD_MAIL_FROM`, its
+  subject.
 - `muted`, `category_muted`: the member's own preferences, which win (FR-NT2).
 - `no_grant`, `not_member`, `private`: the member may not see what it is about (FR-NT5).
 - `replaced`, `withdrawn`: an email that waited for the mail server and no longer says what holds: its
@@ -111,7 +114,10 @@ WHERE household_id = $1 ORDER BY sent_at DESC LIMIT 50;
 
 `scheduler_jobs` holds each job's next slot and how its last run ended. The leader holds a PostgreSQL
 advisory lock; `pg_locks` shows it, `locktype = 'advisory'`, on the leader's connection, which is one
-more than its pool's for as long as it leads.
+more than its pool's for as long as it leads. That session ends at the server once the leader has not
+pinged it for a minute (four ticks, `idle_session_timeout`), so that a leader whose host went releases
+the lead then; a leader that finds its connection gone ends the jobs it was running, each logged as
+`scheduler: a job failed`, and the next leader runs them again at their retry.
 
 ```sql
 SELECT name, next_run_at, last_started_at, last_finished_at, last_failed_at FROM scheduler_jobs ORDER BY name;

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"maps"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -156,18 +157,27 @@ type queued struct {
 	claim         uuid.UUID
 }
 
-// Run runs the workers until ctx ends, then waits for the deliveries they hold. It looks for
-// households with notifications due when a commit of this instance wakes it (Nudge), and every Poll
-// for the rest, as the files workers do; each household's are delivered by one worker at a time.
+// Run runs the workers until ctx ends, then waits for the deliveries they hold. It delivers to a
+// household a commit of this instance queued in as soon as it is woken (Nudge), and looks across every
+// household for notifications due every Poll, as the files workers do: a commit's wake reads none but
+// its own household's. Each household's are delivered by one worker at a time.
 func (s *Service) Run(ctx context.Context) {
 	var running sync.WaitGroup
 	slots := make(chan struct{}, s.cfg.Workers)
 	ticker := time.NewTicker(s.cfg.Poll)
 	defer ticker.Stop()
-	for {
-		households, err := s.due(ctx)
-		if err != nil && ctx.Err() == nil {
-			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: find the notifications due", slog.Any("error", err))
+	for look := true; ; {
+		households := s.takeNudged()
+		if look {
+			due, err := s.due(ctx)
+			if err != nil && ctx.Err() == nil {
+				s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: find the notifications due", slog.Any("error", err))
+			}
+			for _, h := range due {
+				if !slices.Contains(households, h) {
+					households = append(households, h)
+				}
+			}
 		}
 		for _, h := range households {
 			if !s.hold(h) {
@@ -196,9 +206,20 @@ func (s *Service) Run(ctx context.Context) {
 			running.Wait()
 			return
 		case <-ticker.C:
+			look = true
 		case <-s.wake:
+			look = false
 		}
 	}
+}
+
+// takeNudged returns the households nudged since it was last called, and forgets them.
+func (s *Service) takeNudged() []uuid.UUID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	households := slices.Collect(maps.Keys(s.nudged))
+	clear(s.nudged)
+	return households
 }
 
 // hold marks household as one a worker of this instance is delivering to, and reports false when
@@ -214,18 +235,18 @@ func (s *Service) hold(household uuid.UUID) bool {
 	return true
 }
 
-// release lets household go, and wakes the workers when it was found due while held, or when its
-// worker's turn ended with notifications perhaps left.
+// release lets household go, and nudges it when it was found due while held, or when its worker's turn
+// ended with notifications perhaps left.
 func (s *Service) release(household uuid.UUID, more bool) {
 	s.mu.Lock()
 	again := s.busy[household] || more
 	delete(s.busy, household)
+	if again {
+		s.nudged[household] = true
+	}
 	s.mu.Unlock()
 	if again {
-		select {
-		case s.wake <- struct{}{}:
-		default:
-		}
+		s.signal()
 	}
 }
 
@@ -327,7 +348,7 @@ func (s *Service) deliver(ctx context.Context, q queued) {
 	defer func() {
 		if v := recover(); v != nil {
 			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: a delivery panicked", householdAttr(q.household),
-				slog.String("message", q.message), slog.String("panic", httpx.TypeName(v)), slog.String("stack", logging.Stack()))
+				slog.String("template", q.message), slog.String("panic", httpx.TypeName(v)), slog.String("stack", logging.Stack()))
 			s.retry(ctx, q, "", nil, nil)
 		}
 	}()
@@ -515,7 +536,7 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 	}
 	if err != nil {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: render a push", householdAttr(q.household),
-			slog.String("message", q.message), slog.Any("error", err))
+			slog.String("template", q.message), slog.Any("error", err))
 		s.retry(ctx, q, "", nil, nil)
 		return
 	}
@@ -576,16 +597,13 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 
 // pushAll pushes p to each of targets, pushAtOnce at a time, and returns how each went, in targets'
 // order: a push service slow to answer, which may take its client's whole timeout, then holds up none
-// of the others, nor the household's turn. A push that panics is raised again here once every push has
-// ended, for deliver to recover as it would one made in its own goroutine.
+// of the others, nor the household's turn. A push that panics is logged and is one its push service did
+// not take, for a reason that is no target's (Unavailable): what the others' services took is settled
+// as sent, and not pushed again with it, as it would be were the panic the whole notification's.
 func (s *Service) pushAll(ctx context.Context, targets []Target, p Push) []Outcome {
 	outcomes := make([]Outcome, len(targets))
 	slots := make(chan struct{}, pushAtOnce)
-	var (
-		wg       sync.WaitGroup
-		mu       sync.Mutex
-		panicked any
-	)
+	var wg sync.WaitGroup
 	for i, t := range targets {
 		pusher := s.cfg.WebPush
 		if t.Transport == transportExpo {
@@ -596,20 +614,15 @@ func (s *Service) pushAll(ctx context.Context, targets []Target, p Push) []Outco
 			defer func() {
 				<-slots
 				if v := recover(); v != nil {
-					mu.Lock()
-					if panicked == nil {
-						panicked = v
-					}
-					mu.Unlock()
+					s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: a push panicked", householdAttr(p.Household),
+						slog.String("transport", t.Transport), slog.String("panic", httpx.TypeName(v)), slog.String("stack", logging.Stack()))
+					outcomes[i] = Outcome{Status: Unavailable}
 				}
 			}()
 			outcomes[i] = pusher.Push(ctx, t, p)
 		})
 	}
 	wg.Wait()
-	if panicked != nil {
-		panic(panicked)
-	}
 	return outcomes
 }
 
@@ -632,7 +645,7 @@ func (s *Service) sendEmail(ctx context.Context, q queued, r recipient) {
 			if err != nil {
 				// No key opens it: the key it was sealed under is gone, and no retry will mend that.
 				s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: open an email's secret", householdAttr(q.household),
-					slog.String("message", q.message), slog.Any("error", err))
+					slog.String("template", q.message), slog.Any("error", err))
 				s.settle(ctx, q, "failed", reasonEmailFailed, []attempt{{transport: transportEmail, status: "failed", reason: reasonEmailFailed}}, nil)
 				return
 			}
@@ -656,7 +669,7 @@ func (s *Service) sendEmail(ctx context.Context, q queued, r recipient) {
 	}
 	if err != nil {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "notify: an email was not sent", householdAttr(q.household),
-			slog.String("message", q.message), slog.Int("attempt", q.attempts), slog.Any("error", err))
+			slog.String("template", q.message), slog.Int("attempts", q.attempts), slog.Any("error", err))
 		a.status, a.reason = "failed", reasonEmailFailed
 		s.retry(ctx, q, reasonEmailFailed, []attempt{a}, nil)
 		return
@@ -770,17 +783,19 @@ func (s *Service) putBack(ctx context.Context, q queued) {
 }
 
 // holdUntil puts q back until until, its recipient's quiet hours' end: nothing quiet hours hold is
-// dropped (FR-NT2), and holding it is no failed attempt. It waits a minute at least, by the database's
-// clock, which decides what is due: were the instance's clock behind it, a hold ending before the
-// database's now would be claimed again at once, and held again, for as long as the two disagreed.
-// One withdrawn while it was claimed stays dropped, for the reason it was (withdraw).
+// dropped (FR-NT2), and holding it is no failed attempt: the claim that found the quiet hours is not
+// counted, and the attempts that failed before it still are, towards maxAttempts and the backoff. It
+// waits a minute at least, by the database's clock, which decides what is due: were the instance's
+// clock behind it, a hold ending before the database's now would be claimed again at once, and held
+// again, for as long as the two disagreed. One withdrawn while it was claimed stays dropped, for the
+// reason it was (withdraw).
 func (s *Service) holdUntil(ctx context.Context, q queued, until time.Time) {
 	ctx, cancel := detached(ctx)
 	defer cancel()
 	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 			UPDATE notifications SET run_at = greatest($4, now() + make_interval(secs => $6)),
-			  reason = CASE WHEN status = 'queued' THEN $5 ELSE reason END, attempts = 0, claim = NULL
+			  reason = CASE WHEN status = 'queued' THEN $5 ELSE reason END, attempts = greatest(attempts - 1, 0), claim = NULL
 			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, until, reasonQuietHours, holdAtLeast.Seconds())
 		return err
 	})

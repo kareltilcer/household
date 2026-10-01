@@ -39,7 +39,8 @@ func browserTarget(t *testing.T, endpoint string) notify.Target {
 // A Web Push is encrypted to the browser's keys and signed with the VAPID key, which names its
 // public half, with a day to live, the urgency of who it is for and its tag as the topic; a push
 // service's 404 and 410 say the subscription is gone, another refusal that the push failed there, and
-// a 429, a 5xx, a redirect or no answer at all nothing of the subscription.
+// a 401 refusing the server's own signature, a 429, a 5xx, a redirect or no answer at all nothing of
+// the subscription.
 func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 	var (
 		mu     sync.Mutex
@@ -82,7 +83,7 @@ func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 
 	for code, want := range map[int]notify.Status{
 		http.StatusNotFound: notify.Gone, http.StatusGone: notify.Gone, http.StatusBadRequest: notify.Failed,
-		http.StatusForbidden: notify.Failed, http.StatusTooManyRequests: notify.Unavailable,
+		http.StatusForbidden: notify.Failed, http.StatusUnauthorized: notify.Unavailable, http.StatusTooManyRequests: notify.Unavailable,
 		http.StatusInternalServerError: notify.Unavailable, http.StatusServiceUnavailable: notify.Unavailable,
 		http.StatusMovedPermanently: notify.Unavailable,
 	} {
@@ -159,6 +160,8 @@ func TestAnExpoPushIsTicketedAndItsReceiptsRead(t *testing.T) {
 		t.Fatalf("DeviceNotRegistered: %+v", o)
 	}
 	for body, want := range map[string]notify.Status{
+		// Taken, though with no ticket to ask its receipt by: tried again, it would arrive twice.
+		`{"data": [{"status": "ok"}]}`:       notify.Accepted,
 		`{"errors": [{"code": "INTERNAL"}]}`: notify.Unavailable,
 		`{"data": [{"status": "error", "message": "?", "details": {"error": "InvalidCredentials"}}]}`:    notify.Unavailable,
 		`{"data": [{"status": "error", "message": "?", "details": {"error": "DeveloperError"}}]}`:        notify.Unavailable,

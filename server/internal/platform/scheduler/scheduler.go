@@ -17,7 +17,12 @@
 // A job that fails is tried again after Config.Retry, or at its next slot when that comes first, and
 // one that panics is recovered and counted as failed. Timing is a slot's, not an appointment's: a
 // slot missed while no instance led fires once when one does, and the slots it missed are not made
-// up. A job that runs past its next slot is not started again until it has ended.
+// up. A job that runs past its next slot is not started again until it has ended. An instance that
+// finds it no longer leads ends the jobs it started, as a failure, so that they do not run on beside
+// the next leader's; it finds out within a tick and a ping, and until it does, the next leader may
+// start one of those jobs whose next slot has come. The leader's session ends at the server once the
+// leader has not pinged for a few ticks, so that a leader whose host went without closing its
+// connection releases the lead within a minute or so, not once the server's TCP keepalive gives up.
 package scheduler
 
 import (
@@ -46,6 +51,10 @@ const lockKey int64 = 0x686f757365686f6c // "househol"
 // recordWithin bounds what the scheduler writes past its context's end: how a job a shutdown stopped
 // ended, and the lead it gives up. A database that does not answer then holds the process no longer.
 const recordWithin = 10 * time.Second
+
+// pingWithin bounds the leader's ping of its connection: one the network left half-open would
+// otherwise hold the tick, and every job due, until the operating system gave up on it, minutes on.
+const pingWithin = 5 * time.Second
 
 // detached is ctx past its end, for recordWithin.
 func detached(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -130,7 +139,11 @@ type Scheduler struct {
 	leading sync.Mutex
 	mu      sync.Mutex
 	// conn is the leader's connection, its own and no longer the pool's, nil while it does not lead.
-	conn    *pgx.Conn
+	conn *pgx.Conn
+	// term is the lead it holds, nil while it does not lead, and endTerm ends it, and with it every
+	// job it started while it led.
+	term    context.Context
+	endTerm context.CancelFunc
 	running map[string]bool
 	// registered is whether every job was found registered in scheduler_jobs (due).
 	registered bool
@@ -194,6 +207,13 @@ func (s *Scheduler) Tick(ctx context.Context) {
 	if ctx.Err() != nil || !s.lead(ctx) {
 		return
 	}
+	s.mu.Lock()
+	term := s.term
+	s.mu.Unlock()
+	if term == nil {
+		// It resigned meanwhile.
+		return
+	}
 	now := s.cfg.Now()
 	due, err := s.due(ctx, now)
 	if err != nil {
@@ -214,11 +234,16 @@ func (s *Scheduler) Tick(ctx context.Context) {
 			s.finish(j.Name)
 			continue
 		}
+		// The job ends with ctx, or once this instance no longer leads.
+		running, stop := context.WithCancel(ctx)
+		unbind := context.AfterFunc(term, stop)
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 			defer s.finish(j.Name)
-			s.run(ctx, j)
+			defer stop()
+			defer unbind()
+			s.run(running, j)
 		}()
 	}
 }
@@ -233,15 +258,13 @@ func (s *Scheduler) Leading() bool {
 	return s.conn != nil
 }
 
-// Resign gives up the lead, when this instance holds it: it releases the lock, at once for another
-// instance to take, and closes the connection, whose session's end releases it in any case.
+// Resign gives up the lead, when this instance holds it: it ends the jobs it started, releases the
+// lock, at once for another instance to take, and closes the connection, whose session's end
+// releases it in any case.
 func (s *Scheduler) Resign(ctx context.Context) {
 	s.leading.Lock()
 	defer s.leading.Unlock()
-	s.mu.Lock()
-	conn := s.conn
-	s.conn = nil
-	s.mu.Unlock()
+	conn := s.endLead()
 	if conn == nil {
 		return
 	}
@@ -250,11 +273,25 @@ func (s *Scheduler) Resign(ctx context.Context) {
 	s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "scheduler: no longer leading", slog.String("instance", s.instance.String()))
 }
 
+// endLead forgets the lead this instance holds, ending the jobs it started while it led, and returns
+// the connection it held it on, nil when it held none.
+func (s *Scheduler) endLead() *pgx.Conn {
+	s.mu.Lock()
+	conn, end := s.conn, s.endTerm
+	s.conn, s.term, s.endTerm = nil, nil, nil
+	s.mu.Unlock()
+	if end != nil {
+		end()
+	}
+	return conn
+}
+
 // lead reports whether this instance leads, taking the lead when no instance holds it. A leader whose
-// connection no longer answers has lost its session, and with it the lock: it drops the connection
-// and tries for the lead again. An instance that takes the lead takes the connection it took it on out
-// of the pool, which then counts it no longer: held for as long as the instance leads, it would be one
-// fewer for the requests and the workers.
+// connection no longer answers within pingWithin has lost its session, or will once the server ends
+// it as idle: it ends the jobs it started, drops the connection and tries for the lead again. An
+// instance that takes the lead takes the connection it took it on out of the pool, which then counts
+// it no longer: held for as long as the instance leads, it would be one fewer for the requests and the
+// workers.
 func (s *Scheduler) lead(ctx context.Context) bool {
 	s.leading.Lock()
 	defer s.leading.Unlock()
@@ -262,13 +299,14 @@ func (s *Scheduler) lead(ctx context.Context) bool {
 	conn := s.conn
 	s.mu.Unlock()
 	if conn != nil {
-		if err := conn.Ping(ctx); err == nil {
+		pinging, cancel := context.WithTimeout(ctx, pingWithin)
+		err := conn.Ping(pinging)
+		cancel()
+		if err == nil {
 			return true
 		}
 		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "scheduler: lost the lead with its connection", slog.String("instance", s.instance.String()))
-		s.mu.Lock()
-		s.conn = nil
-		s.mu.Unlock()
+		s.endLead()
 		closing, cancel := detached(ctx)
 		_ = conn.Close(closing)
 		cancel()
@@ -286,8 +324,22 @@ func (s *Scheduler) lead(ctx context.Context) bool {
 		return false
 	}
 	conn = pooled.Hijack()
+	// The server ends the session, and the lock with it, once the leader has not pinged it for a few
+	// ticks: a leader whose host went without closing the connection would otherwise hold the lead
+	// until the server's TCP keepalive gave up on it, two hours on by default.
+	idle := max(4*s.cfg.Tick, time.Minute)
+	if _, err := conn.Exec(ctx, "SELECT set_config('idle_session_timeout', $1, false)", fmt.Sprint(idle.Milliseconds())); err != nil {
+		if ctx.Err() == nil {
+			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "scheduler: bound the lead's idle session", slog.Any("error", err))
+		}
+		closing, cancel := detached(ctx)
+		_ = conn.Close(closing)
+		cancel()
+		return false
+	}
+	term, endTerm := context.WithCancel(context.WithoutCancel(ctx))
 	s.mu.Lock()
-	s.conn = conn
+	s.conn, s.term, s.endTerm = conn, term, endTerm
 	s.mu.Unlock()
 	s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "scheduler: leading", slog.String("instance", s.instance.String()))
 	return true
@@ -374,7 +426,7 @@ func (s *Scheduler) run(ctx context.Context, j Job) {
 	began := s.cfg.Now()
 	err := s.guard(ctx, j)
 	ended := s.cfg.Now()
-	attrs := []slog.Attr{slog.String("job", j.Name), slog.Duration("took", ended.Sub(began))}
+	attrs := []slog.Attr{slog.String("job", j.Name), slog.Int64("duration_ms", ended.Sub(began).Milliseconds())}
 	if err != nil {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "scheduler: a job failed", append(attrs, slog.Any("error", err))...)
 	} else {

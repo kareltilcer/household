@@ -193,6 +193,10 @@ type Service struct {
 
 	mu   sync.Mutex
 	busy map[uuid.UUID]bool
+	// nudged are the households Run is to deliver to when it wakes, without looking across every
+	// household for what is due: those a commit of this instance queued in, and those its workers let go
+	// with notifications perhaps left (release).
+	nudged map[uuid.UUID]bool
 }
 
 // New returns the service.
@@ -220,7 +224,7 @@ func New(cfg Config) (*Service, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Service{cfg: cfg, wake: make(chan struct{}, 1), busy: map[uuid.UUID]bool{}}, nil
+	return &Service{cfg: cfg, wake: make(chan struct{}, 1), busy: map[uuid.UUID]bool{}, nudged: map[uuid.UUID]bool{}}, nil
 }
 
 // coalesceLock is the namespace of the locks that serialise queueing a recipient's repeats under one
@@ -230,9 +234,9 @@ const coalesceLock int32 = 0x6e746679
 
 // Queue queues ns in tx, the transaction of what caused them, in ctx's household: they exist exactly
 // when it commits. A notification whose Coalesce matches one still waiting for its recipient merges
-// into it; one that matches one going out now, or sent within Window, waits until Window has passed
-// since, and the repeats after it merge into it. One whose Replaces matches one still waiting drops
-// it. The caller calls Nudge once tx has committed.
+// into it, the latest when two wait; one that matches one going out now, or sent within Window, waits
+// until Window has passed since, and the repeats after it merge into it. One whose Replaces matches
+// one still waiting drops it. The caller calls Nudge once tx has committed.
 //
 // Two transactions queueing one recipient's repeats under one key at once take turns, under an
 // advisory lock held until tx ends: each would otherwise find none waiting that the other has not
@@ -270,9 +274,17 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 			}
 		}
 		if n.Coalesce != "" {
+			// Into one alone, the latest: two may wait at once, one put back after its claim (retry, a
+			// hold for quiet hours, a stopping worker) and the repeat queued while it was claimed, and a
+			// repeat merged into both would go twice, each counting it. The outer conditions are read
+			// again on a row a worker claims meanwhile, which then takes nothing, and the repeat is
+			// queued to wait Window as one going out makes it.
 			tag, err := tx.Exec(ctx, `
 				UPDATE notifications SET count = count + 1, args = $4, link = $5, module = $6, owner_id = $7
-				WHERE household_id = $1 AND user_id = $2 AND coalesce_key = $3 AND status = 'queued' AND claim IS NULL`,
+				WHERE household_id = $1 AND status = 'queued' AND claim IS NULL AND id = (
+				  SELECT id FROM notifications
+				  WHERE household_id = $1 AND user_id = $2 AND coalesce_key = $3 AND status = 'queued' AND claim IS NULL
+				  ORDER BY created_at DESC, id DESC LIMIT 1)`,
 				household, n.To, n.Coalesce, args, nullable(n.Link), nullable(n.Module), nullableID(n.Owner))
 			if err != nil {
 				return fmt.Errorf("notify: coalesce: %w", err)
@@ -351,13 +363,22 @@ func withdraw(ctx context.Context, tx pgx.Tx, household uuid.UUID, key, reason s
 	return nil
 }
 
-// Nudge wakes the workers, once a transaction that queued notifications of household's has
-// committed. Inline, it delivers them before it returns.
+// Nudge wakes the workers for household, once a transaction that queued notifications of its has
+// committed: they deliver to it without looking across every household, which they do every Poll.
+// Inline, it delivers them before it returns.
 func (s *Service) Nudge(ctx context.Context, household uuid.UUID) {
 	if s.cfg.Inline {
 		s.Drain(context.WithoutCancel(ctx), household)
 		return
 	}
+	s.mu.Lock()
+	s.nudged[household] = true
+	s.mu.Unlock()
+	s.signal()
+}
+
+// signal wakes Run, unless a wake already waits for it.
+func (s *Service) signal() {
 	select {
 	case s.wake <- struct{}{}:
 	default:

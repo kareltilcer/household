@@ -208,7 +208,7 @@ func (s *Sweeper) households(ctx context.Context, h household) (int64, error) {
 			return err
 		})
 		if err != nil {
-			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "expiry: sweep a household", slog.String("what", h.what),
+			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "expiry: sweep a household", slog.String("retention", h.what),
 				slog.String(logging.KeyHouseholdID, id.String()), slog.Any("error", err))
 			failed = errors.Join(failed, err)
 		}
@@ -222,11 +222,11 @@ func (s *Sweeper) households(ctx context.Context, h household) (int64, error) {
 // report logs what a retention deleted, or how it failed, and returns its error.
 func (s *Sweeper) report(ctx context.Context, what string, n int64, err error) error {
 	if err != nil {
-		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "expiry: a retention failed", slog.String("what", what), slog.Any("error", err))
+		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "expiry: a retention failed", slog.String("retention", what), slog.Any("error", err))
 		return err
 	}
 	if n > 0 {
-		s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "expiry: deleted what was past its time", slog.String("what", what), slog.Int64("rows", n))
+		s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "expiry: deleted what was past its time", slog.String("retention", what), slog.Int64("rows", n))
 	}
 	return nil
 }

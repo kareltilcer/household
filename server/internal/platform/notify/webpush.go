@@ -86,7 +86,8 @@ type webPushMessage struct {
 // Push sends m to t's browser. A 404 or a 410 says the subscription is gone (RFC 8030 §7.3), and another
 // refusal of the push, a 400 or a 403 for a subscription made with another VAPID key, that it failed
 // there. No answer, a 429, a 5xx or a redirect says nothing of the subscription: the push service, or
-// the way to it, is what failed (Unavailable).
+// the way to it, is what failed (Unavailable); nor does a 401, which refuses the server's own VAPID
+// signature (RFC 8292 §4), as a clock gone wrong or a malformed subject would every push it signed.
 func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 	payload, err := json.Marshal(webPushMessage{
 		Title: cut(m.Title, maxTitle), Body: cut(m.Body, maxBody), URL: m.Link, Tag: m.Tag,
@@ -115,7 +116,7 @@ func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 		return Outcome{Status: Accepted}
 	case code == http.StatusNotFound || code == http.StatusGone:
 		return Outcome{Status: Gone}
-	case code == http.StatusTooManyRequests || code >= 500 || code < 400:
+	case code == http.StatusUnauthorized || code == http.StatusTooManyRequests || code >= 500 || code < 400:
 		return Outcome{Status: Unavailable}
 	default:
 		return Outcome{Status: Failed}
