@@ -180,12 +180,15 @@ func (s *Service) claim(ctx context.Context, household uuid.UUID) (job, bool, er
 	j := job{household: household, claim: idgen.New(), claimed: time.Now()}
 	found := false
 	err := tenant.InWriteTx(s.system(ctx, household), func(tx pgx.Tx) error {
+		// The job is chosen by a subquery in WHERE, which PostgreSQL runs once: one in FROM may be run
+		// again for each row the UPDATE reads, and each run skips the job the last one claimed, so that
+		// a single UPDATE would claim every job due while the worker ran only the first, and the rest
+		// would wait out a lease nobody ran them under, an attempt spent on each.
 		err := tx.QueryRow(ctx, `
 			UPDATE file_jobs j SET run_at = now() + make_interval(secs => $2), attempts = j.attempts + 1, claim = $3
-			FROM (SELECT kind, module, entity_id FROM file_jobs
-			      WHERE household_id = $1 AND run_at <= now()
-			      ORDER BY run_at LIMIT 1 FOR UPDATE SKIP LOCKED) d
-			WHERE j.household_id = $1 AND j.kind = d.kind AND j.module = d.module AND j.entity_id = d.entity_id
+			WHERE j.household_id = $1 AND (j.kind, j.module, j.entity_id) = (
+			  SELECT kind, module, entity_id FROM file_jobs WHERE household_id = $1 AND run_at <= now()
+			  ORDER BY run_at LIMIT 1 FOR UPDATE SKIP LOCKED)
 			RETURNING j.kind, j.module, j.entity_id, j.attempts`,
 			household, s.lease.Seconds(), j.claim).Scan(&j.kind, &j.module, &j.entity, &j.attempts)
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -11,9 +11,13 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
+	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
+
+func TestMain(m *testing.M) { testsupport.Main(m) }
 
 // woken reports whether s's workers were woken, and takes the wake.
 func woken(s *Service) bool {
@@ -110,5 +114,107 @@ func TestAJobEndsNoLaterThanItsLease(t *testing.T) {
 	defer stop()
 	if deadline, ok := ctx.Deadline(); !ok || !deadline.Equal(claimed.Add(s.lease)) {
 		t.Fatalf("a job claimed at %s runs until %s, %t, with a lease of %s", claimed, deadline, ok, s.lease)
+	}
+}
+
+// A claim takes one job, the household's that has waited longest, and leaves every other due. The
+// claim's UPDATE once chose its job in a sub-select of its FROM, which PostgreSQL may run again for
+// each row the UPDATE reads, each run skipping the job the one before had claimed: a single claim then
+// took every job due in the household while its worker ran only the first, and the rest waited out a
+// lease nobody ran them under, an attempt spent on each.
+//
+// Whether PostgreSQL runs it again depends on what it takes the household to hold, so the table is
+// arranged as production's is: households with a job or so each, analyzed, as autovacuum leaves them,
+// and then a burst of uploads in one household that the statistics do not count yet. Taking the
+// household to hold a job or so, PostgreSQL reads its jobs first and runs the sub-select for each.
+func TestAClaimTakesOneJob(t *testing.T) {
+	d := testsupport.Open(t)
+	admin := d.Pool(t, "")
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := admin.Exec(t.Context(), sql, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Other households' jobs, each due longer than any of h's, which a claim in h never sees.
+	households := make([]uuid.UUID, 100, 101)
+	for i := range households {
+		households[i] = idgen.New()
+		exec(testsupport.InsertHousehold, households[i])
+		exec(`INSERT INTO file_jobs (household_id, kind, module, entity_id, run_at)
+		      VALUES ($1, 'variants', 'documents', $2, now() - interval '1 hour')`, households[i], idgen.New())
+	}
+	exec("ANALYZE file_jobs")
+
+	// h's jobs, the one due longest first: two kinds of job for one entity, and jobs of two modules,
+	// so that a job is told by its kind, its module and its entity. They are in the order of the
+	// table's key and inserted in it, so that PostgreSQL, reading them by the table or by its key,
+	// reads them in the order they fell due: a claim that took a second job would take them all.
+	h := idgen.New()
+	exec(testsupport.InsertHousehold, h)
+	households = append(households, h)
+	type key struct {
+		kind, module string
+		entity       uuid.UUID
+	}
+	a, b, c := idgen.New(), idgen.New(), idgen.New()
+	jobs := []key{
+		{"purge", "documents", a},
+		{"purge", "notes", b},
+		{"variants", "documents", a},
+		{"variants", "documents", c},
+		{"variants", "notes", b},
+	}
+	for i, k := range jobs {
+		exec(`INSERT INTO file_jobs (household_id, kind, module, entity_id, run_at)
+		      VALUES ($1, $2, $3, $4, now() - make_interval(mins => $5))`, h, k.kind, k.module, k.entity, len(jobs)-i)
+	}
+
+	s := &Service{pool: d.Pool(t, db.RoleApp), lease: lease}
+	j, ok, err := s.claim(t.Context(), h)
+	if err != nil || !ok {
+		t.Fatalf("claim = %t, %v; want a job", ok, err)
+	}
+	if (key{j.kind, j.module, j.entity}) != jobs[0] || j.attempts != 1 {
+		t.Fatalf("claimed %s %s %s at attempt %d; want %s %s %s at attempt 1",
+			j.kind, j.module, j.entity, j.attempts, jobs[0].kind, jobs[0].module, jobs[0].entity)
+	}
+
+	rows, err := admin.Query(t.Context(), `
+		SELECT household_id, kind, module, entity_id, attempts, claim IS NOT NULL, run_at <= now()
+		FROM file_jobs WHERE household_id = ANY($1)`, households)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	read, claimed := 0, 0
+	for rows.Next() {
+		read++
+		var (
+			household     uuid.UUID
+			k             key
+			attempts      int
+			held, waiting bool
+		)
+		if err := rows.Scan(&household, &k.kind, &k.module, &k.entity, &attempts, &held, &waiting); err != nil {
+			t.Fatal(err)
+		}
+		switch {
+		case household == h && k == jobs[0]:
+			claimed++
+			if attempts != 1 || !held || waiting {
+				t.Errorf("the job claimed, %s %s %s: attempts %d, held %t, due %t", k.kind, k.module, k.entity, attempts, held, waiting)
+			}
+		case attempts != 0 || held || !waiting:
+			claimed++
+			t.Errorf("a job not claimed, %s %s %s in %s: attempts %d, held %t, due %t",
+				k.kind, k.module, k.entity, household, attempts, held, waiting)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if read != len(households)-1+len(jobs) || claimed != 1 {
+		t.Fatalf("one claim took %d of the %d jobs", claimed, read)
 	}
 }
