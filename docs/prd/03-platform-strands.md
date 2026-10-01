@@ -386,7 +386,9 @@ sign-in lives, so signing out, or being signed out everywhere, ends both. A brow
 be at a push service the server knows, so that no member can have the server send where they choose.
 A notification is queued in the transaction of what caused it and delivered once that commits, by a
 worker of any instance; an email's link token waits sealed under a key the database does not hold
-([ADR 0016](../adr/0016-scheduler-and-notification-transports.md)).
+([ADR 0016](../adr/0016-scheduler-and-notification-transports.md)). An email still waiting for the
+mail server is dropped once what it says no longer holds: an invitation's when it is sent again,
+withdrawn, declined or accepted, and a graduation's when a newer link is sent or its link is spent.
 
 **FR-NT2 — Four categories**, each independently mutable per member per household:
 `direct` (someone assigned you something, mentioned you, messaged you), `household` (something
@@ -413,8 +415,8 @@ no one else, and a push reaches only someone who is still a member when it goes 
 one coalescing key merge: into one still waiting, or, within fifteen minutes of one that went, into
 one held until those fifteen minutes have passed.
 
-**FR-NT6 — Delivery log.** Every attempt recorded with outcome, and every notification dropped
-before any attempt with its reason. `404`/`410` from a push service deletes the subscription, and
+**FR-NT6 — Delivery log.** Every attempt recorded with outcome, and every notification dropped,
+or given up, before any attempt with its reason. `404`/`410` from a push service deletes the subscription, and
 Expo's `DeviceNotRegistered`, in a ticket or in its receipt, clears the device's token. Five
 failures in a row mark a subscription or a device stale and stop trying until it registers again. A
 push is not retried, since its push service holds it for the device; an email the mail server does
@@ -461,7 +463,7 @@ schedulers to forget one of.
 | Web sessions | Once ended, revoked or expired, with the browser subscriptions they registered | **D-113** |
 | `Idempotency-Key` records of account requests | 7 days | [01-architecture.md](01-architecture.md) §6 |
 | Used refresh tokens | 30 days after use | **D-113** |
-| Revoked device sign-ins | Once their refresh tokens are gone | **D-113** |
+| Revoked device sign-ins, with their refresh tokens | 30 days after they were revoked | **D-113** |
 | Trusts to skip the second step | Once expired | **D-113** |
 | Sign-in throttle counts | A day after their window and their block end | **D-113** |
 

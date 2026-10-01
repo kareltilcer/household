@@ -860,9 +860,11 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 			WHERE o.id = $1 AND h.id = $2 AND c.id = $3`, scope.UserID(), household, user).Scan(&owner, &name, &locale); err != nil {
 			return err
 		}
+		// The link's email replaces the one still waiting for the profile, whose link this one retires.
 		letter = notify.Notification{
 			Address: req.Email, Locale: locale, Category: notify.Direct, Message: string(emailGraduate),
 			Args: i18n.Args{"owner": owner, "household": name, "member": m.name}, Email: true, Route: routeGraduate,
+			Replaces: graduationKey(user),
 		}
 		return nil
 	})

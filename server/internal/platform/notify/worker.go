@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,10 @@ const (
 	stale = 5
 	// holdAtLeast is the least a notification is held for its recipient's quiet hours (holdUntil).
 	holdAtLeast = time.Minute
+	// settleWithin bounds what a worker writes once a delivery is decided, which it writes past its
+	// context's end (detached), so that a shutdown neither waits on a database that does not answer
+	// nor leaves what was sent claimed, to be sent again once its lease has passed.
+	settleWithin = 10 * time.Second
 )
 
 var backoff = []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute, 2 * time.Hour}
@@ -60,6 +65,10 @@ const (
 	reasonPushFailed    = "push_failed"
 	reasonEmailFailed   = "email_failed"
 	reasonGaveUp        = "gave_up"
+	// reasonReplaced and reasonWithdrawn drop what waits under a key (Notification.Replaces): a newer
+	// one replaced it, or nothing should go any more (Withdraw).
+	reasonReplaced  = "replaced"
+	reasonWithdrawn = "withdrawn"
 )
 
 // The transports, as the contract spells them.
@@ -300,7 +309,8 @@ type verdict struct {
 }
 
 // deliver delivers q and settles it. A panic is recovered and counted as a failed attempt, which the
-// next claim tries again until maxAttempts.
+// next claim tries again until maxAttempts. One that ctx's end stopped before it went is put back,
+// its attempt not counted, for another worker to take at once (putBack).
 func (s *Service) deliver(ctx context.Context, q queued) {
 	defer func() {
 		if v := recover(); v != nil {
@@ -310,11 +320,15 @@ func (s *Service) deliver(ctx context.Context, q queued) {
 		}
 	}()
 	if q.attempts > maxAttempts {
-		s.settle(ctx, q, "failed", reasonGaveUp, nil, nil)
+		// Claimed more times than it may be tried, and never settled: its workers ended with their
+		// process before they could, and it is given up rather than claimed again.
+		s.settle(ctx, q, "failed", reasonGaveUp, []attempt{q.gaveUp()}, nil)
 		return
 	}
 	r, v, err := s.read(ctx, q)
 	switch {
+	case err != nil && ctx.Err() != nil:
+		s.putBack(ctx, q)
 	case err != nil:
 		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: read a notification's recipient", householdAttr(q.household), slog.Any("error", err))
 		s.retry(ctx, q, nil)
@@ -496,8 +510,7 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 		p.Link = *q.link
 	}
 	if q.coalesce != nil {
-		sum := sha256.Sum256([]byte(*q.coalesce))
-		p.Tag = base64.RawURLEncoding.EncodeToString(sum[:24])
+		p.Tag = pushTag(q.household, *q.coalesce)
 	}
 	var (
 		attempts []attempt
@@ -506,6 +519,9 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 		// allGone is whether every target that did not take it is gone, which is the notification's
 		// reason then.
 		allGone = true
+		// stopped is whether ctx's end stopped a push before its service answered: no failure of the
+		// target's, and no attempt.
+		stopped bool
 	)
 	for _, t := range r.targets {
 		pusher := s.cfg.WebPush
@@ -513,6 +529,10 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 			pusher = s.cfg.Expo
 		}
 		o := pusher.Push(ctx, t, p)
+		if o.Status == Failed && ctx.Err() != nil {
+			stopped = true
+			continue
+		}
 		a := attempt{transport: t.Transport, title: &title, body: &body}
 		switch o.Status {
 		case Accepted:
@@ -528,11 +548,22 @@ func (s *Service) sendPush(ctx context.Context, q queued, r recipient) {
 	switch {
 	case sent:
 		s.settle(ctx, q, "sent", "", attempts, healths)
+	case stopped:
+		// Its other targets are tried again with it: what they said, gone or failed, they say again.
+		s.putBack(ctx, q)
 	case allGone:
 		s.settle(ctx, q, "failed", reasonGone, attempts, healths)
 	default:
 		s.settle(ctx, q, "failed", reasonPushFailed, attempts, healths)
 	}
+}
+
+// pushTag is the tag of household's pushes under the coalescing key key: a push service holds one
+// push of a tag for a device, and the device shows one notification of it, so that the tag names the
+// household too, whose notices under one key are not each other's.
+func pushTag(household uuid.UUID, key string) string {
+	sum := sha256.Sum256([]byte(household.String() + "/" + key))
+	return base64.RawURLEncoding.EncodeToString(sum[:24])
 }
 
 // sendEmail renders q in its recipient's language and sends it, trying again with backoff when the
@@ -552,11 +583,16 @@ func (s *Service) sendEmail(ctx context.Context, q queued, r recipient) {
 			}
 			token = string(opened)
 		}
-		args["link"] = s.link(*q.route, token)
+		args["link"] = Link(s.cfg.WebURL, *q.route, token)
 	}
 	m, err := mail.Render(s.cfg.Catalogs, i18n.Match(r.locale), mail.Template(q.message), args, r.address)
 	if err == nil {
 		err = s.cfg.Mail.Send(ctx, m)
+	}
+	if err != nil && ctx.Err() != nil {
+		// Stopped by a shutdown, not refused by the mail server.
+		s.putBack(ctx, q)
+		return
 	}
 	subject := m.Subject
 	a := attempt{transport: transportEmail, status: "sent"}
@@ -573,9 +609,11 @@ func (s *Service) sendEmail(ctx context.Context, q queued, r recipient) {
 	s.settle(ctx, q, "sent", "", []attempt{a}, nil)
 }
 
-// link is the web client's route, with token in its fragment, which a browser sends to no server.
-func (s *Service) link(route, token string) string {
-	u := *s.cfg.WebURL
+// Link is route in the web client served at web, with token in its fragment, which a browser sends to
+// no server, so that it stays out of every access log and Referer on the way: what an email's link,
+// or an invitation's, opens.
+func Link(web *url.URL, route, token string) string {
+	u := *web
 	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + route
 	u.RawQuery = ""
 	u.Fragment = ""
@@ -645,11 +683,34 @@ func failToken(ctx context.Context, tx pgx.Tx, user, device uuid.UUID, token str
 	return err
 }
 
+// detached is ctx past its end, for settleWithin: what a worker writes once a delivery is decided.
+func detached(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), settleWithin)
+}
+
+// putBack puts q back to be claimed again at once, its attempt not counted: a delivery the worker's
+// end stopped before it went, which is no failure of it.
+func (s *Service) putBack(ctx context.Context, q queued) {
+	ctx, cancel := detached(ctx)
+	defer cancel()
+	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+			UPDATE notifications SET run_at = now(), attempts = greatest(attempts - 1, 0), claim = NULL
+			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim)
+		return err
+	})
+	if err != nil {
+		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: put a notification back", householdAttr(q.household), slog.Any("error", err))
+	}
+}
+
 // holdUntil puts q back until until, its recipient's quiet hours' end: nothing quiet hours hold is
 // dropped (FR-NT2), and holding it is no failed attempt. It waits a minute at least, by the database's
 // clock, which decides what is due: were the instance's clock behind it, a hold ending before the
 // database's now would be claimed again at once, and held again, for as long as the two disagreed.
 func (s *Service) holdUntil(ctx context.Context, q queued, until time.Time) {
+	ctx, cancel := detached(ctx)
+	defer cancel()
 	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 			UPDATE notifications SET run_at = greatest($4, now() + make_interval(secs => $6)), reason = $5, attempts = 0, claim = NULL
@@ -672,10 +733,15 @@ func (s *Service) retry(ctx context.Context, q queued, a *attempt) {
 		reason := reasonGaveUp
 		if a != nil {
 			reason = a.reason
+		} else {
+			// No attempt reached a target, and the log still says what became of it (FR-NT6).
+			attempts = append(attempts, q.gaveUp())
 		}
 		s.settle(ctx, q, "failed", reason, attempts, nil)
 		return
 	}
+	ctx, cancel := detached(ctx)
+	defer cancel()
 	wait := backoff[min(q.attempts, len(backoff))-1]
 	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
@@ -698,10 +764,23 @@ func reasonOf(a *attempt) string {
 	return a.reason
 }
 
+// gaveUp is the delivery log's row of q given up with no attempt of its own to log: by its transport
+// for an email, by none for a push, which names no target then.
+func (q queued) gaveUp() attempt {
+	a := attempt{status: "failed", reason: reasonGaveUp}
+	if q.email {
+		a.transport = transportEmail
+	}
+	return a
+}
+
 // settle ends q as status, for reason, recording its attempts and what they say of their targets, and
 // erases what it kept only until then: the address it went to and its email's sealed secret. A worker
-// whose lease another took settles nothing.
+// whose lease another took settles nothing. It settles past ctx's end (detached): what went out and
+// stayed claimed would go again once its lease had passed.
 func (s *Service) settle(ctx context.Context, q queued, status, reason string, attempts []attempt, healths []health) {
+	ctx, cancel := detached(ctx)
+	defer cancel()
 	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE notifications SET status = $4, reason = $5, settled_at = now(), claim = NULL, address = NULL, secret = NULL

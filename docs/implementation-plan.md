@@ -602,7 +602,7 @@ Phase 0 · after 10, 6 · size L
     - In-process, with an advisory-lock leader so only one instance fires.
     - A job registry for modules.
     - Household-timezone resolution that is DST-safe.
-    - The expiry sweep with [03 §5](prd/03-platform-strands.md)'s retention table, and item 8's tables: ended `sessions`, spent and expired `email_tokens`, `auth_throttles` whose window and block have passed, and `account_idempotency_keys` past seven days. And item 9's: `refresh_tokens` used a month ago, `device_sessions` revoked and without tokens, ended or expired `mfa_challenges`, expired `mfa_trusts`, and used or expired `oauth_states`.
+    - The expiry sweep with [03 §5](prd/03-platform-strands.md)'s retention table, and item 8's tables: ended `sessions`, spent and expired `email_tokens`, `auth_throttles` whose window and block have passed, and `account_idempotency_keys` past seven days. And item 9's: `refresh_tokens` used a month ago, `device_sessions` revoked a month ago, with their tokens, ended or expired `mfa_challenges`, expired `mfa_trusts`, and used or expired `oauth_states`.
     - Invitation and token expiry.
     - Item 14's usage sampling (`storage.Sampler`), nightly (FR-ST2), and its sweeps of the objects no row records, a household's (`files.Service.SweepAll`) and the accounts' pictures (`avatar.Service.Sweep`), each night after it.
   - **Transports**:

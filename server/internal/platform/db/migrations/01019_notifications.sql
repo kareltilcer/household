@@ -117,9 +117,12 @@ CREATE TYPE notification_status AS ENUM ('queued', 'sent', 'failed', 'dropped');
 --
 -- module, when set, is the module whose view the recipient must hold when it goes out, and owner_id
 -- the member a private item's notification may reach and no one else (FR-NT5). email marks the fixed
--- set that goes by email (FR-NT1), which no mute or quiet hours hold. run_at is when it may next be
--- tried: past quiet hours (reason quiet_hours), past a failed email's backoff, or past the lease of
--- the worker that claimed it.
+-- set that goes by email (FR-NT1), which no mute or quiet hours hold. replace_key names what it is the
+-- latest word on: one queued under the same key drops it while it waits (reason replaced), as does
+-- its cause ending (reason withdrawn), so that an invitation's email whose link was sent again, or
+-- whose invitation was withdrawn, is never sent late. run_at is when it may next be tried: past quiet
+-- hours (reason quiet_hours), past a failed email's backoff, or past the lease of the worker that
+-- claimed it.
 CREATE TABLE notifications (
   household_id uuid NOT NULL REFERENCES households (id) ON DELETE CASCADE,
   id uuid NOT NULL,
@@ -137,6 +140,7 @@ CREATE TABLE notifications (
   link text CHECK (link LIKE '/%' AND char_length(link) <= 512),
   coalesce_key text CHECK (coalesce_key <> '' AND char_length(coalesce_key) <= 200),
   email boolean NOT NULL DEFAULT false,
+  replace_key text CHECK (replace_key <> '' AND char_length(replace_key) <= 200),
   status notification_status NOT NULL DEFAULT 'queued',
   reason text CHECK (reason ~ '^[a-z][a-z_]*$'),
   run_at timestamptz NOT NULL DEFAULT now(),
@@ -157,14 +161,16 @@ SELECT enable_tenant_isolation('notifications');
 CREATE INDEX notifications_due ON notifications (household_id, run_at) WHERE status = 'queued';
 CREATE INDEX notifications_coalesce ON notifications (household_id, user_id, coalesce_key, created_at DESC)
   WHERE coalesce_key IS NOT NULL;
+CREATE INDEX notifications_replace ON notifications (household_id, replace_key)
+  WHERE status = 'queued' AND replace_key IS NOT NULL;
 CREATE INDEX notifications_created ON notifications (household_id, created_at DESC);
 
 -- The workers find the households with a notification due, across households, as the meter role.
 GRANT SELECT (status, run_at) ON notifications TO household_meter;
 
 -- The delivery log (FR-NT6, FR-HA12): every attempt at a notification on one target, and every
--- notification dropped before any target, with its outcome and, for one that did not arrive, the
--- reason. It is the household's operational record, not its audit log, and holds what was sent only
+-- notification dropped, or a push given up, before any target, with no transport, with its outcome
+-- and, for one that did not arrive, the reason. It is the household's operational record, not its audit log, and holds what was sent only
 -- for seven days (PRD 03 §5): a push's rendered title and body until body_expires_at, which the
 -- expiry sweep clears with them. An email keeps its subject for as long and never its body, which
 -- may carry a link's token. The outcome is kept for as long as the household is.
@@ -185,7 +191,7 @@ CREATE TABLE notification_deliveries (
   FOREIGN KEY (household_id, notification_id) REFERENCES notifications (household_id, id) ON DELETE CASCADE,
   CHECK ((title IS NULL AND body IS NULL) = (body_expires_at IS NULL)),
   CHECK ((status = 'sent') = (reason IS NULL)),
-  CHECK (status = 'dropped' OR transport IS NOT NULL)
+  CHECK (status <> 'sent' OR transport IS NOT NULL)
 );
 
 SELECT enable_tenant_isolation('notification_deliveries');

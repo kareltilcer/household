@@ -584,7 +584,7 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		}
 		changes := []sync.Change{m.change(household, payer, modules)}
 		if old.role == access.Owner && role != access.Owner {
-			withdrawn, err := withdraw(ctx, tx, household, user, s.Now())
+			withdrawn, err := s.withdraw(ctx, tx, household, user, s.Now())
 			if err != nil {
 				return mutation.Record{}, err
 			}
@@ -755,7 +755,7 @@ func (s *Service) end(ctx context.Context, tx pgx.Tx, household uuid.UUID, m mem
 	if _, err := tx.Exec(ctx, "DELETE FROM memberships WHERE id = $1", m.id); err != nil {
 		return mutation.Record{}, err
 	}
-	withdrawn, err := withdraw(ctx, tx, household, m.user, s.Now())
+	withdrawn, err := s.withdraw(ctx, tx, household, m.user, s.Now())
 	if err != nil {
 		return mutation.Record{}, err
 	}

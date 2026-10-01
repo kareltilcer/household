@@ -42,6 +42,15 @@ import (
 // database has a leader of its own.
 const lockKey int64 = 0x686f757365686f6c // "househol"
 
+// recordWithin bounds what the scheduler writes past its context's end: how a job a shutdown stopped
+// ended, and the lead it gives up. A database that does not answer then holds the process no longer.
+const recordWithin = 10 * time.Second
+
+// detached is ctx past its end, for recordWithin.
+func detached(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), recordWithin)
+}
+
 // Cadence says when a job falls due.
 type Cadence interface {
 	// next returns the job's first slot after t.
@@ -118,7 +127,9 @@ type Scheduler struct {
 	mu      sync.Mutex
 	conn    *pgxpool.Conn
 	running map[string]bool
-	wg      sync.WaitGroup
+	// registered is whether every job was found registered in scheduler_jobs (due).
+	registered bool
+	wg         sync.WaitGroup
 }
 
 // New returns a scheduler of jobs, each named once.
@@ -163,7 +174,9 @@ func (s *Scheduler) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			s.wg.Wait()
-			s.Resign(context.WithoutCancel(ctx))
+			resigning, cancel := detached(ctx)
+			s.Resign(resigning)
+			cancel()
 			return
 		case <-ticker.C:
 		}
@@ -177,8 +190,15 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		return
 	}
 	now := s.cfg.Now()
+	due, err := s.due(ctx, now)
+	if err != nil {
+		if ctx.Err() == nil {
+			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "scheduler: read the jobs due", slog.Any("error", err))
+		}
+		return
+	}
 	for _, j := range s.jobs {
-		if !s.start(j.Name) {
+		if !due[j.Name] || !s.start(j.Name) {
 			continue
 		}
 		took, err := s.take(ctx, j, now)
@@ -236,7 +256,9 @@ func (s *Scheduler) lead(ctx context.Context) bool {
 			return true
 		}
 		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "scheduler: lost the lead with its connection", slog.String("instance", s.instance.String()))
-		_ = s.conn.Conn().Close(context.WithoutCancel(ctx))
+		closing, cancel := detached(ctx)
+		_ = s.conn.Conn().Close(closing)
+		cancel()
 		s.conn.Release()
 		s.conn = nil
 	}
@@ -274,6 +296,50 @@ func (s *Scheduler) finish(job string) {
 	delete(s.running, job)
 }
 
+// due returns the jobs whose slot is due at now, in one read: a leader reads every tick, and writes
+// only when it takes a slot. It registers first the jobs it has not found registered yet, each due at
+// its first slot after now, which it does once, or again for a job whose row has gone.
+func (s *Scheduler) due(ctx context.Context, now time.Time) (map[string]bool, error) {
+	s.mu.Lock()
+	registered := s.registered
+	s.mu.Unlock()
+	names := make([]string, len(s.jobs))
+	for i, j := range s.jobs {
+		names[i] = j.Name
+	}
+	due := make(map[string]bool, len(s.jobs))
+	err := tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
+		if !registered {
+			for _, j := range s.jobs {
+				if _, err := tx.Exec(ctx, "INSERT INTO scheduler_jobs (name, next_run_at) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
+					j.Name, j.Cadence.next(now)); err != nil {
+					return err
+				}
+			}
+		}
+		rows, err := tx.Query(ctx, "SELECT name, next_run_at <= $2 FROM scheduler_jobs WHERE name = ANY($1)", names, now)
+		if err != nil {
+			return err
+		}
+		var (
+			name  string
+			isDue bool
+		)
+		_, err = pgx.ForEachRow(rows, []any{&name, &isDue}, func() error {
+			due[name] = isDue
+			return nil
+		})
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	s.registered = len(due) == len(s.jobs)
+	s.mu.Unlock()
+	return due, nil
+}
+
 // take takes j's slot when one is due at now, moving its due time to its next slot, and reports
 // whether it did. A job seen for the first time is due at its first slot after now.
 func (s *Scheduler) take(ctx context.Context, j Job, now time.Time) (bool, error) {
@@ -306,7 +372,8 @@ func (s *Scheduler) run(ctx context.Context, j Job) {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "scheduler: a job ran", attrs...)
 	}
 	// Recorded past ctx's end, so that a job a shutdown stopped is tried again soon after.
-	record := context.WithoutCancel(ctx)
+	record, cancel := detached(ctx)
+	defer cancel()
 	if rerr := tenant.AccountTx(record, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
 		_, err := tx.Exec(record, `
 			UPDATE scheduler_jobs SET last_finished_at = $2,

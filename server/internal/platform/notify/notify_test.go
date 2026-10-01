@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
@@ -24,6 +25,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mfa"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
 
@@ -82,11 +84,13 @@ func (p *pushes) to(user uuid.UUID) []pushed {
 	return out
 }
 
-// mailbox keeps the email sent, and refuses the next fail of them.
+// mailbox keeps the email sent, and refuses the next fail of them; then, when set, runs after each it
+// took.
 type mailbox struct {
 	mu   sync.Mutex
 	sent []mail.Message
 	fail int
+	then func()
 }
 
 func (m *mailbox) Send(_ context.Context, msg mail.Message) error {
@@ -97,6 +101,9 @@ func (m *mailbox) Send(_ context.Context, msg mail.Message) error {
 		return errors.New("the mail server is down")
 	}
 	m.sent = append(m.sent, msg)
+	if m.then != nil {
+		m.then()
+	}
 	return nil
 }
 
@@ -136,6 +143,7 @@ var keys = func() *mfa.Keys {
 type world struct {
 	t      *testing.T
 	admin  *pgxpool.Pool
+	app    *pgxpool.Pool
 	pushes *pushes
 	mail   *mailbox
 	clock  *clock
@@ -150,10 +158,10 @@ func newWorld(t *testing.T) *world {
 		t.Fatal(err)
 	}
 	web, _ := url.Parse("https://app.household.test")
-	w := &world{t: t, admin: d.Pool(t, ""), pushes: &pushes{receipts: map[string]notify.Status{}}, mail: &mailbox{},
-		clock: &clock{t: time.Now()}}
+	w := &world{t: t, admin: d.Pool(t, ""), app: d.Pool(t, db.RoleApp), pushes: &pushes{receipts: map[string]notify.Status{}},
+		mail: &mailbox{}, clock: &clock{t: time.Now()}}
 	w.s, err = notify.New(notify.Config{
-		Pool: d.Pool(t, db.RoleApp), Meter: d.Pool(t, db.RoleMeter), Log: logging.New(io.Discard, slog.LevelDebug),
+		Pool: w.app, Meter: d.Pool(t, db.RoleMeter), Log: logging.New(io.Discard, slog.LevelDebug),
 		Catalogs: catalogs, WebURL: web, Keys: keys, WebPush: w.pushes, Expo: w.pushes, Receipts: w.pushes, Mail: w.mail,
 		VAPIDKey: "key", Now: w.clock.now, Poll: 20 * time.Millisecond,
 	})
@@ -299,6 +307,15 @@ func (q queued) why() string {
 		return ""
 	}
 	return *q.reason
+}
+
+// withdraw withdraws what waits in h under key, as a cause's transaction does.
+func (w *world) withdraw(h uuid.UUID, key string) {
+	w.t.Helper()
+	scoped := tenant.Assume(w.t.Context(), w.app, h, uuid.Nil, "")
+	if err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error { return w.s.Withdraw(scoped, tx, key) }); err != nil {
+		w.t.Fatal(err)
+	}
 }
 
 // due moves h's waiting notifications to now, for a test that has moved the clock past their time.
@@ -699,6 +716,170 @@ func TestRepeatsCoalesce(t *testing.T) {
 	}
 	if got := len(w.pushes.to(jana)); got != 1 {
 		t.Fatalf("pushed %d; want the first alone", got)
+	}
+
+	// One going out now, claimed by a worker, is as good as sent: a repeat neither merges into it nor
+	// goes straight after it.
+	other := w.household()
+	w.member(other, jana, "member", nil)
+	if err := w.s.Send(t.Context(), other, n); err != nil {
+		t.Fatal(err)
+	}
+	w.exec("UPDATE notifications SET claim = gen_random_uuid(), attempts = 1, run_at = now() + interval '5 minutes' WHERE household_id = $1", other)
+	if err := w.s.Send(t.Context(), other, n); err != nil {
+		t.Fatal(err)
+	}
+	all = w.notifications(other)
+	if len(all) != 2 || all[0].count != 1 || all[1].status != "queued" || all[1].count != 1 ||
+		time.Until(all[1].runAt) < notify.Window-time.Minute {
+		t.Fatalf("a repeat while one went out: %+v", all)
+	}
+}
+
+// A push's tag, which a push service and a device keep one push of, is its coalescing key's in its
+// household: the same key in two households is two notices, and neither replaces the other.
+func TestAPushesTagIsItsHouseholds(t *testing.T) {
+	w := newWorld(t)
+	jana := w.user("Jana")
+	w.browser(jana)
+	n := accessChanged(jana)
+	n.Coalesce = "access_changed"
+	tags := map[string]bool{}
+	for range 2 {
+		h := w.household()
+		w.member(h, jana, "member", nil)
+		w.send(h, n)
+	}
+	for _, p := range w.pushes.to(jana) {
+		if p.push.Tag == "" {
+			t.Fatalf("a coalescing push without a tag: %+v", p.push)
+		}
+		tags[p.push.Tag] = true
+	}
+	if len(tags) != 2 {
+		t.Fatalf("two households' pushes under one key: tags %v", tags)
+	}
+}
+
+// A delivery the worker's end stops before it went is put back, its attempt not counted and nothing
+// held against its target; one that went is settled, not left claimed to go again once its lease has
+// passed.
+func TestADeliveryAShutdownStopsIsPutBackAndOneThatWentIsSettled(t *testing.T) {
+	w := newWorld(t)
+	h, jana := w.household(), w.user("Jana")
+	w.member(h, jana, "member", nil)
+	sub := w.browser(jana)
+
+	ctx, stop := context.WithCancel(t.Context())
+	defer stop()
+	w.pushes.answer = func(notify.Target) notify.Outcome {
+		stop()
+		return notify.Outcome{Status: notify.Failed}
+	}
+	if err := w.s.Send(t.Context(), h, accessChanged(jana)); err != nil {
+		t.Fatal(err)
+	}
+	w.s.Drain(ctx, h)
+	q := w.one(h)
+	if q.status != "queued" || q.attempts != 0 || time.Until(q.runAt) > time.Second {
+		t.Fatalf("a push the shutdown stopped: %+v", q)
+	}
+	var failures int
+	if err := w.admin.QueryRow(t.Context(), "SELECT failures FROM push_subscriptions WHERE id = $1", sub).Scan(&failures); err != nil {
+		t.Fatal(err)
+	}
+	if logged := w.deliveries(h); len(logged) != 0 || failures != 0 {
+		t.Fatalf("held against its target: %d failures, logged %+v", failures, logged)
+	}
+	w.pushes.answer = nil
+	w.s.Drain(t.Context(), h)
+	if q := w.one(h); q.status != "sent" {
+		t.Fatalf("once it ran again: %+v", q)
+	}
+
+	other := w.household()
+	sending, stopSending := context.WithCancel(t.Context())
+	defer stopSending()
+	w.mail.then = stopSending
+	if err := w.s.Send(t.Context(), other, notify.Notification{To: jana, Category: notify.Direct, Message: "email.member_removed", Email: true}); err != nil {
+		t.Fatal(err)
+	}
+	w.s.Drain(sending, other)
+	if q := w.one(other); q.status != "sent" || len(w.mail.all()) != 1 {
+		t.Fatalf("an email that went as the worker stopped: %+v, %d sent", q, len(w.mail.all()))
+	}
+}
+
+// An email's that waits under a key (Replaces) is dropped when another is queued under it, and when
+// its cause withdraws it: neither goes once the mail server takes mail again, and each drop is logged.
+func TestAWaitingEmailIsReplacedOrWithdrawn(t *testing.T) {
+	w := newWorld(t)
+	h := w.household()
+	invite := func(token string) notify.Notification {
+		return notify.Notification{
+			Address: "petr@example.test", Locale: "en", Category: notify.Direct, Message: "email.invitation", Email: true,
+			Route: "invitation", Secret: token, Replaces: "invitation:1",
+			Args: i18n.Args{"inviter": "Jana", "household": "Tilcerovi", "hasMessage": "no", "message": ""},
+		}
+	}
+	w.mail.fail = 1
+	w.send(h, invite("first"))
+	w.send(h, invite("second"))
+	sent := w.mail.all()
+	if len(sent) != 1 || !strings.Contains(sent[0].Body, "#token=second") {
+		t.Fatalf("sent: %+v", sent)
+	}
+	all := w.notifications(h)
+	if len(all) != 2 || all[0].status != "dropped" || all[0].why() != "replaced" || all[0].sealed || all[0].addressed ||
+		all[1].status != "sent" {
+		t.Fatalf("the notifications: %+v", all)
+	}
+
+	w.mail.fail = 1
+	waiting := invite("third")
+	waiting.Replaces = "invitation:2"
+	w.send(h, waiting)
+	w.withdraw(h, "invitation:2")
+	w.due(h)
+	w.s.Drain(t.Context(), h)
+	if n := len(w.mail.all()); n != 1 {
+		t.Fatalf("a withdrawn email went: %d sent", n)
+	}
+	all = w.notifications(h)
+	if last := all[len(all)-1]; last.status != "dropped" || last.why() != "withdrawn" || last.sealed || last.addressed {
+		t.Fatalf("withdrawn: %+v", last)
+	}
+	reasons := map[string]int{}
+	for _, d := range w.deliveries(h) {
+		if d.status == "dropped" {
+			reasons[d.reason]++
+		}
+	}
+	if reasons["replaced"] != 1 || reasons["withdrawn"] != 1 {
+		t.Fatalf("drops logged: %v", reasons)
+	}
+}
+
+// A notification claimed more times than it may be tried, its workers ending before they settled it,
+// is given up, and the log says so.
+func TestANotificationNeverSettledIsGivenUpAndLogged(t *testing.T) {
+	w := newWorld(t)
+	h, jana := w.household(), w.user("Jana")
+	w.member(h, jana, "member", nil)
+	w.browser(jana)
+	if err := w.s.Send(t.Context(), h, accessChanged(jana)); err != nil {
+		t.Fatal(err)
+	}
+	w.exec("UPDATE notifications SET attempts = 5 WHERE household_id = $1", h)
+	w.s.Drain(t.Context(), h)
+	if q := w.one(h); q.status != "failed" || q.why() != "gave_up" {
+		t.Fatalf("given up: %+v", q)
+	}
+	if n := len(w.pushes.to(jana)); n != 0 {
+		t.Fatalf("pushed %d", n)
+	}
+	if logged := w.deliveries(h); len(logged) != 1 || logged[0].status != "failed" || logged[0].reason != "gave_up" || logged[0].transport != "" {
+		t.Fatalf("logged: %+v", logged)
 	}
 }
 

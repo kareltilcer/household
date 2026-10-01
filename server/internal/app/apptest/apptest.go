@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"log/slog"
 	"net/url"
 	"path/filepath"
@@ -56,14 +57,26 @@ const (
 type Outbox struct {
 	mu       sync.Mutex
 	messages []mail.Message
+	refuse   int
 }
 
-// Send keeps m.
+// Send keeps m, unless it is one of those Refuse refuses.
 func (o *Outbox) Send(_ context.Context, m mail.Message) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	if o.refuse > 0 {
+		o.refuse--
+		return errors.New("apptest: the mail server refused the message")
+	}
 	o.messages = append(o.messages, m)
 	return nil
+}
+
+// Refuse refuses the next n messages, as a mail server that is down does.
+func (o *Outbox) Refuse(n int) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.refuse = n
 }
 
 // To returns the messages sent to address, in the order they were sent.

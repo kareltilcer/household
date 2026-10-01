@@ -224,9 +224,11 @@ func (s *Service) unsubscribe(w http.ResponseWriter, r *http.Request) {
 }
 
 // pushEndpoint reports whether endpoint is a Web Push endpoint the server sends to: an https URL with
-// no credentials, at a push service it knows (Config.PushHosts).
+// no credentials, at a push service it knows (Config.PushHosts). Its scheme is spelled in lowercase,
+// as a browser gives it and as the table holds it: url.Parse lowercases the scheme it reads, and
+// would pass "HTTPS://" through to a row that refuses it.
 func (s *Service) pushEndpoint(endpoint string) bool {
-	if len(endpoint) > 2048 {
+	if len(endpoint) > 2048 || !strings.HasPrefix(endpoint, "https://") {
 		return false
 	}
 	u, err := url.Parse(endpoint)

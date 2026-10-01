@@ -25,7 +25,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -200,19 +199,6 @@ func pathUUID(r *http.Request, name string) (uuid.UUID, error) {
 		return uuid.Nil, problem.NotFound()
 	}
 	return id, nil
-}
-
-// link is the web client's route, with token in its fragment, which a browser sends to no server,
-// so that it stays out of every access log and Referer on the way.
-func (s *Service) link(route, token string) string {
-	u := *s.WebURL
-	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + route
-	u.RawQuery = ""
-	u.Fragment = ""
-	if token != "" {
-		u.Fragment = "token=" + token
-	}
-	return u.String()
 }
 
 // readTx runs fn in a read-only transaction of household, whatever ctx's scope, with user as the

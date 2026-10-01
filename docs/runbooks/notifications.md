@@ -88,6 +88,10 @@ WHERE household_id = $1 ORDER BY sent_at DESC LIMIT 50;
   deleted, or the device's token cleared, and the app registers again when it next opens.
 - `muted`, `category_muted`: the member's own preferences, which win (FR-NT2).
 - `no_grant`, `not_member`, `private`: the member may not see what it is about (FR-NT5).
+- `replaced`, `withdrawn`: an email that waited for the mail server and no longer says what holds: its
+  invitation or graduation link was sent again, or the invitation ended or the link was spent.
+- `gave_up`: tried, or claimed by workers that ended before settling it, five times; a push given up
+  this way has no transport in the log, since it names no target.
 - A notification `queued` with `attempts` at 1 and `run_at` about five minutes after it was claimed is
   held by a worker; one that died lets another take it then.
 

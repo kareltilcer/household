@@ -80,8 +80,8 @@ func hash(id uuid.UUID) []byte {
 }
 
 // The expiry sweep deletes what its retentions say and nothing a retention still keeps: ended
-// sessions, Idempotency-Keys a week old, used refresh tokens a month old, revoked device sign-ins
-// once their tokens are gone, expired trusts, and throttles that count nothing any more.
+// sessions, Idempotency-Keys a week old, used refresh tokens a month old, device sign-ins revoked a
+// month ago with their tokens, expired trusts, and throttles that count nothing any more.
 func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 	w := newWorld(t)
 	u := w.user()
@@ -104,13 +104,18 @@ func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 	}
 	device := idgen.New()
 	w.exec("INSERT INTO devices (user_id, id) VALUES ($1, $2)", u, device)
-	revokedEmpty, revokedHolding, live := idgen.New(), idgen.New(), idgen.New()
-	w.exec(`INSERT INTO device_sessions (id, user_id, device_id, revoked_at) VALUES ($1, $4, $5, now()), ($2, $4, $5, now()), ($3, $4, $5, NULL)`,
-		revokedEmpty, revokedHolding, live, u, device)
+	revokedLongAgo, revokedLately, live := idgen.New(), idgen.New(), idgen.New()
+	w.exec(`INSERT INTO device_sessions (id, user_id, device_id, revoked_at) VALUES
+	          ($1, $4, $5, now() - interval '31 days'), ($2, $4, $5, now() - interval '29 days'), ($3, $4, $5, NULL)`,
+		revokedLongAgo, revokedLately, live, u, device)
 	oldToken, youngToken := idgen.New(), idgen.New()
 	w.exec(`INSERT INTO refresh_tokens (id, session_id, token_hash, used_at, replaced_by) VALUES
 	          ($1, $3, $4, now() - interval '31 days', gen_random_uuid()), ($2, $3, $5, now() - interval '29 days', gen_random_uuid())`,
-		oldToken, youngToken, revokedHolding, hash(oldToken), hash(youngToken))
+		oldToken, youngToken, live, hash(oldToken), hash(youngToken))
+	// Each revoked sign-in holds its last token, which was never used, as every real one does.
+	lastLongAgo, lastLately := idgen.New(), idgen.New()
+	w.exec(`INSERT INTO refresh_tokens (id, session_id, token_hash) VALUES ($1, $3, $5), ($2, $4, $6)`,
+		lastLongAgo, lastLately, revokedLongAgo, revokedLately, hash(lastLongAgo), hash(lastLately))
 	expiredTrust, liveTrust := idgen.New(), idgen.New()
 	w.exec(`INSERT INTO mfa_trusts (id, user_id, token_hash, created_at, expires_at) VALUES
 	          ($1, $3, $4, now() - interval '31 days', now() - interval '1 day'), ($2, $3, $5, now() - interval '1 day', now() + interval '29 days')`,
@@ -139,11 +144,12 @@ func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 	if len(keysLeft) != 1 || keysLeft[0] != "young" {
 		t.Errorf("account keys: %v", keysLeft)
 	}
-	if got := w.left("SELECT EXISTS (SELECT FROM refresh_tokens WHERE id = $1)", oldToken, youngToken); got[oldToken] || !got[youngToken] {
+	if got := w.left("SELECT EXISTS (SELECT FROM refresh_tokens WHERE id = $1)", oldToken, youngToken, lastLongAgo, lastLately); got[oldToken] ||
+		!got[youngToken] || got[lastLongAgo] || !got[lastLately] {
 		t.Errorf("refresh tokens: %v", got)
 	}
-	if got := w.left("SELECT EXISTS (SELECT FROM device_sessions WHERE id = $1)", revokedEmpty, revokedHolding, live); got[revokedEmpty] ||
-		!got[revokedHolding] || !got[live] {
+	if got := w.left("SELECT EXISTS (SELECT FROM device_sessions WHERE id = $1)", revokedLongAgo, revokedLately, live); got[revokedLongAgo] ||
+		!got[revokedLately] || !got[live] {
 		t.Errorf("device sign-ins: %v", got)
 	}
 	if got := w.left("SELECT EXISTS (SELECT FROM mfa_trusts WHERE id = $1)", expiredTrust, liveTrust); got[expiredTrust] || !got[liveTrust] {

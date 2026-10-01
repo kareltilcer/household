@@ -236,13 +236,11 @@ func proposed(role access.Role, requested map[string]access.Level, modules []str
 	return grants
 }
 
-// outgoing is an email about an invitation, its own or the notice of its decline: its address, the
-// language it is written in and its arguments, read in the transaction that writes the invitation
-// and sent once it commits.
 // letter queues the email of invitation i, whose token is token, in tx, for the notification
 // transport to send once tx commits (Nudge): in the language of the account with its address, else
 // the household's, with the inviter's and the household's names and the message, and the link that
-// carries the token, which waits sealed.
+// carries the token, which waits sealed. It replaces the invitation's email still waiting, whose link
+// this one's token ends.
 func (s *Service) letter(ctx context.Context, tx pgx.Tx, i invitation, token string) error {
 	var household, locale string
 	if err := tx.QueryRow(ctx, `
@@ -256,9 +254,17 @@ func (s *Service) letter(ctx context.Context, tx pgx.Tx, i invitation, token str
 	}
 	return s.Notify.Queue(ctx, tx, notify.Notification{
 		Address: *i.email, Locale: locale, Category: notify.Direct, Message: string(emailInvitation), Args: args,
-		Email: true, Route: routeInvitation, Secret: token,
+		Email: true, Route: routeInvitation, Secret: token, Replaces: invitationKey(i.id),
 	})
 }
+
+// invitationKey is the key an invitation's email waits under (notify.Notification.Replaces): sending
+// it again replaces it, and the invitation's end withdraws it.
+func invitationKey(id uuid.UUID) string { return "invitation:" + id.String() }
+
+// graduationKey is the key the email of a child profile's graduation link waits under: a newer link
+// replaces it, and the link spent with its sender's ownership withdraws it.
+func graduationKey(child uuid.UUID) string { return "graduation:" + child.String() }
 
 // throttle counts an invitation household sends, and refuses one past its twenty a day (PRD 02 §9).
 func (s *Service) throttle(ctx context.Context, household uuid.UUID) error {
@@ -414,7 +420,7 @@ func (s *Service) invite(w http.ResponseWriter, r *http.Request) {
 	if i.kind == kindEmail {
 		s.Notify.Nudge(ctx, household)
 	} else {
-		link := s.link(routeInvitation, token)
+		link := notify.Link(s.WebURL, routeInvitation, token)
 		body.URL = &link
 		idempotency.Unstorable(ctx)
 	}
@@ -521,6 +527,10 @@ func (s *Service) revokeInvitation(w http.ResponseWriter, r *http.Request) {
 		if i, err = setStatus(ctx, tx, i, statusRevoked); err != nil {
 			return mutation.Record{}, err
 		}
+		// Its email, if it still waits for the mail server, invites no one any more.
+		if err := s.Notify.Withdraw(ctx, tx, invitationKey(i.id)); err != nil {
+			return mutation.Record{}, err
+		}
 		return mutation.Record{
 			Event: audit.Event{
 				Module: Name, Action: actionInviteRevoke, EntityType: entityInvitation, EntityID: i.id,
@@ -558,15 +568,27 @@ func setStatus(ctx context.Context, tx pgx.Tx, i invitation, status string) (inv
 // nothing its replicas hold. One whose sending read their role before this withdrawal committed is
 // written after it, and is refused at its confirmation instead, which reads its sender's role under
 // the household's lock (confirmGraduation).
-func withdraw(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, now time.Time) ([]sync.Change, error) {
-	if _, err := tx.Exec(ctx, `
+//
+// The emails of both that still wait for the mail server are withdrawn with them.
+func (s *Service) withdraw(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, now time.Time) ([]sync.Change, error) {
+	rows, err := tx.Query(ctx, `
 		UPDATE email_tokens SET used_at = $3
 		WHERE purpose = 'graduate' AND used_at IS NULL AND sent_by = $2
-		  AND user_id IN (SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'child')`,
-		household, user, now); err != nil {
+		  AND user_id IN (SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'child')
+		RETURNING user_id`,
+		household, user, now)
+	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `
+	spent, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(spent))
+	for _, child := range spent {
+		keys = append(keys, graduationKey(child))
+	}
+	rows, err = tx.Query(ctx, `
 		WITH i AS (
 		  UPDATE invitations SET status = 'revoked'
 		  WHERE household_id = $1 AND invited_by = $2 AND status = 'pending' AND expires_at > $3
@@ -578,11 +600,20 @@ func withdraw(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, now tim
 		return nil, err
 	}
 	withdrawn, err := pgx.CollectRows(rows, scanInvitation)
+	if err != nil {
+		return nil, err
+	}
 	changes := make([]sync.Change, 0, len(withdrawn))
 	for _, i := range withdrawn {
 		changes = append(changes, i.change())
+		if i.kind == kindEmail {
+			keys = append(keys, invitationKey(i.id))
+		}
 	}
-	return changes, err
+	if err := s.Notify.Withdraw(ctx, tx, keys...); err != nil {
+		return nil, err
+	}
+	return changes, nil
 }
 
 // resendInvitation sends an email invitation again, an owner's to do once their own address is
@@ -917,6 +948,11 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		}
 		i.status = status
+		if i.kind == kindEmail && status == statusAccepted {
+			if err := s.Notify.Withdraw(scoped, tx, invitationKey(i.id)); err != nil {
+				return mutation.Record{}, err
+			}
+		}
 		return mutation.Record{
 			Event: audit.Event{
 				Module: Name, Action: actionMemberJoin, EntityType: entityMembership, EntityID: m.id,
@@ -977,6 +1013,11 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 		}
 		if i, err = setStatus(ctx, tx, i, statusDeclined); err != nil {
 			return mutation.Record{}, err
+		}
+		if i.kind == kindEmail {
+			if err := s.Notify.Withdraw(scoped, tx, invitationKey(i.id)); err != nil {
+				return mutation.Record{}, err
+			}
 		}
 		// The inviter is told by a push, as someone who means them (D-111): the invitations are admin's,
 		// which an owner who sent one sees.

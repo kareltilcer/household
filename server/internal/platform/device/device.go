@@ -354,9 +354,13 @@ func (s *Store) List(ctx context.Context, tx pgx.Tx, user uuid.UUID) ([]Device, 
 	return pgx.CollectRows(rows, scanDevice)
 }
 
+// pushEnabled is the contract's Device.push_enabled of devices d: a registered Expo token that failures
+// have not marked stale (FR-NT6), which is what the notification workers push to.
+const pushEnabled = "(d.push_token IS NOT NULL AND d.push_stale_at IS NULL)"
+
 // deviceQuery reads user's devices with a live sign-in.
 const deviceQuery = `
-	SELECT d.id, d.label, coalesce(d.platform, ''), coalesce(d.app_version, ''), d.last_seen_at, d.push_token IS NOT NULL, s.id
+	SELECT d.id, d.label, coalesce(d.platform, ''), coalesce(d.app_version, ''), d.last_seen_at, ` + pushEnabled + `, s.id
 	FROM devices d JOIN device_sessions s ON s.user_id = d.user_id AND s.device_id = d.id AND s.revoked_at IS NULL
 	WHERE d.user_id = $1`
 
@@ -388,7 +392,7 @@ func (s *Store) Rename(ctx context.Context, tx pgx.Tx, user, id uuid.UUID, label
 		    AND EXISTS (SELECT FROM device_sessions s WHERE s.user_id = d.user_id AND s.device_id = d.id AND s.revoked_at IS NULL)
 		  RETURNING d.*
 		)
-		SELECT d.id, d.label, coalesce(d.platform, ''), coalesce(d.app_version, ''), d.last_seen_at, d.push_token IS NOT NULL, s.id
+		SELECT d.id, d.label, coalesce(d.platform, ''), coalesce(d.app_version, ''), d.last_seen_at, `+pushEnabled+`, s.id
 		FROM renamed d JOIN device_sessions s ON s.user_id = d.user_id AND s.device_id = d.id AND s.revoked_at IS NULL`,
 		user, id, clean(label, MaxLabel))
 	if err != nil {

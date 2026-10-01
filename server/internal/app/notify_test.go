@@ -99,6 +99,8 @@ func TestRegisteringWhereAMemberIsReached(t *testing.T) {
 		{"transport": "web_push", "endpoint": "https://attacker.example/push", "keys": browserKeys()},
 		{"transport": "web_push", "endpoint": "http://" + apptest.PushHost + "/send/1", "keys": browserKeys()},
 		{"transport": "web_push", "endpoint": "https://user:pw@" + apptest.PushHost + "/send/1", "keys": browserKeys()},
+		// A scheme no browser spells, which the table would refuse.
+		{"transport": "web_push", "endpoint": "HTTPS://" + apptest.PushHost + "/send/4", "keys": browserKeys()},
 		{"transport": "web_push", "endpoint": "https://" + apptest.PushHost + "/send/2", "keys": map[string]string{"p256dh": "AAAA", "auth": "AAAA"}},
 		{"transport": "web_push", "endpoint": "https://" + apptest.PushHost + "/send/3"},
 		// A browser's sign-in is reached through its subscription, not a device's token.
@@ -132,17 +134,34 @@ func TestRegisteringWhereAMemberIsReached(t *testing.T) {
 			t.Errorf("token %q for device %v: %d", bad.token, bad.device, code)
 		}
 	}
-	rec = phone.send(http.MethodGet, "/me/devices", "", nil)
-	expect(t, rec, http.StatusOK, "")
-	var devices struct {
-		Items []struct {
-			ID          uuid.UUID `json:"id"`
-			PushEnabled bool      `json:"push_enabled"`
-		} `json:"items"`
+	pushEnabled := func() bool {
+		t.Helper()
+		rec := phone.send(http.MethodGet, "/me/devices", "", nil)
+		expect(t, rec, http.StatusOK, "")
+		var devices struct {
+			Items []struct {
+				ID          uuid.UUID `json:"id"`
+				PushEnabled bool      `json:"push_enabled"`
+			} `json:"items"`
+		}
+		decode(t, rec, &devices)
+		if len(devices.Items) != 1 {
+			t.Fatalf("the devices: %+v", devices.Items)
+		}
+		return devices.Items[0].PushEnabled
 	}
-	decode(t, rec, &devices)
-	if len(devices.Items) != 1 || !devices.Items[0].PushEnabled {
-		t.Fatalf("the devices: %+v", devices.Items)
+	if !pushEnabled() {
+		t.Fatal("a registered token is not push_enabled")
+	}
+	// A token five failures marked stale is not pushed to, and says so, until it is registered again.
+	if _, err := s.admin.Exec(t.Context(), "UPDATE devices SET push_failures = 5, push_stale_at = now() WHERE push_token = $1", token); err != nil {
+		t.Fatal(err)
+	}
+	if pushEnabled() {
+		t.Fatal("a stale token is push_enabled")
+	}
+	if code := register(token, nil); code != http.StatusOK || !pushEnabled() {
+		t.Fatalf("registered again: %d, push_enabled %v", code, pushEnabled())
 	}
 
 	expect(t, jana.delete("/push/subscriptions?endpoint="+url.QueryEscape(endpoint)), http.StatusNoContent, "")
@@ -317,6 +336,43 @@ func TestAnInvitationsTokenIsNotKeptOnceSent(t *testing.T) {
 	if left != 0 || subject == nil || len(sent) == 0 || *subject != sent[len(sent)-1].Subject || body != nil ||
 		status != "sent" || transport != "email" || token == "" {
 		t.Fatalf("kept: %d, logged %q %v %s %s", left, *subject, body, status, transport)
+	}
+}
+
+// An invitation's email that waits for the mail server goes with its invitation: sending it again
+// replaces it, so that only the new link arrives, and withdrawing it withdraws it, so that nothing
+// invites anyone once the mail server takes mail again.
+func TestAnInvitationsWaitingEmailGoesWithIt(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	petr, klara := s.a("petr@tilcerovi.cz"), s.a("klara@tilcerovi.cz")
+	later := func() {
+		t.Helper()
+		if _, err := s.admin.Exec(t.Context(), "UPDATE notifications SET run_at = now() WHERE household_id = $1 AND status = 'queued'", h.ID); err != nil {
+			t.Fatal(err)
+		}
+		s.notifier.Drain(t.Context(), h.ID)
+	}
+
+	s.outbox.Refuse(1)
+	sent := jana.invite(h.ID, map[string]any{"kind": "email", "email": petr, "role": "member"})
+	if n := len(s.outbox.To(petr)); n != 0 {
+		t.Fatalf("%d emails while the mail server refused them", n)
+	}
+	expect(t, jana.post(householdPath(h.ID, "/invitations/"+sent.ID.String()+"/resend"), ""), http.StatusAccepted, "")
+	later()
+	if n := len(s.outbox.To(petr)); n != 1 {
+		t.Fatalf("Petr was emailed %d times; want the new link alone", n)
+	}
+	expect(t, s.browser().get("/me/invitations/"+s.invitationToken(petr)), http.StatusOK, "")
+
+	s.outbox.Refuse(1)
+	withdrawn := jana.invite(h.ID, map[string]any{"kind": "email", "email": klara, "role": "member"})
+	expect(t, jana.delete(householdPath(h.ID, "/invitations/"+withdrawn.ID.String())), http.StatusNoContent, "")
+	later()
+	if n := len(s.outbox.To(klara)); n != 0 {
+		t.Fatalf("Klára was emailed a withdrawn invitation %d times", n)
 	}
 }
 

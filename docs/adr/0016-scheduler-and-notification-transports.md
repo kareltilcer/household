@@ -81,15 +81,19 @@ item's owner, their preferences and their quiet hours, and drops, holds or sends
 (FR-NT5): every drop is logged with its reason. Then it renders the message in the recipient's own
 language, with the household's name, and the count of repeats merged into it, and sends to every live
 target. A notification is settled in one transaction with its log rows and what the attempts say of
-their targets; a worker whose lease another took settles nothing.
+their targets; a worker whose lease another took settles nothing. What a worker decided is written
+past its context's end, for ten seconds at most, so that a shutdown leaves nothing it sent claimed to
+go again once the lease has passed; one the shutdown stopped before it went is put back, its attempt
+not counted. A repeat queued while one with its key is going out waits the fifteen minutes, as it
+would after one sent.
 
 **Targets** are the account's: `push_subscriptions` (global), one row per browser endpoint, bound to
 the web session that registered it, which takes it along when it is deleted; and `devices.push_token`,
 used while the device's sign-in lives. An endpoint must be https at a known push service
 (`notify.DefaultPushHosts`, extended by `HOUSEHOLD_PUSH_HOSTS`), since it decides where the server
 sends. Web Push is RFC 8030 over `webpush-go` (PL-2): encrypted to the browser's keys, signed with
-`HOUSEHOLD_VAPID_KEY`, a day to live, the urgency of who it is for, its coalescing key's hash as its
-topic, following no redirect. Expo is its HTTP API with the project's access token when one is set;
+`HOUSEHOLD_VAPID_KEY`, a day to live, the urgency of who it is for, the hash of its household and its
+coalescing key as its topic, following no redirect. Expo is its HTTP API with the project's access token when one is set;
 its ticket waits in `push_receipts` (global) until `notify.receipts` reads its receipt. A 404 or 410,
 or Expo's `DeviceNotRegistered`, deletes a subscription or clears a token; five failures in a row mark
 a target stale until it registers again (FR-NT6). A push is not retried, since its service holds it
@@ -100,7 +104,13 @@ fifth.
 item 9's MFA keys are (`mfa.Keys`: AES-256-GCM, the first seals, each opens), bound to the
 notification's id; the email's address and the sealed token are erased when the notification is
 settled. A backup holds a sealed token only for the minutes an email waits, and never one that opens
-without the key the database does not hold. The delivery log keeps an email's subject, never its
+without the key the database does not hold. An email waits under a key of what it says
+(`Notification.Replaces`): another queued under the key drops it, and its cause's end withdraws it
+(`Withdraw`), so that an invitation sent again, withdrawn, declined or accepted, or a graduation link
+sent again or spent, is not emailed late by a mail server that was down. The graduation's link, an
+account row, is written in the household's `tenant.InWriteTx` with its email rather than in
+`tenant.AccountTx`, which refuses the tenant table the email waits in: the two commit together, and
+the account table admits the request role in either. The delivery log keeps an email's subject, never its
 body; a push's title and body for seven days (`body_expires_at`), which the expiry sweep clears.
 
 **Preferences** (D-112) are a member's per household in `notification_preferences` (tenant, keyed on

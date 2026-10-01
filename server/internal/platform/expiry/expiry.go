@@ -29,7 +29,8 @@ const (
 	// Keys is how long an Idempotency-Key and a pushed mutation's answer are kept (FR-SY5, PRD 01 §6).
 	Keys = 7 * 24 * time.Hour
 	// UsedTokens is how long a used refresh token is kept, which tells a token presented again for a
-	// theft (D-14): a month on, it no longer tells a theft from a stale token.
+	// theft (D-14): a month on, it no longer tells a theft from a stale token. A revoked device sign-in
+	// is kept as long past its revocation, with its tokens.
 	UsedTokens = 30 * 24 * time.Hour
 	// Links is how long a link an email carried, to verify an address, reset a password or graduate,
 	// is kept past its expiry, so that one opened late still answers that it expired.
@@ -98,11 +99,11 @@ var (
 			[]any{Keys.Seconds()}},
 		{"used refresh tokens", "DELETE FROM refresh_tokens WHERE used_at < now() - make_interval(secs => $1)",
 			[]any{UsedTokens.Seconds()}},
-		// A device's sign-in that was revoked, once its tokens are gone: a used token of it presented
-		// again is a reuse until then (D-98).
-		{"revoked device sign-ins", `
-			DELETE FROM device_sessions ds WHERE ds.revoked_at IS NOT NULL
-			  AND NOT EXISTS (SELECT FROM refresh_tokens t WHERE t.session_id = ds.id)`, nil},
+		// A device's sign-in a month after it was revoked, and its refresh tokens with it. A revoked
+		// sign-in's tokens refresh nothing, whatever they are, and its last token was never used, so
+		// that no retention of used tokens ever takes it: the sign-in's own end is what ends them.
+		{"revoked device sign-ins", "DELETE FROM device_sessions WHERE revoked_at < now() - make_interval(secs => $1)",
+			[]any{UsedTokens.Seconds()}},
 		{"expired trusts", "DELETE FROM mfa_trusts WHERE expires_at <= now()", nil},
 	}
 	nightlyHouseholds = []household{

@@ -31,9 +31,6 @@ type Preferences struct {
 // Defaults are an account's preferences until it sets its own: everything on, and no quiet hours.
 func Defaults() Preferences { return Preferences{Enabled: true, Muted: map[Category]bool{}} }
 
-// Wants reports whether p lets a push of category c through, quiet hours aside.
-func (p Preferences) Wants(c Category) bool { return p.Enabled && !p.Muted[c] }
-
 // preferencesJSON is the contract's NotificationPreferences.
 type preferencesJSON struct {
 	HouseholdID *uuid.UUID      `json:"household_id"`

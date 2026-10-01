@@ -95,6 +95,11 @@ type Notification struct {
 	// Route and Secret make an email's link: the web client's Route, with Secret in the fragment,
 	// which no server is sent. The secret is sealed while it waits (Config.Keys).
 	Route, Secret string
+	// Replaces, when set, is the key of what the notification is the latest word on, in its household:
+	// queuing it drops the one still waiting under the key, which it makes stale, and Withdraw drops
+	// it once nothing should go. An invitation's email, whose link a resend replaces and a withdrawal
+	// ends, so that no stale link or withdrawn invitation arrives once the mail server takes mail again.
+	Replaces string
 }
 
 var (
@@ -121,8 +126,10 @@ func (n Notification) check() error {
 		return errors.New("notify: a route that is no email's link")
 	case n.Link != "" && (!strings.HasPrefix(n.Link, "/") || len(n.Link) > 512):
 		return errors.New("notify: a link that is not a path in the app")
-	case len(n.Coalesce) > 200:
-		return errors.New("notify: a coalescing key over 200 bytes")
+	case len(n.Coalesce) > 200 || len(n.Replaces) > 200:
+		return errors.New("notify: a key over 200 bytes")
+	case n.Coalesce != "" && n.Replaces != "":
+		return errors.New("notify: a notification that replaces another merges with none")
 	}
 	for _, c := range Categories {
 		if c == n.Category {
@@ -216,8 +223,9 @@ func New(cfg Config) (*Service, error) {
 
 // Queue queues ns in tx, the transaction of what caused them, in ctx's household: they exist exactly
 // when it commits. A notification whose Coalesce matches one still waiting for its recipient merges
-// into it; one that matches one sent within Window waits until Window has passed since, and the
-// repeats after it merge into it. The caller calls Nudge once tx has committed.
+// into it; one that matches one going out now, or sent within Window, waits until Window has passed
+// since, and the repeats after it merge into it. One whose Replaces matches one still waiting drops
+// it. The caller calls Nudge once tx has committed.
 func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) error {
 	scope := tenant.From(ctx)
 	if scope == nil {
@@ -231,6 +239,11 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 		args := n.Args
 		if args == nil {
 			args = i18n.Args{}
+		}
+		if n.Replaces != "" {
+			if err := withdraw(ctx, tx, household, n.Replaces, reasonReplaced); err != nil {
+				return err
+			}
 		}
 		if n.Coalesce != "" {
 			tag, err := tx.Exec(ctx, `
@@ -249,17 +262,62 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 		if n.Secret != "" {
 			secret = s.cfg.Keys.Seal(id, []byte(n.Secret))
 		}
+		// One going out now, claimed, is as good as sent: a repeat neither merges into it, nor goes
+		// straight after it, but waits Window from now.
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO notifications (household_id, id, user_id, address, locale, category, message, args, route, secret,
-			                           module, owner_id, link, coalesce_key, email, run_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-			        coalesce((SELECT max(settled_at) + make_interval(secs => $16) FROM notifications
-			                  WHERE household_id = $1 AND user_id = $3 AND coalesce_key = $14 AND status = 'sent'
-			                    AND settled_at > now() - make_interval(secs => $16)), now()))`,
+			                           module, owner_id, link, coalesce_key, email, replace_key, run_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $17,
+			        coalesce((SELECT max(coalesce(settled_at, now())) + make_interval(secs => $16) FROM notifications
+			                  WHERE household_id = $1 AND user_id = $3 AND coalesce_key = $14
+			                    AND ((status = 'sent' AND settled_at > now() - make_interval(secs => $16))
+			                         OR (status = 'queued' AND claim IS NOT NULL))), now()))`,
 			household, id, nullableID(n.To), nullable(n.Address), nullable(n.Locale), string(n.Category), n.Message, args,
 			nullable(n.Route), secret, nullable(n.Module), nullableID(n.Owner), nullable(n.Link), nullable(n.Coalesce),
-			n.Email, Window.Seconds()); err != nil {
+			n.Email, Window.Seconds(), nullable(n.Replaces)); err != nil {
 			return fmt.Errorf("notify: queue: %w", err)
+		}
+	}
+	return nil
+}
+
+// Withdraw drops, in tx, what still waits in ctx's household under each of keys (Notification.Replaces),
+// once nothing should go: an invitation withdrawn, declined or accepted, a graduation's link spent.
+// Each drop is logged. One a worker is sending at this moment may still arrive, but is not sent again.
+func (s *Service) Withdraw(ctx context.Context, tx pgx.Tx, keys ...string) error {
+	scope := tenant.From(ctx)
+	if scope == nil {
+		return tenant.ErrNoTenant
+	}
+	for _, key := range keys {
+		if err := withdraw(ctx, tx, scope.HouseholdID(), key, reasonWithdrawn); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// withdraw drops what waits in household under key, for reason, erasing its address and its sealed
+// secret and logging each drop. A worker that claimed one settles nothing of it.
+func withdraw(ctx context.Context, tx pgx.Tx, household uuid.UUID, key, reason string) error {
+	rows, err := tx.Query(ctx, `
+		UPDATE notifications SET status = 'dropped', reason = $3, settled_at = now(), claim = NULL, address = NULL, secret = NULL
+		WHERE household_id = $1 AND replace_key = $2 AND status = 'queued'
+		RETURNING id, user_id, category::text, email`, household, key, reason)
+	if err != nil {
+		return fmt.Errorf("notify: withdraw: %w", err)
+	}
+	dropped, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (queued, error) {
+		q := queued{household: household}
+		err := row.Scan(&q.id, &q.user, &q.category, &q.email)
+		return q, err
+	})
+	if err != nil {
+		return fmt.Errorf("notify: withdraw: %w", err)
+	}
+	for _, q := range dropped {
+		if err := logAttempts(ctx, tx, q, []attempt{{status: "dropped", reason: reason}}); err != nil {
+			return err
 		}
 	}
 	return nil
