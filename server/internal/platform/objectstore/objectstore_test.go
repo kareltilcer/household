@@ -277,11 +277,11 @@ func TestListAndDeleteKeepToAPrefix(t *testing.T) {
 func TestAKeyOutsideTheFormIsRefused(t *testing.T) {
 	s := testsupport.ObjectStore(t)
 	for _, k := range []string{"", "/h/a", "h/../b", "h/a/", "H/a", "h//a", "h/a b"} {
-		if err := put(t, s, k, []byte("x"), "text/plain"); err == nil {
-			t.Errorf("put %q succeeded", k)
+		if err := put(t, s, k, []byte("x"), "text/plain"); !errors.Is(err, objectstore.ErrInvalidKey) {
+			t.Errorf("put %q = %v, want ErrInvalidKey", k, err)
 		}
-		if _, _, err := s.Presign(t.Context(), k, objectstore.Presentation{}, time.Now()); err == nil {
-			t.Errorf("presign %q succeeded", k)
+		if _, _, err := s.Presign(t.Context(), k, objectstore.Presentation{}, time.Now()); !errors.Is(err, objectstore.ErrInvalidKey) {
+			t.Errorf("presign %q = %v, want ErrInvalidKey", k, err)
 		}
 	}
 }

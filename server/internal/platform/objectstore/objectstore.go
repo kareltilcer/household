@@ -39,6 +39,11 @@ var (
 	ErrExists = errors.New("objectstore: the key already holds an object")
 	// ErrNotFound is the answer for a key that holds none.
 	ErrNotFound = errors.New("objectstore: no object at the key")
+	// ErrInvalidKey is the answer for a key outside the form every key the platform writes takes
+	// (ValidKey). It quotes nothing of the key, since errors reach the log and a key that failed the
+	// check is one whose bytes nothing vouches for. Every other error here names a key that passed
+	// it, which holds lowercase letters, digits, '-', '_' and '/' alone.
+	ErrInvalidKey = errors.New("objectstore: not a key the store writes")
 )
 
 // Location is where a store is and how to sign in to it, as its URL names it:
@@ -216,7 +221,7 @@ const sha256Meta = "sha256"
 // and until then the key holds none, which the caller's retry meets again.
 func (s *Store) PutOnce(ctx context.Context, k string, body io.ReadSeeker, size int64, o Object) error {
 	if !ValidKey(k) {
-		return fmt.Errorf("objectstore: %q is not a key", k)
+		return ErrInvalidKey
 	}
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
@@ -432,7 +437,7 @@ const (
 // caller has authorised the one who receives it first.
 func (s *Store) Presign(ctx context.Context, k string, p Presentation, now time.Time) (string, time.Time, error) {
 	if !ValidKey(k) {
-		return "", time.Time{}, fmt.Errorf("objectstore: %q is not a key", k)
+		return "", time.Time{}, ErrInvalidKey
 	}
 	signed := now.UTC().Truncate(LinkWindow)
 	u := *s.public
