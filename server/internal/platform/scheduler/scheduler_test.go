@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/localtime"
@@ -122,6 +124,41 @@ func TestTheLeadersConnectionIsNotThePools(t *testing.T) {
 	}
 	if n := pool.Stat().AcquiredConns(); n != 0 {
 		t.Fatalf("the pool counts %d connections taken while it leads", n)
+	}
+}
+
+// stalled is a pool that hands out no connection until its caller gives up: every one is taken, or the
+// one it would hand out hangs.
+type stalled struct{ scheduler.Pool }
+
+func (stalled) Acquire(ctx context.Context) (*pgxpool.Conn, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// An instance trying for the lead waits a tick at most for a connection to take it on, as the rest of a
+// tick waits, so that a pool that hands out none never holds its ticks, and the lead with them.
+func TestTakingTheLeadWaitsATickAtMost(t *testing.T) {
+	c := &clock{t: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)}
+	s, err := scheduler.New(scheduler.Config{
+		Pool: stalled{testsupport.Open(t).Pool(t, db.RoleApp)}, Log: logging.New(io.Discard, slog.LevelDebug), Now: c.now,
+		Tick: 50 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		s.Tick(context.Background())
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("a tick waited on the pool past its tick")
+	}
+	if s.Leading() {
+		t.Fatal("it leads with no connection")
 	}
 }
 

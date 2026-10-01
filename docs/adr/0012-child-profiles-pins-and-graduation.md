@@ -84,9 +84,10 @@ sent at once leave one that works. It counts among the household's twenty emails
 otherwise let an owner test addresses for an account (D-13). The row names the owner who sent it, `email_tokens.sent_by`: a link lapses with its
 sender's ownership, as an invitation does (D-103). When the ownership ends, `withdraw` spends the
 links they sent for the household's profiles with their invitations, so that none works again once
-they are an owner again; and the confirmation checks under the household's lock that they are still
-an owner, for a link whose sending read the role just before a removal committed, which the
-withdrawal did not find.
+they are an owner again. The sending reads the sender's role, and the profile's membership, again
+under the household's lock, which every change of a role or a membership takes, so that no link,
+nor its email, is written after a withdrawal or a removal (item 15); and the confirmation checks
+under the same lock that the sender is still an owner.
 
 **A PIN keeps no Idempotency-Key**, as a password does not (D-97): the two routes whose body carries
 one are mounted behind the tenant middleware but not the member's key (`household.PINRoutes`). A

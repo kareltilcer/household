@@ -55,10 +55,11 @@ before it could record that, with its process or its host, is tried again by the
 failed one is. A slot missed while no instance led fires once; the slots it missed are not made up.
 A failed or panicking job is tried again after fifteen minutes, or at its next slot if sooner, four
 tries a slot at most (`tries` for `slot_at`): the last moves `next_run_at` to the next slot outright,
-so that a nightly job that one household fails every night, whose run samples every household and
+so that a nightly job that one household fails every night, whose run samples every household or
 lists the whole object store, runs four times that night, not ninety. What a tick asks of the
-database, the jobs due and the slots it takes, waits a tick at most, so that a request pool every
-connection of which is taken never holds the next ping past the leader's idle timeout.
+database, the lead it tries for, the jobs due and the slots it takes, waits a tick at most, so that
+a request pool every connection of which is taken never holds the next ping past the leader's idle
+timeout, nor holds an instance from taking the lead once the leader is gone.
 Cadences are `Every(d)`, counted from the zero time so every instance computes the same slots, and
 `Daily(hh:mm)` in UTC, the clock of the
 jobs that belong to no household's day (D-109); a job about a household's own day, item 53's
@@ -67,9 +68,11 @@ which turns a wall-clock time into an instant DST included: a time the clocks sk
 the gap, and a time they repeat is its first occurrence, but for the end of quiet hours, which is the
 reading of the pass the clock is in.
 
-The jobs this item registers (`app.newScheduler`): `storage.nightly` at 01:00 UTC, the usage sample
-and then the sweeps of objects no row records, a household's and the accounts' pictures (item 14);
-`expiry.sweep` at 03:00 UTC; `expiry.tokens` hourly; `notify.receipts` every fifteen minutes.
+The jobs this item registers (`app.newScheduler`): `storage.sample` at 01:00 UTC, the usage sample;
+`files.sweep` and `avatars.sweep` at 02:00 UTC, the sweeps of objects no row records, a household's
+and the accounts' pictures (item 14), each a job of its own, so that one that fails is tried again
+without the others; `expiry.sweep` at 03:00 UTC; `expiry.tokens` hourly; `notify.receipts` every
+fifteen minutes.
 
 **The expiry sweep** (`internal/platform/expiry`) holds PRD 03 §5's retention table as code, row for
 row, with the account tables' retentions D-113 decides. Account tables are deleted from by the request
@@ -106,9 +109,12 @@ a worker whose lease another took settles nothing. What a worker decided is writ
 past its context's end, for ten seconds at most, so that a shutdown leaves nothing it sent claimed to
 go again once the lease has passed; one the shutdown stopped before it went is put back, its attempt
 not counted. A repeat queued while one with its key is going out waits the fifteen minutes, as it
-would after one sent; should the one going out be put back rather than sent, two wait, and the next
-repeat merges into the later alone, which then says what the repeat says. An email merges with
-nothing. Two transactions queueing one recipient's repeats under one key take turns under a
+would after one sent; should the one going out be put back rather than sent, for quiet hours, a push
+service unavailable or a stopping worker, the repeats queued meanwhile merge into it as it is put
+back, under the same lock, so that the two do not go at once when the quiet hours end; one tried
+already keeps its own row, and the next repeat merges into the later alone, which then says what the
+repeat says. A repeat merging into one in backoff, a push no service took or one that could not be
+read or rendered, sends it now with tries of its own. An email merges with nothing. Two transactions queueing one recipient's repeats under one key take turns under a
 transaction-scoped advisory lock, so that the second finds what the first
 committed rather than each queueing a notification of its own. A commit wakes its own instance's
 workers for its household alone; the meter role's look across every household is the poll's.

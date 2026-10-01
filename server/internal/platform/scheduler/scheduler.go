@@ -335,7 +335,12 @@ func (s *Scheduler) lead(ctx context.Context) bool {
 		_ = conn.Close(closing)
 		cancel()
 	}
-	pooled, err := s.cfg.Pool.Acquire(ctx)
+	// Taking the lead waits a tick at most, as the rest of a tick does: a pool every connection of which
+	// is taken, or one it hands out that the network left half-open, would otherwise hold this instance's
+	// tick until either freed, and with it the lead that every job waits for once the last leader is gone.
+	taking, cancel := context.WithTimeout(ctx, s.cfg.Tick)
+	defer cancel()
+	pooled, err := s.cfg.Pool.Acquire(taking)
 	if err != nil {
 		if ctx.Err() == nil {
 			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "scheduler: connect to take the lead", slog.Any("error", err))
@@ -343,7 +348,10 @@ func (s *Scheduler) lead(ctx context.Context) bool {
 		return false
 	}
 	var took bool
-	if err := pooled.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", lockKey).Scan(&took); err != nil || !took {
+	if err := pooled.QueryRow(taking, "SELECT pg_try_advisory_lock($1)", lockKey).Scan(&took); err != nil || !took {
+		if err != nil && ctx.Err() == nil {
+			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "scheduler: try for the lead", slog.Any("error", err))
+		}
 		pooled.Release()
 		return false
 	}
@@ -352,7 +360,7 @@ func (s *Scheduler) lead(ctx context.Context) bool {
 	// ticks: a leader whose host went without closing the connection would otherwise hold the lead
 	// until the server's TCP keepalive gave up on it, two hours on by default.
 	idle := max(4*s.cfg.Tick, time.Minute)
-	if _, err := conn.Exec(ctx, "SELECT set_config('idle_session_timeout', $1, false)", fmt.Sprint(idle.Milliseconds())); err != nil {
+	if _, err := conn.Exec(taking, "SELECT set_config('idle_session_timeout', $1, false)", fmt.Sprint(idle.Milliseconds())); err != nil {
 		if ctx.Err() == nil {
 			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "scheduler: bound the lead's idle session", slog.Any("error", err))
 		}

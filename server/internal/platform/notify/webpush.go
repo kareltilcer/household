@@ -130,15 +130,15 @@ func (w *WebPush) Push(ctx context.Context, t Target, m Push) Outcome {
 // refusesSignature reports whether body, a push service's 403, refuses the server's VAPID token rather
 // than the subscription: Apple's, which answers a token it does not take, its subject neither an https
 // URL nor a mailto: address, or its expiry past or more than a day off, with the reason BadJwtToken,
-// and Google's, which answers one it cannot verify, or whose expiry it will not take, in plain text:
-// "invalid JWT provided". Another 403, Google's for a subscription made with another key, is the
-// subscription's.
+// and Google's, which answers one it cannot verify, or whose expiry it will not take, saying "invalid
+// JWT provided", in plain text or within a JSON error. Another 403, Google's for a subscription made
+// with another key, is the subscription's.
 func refusesSignature(body []byte) bool {
 	var answer struct {
 		Reason string `json:"reason"`
 	}
-	if json.Unmarshal(body, &answer) == nil {
-		return answer.Reason == "BadJwtToken"
+	if json.Unmarshal(body, &answer) == nil && answer.Reason == "BadJwtToken" {
+		return true
 	}
 	return bytes.Contains(bytes.ToLower(body), []byte("invalid jwt"))
 }

@@ -99,8 +99,9 @@ func TestAWebPushIsEncryptedAndSigned(t *testing.T) {
 	for refusal, want := range map[string]notify.Status{
 		// Apple's refusal of the server's token, and Google's, which each would refuse for every
 		// subscription.
-		`{"reason": "BadJwtToken"}`: notify.Unavailable,
-		"invalid JWT provided\n":    notify.Unavailable,
+		`{"reason": "BadJwtToken"}`:                                   notify.Unavailable,
+		"invalid JWT provided\n":                                      notify.Unavailable,
+		`{"error": {"code": 403, "message": "invalid JWT provided"}}`: notify.Unavailable,
 		// Google's for a subscription made with another VAPID key, and Apple's of the subscription.
 		"the key in the authorization header does not correspond to the sender ID used to subscribe this user": notify.Failed,
 		`{"reason": "BadDeviceToken"}`: notify.Failed,

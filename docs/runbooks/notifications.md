@@ -120,7 +120,11 @@ advisory lock, `db.SchedulerLock` ("schedule", `classid` 1935894629 and `objid` 
 more than its pool's for as long as it leads. That session ends at the server once the leader has not
 pinged it for a minute (four ticks, `idle_session_timeout`), so that a leader whose host went releases
 the lead then; a leader that finds its connection gone ends the jobs it was running, each logged as
-`scheduler: a job failed`, and the next leader runs them again at their retry.
+`scheduler: a job failed`, and the next leader runs them again at their retry. An instance that gets
+no connection, or no answer, within a tick while it tries for the lead logs
+`scheduler: connect to take the lead` or `scheduler: try for the lead` and tries again at its next
+tick: many in a row while no instance leads point at an exhausted pool or a database that does not
+answer.
 
 ```sql
 SELECT name, next_run_at, slot_at, tries, last_started_at, last_finished_at, last_failed_at FROM scheduler_jobs ORDER BY name;

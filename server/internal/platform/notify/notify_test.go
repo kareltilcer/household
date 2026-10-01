@@ -994,6 +994,100 @@ func TestRepeatsCoalesce(t *testing.T) {
 	if q := w.one(fourth); q.count != 3 || q.attempts != 0 || q.why() != "quiet_hours" || time.Until(q.runAt) < 5*time.Hour {
 		t.Fatalf("merged into one held for quiet hours: %+v", q)
 	}
+	// So does one waiting out the backoff of a failure to read or render it, which records no reason;
+	// one waiting the window since one went, which has had no try, still waits it.
+	fifth := w.household()
+	w.member(fifth, jana, "member", nil)
+	if err := w.s.Send(t.Context(), fifth, n); err != nil {
+		t.Fatal(err)
+	}
+	w.exec(`UPDATE notifications SET attempts = 4, reason = NULL, run_at = now() + interval '2 hours' WHERE household_id = $1`, fifth)
+	if err := w.s.Send(t.Context(), fifth, n); err != nil {
+		t.Fatal(err)
+	}
+	if q := w.one(fifth); q.count != 2 || q.attempts != 0 || q.reason != nil || time.Until(q.runAt) > time.Minute {
+		t.Fatalf("merged into one in backoff with no reason: %+v", q)
+	}
+	w.exec(`UPDATE notifications SET run_at = now() + interval '10 minutes' WHERE household_id = $1`, fifth)
+	if err := w.s.Send(t.Context(), fifth, n); err != nil {
+		t.Fatal(err)
+	}
+	if q := w.one(fifth); q.count != 3 || time.Until(q.runAt) < 5*time.Minute {
+		t.Fatalf("merged into one waiting the window: %+v", q)
+	}
+}
+
+// A repeat queued while its notification was claimed, which then did not go, merges into it as it is
+// put back, rather than waiting the window to go beside it, as it would once both were held for the
+// same quiet hours: tried again because no push service took it, or put back by a stopping worker, it
+// says what the repeat says, and stands for both.
+func TestARepeatQueuedWhileItsNotificationWasClaimedMergesWhenItDidNotGo(t *testing.T) {
+	w := newWorld(t)
+	jana := w.user("Jana")
+	w.browser(jana)
+	n := accessChanged(jana)
+	n.Coalesce = "access_changed"
+	latest := n
+	latest.Category, latest.Message, latest.Args = notify.Household, "notification.child_locked", i18n.Args{"member": "Petr"}
+	message := func(h uuid.UUID) string {
+		t.Helper()
+		var m string
+		if err := w.admin.QueryRow(t.Context(), "SELECT message FROM notifications WHERE household_id = $1", h).Scan(&m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+
+	h := w.household()
+	w.member(h, jana, "member", nil)
+	repeat := sync.OnceFunc(func() {
+		if err := w.s.Send(t.Context(), h, latest); err != nil {
+			t.Error(err)
+		}
+	})
+	w.pushes.answer = func(notify.Target) notify.Outcome {
+		repeat()
+		return notify.Outcome{Status: notify.Unavailable}
+	}
+	w.send(h, n)
+	// Merged as it was put back, it went again at once with a try of its own, and waits its backoff.
+	if q := w.one(h); q.status != "queued" || q.count != 2 || q.why() != "push_unavailable" || q.attempts != 1 {
+		t.Fatalf("a repeat while no service took it: %+v", q)
+	}
+	if m := message(h); m != latest.Message {
+		t.Fatalf("says %s; want the repeat's", m)
+	}
+	w.pushes.answer = nil
+	w.due(h)
+	w.s.Drain(t.Context(), h)
+	if q := w.one(h); q.status != "sent" || q.count != 2 {
+		t.Fatalf("once a service took it: %+v", q)
+	}
+
+	other := w.household()
+	w.member(other, jana, "member", nil)
+	ctx, stop := context.WithCancel(t.Context())
+	defer stop()
+	again := sync.OnceFunc(func() {
+		if err := w.s.Send(t.Context(), other, latest); err != nil {
+			t.Error(err)
+		}
+	})
+	w.pushes.answer = func(notify.Target) notify.Outcome {
+		again()
+		stop()
+		return notify.Outcome{Status: notify.Failed}
+	}
+	if err := w.s.Send(t.Context(), other, n); err != nil {
+		t.Fatal(err)
+	}
+	w.s.Drain(ctx, other)
+	if q := w.one(other); q.status != "queued" || q.count != 2 || q.attempts != 0 || time.Until(q.runAt) > time.Second {
+		t.Fatalf("a repeat while a stopping worker had it: %+v", q)
+	}
+	if m := message(other); m != latest.Message {
+		t.Fatalf("says %s; want the repeat's", m)
+	}
 }
 
 // Two transactions queueing one member's repeats under one key at once still merge them: the second

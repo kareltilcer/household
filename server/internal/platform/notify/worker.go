@@ -723,12 +723,14 @@ func deliveredToken(ctx context.Context, tx pgx.Tx, user, device uuid.UUID, toke
 	return err
 }
 
+// clearToken clears a device's Expo token and what its pushes said of it, on the devices the WHERE
+// clause appended to it names.
+const clearToken = "UPDATE devices SET push_token = NULL, push_registered_at = NULL, push_failures = 0, push_stale_at = NULL WHERE "
+
 // forgetToken clears a device's token that its push service no longer knows, unless the device has
 // registered another since.
 func forgetToken(ctx context.Context, tx pgx.Tx, user, device uuid.UUID, token string) error {
-	_, err := tx.Exec(ctx, `
-		UPDATE devices SET push_token = NULL, push_registered_at = NULL, push_failures = 0, push_stale_at = NULL
-		WHERE user_id = $1 AND id = $2 AND push_token = $3`, user, device, token)
+	_, err := tx.Exec(ctx, clearToken+"user_id = $1 AND id = $2 AND push_token = $3", user, device, token)
 	return err
 }
 
@@ -749,17 +751,7 @@ func detached(ctx context.Context) (context.Context, context.CancelFunc) {
 // putBack puts q back to be claimed again at once, its attempt not counted: a delivery the worker's
 // end stopped before it went, which is no failure of it.
 func (s *Service) putBack(ctx context.Context, q queued) {
-	ctx, cancel := detached(ctx)
-	defer cancel()
-	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `
-			UPDATE notifications SET run_at = now(), attempts = greatest(attempts - 1, 0), claim = NULL
-			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim)
-		return err
-	})
-	if err != nil {
-		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: put a notification back", householdAttr(q.household), slog.Any("error", err))
-	}
+	s.unclaim(ctx, q, back{keep: true, uncount: true})
 }
 
 // holdUntil puts q back until until, its recipient's quiet hours' end: nothing quiet hours hold is
@@ -767,28 +759,14 @@ func (s *Service) putBack(ctx context.Context, q queued) {
 // counted, and the attempts that failed before it still are, towards maxAttempts and the backoff. It
 // waits a minute at least, by the database's clock, which decides what is due: were the instance's
 // clock behind it, a hold ending before the database's now would be claimed again at once, and held
-// again, for as long as the two disagreed. One withdrawn while it was claimed stays dropped, for the
-// reason it was (withdraw).
+// again, for as long as the two disagreed.
 func (s *Service) holdUntil(ctx context.Context, q queued, until time.Time) {
-	ctx, cancel := detached(ctx)
-	defer cancel()
-	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `
-			UPDATE notifications SET run_at = greatest($4, now() + make_interval(secs => $6)),
-			  reason = CASE WHEN status = 'queued' THEN $5 ELSE reason END, attempts = greatest(attempts - 1, 0), claim = NULL
-			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, until, reasonQuietHours, holdAtLeast.Seconds())
-		return err
-	})
-	if err != nil {
-		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: hold a notification", householdAttr(q.household), slog.Any("error", err))
-	}
+	s.unclaim(ctx, q, back{until: until, wait: holdAtLeast, reason: reasonQuietHours, uncount: true})
 }
 
 // retry puts q back for its next attempt after its backoff, for reason, recording attempts, those that
 // failed, and what they say of their targets (settle), when there were any; q is failed, for reason,
-// once it has had maxAttempts, or given up when no attempt reached a target. One withdrawn while it was
-// claimed is not tried again: it stays dropped, for the reason it was (withdraw), and its attempts are
-// logged after its drop.
+// once it has had maxAttempts, or given up when no attempt reached a target.
 func (s *Service) retry(ctx context.Context, q queued, reason string, attempts []attempt, healths []health) {
 	if q.attempts >= maxAttempts {
 		if reason == "" {
@@ -799,23 +777,95 @@ func (s *Service) retry(ctx context.Context, q queued, reason string, attempts [
 		s.settle(ctx, q, "failed", reason, attempts, healths)
 		return
 	}
+	s.unclaim(ctx, q, back{wait: backoff[min(q.attempts, len(backoff))-1], reason: reason, attempts: attempts, healths: healths})
+}
+
+// back is how a claim that settles nothing ends (unclaim).
+type back struct {
+	// until and wait say when the notification is due again: at the later of until, when it is set, and
+	// wait from now, by the database's clock.
+	until time.Time
+	wait  time.Duration
+	// reason is what it waits for, "" for nothing in particular, and keep keeps the reason it has.
+	reason string
+	keep   bool
+	// uncount takes back the claim's attempt, which was no failure of the notification's.
+	uncount bool
+	// attempts and healths are the attempts made under the claim, which failed, and what they say of
+	// their targets (settle).
+	attempts []attempt
+	healths  []health
+}
+
+// unclaim ends q's claim as b says, without settling q; it and settle are the only ways a claim ends,
+// each past ctx's end (detached). A worker whose lease another took ends nothing. One withdrawn while
+// it was claimed stays dropped, for the reason it was (withdraw), and is never claimed again, which
+// only a queued one is; its attempts are logged after its drop. The repeats queued under q's
+// coalescing key while it was claimed are merged into it (fold).
+func (s *Service) unclaim(ctx context.Context, q queued, b back) {
 	ctx, cancel := detached(ctx)
 	defer cancel()
-	wait := backoff[min(q.attempts, len(backoff))-1]
+	var until *time.Time
+	if !b.until.IsZero() {
+		until = &b.until
+	}
 	err := tenant.InWriteTx(s.system(ctx, q.household), func(tx pgx.Tx) error {
+		if q.user != nil && q.coalesce != nil {
+			// Taken before the row, as Queue takes it before the rows it merges into.
+			if err := lockCoalescing(ctx, tx, []string{coalescing(q.household, *q.user, *q.coalesce)}); err != nil {
+				return err
+			}
+		}
 		tag, err := tx.Exec(ctx, `
-			UPDATE notifications SET run_at = now() + make_interval(secs => $4),
-			  reason = CASE WHEN status = 'queued' THEN $5 ELSE reason END, claim = NULL
-			WHERE household_id = $1 AND id = $2 AND claim = $3`, q.household, q.id, q.claim, wait.Seconds(), nullable(reason))
+			UPDATE notifications SET run_at = greatest($4::timestamptz, now() + make_interval(secs => $5)),
+			  reason = CASE WHEN status = 'queued' AND NOT $6 THEN $7 ELSE reason END,
+			  attempts = CASE WHEN $8 THEN greatest(attempts - 1, 0) ELSE attempts END, claim = NULL
+			WHERE household_id = $1 AND id = $2 AND claim = $3`,
+			q.household, q.id, q.claim, until, b.wait.Seconds(), b.keep, nullable(b.reason), b.uncount)
 		if err != nil || tag.RowsAffected() == 0 {
 			return err
 		}
-		s.recordHealths(ctx, tx, q, healths)
-		return logAttempts(ctx, tx, q, attempts)
+		if err := fold(ctx, tx, q); err != nil {
+			return err
+		}
+		s.recordHealths(ctx, tx, q, b.healths)
+		return logAttempts(ctx, tx, q, b.attempts)
 	})
 	if err != nil {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "notify: put a notification back", householdAttr(q.household), slog.Any("error", err))
 	}
+}
+
+// fold merges into q, put back after its claim without going, the repeats queued for its recipient
+// under its coalescing key while it was claimed. Each waits Window from the claim, as a repeat of one
+// going out does (Queue), and would go beside q once q went, held for the same quiet hours or not: two
+// pushes for one burst. They merge as Queue merges a repeat into one waiting, so that q says what the
+// latest says, counting them all, and is fresh. A repeat that has been tried already, which the delivery
+// log names, keeps its own row and its log, and goes on its own.
+func fold(ctx context.Context, tx pgx.Tx, q queued) error {
+	if q.user == nil || q.coalesce == nil {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `
+		WITH later AS (
+		  DELETE FROM notifications r
+		  WHERE r.household_id = $1 AND r.user_id = $3 AND r.coalesce_key = $4 AND r.status = 'queued' AND r.claim IS NULL
+		    AND r.id <> $2
+		    AND EXISTS (SELECT FROM notifications q WHERE q.household_id = $1 AND q.id = $2 AND q.status = 'queued' AND q.claim IS NULL)
+		    AND NOT EXISTS (SELECT FROM notification_deliveries d WHERE d.household_id = $1 AND d.notification_id = r.id)
+		  RETURNING r.id, r.created_at, r.count, r.category, r.message, r.args, r.link, r.module, r.owner_id
+		), latest AS (
+		  SELECT * FROM later ORDER BY created_at DESC, id DESC LIMIT 1
+		)
+		UPDATE notifications n SET count = n.count + (SELECT sum(count) FROM later), category = latest.category,
+		  message = latest.message, args = latest.args, link = latest.link, module = latest.module, owner_id = latest.owner_id,
+		  `+fresh+`
+		FROM latest
+		WHERE n.household_id = $1 AND n.id = $2`, q.household, q.id, *q.user, *q.coalesce)
+	if err != nil {
+		return fmt.Errorf("notify: fold: %w", err)
+	}
+	return nil
 }
 
 // gaveUp is the delivery log's row of q given up with no attempt of its own to log: by its transport

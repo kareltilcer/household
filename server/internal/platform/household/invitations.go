@@ -566,9 +566,9 @@ func setStatus(ctx context.Context, tx pgx.Tx, i invitation, status string) (inv
 // The graduation links they sent for the household's child profiles are spent with them (D-104), so
 // that none works again once they are an owner again: its holder would come into the household with
 // the profile's account and everything it made. A link is no row of the household's, and changes
-// nothing its replicas hold. One whose sending read their role before this withdrawal committed is
-// written after it, and is refused at its confirmation instead, which reads its sender's role under
-// the household's lock (confirmGraduation).
+// nothing its replicas hold. A sending reads its sender's role again under the household's lock, which
+// this withdrawal's change of role holds, so that none is written after it (graduate); the
+// confirmation reads it there too (confirmGraduation).
 //
 // The emails of both that still wait for the mail server are withdrawn with them.
 func (s *Service) withdraw(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, now time.Time) ([]sync.Change, error) {

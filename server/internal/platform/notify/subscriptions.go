@@ -223,9 +223,7 @@ func (s *Service) subscribeDevice(r *http.Request, req subscriptionCreate) (subs
 			user, current.Device, req.Endpoint).Scan(&sub.CreatedAt, &sub.LastSeenAt, &created); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `
-			UPDATE devices SET push_token = NULL, push_registered_at = NULL, push_failures = 0, push_stale_at = NULL
-			WHERE push_token = $1 AND id <> $2`, req.Endpoint, current.Device); err != nil {
+		if _, err := tx.Exec(ctx, clearToken+"push_token = $1 AND id <> $2", req.Endpoint, current.Device); err != nil {
 			return err
 		}
 		return idempotency.Commit(ctx, tx)
@@ -244,9 +242,7 @@ func (s *Service) unsubscribe(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(ctx, "DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2", user, endpoint); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `
-			UPDATE devices SET push_token = NULL, push_registered_at = NULL, push_failures = 0, push_stale_at = NULL
-			WHERE user_id = $1 AND push_token = $2`, user, endpoint); err != nil {
+		if _, err := tx.Exec(ctx, clearToken+"user_id = $1 AND push_token = $2", user, endpoint); err != nil {
 			return err
 		}
 		return idempotency.Commit(ctx, tx)

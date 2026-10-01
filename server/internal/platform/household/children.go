@@ -881,7 +881,22 @@ func (s *Service) graduate(w http.ResponseWriter, r *http.Request) {
 	// the link exists; in the household's context, where the email waits, and the link's row, which is
 	// the account's, is written as it is anywhere.
 	err = tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
-		// The profile's account first, as its graduation's confirmation locks it before its links, so
+		// The household first, which every change of a member's role or membership locks, and under it
+		// the sender's ownership and the profile's membership read again: the profile's removal, or the
+		// end of the sender's ownership, that committed since the read above spent the links it found
+		// and withdrew their emails (removeMember, withdraw), and a link written after it would arrive
+		// with its email all the same, to open nothing.
+		if _, err := lockAsOwner(ctx, tx); err != nil {
+			return err
+		}
+		m, err := readMembership(ctx, tx, household, user, false)
+		switch {
+		case err != nil:
+			return err
+		case m.child == nil:
+			return problem.NotFound()
+		}
+		// The profile's account next, as its graduation's confirmation locks it before its links, so
 		// that two links sent at once are written one after the other, and the later retires the
 		// earlier: each statement reads what had committed when it began, and neither sending would
 		// otherwise see the other's link to retire it.
@@ -965,10 +980,9 @@ func findGraduation(ctx context.Context, tx pgx.Tx, token string, now time.Time,
 // removed, has left or has been made a member since is refused as spent, 410 token_already_used,
 // since whoever holds it would come into the household with the profile's account and everything it
 // made, at an address the owners who stay never chose. The ownership's end spends it, with the
-// sender's invitations (withdraw), so that it stays spent once they are an owner again; and it is
-// checked here too, under the household's lock, which every change of a role takes, for a link its
-// sender was sending when their ownership ended, which the withdrawal did not find: the sending read
-// their role before that.
+// sender's invitations (withdraw), so that it stays spent once they are an owner again, and the
+// sending reads their role under the household's lock, which every change of a role takes, so that
+// none is written after that; it is checked here too, under the same lock.
 func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {

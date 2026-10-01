@@ -288,18 +288,20 @@ func newNotify(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool, 
 	})
 }
 
-// The scheduler's jobs' times (PRD 03 §5): the usage sample and the sweeps of the objects no row
-// records after it at 01:00 UTC, the day the sample is the day of (D-109), and the expiry sweep at
+// The scheduler's jobs' times (PRD 03 §5): the usage sample at 01:00 UTC, the day the sample is the
+// day of (D-109), the sweeps of the objects no row records an hour after it, and the expiry sweep at
 // 03:00 UTC, once they are done.
 const (
-	nightlyStorage = localtime.Clock(1 * 60)
-	nightlyExpiry  = localtime.Clock(3 * 60)
+	nightlySample = localtime.Clock(1 * 60)
+	nightlySweeps = localtime.Clock(2 * 60)
+	nightlyExpiry = localtime.Clock(3 * 60)
 )
 
 // newScheduler builds the scheduler of the platform's jobs (PRD 03 §5): nightly, the usage sample
 // (FR-ST2) and then the sweeps of the objects no row records, a household's and the accounts'
 // pictures (item 14), and the expiry sweep; hourly, the expiry of single-use tokens and of the
 // invitations that stopped working a month ago (D-110); and every fifteen minutes, Expo's receipts.
+// Each is a job of its own, so that one that fails is tried again alone, not with the others that ran.
 // catalog is the module registry with admin, which the invitations' deletions are checked against.
 func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog *module.Registry, pipeline *files.Service,
 	avatars *avatar.Service, households *household.Service, notifier *notify.Service,
@@ -312,11 +314,14 @@ func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog
 		return nil, err
 	}
 	return scheduler.New(scheduler.Config{Pool: pool, Log: log},
-		scheduler.Job{Name: "storage.nightly", Cadence: scheduler.Daily(nightlyStorage), Run: func(ctx context.Context) error {
-			_, sampled := sampler.Sample(ctx)
-			swept := pipeline.SweepAll(ctx)
-			_, pictures := avatars.Sweep(ctx, pool)
-			return errors.Join(sampled, swept, pictures)
+		scheduler.Job{Name: "storage.sample", Cadence: scheduler.Daily(nightlySample), Run: func(ctx context.Context) error {
+			_, err := sampler.Sample(ctx)
+			return err
+		}},
+		scheduler.Job{Name: "files.sweep", Cadence: scheduler.Daily(nightlySweeps), Run: pipeline.SweepAll},
+		scheduler.Job{Name: "avatars.sweep", Cadence: scheduler.Daily(nightlySweeps), Run: func(ctx context.Context) error {
+			_, err := avatars.Sweep(ctx, pool)
+			return err
 		}},
 		scheduler.Job{Name: "expiry.sweep", Cadence: scheduler.Daily(nightlyExpiry), Run: sweeper.Sweep},
 		scheduler.Job{Name: "expiry.tokens", Cadence: scheduler.Every(time.Hour), Run: sweeper.Tokens},

@@ -229,9 +229,38 @@ func New(cfg Config) (*Service, error) {
 }
 
 // coalesceLock is the namespace of the locks that serialise queueing a recipient's repeats under one
-// coalescing key, the first key of the two-key advisory lock whose second is the hash of the
-// household, the recipient and the key.
+// coalescing key, and merging into a notification put back after its claim those queued meanwhile
+// (fold): the first key of the two-key advisory lock whose second is the hash of the household, the
+// recipient and the key (coalescing).
 const coalesceLock = db.CoalesceLock
+
+// coalescing names household's notifications to user under the coalescing key key, in the lock that
+// serialises queueing them (coalesceLock).
+func coalescing(household, user uuid.UUID, key string) string {
+	return household.String() + "\x1f" + user.String() + "\x1f" + key
+}
+
+// lockCoalescing takes, in tx and until it ends, the lock on each of keys (coalescing), in one order,
+// so that two transactions with the same keys never wait on each other's.
+func lockCoalescing(ctx context.Context, tx pgx.Tx, keys []string) error {
+	slices.Sort(keys)
+	for _, key := range slices.Compact(keys) {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, hashtext($2))", coalesceLock, key); err != nil {
+			return fmt.Errorf("notify: coalesce: %w", err)
+		}
+	}
+	return nil
+}
+
+// fresh is what a notification a repeat merges into keeps of its own waiting (Queue, fold), its table
+// aliased n: the merged one says the latest word, which has had no try of its own. What it waits on
+// stands, quiet hours or the window since one went, but the backoff and the tries of what it said
+// before do not, which would hold the latest word hours and give it up at its first failure: a backoff
+// is a push no service took (reasonPushUnavailable), or a failure to read or render it, which records
+// no reason and has had a try, as nothing else waiting without a reason has.
+const fresh = `attempts = 0,
+  run_at = CASE WHEN n.reason = '` + reasonPushUnavailable + `' OR (n.reason IS NULL AND n.attempts > 0) THEN least(n.run_at, now()) ELSE n.run_at END,
+  reason = CASE WHEN n.reason = '` + reasonPushUnavailable + `' THEN NULL ELSE n.reason END`
 
 // Queue queues ns in tx, the transaction of what caused them, in ctx's household: they exist exactly
 // when it commits. A notification whose Coalesce matches one still waiting for its recipient merges
@@ -252,14 +281,11 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 	var keys []string
 	for _, n := range ns {
 		if n.Coalesce != "" {
-			keys = append(keys, household.String()+"\x1f"+n.To.String()+"\x1f"+n.Coalesce)
+			keys = append(keys, coalescing(household, n.To, n.Coalesce))
 		}
 	}
-	slices.Sort(keys)
-	for _, key := range slices.Compact(keys) {
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, hashtext($2))", coalesceLock, key); err != nil {
-			return fmt.Errorf("notify: coalesce: %w", err)
-		}
+	if err := lockCoalescing(ctx, tx, keys); err != nil {
+		return err
 	}
 	for _, n := range ns {
 		if err := n.check(); err != nil {
@@ -275,25 +301,20 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 			}
 		}
 		if n.Coalesce != "" {
-			// Into one alone, the latest: two may wait at once, one put back after its claim (retry, a
-			// hold for quiet hours, a stopping worker) and the repeat queued while it was claimed, and a
-			// repeat merged into both would go twice, each counting it. The outer conditions are read
-			// again on a row a worker claims meanwhile, which then takes nothing, and the repeat is
-			// queued to wait Window as one going out makes it. The merged one says what the repeat says,
-			// the latest word, counting the repeats, and has had no try of its own: what it waited on
-			// stands, quiet hours or the window since one went, but the backoff and the tries of what it
-			// said before do not, which would hold the latest word hours and give it up at its first
-			// failure.
+			// Into one alone, the latest: two may still wait at once, one put back after its claim and a
+			// repeat queued meanwhile that had been tried already, which fold leaves, and a repeat merged
+			// into both would go twice, each counting it. The outer conditions are read again on
+			// a row a worker claims meanwhile, which then takes nothing, and the repeat is queued to wait
+			// Window as one going out makes it. The merged one says what the repeat says, the latest
+			// word, counting the repeats, and is fresh.
 			tag, err := tx.Exec(ctx, `
-				UPDATE notifications SET count = count + 1, category = $8, message = $9, args = $4, link = $5, module = $6, owner_id = $7,
-				  attempts = 0, run_at = CASE WHEN reason = $10 THEN least(run_at, now()) ELSE run_at END,
-				  reason = CASE WHEN reason = $10 THEN NULL ELSE reason END
-				WHERE household_id = $1 AND status = 'queued' AND claim IS NULL AND id = (
+				UPDATE notifications n SET count = n.count + 1, category = $8, message = $9, args = $4, link = $5, module = $6, owner_id = $7,
+				  `+fresh+`
+				WHERE n.household_id = $1 AND n.status = 'queued' AND n.claim IS NULL AND n.id = (
 				  SELECT id FROM notifications
 				  WHERE household_id = $1 AND user_id = $2 AND coalesce_key = $3 AND status = 'queued' AND claim IS NULL
 				  ORDER BY created_at DESC, id DESC LIMIT 1)`,
-				household, n.To, n.Coalesce, args, nullable(n.Link), nullable(n.Module), nullableID(n.Owner), string(n.Category), n.Message,
-				reasonPushUnavailable)
+				household, n.To, n.Coalesce, args, nullable(n.Link), nullable(n.Module), nullableID(n.Owner), string(n.Category), n.Message)
 			if err != nil {
 				return fmt.Errorf("notify: coalesce: %w", err)
 			}
@@ -307,7 +328,8 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 			secret = s.cfg.Keys.Seal(id, []byte(n.Secret))
 		}
 		// One going out now, claimed, is as good as sent: a repeat neither merges into it, nor goes
-		// straight after it, but waits Window from now.
+		// straight after it, but waits Window from now, and merges into it should it be put back
+		// without going (fold).
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO notifications (household_id, id, user_id, address, locale, category, message, args, route, secret,
 			                           module, owner_id, link, coalesce_key, email, replace_key, run_at)
