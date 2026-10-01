@@ -1,0 +1,377 @@
+package files
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
+	"github.com/kareltilcer/household/server/internal/platform/idgen"
+	"github.com/kareltilcer/household/server/internal/platform/logging"
+	"github.com/kareltilcer/household/server/internal/platform/objectstore"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
+)
+
+// The jobs' timing: a worker that takes a job holds it for lease (Config.Lease), after which another
+// may take it as one whose worker died, and the job is stopped then as one that failed; a job that
+// failed waits backoff[attempts-1] before it is tried again, and one that failed maxAttempts times is
+// given up, its file left download-only.
+const (
+	lease       = 10 * time.Minute
+	maxAttempts = 5
+)
+
+var backoff = []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute, 2 * time.Hour}
+
+// job is a file job a worker holds.
+type job struct {
+	household uuid.UUID
+	kind      string
+	module    string
+	entity    uuid.UUID
+	attempts  int
+	claim     uuid.UUID
+	// claimed is when the worker began to claim the job, before the transaction whose now() its
+	// lease runs from: the job's own time runs from here (leased), so that it ends no later than the
+	// lease another worker may take the job at.
+	claimed time.Time
+}
+
+// errPermanent marks a failure a retry will not mend: a file that cannot be decoded or converted.
+var errPermanent = errors.New("files: the variants cannot be derived")
+
+// errGone is a job's answer when the entity it was for is no longer there: it is done.
+var errGone = errors.New("files: the entity is gone")
+
+// Run runs the workers until ctx ends, then waits for the jobs they hold to be released. It looks
+// for households with work due when a commit of this instance wakes it (Nudge), and every Poll for
+// the rest; each household's jobs are run by one worker at a time, and at most Workers at once. The
+// households due take turns (Config.Turn): a worker lets a household go once its turn is over, and
+// the others found due with it take theirs before it is looked at again.
+func (s *Service) Run(ctx context.Context) {
+	var running sync.WaitGroup
+	slots := make(chan struct{}, s.workers)
+	ticker := time.NewTicker(s.poll)
+	defer ticker.Stop()
+	for {
+		households, err := s.due(ctx)
+		if err != nil && ctx.Err() == nil {
+			s.log.LogAttrs(ctx, slog.LevelError, "files: find the jobs due", slog.Any("error", err))
+		}
+		for _, h := range households {
+			if !s.hold(h) {
+				continue
+			}
+			select {
+			case slots <- struct{}{}:
+			case <-ctx.Done():
+				s.release(h, false)
+				running.Wait()
+				return
+			}
+			running.Add(1)
+			go func() {
+				more := false
+				defer func() {
+					<-slots
+					s.release(h, more)
+					running.Done()
+				}()
+				more = s.drain(ctx, h)
+			}()
+		}
+		select {
+		case <-ctx.Done():
+			running.Wait()
+			return
+		case <-ticker.C:
+		case <-s.wake:
+		}
+	}
+}
+
+// hold marks household as one a worker of this instance is draining, and reports false when one
+// already is. That worker then looks again once it lets the household go (release): what found the
+// household due may be a job committed after the worker's last claim looked, which a worker about to
+// stop would otherwise leave to the next poll, however soon its commit woke the workers.
+func (s *Service) hold(household uuid.UUID) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, held := s.busy[household]; held {
+		s.busy[household] = true
+		return false
+	}
+	s.busy[household] = false
+	return true
+}
+
+// release lets household go, and wakes the workers when it was found due while it was held, or when
+// its worker's turn ended with jobs perhaps left (more): the loop reaches the other households found
+// due first, and then looks for this one again.
+func (s *Service) release(household uuid.UUID, more bool) {
+	s.mu.Lock()
+	again := s.busy[household] || more
+	delete(s.busy, household)
+	s.mu.Unlock()
+	if again {
+		s.Nudge()
+	}
+}
+
+// due returns the households with a job due, as the meter role reads them: no one household's
+// context can see another's jobs. The household whose oldest job has waited longest comes first, so
+// that every instance serves them in the order they have waited, and a household past the first
+// thousand is reached as the ones before it are served.
+func (s *Service) due(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := s.meter.Query(ctx, `
+		SELECT household_id FROM file_jobs WHERE run_at <= now()
+		GROUP BY household_id ORDER BY min(run_at), household_id LIMIT 1000`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+}
+
+// drain runs household's jobs due, one after another, until none is left, ctx ends, or the worker's
+// turn at the household is over (Config.Turn), and reports whether it stopped for its turn, with jobs
+// perhaps left. The job running when the turn ends runs to its end, within its lease. A worker that
+// ran one household's jobs until none was left would hold its slot for as long as that took: a
+// household that uploaded an archive of documents, each waiting its minutes on the converter, would
+// keep every other household's thumbnails and previews waiting behind the whole of it, in every
+// instance, whose workers find the households due in the same order.
+func (s *Service) drain(ctx context.Context, household uuid.UUID) bool {
+	began := time.Now()
+	for ctx.Err() == nil {
+		j, ok, err := s.claim(ctx, household)
+		if err != nil {
+			if ctx.Err() == nil {
+				s.log.LogAttrs(ctx, slog.LevelError, "files: claim a job", householdAttr(household), slog.Any("error", err))
+			}
+			return false
+		}
+		if !ok {
+			return false
+		}
+		s.run(ctx, j)
+		if time.Since(began) >= s.turn {
+			return true
+		}
+	}
+	return false
+}
+
+// Drain runs household's jobs due now, in the caller's goroutine, turn after turn until none is left:
+// what the workers would, for a test that waits for it.
+func (s *Service) Drain(ctx context.Context, household uuid.UUID) {
+	for more := true; more; {
+		more = s.drain(ctx, household)
+	}
+}
+
+// claim takes household's next job due, moving it past its lease.
+func (s *Service) claim(ctx context.Context, household uuid.UUID) (job, bool, error) {
+	j := job{household: household, claim: idgen.New(), claimed: time.Now()}
+	found := false
+	err := tenant.InWriteTx(s.system(ctx, household), func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			UPDATE file_jobs j SET run_at = now() + make_interval(secs => $2), attempts = j.attempts + 1, claim = $3
+			FROM (SELECT kind, module, entity_id FROM file_jobs
+			      WHERE household_id = $1 AND run_at <= now()
+			      ORDER BY run_at LIMIT 1 FOR UPDATE SKIP LOCKED) d
+			WHERE j.household_id = $1 AND j.kind = d.kind AND j.module = d.module AND j.entity_id = d.entity_id
+			RETURNING j.kind, j.module, j.entity_id, j.attempts`,
+			household, s.lease.Seconds(), j.claim).Scan(&j.kind, &j.module, &j.entity, &j.attempts)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		found = err == nil
+		return err
+	})
+	return j, found, err
+}
+
+// run runs j and settles it: done, tried again later, or given up.
+//
+// The job runs for its lease at most, and past it fails as any job does, to be tried again: another
+// worker may take it then, and a store or a converter that stops mid-transfer would otherwise hold
+// this worker for as long as the process lives, since the store's client bounds only how long an
+// answer takes to begin (objectstore.DefaultResponseTimeout).
+//
+// A job claimed more times than it may be tried is given up without running: each claim counts an
+// attempt, and one past the last is a job whose workers ended with the process before they could
+// settle it, killed for the memory it took or by what else it did. Tried again, it would take down
+// each instance that claimed it, one lease after another.
+//
+// A variants job given up marks its original's variants failed, and the file stays download-only. A
+// purge given up marks nothing: no original is its own, and one there is another upload's, recorded
+// again under the entity's id once the delete had committed, whose variants its own job settles, and
+// which a purge marking it failed would leave download-only for good. The bytes the purge left, which
+// no row records, are the sweep's.
+func (s *Service) run(ctx context.Context, j job) {
+	running, stop := s.leased(ctx, j)
+	defer stop()
+	var err error
+	switch {
+	case j.attempts > maxAttempts:
+		err = fmt.Errorf("%w: claimed %d times, and never settled", errPermanent, j.attempts)
+	case j.kind == "variants":
+		err = s.guard(running, j, s.derive)
+	case j.kind == "purge":
+		err = s.guard(running, j, s.purge)
+	}
+	// The job is settled even when ctx has ended: a job left claimed waits out its lease.
+	settle := context.WithoutCancel(ctx)
+	switch {
+	case err == nil, errors.Is(err, errGone):
+		err = s.settle(settle, j, "", 0)
+	case ctx.Err() != nil:
+		// Stopped by a shutdown, not failed: it runs again at once, its attempt not counted.
+		err = s.settle(settle, j, "", -1)
+	case errors.Is(err, errPermanent) || j.attempts >= maxAttempts:
+		s.log.LogAttrs(ctx, slog.LevelWarn, "files: a job failed for good", householdAttr(j.household), slog.String("kind", j.kind),
+			slog.String("module", j.module), slog.Any("error", err))
+		status := ""
+		if j.kind == "variants" {
+			status = "failed"
+		}
+		err = s.settle(settle, j, status, 0)
+	default:
+		s.log.LogAttrs(ctx, slog.LevelWarn, "files: a job failed; it runs again later", householdAttr(j.household),
+			slog.String("kind", j.kind), slog.String("module", j.module), slog.Int("attempts", j.attempts), slog.Any("error", err))
+		err = s.settle(settle, j, "", backoff[min(j.attempts, len(backoff))-1])
+	}
+	if err != nil {
+		s.log.LogAttrs(ctx, slog.LevelError, "files: settle a job", householdAttr(j.household), slog.Any("error", err))
+	}
+}
+
+// householdAttr names household on a line a job logs. The workers run in no request's scope, from
+// which the logger takes the household for a request's lines, and every line names its household
+// (FR-NF5): without it, an operator reading that a job failed could not tell whose files it was for.
+func householdAttr(household uuid.UUID) slog.Attr {
+	return slog.String(logging.KeyHouseholdID, household.String())
+}
+
+// leased returns ctx for as long as j's lease lasts. The lease runs from the now() of the transaction
+// that claimed the job, and the job's time from before that transaction began (job.claimed), never
+// from once it has committed: counted from the commit, the job would still be running for as long
+// as the commit took past the moment its lease let another worker take it, and run twice at once.
+func (s *Service) leased(ctx context.Context, j job) (context.Context, context.CancelFunc) {
+	return context.WithDeadline(ctx, j.claimed.Add(s.lease))
+}
+
+// guard runs fn on j, and answers a panic in it as a failure a retry will not mend. The workers
+// decode and convert what members upload, through decoders that are not ours, in goroutines of the
+// server's own: a panic left to pass would end the process, the requests it was serving with it, and
+// the job, never settled, would end the next instance that claimed it once its lease had passed. The
+// panic is logged by its value's type and the stack, never the value, which may quote the file.
+func (s *Service) guard(ctx context.Context, j job, fn func(context.Context, job) error) (err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			s.log.LogAttrs(ctx, slog.LevelError, "files: a job panicked", householdAttr(j.household), slog.String("kind", j.kind),
+				slog.String("module", j.module), slog.String("panic", httpx.TypeName(v)), slog.String("stack", logging.Stack()))
+			err = fmt.Errorf("%w: it panicked", errPermanent)
+		}
+	}()
+	return fn(ctx, j)
+}
+
+// settle ends j: with its original's variants marked failed when status says so, and the job
+// deleted, when retry is zero; put back at once with its attempt uncounted when retry is negative;
+// otherwise run again after retry. A job another worker took meanwhile, once its lease had passed,
+// is that worker's to settle.
+//
+// A job that marks its original takes the original's row before the job's, the order the entity's
+// delete takes them in (Remove): the other way round, a job failing for good beside the delete would
+// hold the job the delete removes while it waited for the original the delete holds, and PostgreSQL
+// would break the deadlock by aborting one of the two, which may be the member's delete.
+func (s *Service) settle(ctx context.Context, j job, status string, retry time.Duration) error {
+	return tenant.InWriteTx(s.system(ctx, j.household), func(tx pgx.Tx) error {
+		if status != "" {
+			if _, err := tx.Exec(ctx, `
+				SELECT FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3 AND variant = 'original' FOR UPDATE`,
+				j.household, j.module, j.entity); err != nil {
+				return err
+			}
+		}
+		switch {
+		case retry < 0:
+			_, err := tx.Exec(ctx, `
+				UPDATE file_jobs SET run_at = now(), attempts = attempts - 1, claim = NULL
+				WHERE household_id = $1 AND kind = $2 AND module = $3 AND entity_id = $4 AND claim = $5`,
+				j.household, j.kind, j.module, j.entity, j.claim)
+			return err
+		case retry > 0:
+			_, err := tx.Exec(ctx, `
+				UPDATE file_jobs SET run_at = now() + make_interval(secs => $6), claim = NULL
+				WHERE household_id = $1 AND kind = $2 AND module = $3 AND entity_id = $4 AND claim = $5`,
+				j.household, j.kind, j.module, j.entity, j.claim, retry.Seconds())
+			return err
+		}
+		tag, err := tx.Exec(ctx, `
+			DELETE FROM file_jobs WHERE household_id = $1 AND kind = $2 AND module = $3 AND entity_id = $4 AND claim = $5`,
+			j.household, j.kind, j.module, j.entity, j.claim)
+		if err != nil || tag.RowsAffected() == 0 || status == "" {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+			UPDATE files SET variants = $4 WHERE household_id = $1 AND module = $2 AND entity_id = $3 AND variant = 'original'`,
+			j.household, j.module, j.entity, status)
+		return err
+	})
+}
+
+// purge deletes the objects of j's entity that no row records: every one, once the mutation that
+// deleted the entity has committed.
+//
+// It reads the rows before it lists the objects, so that an upload recorded again under the entity's
+// id before the purge ran keeps its bytes. One recorded between the read and the delete is a window
+// of moments, the sweep's (Sweep), which it does not close: its bytes, the same as the deleted
+// entity's and so never written again (Put), would go with the purge while its row stayed. Closing
+// it would take a delete conditional on the row, which the store cannot be asked, or the purge's
+// claim held across the store's deletes for the upload's mutation to wait on, and it needs an id that
+// was deleted sent again with the same bytes in the moment its purge runs. The purge is not delayed
+// by the sweep's day instead: a deleted file's bytes go when it does.
+//
+// An entity whose original is recorded again is the upload's, and the purge leaves every object of
+// it, the variants no row records yet among them: they are the deleted entity's, derived from the
+// same bytes, and the upload's own variants job keeps each it finds in place rather than derive it
+// again (putVariant). That job, in another instance, may have found one and not yet recorded it; the
+// purge deleting it then would leave the job to record a variant whose bytes are gone, which a link
+// answers 404 for good. What the job never records is the sweep's.
+func (s *Service) purge(ctx context.Context, j job) error {
+	recorded := map[string]bool{}
+	err := tenant.InTx(s.system(ctx, j.household), func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, "SELECT variant FROM files WHERE household_id = $1 AND module = $2 AND entity_id = $3",
+			j.household, j.module, j.entity)
+		if err != nil {
+			return err
+		}
+		variants, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		for _, v := range variants {
+			recorded[v] = true
+		}
+		return err
+	})
+	if err != nil || recorded[Original] {
+		return err
+	}
+	prefix := Key(j.household, j.module, j.entity, "")
+	var keys []string
+	if err := s.store.List(ctx, prefix, func(o objectstore.Info) error {
+		if variant := strings.TrimPrefix(o.Key, prefix); !recorded[variant] {
+			keys = append(keys, o.Key)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return s.store.Delete(ctx, keys...)
+}

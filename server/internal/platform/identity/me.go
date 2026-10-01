@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/auth"
+	"github.com/kareltilcer/household/server/internal/platform/avatar"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
@@ -36,24 +37,32 @@ type meJSON struct {
 	DeletionScheduledAt  *time.Time `json:"deletion_scheduled_at"`
 }
 
-// loadMe reads user as the contract's Me. Avatars (item 14) and a scheduled deletion (item 20) are
-// later items'; until then each reads as absent.
-func loadMe(ctx context.Context, tx pgx.Tx, user uuid.UUID) (meJSON, error) {
+// loadMe reads user as the contract's Me, their picture's link among it (avatar.Service.URL). A
+// scheduled deletion is item 20's; until then it reads as absent.
+func (s *Service) loadMe(ctx context.Context, tx pgx.Tx, user uuid.UUID) (meJSON, error) {
 	me := meJSON{ID: user}
-	var left int
+	var (
+		left    int
+		picture avatar.Ref
+	)
 	err := tx.QueryRow(ctx, `
 		SELECT u.email, u.email_verified_at IS NOT NULL, u.display_name, u.locale, u.timezone, u.first_day_of_week,
 		  array(SELECT c.type::text FROM credentials c WHERE c.user_id = u.id ORDER BY c.type),
 		  EXISTS (SELECT FROM mfa_totp t WHERE t.user_id = u.id AND t.activated_at IS NOT NULL),
-		  (SELECT count(*) FROM mfa_recovery_codes r WHERE r.user_id = u.id AND r.used_at IS NULL)
+		  (SELECT count(*) FROM mfa_recovery_codes r WHERE r.user_id = u.id AND r.used_at IS NULL),
+		  `+avatar.Columns("u.id")+`
 		FROM users u WHERE u.id = $1`, user).
 		Scan(&me.Email, &me.EmailVerified, &me.DisplayName, &me.Locale, &me.Timezone, &me.FirstDayOfWeek, &me.Credentials,
-			&me.MFAEnabled, &left)
+			&me.MFAEnabled, &left, &picture.ID, &picture.ContentType)
+	if err != nil {
+		return me, err
+	}
 	me.IsChild = slices.Contains(me.Credentials, "child_pin")
 	if me.MFAEnabled {
 		me.MFARecoveryCodesLeft = &left
 	}
-	return me, err
+	me.AvatarURL = s.Avatars.URL(ctx, user, picture)
+	return me, nil
 }
 
 // me is getMe.
@@ -63,7 +72,7 @@ func (s *Service) me(w http.ResponseWriter, r *http.Request) {
 	var me meJSON
 	err := tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		var err error
-		me, err = loadMe(ctx, tx, user)
+		me, err = s.loadMe(ctx, tx, user)
 		return err
 	})
 	if err != nil {
@@ -80,6 +89,7 @@ type profileUpdate struct {
 	setTimezone, setFirstDay bool
 	timezone                 *string
 	firstDayOfWeek           *int
+	clearAvatar              bool
 }
 
 // readUpdate reads a MeUpdate, a JSON merge: a member left out is unchanged, and null clears one
@@ -139,10 +149,13 @@ func readUpdate(r *http.Request) (profileUpdate, error) {
 			u.firstDayOfWeek = &day
 		}
 	}
-	// Only clearing an avatar is possible until avatars are uploaded as files (item 14), and there
-	// is none to clear yet.
-	if raw, ok := members["avatar_url"]; ok && !null(raw) {
-		errs = append(errs, problem.FieldError{Field: "/avatar_url", Code: problem.FieldInvalid})
+	// A picture is uploaded as a file (putMeAvatar), never named by a URL: null clears it, and any
+	// other value is refused.
+	if raw, ok := members["avatar_url"]; ok {
+		if !null(raw) {
+			errs = append(errs, problem.FieldError{Field: "/avatar_url", Code: problem.FieldInvalid})
+		}
+		u.clearAvatar = true
 	}
 	if len(errs) > 0 {
 		return u, problem.Validation(errs...)
@@ -159,7 +172,10 @@ func (s *Service) updateMe(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var me meJSON
+	var (
+		me      meJSON
+		cleared uuid.UUID
+	)
 	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `
 			UPDATE users SET
@@ -172,7 +188,12 @@ func (s *Service) updateMe(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var err error
-		if me, err = loadMe(ctx, tx, user); err != nil {
+		if u.clearAvatar {
+			if cleared, err = avatar.Clear(ctx, tx, user); err != nil {
+				return err
+			}
+		}
+		if me, err = s.loadMe(ctx, tx, user); err != nil {
 			return err
 		}
 		return idempotency.Commit(ctx, tx)
@@ -181,6 +202,44 @@ func (s *Service) updateMe(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.Avatars.Purge(ctx, user, cleared)
+	httpx.WriteJSON(w, http.StatusOK, me)
+}
+
+// putAvatar is putMeAvatar: the caller's picture, made from an image they upload (avatar.Upload), in
+// place of any they had, which goes once the new one is recorded. It is the account's, and counts
+// against no household's storage (D-107).
+func (s *Service) putAvatar(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := auth.User(ctx)
+	picture, err := s.Avatars.Upload(w, r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.Avatars.Put(ctx, user, picture); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var (
+		me       meJSON
+		replaced uuid.UUID
+	)
+	err = tenant.AccountTx(ctx, s.Pool, user, func(tx pgx.Tx) error {
+		var err error
+		if replaced, err = avatar.Set(ctx, tx, user, picture); err != nil {
+			return err
+		}
+		if me, err = s.loadMe(ctx, tx, user); err != nil {
+			return err
+		}
+		return idempotency.Commit(ctx, tx)
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.Avatars.Purge(ctx, user, replaced)
 	httpx.WriteJSON(w, http.StatusOK, me)
 }
 

@@ -14,10 +14,12 @@ import (
 )
 
 // Architecture test 2 (PRD 01 §2.2, §10, D-2): every tenant table carries household_id uuid NOT
-// NULL, enables and forces row-level security, and has as its only permissive policy the
-// tenant isolation that enable_tenant_isolation creates. Another permissive policy would widen
-// what a household can read, since permissive policies are ORed; a rule narrower than the
-// tenant's is a restrictive policy, which is ANDed with it. A materialized view cannot hold a
+// NULL, enables and forces row-level security, and has as its only permissive policies the
+// tenant isolation that enable_tenant_isolation creates and the meter role's read beside it
+// (enable_metering), which reaches that role alone. Another permissive policy would widen what a
+// household can read, since permissive policies are ORed; a rule narrower than the tenant's is a
+// restrictive policy, which is ANDed with it, and names the roles it narrows, since one that
+// reached the meter role would hide rows from the usage sample. A materialized view cannot hold a
 // policy at all, so none may hold a household's rows. A table exempted for a policy of its own
 // may read more widely than its household, but only in a FOR SELECT policy: it is written only
 // in its household's context. No global table's row, deleted or updated by the request role,
@@ -110,6 +112,8 @@ var exemptions = map[string]exemption{
 	"public.mfa_challenges":     {why: "a sign-in waiting for its second step"},
 	"public.mfa_trusts":         {why: "a browser or device a user trusted to skip the second step"},
 	"public.oauth_states":       {why: "FR-ID2: a sign-in begun with an identity provider"},
+	// Item 14's: a user's picture is their account's, and no household's (D-107).
+	"public.avatars": {why: "PRD 01 §2.4: a user's picture, kept under their account's prefix and metered to no household"},
 	// PRD 01 §2.4's global reference data, which the request role only reads (item 7).
 	"public.reference_datasets": {why: "the version of each reference dataset the loader has loaded"},
 	"public.country_profiles":   {why: "PRD 01 §2.4: reference data, the same for every household"},
@@ -142,12 +146,22 @@ type table struct {
 	partition, reachable bool
 }
 
-// policy is a row-level security policy, as the catalog describes it.
+// policy is a row-level security policy, as the catalog describes it: roles are the roles it
+// applies to, by name, "public" for every role.
 type policy struct {
 	name        string
 	permissive  bool
 	command     string
 	using, with string
+	roles       []string
+}
+
+// metered reports whether p is the meter role's read (enable_metering): permissive, for reading
+// only, to that role alone, over every row. It widens no household's reads, and the role reads
+// through it only the columns it is granted, which test 11 holds to what names, counts, sizes or
+// schedules rows (PRD 01 §2.3).
+func (p policy) metered() bool {
+	return p.permissive && p.command == "r" && p.using == "true" && p.with == "" && slices.Equal(p.roles, []string{db.RoleMeter})
 }
 
 // foreignKey is a foreign key, as the catalog describes it: the table it references, its
@@ -194,7 +208,8 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 
 	rows, err = tx.Query(ctx, `
 		SELECT polrelid, polname, polpermissive, polcmd::text,
-		  coalesce(pg_get_expr(polqual, polrelid), ''), coalesce(pg_get_expr(polwithcheck, polrelid), '')
+		  coalesce(pg_get_expr(polqual, polrelid), ''), coalesce(pg_get_expr(polwithcheck, polrelid), ''),
+		  array(SELECT CASE WHEN r = 0 THEN 'public' ELSE pg_get_userbyid(r)::text END FROM unnest(polroles) AS r ORDER BY 1)
 		FROM pg_policy
 		ORDER BY polrelid, polname`)
 	if err != nil {
@@ -205,8 +220,10 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 		relid uint32
 		p     policy
 	)
-	if _, err := pgx.ForEachRow(rows, []any{&relid, &p.name, &p.permissive, &p.command, &p.using, &p.with}, func() error {
-		policies[relid] = append(policies[relid], p)
+	if _, err := pgx.ForEachRow(rows, []any{&relid, &p.name, &p.permissive, &p.command, &p.using, &p.with, &p.roles}, func() error {
+		held := p
+		held.roles = slices.Clone(p.roles)
+		policies[relid] = append(policies[relid], held)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -253,6 +270,7 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 		case exempted:
 			out = append(out, rlsViolations(tb)...)
 			out = append(out, partitionViolations(tb)...)
+			out = append(out, meterNarrowedViolations(tb, policies[tb.oid])...)
 			if len(policies[tb.oid]) == 0 {
 				out = append(out, tb.name+" has no policy, so the request role reads none of it")
 			}
@@ -274,11 +292,12 @@ func tenancyViolations(t *testing.T, tx pgx.Tx, schema string, exempt map[string
 		}
 		out = append(out, rlsViolations(tb)...)
 		out = append(out, partitionViolations(tb)...)
+		out = append(out, meterNarrowedViolations(tb, policies[tb.oid])...)
 		isolated := false
 		for _, p := range policies[tb.oid] {
 			switch {
-			case !p.permissive:
-			case p.command == "*" && p.using == tenantIsolation && p.with == tenantIsolation:
+			case !p.permissive, p.metered():
+			case p.command == "*" && p.using == tenantIsolation && p.with == tenantIsolation && slices.Equal(p.roles, []string{"public"}):
 				isolated = true
 			default:
 				out = append(out, fmt.Sprintf("%s has permissive policy %s, which is not the tenant isolation; "+
@@ -372,6 +391,25 @@ func globalActionViolations(tb table, fks []foreignKey, exempt map[string]exempt
 		if acts(fk.onUpdate) && fk.canUpdate {
 			out = append(out, fmt.Sprintf("%s has foreign key %s, which acts on an update of %s, a global table the request "+
 				"role updates; the action runs past row-level security, into every household", tb.name, fk.name, fk.references))
+		}
+	}
+	return out
+}
+
+// meterNarrowedViolations reports each restrictive policy on tb that applies to the meter role, as
+// one for every role does. A restrictive policy is ANDed with every permissive one, the meter's read
+// among them, so a rule written to narrow what a member reads narrows what the meter counts too: a
+// private item's owner, owner_id = app_user_id(), hides every such row from a role that reads with
+// no caller, and the usage sample and the fair-use counters would miss them, or bill none of a
+// narrowed table's bytes. The meter reads only the columns that name, count, size or schedule rows
+// (test 11), so a policy that names the roles it narrows, the request role's, keeps nothing from it
+// that a member's rule protects.
+func meterNarrowedViolations(tb table, policies []policy) []string {
+	var out []string
+	for _, p := range policies {
+		if !p.permissive && (slices.Contains(p.roles, "public") || slices.Contains(p.roles, db.RoleMeter)) {
+			out = append(out, fmt.Sprintf("%s has restrictive policy %s, which narrows the meter role's reads too, so the usage "+
+				"sample would miss the rows it hides; name the roles it narrows, TO %s", tb.name, p.name, db.RoleApp))
 		}
 	}
 	return out

@@ -141,6 +141,7 @@ type memberDoc struct {
 	UserID         uuid.UUID         `json:"user_id"`
 	DisplayName    string            `json:"display_name"`
 	Email          *string           `json:"email"`
+	AvatarURL      *string           `json:"avatar_url"`
 	Role           string            `json:"role"`
 	Grants         map[string]string `json:"grants"`
 	IsBillingPayer bool              `json:"is_billing_payer"`

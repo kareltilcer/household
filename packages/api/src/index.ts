@@ -29,6 +29,7 @@ export {
   type IdempotencyInProgress,
   type PlainProblem,
   type ProblemCode,
+  type StorageCeilingReached,
   type UnreadableProblem,
   type ValidationFailure,
   type VersionConflict,

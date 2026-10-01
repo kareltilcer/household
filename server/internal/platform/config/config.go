@@ -8,8 +8,9 @@
 // connection string a command needs must be set explicitly, and so must what serving the
 // accounts needs: where the web client is, the proxies in front of the server (or none), the
 // mail server and its sender, the breached-password corpus, which development may run without,
-// and the keys that sign access tokens and seal the second step's secrets, which development
-// defaults to published ones. Google and Apple are each configured whole or not at all. The other settings, which carry no secret and name no database, default
+// the keys that sign access tokens and seal the second step's secrets, which development
+// defaults to published ones, and the object store and the converter sidecar the files pipeline
+// uses, which development defaults to the compose services. Google and Apple are each configured whole or not at all. The other settings, which carry no secret and name no database, default
 // everywhere; only the listen address differs, loopback in development and :8080 elsewhere.
 // HOUSEHOLD_ENV itself defaults to development, so bootstrap, which sets the roles'
 // passwords, sets a defaulted one only on a cluster on this machine.
@@ -37,6 +38,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/federation"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mfa"
+	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/token"
 )
@@ -100,6 +102,12 @@ const (
 	ReplicationDatabaseURLVar = "HOUSEHOLD_REPLICATION_DATABASE_URL"
 	PowerSyncStorageURLVar    = "HOUSEHOLD_POWERSYNC_STORAGE_URL"
 	PowerSyncURLVar           = "HOUSEHOLD_POWERSYNC_URL"
+
+	ObjectStoreURLVar       = "HOUSEHOLD_OBJECT_STORE_URL"
+	ObjectStorePublicURLVar = "HOUSEHOLD_OBJECT_STORE_PUBLIC_URL"
+	ConverterURLVar         = "HOUSEHOLD_CONVERTER_URL"
+	UploadDirVar            = "HOUSEHOLD_UPLOAD_DIR"
+	UploadTimeoutVar        = "HOUSEHOLD_UPLOAD_TIMEOUT"
 )
 
 // NoProxies is TrustedProxiesVar's value for a server its clients reach directly, with no proxy
@@ -124,7 +132,14 @@ const (
 	devWebURL   = "http://localhost:5173"
 	devSMTPURL  = "smtp://127.0.0.1:1025"
 	devMailFrom = "Household <no-reply@household.localhost>"
+	// The compose object store, with its bucket, and the converter sidecar of its convert profile.
+	devObjectStoreURL = "http://household:" + devObjectStoreSecret + "@127.0.0.1:9000/household"
+	devConverterURL   = "http://127.0.0.1:3100"
 )
+
+// devObjectStoreSecret is the compose object store's published secret, which nothing outside
+// development may use.
+const devObjectStoreSecret = "household-local-only"
 
 // The keys development signs access tokens and seals the second step's secrets with: 32 published
 // bytes each, in base64, which nothing outside development may use.
@@ -144,7 +159,8 @@ type Config struct {
 	// MigrateDatabaseURL connects as the migrate role.
 	MigrateDatabaseURL string
 	// MeterDatabaseURL connects as the meter role. Bootstrap sets the role's password from
-	// it; the sampler (item 14) connects with it.
+	// it; Serve reads across households with it, the usage sampler, the files workers and the live
+	// counts fair use compares with (item 14).
 	MeterDatabaseURL string
 	// AdminDatabaseURL connects as a role that may create roles, for Bootstrap only. The
 	// serving process never holds it.
@@ -192,6 +208,19 @@ type Config struct {
 	// providers configured, nil for one that is not.
 	RedirectURIs  []string
 	Google, Apple *federation.Config
+
+	// ObjectStore is the bucket the files pipeline keeps households' files and users' pictures in
+	// (item 14), and ObjectStorePublic the scheme and host a client reaches it at, which the links the
+	// API pre-signs name: nil for the endpoint the server reaches it at.
+	ObjectStore       objectstore.Location
+	ObjectStorePublic *url.URL
+	// ConverterURL is the converter sidecar (cmd/converter), which derives an office document's
+	// and a PDF's variants.
+	ConverterURL string
+	// UploadDir is where uploads are read to before they are stored, a directory of the system's
+	// temporary one when "", and UploadTimeout how long an upload's body may take to arrive.
+	UploadDir     string
+	UploadTimeout time.Duration
 }
 
 // Getenv looks a variable up, reporting whether it is set.
@@ -254,7 +283,10 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 	switch command {
 	case Serve:
 		c.DatabaseURL = url(DatabaseURLVar, devDatabaseURL, db.RoleApp)
+		c.MeterDatabaseURL = url(MeterDatabaseURLVar, devMeterDatabaseURL, db.RoleMeter)
+		l.sameDatabase(c.DatabaseURL, c.MeterDatabaseURL)
 		l.serving(c, dev)
+		l.files(c, dev)
 	case Migrate:
 		c.MigrateDatabaseURL = url(MigrateDatabaseURLVar, devMigrateDatabaseURL, db.RoleMigrate)
 	case Bootstrap:
@@ -285,17 +317,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 
 // serving reads what serving the accounts needs (item 8).
 func (l *loader) serving(c *Config, dev bool) {
-	required := func(key, devDefault string) string {
-		value, ok := l.getenv(key)
-		if ok && value != "" {
-			return value
-		}
-		if !dev {
-			l.fail("%s is required outside development", key)
-			return ""
-		}
-		return devDefault
-	}
+	required := func(key, devDefault string) string { return l.required(key, devDefault, dev) }
 
 	if web := required(WebURLVar, devWebURL); web != "" {
 		u, err := url.Parse(web)
@@ -402,6 +424,58 @@ func (l *loader) serving(c *Config, dev bool) {
 	l.providers(c)
 }
 
+// files reads what the files pipeline needs (item 14): the object store, whose URL carries its
+// credentials and is never named in an error, reached over https outside development and never
+// with the compose store's published secret; where clients reach it, when that is not where the
+// server does; the converter sidecar; and where and for how long an upload's body is read.
+func (l *loader) files(c *Config, dev bool) {
+	if raw := l.required(ObjectStoreURLVar, devObjectStoreURL, dev); raw != "" {
+		loc, err := objectstore.ParseURL(raw)
+		switch {
+		case err != nil:
+			l.fail("%s: %v", ObjectStoreURLVar, err)
+		case !dev && loc.Endpoint.Scheme != "https":
+			l.fail("%s: outside development the object store is reached over https", ObjectStoreURLVar)
+		case !dev && loc.Secret == devObjectStoreSecret:
+			l.fail("%s holds the compose object store's published secret, which only development may use", ObjectStoreURLVar)
+		default:
+			c.ObjectStore = loc
+		}
+	}
+	if public := l.str(ObjectStorePublicURLVar, ""); public != "" {
+		u, err := url.Parse(public)
+		switch {
+		case err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
+			(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "":
+			l.fail("%s is %s; want the object store's http(s) scheme and host", ObjectStorePublicURLVar, quotedURL(public))
+		case !dev && u.Scheme != "https":
+			l.fail("%s is %s; outside development clients reach the object store over https", ObjectStorePublicURLVar, quotedURL(public))
+		default:
+			c.ObjectStorePublic = &url.URL{Scheme: u.Scheme, Host: u.Host}
+		}
+	}
+	if converter := l.required(ConverterURLVar, devConverterURL, dev); converter != "" {
+		if u, err := url.Parse(converter); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
+			l.fail("%s is %s; want the converter's absolute http(s) URL", ConverterURLVar, quotedURL(converter))
+		} else {
+			c.ConverterURL = strings.TrimRight(converter, "/")
+		}
+	}
+	c.UploadDir = l.str(UploadDirVar, "")
+	c.UploadTimeout = l.duration(UploadTimeoutVar, 15*time.Minute)
+}
+
+// quotedURL is raw as an error about it quotes it: its password replaced, since a setting that refuses
+// a URL carrying credentials may still have been given one, and none of it when it does not parse as
+// a URL, since its text may then hold one where no parser finds it.
+func quotedURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "a value that does not parse as a URL"
+	}
+	return strconv.Quote(u.Redacted())
+}
+
 // providers reads the identity providers (item 9): each configured whole or not at all, and none
 // without a redirect URI to send a person back to.
 func (l *loader) providers(c *Config) {
@@ -470,6 +544,19 @@ type loader struct {
 
 func (l *loader) fail(format string, args ...any) {
 	l.errs = append(l.errs, fmt.Errorf(format, args...))
+}
+
+// required reads a setting serving needs: devDefault in development when it is not set, and outside
+// development a failure, and "", since nothing is defaulted there.
+func (l *loader) required(key, devDefault string, dev bool) string {
+	if value, ok := l.getenv(key); ok && value != "" {
+		return value
+	}
+	if !dev {
+		l.fail("%s is required outside development", key)
+		return ""
+	}
+	return devDefault
 }
 
 func (l *loader) str(key, def string) string {

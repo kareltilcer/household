@@ -69,3 +69,27 @@ INSERT INTO sync_mutations (household_id, user_id, mutation_id, fingerprint, out
   ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000a1', '01900000-0000-7000-8000-0000000000d4', decode(repeat('a1', 32), 'hex'), 'applied', 1, '{"title": "Milk"}'),
   ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-0000000000d5', decode(repeat('a2', 32), 'hex'), 'applied', 1, '{"title": "Eggs"}'),
   ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-0000000000d6', decode(repeat('b1', 32), 'hex'), 'applied', 1, '{"title": "Bread"}');
+
+-- An object in each household, household B's owner's private one in household A, a job for each, and
+-- each household's sample of a day, split by module and by member.
+INSERT INTO files (household_id, module, entity_id, variant, content_type, byte_size, sha256, filename, owner_id, private, variants) VALUES
+  ('01900000-0000-7000-8000-00000000000a', 'documents', '01900000-0000-7000-8000-0000000000c3', 'original', 'application/pdf', 1024,
+   decode(repeat('a3', 32), 'hex'), 'Milk.pdf', '01900000-0000-7000-8000-0000000000b1', true, 'pending'),
+  ('01900000-0000-7000-8000-00000000000b', 'documents', '01900000-0000-7000-8000-0000000000c4', 'original', 'application/pdf', 2048,
+   decode(repeat('b3', 32), 'hex'), 'Bread.pdf', '01900000-0000-7000-8000-0000000000b1', false, 'pending');
+
+INSERT INTO file_jobs (household_id, kind, module, entity_id) VALUES
+  ('01900000-0000-7000-8000-00000000000a', 'variants', 'documents', '01900000-0000-7000-8000-0000000000c3'),
+  ('01900000-0000-7000-8000-00000000000b', 'variants', 'documents', '01900000-0000-7000-8000-0000000000c4');
+
+INSERT INTO usage_samples (household_id, sampled_on, sampled_at, stored_bytes, derived_bytes, object_count) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '2026-09-30', now(), 1024, 0, 1),
+  ('01900000-0000-7000-8000-00000000000b', '2026-09-30', now(), 2048, 0, 1);
+
+INSERT INTO usage_sample_modules (household_id, sampled_on, module, stored_bytes, derived_bytes, object_count, row_count) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '2026-09-30', 'documents', 1024, 0, 1, 1),
+  ('01900000-0000-7000-8000-00000000000b', '2026-09-30', 'documents', 2048, 0, 1, 1);
+
+INSERT INTO usage_sample_members (household_id, sampled_on, user_id, stored_bytes, object_count) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '2026-09-30', '01900000-0000-7000-8000-0000000000b1', 1024, 1),
+  ('01900000-0000-7000-8000-00000000000b', '2026-09-30', '01900000-0000-7000-8000-0000000000b1', 2048, 1);

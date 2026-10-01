@@ -170,7 +170,11 @@ module exists (D-82), enforced by architecture tests. None of them says:
   between the two, the response was larger than the 1 MiB a key keeps, or the request was
   answered other than `2xx` after its effect committed, answers `409` until it expires: running it
   again would repeat the effect, the one thing the key exists to prevent. The contract says so. An
-  upload that takes longer than the lease needs its claim renewed (item 14).
+  upload that takes longer than the lease to arrive, which item 14 lets take fifteen minutes, keeps
+  its claim until a repeat takes it over, and item 14 renews none: a client sends the repeat once it
+  has given up on the first, which, if it is still arriving, can then no longer commit
+  (`ErrClaimLost`), and the repeat's upload is the one that lands
+  ([ADR 0015](0015-files-object-storage-the-meter-and-pictures.md)).
 - The Idempotency-Key middleware is mounted on module routes. A household-scoped route outside a
   module (item 10's members, invitations and grants) mounts it as well. A route outside any
   household (`/auth`, `/me`, creating a household) has no household to hold its key in, since a

@@ -1,4 +1,5 @@
 {
+  "admin.child.avatar": "{change, select, cleared {Odstránenie obrázka pre {member}} other {Nový obrázok pre {member}}}",
   "admin.child.create": "Pridanie detského profilu: {member}",
   "admin.child.lock": "Uzamknutie profilu {member} po desiatich chybných PIN-och",
   "admin.child.pin": "Nový PIN pre {member}",

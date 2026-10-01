@@ -344,18 +344,29 @@ server time is clamped and flagged. **D-26.**
 ## 3. Storage and metering
 
 **FR-ST1 — The storage catalog.** Each module declares the tables it owns and, if it holds bytes,
-the object prefixes it owns with an attribution function mapping a prefix to `(owner_id,
-visibility, objects, bytes)`. Only the module can do this: only `documents` knows that
-`h/{hh}/documents/{id}/original` maps to that document's creator.
+whom each of its objects is attributed to, `(owner_id, visibility)`: the member its bytes count
+against and whether its entity is private to them. Only the module can do this: only `documents`
+knows that `h/{hh}/documents/{id}/original` maps to that document's creator. The attribution travels
+with each object, never computed from a prefix when the bytes are counted: the module declares its
+member and whether its entity is private when it records the upload, and keeps both current as the
+entity moves, so the sampler splits bytes by member, and counts objects and bytes, from the objects'
+own rows without reading any module's table
+([ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md)).
 
 **FR-ST2 — Daily sampling.** A nightly job per household records a `usage_sample`:
 `stored_bytes` broken down by module and by member, `object_count`, plus row counts per module for
-fair-use monitoring. The sample is what billing reads; nothing bills off a live scan.
+fair-use monitoring. The sample is what billing reads; nothing bills off a live scan. It is the UTC
+day's (**D-109**), a second one that day replacing the first, and a household that keeps nothing is sampled at
+nothing, so a period's average counts its empty days. The meter role measures every household; each
+household's sample is written in its own context.
 
 **FR-ST3 — What is billed.** `stored_bytes` = object-storage bytes attributed to the household,
-including all derived variants (previews, thumbnails) and all versions retained for backup within
-the household's own retention. Database rows are **not** billed; they are subject to per-plan
-fair-use ceilings. See [04](04-billing-and-entitlements.md).
+including all derived variants (previews, thumbnails): every object the household's files record.
+The versions the store keeps of a deleted or replaced object, for the backups' 35 days
+([07](07-nonfunctional.md) §3), are the platform's backup and not the household's storage, and are
+not billed: counted, a file uploaded and deleted the same day would be billed for five weeks, which
+**D-31** and FR-BI3's worked example rule out. Database rows are **not** billed; they are subject to
+per-plan fair-use ceilings. See [04](04-billing-and-entitlements.md).
 
 **FR-ST4 — The household can see it.** A storage screen shows total, the trend, the split by
 module and by member, the largest items, and what deleting something would actually recover. A
@@ -476,7 +487,12 @@ the number of results a caller sees and is itself a leak.
 **FR-FL1 — Upload** goes through the API: enforce the size cap, sniff the content type from the
 leading bytes (never trust the client's header), check the household's storage quota, stream to
 object storage, compute a SHA-256, and write the metadata row in the same transaction as the audit
-event and the sync change. Bytes are **write-once**.
+event and the sync change. Bytes are **write-once**. The cap is 100 MB (`413`); a program is refused
+`415` by its bytes or by its name, and so is a type the route does not take; an upload past the
+storage ceiling is `402 storage_ceiling_reached`, naming by how much. The bytes are in the store
+before their row commits, never after: bytes a failed mutation left, which no row names, are billed to
+nobody and swept once a day old. The same bytes sent again for an entity succeed; other bytes for it
+are refused `422`.
 
 **FR-FL2 — Delivery** is a short-lived pre-signed URL issued only after the caller is authorised
 for the owning entity. Originals of untrusted active types (HTML, SVG) are download-only and are
@@ -484,7 +500,12 @@ never rendered in the app's origin. `X-Content-Type-Options: nosniff` on everyth
 
 **FR-FL3 — Derived variants** — thumbnails, image scaling, PDF first-page previews, and office
 document conversion — are generated asynchronously after commit, once, and cached forever, because
-the bytes never change. A failure leaves the file download-only and never loses the upload.
+the bytes never change. A failure leaves the file download-only and never loses the upload. A raster
+image gets a 320-pixel thumbnail and, when larger than 1600 pixels, not upright, or of a type browsers
+do not show (BMP, TIFF), a preview, both without the original's metadata; a PDF its first page as a
+preview and a thumbnail; an office document a PDF and that PDF's page, through a LibreOffice sidecar
+with a timeout. A failure a retry may mend is retried for about two and a half hours; a file that
+cannot be decoded or converted is left at once.
 
 **FR-FL4 — Quota enforcement is on upload, never on read and never by deletion.** Over quota, an
 upload returns `402` with the amount over; existing files remain readable and downloadable forever.

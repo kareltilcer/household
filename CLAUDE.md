@@ -29,6 +29,7 @@ pnpm install          # workspace dependencies
 pnpm run up           # Postgres 17 (logical replication), RustFS (S3) and Mailpit, waiting until healthy
 pnpm run db:setup     # create the database roles and PowerSync's storage, then apply the migrations
 pnpm run up:sync      # PowerSync, once db:setup has made its role, its publication and its storage
+pnpm run up:convert   # build and start the converter sidecar (LibreOffice, poppler): office and PDF previews
 pnpm run dev:api      # serve the API on 127.0.0.1:8080 (/api/v1/healthz, /api/v1/readyz)
 pnpm test             # Vitest through turbo, then go test against the compose Postgres
 pnpm run lint         # ESLint, golangci-lint, Redocly and Prettier
@@ -45,9 +46,11 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
 - **Go tools are pinned per tool** in `server/tools/<tool>.mod` and run through `go tool
   -modfile=…`: `lint:go` (golangci-lint), `audit:go` (govulncheck) and `secrets`
   (gitleaks). Each has its own modfile, so no tool's dependencies can move another's.
-- **Go tests need the database.** They fail, rather than skip, when PostgreSQL is not
-  reachable, and run with `-count=1` so that no cached result stands in for a run. Set
-  `HOUSEHOLD_TEST_DATABASE_URL` to point them elsewhere. A package that touches the
+- **Go tests need the database and the object store.** They fail, rather than skip, when
+  PostgreSQL or RustFS is not reachable, and run with `-count=1` so that no cached result stands in
+  for a run. Set `HOUSEHOLD_TEST_DATABASE_URL` and `HOUSEHOLD_TEST_OBJECT_STORE_URL` to point them
+  elsewhere; `testsupport.ObjectStore` gives a test a bucket of its own. The converter's real-sidecar
+  test runs only when `HOUSEHOLD_TEST_CONVERTER_URL` names one, as CI's converter job does. A package that touches the
   database calls `testsupport.Main` from its `TestMain` and gets its own clone of a
   migrated template (`testsupport.Open`); `testsupport.Serve` checks every response a test
   sees against `openapi.yaml`.
@@ -83,7 +86,7 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
 | `packages/*` | `api` (generated client), `i18n`, `tokens`, `icons`, `domain`, `sync`, `test-vectors` |
 | `tooling/` | Guards over the workspace itself: strictness, catalog pins, local/CI parity |
 | `reference-data/`, `fixtures/` | Sourced reference content, and the seed ported from `design/v1` |
-| `deploy/` | What runs beside the server: PowerSync's configuration and its generated streams |
+| `deploy/` | What runs beside the server: PowerSync's configuration and its generated streams, and the converter sidecar's image |
 | `docs/adr/`, `docs/runbooks/` | Architecture decision records, and operational procedures |
 
 ## Conventions that are never negotiated
@@ -94,7 +97,9 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   **requires** `id` in its body. A server-minted id online and a client id offline is the
   dual identity D-23 exists to prevent.
 - **Instants** are `timestamptz`, RFC 3339 with an explicit offset on the wire. **Calendar
-  days** are `date` (`YYYY-MM-DD`) in the household's timezone, which is never assumed.
+  days** are `date` (`YYYY-MM-DD`) in the household's timezone, which is never assumed. The one
+  exception is the usage sample's day, a metering bucket every household shares, which is UTC's
+  ([D-109](docs/prd/09-decisions.md)).
 - **English is the source language** of every identifier, enum value, log message and
   comment. No user-visible string is a literal: it is a translation key, present in all five
   catalogs (`en`, `cs`, `sk`, `de`, `pl`) in `packages/i18n/catalogs/`, and architecture test 7
@@ -140,6 +145,16 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   `module.PlatformModule` declares, and holds a household its caller is not yet in, creating
   it or holding its invitation, through `tenant.Assume`, which test 4 keeps out of modules too
   ([ADR 0011](docs/adr/0011-households-as-the-platforms-own-module.md)).
+- **Files** go through the pipeline, `internal/platform/files`, and nothing else touches the object
+  store: a module's handler `Receive`s the upload (sniffed, capped, programs refused), `Put`s it
+  (ceiling checked, written once under `h/{household}/{module}/{entity}/{variant}`), `Record`s it in
+  its mutation with the attribution only it knows, and hands out `Link`s, pre-signed for one object
+  for minutes. It declares its tables and labels through `module.StorageSource`. The meter role
+  reads every household's counting columns, and nothing else (architecture test 11,
+  [ADR 0015](docs/adr/0015-files-object-storage-the-meter-and-pictures.md)); a user's picture is the
+  account's (D-107). What the platform keeps of the work after a commit is no entity's history
+  either, and goes through `tenant.InWriteTx` in the household's context, with no caller: the
+  workers' claims on `file_jobs` and the variants they record, and the usage sampler's samples.
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`

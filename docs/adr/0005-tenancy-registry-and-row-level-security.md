@@ -51,7 +51,8 @@ tenant table, compares each row's `household_id` with the setting. It says the m
   `tenant_isolation` policy, `household_id = app_household_id()` for both `USING` and `WITH
   CHECK`. A tenant table's only permissive policy is that one; a narrower rule, such as a
   private item's owner, is a restrictive policy on top, which PostgreSQL ANDs with it where it
-  would OR a second permissive one.
+  would OR a second permissive one. It names the roles it narrows, `TO household_app`, since one
+  written for every role would narrow the meter role's reads too (ADR 0015).
 - **Two tables have policies of their own** (PRD 01 §2.4). Inside a household's context each
   reads as a tenant table does, that household's rows only. Outside any household's context,
   where the tenant middleware checks membership and a user lists their households,

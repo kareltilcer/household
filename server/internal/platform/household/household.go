@@ -131,6 +131,8 @@ func (s *Service) HouseholdRoutes(r chi.Router) {
 	r.Get(h+"/modules", s.listModules)
 	r.Patch(h+"/modules/{module}", s.updateModule)
 	r.Post(h+"/children/{user_id}/unlock", s.unlockChild)
+	r.Put(h+"/children/{user_id}/avatar", s.putChildAvatar)
+	r.Delete(h+"/children/{user_id}/avatar", s.clearChildAvatar)
 	r.Post(h+"/children/{user_id}/graduate", s.graduate)
 }
 
@@ -201,12 +203,6 @@ func pathUUID(r *http.Request, name string) (uuid.UUID, error) {
 	}
 	return id, nil
 }
-
-// pointerEscaper spells a name as a JSON Pointer's reference token (RFC 6901): ~ as ~0 and / as ~1.
-var pointerEscaper = strings.NewReplacer("~", "~0", "/", "~1")
-
-// escapePointer is name as a JSON Pointer's reference token (pointerEscaper).
-func escapePointer(name string) string { return pointerEscaper.Replace(name) }
 
 // email sends t to address in the language of locale, with args, after the response. A failure is
 // logged: nothing the request did depends on it.

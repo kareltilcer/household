@@ -76,6 +76,14 @@ var allowed = map[string]bool{
 	// A mutation the push could not answer (internal/platform/push): the UUID its device drew for
 	// it, which names it in the device's queue and carries none of its fields.
 	"mutation_id": true,
+
+	// A file job (internal/platform/files): its kind, variants or purge, the module id whose
+	// objects it derives or purges, and how many times it was tried; and how many objects a sweep
+	// removed. Never a file's name, its type or its key.
+	"kind":     true,
+	"module":   true,
+	"attempts": true,
+	"objects":  true,
 }
 
 // The correlation keys the logger adds from the request's scope.

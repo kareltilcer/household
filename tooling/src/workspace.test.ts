@@ -344,6 +344,22 @@ describe('a developer machine and CI', () => {
     )
   })
 
+  // The Go tests keep files in a bucket of their own on the object store (plan item 14): CI's is
+  // the image a developer's compose runs, pinned to a release, and started with the credentials
+  // the tests sign in with.
+  it('run the same object store', () => {
+    const compose = readRecord('docker-compose.yml')
+    const local = field(compose, 'services', 'objectstore', 'image')
+    expect(local).toMatch(/^rustfs\/rustfs:\d+\.\d+\.\d+$/)
+    const go = field(readRecord('.github/workflows/ci.yml'), 'jobs', 'go')
+    expect(field(go, 'services', 'objectstore', 'image')).toBe(local)
+    for (const key of ['RUSTFS_ACCESS_KEY', 'RUSTFS_SECRET_KEY']) {
+      expect(field(go, 'services', 'objectstore', 'env', key), key).toBe(
+        field(compose, 'services', 'objectstore', 'environment', key),
+      )
+    }
+  })
+
   // The conformance suite's stack (plan item 12) runs its own PostgreSQL, with logical
   // replication, beside PowerSync. The two PostgreSQLs are one image, and PowerSync is pinned to a
   // release, never a moving tag: the suite is what tells an upgrade apart.

@@ -38,6 +38,7 @@ const (
 	CodeHouseholdLimitReached    Code = "household_limit_reached"
 	CodeLastOwner                Code = "last_owner"
 	CodeBillingPayer             Code = "billing_payer"
+	CodeStorageCeilingReached    Code = "storage_ceiling_reached"
 	CodeAccountDeletionBlocked   Code = "account_deletion_blocked"
 	CodeLayoutLocked             Code = "layout_locked"
 	CodeReadOnlyParticipation    Code = "read_only_participation"
@@ -65,6 +66,7 @@ const (
 	CodeNoReferenceRate          Code = "no_reference_rate"
 	CodePayloadTooLarge          Code = "payload_too_large"
 	CodeUnsupportedMediaType     Code = "unsupported_media_type"
+	CodeStorageUnavailable       Code = "storage_unavailable"
 )
 
 // Codes lists every Code, in the order the contract declares them.
@@ -99,6 +101,7 @@ var Codes = []Code{
 	CodeHouseholdLimitReached,
 	CodeLastOwner,
 	CodeBillingPayer,
+	CodeStorageCeilingReached,
 	CodeAccountDeletionBlocked,
 	CodeLayoutLocked,
 	CodeReadOnlyParticipation,
@@ -126,4 +129,5 @@ var Codes = []Code{
 	CodeNoReferenceRate,
 	CodePayloadTooLarge,
 	CodeUnsupportedMediaType,
+	CodeStorageUnavailable,
 }

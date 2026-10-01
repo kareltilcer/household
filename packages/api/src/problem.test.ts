@@ -63,6 +63,29 @@ describe('a problem document', () => {
     }
   })
 
+  it('from an upload past the storage ceiling carries by how much, and is no gate refusal', () => {
+    const members = {
+      state: 'trialing',
+      remedy: 'free_storage',
+      over_by_bytes: 600,
+      blocks_at_ceiling: 20,
+    }
+    const read = readProblem(402, problem('storage_ceiling_reached', 402, members))
+    if (read.code !== 'storage_ceiling_reached') throw new Error('not a ceiling refusal')
+    expect(read.over_by_bytes).toBe(600)
+    expect(read.blocks_at_ceiling).toBe(20)
+    expect(read.remedy).toBe('free_storage')
+    expect(isEntitlementRefusal(read)).toBe(false)
+    const unreadable = [
+      { state: 'trialing', remedy: 'free_storage', blocks_at_ceiling: 20 },
+      { ...members, state: 'frozen' },
+      { ...members, over_by_bytes: '600' },
+    ]
+    for (const extra of unreadable) {
+      expect(readProblem(402, problem('storage_ceiling_reached', 402, extra)).code).toBeUndefined()
+    }
+  })
+
   it('with validation_failed names its failures', () => {
     const errors = [{ field: '/name', code: 'required' }]
     const read = readProblem(422, problem('validation_failed', 422, { errors }))

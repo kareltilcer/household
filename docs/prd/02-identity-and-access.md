@@ -279,7 +279,9 @@ Three of these need their reasoning stated, because they are the ones that look 
   filtered by every other grant — a member sees history only for modules they can see — so `view`
   here reveals nothing they could not read directly, and the log is the transparency surface on
   which FR-PS2 and D-75 depend. `view` on Household settings works the same way: it unlocks the
-  household's invitations and the storage picture, and every *write* in that module is
+  household's invitations and the storage picture, whose split by module and largest items leave
+  out every module the member cannot see, and whose totals and split by member count every byte,
+  which say how much and whose but never what (**D-108**); and every *write* in that module is
   `owner`-gated regardless of the grant. The member list and the household profile every member
   reads, whatever their grant, since every member's app works from them
   ([modules/17-household-admin.md](modules/17-household-admin.md) Permissions, **D-103**).

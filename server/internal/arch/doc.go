@@ -6,5 +6,6 @@
 // (no float or numeric money). Item 3 adds 1 (no module imports another), 2 (every tenant
 // table is isolated) and 3 (every module exports and erases), and the tenant isolation test
 // of FR-NF4; item 4 adds 4, 5 and 9; item 13 adds 10 (the generated sync configuration, and the
-// tables its streams read published for PowerSync).
+// tables its streams read published for PowerSync); item 14 adds 11 (the meter role reads only
+// the columns that name, count, size or schedule rows).
 package arch

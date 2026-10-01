@@ -116,8 +116,10 @@ root's owner-readable case (items 43 and 46) read.
 - Plan item 29 builds the child's screens on `postAuthChildProfiles` and `postAuthChildLogin`, and
   the tablet's switcher over the sign-ins it holds; item 25 builds the web page a graduation's link
   opens, which posts `postAuthGraduationConfirm`.
-- Plan item 14 lets a child profile's `avatar_url` be set, which its making refuses until uploads
-  exist, as `PATCH /me` does.
+- Plan item 14 gives a child profile its picture through an upload of its own once the profile
+  exists (`putChildrenByUserIdAvatar`), as a member uploads theirs (`putMeAvatar`); its making, like
+  `PATCH /me`, still takes no `avatar_url` but null, since a picture is uploaded and never named by
+  a URL ([D-107](../prd/09-decisions.md), [ADR 0015](0015-files-object-storage-the-meter-and-pictures.md)).
 - Plan item 15 may tell the owners that a profile locked (A-18's *ask Jana*), from its
   `admin.child.lock` event; item 15's sweep deletes spent and expired `graduate` tokens with the rest.
 - Plan item 20 erases the account of a child profile removed from its household: it is nothing

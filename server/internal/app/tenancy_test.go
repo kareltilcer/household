@@ -30,6 +30,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
@@ -79,6 +80,7 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 		Pool: pool, Modules: registry, MaxBodyBytes: 1 << 10, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, outbox, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
+		Storage:    &storage.Picture{Log: log},
 	}
 	for _, o := range options {
 		o(&deps)

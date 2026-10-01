@@ -1,0 +1,7 @@
+# Every violation architecture test 11 must report for tables.sql, table by table in name order.
+arch_testdata.counter: the meter role holds SELECT, USAGE on all of it; grant it SELECT on the columns it counts by, one at a time
+arch_testdata.drawn: the meter role holds USAGE on all of it; grant it SELECT on the columns it counts by, one at a time
+arch_testdata.maintained: the meter role holds MAINTAIN on all of it; grant it SELECT on the columns it counts by, one at a time
+arch_testdata.noted.note: the meter role reads it, and it neither names a household nor counts, sizes or schedules rows
+arch_testdata.whole: the meter role holds SELECT on all of it; grant it SELECT on the columns it counts by, one at a time
+arch_testdata.written.household_id: the meter role holds UPDATE on it; it only reads

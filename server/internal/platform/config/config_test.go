@@ -37,11 +37,12 @@ func TestDevelopmentNeedsNothingSet(t *testing.T) {
 	}
 }
 
-// The serving process gets the request role's connection and nothing else: never the
+// The serving process gets the request role's connection and the meter role's, which reads across
+// households for the usage sample and the files workers (item 14), and nothing else: never the
 // administrator's, which only bootstrap holds.
 func TestEachCommandGetsOnlyTheConnectionsItUses(t *testing.T) {
 	serve, _ := config.Load(config.Serve, env(nil))
-	if serve.DatabaseURL == "" || serve.MigrateDatabaseURL != "" || serve.AdminDatabaseURL != "" || serve.MeterDatabaseURL != "" {
+	if serve.DatabaseURL == "" || serve.MigrateDatabaseURL != "" || serve.AdminDatabaseURL != "" || serve.MeterDatabaseURL == "" {
 		t.Errorf("serve: %+v", serve)
 	}
 	migrate, _ := config.Load(config.Migrate, env(nil))
@@ -78,7 +79,8 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
 	}))
 	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachCorpusVar,
-		config.TokenKeysVar, config.MFAKeysVar, config.PowerSyncURLVar} {
+		config.TokenKeysVar, config.MFAKeysVar, config.PowerSyncURLVar, config.MeterDatabaseURLVar, config.ObjectStoreURLVar,
+		config.ConverterURLVar} {
 		if err == nil || !strings.Contains(err.Error(), key) {
 			t.Errorf("serving in production without %s: %v", key, err)
 		}
@@ -99,20 +101,78 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 // serving adds to vars what serving needs outside development, where vars does not set it.
 func serving(vars map[string]string) map[string]string {
 	for key, value := range map[string]string{
-		config.WebURLVar:         "https://app.household.example",
-		config.TrustedProxiesVar: config.NoProxies,
-		config.SMTPURLVar:        "smtps://mailer:" + "pw" + "@smtp.example:465",
-		config.MailFromVar:       "Household <no-reply@household.example>",
-		config.BreachCorpusVar:   "/var/lib/household/breached.bin",
-		config.TokenKeysVar:      base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
-		config.MFAKeysVar:        base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
-		config.PowerSyncURLVar:   "https://sync.household.example",
+		config.WebURLVar:           "https://app.household.example",
+		config.TrustedProxiesVar:   config.NoProxies,
+		config.SMTPURLVar:          "smtps://mailer:" + "pw" + "@smtp.example:465",
+		config.MailFromVar:         "Household <no-reply@household.example>",
+		config.BreachCorpusVar:     "/var/lib/household/breached.bin",
+		config.TokenKeysVar:        base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
+		config.MFAKeysVar:          base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
+		config.PowerSyncURLVar:     "https://sync.household.example",
+		config.MeterDatabaseURLVar: dsn("household_meter", "m3ter", "db.internal:5432", "household"),
+		config.ObjectStoreURLVar:   "https://AKIA:" + "s3cret" + "@objects.household.example/household?region=eu-central-1",
+		config.ConverterURLVar:     "http://converter:3100",
 	} {
 		if _, ok := vars[key]; !ok {
 			vars[key] = value
 		}
 	}
 	return vars
+}
+
+// In development the files pipeline defaults to the compose object store, its bucket and its
+// published credentials, and to the converter of the compose convert profile; elsewhere each is
+// named, the store is reached over https, and the published secret is refused.
+func TestTheFilesSettings(t *testing.T) {
+	c, err := config.Load(config.Serve, env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.ObjectStore.Endpoint.String() != "http://127.0.0.1:9000" || c.ObjectStore.Bucket != "household" ||
+		c.ObjectStore.AccessKey != "household" || c.ObjectStorePublic != nil || c.ConverterURL != "http://127.0.0.1:3100" ||
+		c.UploadTimeout != 15*time.Minute {
+		t.Fatalf("%+v", c)
+	}
+
+	c, err = config.Load(config.Serve, env(serving(map[string]string{
+		config.EnvVar:                  "production",
+		config.DatabaseURLVar:          dsn("household_app", "s3cret", "db.internal:5432", "household"),
+		config.ObjectStorePublicURLVar: "https://files.household.example/",
+		config.UploadDirVar:            "/var/lib/household/uploads",
+		config.UploadTimeoutVar:        "30m",
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.ObjectStore.Endpoint.String() != "https://objects.household.example" || c.ObjectStore.Region != "eu-central-1" ||
+		c.ObjectStorePublic.String() != "https://files.household.example" || c.ConverterURL != "http://converter:3100" ||
+		c.UploadDir != "/var/lib/household/uploads" || c.UploadTimeout != 30*time.Minute {
+		t.Fatalf("%+v", c)
+	}
+
+	for name, vars := range map[string]map[string]string{
+		"a store over http":             {config.ObjectStoreURLVar: "http://AKIA:" + "s3cret" + "@objects.internal:9000/household"},
+		"the published secret":          {config.ObjectStoreURLVar: "https://household:" + "household-local-only" + "@objects.household.example/household"},
+		"a store with no bucket":        {config.ObjectStoreURLVar: "https://AKIA:" + "s3cret" + "@objects.household.example"},
+		"a public URL with a path":      {config.ObjectStorePublicURLVar: "https://files.household.example/household"},
+		"a public URL over http":        {config.ObjectStorePublicURLVar: "http://files.household.example"},
+		"a converter that is not a URL": {config.ConverterURLVar: "converter:3100"},
+		// A URL that carries no credentials refuses one it was given, and names it without them.
+		"a public URL with credentials":   {config.ObjectStorePublicURLVar: "https://AKIA:" + "s3cret" + "@files.household.example"},
+		"a converter with credentials":    {config.ConverterURLVar: "http://svc:" + "s3cret" + "@converter:3100"},
+		"a converter that does not parse": {config.ConverterURLVar: "http://svc:" + "s3cret%zz" + "@converter:3100"},
+	} {
+		vars[config.EnvVar] = "production"
+		vars[config.DatabaseURLVar] = dsn("household_app", "s3cret", "db.internal:5432", "household")
+		_, err := config.Load(config.Serve, env(serving(vars)))
+		if err == nil {
+			t.Errorf("%s: loaded", name)
+			continue
+		}
+		if strings.Contains(err.Error(), "s3cret") || strings.Contains(err.Error(), "household-local-only") {
+			t.Errorf("%s: the error names the secret: %v", name, err)
+		}
+	}
 }
 
 // In development the account settings default to the web client's dev server and the compose mail

@@ -309,19 +309,36 @@ func unstorable(key string) (string, bool) {
 // fingerprintOf is what makes two requests the same request: the method, the path and query,
 // the precondition, the media type and the body. A JSON body is read, up to maxBody bytes, and
 // put back for the handler; on a request an operation matches, the edge has already read it
-// into memory under the same cap. A body in another media type, an upload, is the handler's to
-// stream and is not read here, so its length stands in for it.
+// into memory under the same cap. A body in another media type is the handler's to stream and is
+// not read here, so its length stands in for it, but for a form's.
+//
+// A form's boundary is not the request's: a browser, and React Native, draw one afresh each time
+// they send a form, the same upload sent again included, so a multipart body's media type stands
+// in without it, and a retry that drew another is still the same request. Nor is a form's length,
+// which carries the boundary once for each part and once more: Firefox draws boundaries of more
+// than one length, and the same form sent again under one a digit shorter is a few bytes shorter.
+// A form is known by its method, its path and query, its precondition and its media type, so a key
+// sent again with another upload to the same route is answered as the first upload was, as one of
+// the same length always was: a key is drawn for one upload, and a client that spends it on
+// another has a bug no length could be trusted to catch.
 func fingerprintOf(w http.ResponseWriter, r *http.Request, maxBody int64) ([]byte, error) {
 	h := sha256.New()
 	contentType := r.Header.Get("Content-Type")
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	form := err == nil && strings.HasPrefix(mediaType, "multipart/")
+	if form {
+		delete(params, "boundary")
+		contentType = mime.FormatMediaType(mediaType, params)
+	}
 	for _, part := range []string{r.Method, r.URL.EscapedPath(), r.URL.RawQuery, r.Header.Get("If-Match"), contentType} {
 		_, _ = io.WriteString(h, part)
 		_, _ = h.Write([]byte{0})
 	}
-	mediaType, _, _ := mime.ParseMediaType(contentType)
 	isJSON := mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
 	if r.Body == nil || r.Body == http.NoBody || !isJSON {
-		_, _ = io.WriteString(h, strconv.FormatInt(r.ContentLength, 10))
+		if !form {
+			_, _ = io.WriteString(h, strconv.FormatInt(r.ContentLength, 10))
+		}
 		return h.Sum(nil), nil
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
