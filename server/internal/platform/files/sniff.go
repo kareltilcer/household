@@ -496,14 +496,23 @@ func zipText(z *zip.Reader, name string) string {
 var cfbMagic = []byte{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1}
 
 // cfbClasses are the root entry's class ids a compound file names its application by, as the
-// sixteen bytes it stores them in.
+// sixteen bytes it stores them in. PowerPoint's node is not the OLE automation C000…0046 the pre-2007
+// Office formats share, so it is named in full: a real .ppt keeps its "PowerPoint Document" stream past
+// the first directory sector sniffCFB reads, where Word's and Excel's streams also may lie, so each is
+// known by its root's class first and its stream only as a fallback.
 var cfbClasses = map[[16]byte]Type{
 	clsid(0x000C1084, 0, 0, 0xC0, 0x46): {MIME: "application/x-msi", Class: ClassBlocked},
 	clsid(0x000C1086, 0, 0, 0xC0, 0x46): {MIME: "application/x-msi", Class: ClassBlocked},
 	clsid(0x00020906, 0, 0, 0xC0, 0x46): {MIME: "application/msword", Class: ClassOffice, Ext: "doc"},
 	clsid(0x00020820, 0, 0, 0xC0, 0x46): {MIME: "application/vnd.ms-excel", Class: ClassOffice, Ext: "xls"},
 	clsid(0x00020810, 0, 0, 0xC0, 0x46): {MIME: "application/vnd.ms-excel", Class: ClassOffice, Ext: "xls"},
+	pptCLSID:                            {MIME: "application/vnd.ms-powerpoint", Class: ClassOffice, Ext: "ppt"},
 }
+
+// pptCLSID is PowerPoint 97–2003's root class id, {64818D10-4F9B-11CF-86EA-00AA00B929E8}, as a
+// compound file stores it: its first three fields little-endian, its node as it is. The clsid helper
+// builds only the OLE automation family, whose node is C000…0046; this one's is not.
+var pptCLSID = [16]byte{0x10, 0x8D, 0x81, 0x64, 0x9B, 0x4F, 0xCF, 0x11, 0x86, 0xEA, 0x00, 0xAA, 0x00, 0xB9, 0x29, 0xE8}
 
 // clsid is the class id {d1-0000-0000-hi00-0000000000lo} as a compound file stores it: its first
 // three fields little-endian.

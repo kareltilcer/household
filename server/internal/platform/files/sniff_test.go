@@ -136,6 +136,9 @@ func TestSniff(t *testing.T) {
 		{"doc", compound(clsid(0x00020906, 0, 0, 0xC0, 0x46), "WordDocument"), "", "application/msword", ClassOffice},
 		{"xls by its stream", compound([16]byte{}, "Workbook"), "", "application/vnd.ms-excel", ClassOffice},
 		{"ppt by its stream", compound([16]byte{}, "PowerPoint Document"), "", "application/vnd.ms-powerpoint", ClassOffice},
+		// A real .ppt keeps "PowerPoint Document" past the first directory sector, where a synthetic one
+		// puts it, so it is known by its root's class, as LibreOffice and PowerPoint set it.
+		{"ppt by its root class", compound(pptCLSID, "Current User"), "", "application/vnd.ms-powerpoint", ClassOffice},
 		{"msi", compound(clsid(0x000C1084, 0, 0, 0xC0, 0x46), "\u4840\u3f3f"), "setup.doc", "application/x-msi", ClassBlocked},
 		{"another compound file", compound([16]byte{}, "__substg1.0_0037001F"), "", "application/x-ole-storage", ClassBinary},
 		{"windows program", append([]byte("MZ\x90\x00\x03\x00\x00\x00"), make([]byte, 60)...), "", "application/vnd.microsoft.portable-executable", ClassBlocked},
