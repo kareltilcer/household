@@ -59,9 +59,8 @@ func RemoveReader(ctx context.Context, tx pgx.Tx, entities []Entity, household, 
 		if e.Access&Audience == 0 {
 			continue
 		}
-		table := pgx.Identifier(strings.Split(e.Table, ".")).Sanitize()
 		if _, err := RewriteAccess(ctx, tx, []string{ReadersColumn}, fmt.Sprintf(
-			"UPDATE %s SET %s = array_remove(%[2]s, $2) WHERE household_id = $1 AND $2 = ANY (%[2]s)", table, ReadersColumn),
+			"UPDATE %s SET %s = array_remove(%[2]s, $2) WHERE household_id = $1 AND $2 = ANY (%[2]s)", e.Identifier(), ReadersColumn),
 			household, member); err != nil {
 			return fmt.Errorf("sync: take %s out of the readers of %s: %w", member, e.Name, err)
 		}

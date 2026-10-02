@@ -26,15 +26,18 @@ import (
 // a chore and a conversation, strict_version; a note, lww_row with its loser preserved, and its
 // comments; an attachment's row; and a conversation's members and messages, its audience.
 func (Module) WriteSync(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, error) {
-	write, ok := map[string]func(context.Context, pgx.Tx, push.Mutation) (push.Written, error){
-		Item: writeItem, ItemChecked: writeCheck, Reading: writeReading, Completion: writeCompletion,
-		Budget: writeBudget, Note: writeNote, NoteComment: writeComment, Chore: writeChore, Attachment: writeAttachment,
-		Conversation: writeConversation, ConversationMember: writeMember, Message: writeMessage,
-	}[m.Entity.Name]
+	write, ok := writers[m.Entity.Name]
 	if !ok {
 		return push.Written{}, push.Refuse(problem.CodeValidationFailed, "%s is not one of the module's entities", m.Entity.Name)
 	}
 	return write(ctx, tx, m)
+}
+
+// writers are the module's writers, by the entity each writes.
+var writers = map[string]func(context.Context, pgx.Tx, push.Mutation) (push.Written, error){
+	Item: writeItem, ItemChecked: writeCheck, Reading: writeReading, Completion: writeCompletion,
+	Budget: writeBudget, Note: writeNote, NoteComment: writeComment, Chore: writeChore, Attachment: writeAttachment,
+	Conversation: writeConversation, ConversationMember: writeMember, Message: writeMessage,
 }
 
 // written is what a write that recorded ev and changed row came to.

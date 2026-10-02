@@ -55,6 +55,14 @@ read, which tells a caller nothing their module would not show them):
   reading (ADR 0013) is confirmed: the later write is answered `merged`, carrying the row, and the
   earlier value is not silently dropped, since the activity log keeps it as the value the later write
   replaced, which the conformance item's writer records as each field's diff.
+- **A replica's own earlier write is never a change it had not seen.** A replica makes each write
+  against the version of the row it holds, which moves only when a checkpoint reaches it, so its
+  second write of a row carries the base version its first did. Within a batch the push holds a later
+  mutation of a row an earlier one wrote, made against the same version, to the version the earlier
+  left (`landing.rebase`): applied rather than merged over its own replica's write, no loser kept of
+  it, no conflict with it, and an edit of a row created in the same batch, which could name no
+  version, held to the create's. Across batches the client does the same, sending a mutation it made
+  while an earlier one of the row was in flight against the version that one's answer returned.
 - **`lww_row` preserves its loser in its module**: a write behind its row keeps the row it replaces,
   with the version it stood at, the version the write was made against and who wrote each, where the
   module keeps it for the member to be offered (notes' `note_body_versions`, PRD modules/07 FR-NO10;
@@ -168,8 +176,9 @@ mechanism.
 - **Item 18** builds the replica's report: both halves of `postSyncDigest`, `postSyncReset` and
   `getSyncState`, their table of each replica's last report, and the confirmation of a mismatch; its
   client surfaces a `merged` answer where a field the member set was overridden, shows an `lww_row`
-  loser, and holds a `429` past the day's mutations until its `Retry-After`. It reports a replica's
-  queue and divergence through `sync.Metrics`.
+  loser, and holds a `429` past the day's mutations until its `Retry-After`; it sends a mutation made
+  while an earlier one of its row was in flight against the version that one's answer returned. It
+  reports a replica's queue and divergence through `sync.Metrics`.
 - **Item 34** drops `sync_changes` and `sync_changes_add_partitions` once G-C passes, with the tests
   and the isolation fixture's rows that hold them; if G-C fails, its fallback writes the feed again
   from the change every mutation reports.
@@ -177,7 +186,10 @@ mechanism.
   `deploy/powersync/compact.sh` beside their PowerSync; **item 89** alerts on `sync.Metrics`.
 - **Modules** with an `Owner` or `Audience` entity carry the access columns on every row the item or
   the audience bounds, rewrite them through `sync.RewriteAccess` in the mutation that moves the item or
-  changes the audience, and keep an `lww_row` entity's losers themselves (items 43, 75, 85).
+  changes the audience, and keep an `lww_row` entity's losers themselves (items 43, 75, 85). A removal
+  from the household leaves a module's own audience memberships as they were, so a module that writes
+  a row's readers from them holds them to the household's members, locking those memberships until
+  the write commits, as the conformance module's messages do.
 - A household that pushes its day's 100 000 mutations waits for the next UTC day: at Europe's offsets
   that is midnight or one or two in the morning, local time.
 - **What would make this worth revisiting**: a module whose bounded rows are too many to rewrite in

@@ -256,7 +256,12 @@ against another version than the row's is `conflict`, carrying the row as it sta
 or `lww_row` write made against an older version is applied over the change it had not seen, and
 answered `merged` with the code `concurrent_change` and the row: the server's row differs from what
 the client expected, and the client surfaces it where a field the member set was overridden. A
-create, and a write against the row's own version, is `applied`.
+create, and a write against the row's own version, is `applied`. A replica's own earlier write is
+never a change it had not seen: a replica makes each write against the version it holds, which moves
+only when a checkpoint reaches it, so a later mutation of a batch to a row an earlier one wrote,
+made against the same version, is held to the version the earlier left; and a client sends a
+mutation it made while an earlier one of the row was in flight against the version that one's answer
+returned.
 
 **FR-SY4 — Client-generated ids are mandatory.** A create performed offline must have a stable
 identity immediately, because the user may then edit it, attach to it, or reference it in

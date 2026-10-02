@@ -15,8 +15,9 @@ type Metrics interface {
 	// Batch reports a batch of mutations the push received, in ctx's household: its size, the part of
 	// a device's queue it carried.
 	Batch(ctx context.Context, mutations int)
-	// Answered reports one mutation's outcome, and its code when it was not applied: conflict, merged
-	// and rejected over all are the conflict rate.
+	// Answered reports one mutation's outcome, and its code when it was not applied, for its entity's
+	// registered name, "" for a type the registry does not hold: conflict, merged and rejected over all
+	// are the conflict rate.
 	Answered(ctx context.Context, entity, outcome, code string)
 	// Diverged reports a replica that disagreed with the server for entity: a bucket whose checksum
 	// failed, or a digest that did not match (D-85), as the replica's report says (item 18).

@@ -61,7 +61,10 @@ type Mutation struct {
 	Entity   sync.Entity
 	EntityID uuid.UUID
 	Op       Op
-	// BaseVersion is the row's version the client wrote against, nil on a create.
+	// BaseVersion is the row's version the client wrote against, nil on a create. For an entity whose
+	// policy compares it, it is the version an earlier mutation of the batch to the same row left it at
+	// when the client sent the two against the same version: the replica made the later having seen
+	// the earlier (D-122).
 	BaseVersion *int64
 	// Prior is the version of the row EntityID names as the push found it, locked FOR UPDATE until the
 	// mutation's transaction ends, for an update, a delete or an action of an entity whose policy
@@ -104,7 +107,8 @@ func (m Mutation) Admit(current any) error {
 }
 
 // Behind reports whether m was made against an older version of its row than the one it lands on:
-// another write reached the row since the client last saw it. An lww_field or lww_row write behind is
+// another write reached the row since the client last saw it, which is never the client's own earlier
+// mutation of its batch (BaseVersion). An lww_field or lww_row write behind is
 // answered merged, its row attached, since the row the server keeps differs from what the client
 // expected; and a writer of an lww_row entity preserves the row its write replaces, the loser, which
 // whole-row last-write-wins would otherwise drop (PRD 03 §2.5, D-122).

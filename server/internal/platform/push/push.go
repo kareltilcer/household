@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -71,8 +70,8 @@ type Config struct {
 	// entity whose module implements no Writer is refused.
 	Registry *module.Registry
 	Logger   *slog.Logger
-	// Notify tells a household's owners it nears its day's fair use of mutations (DailyMutations);
-	// nil tells no one.
+	// Notify tells a household's owners it nears its day's fair use of mutations
+	// (fairuse.SyncMutations); nil tells no one.
 	Notify *notify.Service
 	// Metrics is told of each batch and each answer; sync.LogMetrics on Logger when nil.
 	Metrics sync.Metrics
@@ -122,8 +121,13 @@ func (s *Service) Routes(r chi.Router) {
 // and answers every one (FR-SY6): a mutation that fails does not stop the ones after it, and one
 // that writes a row an earlier mutation of the batch failed to, or names one in a field, is
 // deferred. The answer is 200 whenever the batch was processed at all; each mutation's outcome is in
-// the body. A household whose replicas pushed DailyMutations mutations already this UTC day is
-// answered 429 until the day ends, the batch untouched (fair use, D-127).
+// the body. A household whose replicas pushed fairuse.SyncMutations mutations already this UTC day
+// is answered 429 until the day ends, the batch untouched (fair use, D-127).
+//
+// A replica makes each mutation against the version of the row it holds, which moves only when a
+// checkpoint reaches it, so a later mutation of the batch to a row an earlier one wrote carries the
+// same base version as the earlier, having seen what it wrote: it is held to the version the earlier
+// left the row at (landing.rebase, D-122).
 //
 // The answers kept for the batch's mutations are read at once, before the first is applied. A
 // mutation id the batch repeats is looked up again when it recurs, since its first delivery has kept
@@ -179,6 +183,7 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.now()
 	failed := map[uuid.UUID]bool{}
+	landed := map[uuid.UUID]landing{}
 	seen := make(map[uuid.UUID]bool, len(ids))
 	out := BatchResult{Results: make([]Result, 0, len(batch.Mutations))}
 	for _, m := range batch.Mutations {
@@ -191,19 +196,32 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 			answers[m.MutationID] = again[m.MutationID]
 		}
 		seen[m.MutationID] = true
-		res, err := s.apply(ctx, m, now, failed, answers[m.MutationID])
+		var earlier *landing
+		if l, ok := landed[m.EntityID]; ok {
+			earlier = &l
+		}
+		res, err := s.apply(ctx, m, now, failed, answers[m.MutationID], earlier)
 		if err != nil {
 			fail(err, slog.String("mutation_id", m.MutationID.String()))
 			return
 		}
-		if res.Outcome != Applied && res.Outcome != Merged {
+		switch {
+		case res.Outcome != Applied && res.Outcome != Merged:
 			failed[m.EntityID] = true
+		case res.Version != nil:
+			landed[m.EntityID] = landing{base: m.BaseVersion, version: *res.Version}
 		}
 		code := ""
 		if res.Code != nil {
 			code = *res.Code
 		}
-		s.metrics.Answered(ctx, m.EntityType, res.Outcome, code)
+		// The entity as the registry names it, never a type the client made up, which the log would
+		// carry as it was sent.
+		entity := ""
+		if e, ok := s.registry.Entity(m.EntityType); ok {
+			entity = e.Name
+		}
+		s.metrics.Answered(ctx, entity, res.Outcome, code)
 		out.Results = append(out.Results, res)
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
@@ -223,8 +241,10 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 // update, a delete or an action names locked, for the version its policy compares the mutation's base
 // version with (Mutation.Prior): a strict_version write over another version is a conflict, which its
 // writer answers (Mutation.Admit), and an lww_field or lww_row write behind the row is answered merged
-// (Mutation.Behind). Every answer but deferred is kept.
-func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uuid.UUID]bool, found *kept) (Result, error) {
+// (Mutation.Behind). Its base version is first held to where earlier, an earlier mutation of its batch
+// to the same row, left the row, when that one was made against the same version (landing.rebase).
+// Every answer but deferred is kept.
+func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uuid.UUID]bool, found *kept, earlier *landing) (Result, error) {
 	res := Result{MutationID: in.MutationID}
 	fp, err := fingerprint(in)
 	if err != nil {
@@ -279,6 +299,9 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 	}
 	if in.Action != nil {
 		m.Action = *in.Action
+	}
+	if compares(e.Policy) && m.Op != Create {
+		m.BaseVersion = earlier.rebase(m.BaseVersion)
 	}
 	m.ClientTime, m.ClockFlagged = clamp(in.ClientTime, now)
 
@@ -345,17 +368,11 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 // version, and no other write reaches it before this one commits. The version alone is read, which
 // says nothing of the row's content to a caller its module would not show it.
 func lockRow(ctx context.Context, tx pgx.Tx, m Mutation) (int64, error) {
-	switch m.Entity.Policy {
-	case sync.LWWField, sync.LWWRow, sync.StrictVersion:
-	case sync.Additive, sync.StateSet:
-		return 0, nil
-	}
-	if m.Op == Create {
+	if !compares(m.Entity.Policy) || m.Op == Create {
 		return 0, nil
 	}
 	var version int64
-	err := tx.QueryRow(ctx, "SELECT version FROM "+pgx.Identifier(strings.Split(m.Entity.Table, ".")).Sanitize()+" WHERE id = $1 FOR UPDATE",
-		m.EntityID).Scan(&version)
+	err := tx.QueryRow(ctx, "SELECT version FROM "+m.Entity.Identifier()+" WHERE id = $1 FOR UPDATE", m.EntityID).Scan(&version)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return 0, nil
@@ -363,6 +380,42 @@ func lockRow(ctx context.Context, tx pgx.Tx, m Mutation) (int64, error) {
 		return 0, fmt.Errorf("push: lock %s %s: %w", m.Entity.Name, m.EntityID, err)
 	}
 	return version, nil
+}
+
+// compares reports whether policy holds a write to the base version it was made against: lww_field
+// and lww_row, which merge a write behind its row, and strict_version, which refuses one.
+func compares(policy sync.Policy) bool {
+	switch policy {
+	case sync.LWWField, sync.LWWRow, sync.StrictVersion:
+		return true
+	case sync.Additive, sync.StateSet:
+	}
+	return false
+}
+
+// landing is where a mutation of a batch left its row: the base version it was made against, as its
+// replica sent it, nil for none, and the version it left the row at, written or found in place.
+type landing struct {
+	base    *int64
+	version int64
+}
+
+// rebase returns base, the version a later mutation of l's batch to l's row was made against, or the
+// version l left the row at when base is the version l was made against too. The replica made both
+// against the version it held, which moves only when a checkpoint reaches it, and the later after the
+// earlier: it has seen what the earlier wrote, which it is neither merged over nor in conflict with
+// (D-122). So a row created and then edited, both before the replica heard back, takes its edit
+// against the create's version, which the edit could not name. A mutation the replica made against
+// another version keeps its own, and l nil changes nothing.
+func (l *landing) rebase(base *int64) *int64 {
+	switch {
+	case l == nil,
+		(l.base == nil) != (base == nil),
+		l.base != nil && *l.base != *base:
+		return base
+	}
+	version := l.version
+	return &version
 }
 
 // errAnswered rolls back a mutation whose answer another delivery of it kept first, while this one

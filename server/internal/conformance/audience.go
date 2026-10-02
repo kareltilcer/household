@@ -20,7 +20,8 @@ import (
 // it is at or above, which its stream holds a member to (ADR 0001). A message's readers are written
 // when it is made, and a member's leaving takes them out of every message's, which is no edit of the
 // messages (sync.RewriteAccess). Removing a member from the household takes them out of every
-// audience's readers as well (app.Retract).
+// audience's readers as well (app.Retract), and out of the readers of every message written after it,
+// which are held to the household's members.
 
 // ConversationRow is a conversation as the push answers it.
 type ConversationRow struct {
@@ -129,7 +130,9 @@ func scanMember(row pgx.Row) (MemberRow, error) {
 // household to a live conversation from its next message on, their floor: they read nothing written
 // before it (FR-CT2, D-90). A delete, made against the version the membership is at, takes them out
 // of the conversation and out of the readers of every one of its messages, which retracts the messages
-// from their replicas and is no edit of them.
+// from their replicas and is no edit of them. A member who left may be added again, by a membership of
+// its own, from the conversation's next message on: one member is in a conversation once at a time
+// (98004).
 func writeMember(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, error) {
 	var f struct {
 		ConversationID *uuid.UUID `json:"conversation_id"`
@@ -182,6 +185,12 @@ func writeMember(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written,
 			return push.Written{}, gone("member")
 		}
 		if err := m.Admit(current); err != nil {
+			return push.Written{}, err
+		}
+		// The conversation is locked as a message's write locks it: a message written meanwhile either
+		// commits first, and its readers are rewritten below, or draws its readers once this has
+		// committed, without the member. A deleted conversation writes no message to race with.
+		if _, err := lockConversation(ctx, tx, current.ConversationID); err != nil {
 			return push.Written{}, err
 		}
 		mr, err = scanMember(tx.QueryRow(ctx, "UPDATE conformance_conversation_members SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING "+
@@ -264,16 +273,34 @@ func writeMessage(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written
 	if !live || !member {
 		return push.Written{}, gone("conversation")
 	}
+	var place int64
+	if err := tx.QueryRow(ctx, "SELECT coalesce(max(seq), 0) + 1 FROM conformance_messages WHERE household_id = $1 AND conversation_id = $2",
+		scope.HouseholdID(), *f.ConversationID).Scan(&place); err != nil {
+		return push.Written{}, err
+	}
+	// Its readers are the conversation's members whose floor its place is at or above and who are still
+	// members of the household: a removal from the household leaves the conversation's members as they
+	// were, and takes the member out of the readers of what was written before it (app.Retract), so it
+	// must keep them from what is written after it too. Their memberships are locked until the write
+	// commits: a removal deletes the membership before it rewrites the readers, so it either waits for
+	// this message and then takes them out of its readers, or has deleted the membership first, which
+	// leaves them out of those this finds.
+	rows, err := tx.Query(ctx, `
+		SELECT c.user_id FROM conformance_conversation_members c
+		JOIN memberships hm ON hm.household_id = c.household_id AND hm.user_id = c.user_id
+		WHERE c.household_id = $1 AND c.conversation_id = $2 AND c.deleted_at IS NULL AND c.floor_seq <= $3
+		ORDER BY c.user_id
+		FOR KEY SHARE OF hm`, scope.HouseholdID(), *f.ConversationID, place)
+	if err != nil {
+		return push.Written{}, err
+	}
+	readers, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return push.Written{}, err
+	}
 	mr, err := scanMessage(tx.QueryRow(ctx, `
-		WITH place AS (
-		  SELECT coalesce(max(seq), 0) + 1 AS seq FROM conformance_messages WHERE household_id = $2 AND conversation_id = $3
-		)
-		INSERT INTO conformance_messages (id, household_id, conversation_id, seq, body, readers)
-		SELECT $1, $2, $3, place.seq, $4,
-		  coalesce((SELECT array_agg(c.user_id ORDER BY c.user_id) FROM conformance_conversation_members c
-		            WHERE c.household_id = $2 AND c.conversation_id = $3 AND c.deleted_at IS NULL AND c.floor_seq <= place.seq), '{}')
-		FROM place
-		RETURNING `+messageColumns, m.EntityID, scope.HouseholdID(), *f.ConversationID, *f.Body))
+		INSERT INTO conformance_messages (id, household_id, conversation_id, seq, body, readers) VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING `+messageColumns, m.EntityID, scope.HouseholdID(), *f.ConversationID, place, *f.Body, readers))
 	if err != nil {
 		return push.Written{}, err
 	}

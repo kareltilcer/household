@@ -2083,7 +2083,11 @@ paths:
         an `lww_row` write keeps the row it replaced, the loser, for the member to be offered; a
         `strict_version` update, delete or action names its `base_version`, and one made against
         another version than the row's is answered `conflict` (`version_conflict`) with the row as it
-        stands, so that the member's change can be re-presented beside it. A mutation is `rejected` when its entity is not one that syncs
+        stands, so that the member's change can be re-presented beside it. A replica's own earlier
+        write is never a change it had not seen: a later mutation of the batch to a row an earlier one
+        wrote, made against the same `base_version`, is held to the version the earlier left, and an
+        edit of a row created earlier in the batch, which names none, to the create's. A mutation is
+        `rejected` when its entity is not one that syncs
         (`validation_failed`), when the caller cannot see the entity's module (`not_found`) or may
         not contribute to it (`forbidden`), when the entity is read-only offline (`forbidden`: its
         merge policy does not yet take offline writes, D-84), when its policy does not take its op

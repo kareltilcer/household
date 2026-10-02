@@ -97,9 +97,10 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   **requires** `id` in its body. A server-minted id online and a client id offline is the
   dual identity D-23 exists to prevent.
 - **Instants** are `timestamptz`, RFC 3339 with an explicit offset on the wire. **Calendar
-  days** are `date` (`YYYY-MM-DD`) in the household's timezone, which is never assumed. The one
-  exception is the usage sample's day, a metering bucket every household shares, which is UTC's
-  ([D-109](docs/prd/09-decisions.md)).
+  days** are `date` (`YYYY-MM-DD`) in the household's timezone, which is never assumed. The
+  exception is a metering bucket every household shares, which is UTC's: the usage sample's day
+  ([D-109](docs/prd/09-decisions.md)) and the day the push counts a household's mutations in
+  (`sync_usage`, [D-127](docs/prd/09-decisions.md)).
 - **English is the source language** of every identifier, enum value, log message and
   comment. No user-visible string is a literal: it is a translation key, present in all five
   catalogs (`en`, `cs`, `sk`, `de`, `pl`) in `packages/i18n/catalogs/`, and architecture test 7
@@ -151,7 +152,9 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   `tenant.InWriteTx`, which test 4 also keeps out of modules: the Idempotency-Key middleware's
   keys, and the push's answer to each mutation (`sync_mutations`), kept in the effect's own
   transaction when the mutation took one and in a transaction of its own when it took none
-  ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
+  ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)),
+  and its count of the mutations a household pushed in a day (`sync_usage`,
+  [ADR 0018](docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)).
   The household surface (`internal/platform/household`) is `admin`, a module the platform
   serves itself: it writes through `mutation.Apply` with the actions and entities
   `module.PlatformModule` declares, and holds a household its caller is not yet in, creating

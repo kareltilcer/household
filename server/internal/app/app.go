@@ -364,9 +364,8 @@ func Serve(ctx context.Context, log *slog.Logger, srv *http.Server, ln net.Liste
 // NewServer returns the http.Server for handler. Reading a request's headers is bounded,
 // against slow-loris clients. Reading a body and writing a response are not bounded here:
 // an upload over a slow connection (item 14) legitimately takes minutes, which a server-wide
-// timeout would cut off. A body is bounded per request
-// instead, by httpx.BodyDeadline (Deps.BodyTimeout), which such a handler extends through
-// http.ResponseController.
+// timeout would cut off. A body is bounded per request instead, by httpx.BodyDeadline
+// (Deps.BodyTimeout), which such a handler extends through http.ResponseController.
 func NewServer(handler http.Handler, log *slog.Logger) *http.Server {
 	return &http.Server{
 		Handler:           handler,

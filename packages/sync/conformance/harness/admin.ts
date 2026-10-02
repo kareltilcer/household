@@ -304,13 +304,17 @@ export class Admin {
     return { events: Number(events.rows[0]?.n ?? 0) }
   }
 
-  /** The id and the version of member's membership of conversation, which a removal is made against. */
+  /**
+   * The id and the version of member's membership of conversation, which a removal is made against:
+   * the one not deleted, since a member who left may join again by another.
+   */
   async conversationMember(
     conversation: string,
     member: Member,
   ): Promise<{ id: string; version: number }> {
     const result = await this.pool.query<{ id: string; version: string }>(
-      'SELECT id, version FROM conformance_conversation_members WHERE conversation_id = $1 AND user_id = $2',
+      `SELECT id, version FROM conformance_conversation_members
+       WHERE conversation_id = $1 AND user_id = $2 AND deleted_at IS NULL`,
       [conversation, member.id],
     )
     const row = result.rows[0]

@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Policy is how concurrent writes to an entity merge (PRD 03 §2.5, D-24). Every entity declares
@@ -168,6 +170,11 @@ type Entity struct {
 func (e Entity) Module() string {
 	m, _, _ := strings.Cut(e.Name, ".")
 	return m
+}
+
+// Identifier returns the entity's table quoted for SQL, its schema quoted apart when it names one.
+func (e Entity) Identifier() string {
+	return pgx.Identifier(strings.Split(e.Table, ".")).Sanitize()
 }
 
 var (

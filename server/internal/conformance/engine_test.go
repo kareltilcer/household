@@ -16,10 +16,13 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/app/apptest"
 	"github.com/kareltilcer/household/server/internal/conformance"
 	"github.com/kareltilcer/household/server/internal/platform/fairuse"
+	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
+	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/push"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
@@ -81,21 +84,27 @@ func rowOf(t *testing.T, r push.Result) map[string]any {
 // An lww_field write made against an older version than the row's is applied over the change it had
 // not seen and answered merged, concurrent_change, with the row (D-122): what the server keeps is not
 // what its client expected. The value it replaced stays in the activity log. A write against the
-// row's own version, or a create, is applied.
+// row's own version, or a create, is applied, and so is a later write of the batch made against the
+// version an earlier one was: the replica made it having seen what the earlier wrote.
 func TestPushAnswersAWriteBehindItsRowMerged(t *testing.T) {
 	w := newWorld(t, apptest.Options{})
 	household, member := w.household("contribute")
 	token := w.signIn(member, 0)
 	milk := idgen.New()
 	w.exec("INSERT INTO conformance_items (id, household_id, title) VALUES ($1, $2, 'Milk')", milk, household)
+	w.want(w.results(w.push(household, w.signIn(w.owner(household), 0), key(),
+		based(mutationOf(conformance.Item, "update", milk, map[string]any{"title": "Oat milk"}), 1))), push.Applied)
 	got := w.results(w.push(household, token, key(),
-		based(mutationOf(conformance.Item, "update", milk, map[string]any{"title": "Oat milk"}), 1),
 		based(mutationOf(conformance.Item, "update", milk, map[string]any{"title": "Soy milk"}), 1),
-		based(mutationOf(conformance.Item, "update", milk, map[string]any{"note": "two litres"}), 3),
+		based(mutationOf(conformance.Item, "update", milk, map[string]any{"note": "two litres"}), 1),
+		based(mutationOf(conformance.Item, "update", milk, map[string]any{"note": "one litre"}), 4),
 	))
-	w.want(got, push.Applied, push.Merged+" "+push.ConcurrentChange, push.Applied)
-	if row := rowOf(t, got.Results[1]); row["title"] != "Soy milk" || *got.Results[1].Version != 3 {
-		t.Errorf("the merged write's row: %v at %d", row, *got.Results[1].Version)
+	w.want(got, push.Merged+" "+push.ConcurrentChange, push.Applied, push.Applied)
+	if row := rowOf(t, got.Results[0]); row["title"] != "Soy milk" || *got.Results[0].Version != 3 {
+		t.Errorf("the merged write's row: %v at %d", row, *got.Results[0].Version)
+	}
+	if v := *got.Results[2].Version; v != 5 {
+		t.Errorf("the last write landed at version %d, want 5", v)
 	}
 	if n := w.count(`SELECT count(*) FROM audit_changes c JOIN audit_events e ON e.household_id = c.household_id AND e.id = c.event_id
 		WHERE e.entity_id = $1 AND c.field = 'title' AND c.old_value = '"Oat milk"' AND c.new_value = '"Soy milk"'`, milk); n != 1 {
@@ -140,19 +149,57 @@ func TestPushHoldsAStrictVersionWriteToItsBaseVersion(t *testing.T) {
 	}
 }
 
+// A replica that writes a row twice before it hears back makes both writes against the version it
+// holds: the later is held to the version the earlier of its batch left, having seen it, and is no
+// conflict with it (D-122). An edit of a row created in the same batch, which could name no version,
+// is held to the create's. Another replica's write between is still a conflict.
+func TestPushHoldsALaterWriteOfABatchToWhatTheEarlierLeft(t *testing.T) {
+	w := newWorld(t, apptest.Options{})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	groceries := idgen.New()
+	amount := func(minor int) map[string]any { return map[string]any{"amount_minor": minor} }
+	w.want(w.results(w.push(household, token, key(),
+		mutationOf(conformance.Budget, "create", groceries, map[string]any{"name": "Groceries", "amount_minor": 450_000, "currency": "CZK"}),
+		mutationOf(conformance.Budget, "update", groceries, amount(500_000)),
+		mutationOf(conformance.Budget, "update", groceries, amount(550_000)),
+	)), push.Applied, push.Applied, push.Applied)
+	w.want(w.results(w.push(household, token, key(),
+		based(mutationOf(conformance.Budget, "update", groceries, amount(600_000)), 3),
+		based(mutationOf(conformance.Budget, "update", groceries, amount(650_000)), 3),
+	)), push.Applied, push.Applied)
+	if n := w.count("SELECT count(*) FROM conformance_budgets WHERE id = $1 AND amount_minor = 650000 AND version = 5", groceries); n != 1 {
+		t.Error("the budget is not the batch's last write at version 5")
+	}
+	w.want(w.results(w.push(household, w.signIn(w.owner(household), 0), key(),
+		based(mutationOf(conformance.Budget, "update", groceries, amount(700_000)), 5))), push.Applied)
+	w.want(w.results(w.push(household, token, key(),
+		based(mutationOf(conformance.Budget, "update", groceries, amount(1)), 5),
+		based(mutationOf(conformance.Budget, "update", groceries, amount(2)), 5),
+	)), "conflict version_conflict", "deferred "+push.DependencyFailed)
+}
+
 // An lww_row write made against an older version than the note's replaces it whole, answered merged,
 // and keeps the note it replaced, the loser, with the version it stood at, the version the write was
-// made against, and who wrote each (PRD 03 §2.5).
+// made against, and who wrote each (PRD 03 §2.5). A replica's own earlier write is no loser: a later
+// write of its batch made against the same version replaces it, applied, and keeps nothing.
 func TestANoteWriteBehindKeepsItsLoser(t *testing.T) {
 	w := newWorld(t, apptest.Options{})
 	household, member := w.household("contribute")
 	token := w.signIn(member, 0)
+	owner := w.owner(household)
 	plan := idgen.New()
 	w.want(w.results(w.push(household, token, key(),
 		mutationOf(conformance.Note, "create", plan, map[string]any{"title": "Plan", "body": "A"}),
 		based(mutationOf(conformance.Note, "update", plan, map[string]any{"body": "B"}), 1),
+	)), push.Applied, push.Applied)
+	w.want(w.results(w.push(household, w.signIn(owner, 0), key(),
 		based(mutationOf(conformance.Note, "update", plan, map[string]any{"body": "C"}), 1),
-	)), push.Applied, push.Applied, push.Merged+" "+push.ConcurrentChange)
+		based(mutationOf(conformance.Note, "update", plan, map[string]any{"body": "D"}), 1),
+	)), push.Merged+" "+push.ConcurrentChange, push.Applied)
+	if n := w.count("SELECT count(*) FROM conformance_note_versions WHERE note_id = $1", plan); n != 1 {
+		t.Fatalf("%d losers kept, want the one another member's write replaced", n)
+	}
 	var (
 		version, base int64
 		body          string
@@ -164,10 +211,10 @@ func TestANoteWriteBehindKeepsItsLoser(t *testing.T) {
 		Scan(&version, &base, &body, &writtenBy, &supersededBy); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 || base != 1 || body != "B" || writtenBy != member || supersededBy != member {
+	if version != 2 || base != 1 || body != "B" || writtenBy != member || supersededBy != owner {
 		t.Errorf("the loser: version %d against %d, %q, written by %s, replaced by %s", version, base, body, writtenBy, supersededBy)
 	}
-	if n := w.count("SELECT count(*) FROM conformance_notes WHERE id = $1 AND body = 'C' AND version = 3", plan); n != 1 {
+	if n := w.count("SELECT count(*) FROM conformance_notes WHERE id = $1 AND body = 'D' AND version = 4", plan); n != 1 {
 		t.Error("the note is not the last write's")
 	}
 }
@@ -368,11 +415,26 @@ func TestAConversationsMessagesReachTheirReadersFromTheirFloor(t *testing.T) {
 	}
 	w.want(w.results(w.push(household, tokens[ben], key(), post("And milk"))), "rejected not_found")
 	w.want(w.results(w.push(household, w.signIn(w.owner(household), 0), key(), post("Hello"))), "rejected not_found")
+
+	// Ben may be added again, by a membership of his own, and reads from the conversation's next message
+	// on: nothing written while he was out, nor before.
+	w.want(w.results(w.push(household, tokens[ana], key(), mutationOf(conformance.ConversationMember, "create", idgen.New(), map[string]any{
+		"conversation_id": talk.String(), "user_id": ben.String(),
+	}))), push.Applied)
+	fourth := post("Back again")
+	w.want(w.results(w.push(household, tokens[ben], key(), fourth)), push.Applied)
+	if got := readers(fourth); !slices.Equal(got, sorted(ana, ben, cyril)) {
+		t.Errorf("the message after Ben's return: readers %v", got)
+	}
+	if slices.Contains(readers(third), ben) {
+		t.Error("Ben, back, reads a message written while he was out")
+	}
 }
 
 // Removing a member from the household, through item 10's route, takes them out of the readers of
 // every row an audience bounds, in the removal's transaction (app.Retract): readers left behind would
-// reach them again were they ever brought back with the grant.
+// reach them again were they ever brought back with the grant. The conversation's members stay as they
+// were, and a message written after the removal does not name them either.
 func TestRemovalFromTheHouseholdTakesAMemberOutOfEveryAudience(t *testing.T) {
 	w := newWorld(t, apptest.Options{})
 	household, ana := w.household("contribute")
@@ -380,6 +442,10 @@ func TestRemovalFromTheHouseholdTakesAMemberOutOfEveryAudience(t *testing.T) {
 	w.exec(testsupport.InsertEnablement, household, "admin", true)
 	talk := idgen.New()
 	w.exec("INSERT INTO conformance_conversations (id, household_id, title) VALUES ($1, $2, 'Shopping')", talk, household)
+	for _, who := range []uuid.UUID{ana, ben} {
+		w.exec("INSERT INTO conformance_conversation_members (id, household_id, conversation_id, user_id, floor_seq) VALUES ($1, $2, $3, $4, 1)",
+			idgen.New(), household, talk, who)
+	}
 	for i, body := range []string{"Bread", "Milk"} {
 		w.exec("INSERT INTO conformance_messages (id, household_id, conversation_id, seq, body, readers) VALUES ($1, $2, $3, $4, $5, ARRAY[$6::uuid, $7::uuid])",
 			idgen.New(), household, talk, i+1, body, ana, ben)
@@ -389,11 +455,62 @@ func TestRemovalFromTheHouseholdTakesAMemberOutOfEveryAudience(t *testing.T) {
 	if rec := w.serve(req); rec.Code != http.StatusNoContent {
 		t.Fatalf("removing Ben: %d %s", rec.Code, rec.Body)
 	}
+	w.want(w.results(w.push(household, w.signIn(ana, 0), key(),
+		mutationOf(conformance.Message, "create", idgen.New(), map[string]any{"conversation_id": talk.String(), "body": "Eggs"}))), push.Applied)
 	if n := w.count("SELECT count(*) FROM conformance_messages WHERE conversation_id = $1 AND $2 = ANY (readers)", talk, ben); n != 0 {
 		t.Errorf("Ben, removed from the household, still reads %d messages", n)
 	}
-	if n := w.count("SELECT count(*) FROM conformance_messages WHERE conversation_id = $1 AND readers = ARRAY[$2::uuid] AND version = 1", talk, ana); n != 2 {
-		t.Errorf("%d messages Ana alone reads, unedited; want 2", n)
+	if n := w.count("SELECT count(*) FROM conformance_messages WHERE conversation_id = $1 AND readers = ARRAY[$2::uuid] AND version = 1", talk, ana); n != 3 {
+		t.Errorf("%d messages Ana alone reads, unedited; want 3", n)
+	}
+}
+
+// Only a member gone from the household leaves the readers (app.Retract): a grant lowered to none or a
+// module disabled changes what every stream looks up, and the member, still in the conversation, reads
+// it again when the access comes back.
+func TestRetractKeepsTheReadersOfAMemberWhoStays(t *testing.T) {
+	w := newWorld(t, apptest.Options{})
+	home, ana := w.household("contribute")
+	talk, said := idgen.New(), idgen.New()
+	w.exec("INSERT INTO conformance_conversations (id, household_id, title) VALUES ($1, $2, 'Shopping')", talk, home)
+	w.exec("INSERT INTO conformance_messages (id, household_id, conversation_id, seq, body, readers) VALUES ($1, $2, $3, 1, 'Hi', ARRAY[$4::uuid])",
+		said, home, talk, ana)
+	registry, err := module.NewRegistry(conformance.Module{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := registry.WithPlatform(household.Admin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	retract := app.Retract(catalog)
+	ctx := t.Context()
+	tx, err := w.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	reads := func() bool {
+		t.Helper()
+		var reads bool
+		if err := tx.QueryRow(ctx, "SELECT $2 = ANY (readers) FROM conformance_messages WHERE id = $1", said, ana).Scan(&reads); err != nil {
+			t.Fatal(err)
+		}
+		return reads
+	}
+	for _, cause := range []household.Cause{household.CauseGrant, household.CauseModule} {
+		if err := retract(ctx, tx, household.Loss{Household: home, Cause: cause, Members: map[uuid.UUID][]string{ana: {conformance.Name}}}); err != nil {
+			t.Fatal(err)
+		}
+		if !reads() {
+			t.Errorf("a loss of the module (%s) took Ana out of the readers", cause)
+		}
+	}
+	if err := retract(ctx, tx, household.Loss{Household: home, Cause: household.CauseRemoved, Members: map[uuid.UUID][]string{ana: nil}}); err != nil {
+		t.Fatal(err)
+	}
+	if reads() {
+		t.Error("Ana, gone from the household, still reads the message")
 	}
 }
 
