@@ -692,7 +692,7 @@ Phase 0 · after 13, 14, 16 · size XL · **gate G-B**
 - **Done when** — this is **G-B**:
   - All 18 scenarios and a fuzz run are green; CI runs a short fuzz run per PR and a long run nightly.
   - The PR asks for a second-engineer review of the generated streams, the push and the retraction path ([10 §8](prd/10-sync-risk.md)).
-- **PR:** —
+- **PR:** [#22](https://github.com/kareltilcer/household/pull/22)
 
 ### 18 · `@household/sync` client library · `planned`
 
