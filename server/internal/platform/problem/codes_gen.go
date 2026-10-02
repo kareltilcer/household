@@ -36,6 +36,7 @@ const (
 	CodeTokenAlreadyUsed         Code = "token_already_used"
 	CodeRedirectUriNotRegistered Code = "redirect_uri_not_registered"
 	CodeHouseholdLimitReached    Code = "household_limit_reached"
+	CodeFairUseCeiling           Code = "fair_use_ceiling"
 	CodeLastOwner                Code = "last_owner"
 	CodeBillingPayer             Code = "billing_payer"
 	CodeStorageCeilingReached    Code = "storage_ceiling_reached"
@@ -99,6 +100,7 @@ var Codes = []Code{
 	CodeTokenAlreadyUsed,
 	CodeRedirectUriNotRegistered,
 	CodeHouseholdLimitReached,
+	CodeFairUseCeiling,
 	CodeLastOwner,
 	CodeBillingPayer,
 	CodeStorageCeilingReached,

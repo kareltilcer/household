@@ -116,6 +116,8 @@ func (s *Service) HouseholdRoutes(r chi.Router) {
 	r.Get(h, s.getHousehold)
 	r.Patch(h, s.updateHousehold)
 	r.Post(h+"/join-code", s.regenerateJoinCode)
+	r.Post(h+"/restriction", s.restrict)
+	r.Delete(h+"/restriction", s.unrestrict)
 	r.Get(h+"/members", s.listMembers)
 	r.Get(h+"/members/{user_id}", s.getMember)
 	r.Patch(h+"/members/{user_id}", s.updateMember)

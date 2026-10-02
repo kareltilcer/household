@@ -15,6 +15,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/entitlement"
 	"github.com/kareltilcer/household/server/internal/platform/etag"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
@@ -65,7 +66,8 @@ func readSettings(ctx context.Context, tx pgx.Tx, household uuid.UUID) (settings
 
 // householdBody is the contract's Household. The household code, and the caller's role and levels,
 // are the caller's: the code is shown to owners alone (PRD modules/17 §1), and the household's sync
-// row carries none of the three.
+// row carries none of the three. Nor does it carry the entitlement, which every member reads here
+// and on the household list, and which a 402 names.
 type householdBody struct {
 	ID             uuid.UUID               `json:"id"`
 	Name           string                  `json:"name"`
@@ -80,6 +82,7 @@ type householdBody struct {
 	JoinCode       string                  `json:"join_code,omitempty"`
 	MyRole         access.Role             `json:"my_role,omitempty"`
 	MyGrants       map[string]access.Level `json:"my_grants,omitempty"`
+	Entitlement    *entitlement.Summary    `json:"entitlement,omitempty"`
 }
 
 // row is h as its sync row carries it, and as a member who is not the caller reads it.
@@ -91,9 +94,10 @@ func (h settings) row() householdBody {
 }
 
 // body is h as a caller whose role is role, and whose level on each of modules level gives, reads
-// it.
-func (h settings) body(role access.Role, level func(string) access.Level, modules []string) householdBody {
+// it, with its entitlement as e says it.
+func (h settings) body(role access.Role, level func(string) access.Level, modules []string, e entitlement.Summary) householdBody {
 	b := h.row()
+	b.Entitlement = &e
 	b.MyRole = role
 	if role == access.Owner {
 		b.JoinCode = h.joinCode
@@ -105,9 +109,10 @@ func (h settings) body(role access.Role, level func(string) access.Level, module
 	return b
 }
 
-// bodyFor is h as scope's caller reads it.
-func (h settings) bodyFor(scope *tenant.Scope, modules []string) householdBody {
-	return h.body(scope.Role(), scope.Level, modules)
+// bodyFor is h as scope's caller reads it at now, with the entitlement the request found: the state
+// is resolved once per request (PRD 04 §3).
+func (h settings) bodyFor(scope *tenant.Scope, modules []string, now time.Time) householdBody {
+	return h.body(scope.Role(), scope.Level, modules, scope.Entitlement().Summary(now))
 }
 
 // settingsChange is the sync change of h, as it stands after a mutation.
@@ -226,6 +231,7 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 	scoped := tenant.Assume(ctx, s.Pool, req.ID, user, access.Owner)
 	var (
 		created settings
+		status  entitlement.Status
 		modules = Modules
 	)
 	_, err := mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
@@ -241,6 +247,9 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		case !ok:
 			return mutation.Record{}, invalid("/country", problem.FieldInvalid)
+		}
+		if err := ownedCeiling(scoped, tx, user); err != nil {
+			return mutation.Record{}, err
 		}
 		units, firstDay := p.units, p.firstDayOfWeek
 		if req.Units != nil {
@@ -267,6 +276,11 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 		if err := s.Hooks.created(ctx, tx, created.id); err != nil {
 			return mutation.Record{}, err
 		}
+		// Its trial began with it (FR-HH1), by the row's own default, in the version the change above
+		// records.
+		if status, err = readStatus(ctx, tx, created.id); err != nil {
+			return mutation.Record{}, err
+		}
 		return mutation.Record{
 			Event: audit.Event{
 				Module: Name, Action: actionCreate, EntityType: entitySettings, EntityID: created.id,
@@ -282,7 +296,7 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 	// The creator is its owner, with Manage on every module, each of which it enables.
 	manage := func(string) access.Level { return access.Manage }
 	etag.Set(w, created.version)
-	httpx.WriteJSON(w, http.StatusCreated, created.body(access.Owner, manage, modules))
+	httpx.WriteJSON(w, http.StatusCreated, created.body(access.Owner, manage, modules, status.Summary(s.Now())))
 }
 
 // insertHousehold writes the household req names, with its creator as its payer, and returns it. An
@@ -312,14 +326,17 @@ func insertHousehold(ctx context.Context, tx pgx.Tx, req createRequest, payer uu
 
 // householdSummary is the contract's HouseholdSummary.
 type householdSummary struct {
-	ID          uuid.UUID   `json:"id"`
-	Name        string      `json:"name"`
-	AvatarURL   *string     `json:"avatar_url"`
-	MyRole      access.Role `json:"my_role"`
-	MemberCount int         `json:"member_count"`
+	ID          uuid.UUID            `json:"id"`
+	Name        string               `json:"name"`
+	AvatarURL   *string              `json:"avatar_url"`
+	MyRole      access.Role          `json:"my_role"`
+	MemberCount int                  `json:"member_count"`
+	Entitlement *entitlement.Summary `json:"entitlement"`
 }
 
-// listHouseholds lists the households the caller belongs to, in the order they were made (A-36).
+// listHouseholds lists the households the caller belongs to, in the order they were made (A-36), each
+// with its entitlement: a suspended one among them, whose every route answers 404, so that a client
+// shows its lockout rather than nothing (D-115).
 func (s *Service) listHouseholds(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -345,11 +362,21 @@ func (s *Service) listHouseholds(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	// Each household's members are read in its own context, where its memberships are.
+	// Each household's members and entitlement are read in its own context, where its memberships are.
+	now := s.Now()
 	for i := range items {
 		err := s.readTx(ctx, items[i].ID, user, func(tx pgx.Tx) error {
-			return tx.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE household_id = $1", items[i].ID).
-				Scan(&items[i].MemberCount)
+			if err := tx.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE household_id = $1", items[i].ID).
+				Scan(&items[i].MemberCount); err != nil {
+				return err
+			}
+			status, err := readStatus(ctx, tx, items[i].ID)
+			if err != nil {
+				return err
+			}
+			summary := status.Summary(now)
+			items[i].Entitlement = &summary
+			return nil
 		})
 		if err != nil {
 			s.fail(w, r, err)
@@ -375,7 +402,7 @@ func (s *Service) getHousehold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag.Set(w, h.version)
-	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, Modules))
+	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, Modules, s.Now()))
 }
 
 // updateHousehold changes the household's settings (FR-HA1), an owner's to change, under If-Match. A
@@ -413,7 +440,7 @@ func (s *Service) updateHousehold(w http.ResponseWriter, r *http.Request) {
 		}
 		h = old
 		if !precondition.Allows(old.version) {
-			return mutation.Record{}, problem.Conflict(old.bodyFor(scope, modules), old.version)
+			return mutation.Record{}, problem.Conflict(old.bodyFor(scope, modules, s.Now()), old.version)
 		}
 		if req.BaseCurrency != nil && *req.BaseCurrency != old.currency {
 			return mutation.Record{}, invalid("/base_currency", problem.FieldInvalid)
@@ -457,7 +484,7 @@ func (s *Service) updateHousehold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag.Set(w, h.version)
-	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, modules))
+	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, modules, s.Now()))
 }
 
 // set sets *field to *value when value is not nil.
@@ -519,7 +546,7 @@ func (s *Service) regenerateJoinCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag.Set(w, h.version)
-	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, modules))
+	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, modules, s.Now()))
 }
 
 // setJoinCode gives household a new code, drawn again under a savepoint while another household has

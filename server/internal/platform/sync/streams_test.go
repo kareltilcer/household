@@ -33,10 +33,10 @@ func TestStreamsHoldEachEntityToItsAccess(t *testing.T) {
 		names = append(names, s.Name+" "+s.Entity+" "+strings.Join(s.Reads, ","))
 	}
 	want := []string{
-		"shopping_item_owner shopping.item shopping_items,memberships,module_enablement",
-		"shopping_item_granted shopping.item shopping_items,module_grants,module_enablement",
+		"shopping_item_owner shopping.item shopping_items,memberships,module_enablement,households",
+		"shopping_item_granted shopping.item shopping_items,module_grants,module_enablement,households",
 		"admin_household_settings admin.household_settings households,memberships",
-		"admin_membership admin.membership memberships",
+		"admin_membership admin.membership memberships,households",
 	}
 	if !slices.Equal(names, want) {
 		t.Fatalf("streams\n  %s\nwant\n  %s", strings.Join(names, "\n  "), strings.Join(want, "\n  "))
@@ -56,14 +56,15 @@ func TestStreamsHoldEachEntityToItsAccess(t *testing.T) {
 	if !strings.HasPrefix(streams[2].Query, "SELECT id, name FROM households\nWHERE id = subscription.parameter('household_id')\n  AND id IN (") {
 		t.Errorf("the tenant root's:\n%s", streams[2].Query)
 	}
-	if got := sync.Tables(streams); !slices.Equal(got, []string{"shopping_items", "memberships", "module_enablement", "module_grants", "households"}) {
+	if got := sync.Tables(streams); !slices.Equal(got, []string{"shopping_items", "memberships", "module_enablement", "households", "module_grants"}) {
 		t.Errorf("tables %v", got)
 	}
 }
 
 // PowerSync caps one connection's parameter results at 1000 (PSYNC_S2305): a lookup of every
 // household that enables a module grows with the database until every connection is refused. So
-// every table a stream's subquery reads is looked up by the caller or by the subscribed household.
+// every table a stream's subquery reads is looked up by the caller or by the subscribed household,
+// the tenant root by its own id.
 func TestEveryLookupIsTheCallersOrTheHouseholds(t *testing.T) {
 	streams, err := sync.Streams(declared)
 	if err != nil {
@@ -77,10 +78,33 @@ func TestEveryLookupIsTheCallersOrTheHouseholds(t *testing.T) {
 		}
 		for _, m := range table.FindAllStringSubmatch(lookup, -1) {
 			alias := m[2]
+			key := ".household_id"
+			if m[1] == sync.TenantRoot {
+				key = ".id"
+			}
 			if !strings.Contains(lookup, alias+".user_id = auth.user_id()") &&
-				!strings.Contains(lookup, alias+".household_id = subscription.parameter('household_id')") {
+				!strings.Contains(lookup, alias+key+" = subscription.parameter('household_id')") {
 				t.Errorf("%s looks %s up by neither the caller nor the household:\n%s", s.Name, m[1], s.Query)
 			}
+		}
+	}
+}
+
+// A suspended household replicates nothing (D-115): every stream's lookup joins the subscribed
+// household and holds it to not being suspended, so that every bucket of it leaves the replicas.
+func TestEveryStreamHoldsASuspendedHouseholdToNothing(t *testing.T) {
+	streams, err := sync.Streams(declared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range streams {
+		_, lookup, _ := strings.Cut(s.Query, " IN (")
+		if !strings.Contains(lookup, "JOIN households h ON h.id = ") ||
+			!strings.Contains(lookup, "AND h.id = subscription.parameter('household_id') AND h.suspended_at IS NULL") {
+			t.Errorf("%s replicates a suspended household:\n%s", s.Name, s.Query)
+		}
+		if !slices.Contains(s.Reads, sync.TenantRoot) {
+			t.Errorf("%s reads households without naming it among its reads: %v", s.Name, s.Reads)
 		}
 	}
 }

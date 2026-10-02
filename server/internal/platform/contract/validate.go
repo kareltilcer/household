@@ -2,6 +2,7 @@ package contract
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -90,9 +91,19 @@ func (c *Contract) Middleware(router chi.Routes, limits Limits) func(http.Handle
 			if rctx != nil {
 				rctx.RoutePatterns = rctx.RoutePatterns[:len(rctx.RoutePatterns)-1]
 			}
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), operationKey{}, op)))
 		})
 	}
+}
+
+type operationKey struct{}
+
+// OperationOf returns the operation the edge validated ctx's request against, and false for a
+// request no route matches, or one the edge did not see: what a middleware behind the edge asks
+// when it decides by the operation, as the entitlement gate does by its operationId.
+func OperationOf(ctx context.Context) (*Operation, bool) {
+	op, ok := ctx.Value(operationKey{}).(*Operation)
+	return op, ok
 }
 
 func (c *Contract) validate(w http.ResponseWriter, r *http.Request, o *Operation, params map[string]string, limits Limits) *problem.Problem {

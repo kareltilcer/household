@@ -107,6 +107,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 		Contract:     c,
 		Health:       health.New(log, 2*time.Second, health.Database(pool), health.ObjectStore(pipeline.Store())),
 		Pool:         pool,
+		Meter:        meter,
 		Modules:      registry,
 		MaxBodyBytes: cfg.MaxBodyBytes,
 		BodyTimeout:  cfg.BodyTimeout,
@@ -298,15 +299,18 @@ const (
 )
 
 // newScheduler builds the scheduler of the platform's jobs (PRD 03 §5): nightly, the usage sample
-// (FR-ST2) and then the sweeps of the objects no row records, a household's and the accounts'
-// pictures (item 14), and the expiry sweep; hourly, the expiry of single-use tokens and of the
-// invitations that stopped working a month ago (D-110); and every fifteen minutes, Expo's receipts.
-// Each is a job of its own, so that one that fails is tried again alone, not with the others that ran.
-// catalog is the module registry with admin, which the invitations' deletions are checked against.
+// (FR-ST2), which warns the owners of a household nearing a fair-use ceiling (PRD 04 §5), and then the
+// sweeps of the objects no row records, a household's and the accounts' pictures (item 14), and the
+// expiry sweep; hourly, the expiry of single-use tokens and of the invitations that stopped working a
+// month ago (D-110), and the households' trial, dunning and grace transitions with the warnings before
+// a lapsed household's data is deleted (item 16); and every fifteen minutes, Expo's receipts. Each is
+// a job of its own, so that one that fails is tried again alone, not with the others that ran.
+// catalog is the module registry with admin, which the invitations' deletions and the transitions are
+// checked against.
 func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog *module.Registry, pipeline *files.Service,
 	avatars *avatar.Service, households *household.Service, notifier *notify.Service,
 ) (*scheduler.Scheduler, error) {
-	sampler := &storage.Sampler{Meter: meter, Pool: pool, Modules: registry, Log: log}
+	sampler := &storage.Sampler{Meter: meter, Pool: pool, Modules: registry, Log: log, Notify: notifier}
 	sweeper, err := expiry.New(expiry.Config{Pool: pool, Meter: meter, Log: log, Invitations: func(ctx context.Context) (int, error) {
 		return households.PurgeInvitations(ctx, meter, catalog)
 	}})
@@ -325,6 +329,10 @@ func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog
 		}},
 		scheduler.Job{Name: "expiry.sweep", Cadence: scheduler.Daily(nightlyExpiry), Run: sweeper.Sweep},
 		scheduler.Job{Name: "expiry.tokens", Cadence: scheduler.Every(time.Hour), Run: sweeper.Tokens},
+		scheduler.Job{Name: "entitlement.transitions", Cadence: scheduler.Every(time.Hour), Run: func(ctx context.Context) error {
+			_, err := households.Transition(ctx, meter, catalog)
+			return err
+		}},
 		scheduler.Job{Name: "notify.receipts", Cadence: scheduler.Every(15 * time.Minute), Run: notifier.CheckReceipts},
 	)
 }

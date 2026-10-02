@@ -85,7 +85,7 @@ func newWorldOf(t *testing.T, o apptest.Options, m module.Module) *world {
 	accounts, outbox := apptest.Accounts(t, pool, log, o)
 	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, o)
 	router, err := app.NewRouter(app.Deps{
-		Logger: log, Contract: c, Health: health.New(log, time.Second), Pool: pool, Modules: registry,
+		Logger: log, Contract: c, Health: health.New(log, time.Second), Pool: pool, Meter: d.Pool(t, db.RoleMeter), Modules: registry,
 		MaxBodyBytes: 1 << 20, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, notifier, o),
 		Notify:     notifier,

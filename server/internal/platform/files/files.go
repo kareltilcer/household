@@ -88,9 +88,6 @@ type Config struct {
 	MaxBytes int64
 	// Allowance is what a household may store, storage.Default when zero.
 	Allowance storage.Allowance
-	// State returns the household's entitlement state, which a 402 names. Nil until item 16 builds
-	// the states, and every household is trialing.
-	State func(ctx context.Context, household uuid.UUID) (string, error)
 	// Now is the clock, time.Now when nil.
 	Now func() time.Time
 	// Workers is how many jobs run at once in the instance, 2 when zero, and Poll how often they look
@@ -117,7 +114,6 @@ type Service struct {
 	timeout   time.Duration
 	maxBytes  int64
 	allowance storage.Allowance
-	state     func(context.Context, uuid.UUID) (string, error)
 	now       func() time.Time
 	workers   int
 	poll      time.Duration
@@ -143,7 +139,7 @@ func New(cfg Config) (*Service, error) {
 	}
 	s := &Service{
 		pool: cfg.Pool, meter: cfg.Meter, store: cfg.Store, convert: cfg.Convert, log: cfg.Log,
-		dir: cfg.Dir, timeout: cfg.Timeout, maxBytes: cfg.MaxBytes, allowance: cfg.Allowance, state: cfg.State,
+		dir: cfg.Dir, timeout: cfg.Timeout, maxBytes: cfg.MaxBytes, allowance: cfg.Allowance,
 		now: cfg.Now, workers: cfg.Workers, poll: cfg.Poll, lease: cfg.Lease, turn: cfg.Turn,
 		wake: make(chan struct{}, 1), busy: map[uuid.UUID]bool{},
 	}

@@ -531,12 +531,17 @@ func (s *Service) createChild(w http.ResponseWriter, r *http.Request) {
 	household, modules := scope.HouseholdID(), Modules
 	lock := req.LockDashboard == nil || *req.LockDashboard
 	var (
-		m     membership
-		payer *uuid.UUID
+		m       membership
+		payer   *uuid.UUID
+		noticed bool
 	)
 	_, err = mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		var err error
 		if payer, err = lockAsOwner(ctx, tx); err != nil {
+			return mutation.Record{}, err
+		}
+		members, err := memberCeiling(ctx, tx, household)
+		if err != nil {
 			return mutation.Record{}, err
 		}
 		tag, err := tx.Exec(ctx, `
@@ -561,6 +566,9 @@ func (s *Service) createChild(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return mutation.Record{}, err
 		}
+		if noticed, err = s.membersNotice(ctx, tx, household, members); err != nil {
+			return mutation.Record{}, err
+		}
 		rec := childRecord(household, payer, m, actionChildCreate)
 		rec.Event.Changes = joinDiffs(access.Child, grants, modules)
 		return rec, nil
@@ -568,6 +576,9 @@ func (s *Service) createChild(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if noticed {
+		s.Notify.Nudge(ctx, household)
 	}
 	etag.Set(w, m.version)
 	httpx.WriteJSON(w, http.StatusCreated, s.member(ctx, scope, payer, modules, m))

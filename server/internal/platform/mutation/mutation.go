@@ -61,7 +61,29 @@ type (
 	catalogKey struct{}
 	viaKey     struct{}
 	hookKey    struct{}
+	ceilingKey struct{}
 )
+
+// Ceiling refuses a mutation of module that creates creates rows in household, read in tx, when they
+// would take the module past the rows it may hold (fair use, PRD 04 §5), with the problem that
+// answers it, and returns nil otherwise.
+type Ceiling func(ctx context.Context, tx pgx.Tx, household uuid.UUID, module string, creates int64) error
+
+// WithCeiling returns ctx carrying c, which Apply asks of every mutation that creates rows.
+func WithCeiling(ctx context.Context, c Ceiling) context.Context {
+	return context.WithValue(ctx, ceilingKey{}, c)
+}
+
+// Ceilings is the middleware that carries c into every request it serves (WithCeiling): the front
+// doors members write through, REST and the push alike. The system's own writes, a job's, carry
+// none, and are held to no ceiling.
+func Ceilings(c Ceiling) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r.WithContext(WithCeiling(r.Context(), c)))
+		})
+	}
+}
 
 // WithCatalog returns ctx carrying reg, whose modules declare the audit actions and the sync
 // entities a mutation may record.
@@ -95,6 +117,9 @@ func WithVia(ctx context.Context, via audit.Via) context.Context {
 // action must be one its module declares, and each change must name an entity of that module,
 // consistent with the entity's declared access (sync.Change.Check); an event with a private
 // change is private to that change's owner.
+//
+// A mutation that creates rows, each an upsert of a row at its first version, is checked against the
+// ceiling ctx carries (WithCeiling), and refused with its problem, rolled back.
 //
 // A mutation that reports nothing, a request for a change already in place, is rolled back,
 // whatever it did, and Apply returns a zero Result: Apply commits only what it records. So a
@@ -134,6 +159,13 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 		if err := check(reg, rec); err != nil {
 			return err
 		}
+		if ceiling, ok := ctx.Value(ceilingKey{}).(Ceiling); ok {
+			if n := creates(rec); n > 0 {
+				if err := ceiling(ctx, tx, scope.HouseholdID(), rec.Event.Module, n); err != nil {
+					return err
+				}
+			}
+		}
 		// The key first, before the feed lock: a row lock taken under the feed lock could be one
 		// another mutation of the household holds while it waits for the feed lock, a member's
 		// removal taking their keys with their membership, and the two would deadlock.
@@ -169,6 +201,18 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 		return Result{}, err
 	}
 	return res, nil
+}
+
+// creates is how many rows rec creates: its upserts of a row at its first version, which
+// add_entity_columns gives every row as it is inserted, and every update moves past.
+func creates(rec Record) int64 {
+	var n int64
+	for _, c := range rec.Changes {
+		if c.Op == sync.Upsert && c.Version == 1 {
+			n++
+		}
+	}
+	return n
 }
 
 // check returns what makes rec unrecordable: an incomplete record, an event its module does

@@ -48,7 +48,8 @@ func TestMeterReadsOnlyWhatCountsCatchesEachViolation(t *testing.T) {
 // every table that has one: the tenant root's id, which lists the households, and what the sampler
 // sums and the files workers schedule by.
 var meterColumns = map[string][]string{
-	"public.households": {"id"},
+	// Item 16's: the clocks the hourly entitlement transitions find a household's next move by.
+	"public.households": {"id", "billing_state", "trial_ends_at", "dunning_ends_at", "grace_ends_at", "retained_until", "retention_warnings"},
 	"public.files":      {"household_id", "module", "variant", "byte_size", "owner_id"},
 	"public.file_jobs":  {"household_id", "run_at"},
 	// Item 15's: what the notification workers find due, and what the expiry sweep finds past its time.

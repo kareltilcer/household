@@ -12,7 +12,9 @@ streams:
       WHERE id = subscription.parameter('household_id')
         AND id IN (
           SELECT m.household_id FROM memberships m
+            JOIN households h ON h.id = m.household_id
           WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
+            AND h.id = subscription.parameter('household_id') AND h.suspended_at IS NULL
         )
 
   admin_invitation_owner:
@@ -22,9 +24,11 @@ streams:
         AND household_id IN (
           SELECT m.household_id FROM memberships m
             JOIN module_enablement e ON e.household_id = m.household_id
+            JOIN households h ON h.id = m.household_id
           WHERE m.user_id = auth.user_id() AND m.role = 'owner'
             AND e.household_id = subscription.parameter('household_id')
             AND e.module = 'admin' AND e.enabled
+            AND h.id = subscription.parameter('household_id') AND h.suspended_at IS NULL
         )
 
   admin_invitation_granted:
@@ -34,8 +38,10 @@ streams:
         AND household_id IN (
           SELECT g.household_id FROM module_grants g
             JOIN module_enablement e ON e.household_id = g.household_id AND e.module = g.module
+            JOIN households h ON h.id = g.household_id
           WHERE g.user_id = auth.user_id() AND g.module = 'admin' AND g.level <> 'none'
             AND e.household_id = subscription.parameter('household_id') AND e.enabled
+            AND h.id = subscription.parameter('household_id') AND h.suspended_at IS NULL
         )
 
   admin_membership:
@@ -44,7 +50,9 @@ streams:
       WHERE household_id = subscription.parameter('household_id')
         AND household_id IN (
           SELECT m.household_id FROM memberships m
+            JOIN households h ON h.id = m.household_id
           WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
+            AND h.id = subscription.parameter('household_id') AND h.suspended_at IS NULL
         )
 
   admin_module_enablement:
@@ -53,5 +61,7 @@ streams:
       WHERE household_id = subscription.parameter('household_id')
         AND household_id IN (
           SELECT m.household_id FROM memberships m
+            JOIN households h ON h.id = m.household_id
           WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
+            AND h.id = subscription.parameter('household_id') AND h.suspended_at IS NULL
         )

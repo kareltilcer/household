@@ -915,6 +915,7 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		m       membership
 		payer   *uuid.UUID
 		modules = Modules
+		noticed bool
 	)
 	_, err = mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
 		var err error
@@ -936,8 +937,15 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return mutation.Record{}, err
 		}
+		members, err := memberCeiling(ctx, tx, household)
+		if err != nil {
+			return mutation.Record{}, err
+		}
 		grants := joining(i, modules)
 		if m, err = insertMembership(ctx, tx, household, user, i.role, grants); err != nil {
+			return mutation.Record{}, err
+		}
+		if noticed, err = s.membersNotice(scoped, tx, household, members); err != nil {
 			return mutation.Record{}, err
 		}
 		status := i.status
@@ -966,6 +974,9 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if noticed {
+		s.Notify.Nudge(ctx, household)
 	}
 	httpx.WriteJSON(w, http.StatusOK, s.member(ctx, tenant.From(scoped), payer, modules, m))
 }

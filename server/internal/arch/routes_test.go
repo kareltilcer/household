@@ -48,7 +48,7 @@ func TestRoutesMatchTheContract(t *testing.T) {
 	}
 	router, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
-		Pool: pool, Modules: mods, MaxBodyBytes: 1, Accounts: accounts,
+		Pool: pool, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Modules: mods, MaxBodyBytes: 1, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, notifier, apptest.Options{}),
 		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
