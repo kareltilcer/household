@@ -10,7 +10,7 @@
     "./native": "./native/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit && tsc --noEmit --project web && tsc --noEmit --project native",
+    "typecheck": "tsc --noEmit && tsc --noEmit --project web && tsc --noEmit --project native && tsc --noEmit --project conformance/web",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run src conformance/harness",
     "conformance:up": "node conformance/stack/up.ts",
@@ -47,9 +47,11 @@
     "@powersync/web": "2.4.2",
     "@types/node": "catalog:",
     "@types/pg": "8.23.1",
+    "@vitest/browser-playwright": "5.0.2",
     "better-sqlite3": "13.0.3",
     "eslint": "catalog:",
     "pg": "8.23.0",
+    "playwright": "1.63.0",
     "react": "19.3.0",
     "react-native": "0.87.1",
     "typescript": "catalog:",

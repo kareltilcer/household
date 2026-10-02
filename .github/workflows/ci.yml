@@ -153,6 +153,15 @@ jobs:
         env:
           CONFORMANCE_API_ADDR: 0.0.0.0:8091
         run: pnpm --filter @household/sync conformance
+      # @household/sync's web build (wa-sqlite over IndexedDB) in a real browser, against the same
+      # stack: it replicates, pushes, survives a reload with a write queued and reports itself (plan
+      # item 18). Playwright's Chromium, at the version the package pins.
+      - name: Chromium for the web replica's smoke test
+        run: pnpm --filter @household/sync exec playwright install --with-deps chromium
+      - name: The web replica in a browser
+        env:
+          CONFORMANCE_API_ADDR: 0.0.0.0:8091
+        run: pnpm --filter @household/sync conformance:web
       - name: The stack's logs
         if: failure()
         run: docker compose --file packages/sync/conformance/stack/docker-compose.yml logs --tail 200
