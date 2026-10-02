@@ -146,7 +146,8 @@ func AccountTx(ctx context.Context, pool Beginner, user uuid.UUID, fn func(pgx.T
 // security admits outside any household alone, read in the transaction that writes, so that a lock
 // it holds covers the read too, as the households a user may own are counted where one is created
 // (fair use). Nothing else is admitted there: a tenant table reads nothing and refuses every write,
-// as in AccountTx. fn's error is returned before one putting the household back met.
+// as in AccountTx. fn's error is returned before one putting the household back met. It is the
+// platform's, as AccountTx and Assume are: architecture test 4 keeps it out of every module.
 func Outside(ctx context.Context, tx pgx.Tx, fn func() error) error {
 	s := From(ctx)
 	if s == nil {

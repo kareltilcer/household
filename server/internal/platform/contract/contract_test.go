@@ -793,6 +793,23 @@ func TestValidateResponse(t *testing.T) {
 		http.StatusUnauthorized, problemHeader, csrf); err == nil {
 		t.Error("a csrf_failed answered with another status passed")
 	}
+	// A fair-use ceiling's refusal is any unsafe operation's 403 too (PRD 04 §5, D-116), held to
+	// FairUseProblem, whether or not it declares one, as postShoppingListsByListIdItems does not;
+	// and no safe operation's.
+	listItems := "/households/{household_id}/shopping/lists/{list_id}/items"
+	itemParams := map[string]string{"household_id": household, "list_id": household}
+	postItem := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1"+lists+"/"+household+"/items", nil)
+	ceiling := []byte(`{"type":"urn:household:problem:fair_use_ceiling","title":"Forbidden","status":403,"code":"fair_use_ceiling","resource":"rows","ceiling":250000,"module":"shopping"}`)
+	if err := c.ValidateResponse(postItem, listItems, itemParams, http.StatusForbidden, problemHeader, ceiling); err != nil {
+		t.Errorf("a 403 fair_use_ceiling from an unsafe operation that declares no 403: %v", err)
+	}
+	if err := c.ValidateResponse(get, "/healthz", nil, http.StatusForbidden, problemHeader, ceiling); err == nil {
+		t.Error("a 403 fair_use_ceiling from a safe operation passed")
+	}
+	unread := []byte(`{"type":"urn:household:problem:fair_use_ceiling","title":"Forbidden","status":403,"code":"fair_use_ceiling","resource":"messages"}`)
+	if err := c.ValidateResponse(postItem, listItems, itemParams, http.StatusForbidden, problemHeader, unread); err == nil {
+		t.Error("a fair_use_ceiling naming no resource FairUseProblem knows passed")
+	}
 	if err := c.ValidateResponse(get, "", nil, http.StatusNotFound, problemHeader, []byte(`{"type":"x","title":"Not Found","status":404}`)); err == nil {
 		t.Error("a problem without a code passed")
 	}

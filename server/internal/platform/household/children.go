@@ -719,8 +719,8 @@ func (s *Service) putChildAvatar(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if status := scope.Entitlement(); !status.State().Uploads() {
-		s.fail(w, r, status.Refusal(scope.Role()))
+	if err := scope.Entitlement().Uploadable(scope.Role()); err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	user, err := pathUUID(r, "user_id")

@@ -125,6 +125,43 @@ func TestARefusalNamesTheStateAndTheRemedy(t *testing.T) {
 	}
 }
 
+// A write, and an upload, into a household in each state: a suspended one is not found for a write,
+// a state that does not write or upload refuses it 402, and the rest let it on (D-115, D-120, PRD 04
+// §3). The gate asks Writable of an unsafe request, and the files pipeline Uploadable of an upload.
+func TestWhatAWriteAndAnUploadAreAnswered(t *testing.T) {
+	restricted := status(entitlement.Active)
+	restricted.Restriction = restrct
+	suspended := status(entitlement.Active)
+	suspended.SuspendedAt = at(t0)
+	for name, tc := range map[string]struct {
+		status        entitlement.Status
+		write, upload int
+	}{
+		"trialing":   {status(entitlement.Trialing), 0, 0},
+		"active":     {status(entitlement.Active), 0, 0},
+		"past_due":   {status(entitlement.PastDue), 0, 0},
+		"grace":      {status(entitlement.Grace), 0, http.StatusPaymentRequired},
+		"read_only":  {status(entitlement.ReadOnly), http.StatusPaymentRequired, http.StatusPaymentRequired},
+		"canceled":   {status(entitlement.Canceled), http.StatusPaymentRequired, http.StatusPaymentRequired},
+		"restricted": {restricted, http.StatusPaymentRequired, http.StatusPaymentRequired},
+		"suspended":  {suspended, http.StatusNotFound, http.StatusPaymentRequired},
+	} {
+		for what, got := range map[string]error{"write": tc.status.Writable(access.Member), "upload": tc.status.Uploadable(access.Member)} {
+			want := tc.write
+			if what == "upload" {
+				want = tc.upload
+			}
+			var p *problem.Problem
+			switch {
+			case want == 0 && got != nil:
+				t.Errorf("%s: a %s refused %v", name, what, got)
+			case want != 0 && (!errors.As(got, &p) || p.Status != want):
+				t.Errorf("%s: a %s answered %v, want %d", name, what, got, want)
+			}
+		}
+	}
+}
+
 // The trial ends into grace, dunning ends into grace, and grace into read_only, each timed from the
 // deadline before it, so that a household the hourly job reaches late lapses when it would have; a
 // restriction and a suspension leave the clocks running.

@@ -8,7 +8,9 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -328,8 +330,8 @@ func (s *site) suspension(h uuid.UUID, suspended bool) {
 
 // Accepting an invitation and declining one are held to the household's entitlement (D-120): a
 // household that does not write is joined and declined by nobody, 402 naming its state, the invitee
-// told to ask an owner, and a suspended one is not found. The invitation is left as it was, and works
-// once the household writes again.
+// told to ask an owner, and a suspended one is not found, its invitation neither previewed nor listed.
+// The invitation is left as it was, and works once the household writes again.
 func TestAnInvitationIsHeldToTheHouseholdsState(t *testing.T) {
 	s, _ := newHouseholdSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
@@ -347,7 +349,26 @@ func TestAnInvitationIsHeldToTheHouseholdsState(t *testing.T) {
 			t.Fatalf("%s's refusal: %+v", path, r)
 		}
 	}
+	// Nor is it shown, previewed or listed, while its household is suspended (D-115).
+	listed := func() int {
+		t.Helper()
+		rec := eva.get("/me/invitations")
+		expect(t, rec, http.StatusOK, "")
+		var list struct {
+			Items []preview `json:"items"`
+		}
+		decode(t, rec, &list)
+		return len(list.Items)
+	}
+	expect(t, eva.get("/me/invitations/"+token), http.StatusOK, "")
+	if n := listed(); n != 1 {
+		t.Fatalf("listed %d invitations", n)
+	}
 	s.suspension(h.ID, true)
+	expect(t, eva.get("/me/invitations/"+token), http.StatusNotFound, problem.CodeNotFound)
+	if n := listed(); n != 0 {
+		t.Fatalf("a suspended household's invitation is listed (%d)", n)
+	}
 	expect(t, eva.post(accept, ""), http.StatusNotFound, problem.CodeNotFound)
 	expect(t, eva.post(decline, ""), http.StatusNotFound, problem.CodeNotFound)
 	if n := s.count("SELECT count(*) FROM memberships WHERE household_id = $1", h.ID); n != 1 {
@@ -358,6 +379,7 @@ func TestAnInvitationIsHeldToTheHouseholdsState(t *testing.T) {
 	}
 
 	s.suspension(h.ID, false)
+	expect(t, eva.get("/me/invitations/"+token), http.StatusOK, "")
 	expect(t, jana.delete(householdPath(h.ID, "/restriction")), http.StatusOK, "")
 	expect(t, eva.post(accept, ""), http.StatusOK, "")
 }
@@ -637,6 +659,36 @@ func TestAUserOwnsFiveHouseholdsAtMost(t *testing.T) {
 	expect(t, rec, http.StatusForbidden, problem.CodeHouseholdLimitReached)
 	if n := len(listHouseholds(t, jana)); n != fairuse.Households+1 {
 		t.Fatalf("Jana is in %d households", n)
+	}
+}
+
+// The households one user creates at once count each other (D-116): their creations are serialised on
+// a lock of the user's (db.OwnerLock), so that of two sent together by a user who owns four, one is
+// made and the other refused 403 household_limit_reached, never both made.
+func TestHouseholdsCreatedAtOnceCountEachOther(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	for i := range fairuse.Households - 1 {
+		jana.create(fmt.Sprintf("Tilcerovi %d", i))
+	}
+	codes := make([]int, 2)
+	var wg sync.WaitGroup
+	for i := range codes {
+		// The same signed-in browser, twice: each request with a copy of its cookies.
+		b := &browser{s: s, cookies: maps.Clone(jana.cookies), peer: jana.peer}
+		body := jsonBody(t, map[string]any{
+			"id": idgen.New(), "name": fmt.Sprintf("At once %d", i), "country": "CZ", "timezone": "Europe/Prague",
+			"base_currency": "CZK", "locale": "cs",
+		})
+		wg.Go(func() { codes[i] = b.post("/households", body).Code })
+	}
+	wg.Wait()
+	slices.Sort(codes)
+	if !slices.Equal(codes, []int{http.StatusCreated, http.StatusForbidden}) {
+		t.Fatalf("two creations at once answered %v", codes)
+	}
+	if n := len(listHouseholds(t, jana)); n != fairuse.Households {
+		t.Fatalf("Jana owns %d households", n)
 	}
 }
 

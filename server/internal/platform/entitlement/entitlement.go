@@ -2,8 +2,8 @@
 // eight, resolved once per request from the household's row, which says what the household may do.
 // Every state reads but suspended; trialing, active, past_due and grace write; only the first three
 // upload. The tenant middleware asks Gate of every household-scoped request (FR-BI1), so that a module
-// holds no billing logic at all, and the files pipeline asks Uploads of an upload, which is how grace
-// blocks uploads alone.
+// holds no billing logic at all, and the files pipeline asks Uploadable of an upload, which is how
+// grace blocks uploads alone.
 //
 // The state is resolved from three sources, kept apart on the row: the subscription's own state,
 // which money decides; an owner's restriction of processing (FR-BI7, D-87); and the platform's
@@ -149,6 +149,30 @@ func (s Status) Refusal(role access.Role) *problem.Problem {
 	return p
 }
 
+// Writable refuses a write into a household in s by a caller whose role is role: 404 while it is
+// suspended, which nobody can see (D-115), the 402 (Refusal) in any other state that does not write,
+// and nil otherwise. The gate asks it of every unsafe request but the closed list, and the platform
+// of each write into a household from outside its routes (D-120).
+func (s Status) Writable(role access.Role) error {
+	switch st := s.State(); {
+	case !st.Reads():
+		return problem.NotFound()
+	case !st.Writes():
+		return s.Refusal(role)
+	}
+	return nil
+}
+
+// Uploadable refuses an upload into a household in s by a caller whose role is role, with the 402
+// (Refusal) in a state that does not upload, grace the one among them that writes (PRD 04 §3), and
+// returns nil otherwise: what the files pipeline, and any other upload, asks before it reads a byte.
+func (s Status) Uploadable(role access.Role) error {
+	if !s.State().Uploads() {
+		return s.Refusal(role)
+	}
+	return nil
+}
+
 func (s Status) remedy(role access.Role) string {
 	switch {
 	case role != access.Owner:
@@ -204,16 +228,15 @@ func Exemptions() []string {
 // household its caller cannot see (D-115); otherwise a safe method always goes on, since no read is
 // ever refused with 402, and so does an unsafe one in a state that writes or on an exempt operation,
 // operation being its operationId, "" for a request no route matches. Every other is refused 402 for
-// a caller whose role is role (Refusal).
+// a caller whose role is role (Writable).
 func Gate(s Status, role access.Role, operation, method string) error {
-	st := s.State()
 	switch {
-	case !st.Reads():
+	case !s.State().Reads():
 		return problem.NotFound()
-	case safe(method), st.Writes(), Exempt(operation):
+	case safe(method), Exempt(operation):
 		return nil
 	}
-	return s.Refusal(role)
+	return s.Writable(role)
 }
 
 // safe reports whether method is safe (RFC 9110 §9.2.1), which reads and changes nothing.

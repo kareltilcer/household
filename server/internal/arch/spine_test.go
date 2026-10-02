@@ -27,7 +27,9 @@ import (
 //   - and no module opens a write transaction of its own: this test fails a module, its tests
 //     and its testdata included, that names tenant.InWriteTx or tenant.AccountTx, which only the
 //     platform may, or tenant.Assume, through which a module could make a scope of any household
-//     and write there, or dot-imports the tenant package, which would hide the names from it.
+//     and write there, or tenant.Outside, through which it would read outside the household the
+//     tenant middleware resolved, in the transaction that writes there, or dot-imports the tenant
+//     package, which would hide the names from it.
 func TestModulesWriteOnlyThroughTheSpine(t *testing.T) {
 	// The server's internal directory, one up.
 	for _, v := range spineViolations(t, os.DirFS("..")) {
@@ -51,8 +53,8 @@ func TestModulesWriteOnlyThroughTheSpineCatchesEachViolation(t *testing.T) {
 const tenantPath = internalPath + "platform/tenant"
 
 // spineViolations walks root, an internal directory, and returns each place a module's Go file
-// names tenant.InWriteTx, tenant.AccountTx or tenant.Assume, or dot-imports the tenant package, as
-// "path:line: message".
+// names tenant.InWriteTx, tenant.AccountTx, tenant.Assume or tenant.Outside, or dot-imports the
+// tenant package, as "path:line: message".
 func spineViolations(t *testing.T, root fs.FS) []string {
 	t.Helper()
 	var out []string
@@ -95,7 +97,7 @@ func spineViolations(t *testing.T, root fs.FS) []string {
 			case spec.Name == nil:
 				names = append(names, "tenant")
 			case spec.Name.Name == ".":
-				out = append(out, fmt.Sprintf("%s:%d: module %s dot-imports the tenant package, which hides tenant.InWriteTx, tenant.AccountTx and tenant.Assume from this test",
+				out = append(out, fmt.Sprintf("%s:%d: module %s dot-imports the tenant package, which hides tenant.InWriteTx, tenant.AccountTx, tenant.Assume and tenant.Outside from this test",
 					p, fset.Position(spec.Pos()).Line, mod))
 			case spec.Name.Name != "_":
 				names = append(names, spec.Name.Name)
@@ -103,7 +105,7 @@ func spineViolations(t *testing.T, root fs.FS) []string {
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
 			sel, ok := n.(*ast.SelectorExpr)
-			if !ok || !slices.Contains([]string{"InWriteTx", "AccountTx", "Assume"}, sel.Sel.Name) {
+			if !ok || !slices.Contains([]string{"InWriteTx", "AccountTx", "Assume", "Outside"}, sel.Sel.Name) {
 				return true
 			}
 			x, ok := sel.X.(*ast.Ident)
@@ -111,6 +113,10 @@ func spineViolations(t *testing.T, root fs.FS) []string {
 			case !ok || !slices.Contains(names, x.Name):
 			case sel.Sel.Name == "Assume":
 				out = append(out, fmt.Sprintf("%s:%d: module %s makes a tenant scope of its own; "+
+					"a module reads and writes the household the tenant middleware resolved",
+					p, fset.Position(sel.Pos()).Line, mod))
+			case sel.Sel.Name == "Outside":
+				out = append(out, fmt.Sprintf("%s:%d: module %s steps outside its household's context; "+
 					"a module reads and writes the household the tenant middleware resolved",
 					p, fset.Position(sel.Pos()).Line, mod))
 			default:

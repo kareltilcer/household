@@ -51,8 +51,10 @@ func protocolStatus(o *Operation, status int) bool {
 // and a status the operation answers undeclared. The 409 idempotency_in_progress, which the
 // contract admits from every operation that accepts Idempotency-Key, is held to Problem alone,
 // whatever 409 the operation declares for its own conflicts, and so is the 403 csrf_failed,
-// which it admits from every unsafe operation; the 400 update_required, which it admits from
-// every operation, is held to UpdateRequiredProblem.
+// which it admits from every unsafe operation; the 403 fair_use_ceiling, which the mutation spine
+// and the files pipeline answer a create past a fair-use ceiling with (PRD 04 §5, D-116), and the
+// contract admits from every unsafe operation too, is held to FairUseProblem; the 400
+// update_required, which it admits from every operation, is held to UpdateRequiredProblem.
 func (c *Contract) ValidateResponse(req *http.Request, pattern string, params map[string]string, status int, header http.Header, body []byte) error {
 	problemDocument := isProblem(header)
 	var code problem.Code
@@ -78,7 +80,7 @@ func (c *Contract) ValidateResponse(req *http.Request, pattern string, params ma
 			return fmt.Errorf("%s %s answered %d %s, which only a 409 from an operation that accepts Idempotency-Key may", req.Method, pattern, status, code)
 		}
 		return nil
-	case problem.CodeCsrfFailed:
+	case problem.CodeCsrfFailed, problem.CodeFairUseCeiling:
 		if status != http.StatusForbidden || httpx.Safe(req.Method) {
 			return fmt.Errorf("%s %s answered %d %s, which only a 403 from an unsafe operation may", req.Method, pattern, status, code)
 		}
@@ -121,7 +123,8 @@ func isProblem(header http.Header) bool {
 }
 
 // validateProblem checks body against Problem, or ValidationProblem when its code is
-// validation_failed, or UpdateRequiredProblem when it is update_required, and returns its code.
+// validation_failed, UpdateRequiredProblem when it is update_required, or FairUseProblem when it is
+// fair_use_ceiling or household_limit_reached, and returns its code.
 func (c *Contract) validateProblem(body []byte) (problem.Code, error) {
 	var value any
 	if err := json.Unmarshal(body, &value); err != nil {
@@ -138,6 +141,8 @@ func (c *Contract) validateProblem(body []byte) (problem.Code, error) {
 		name = "ValidationProblem"
 	case problem.CodeUpdateRequired:
 		name = "UpdateRequiredProblem"
+	case problem.CodeFairUseCeiling, problem.CodeHouseholdLimitReached:
+		name = "FairUseProblem"
 	}
 	ref := c.doc.Components.Schemas[name]
 	if ref == nil || ref.Value == nil {

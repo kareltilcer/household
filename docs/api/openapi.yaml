@@ -43,7 +43,8 @@ info:
     lockout a client shows. The writes into a household from outside its routes, accepting an
     invitation (`postMeInvitationsByTokenAccept`), declining one (`postMeInvitationsByTokenDecline`)
     and confirming a graduation (`postAuthGraduationConfirm`), are held to the same: `402` in a
-    state that does not write, and not found in a `suspended` household (D-120).
+    state that does not write, and not found in a `suspended` household (D-120), whose invitations
+    are neither previewed nor listed either.
 
     A fair-use ceiling on what a household or a user holds (PRD 04 §5: members, owned households,
     rows per module, objects) refuses the create that would pass it `403`, `fair_use_ceiling`, or
@@ -139,8 +140,9 @@ info:
     (`validation_failed`) for a request the document does not admit, and any operation that takes
     a body `413` (`payload_too_large`) or `415` (`unsupported_media_type`). Any operation that
     accepts `Idempotency-Key` can also answer `409` (`idempotency_in_progress`), any unsafe
-    operation `403` (`csrf_failed`, see Authentication), and any operation `400`
-    (`update_required`, see Clients). None of these is declared on each operation.
+    operation `403` (`csrf_failed`, see Authentication, or `fair_use_ceiling`, a
+    `FairUseProblem`, see Entitlement), and any operation `400` (`update_required`, see Clients).
+    None of these is declared on each operation.
 
     In a `ValidationProblem`, each `errors[].field` is an RFC 6901 JSON Pointer into the request
     body (`/name`, `/items/0/amount_minor`, or an empty string for the body as a whole), or, for a
@@ -1125,7 +1127,7 @@ paths:
         The pending email invitations to the signed-in user's address, once it is verified, to the
         households they are not a member of. Each carries the invitation's id as its `token`, which its
         addressee, signed in with that verified address, may use in place of the token the email
-        carries.
+        carries. An invitation into a `suspended` household is not listed (D-115).
       responses:
         '200': { description: Invitations, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/InvitationForInvitee' } } } } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1140,7 +1142,8 @@ paths:
         Shows exactly what is being granted — household, inviter, role, and the module levels — before
         acceptance. Signed in or not: the token its email or link carries opens it before the invitee
         has an account, and its id opens it for its addressee alone, signed in. A signed-in caller's
-        requests count against their own limit (`429`).
+        requests count against their own limit (`429`). An invitation into a `suspended` household
+        is not found, as accepting it is not (D-115, D-120).
       security: [{}, { bearerAuth: [] }, { sessionCookie: [] }]
       parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }]
       responses:
@@ -8681,9 +8684,9 @@ components:
         **Reads, downloads and exports are never blocked with `402`, in any state**, and neither are
         billing, export, household deletion, leaving, setting or lifting a restriction, or a
         replica's credentials; a `suspended` household answers every one of its routes `404`
-        instead, these too (D-115). `remedy` is what fixes it, for the caller: an owner is told to `subscribe`, to
-        `update_payment_method` after a failed payment, or to `lift_restriction`; anyone else to
-        `contact_owner`, since only an owner can (FR-BI5).
+        instead, these too (D-115). `remedy` is what fixes it, for the caller: an owner is told to
+        `subscribe`, to `update_payment_method` after a failed payment, or to `lift_restriction`;
+        anyone else to `contact_owner`, since only an owner can (FR-BI5).
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/EntitlementProblem' } } }
     StorageUnavailable:
       description: |

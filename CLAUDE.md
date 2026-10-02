@@ -149,8 +149,9 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   The household surface (`internal/platform/household`) is `admin`, a module the platform
   serves itself: it writes through `mutation.Apply` with the actions and entities
   `module.PlatformModule` declares, and holds a household its caller is not yet in, creating
-  it or holding its invitation, through `tenant.Assume`, which test 4 keeps out of modules too
-  ([ADR 0011](docs/adr/0011-households-as-the-platforms-own-module.md)).
+  it or holding its invitation, through `tenant.Assume`, and steps outside it to count the
+  households its caller owns through `tenant.Outside`, both of which test 4 keeps out of modules
+  too ([ADR 0011](docs/adr/0011-households-as-the-platforms-own-module.md)).
 - **Files** go through the pipeline, `internal/platform/files`, and nothing else touches the object
   store: a module's handler `Receive`s the upload (sniffed, capped, programs refused), `Put`s it
   (ceiling checked, written once under `h/{household}/{module}/{entity}/{variant}`), `Record`s it in

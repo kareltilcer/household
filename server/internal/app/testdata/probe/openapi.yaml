@@ -284,3 +284,11 @@ components:
                 properties:
                   field: { type: string }
                   code: { type: string }
+    FairUseProblem:
+      allOf:
+        - { $ref: '#/components/schemas/Problem' }
+        - type: object
+          properties:
+            resource: { type: string, enum: [members, rows, objects] }
+            ceiling: { type: integer }
+            module: { type: string }

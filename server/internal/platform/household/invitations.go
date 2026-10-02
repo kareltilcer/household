@@ -767,17 +767,26 @@ type moduleLevel struct {
 	Level  access.Level `json:"level"`
 }
 
+// errSuspended is forInvitee's answer for an invitation into a suspended household, which nobody is
+// shown, as nothing in the household is found (D-115): accepting and declining it answer 404 too.
+var errSuspended = errors.New("household: the invitation's household is suspended")
+
 // forInvitee reads what i's invitee is shown, in its household's context, as the caller user: its
 // household's name, and the level it gives on each module the household enables. token is how the
-// request named it.
+// request named it. It returns errSuspended while the household is suspended.
 func (s *Service) forInvitee(ctx context.Context, i invitation, token string, user uuid.UUID) (forInvitee, error) {
 	out := forInvitee{
 		Token: token, InvitedBy: i.inviterName, Role: i.role, Message: i.message, ExpiresAt: i.expires.UTC(),
 		Modules: []moduleLevel{},
 	}
 	err := s.readTx(ctx, i.household, user, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, "SELECT name FROM households WHERE id = $1", i.household).Scan(&out.HouseholdName); err != nil {
+		var suspended bool
+		if err := tx.QueryRow(ctx, "SELECT name, suspended_at IS NOT NULL FROM households WHERE id = $1", i.household).
+			Scan(&out.HouseholdName, &suspended); err != nil {
 			return err
+		}
+		if suspended {
+			return errSuspended
 		}
 		modules := Modules
 		enabled, err := enabledModules(ctx, tx, i.household)
@@ -811,7 +820,8 @@ func joining(i invitation, modules []string) map[string]access.Level {
 }
 
 // previewInvitation shows an invitation's holder what accepting it gives (FR-HH3, A-24), signed in or
-// not: its link opens before the invitee has an account.
+// not: its link opens before the invitee has an account. One into a suspended household is not
+// found, as accepting it is not (D-115, D-120).
 func (s *Service) previewInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -823,6 +833,9 @@ func (s *Service) previewInvitation(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		body, err = s.forInvitee(ctx, i, chi.URLParam(r, "token"), user)
 	}
+	if errors.Is(err, errSuspended) {
+		err = problem.NotFound()
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -832,7 +845,8 @@ func (s *Service) previewInvitation(w http.ResponseWriter, r *http.Request) {
 
 // myInvitations lists the email invitations waiting for the caller's verified address, each with its
 // id as its token, which they may accept or decline by signed in: those of the households they are not
-// in yet, since one they have joined since, by another invitation, asks them into nothing.
+// in yet, since one they have joined since, by another invitation, asks them into nothing, and none
+// into a suspended household, which is not found (D-115).
 func (s *Service) myInvitations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -859,6 +873,9 @@ func (s *Service) myInvitations(w http.ResponseWriter, r *http.Request) {
 	items := make([]forInvitee, 0, len(invitations))
 	for _, i := range invitations {
 		item, err := s.forInvitee(ctx, i, i.id.String(), user)
+		if errors.Is(err, errSuspended) {
+			continue
+		}
 		if err != nil {
 			s.fail(w, r, err)
 			return

@@ -39,9 +39,12 @@ type RowCeiling struct {
 }
 
 // NewRowCeiling returns the ceiling that counts, as meter, the meter role's pool, the tables modules
-// declare, which it reads from the registry once. A declaration that is no table's name is left out,
-// as the sampler leaves it out and reports it each night (Sampler.Sample), rather than failing every
-// create of its module.
+// declare, which it reads from the registry once. A declaration that is not a table's name in form is
+// left out, as the sampler leaves it out and reports it each night (Sampler.Sample), rather than
+// failing every create of its module. A well-formed one the meter role cannot count, a table that is
+// not there or whose household it may not read, which the sampler leaves out too and reports each
+// night, is not: it fails Check's count, and so each create of its module, once the household's
+// sample puts the module at 80 % of its ceiling, rather than letting it pass with rows unseen.
 func NewRowCeiling(meter tenant.Beginner, modules *module.Registry) *RowCeiling {
 	declared, _ := declaredTables(modules)
 	tables := map[string][]countedTable{}

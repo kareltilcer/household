@@ -87,15 +87,18 @@ pnpm exec redocly build-docs docs/api/openapi.yaml --output=dist/api-docs.html
 - **`402` is declared on every household-scoped unsafe method**, because the entitlement gate is
   middleware and can refuse any of them ([04](../prd/04-billing-and-entitlements.md) FR-BI1). The
   exceptions are the operations that must keep working in a non-writing state: billing, export,
-  household deletion, leaving, and lifting an Art. 18 restriction. A client that cannot handle `402` on an ordinary write is a client that
-  breaks the day a card expires.
+  household deletion, leaving, setting and lifting an Art. 18 restriction, and a replica's
+  credentials (D-117), exactly the gate's closed list (`entitlement.Exemptions`), which a test
+  holds to the operations that declare no `402`. A client that cannot handle `402` on an ordinary
+  write is a client that breaks the day a card expires.
 - **Errors are RFC 9457** `application/problem+json`, with a body on every error response. Switch
   on `code`, never on `detail`; `code` is the `ProblemCode` enum, so the switch is exhaustive.
   Any operation can also answer `405 method_not_allowed`, `500 internal`, and
   `422 validation_failed` for a request the document does not admit, and one that takes a body
   `413 payload_too_large` or `415 unsupported_media_type`, one that accepts
   `Idempotency-Key` `409 idempotency_in_progress`, any unsafe one `403 csrf_failed`, for a
-  browser's request from another origin or a session's without its CSRF token, and any at all
+  browser's request from another origin or a session's without its CSRF token, and
+  `403 fair_use_ceiling` (`FairUseProblem`), for a create past a fair-use ceiling (D-116), and any at all
   `400 update_required`, for a client older than the oldest the server serves, whether or not it
   declares them. A
   `422 validation_failed` names each failure in `errors[]`: `field` is a JSON Pointer into the

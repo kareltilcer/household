@@ -69,8 +69,8 @@ func (s *Service) Put(ctx context.Context, u *Upload, t Target) (Stored, error) 
 	if scope == nil {
 		return Stored{}, tenant.ErrNoTenant
 	}
-	if status := scope.Entitlement(); !status.State().Uploads() {
-		return Stored{}, status.Refusal(scope.Role())
+	if err := scope.Entitlement().Uploadable(scope.Role()); err != nil {
+		return Stored{}, err
 	}
 	household := scope.HouseholdID()
 	st := Stored{household: household, target: t, typ: u.Type, size: u.Size, sha256: u.SHA256, filename: u.Filename}

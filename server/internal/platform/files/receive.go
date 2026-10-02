@@ -87,8 +87,8 @@ const (
 // returns.
 func (s *Service) Receive(w http.ResponseWriter, r *http.Request, rules Rules) (*Upload, error) {
 	if scope := tenant.From(r.Context()); scope != nil {
-		if status := scope.Entitlement(); !status.State().Uploads() {
-			return nil, status.Refusal(scope.Role())
+		if err := scope.Entitlement().Uploadable(scope.Role()); err != nil {
+			return nil, err
 		}
 	}
 	limit := s.maxBytes
