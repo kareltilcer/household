@@ -188,10 +188,14 @@ removed, and `429` for a rate (**D-116**).
 | Households a user may own | 5 |
 | Rows per module | 250 000 |
 | Chat messages | 500 000 |
-| Sync mutations | 100 000 / day / household |
+| Sync mutations | 100 000 / UTC day / household (**D-127**) |
 | API requests | 600 / min / user, 3 000 / min / household |
 | Individual file | 100 MB |
 | Object count | 100 000 |
+
+The sync mutations are counted as each batch arrives, per UTC day, D-109's metering bucket: a batch
+received once the day's count has reached the ceiling is refused whole, `429` with `Retry-After` the
+end of the day, and is not counted, and the owners were told once as the day passed 80 % (**D-127**).
 
 Exceeding a ceiling is a support conversation, not an automatic charge. `platform_admin` can
 raise any of them per household. A module's rows are the rows the database holds: a row a member

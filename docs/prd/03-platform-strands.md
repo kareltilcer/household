@@ -68,8 +68,10 @@ plan for it is a rewrite; planning for it costs four columns and a discipline.
 > §2.2–§2.3 and FR-SY7 are its checkpoints and buckets, and a retraction is a row leaving every
 > bucket a member holds. §2.3's predicate is stream definitions generated from the entity registry:
 > the floor is a reader set kept on each row rather than a term, and a redacted projection reaches
-> its owner as well, in a table of its own. Where §2.2–§2.3 and FR-SY7 describe the feed's own
-> mechanics, they describe the design D-93 replaced; plan items 13 and 17 amend them as they build.
+> its owner as well, in a table of its own. Where §2.2–§2.3 describe the feed's own mechanics, they
+> describe the design D-93 replaced, which gate G-C's fallback would build: the spine writes no feed
+> (**D-121**), and FR-SY7 states retraction as plan item 17 built it
+> ([ADR 0018](../adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)).
 
 ### 2.1 What is promised
 
@@ -86,6 +88,13 @@ merge of rich text. Note bodies remain last-write-wins with the loser preserved,
 `home`.
 
 ### 2.2 The change feed
+
+> **Under D-93 the spine writes no feed (D-121, plan item 17).** Every mutation still reports a
+> change for each row it writes, which the spine checks against the row's entity, with the audit
+> event beside it, in the mutation's transaction (FR-SY1); `sync_changes` is no longer written, nor
+> its household lock taken, and the push's answer carries no `seq`. The table stays until gate G-C
+> passes, when plan item 34 drops it; should G-C fail, its fallback writes it again. What follows
+> describes the feed that fallback would build.
 
 One append-only table per deployment, keyed by household, ordered by a monotonic sequence.
 
@@ -132,8 +141,9 @@ URL: the check should be visible in one place.
 
 Index: `(household_id, seq)` and a partial `(household_id, for_user_id, seq) WHERE for_user_id IS NOT NULL`.
 
-**FR-SY1 — The change is written in the mutation's transaction**, beside the audit event. Same
-rule, same enforcement, same architecture test.
+**FR-SY1 — The change is recorded in the mutation's transaction**, beside the audit event. Same
+rule, same enforcement, same architecture test. *Under D-93 it is reported and checked, and written
+to no feed (D-121).*
 
 ### 2.3 Pull
 
@@ -149,10 +159,16 @@ rule, same enforcement, same architecture test.
 > enables the module; admin's settings, memberships and module enablement reach every member of the
 > household; each stream sends the columns its entity names, and a soft-deleted row stays in it, so
 > that a client tells a row another member deleted from one it lost access to. The predicate below
-> is what the streams express; its visibility and audience terms are plan item 17's streams, and
-> until then an entity whose rows may be private or an audience's reaches no replica. The feed's
-> `seq`, cursor and horizon describe the design D-93 replaced; FR-SY2's pruning is PowerSync's
-> compaction, and FR-SY3's bootstrap is a replica's initial sync.
+> is what the streams express (plan item 17, ADR 0018): an entity whose rows may be private has its
+> shared rows and its caller's own private rows in streams of their own, by the `visibility` and
+> `owner_id` each row carries; its redacted projection, a column list the entity declares, reaches
+> everyone with the grant, the owner included, from its private rows, in a client table of its own;
+> and every stream of an entity an audience bounds holds its rows to the members their `readers`
+> name. A row a private item or an audience bounds carries those columns itself, since a stream reads
+> its entity's own table, and they are rewritten when the item moves or the audience changes, which
+> is no edit of the row (**D-123**). The feed's `seq`, cursor and horizon describe the design D-93
+> replaced; FR-SY2's pruning is PowerSync's compaction, run nightly, and FR-SY3's bootstrap is a
+> replica's initial sync.
 
 `GET /api/v1/households/{id}/sync/changes?since={cursor}&limit=` *(replaced, D-93)*
 
@@ -185,6 +201,12 @@ FR-CT2's message-id floor is unchanged and remains what the chat API and the unr
 `floor_seq` is its equivalent in the feed's own ordering, and the two are set together from one
 event so they cannot drift. An audience with no floor concept — a `member_shared` calendar, where
 joining grants the whole calendar — stores `floor_seq = 0` and the term is satisfied trivially.
+
+> **Under D-93 no `floor_seq` is stored.** A row an audience bounds keeps its **readers**, the
+> members whose floor it is at or above, written by the mutation that writes it and rewritten by the
+> one that changes the audience; a member added with a floor is a reader of nothing before it, which
+> scenario 18 asserts on the count of messages a new member's replica receives. A `member_shared`
+> calendar keeps readers on every row as well (**D-126**).
 
 The rejected alternative was to keep chat out of the generic feed and give it a chat-specific pull
 that already understands floors. It was rejected for the reason behind
@@ -228,6 +250,14 @@ The response reports **per mutation**, in the same order:
 | `rejected` | Invalid, unauthorised, or references something gone | Drop from the queue, surface a clear message |
 | `deferred` | A dependency in this batch failed | Retry after the dependency is resolved |
 
+**D-122: a write is held to its `base_version` against the row as the push finds it**, locked until
+the write commits. A `strict_version` update, delete or action names its `base_version`, and one made
+against another version than the row's is `conflict`, carrying the row as it stands. An `lww_field`
+or `lww_row` write made against an older version is applied over the change it had not seen, and
+answered `merged` with the code `concurrent_change` and the row: the server's row differs from what
+the client expected, and the client surfaces it where a field the member set was overridden. A
+create, and a write against the row's own version, is `applied`.
+
 **FR-SY4 — Client-generated ids are mandatory.** A create performed offline must have a stable
 identity immediately, because the user may then edit it, attach to it, or reference it in
 another offline create before it ever reaches the server. UUIDv7 gives the client that identity
@@ -249,7 +279,9 @@ come back `deferred`. Whole-batch atomicity would mean one bad row blocks a week
 work. A mutation depends on a failed one when it writes the row the failed one did, or names it by
 its id in a field. Every outcome but `applied` carries a machine-readable `code` (PRD 10 §6). A batch
 holds at most 500 mutations, a larger one refused whole (`413`, `batch_too_large`), and a device, or a
-web session, sends at most 60 batches a minute (02 §9).
+web session, sends at most 60 batches a minute (02 §9). A household's replicas push at most 100 000
+mutations on a UTC day between them, a batch past that refused whole, `429` until the day ends
+([04](04-billing-and-entitlements.md) §5, **D-127**).
 
 ### 2.5 Merge policy
 
@@ -260,7 +292,7 @@ registers its entities with one of five:
 |---|---|---|
 | **`lww_field`** | Field-level last-write-wins by server receipt time. Two members editing different fields of the same row both succeed | Most entities: tasks, notes metadata, plantings, contacts |
 | **`additive`** | Append-only **in the merge**. Rows are created and never merged, so two replicas can never disagree about one. A correction is an ordinary **online** edit under `If-Match`; it is never queued offline | Chat messages, meter readings, harvest entries, fuel entries, service records, settlements, point-ledger entries |
-| **`lww_row`** | Whole-row last-write-wins; the loser's version is preserved and surfaced | Note and message bodies — rich text cannot be field-merged honestly |
+| **`lww_row`** | Whole-row last-write-wins; the loser's version is preserved and surfaced: a write made against an older version keeps the row it replaced, in its module, with the version it stood at, the version the write was made against and who wrote each (**D-122**) | Note and message bodies — rich text cannot be field-merged honestly |
 | **`strict_version`** | `base_version` must match exactly; otherwise `conflict` | Anything money-affecting or structurally load-bearing: allocation rules, transactions and expense shares, tariff versions, season close, permission changes |
 | **`state_set`** | Idempotent **desired-state** writes. The entity declares its **key** and its **resolution rule**; applying the same write twice is applying it once | Shopping item checked state, chore completion, medication doses, reactions, read markers |
 
@@ -322,9 +354,22 @@ household ([04](04-billing-and-entitlements.md) §3) refuses reads, and every st
 nothing, so each replica that connects is emptied of it and fills again when it is lifted
 (**D-115**).
 
-**FR-SY7 — Access loss emits `op: retract` rows addressed to the affected member** (`for_user_id`
-set), covering every entity id they can no longer see. The client deletes those rows from its
-local store on receipt. A retraction carries no payload, so the act of retracting leaks nothing.
+**FR-SY7 — Access loss is a row leaving every bucket the member holds** (D-93, plan item 17), which
+their client deletes from its replica. No retraction is written: each cause changes what a stream
+reads, in the transaction of the change, and PowerSync moves the rows out of the buckets that held
+them, carrying no payload, so the act of retracting leaks nothing:
+
+| Cause | What the change writes, which the streams read |
+|---|---|
+| A module grant lowered to `none` | The member's grant (`module_grants`), which the grant's stream looks up |
+| Removal from a conversation or a `member_shared` calendar | The audience's membership, and the member taken out of the `readers` of every row it bounds, which is no edit of them (**D-123**) |
+| An item moved from shared to private | The item's `visibility` and `owner_id`, and the same rewritten on every row it bounds, which is no edit of them |
+| Removal from the household | The membership, which every stream looks up; and the member taken out of the readers of every audience they were in, by the household surface's hook (`household.Hooks.Lost`), since readers left behind would reach them again were they brought back with the grant |
+| A module disabled household-wide | The module's enablement, which every stream of its entities looks up |
+
+A row another member deleted stays in its streams, a tombstone, so that a client tells it from a row
+it lost access to, which leaves its replica. The conformance suite proves each cause (PRD 10 §4,
+the `loss-*` cases).
 
 **FR-SY8 — Retraction is best-effort but auditable.** A device that never comes back online keeps
 its local copy; nothing can prevent that. The security model therefore does not depend on
@@ -456,7 +501,8 @@ minutes until it.
 | Weather poll | Twice daily | Garden |
 | Storage sampling | Nightly | Storage |
 | Usage rollup and billing sync | Nightly | Billing |
-| Change-feed compaction | Nightly | Sync |
+| PowerSync's compaction, after the erasure and the expiry sweep (`deploy/powersync/compact.sh`) | Nightly, 04:00 UTC | Sync |
+| PowerSync's replication lag, sampled for alerting | Every minute | Sync |
 | Trial and dunning transitions | Hourly | Billing |
 | Invitation and token expiry | Hourly | Identity |
 | Erasure execution | Nightly | Privacy |
@@ -470,6 +516,7 @@ schedulers to forget one of.
 | What it drops | Retention | Stated in |
 |---|---|---|
 | Mutation idempotency records | 7 days | FR-SY5 |
+| The count of a household's pushed mutations on a day | 7 days past the day | **D-127** |
 | `Idempotency-Key` records of REST requests | 7 days | [01-architecture.md](01-architecture.md) §6 |
 | Preserved note-body losers | 30 days | [modules/07-notes.md](modules/07-notes.md) FR-NO10 |
 | Generated export archives | 7 days after generation | [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §3 |

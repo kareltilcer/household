@@ -58,7 +58,8 @@ item that surprises people, and giving them a tool beats sending them a bill.
 **FR-CT9 — Realtime.** **The one exception to the nudge-only WebSocket** ([01](../01-architecture.md)
 §7): message payloads ride the socket to resolved conversation members, because a pull round-trip is
 visible latency in a chat and nowhere else. The frame is marshalled once per audience, never per
-recipient.
+recipient. *Under D-93 there is no socket (**D-124**): a message reaches its readers through its stream
+on PowerSync's connection, which sends each row as it changes, so no pull round-trip delays it.*
 
 **FR-CT10 — Push.** New messages notify conversation members in the `direct` category, honouring
 mutes and quiet hours. A conversation can be muted individually.

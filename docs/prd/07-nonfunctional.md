@@ -11,10 +11,10 @@ assert, not an aspiration.
 | Users | 12 000 | 280 000 | — |
 | Members per household | 2–4 typical, 12 ceiling | same | — |
 | Devices per user | 2 | 3 | — |
-| Rows in the largest table (`sync_changes`) | ~200 M/yr before compaction | ~4 B/yr | Compacted at 90 days; partitioned monthly |
+| Rows in the largest table (`sync_changes`, written no longer under D-93, **D-121**) | — | — | Dropped once gate G-C passes; PowerSync's bucket storage holds the replicated operations instead, compacted nightly |
 | Object storage | 30 TB | 700 TB | Prefix-sharded by household |
 | Peak API rate | 200 rps | 4 000 rps | Horizontal; the workload shards perfectly by tenant |
-| WebSocket connections | 2 000 concurrent | 40 000 | Multiple instances; connections are stateless past auth |
+| PowerSync connections (one per replica of a household, D-4; the realtime socket is gone, **D-124**) | 2 000 concurrent | 40 000 | PowerSync's API processes scale out: its guidance caps one at 200 connections and recommends 100, so ~400 at Year 3; item 90 measures it |
 
 **The workload is unusually friendly.** Every request belongs to exactly one household, no query
 crosses tenants, and households are independent. The scaling path is therefore: more API

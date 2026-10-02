@@ -6,8 +6,7 @@
 # before it, so that a row erased leaves bucket storage the night it leaves the database (PRD 05 §4).
 #
 # HOUSEHOLD_COMPACT_AT is the time it runs, HH:MM in UTC, 04:00 by default. A compaction that fails
-# is tried again the next night; the replication slot's runbook (docs/runbooks/compaction.md) says
-# what to look at.
+# is tried again the next night; docs/runbooks/compaction.md says what to look at.
 set -eu
 
 at="${HOUSEHOLD_COMPACT_AT:-04:00}"

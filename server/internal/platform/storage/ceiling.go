@@ -19,8 +19,9 @@ import (
 // read, in the mutation's own transaction. Below 80 % of the ceiling that is trusted, since the
 // ceiling exists to catch automation rather than a family: a household would have to create a fifth
 // of the ceiling between two samples, which only automation does, and the next night's sample then
-// holds it. Until then nothing bounds what it creates but its request limits (and item 17's ceiling
-// on a day's sync mutations), so automation may pass the ceiling by what it creates in that day. At
+// holds it. Until then nothing bounds what it creates but its request limits and the push's ceiling on
+// a day's sync mutations (push.count, D-127), so automation may pass the ceiling by what it creates in
+// that day. At
 // or above 80 %, the module's rows are counted now, as the meter role reads them all, every member's
 // private rows among them (Count), and a create that would pass the ceiling is refused 403
 // fair_use_ceiling. So a household near the ceiling pays for a count with each create, and one whose

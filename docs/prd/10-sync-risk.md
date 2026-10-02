@@ -151,7 +151,7 @@ is the single most valuable artefact produced in Phase 0.
 | # | Scenario | Expected |
 |---|---|---|
 | 1 | Two clients offline edit **different fields** of one row (`lww_field`) | Both changes survive; no conflict shown |
-| 2 | Two clients offline edit **the same field** | One wins by server receipt; the loser is surfaced, not silently dropped |
+| 2 | Two clients offline edit **the same field** | One wins by server receipt; the loser is surfaced, not silently dropped. Under D-93: the later write is answered `merged`, carrying the row, and the activity log keeps the value it replaced (**D-122**) |
 | 3 | Two clients offline check the **same** shopping item | One check; idempotent; no conflict dialog |
 | 4 | Client A creates X offline and edits it twice before syncing | One entity, final state, no id remapping |
 | 5 | Client A creates X, edits X, deletes X — all offline | Server sees three mutations for an id it never had; net effect is a tombstone and **no error storm** |
@@ -206,10 +206,14 @@ alerting metric** ([07-nonfunctional.md](07-nonfunctional.md) §5), not a suppor
 > **Under D-93** PowerSync verifies a checksum per bucket at every checkpoint and downloads a
 > bucket again when it does not match, which holds a replica to PowerSync's buckets. It does not
 > hold the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an
-> entity's declared access, passes every checksum. The digest, computed from PostgreSQL, remains
-> the check on that, but it is evaluated above at the client's cursor, and a PowerSync client holds
-> no feed cursor. Plan item 17 decides whether it keeps an endpoint of its own and, if it does, the
-> point it is computed at.
+> entity's declared access, passes every checksum. **The digest stays, as the replica's report
+> (D-125):** sent at rest, it carries per entity type the rows held and the hash of their
+> `(entity_id, version)` pairs, and the replica's health (checkpoint, queue, unresolved conflicts,
+> checksum failures). A PowerSync client holds no feed cursor and PostgreSQL keeps no row's history,
+> so the server computes the same over what the caller may see as the report arrives, and a mismatch
+> is divergence only when the next report, a minute or more later, mismatches again while the
+> server's own hash held still. A replica found divergent downloads itself again once its queue has
+> drained. Plan item 18 builds both halves.
 
 ## 6. The interaction with the no-content-access guarantee
 

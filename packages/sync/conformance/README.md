@@ -1,7 +1,8 @@
 # The sync conformance suite
 
-PRD 10 §4's falsifier (plan items 12 and 13, [ADR 0013](../../../docs/adr/0013-conformance-suite-stand-ins-and-the-oracle.md),
-[ADR 0014](../../../docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)):
+PRD 10 §4's falsifier (plan items 12, 13 and 17, [ADR 0013](../../../docs/adr/0013-conformance-suite-stand-ins-and-the-oracle.md),
+[ADR 0014](../../../docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md),
+[ADR 0018](../../../docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)):
 PowerSync clients, each on its own SQLite file, driven through scripted partitions, lost answers,
 duplicate delivery, skewed clocks and access changes against the real stack, with PRD 10 §4's six
 invariants judged after every scenario and every seeded fuzz schedule.
@@ -48,7 +49,7 @@ CONFORMANCE_FUZZ_RUNS=150 CONFORMANCE_FUZZ_STEPS=150 pnpm --filter @household/sy
 | `harness/` | Clients, the suite's connector, the network, the seeded generator, the invariants, the fuzzer; `*.test.ts` beside them are its unit tests, run by `pnpm test` |
 | `scenarios/` | The 18 scenarios and the access-loss cases, and `enabled`: the ones switched on |
 | `suite/` | What `conformance` runs: the harness's self-tests and negative controls, the scenarios, the fuzzer |
-| `../../../server/internal/conformance` | The conformance module the scenarios write, its writer, and the suite's sign-in; `cmd/conformance-api` serves them with the server's API |
+| `../../../server/internal/conformance` | The conformance module the scenarios write, its writers for every entity, and the suite's sign-in and attachments' uploads; `cmd/conformance-api` serves them with the server's API |
 
 ## The engine
 
@@ -57,8 +58,13 @@ module registered, its push and its credentials, and PowerSync on the streams ge
 entity registry (`pnpm run gen` writes `stack/powersync/sync-config.yaml` and `streams.json`), beside
 one stream broken on purpose for the negative control. A client subscribes to every generated stream,
 admin's included, and its replica is compared on every table the schema declares. The suite signs its
-members in through a sign-in of its own, which signs a new device of theirs in. A scenario is skipped
-until the item that builds its engine switches it on:
+members in through a sign-in of its own, which signs a new device of theirs in. A grant and a module's
+enablement are written as the database's administrator, since item 10's routes cannot name the
+conformance module; a member leaving a conversation and a note made private are pushed, as a member
+pushes them, and the server rewrites the readers, the visibility and the owner the rows carry; a
+removal from the household goes through item 10's route (`World`). PowerSync's compaction runs in the
+stack's service on demand (`target.compact`). A scenario is skipped until the item that builds its
+engine switches it on, and since item 17, gate G-B, every one is:
 
 | Item | Switches on |
 |---|---|

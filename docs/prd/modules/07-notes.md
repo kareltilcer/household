@@ -91,7 +91,12 @@ after 30 days by the nightly job, and they are the only place a note body exists
 | `notes.pin` | `state_set` |
 
 Private notes sync only to their owner. Lowering a member's grant, or a note moving from shared to
-private, emits **retractions** ([03](../03-platform-strands.md) §2.6).
+private, emits **retractions** ([03](../03-platform-strands.md) §2.6). *Under D-93 a retraction is the
+note leaving the member's buckets: a private note's own streams reach its owner alone, and its body,
+pins and images carry its `visibility` and `owner_id`, rewritten when it moves, which is no edit of
+them (**D-123**). Its redacted projection, if it declares one, is a column list streamed to everyone
+with the grant. A body written against an older version keeps the one it replaced in
+`note_body_versions` (**D-122**).*
 
 ## Catalog contributions
 
