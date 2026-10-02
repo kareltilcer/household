@@ -196,6 +196,12 @@ mechanism.
   from the household leaves a module's own audience memberships as they were, so a module that writes
   a row's readers from them holds them to the household's members, locking those memberships until
   the write commits, as the conformance module's messages do.
+- **`Audience` holds every row of its entity to its readers**, since each of the entity's streams
+  tests the caller against them: a row no audience bounds reaches nobody. An entity only some of whose
+  rows an audience bounds, as a calendar's events, of which only a `member_shared` calendar's have one
+  (D-126), cannot declare it as the generator stands; item 75 keeps those rows in an entity of their
+  own, or extends the generator with streams of the rows no audience bounds, which the suite then
+  proves beside the grant's.
 - A household that pushes its day's 100 000 mutations waits for the next UTC day: at Europe's offsets
   that is midnight or one or two in the morning, local time.
 - **What would make this worth revisiting**: a module whose bounded rows are too many to rewrite in

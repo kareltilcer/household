@@ -96,9 +96,12 @@ const (
 	// owner_id names them; the entity's redacted projection, where it declares one, reaches everyone
 	// with the grant, the owner too, whose client shows the full row over it (D-88, D-93).
 	Owner
-	// Audience lets a row belong to an enumerated member list, a chat conversation or a
-	// member_shared calendar, and reach only the members its readers column names: those whose floor
-	// it is at or above (D-90, D-93).
+	// Audience holds a row to an enumerated member list, a chat conversation or a member_shared
+	// calendar: it reaches only the members its readers column names, those whose floor it is at or
+	// above (D-90, D-93). Every row of the entity is held to its readers (Streams): a row no audience
+	// bounds reaches nobody, so an entity only some of whose rows an audience bounds, as a calendar's
+	// events, of which only a member_shared calendar's have one, does not declare it as the generator
+	// stands (ADR 0018; plan item 75 settles the calendar's).
 	Audience
 	// Members holds a row to every member of its household, whatever their grant on its module: what
 	// every member's app works from, the household's settings, its memberships and which modules it

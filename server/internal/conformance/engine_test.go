@@ -177,6 +177,16 @@ func TestPushHoldsALaterWriteOfABatchToWhatTheEarlierLeft(t *testing.T) {
 		based(mutationOf(conformance.Budget, "update", groceries, amount(1)), 5),
 		based(mutationOf(conformance.Budget, "update", groceries, amount(2)), 5),
 	)), "conflict version_conflict", "deferred "+push.DependencyFailed)
+	// A create that finds its row in place, as one sent again once its answer is no longer kept does,
+	// wrote nothing an edit after it saw: the edit, which names no version, is held to the version a
+	// create gives its row, and the writes made since are a conflict, not applied past unseen.
+	w.want(w.results(w.push(household, token, key(),
+		mutationOf(conformance.Budget, "create", groceries, map[string]any{"name": "Groceries", "amount_minor": 450_000, "currency": "CZK"}),
+		mutationOf(conformance.Budget, "update", groceries, amount(3)),
+	)), push.Applied, "conflict version_conflict")
+	if n := w.count("SELECT count(*) FROM conformance_budgets WHERE id = $1 AND amount_minor = 700000 AND version = 6", groceries); n != 1 {
+		t.Error("an edit after a create that found its row in place was applied over the writes since")
+	}
 }
 
 // An lww_row write made against an older version than the note's replaces it whole, answered merged,

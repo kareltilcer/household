@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -171,9 +172,16 @@ func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 }
 
 // A household's own rows past their time are found by the meter role and deleted in their household:
-// Idempotency-Keys and the push's answers a week old, and what a notification said and the arguments
-// it was rendered from, after their seven days, which leaves the outcome.
+// Idempotency-Keys and the push's answers a week old, what a notification said and the arguments it
+// was rendered from, after their seven days, which leaves the outcome, and the count of the mutations
+// its replicas pushed on a UTC day, a week after the day (expiry.UsageDays), today's and the last
+// week's kept.
 func TestTheNightlySweepReachesEveryHousehold(t *testing.T) {
+	// The counts are of UTC days, which the sweep reads as it runs: a day that ended between the
+	// insert and the sweep would move each count a day older.
+	if left := time.Until(time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)); left < 10*time.Second {
+		time.Sleep(left + time.Second)
+	}
 	w := newWorld(t)
 	u := w.user()
 	var households []uuid.UUID
@@ -187,6 +195,9 @@ func TestTheNightlySweepReachesEveryHousehold(t *testing.T) {
 			w.exec(`INSERT INTO sync_mutations (household_id, user_id, mutation_id, fingerprint, outcome, created_at)
 			        VALUES ($1, $2, gen_random_uuid(), decode(repeat('a1', 32), 'hex'), 'applied', now() - $3::interval)`, h, u, at)
 		}
+		w.exec(`INSERT INTO sync_usage (household_id, day, mutations)
+		        SELECT $1, (now() AT TIME ZONE 'UTC')::date - ago, 10 FROM unnest(ARRAY[0, $2::integer, $2::integer + 1]) AS ago`,
+			h, expiry.UsageDays)
 		n, kept := idgen.New(), idgen.New()
 		w.exec(`INSERT INTO notifications (household_id, id, user_id, category, message, args, status, settled_at, args_expires_at)
 		        VALUES ($1, $2, $4, 'direct', 'email.invitation', '{"message": "old"}', 'sent', now() - interval '8 days', now() - interval '1 second'),
@@ -215,6 +226,16 @@ func TestTheNightlySweepReachesEveryHousehold(t *testing.T) {
 		}
 		if len(args) != 2 || args[0] != "{} false" || args[1] != `{"message": "new"} true` {
 			t.Errorf("household %s: notifications' arguments %q", h, args)
+		}
+		var days []int
+		if err := w.admin.QueryRow(t.Context(), `
+			SELECT array(SELECT (now() AT TIME ZONE 'UTC')::date - day FROM sync_usage WHERE household_id = $1 ORDER BY day DESC)`, h).
+			Scan(&days); err != nil {
+			t.Fatal(err)
+		}
+		if len(days) != 2 || days[0] != 0 || days[1] != expiry.UsageDays {
+			t.Errorf("household %s: the pushed mutations' days kept, by how many days ago: %v; want today's and the one %d days ago",
+				h, days, expiry.UsageDays)
 		}
 	}
 }

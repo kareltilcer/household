@@ -121,8 +121,8 @@ through `POST …/sync/digest`, and which entity types disagreed — [D-85](../0
 **force re-snapshot** action. When offline-first goes wrong, this is the screen that tells a member
 why, and its absence is why sync bugs become support tickets. **D-79.** Under D-93 the cursor
 position is the replica's last checkpoint, the replica-digest state is its bucket-checksum state
-(with the digest's, if the plan keeps that endpoint), and the re-snapshot is a re-download of the
-replica.
+with the digest's, both from the replica's report (`POST …/sync/digest`, **D-125**), and the
+re-snapshot is a re-download of the replica once its queue has drained.
 
 **It ships in Phase 0, not with this module** ([10-sync-risk.md](../10-sync-risk.md) §6). Because
 platform staff cannot read household content ([D-3](../09-decisions.md)), nobody can inspect a

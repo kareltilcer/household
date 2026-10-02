@@ -150,7 +150,9 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 	}
 	// fresh is how many of the batch's mutations this push answered for the first time, which tally
 	// counts towards the day, whether the batch ends answered or failed: those it answered before a
-	// failure keep their answers, and are answered from them when the batch is sent again.
+	// failure keep their answers, and are answered from them when the batch is sent again. One answered
+	// from an answer kept for it, before this push or by another delivery of it racing this one, was
+	// counted by the delivery that answered it first (Result.replayed).
 	fresh := 0
 	tally := func() {
 		if err := s.count(context.WithoutCancel(ctx), fresh); err != nil {
@@ -218,14 +220,14 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 			fail(err, slog.String("mutation_id", m.MutationID.String()))
 			return
 		}
-		if answers[m.MutationID] == nil && res.Outcome != Deferred {
+		if !res.replayed && res.Outcome != Deferred {
 			fresh++
 		}
 		switch {
 		case res.Outcome != Applied && res.Outcome != Merged:
 			failed[m.EntityID] = true
 		case res.Version != nil:
-			landed[m.EntityID] = landing{base: m.BaseVersion, version: *res.Version}
+			landed[m.EntityID] = land(m, *res.Version)
 		}
 		code := ""
 		if res.Code != nil {
@@ -411,10 +413,28 @@ func compares(policy sync.Policy) bool {
 }
 
 // landing is where a mutation of a batch left its row: the base version it was made against, as its
-// replica sent it, nil for none, and the version it left the row at, written or found in place.
+// replica sent it, nil for none, and the version it left the row at (land).
 type landing struct {
 	base    *int64
 	version int64
+}
+
+// createdVersion is the version add_entity_columns gives a row as it is inserted, which a create
+// leaves its row at.
+const createdVersion int64 = 1
+
+// land returns where m, answered applied or merged at version, left its row: version, written or found
+// in place, for an update, a delete or an action; and createdVersion for a create, whether it wrote
+// the row or found it in place. A create finds its row in place when it took effect before and its
+// answer is no longer kept, and the row may since have taken other members' writes, which the replica
+// that made the create never saw: a later mutation of the batch that names no version was made against
+// the row as the create made it, and is held to that, rather than merged over or applied past what it
+// did not see.
+func land(m In, version int64) landing {
+	if Op(m.Op) == Create {
+		version = createdVersion
+	}
+	return landing{base: m.BaseVersion, version: version}
 }
 
 // rebase returns base, the version a later mutation of l's batch to l's row was made against, or the
@@ -422,8 +442,9 @@ type landing struct {
 // against the version it held, which moves only when a checkpoint reaches it, and the later after the
 // earlier: it has seen what the earlier wrote, which it is neither merged over nor in conflict with
 // (D-122). So a row created and then edited, both before the replica heard back, takes its edit
-// against the create's version, which the edit could not name. A mutation the replica made against
-// another version keeps its own, and l nil changes nothing.
+// against the create's version, which the edit could not name: the version a create gives its row
+// (land). A mutation the replica made against another version keeps its own, and l nil changes
+// nothing.
 func (l *landing) rebase(base *int64) *int64 {
 	switch {
 	case l == nil,

@@ -6,7 +6,7 @@
 // own, were replaced by it; a scenario asks the target for what it needs, so a later item's engine is
 // a target the same scenarios run against.
 
-import { execFileSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { composeFile } from '../stack/stack.ts'
@@ -154,24 +154,32 @@ export const engine: Target = {
   tombstones: 'kept',
   replay: 'fresh-key',
   // PowerSync's own command, in the stack's service, as the deployment's nightly schedule runs it
-  // (deploy/powersync/compact.sh): it supersedes the operations of a bucket a later one replaced.
+  // (deploy/powersync/compact.sh): it supersedes the operations of a bucket a later one replaced. It
+  // runs as a child the suite waits for without blocking, so that the clients connected meanwhile go
+  // on reading their streams, as a replica does while the nightly compaction runs.
   compact() {
-    execFileSync(
-      'docker',
-      [
-        'compose',
-        '--file',
-        composeFile,
-        'exec',
-        '-T',
-        'powersync',
-        'node',
-        'service/lib/entry.js',
-        'compact',
-      ],
-      { stdio: 'ignore' },
-    )
-    return Promise.resolve()
+    return new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        'docker',
+        [
+          'compose',
+          '--file',
+          composeFile,
+          'exec',
+          '-T',
+          'powersync',
+          'node',
+          'service/lib/entry.js',
+          'compact',
+        ],
+        { stdio: 'ignore' },
+      )
+      child.on('error', reject)
+      child.on('exit', (code, signal) => {
+        if (code === 0) resolve()
+        else reject(new Error(`PowerSync's compaction ended ${String(code ?? signal)}`))
+      })
+    })
   },
   // The conformance API's own route (server/internal/conformance/upload.go), through item 14's
   // pipeline: the contract names no operation of the conformance module's.

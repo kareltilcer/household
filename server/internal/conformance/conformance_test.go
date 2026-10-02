@@ -789,6 +789,31 @@ func TestPushAnswersAMemberRemovedWhileTheirBatchRuns(t *testing.T) {
 	}
 }
 
+// A mutation two deliveries race to answer counts towards the household's day once (D-127): the
+// delivery that answers it first counts it, and the other, answered with what the first kept, does not.
+func TestPushCountsAMutationTwoDeliveriesRaceForOnce(t *testing.T) {
+	var take func()
+	w := newWorldOf(t, apptest.Options{}, takeover{take: func() { take() }})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	milk := mutationOf(conformance.Item, "create", idgen.New(), map[string]any{"title": "Milk"})
+	// The mutation sent again under a key of its own, as a client sends it once D-92's minutes have
+	// passed, runs whole while the first delivery is about to write.
+	var again push.BatchResult
+	take = func() {
+		take = func() {}
+		again = w.results(w.push(household, token, key(), milk))
+	}
+	w.want(w.results(w.push(household, token, key(), milk)), push.Applied)
+	w.want(again, push.Applied)
+	if n := w.count("SELECT coalesce(sum(mutations), 0) FROM sync_usage WHERE household_id = $1", household); n != 1 {
+		t.Errorf("the household's day counts %d mutations, want the one", n)
+	}
+	if n := w.failures.Load(); n != 0 {
+		t.Errorf("%d failures logged, want none", n)
+	}
+}
+
 // serviceLayer is the conformance module with a writer that refuses as a module's REST service layer
 // does, with a problem: an item titled Refused as a validation_failed naming its title, one titled
 // Stale as the version_conflict of an item written since, and one titled Broken as a failure of the

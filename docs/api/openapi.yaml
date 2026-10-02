@@ -9818,7 +9818,7 @@ components:
         entity_type: { type: string }
         entity_id: { $ref: '#/components/schemas/Uuid' }
         op: { $ref: '#/components/schemas/SyncMutationOp' }
-        base_version: { type: [integer, 'null'], format: int64, description: Null on create. }
+        base_version: { type: [integer, 'null'], format: int64, description: 'The version of the row the client wrote against (D-122). Null on create, and on an edit of a row an earlier mutation of the batch created, which is held to the version a create gives its row; a `strict_version` update, delete or action names it.' }
         action: { type: [string, 'null'], description: 'Present when `op = action` — `complete`, `move`, `check`, and so on.' }
         fields: { type: object, additionalProperties: true, description: Only the fields the client actually changed. Field-level merge depends on this. }
         client_time: { type: string, format: date-time, description: 'Advisory data, never authority. Ordering is by server receipt; anything more than 24 hours out is clamped and flagged.' }

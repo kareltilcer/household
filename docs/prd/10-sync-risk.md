@@ -22,8 +22,9 @@ imprecision is what makes it feel unmanageable. There are two distinct things:
 | **The sync engine** | **Contained** — one package, one protocol version, no data migration | The change feed, the mutation queue, conflict resolution, retraction, compaction, the client replica |
 
 > **Under D-93** the replicated path reads no change row: PowerSync's streams read the access fields
-> on each entity's own row, and plan item 17 decides how a row that a private item or an audience
-> bounds carries them ([ADR 0001](../adr/0001-sync-engine.md)).
+> on each entity's own row, and a row that a private item or an audience bounds carries them itself,
+> rewritten when the item or the audience changes, which is no edit of it (**D-123**,
+> [ADR 0001](../adr/0001-sync-engine.md), [ADR 0018](../adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)).
 
 The schema half is **cheap to get right and must be right on day one**. It is four columns, an id
 strategy and a registry. None of it requires the engine to exist. All of it is enforceable by the
@@ -231,8 +232,9 @@ Three consequences, all requirements rather than observations:
    view anyone gets of what went wrong.
 2. **The diagnostic bundle carries sync state** — cursor, queue depth, per-entity digest mismatch,
    the last N mutation outcomes and their reasons, with **no field values**. Under D-93 the cursor
-   is the replica's last checkpoint, and the mismatches are its bucket-checksum failures and any
-   digest item 17 keeps. That makes it metadata, which means it can be sent without the member
+   is the replica's last checkpoint, and the mismatches are its bucket-checksum failures and the
+   entity types its digest disagreed on, the replica's report (**D-125**). That makes it metadata,
+   which means it can be sent without the member
    having to expose content.
 3. **Every mutation outcome but `applied` carries a machine-readable `code`, always.** "Rejected"
    with no reason is undebuggable by anyone, and here there is no second route to the answer. An
