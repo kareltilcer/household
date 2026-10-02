@@ -15,6 +15,7 @@ garden.weather: access holds an axis that is not grant, owner, audience or membe
 garden.rule: a redacted projection on an entity whose rows are never private
 garden.diary: a redacted projection's columns that do not start with id, which a replica keys every row on
 garden.log: a redacted projection's columns naming one that is not a lowercase identifier
+garden.journal: a redacted projection's column secret, which its columns withhold from every replica
 garden.zone: access to every member of the household beside another axis; members stands alone
 garden.shed: columns that do not start with id, which a replica keys every row on
 garden.path: columns naming one that is not a lowercase identifier
@@ -26,4 +27,4 @@ garden.variety: create operation "" is empty or named twice
 garden.planting: the name is declared twice
 notes.page: the name is not qualified by its module, garden
 Garden.Tool: the name is not <module>.<entity> in lowercase words joined by underscores
-garden entity 24: the name is not <module>.<entity> in lowercase words joined by underscores
+garden entity 25: the name is not <module>.<entity> in lowercase words joined by underscores

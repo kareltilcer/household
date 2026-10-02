@@ -9,6 +9,7 @@ arch_testdata.halfway_items: a stream reads it, and household_powersync may not 
 arch_testdata.gone_items: a stream reads it, and it does not exist
 arch_testdata.published_items: probe.published replicates its column colour, which it does not have
 arch_testdata.published_items: probe.private replicates its column secret, which it does not have
+arch_testdata.published_items: probe.private holds its rows to their column visibility, which may be NULL: a row it is NULL on reaches no replica
 arch_testdata.published_items: probe.private holds its rows to their column owner_id, which it does not have
 arch_testdata.published_items: probe.heard holds its rows to their column readers, which it does not have
 arch_testdata.exposed_items: household_powersync may read it, and no stream reads it: the role reads past row-level security, and only what it replicates

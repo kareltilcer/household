@@ -3,7 +3,8 @@
 
 CREATE SCHEMA arch_testdata;
 
--- Keeps it: published as replicate publishes a table.
+-- Keeps it: published as replicate publishes a table. Its visibility, which a private entity of it
+-- reads, may be NULL.
 CREATE TABLE arch_testdata.published_items (id uuid PRIMARY KEY, household_id uuid NOT NULL, title text, visibility text);
 SELECT replicate('arch_testdata.published_items');
 

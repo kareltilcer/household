@@ -113,8 +113,9 @@ const (
 )
 
 // The columns the access axes read on an entity's own rows, which its table has (architecture test
-// 10): a row that may be private says whether it is, and whose; a row an audience bounds names its
-// readers, an array of user ids.
+// 10): a row that may be private says whether it is, 'shared' or 'private', and whose; a row an
+// audience bounds names its readers, an array of user ids. Neither the visibility nor the readers is
+// ever NULL, which no stream matches: a row would reach nobody (test 10).
 const (
 	VisibilityColumn = "visibility"
 	OwnerColumn      = "owner_id"
@@ -153,10 +154,11 @@ type Entity struct {
 	Columns []string
 	// Redacted is its redacted projection (D-88), for an entity whose private rows others may see in
 	// part, as a busy block stands in for a private event: the columns of Table, id first, that a
-	// private row shows everyone with the grant, in a client table of its own named for Table with
-	// _redacted after it, which its owner holds as well (D-93). Nil for an entity that has none; only an
-	// Owner entity may have one. What is safe to reveal is the entity's to say, so the platform has no
-	// generic field-stripper. A column the table does not have fails architecture test 10.
+	// private row shows everyone with the grant, in a client table of its own named for Table, without
+	// its schema, with _redacted after it, which its owner holds as well (D-93). Nil for an entity that
+	// has none; only an Owner entity may have one, and only columns Columns names when it names them.
+	// What is safe to reveal is the entity's to say, so the platform has no generic field-stripper. A
+	// column the table does not have fails architecture test 10.
 	Redacted []string
 	// OfflineWrites is its offline-write flag (D-84): false until its policy's phase lets a
 	// client queue writes to it, and read-only offline until then.
@@ -190,7 +192,8 @@ var (
 // additive, or one that names no rule or no fields; no access, one that includes neither the grant
 // nor every member, or every member beside another axis; a redacted projection on an entity that is
 // never private; columns, or a redacted projection's, that do not start with id, or name one that is
-// not an identifier, or one twice; and a create operation named twice.
+// not an identifier, or one twice; a redacted projection's column that the entity's columns leave
+// out; and a create operation named twice.
 func Violations(module string, entities []Entity) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -278,6 +281,15 @@ func Violations(module string, entities []Entity) []string {
 						bad("%s naming %s twice", list.what, c)
 					}
 					named[c] = true
+				}
+			}
+		}
+		// A column the full row withholds from every replica, a token or a code, is withheld from the
+		// projection everyone with the grant holds as well.
+		if e.Columns != nil {
+			for _, c := range e.Redacted {
+				if !slices.Contains(e.Columns, c) {
+					bad("a redacted projection's column %s, which its columns withhold from every replica", c)
 				}
 			}
 		}

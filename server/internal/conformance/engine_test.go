@@ -587,7 +587,13 @@ func TestAnAttachmentsUploadSettlesItsRow(t *testing.T) {
 // A household's replicas push at most fairuse.SyncMutations mutations on a UTC day between them (PRD 04
 // §5, D-127): past them a batch is refused whole, 429, until the day ends, and is not counted. The
 // batch that takes the day past 80 % tells the owners, once. Yesterday's count is no part of today's.
+// A mutation counts once, as it is first answered: a batch sent again, its answers kept, adds nothing.
 func TestPushHoldsAHouseholdToItsDaysMutations(t *testing.T) {
+	// The test seeds the UTC day the push counts in: one that ended while it ran would move the push
+	// to the next.
+	if left := time.Until(time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)); left < 30*time.Second {
+		time.Sleep(left + time.Second)
+	}
 	w := newWorld(t, apptest.Options{})
 	household, member := w.household("contribute")
 	token := w.signIn(member, 0)
@@ -605,9 +611,17 @@ func TestPushHoldsAHouseholdToItsDaysMutations(t *testing.T) {
 	if n := warnings(); n != 1 {
 		t.Errorf("%d warnings of the day's mutations, want 1 to the owner", n)
 	}
-	w.results(w.push(household, token, key(), item()))
+	again := item()
+	w.results(w.push(household, token, key(), again))
 	if n := warnings(); n != 1 {
 		t.Errorf("%d warnings after a later batch, want the one", n)
+	}
+	// The same batch sent again, under a fresh key as a client sends it once D-92's minutes have
+	// passed, is answered from what was kept for it, and counts nothing more.
+	pushed := w.count("SELECT mutations FROM sync_usage WHERE household_id = $1 AND day = $2", household, today)
+	w.want(w.results(w.push(household, token, key(), again)), push.Applied)
+	if n := w.count("SELECT mutations FROM sync_usage WHERE household_id = $1 AND day = $2", household, today); n != pushed {
+		t.Errorf("a batch sent again took the day from %d mutations to %d", pushed, n)
 	}
 	w.exec("UPDATE sync_usage SET mutations = $3 WHERE household_id = $1 AND day = $2", household, today, fairuse.SyncMutations-1)
 	w.results(w.push(household, token, key(), item(), item()))

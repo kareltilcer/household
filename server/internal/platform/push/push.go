@@ -122,7 +122,10 @@ func (s *Service) Routes(r chi.Router) {
 // that writes a row an earlier mutation of the batch failed to, or names one in a field, is
 // deferred. The answer is 200 whenever the batch was processed at all; each mutation's outcome is in
 // the body. A household whose replicas pushed fairuse.SyncMutations mutations already this UTC day
-// is answered 429 until the day ends, the batch untouched (fair use, D-127).
+// is answered 429 until the day ends, the batch untouched (fair use, D-127). A mutation counts
+// towards the day once, as this push first answers it: one answered from what was kept for it, one
+// deferred to its replay, and the ones a batch that failed did not answer are not counted, so that a
+// batch sent again after a lost answer or a server's fault counts once (count).
 //
 // A replica makes each mutation against the version of the row it holds, which moves only when a
 // checkpoint reaches it, so a later mutation of the batch to a row an earlier one wrote carries the
@@ -145,7 +148,17 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, requestID, problem.New(http.StatusRequestEntityTooLarge, problem.CodeBatchTooLarge))
 		return
 	}
+	// fresh is how many of the batch's mutations this push answered for the first time, which tally
+	// counts towards the day, whether the batch ends answered or failed: those it answered before a
+	// failure keep their answers, and are answered from them when the batch is sent again.
+	fresh := 0
+	tally := func() {
+		if err := s.count(context.WithoutCancel(ctx), fresh); err != nil {
+			s.log.LogAttrs(ctx, slog.LevelError, "push: the day's mutations could not be counted", slog.Any("error", err))
+		}
+	}
 	fail := func(err error, attrs ...slog.Attr) {
+		tally()
 		switch {
 		// A repeat of the request took its Idempotency-Key over once the key's lease had passed, and
 		// runs the batch itself: this one can no longer commit, and is answered as a repeat of a
@@ -163,7 +176,7 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.metrics.Batch(ctx, len(batch.Mutations))
-	if err := s.count(ctx, len(batch.Mutations)); err != nil {
+	if err := s.admit(ctx); err != nil {
 		var p *problem.Problem
 		if errors.As(err, &p) {
 			problem.Write(w, requestID, p)
@@ -205,6 +218,9 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 			fail(err, slog.String("mutation_id", m.MutationID.String()))
 			return
 		}
+		if answers[m.MutationID] == nil && res.Outcome != Deferred {
+			fresh++
+		}
 		switch {
 		case res.Outcome != Applied && res.Outcome != Merged:
 			failed[m.EntityID] = true
@@ -224,6 +240,7 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 		s.metrics.Answered(ctx, entity, res.Outcome, code)
 		out.Results = append(out.Results, res)
 	}
+	tally()
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 

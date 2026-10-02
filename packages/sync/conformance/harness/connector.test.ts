@@ -121,7 +121,6 @@ function results(
 ): (ids: string[]) => Response {
   return (ids) =>
     json(200, {
-      seq: 1,
       results: ids.map((mutation_id, i) => {
         const o = outcomes[i] ?? 'applied'
         const [outcome, code] = typeof o === 'string' ? [o, o === 'applied' ? null : o] : o
@@ -538,9 +537,9 @@ describe('the connector', () => {
   it('throws on an answer the contract does not allow, and reports it', async () => {
     const reasons: string[] = []
     for (const answer of [
-      json(200, { seq: 1, results: [] }),
-      json(200, { seq: 1, results: [{ mutation_id: 'm-1', outcome: 'rejected', code: null }] }),
-      json(200, { seq: 1, results: [{ mutation_id: 'someone-else', outcome: 'applied' }] }),
+      json(200, { results: [] }),
+      json(200, { results: [{ mutation_id: 'm-1', outcome: 'rejected', code: null }] }),
+      json(200, { results: [{ mutation_id: 'someone-else', outcome: 'applied' }] }),
     ]) {
       const q = new Queue()
       q.write('Milk')

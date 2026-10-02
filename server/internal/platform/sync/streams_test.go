@@ -193,4 +193,16 @@ func TestTheConfigurationAndTheManifest(t *testing.T) {
 	if err := json.Unmarshal(manifest, &entries); err != nil || len(entries) != 6 || entries[0]["table"] != "notes" || entries[5]["table"] != "notes_redacted" {
 		t.Errorf("the manifest: %s %v", manifest, err)
 	}
+	// A table in a schema of its own names its redacted client table without the schema, which an
+	// alias cannot carry.
+	diary := sync.Entity{Name: "garden.diary", Table: "garden.diaries", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner,
+		Redacted: []string{"id", "owner_id"}}
+	qualified, err := sync.Streams([]sync.Entity{diary})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := qualified[len(qualified)-1]
+	if last.Output != "diaries_redacted" || !strings.HasPrefix(last.Query, "SELECT id, owner_id FROM garden.diaries AS diaries_redacted\n") {
+		t.Errorf("a schema's table's redacted projection: %s into %s", last.Query, last.Output)
+	}
 }

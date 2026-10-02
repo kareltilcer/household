@@ -374,8 +374,9 @@ broken product for everyone who has not updated. **D-11.**
 10. A committed sync configuration that is not the one the entity registry generates, a table a
     generated stream reads that is not published for PowerSync, a table PowerSync's replication
     role may `SELECT` that no stream needs, and an entity whose table lacks a column its stream
-    sends, its redacted projection names or its access reads (`visibility`, `owner_id`, `readers`)
-    (**D-93**; plan items 13 and 17).
+    sends, its redacted projection names or its access reads (`visibility`, `owner_id`, `readers`),
+    or lets its `visibility` or `readers` be NULL, which no stream matches (**D-93**; plan items 13
+    and 17).
 11. A privilege of the meter role's beyond `SELECT` on a column that names a household or counts,
     sizes or schedules rows (§2.3; plan item 14).
 

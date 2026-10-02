@@ -20,8 +20,8 @@ func Streams() []sync.Stream {
 
 // Entities are kept in the testdata's tables: one replicating a column its table does not have; one
 // whose table no stream reads, which keeps it from no violation; a private one whose table has no
-// owner and whose redacted projection names a column its table does not have; and an audience's,
-// whose table keeps no readers.
+// owner, lets its visibility be NULL, and whose redacted projection names a column its table does not
+// have; and an audience's, whose table keeps no readers.
 func Entities() []sync.Entity {
 	return []sync.Entity{
 		{Name: "probe.published", Table: "arch_testdata.published_items", Columns: []string{"id", "title", "colour"}},

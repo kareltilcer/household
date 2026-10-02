@@ -13,8 +13,8 @@ import (
 // streams, so that a stream filtering on it would lose each row at its first update.
 const TenantRoot = "households"
 
-// RedactedSuffix follows the name of an entity's table in the name of the client table its redacted
-// projection replicates into (Entity.Redacted).
+// RedactedSuffix follows the name of an entity's table, without its schema, in the name of the client
+// table its redacted projection replicates into (Entity.Redacted).
 const RedactedSuffix = "_redacted"
 
 // The tables a generated stream looks a caller's access up in, every one of them replicated as the
@@ -45,7 +45,7 @@ type Stream struct {
 	// Entity is the entity whose rows it sends, and Table the table they come from.
 	Entity, Table string
 	// Output is the client table the rows replicate into: Table, or for a redacted projection Table
-	// with RedactedSuffix after it.
+	// without its schema, with RedactedSuffix after it.
 	Output string
 	// Reads are the tables it reads, Table first: each is in the powersync publication, at REPLICA
 	// IDENTITY FULL, and readable by the replication role (architecture test 10).
@@ -185,7 +185,12 @@ func Streams(entities []Entity) ([]Stream, error) {
 			}
 		}
 		if e.Redacted != nil {
-			output := e.Table + RedactedSuffix
+			// The client table is an alias, which names no schema.
+			bare := e.Table
+			if _, table, qualified := strings.Cut(e.Table, "."); qualified {
+				bare = table
+			}
+			output := bare + RedactedSuffix
 			for _, a := range ways {
 				if err := add(base+RedactedSuffix+a.suffix, strings.Join(e.Redacted, ", "), e.Table+" AS "+output, output,
 					append([]string{privateTerm}, always...), a); err != nil {

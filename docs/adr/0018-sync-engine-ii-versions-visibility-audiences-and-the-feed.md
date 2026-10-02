@@ -74,14 +74,17 @@ a row that may be private carries `visibility` and `owner_id`, a row an audience
 `readers`, the members whose floor it is at or above (`sync.Entity.AccessColumns`). Every row a
 private item or an audience bounds carries them itself (a private note's comments, a message's body,
 reactions and attachments' metadata), since a stream reads its entity's own table; architecture test
-10 fails an entity whose table lacks them. The generated streams (`sync.Streams`):
+10 fails an entity whose table lacks them, or lets its `visibility` or its `readers` be NULL, which
+no stream matches. The generated streams (`sync.Streams`):
 
 - `Owner` doubles the grant's two arms: the shared rows (`visibility = 'shared'`), and the private
   rows of the caller's own (`visibility = 'private' AND owner_id = auth.user_id()`).
 - A redacted projection is a column list on the entity (`sync.Entity.Redacted`, replacing ADR 0006's
   `Redact` function), streamed by the grant's two arms from the private rows, whoever owns them, into
-  a client table of its own named for the entity's table with `_redacted` after it (`SELECT … FROM t
-  AS t_redacted`), which reaches the owner as well, whose client shows the full row over it.
+  a client table of its own named for the entity's table, without its schema, with `_redacted` after
+  it (`SELECT … FROM t AS t_redacted`), which reaches the owner as well, whose client shows the full
+  row over it. It names only columns the entity's own column list does, when it has one: a column
+  withheld from every replica is withheld from the projection too (architecture test 5).
 - `Audience` holds every stream of the entity, its projection's included, to the rows whose readers
   name the caller (`auth.user_id() IN readers`).
 
@@ -146,9 +149,11 @@ minute. `sync.LogMetrics` logs them until item 89 alerts on them.
 
 **The sync mutations' fair-use ceiling is a rate per UTC day (D-127).** The push counts each
 household's mutations per UTC day (`sync_usage`, the platform's own record, kept a week), D-109's
-metering bucket; a batch received once the day's count has reached 100 000 is refused whole, `429`
-`rate_limited` with `Retry-After` the day's end, and is not counted; the batch that crosses 80 % tells
-the owners once (`notification.fair_use_sync`).
+metering bucket, each once, as it first answers it: a mutation answered from what was kept for it, or
+deferred to its replay, is not counted again, so that a batch sent again after a lost answer, or
+after the server failed it, counts once. A batch received once the day's count has reached 100 000 is
+refused whole, `429` `rate_limited` with `Retry-After` the day's end, and is not counted; the batch
+that crosses 80 % tells the owners once (`notification.fair_use_sync`).
 
 **A `member_shared` calendar's audience is readers on every row (D-126)**, as a conversation's: the
 member list in the stream was never tried beside the grant's subquery, and the suite proves one
@@ -170,6 +175,7 @@ mechanism.
 | **Building the digest's server half here** | Its hash, the replica's id and the report are agreed between two halves; built alone it would be tested against a hand-made client only. Item 18 builds both, and the contract states them now |
 | **Keeping the socket for `entitlement_changed` and `access_changed`** | Both are state on rows a replica already holds; a second channel would carry them a second way |
 | **A fixed 24-hour window counted from each mutation, or per device** | A rolling window needs per-mutation timestamps to count; the ceiling is the household's (PRD 04 §5), and D-109 already makes the UTC day the metering bucket every household shares |
+| **Counting each batch whole as it arrives** | A batch is sent again after a lost answer or a server's fault: one mutation that fails its batch, retried every few seconds by its device, would spend the household's day in minutes and hold every one of its devices until midnight |
 
 ## Consequences
 

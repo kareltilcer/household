@@ -35,6 +35,8 @@ func Declared() map[string][]sync.Entity {
 			{Name: "garden.rule", Table: "garden_rules", Policy: sync.LWWField, Access: sync.Grant, Redacted: []string{"id"}},
 			{Name: "garden.diary", Table: "garden_diaries", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner, Redacted: []string{"owner_id", "id"}},
 			{Name: "garden.log", Table: "garden_logs", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner, Redacted: []string{"id", "Owner", "id"}},
+			{Name: "garden.journal", Table: "garden_journals", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner,
+				Columns: []string{"id", "owner_id", "title"}, Redacted: []string{"id", "owner_id", "secret"}},
 			{Name: "garden.zone", Table: "garden_zones", Policy: sync.LWWField, Access: sync.Members | sync.Grant},
 			{Name: "garden.shed", Table: "garden_sheds", Policy: sync.LWWField, Access: sync.Grant, Columns: []string{"title", "id"}},
 			{Name: "garden.path", Table: "garden_paths", Policy: sync.LWWField, Access: sync.Grant, Columns: []string{"id", "Title"}},
