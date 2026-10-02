@@ -114,6 +114,8 @@ export interface ConnectorOptions {
 
 /** The ProblemCode of a 409 whose key's first request has not answered (D-92). */
 const inProgress = 'idempotency_in_progress'
+/** The code a 402 that names none is recorded with: the household does not write. */
+const entitlementReadOnly = 'entitlement_read_only'
 
 /** A batch not yet answered, which a retry must send again unchanged. */
 interface InFlight {
@@ -376,7 +378,16 @@ export class ConformanceConnector {
         }
         case 402:
         case 404: {
-          const code = response.status === 402 ? 'entitlement' : 'not_found'
+          // A 402 is the household's state refusing the batch (FR-BI2, D-118): each mutation is
+          // recorded with the problem's own code, entitlement_read_only or entitlement_restricted,
+          // and held.
+          const refused = problemCode(text)
+          const code =
+            response.status === 404
+              ? 'not_found'
+              : isEntitlement(refused)
+                ? (refused ?? entitlementReadOnly)
+                : entitlementReadOnly
           for (const m of mutations) {
             flight.settled.set(m.mutation_id, {
               mutation_id: m.mutation_id,

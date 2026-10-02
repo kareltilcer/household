@@ -314,6 +314,11 @@ describe('the connector', () => {
       ['entitlement', 'm-1'],
       ['entitlement', 'm-2'],
     ])
+    // Each with the 402's own code (D-118).
+    expect(journal.recorded.map(([m, r]) => [m.mutation_id, r.outcome, r.code])).toEqual([
+      ['m-1', 'rejected', 'entitlement_read_only'],
+      ['m-2', 'rejected', 'entitlement_read_only'],
+    ])
     q.write('Eggs')
     await connector(server(json(404, { code: 'not_found' })).fetch, journal).c.upload(q)
     expect(journal.recorded.at(-1)?.[1]).toMatchObject({ outcome: 'rejected', code: 'not_found' })

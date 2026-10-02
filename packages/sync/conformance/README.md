@@ -63,5 +63,5 @@ until the item that builds its engine switches it on:
 | Item | Switches on |
 |---|---|
 | 13 | 1, 3, 4, 5, 8, 9, 10, 13, 15, 17 |
-| 14 | 2, 6, 7, 11, 12, 13-rotation, 16, 18, and the five `loss-*` cases |
-| 18 | 14, and `no-loss-lapse` |
+| 16 | 14, `no-loss-lapse` and `suspension` |
+| 17 | 2, 6, 7, 11, 12, 13-rotation, 16, 18, and the five `loss-*` cases |

@@ -219,6 +219,29 @@ export const access: readonly Scenario[] = [
     },
   },
   {
+    key: 'suspension',
+    title: 'A suspended household replicates nothing',
+    expected:
+      'Every replica of a suspended household is emptied of it, its own row among them, and holds it all again ' +
+      'once the suspension is lifted (PRD 04 §3, D-115)',
+    enabledBy: 16,
+    needs: [],
+    replicates: ['conformance_items'],
+    async run(w) {
+      const f = await family(w)
+      const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
+      await online(w, eva)
+      expect(await eva.rows('conformance_items')).toHaveLength(3)
+      await w.admin.setSuspended(f.home, true)
+      expect(await w.settle()).toBe(true)
+      expect(await eva.rows('conformance_items')).toEqual([])
+      expect(await eva.rows('households')).toEqual([])
+      await w.admin.setSuspended(f.home, false)
+      expect(await w.settle()).toBe(true)
+      expect(await eva.rows('conformance_items')).toHaveLength(3)
+    },
+  },
+  {
     key: 'no-loss-lapse',
     title: 'Not access loss: a lapsed entitlement',
     expected:
@@ -234,7 +257,11 @@ export const access: readonly Scenario[] = [
       await w.target.setEntitlement?.(f.home.id, 'read_only')
       expect(await w.settle()).toBe(true)
       expect(await eva.rows('conformance_items')).toHaveLength(3)
+      // The state is on the household's row (item 16), whose change replicates as any row's does:
+      // the replica settles on the resumed household too, and loses nothing either way.
       await w.target.setEntitlement?.(f.home.id, 'active')
+      expect(await w.settle()).toBe(true)
+      expect(await eva.rows('conformance_items')).toHaveLength(3)
     },
   },
 ]
