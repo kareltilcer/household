@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
 // Architecture test 4 (PRD 01 §3, §10, FR-AU1, FR-SY1): a mutation writes an audit event and a
@@ -29,7 +31,9 @@ import (
 //     platform may, or tenant.Assume, through which a module could make a scope of any household
 //     and write there, or tenant.Outside, through which it would read outside the household the
 //     tenant middleware resolved, in the transaction that writes there, or dot-imports the tenant
-//     package, which would hide the names from it.
+//     package, which would hide the names from it; nor names the setting that keeps an update from
+//     moving a row's version, which only sync.RewriteAccess sets, for the access a row carries
+//     (ADR 0018).
 func TestModulesWriteOnlyThroughTheSpine(t *testing.T) {
 	// The server's internal directory, one up.
 	for _, v := range spineViolations(t, os.DirFS("..")) {
@@ -104,6 +108,12 @@ func spineViolations(t *testing.T, root fs.FS) []string {
 			}
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING && strings.Contains(lit.Value, sync.AccessRewrite) {
+				out = append(out, fmt.Sprintf("%s:%d: module %s names the access rewrite; a module rewrites the access a row carries "+
+					"through sync.RewriteAccess, which touch_entity holds to the access columns and leaves unversioned",
+					p, fset.Position(lit.Pos()).Line, mod))
+				return true
+			}
 			sel, ok := n.(*ast.SelectorExpr)
 			if !ok || !slices.Contains([]string{"InWriteTx", "AccountTx", "Assume", "Outside"}, sel.Sel.Name) {
 				return true

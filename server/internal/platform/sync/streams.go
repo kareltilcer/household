@@ -13,6 +13,10 @@ import (
 // streams, so that a stream filtering on it would lose each row at its first update.
 const TenantRoot = "households"
 
+// RedactedSuffix follows the name of an entity's table, without its schema, in the name of the client
+// table its redacted projection replicates into (Entity.Redacted).
+const RedactedSuffix = "_redacted"
+
 // The tables a generated stream looks a caller's access up in, every one of them replicated as the
 // streams' own are (replicate): a member's role, their grants, which modules their household
 // enables. Each lookup also reads the tenant root, whether the household is suspended (unsuspended).
@@ -40,12 +44,69 @@ type Stream struct {
 	Name string
 	// Entity is the entity whose rows it sends, and Table the table they come from.
 	Entity, Table string
+	// Output is the client table the rows replicate into: Table, or for a redacted projection Table
+	// without its schema, with RedactedSuffix after it.
+	Output string
 	// Reads are the tables it reads, Table first: each is in the powersync publication, at REPLICA
 	// IDENTITY FULL, and readable by the replication role (architecture test 10).
 	Reads []string
 	// Query is its definition.
 	Query string
 }
+
+// arm is one way a member reaches a module's rows, the lookup a stream holds its household to.
+type arm struct {
+	suffix, lookup string
+	reads          []string
+}
+
+// arms returns the ways a member reaches e's rows: every member of the household for Members; for
+// Grant, an owner of the household while it enables the module, and a member whose grant on the module
+// is above none while it does.
+func arms(e Entity) ([]arm, error) {
+	switch {
+	case e.Access == Members:
+		join, where := unsuspended("m")
+		return []arm{{"", `    SELECT m.household_id FROM memberships m
+` + join + `    WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
+` + where, []string{membershipsTable, TenantRoot}}}, nil
+	case e.Access&Grant != 0 && e.Access&Members == 0:
+		module := e.Module()
+		ownerJoin, ownerWhere := unsuspended("m")
+		grantJoin, grantWhere := unsuspended("g")
+		return []arm{
+			{"_owner", fmt.Sprintf(`    SELECT m.household_id FROM memberships m
+      JOIN module_enablement e ON e.household_id = m.household_id
+%s    WHERE m.user_id = auth.user_id() AND m.role = 'owner'
+      AND e.household_id = subscription.parameter('household_id')
+      AND e.module = '%s' AND e.enabled
+%s`, ownerJoin, module, ownerWhere), []string{membershipsTable, enablementTable, TenantRoot}},
+			{"_granted", fmt.Sprintf(`    SELECT g.household_id FROM module_grants g
+      JOIN module_enablement e ON e.household_id = g.household_id AND e.module = g.module
+%s    WHERE g.user_id = auth.user_id() AND g.module = '%s' AND g.level <> 'none'
+      AND e.household_id = subscription.parameter('household_id') AND e.enabled
+%s`, grantJoin, module, grantWhere), []string{grantsTable, enablementTable, TenantRoot}},
+		}, nil
+	}
+	return nil, fmt.Errorf("sync: %s declares access %d, which no stream is generated for", e.Name, e.Access)
+}
+
+// variant is one part of an entity's rows a stream sends: those a term on the row picks.
+type variant struct {
+	suffix string
+	terms  []string
+}
+
+// The terms on a row of an entity that declares Owner and Audience: a shared row, a private row of
+// the caller's, a private row whatever its owner, and a row the caller reads.
+const (
+	sharedTerm    = VisibilityColumn + " = 'shared'"
+	privateTerm   = VisibilityColumn + " = 'private'"
+	ownedTerm     = OwnerColumn + " = auth.user_id()"
+	readerTerm    = "auth.user_id() IN " + ReadersColumn
+	sharedSuffix  = "_shared"
+	privateSuffix = "_private"
+)
 
 // Streams returns the streams that hold the rows of entities to the access each declares
 // (PRD 03 §2.3), in the entities' order:
@@ -55,6 +116,14 @@ type Stream struct {
 //     on the module is above none while it does. A row both reach is held once by the client. A child's
 //     ceiling is never below view, so a stored grant above none is always one the member holds.
 //   - Members is one stream: every member of the household.
+//   - Owner doubles the grant's: its shared rows, and its private rows of the caller's own, by their
+//     visibility and owner_id (D-88). Its redacted projection, where it declares one, is the grant's
+//     two streams again, of its private rows whoever they belong to, sending the projection's columns
+//     into a client table of its own, which reaches the owner as well, whose client shows the full row
+//     over it (ADR 0001): a stream compares a row with the caller by equality alone.
+//   - Audience holds every stream of the entity, its projection's too, to the rows whose readers name
+//     the caller (D-90): the members whose floor the row is at or above, which the server keeps on
+//     each row, since a stream cannot compare a row with a member's floor.
 //
 // Each holds the household to not being suspended (unsuspended).
 //
@@ -63,71 +132,71 @@ type Stream struct {
 // and a lookup of every household that enables a module grows with the database until every
 // connection is refused. A soft-deleted row stays in its streams, a tombstone, so that a client tells
 // a row another member deleted from one it lost access to, which leaves its buckets.
-//
-// An entity whose rows may be private to their owner or bounded by an audience is not replicated
-// yet: plan item 17 generates its visibility and audience streams, and until then it reaches no
-// replica, which withholds it rather than leaking it.
 func Streams(entities []Entity) ([]Stream, error) {
 	var out []Stream
 	names := map[string]bool{}
 	for _, e := range entities {
-		if e.Access&(Owner|Audience) != 0 {
-			continue
-		}
-		columns := "*"
-		if e.Columns != nil {
-			columns = strings.Join(e.Columns, ", ")
+		ways, err := arms(e)
+		if err != nil {
+			return nil, err
 		}
 		key := "household_id"
 		if e.Table == TenantRoot {
 			key = "id"
 		}
 		base := strings.ReplaceAll(e.Name, ".", "_")
-		head := fmt.Sprintf("SELECT %s FROM %s\nWHERE %s = subscription.parameter('household_id')\n  AND %s IN (\n", columns, e.Table, key, key)
-		add := func(name, lookup string, reads ...string) error {
+		var always []string
+		if e.Access&Audience != 0 {
+			always = append(always, readerTerm)
+		}
+		add := func(name, columns, from, output string, terms []string, a arm) error {
 			if names[name] {
 				return fmt.Errorf("sync: two streams are named %s; rename an entity", name)
 			}
 			names[name] = true
-			all := []string{e.Table}
-			for _, r := range reads {
-				if !slices.Contains(all, r) {
-					all = append(all, r)
+			reads := []string{e.Table}
+			for _, r := range a.reads {
+				if !slices.Contains(reads, r) {
+					reads = append(reads, r)
 				}
 			}
-			out = append(out, Stream{Name: name, Entity: e.Name, Table: e.Table, Reads: all, Query: head + lookup + "  )\n"})
+			var q strings.Builder
+			fmt.Fprintf(&q, "SELECT %s FROM %s\nWHERE %s = subscription.parameter('household_id')\n", columns, from, key)
+			for _, t := range terms {
+				q.WriteString("  AND " + t + "\n")
+			}
+			q.WriteString("  AND " + key + " IN (\n" + a.lookup + "  )\n")
+			out = append(out, Stream{Name: name, Entity: e.Name, Table: e.Table, Output: output, Reads: reads, Query: q.String()})
 			return nil
 		}
-		var err error
-		//nolint:exhaustive // Owner and Audience were passed over above, and any other set is refused below.
-		switch e.Access {
-		case Members:
-			join, where := unsuspended("m")
-			err = add(base, `    SELECT m.household_id FROM memberships m
-`+join+`    WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
-`+where, membershipsTable, TenantRoot)
-		case Grant:
-			module := e.Module()
-			join, where := unsuspended("m")
-			err = add(base+"_owner", fmt.Sprintf(`    SELECT m.household_id FROM memberships m
-      JOIN module_enablement e ON e.household_id = m.household_id
-%s    WHERE m.user_id = auth.user_id() AND m.role = 'owner'
-      AND e.household_id = subscription.parameter('household_id')
-      AND e.module = '%s' AND e.enabled
-%s`, join, module, where), membershipsTable, enablementTable, TenantRoot)
-			if err == nil {
-				join, where = unsuspended("g")
-				err = add(base+"_granted", fmt.Sprintf(`    SELECT g.household_id FROM module_grants g
-      JOIN module_enablement e ON e.household_id = g.household_id AND e.module = g.module
-%s    WHERE g.user_id = auth.user_id() AND g.module = '%s' AND g.level <> 'none'
-      AND e.household_id = subscription.parameter('household_id') AND e.enabled
-%s`, join, module, where), grantsTable, enablementTable, TenantRoot)
-			}
-		default:
-			err = fmt.Errorf("sync: %s declares access %d, which no stream is generated for", e.Name, e.Access)
+		columns := "*"
+		if e.Columns != nil {
+			columns = strings.Join(e.Columns, ", ")
 		}
-		if err != nil {
-			return nil, err
+		variants := []variant{{"", nil}}
+		if e.Access&Owner != 0 {
+			variants = []variant{{sharedSuffix, []string{sharedTerm}}, {privateSuffix, []string{privateTerm, ownedTerm}}}
+		}
+		for _, v := range variants {
+			for _, a := range ways {
+				if err := add(base+v.suffix+a.suffix, columns, e.Table, e.Table, append(slices.Clone(v.terms), always...), a); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if e.Redacted != nil {
+			// The client table is an alias, which names no schema.
+			bare := e.Table
+			if _, table, qualified := strings.Cut(e.Table, "."); qualified {
+				bare = table
+			}
+			output := bare + RedactedSuffix
+			for _, a := range ways {
+				if err := add(base+RedactedSuffix+a.suffix, strings.Join(e.Redacted, ", "), e.Table+" AS "+output, output,
+					append([]string{privateTerm}, always...), a); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 	return out, nil
@@ -166,8 +235,9 @@ func Config(header string, streams []Stream) []byte {
 	return b.Bytes()
 }
 
-// Manifest returns streams as JSON, one object for each with its name, its entity and its table:
-// what the conformance suite's clients subscribe to, and the tables they compare.
+// Manifest returns streams as JSON, one object for each with its name, its entity and the client
+// table its rows replicate into: what the conformance suite's clients subscribe to, and the tables
+// they compare.
 func Manifest(streams []Stream) ([]byte, error) {
 	type entry struct {
 		Stream string `json:"stream"`
@@ -176,7 +246,7 @@ func Manifest(streams []Stream) ([]byte, error) {
 	}
 	entries := make([]entry, 0, len(streams))
 	for _, s := range streams {
-		entries = append(entries, entry{Stream: s.Name, Entity: s.Entity, Table: s.Table})
+		entries = append(entries, entry{Stream: s.Name, Entity: s.Entity, Table: s.Output})
 	}
 	out, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {

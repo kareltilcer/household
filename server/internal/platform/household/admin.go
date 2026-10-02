@@ -76,11 +76,16 @@ func Admin() module.PlatformModule {
 	// grant on admin, since every member's app works from them; the invitations reach the members
 	// granted admin (PRD modules/17 Sync). Each replicates the columns its sync row carries: a
 	// household without its code, which only its owners read, a membership without a child's birth
-	// year, and an invitation without its token.
+	// year, and an invitation without its token. The household carries its entitlement as its banner
+	// shows it to every member, the state of its subscription, its clocks and its restriction (PRD 04
+	// §3), so that a client knows offline what its household may do, and learns of a change of it as
+	// of any change of the row (D-124); not the clocks only the hourly transitions read, nor the count
+	// of warnings sent.
 	p.Entities = []sync.Entity{
 		{Name: entitySettings, Table: "households", Policy: sync.StrictVersion, Access: sync.Members,
 			Columns: append([]string{"id", "name", "country", "timezone", "base_currency", "locale", "units",
-				"first_day_of_week", "billing_payer_id"}, baseColumns...),
+				"first_day_of_week", "billing_payer_id", "billing_state", "trial_ends_at", "grace_ends_at", "retained_until",
+				"restricted_at", "restricted_by", "restricted_by_label", "restriction_reason"}, baseColumns...),
 			Creates: []string{"postHouseholds"}},
 		{Name: entityMembership, Table: "memberships", Policy: sync.StrictVersion, Access: sync.Members,
 			Columns: append([]string{"id", "household_id", "user_id", "role", "grants", "dashboard_locked", "pin_locked"}, baseColumns...),
@@ -180,9 +185,10 @@ type Change struct {
 // Hooks are what later items plug into the household surface, each nil until its item fills it in.
 type Hooks struct {
 	// Lost runs in the transaction of every change that takes access from members, the grant
-	// lowered to none, the module disabled, the member removed or gone: item 17 retracts what
-	// their replicas may no longer hold there (FR-SY7), and item 20 starts a leaving member's
-	// private root's window (FR-PR7). An error rolls the change back.
+	// lowered to none, the module disabled, the member removed or gone: the streams retract from
+	// their replicas what the change took (FR-SY7), and the hook takes a member removed or gone out
+	// of every audience's readers (app.Retract, item 17); item 20 starts a leaving member's private
+	// root's window (FR-PR7). An error rolls the change back.
 	Lost func(ctx context.Context, tx pgx.Tx, loss Loss) error
 	// Changed runs after a change of a member's role or grants, or their removal, commits: item 15
 	// tells them (D-78, FR-HA5).

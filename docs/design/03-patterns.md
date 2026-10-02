@@ -85,9 +85,10 @@ The one screen that exists because nobody at the platform can look at a member's
 ([D-3](../prd/09-decisions.md)). Per device: last sync, cursor position, pending mutation count,
 conflicts awaiting resolution, replica-digest state, and **force re-snapshot**
 ([FR-HA19](../prd/modules/17-household-admin.md)); under D-93 the cursor position is the
-replica's last checkpoint, the digest state its bucket-checksum state (with the digest's, if plan
-item 17 keeps that endpoint), and the re-snapshot a re-download. **It ships in Phase 0**, before
-any feature module, because it is the only view anyone gets of a sync failure.
+replica's last checkpoint, the digest state its bucket-checksum state with the digest's, both from
+the replica's report ([D-125](../prd/09-decisions.md)), and the re-snapshot a re-download. **It
+ships in Phase 0**, before any feature module, because it is the only view anyone gets of a sync
+failure.
 
 ## 2. Absence, not disabling
 

@@ -97,9 +97,10 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   **requires** `id` in its body. A server-minted id online and a client id offline is the
   dual identity D-23 exists to prevent.
 - **Instants** are `timestamptz`, RFC 3339 with an explicit offset on the wire. **Calendar
-  days** are `date` (`YYYY-MM-DD`) in the household's timezone, which is never assumed. The one
-  exception is the usage sample's day, a metering bucket every household shares, which is UTC's
-  ([D-109](docs/prd/09-decisions.md)).
+  days** are `date` (`YYYY-MM-DD`) in the household's timezone, which is never assumed. The
+  exception is a metering bucket every household shares, which is UTC's: the usage sample's day
+  ([D-109](docs/prd/09-decisions.md)) and the day the push counts a household's mutations in
+  (`sync_usage`, [D-127](docs/prd/09-decisions.md)).
 - **English is the source language** of every identifier, enum value, log message and
   comment. No user-visible string is a literal: it is a translation key, present in all five
   catalogs (`en`, `cs`, `sk`, `de`, `pl`) in `packages/i18n/catalogs/`, and architecture test 7
@@ -129,15 +130,21 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   household-scoped unsafe operations that declare no `402`: a new one declares it. A suspended
   household answers `404`. The spine refuses a create past a module's rows, and the files pipeline an
   upload past the objects or in grace ([ADR 0017](docs/adr/0017-entitlements-on-the-households-row-the-gate-and-fair-use.md)).
-- **The mutation spine.** Every mutation writes its row, an audit event and a sync change
-  in one transaction, through one service-layer entry point, `mutation.Apply`, which commits
-  only what it records. REST and sync both write through it: a module whose entities a client
+- **The mutation spine.** Every mutation writes its row and an audit event, and reports a sync
+  change for each row it writes, in one transaction, through one service-layer entry point,
+  `mutation.Apply`, which commits only what it records; the change is checked against its entity and
+  written to no feed (D-121). REST and sync both write through it: a module whose entities a client
   writes offline implements `push.Writer`, and the push (`internal/platform/push`) hands it each
-  mutation once it has checked the declaration, the grant and the batch. An entity's table
-  calls `add_entity_columns` for the base columns (`version`, `created_*`, `updated_*`,
-  `deleted_at`), and `replicate` once a generated stream reads it; its module declares it through
-  `SyncSource` with its merge policy and access (architecture tests 5, 9 and 10;
-  [ADR 0006](docs/adr/0006-sync-ready-schema-and-the-mutation-spine.md), [ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
+  mutation once it has checked the declaration, the grant and the batch, and locked the row an
+  update names: a `strict_version` writer calls `Mutation.Admit`, and an `lww_row` writer keeps the
+  loser when `Mutation.Behind` (D-122). An entity's table calls `add_entity_columns` for the base
+  columns (`version`, `created_*`, `updated_*`, `deleted_at`), and `replicate` once a generated
+  stream reads it; its module declares it through `SyncSource` with its merge policy and access. A
+  row a private item or an audience bounds carries `visibility` and `owner_id`, or `readers`, itself,
+  rewritten through `sync.RewriteAccess`, which is no edit of it (D-123) and which architecture test
+  4 keeps modules from doing any other way (architecture tests 4, 5, 9 and 10;
+  [ADR 0006](docs/adr/0006-sync-ready-schema-and-the-mutation-spine.md), [ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md),
+  [ADR 0018](docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)).
   The one other write path is the platform's own, for the global account tables (a user's
   profile, credentials and sessions), which are no household's history: `tenant.AccountTx`,
   which architecture test 4 keeps out of every module ([ADR 0009](docs/adr/0009-accounts-sessions-throttles-and-the-breach-corpus.md)).
@@ -145,7 +152,9 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   `tenant.InWriteTx`, which test 4 also keeps out of modules: the Idempotency-Key middleware's
   keys, and the push's answer to each mutation (`sync_mutations`), kept in the effect's own
   transaction when the mutation took one and in a transaction of its own when it took none
-  ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
+  ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)),
+  and its count of the mutations a household pushed in a day (`sync_usage`,
+  [ADR 0018](docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)).
   The household surface (`internal/platform/household`) is `admin`, a module the platform
   serves itself: it writes through `mutation.Apply` with the actions and entities
   `module.PlatformModule` declares, and holds a household its caller is not yet in, creating

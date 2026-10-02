@@ -1,8 +1,10 @@
-// Package mutation is the mutation spine (PRD 01 §3, PRD 03 §1, §2.2): the one service-layer
-// entry point every write goes through, from a REST handler, from the sync engine's push (item
-// 13) and from any later front door alike (future/ai-assistant). Apply runs a mutation's own
-// writes and, in the same transaction, records its audit event (FR-AU1) and writes its changes
-// to the household's feed (FR-SY1), so that the three commit or roll back together.
+// Package mutation is the mutation spine (PRD 01 §3, PRD 03 §1): the one service-layer entry point
+// every write goes through, from a REST handler, from the sync engine's push (item 13) and from any
+// later front door alike (future/ai-assistant). Apply runs a mutation's own writes and, in the same
+// transaction, records its audit event (FR-AU1) and checks the change it reports of each row it wrote
+// against the row's entity (FR-SY1), so that the write and its history commit or roll back together.
+// PowerSync replicates the rows themselves from the write-ahead log (D-93); the change feed the
+// spine once wrote beside them has no reader, and is no longer written (D-121, ADR 0018).
 //
 // It is the only way to write. tenant.InTx, through which a handler reads, is read-only, so
 // PostgreSQL refuses a write there; Apply's transaction may write, and commits only what it
@@ -27,19 +29,18 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
-// Record is what a mutation did: the audit event it records and the changes it emits, one per
-// entity row it created, changed or deleted.
+// Record is what a mutation did: the audit event it records and its changes, one per entity row it
+// created, changed or deleted.
 type Record struct {
 	Event   audit.Event
 	Changes []sync.Change
 }
 
-// Result is what a committed mutation wrote.
+// Result is what a committed mutation wrote: the zero Result for one that reported nothing, whose
+// transaction Apply rolled back.
 type Result struct {
 	// EventID is its audit event's id.
 	EventID uuid.UUID
-	// Seq is the feed seq of its last change.
-	Seq int64
 }
 
 var (
@@ -60,7 +61,6 @@ var errNothing = errors.New("mutation: nothing to record")
 type (
 	catalogKey struct{}
 	viaKey     struct{}
-	hookKey    struct{}
 	ceilingKey struct{}
 )
 
@@ -107,9 +107,9 @@ func WithVia(ctx context.Context, via audit.Via) context.Context {
 	return context.WithValue(ctx, viaKey{}, via)
 }
 
-// Apply runs fn in a transaction of ctx's household that may write, then records the audit
-// event and writes the changes fn reports, and commits: all of it or none of it. fn's error, a
-// problem for instance, is returned as it is, after the rollback.
+// Apply runs fn in a transaction of ctx's household that may write, then records the audit event
+// and checks the changes fn reports, and commits: all of it or none of it. fn's error, a problem for
+// instance, is returned as it is, after the rollback.
 //
 // The actor is the caller in ctx's tenant scope, labelled with their display name as it is when
 // the event is written, or the system when the scope has no caller, and the audit event records
@@ -166,9 +166,6 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 				}
 			}
 		}
-		// The key first, before the feed lock: a row lock taken under the feed lock could be one
-		// another mutation of the household holds while it waits for the feed lock, a member's
-		// removal taking their keys with their membership, and the two would deadlock.
 		if err := idempotency.Commit(ctx, tx); err != nil {
 			return err
 		}
@@ -180,17 +177,8 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 				return fmt.Errorf("mutation: the actor's name: %w", err)
 			}
 		}
-		household := scope.HouseholdID()
-		// The event before the changes, for the same reason: its foreign keys take the locks on
-		// the household's row and the module's that the feed's inserts need under the feed lock.
-		if res.EventID, err = audit.Record(ctx, tx, household, actor, via, reqctx.RequestID(ctx), rec.Event); err != nil {
+		if res.EventID, err = audit.Record(ctx, tx, scope.HouseholdID(), actor, via, reqctx.RequestID(ctx), rec.Event); err != nil {
 			return err
-		}
-		if res.Seq, err = sync.Emit(ctx, tx, household, actor.ID, rec.Changes); err != nil {
-			return err
-		}
-		if hook, ok := ctx.Value(hookKey{}).(func()); ok {
-			hook()
 		}
 		return nil
 	})

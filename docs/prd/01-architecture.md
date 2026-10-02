@@ -177,7 +177,7 @@ Applied by every module without exception; stated once here.
 |---|---|
 | **Primary keys** | `uuid` holding a **UUIDv7**. Clients generate them (the sync engine requires client-side id generation so an offline create has a stable identity) |
 | **Tenant key** | `household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE` on every tenant row |
-| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token. Under D-93 a rewrite alone of the access fields a row carries for its stream does not count as an update: an audience's readers ([modules/15-chat.md](modules/15-chat.md) Sync), or the visibility and owner a row takes from the private item that bounds it. Plan item 17 keeps such a rewrite out of the version, or keeps those fields off the row |
+| **Row version** | `version bigint NOT NULL DEFAULT 1`, incremented on every update. The sync engine's optimistic-concurrency token. Under D-93 a rewrite alone of the access fields a row carries for its stream does not count as an update: an audience's readers ([modules/15-chat.md](modules/15-chat.md) Sync), or the visibility and owner a row takes from the private item that bounds it. Such a rewrite goes through `sync.RewriteAccess`, and `touch_entity` leaves the version as it was and refuses one that changes anything else (**D-123**, [ADR 0018](../adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)) |
 | **Audit columns** | `created_by`, `created_at`, `updated_by`, `updated_at` — `timestamptz`, never local time |
 | **Soft delete** | `deleted_at timestamptz NULL`. Hard delete is reserved for the destructive-operation gate and for erasure |
 | **Ordering** | Lexorank `position text` where users order things by hand |
@@ -192,7 +192,9 @@ Applied by every module without exception; stated once here.
 Stated once, applied everywhere, never repeated in a module specification:
 
 1. Writes an **audit event** through the spine, in the same transaction.
-2. Writes a **sync change** to the household's change feed, in the same transaction.
+2. Reports a **sync change** for each row it writes, which the spine checks against the row's
+   entity, in the same transaction. Under D-93 PowerSync replicates the rows themselves, and the
+   spine writes the change to no feed (**D-121**).
 
 A module that mutates without doing both is a bug the architecture test catches.
 
@@ -305,9 +307,11 @@ Household has **one** realtime channel and it exists to serve the sync engine.
 
 > **Under D-93 replication is PowerSync's**, over its own connection from each client to the
 > PowerSync service, so a client neither pulls `GET …/sync/changes` nor needs a nudge to learn that
-> the feed advanced. Whether this socket stays, for Chat's payload exception and for the
-> entitlement and access changes the contract also sends on it, is plan item 17's decision, and
-> this section is amended with it ([ADR 0001](../adr/0001-sync-engine.md)).
+> the feed advanced. **The socket is gone (D-124):** a chat message reaches its readers through its
+> stream on that connection, as every row does, a member's grants on their membership row, and the
+> household's entitlement on the household's row, whose stream sends its state as its banner shows
+> it. PowerSync's connection is the one realtime channel, and its connections are the target PRD 07
+> §1 sizes ([ADR 0018](../adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)).
 
 The full design of the change feed, the mutation queue, retractions and conflict policy is in
 [03-platform-strands.md](03-platform-strands.md) §2. It is the largest single piece of new
@@ -358,7 +362,9 @@ broken product for everyone who has not updated. **D-11.**
 1. A module importing another module.
 2. A tenant table without `household_id`, without RLS enabled, or without `FORCE ROW LEVEL SECURITY`.
 3. A registered module that does not implement `ExportSource` and `EraseSource`.
-4. A mutating route that does not write an audit event, or does not write a sync change.
+4. A mutating route that does not write an audit event, or does not record a sync change (which,
+   under D-93, the spine checks and writes to no feed, **D-121**); and a module that sets the access
+   rewrite itself, which only the platform's `sync.RewriteAccess` may (**D-123**).
 5. A sync entity without a declared merge policy and access predicate.
 6. A route not present in `openapi.yaml`, or a path in `openapi.yaml` with no route.
 7. A user-visible string literal in client code that is not a translation key.
@@ -366,8 +372,11 @@ broken product for everyone who has not updated. **D-11.**
 9. A create operation for a sync entity that does not **require** a client-supplied `id`
    (**D-23**, **D-91**).
 10. A committed sync configuration that is not the one the entity registry generates, a table a
-    generated stream reads that is not published for PowerSync, and a table PowerSync's replication
-    role may `SELECT` that no stream needs (**D-93**; plan item 13).
+    generated stream reads that is not published for PowerSync, a table PowerSync's replication
+    role may `SELECT` that no stream needs, and an entity whose table lacks a column its stream
+    sends, its redacted projection names or its access reads (`visibility`, `owner_id`, `readers`),
+    or lets its `visibility` or `readers` be NULL, which no stream matches (**D-93**; plan items 13
+    and 17).
 11. A privilege of the meter role's beyond `SELECT` on a column that names a household or counts,
     sizes or schedules rows (§2.3; plan item 14).
 

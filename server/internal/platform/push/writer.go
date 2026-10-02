@@ -33,10 +33,11 @@ import (
 // Writer is what a module implements to take the mutations clients push to its entities. The push
 // calls WriteSync inside mutation.Apply's transaction, tx, of the caller's household, once it has
 // checked m against its entity's declaration, the caller's grant on the module and the entity's
-// cross-row invariant: the write is all that is left. A refusal is a *Refusal, or the problem the
-// module's service layer answers its REST routes with, which the push reads as one (asRefusal); a
-// constraint the database enforces is refused as FromDatabase reads it; any other error, a problem
-// of the server's own among them, fails the batch.
+// cross-row invariant, and locked the row an update, a delete or an action names (Mutation.Prior):
+// the write is all that is left, and a strict_version writer's Admit before it. A refusal is a
+// *Refusal, or the problem the module's service layer answers its REST routes with, which the push
+// reads as one (asRefusal); a constraint the database enforces is refused as FromDatabase reads it;
+// any other error, a problem of the server's own among them, fails the batch.
 type Writer interface {
 	WriteSync(ctx context.Context, tx pgx.Tx, m Mutation) (Written, error)
 }
@@ -60,8 +61,16 @@ type Mutation struct {
 	Entity   sync.Entity
 	EntityID uuid.UUID
 	Op       Op
-	// BaseVersion is the row's version the client wrote against, nil on a create.
+	// BaseVersion is the row's version the client wrote against, nil on a create. For an entity whose
+	// policy compares it, it is the version an earlier mutation of the batch to the same row left it at
+	// when the client sent the two against the same version: the replica made the later having seen
+	// the earlier (D-122).
 	BaseVersion *int64
+	// Prior is the version of the row EntityID names as the push found it, locked FOR UPDATE until the
+	// mutation's transaction ends, for an update, a delete or an action of an entity whose policy
+	// compares a base version (lww_field, lww_row and strict_version); 0 when no row has the id, and on
+	// anything else. Admit and Behind compare BaseVersion with it.
+	Prior int64
 	// Action is the action an Action names, "" for any other op.
 	Action string
 	// Fields are the fields the client changed, each as its JSON.
@@ -71,6 +80,40 @@ type Mutation struct {
 	// latest client time orders by it, and a row that keeps it keeps the flag beside it.
 	ClientTime   time.Time
 	ClockFlagged bool
+}
+
+// Admit returns why m's merge policy refuses to write it over its row as it stands, at m.Prior, whose
+// representation the module serialises as current; nil when it admits it (PRD 03 §2.5). A writer of a
+// strict_version entity calls it once it has found the row and may show it to the caller, before it
+// writes: an update, a delete or an action that names no base version is refused, and one made against
+// another version than the row's is a conflict, which carries current so that the member's change can
+// be re-presented beside it. A create, and every other policy, it admits; the push fails the batch at a
+// strict_version write a writer let through over another version.
+func (m Mutation) Admit(current any) error {
+	if m.Entity.Policy != sync.StrictVersion || m.Op == Create {
+		return nil
+	}
+	switch {
+	case m.BaseVersion == nil:
+		return Refuse(problem.CodeValidationFailed, "%s is strict_version: a write names the version it was made against", m.Entity.Name)
+	case *m.BaseVersion != m.Prior:
+		return &Refusal{
+			Code:    problem.CodeVersionConflict,
+			Message: fmt.Sprintf("it was made against version %d of the row, which is at version %d", *m.BaseVersion, m.Prior),
+			Row:     current,
+		}
+	}
+	return nil
+}
+
+// Behind reports whether m was made against an older version of its row than the one it lands on:
+// another write reached the row since the client last saw it, which is never the client's own earlier
+// mutation of its batch (BaseVersion). An lww_field or lww_row write behind is
+// answered merged, its row attached, since the row the server keeps differs from what the client
+// expected; and a writer of an lww_row entity preserves the row its write replaces, the loser, which
+// whole-row last-write-wins would otherwise drop (PRD 03 §2.5, D-122).
+func (m Mutation) Behind() bool {
+	return m.Op != Create && m.BaseVersion != nil && *m.BaseVersion < m.Prior
 }
 
 // Written is what a module's write of a mutation came to.

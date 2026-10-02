@@ -70,6 +70,11 @@ INSERT INTO sync_mutations (household_id, user_id, mutation_id, fingerprint, out
   ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-0000000000d5', decode(repeat('a2', 32), 'hex'), 'applied', 1, '{"title": "Eggs"}'),
   ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-0000000000d6', decode(repeat('b1', 32), 'hex'), 'applied', 1, '{"title": "Bread"}');
 
+-- How many mutations each household's replicas pushed on a day.
+INSERT INTO sync_usage (household_id, day, mutations) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '2026-09-30', 3),
+  ('01900000-0000-7000-8000-00000000000b', '2026-09-30', 1);
+
 -- An object in each household, household B's owner's private one in household A, a job for each, and
 -- each household's sample of a day, split by module and by member.
 INSERT INTO files (household_id, module, entity_id, variant, content_type, byte_size, sha256, filename, owner_id, private, variants) VALUES

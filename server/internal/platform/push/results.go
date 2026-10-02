@@ -30,11 +30,16 @@ type Result struct {
 	Row        any       `json:"row,omitempty"`
 	Code       *string   `json:"code"`
 	Message    *string   `json:"message"`
+	// replayed marks an answer kept for the mutation's id before this delivery answered it (kept.answer):
+	// the delivery that answered it first counted it towards the household's day (count), and this
+	// one does not. It is never serialised.
+	replayed bool
 }
 
-// The outcomes of a mutation (PRD 03 §2.4). This item's push answers applied, rejected and
-// deferred, and conflict when a module refuses a mutation on its row's version; merged, and the
-// policies that merge or conflict on a base version, are item 17's.
+// The outcomes of a mutation (PRD 03 §2.4): applied; merged, an lww_field or lww_row write applied
+// over a row another write changed since the client saw it (Mutation.Behind); conflict, a write
+// refused on its row's version, strict_version's (Mutation.Admit) or a module's own; rejected; and
+// deferred.
 const (
 	Applied  = "applied"
 	Merged   = "merged"
@@ -96,12 +101,14 @@ type kept struct {
 
 // answer is the answer to res's mutation, which carries what fp fingerprints, when k was kept for
 // its id: k's own, when the mutation is the one k answered, and a refusal when the id was sent
-// before carrying another mutation.
+// before carrying another mutation. Either is replayed: the id was answered, and counted, before.
 func (k kept) answer(res Result, fp []byte) Result {
+	out := k.result
 	if !bytes.Equal(k.fingerprint, fp) {
-		return reject(res, Refuse(problem.CodeValidationFailed, "mutation %s was sent before carrying another mutation", res.MutationID))
+		out = reject(res, Refuse(problem.CodeValidationFailed, "mutation %s was sent before carrying another mutation", res.MutationID))
 	}
-	return k.result
+	out.replayed = true
+	return out
 }
 
 // keptAnswers returns the answers kept for the caller's mutation ids in ctx's household, within

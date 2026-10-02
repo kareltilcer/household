@@ -3,8 +3,9 @@
 
 CREATE SCHEMA arch_testdata;
 
--- Keeps it: published as replicate publishes a table.
-CREATE TABLE arch_testdata.published_items (id uuid PRIMARY KEY, household_id uuid NOT NULL, title text);
+-- Keeps it: published as replicate publishes a table. Its visibility, which a private entity of it
+-- reads, may be NULL.
+CREATE TABLE arch_testdata.published_items (id uuid PRIMARY KEY, household_id uuid NOT NULL, title text, visibility text);
 SELECT replicate('arch_testdata.published_items');
 
 -- A stream reads it, and nothing published it.
@@ -18,6 +19,7 @@ ALTER PUBLICATION powersync ADD TABLE arch_testdata.halfway_items;
 CREATE TABLE arch_testdata.exposed_items (id uuid PRIMARY KEY, household_id uuid NOT NULL);
 GRANT SELECT ON arch_testdata.exposed_items TO household_powersync;
 
--- Published, and no stream reads it yet: an entity's, whose streams plan item 17 generates.
+-- Published, and no stream reads it: an entity's, which the role reads past row-level security
+-- whatever keeps it.
 CREATE TABLE arch_testdata.withheld_items (id uuid PRIMARY KEY, household_id uuid NOT NULL);
 SELECT replicate('arch_testdata.withheld_items');

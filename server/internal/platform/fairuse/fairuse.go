@@ -32,6 +32,10 @@ const (
 	Objects    = 100_000
 )
 
+// SyncMutations is the mutations a household's replicas may push on one UTC day (PRD 04 §5): a
+// ceiling on a rate, which the push answers 429 past, until the day ends (D-127).
+const SyncMutations = 100_000
+
 // The resources a refusal and a warning name, as the contract's FairUseProblem spells them.
 const (
 	ResourceMembers = "members"
@@ -74,16 +78,33 @@ const message = "notification.fair_use"
 // of resource, of module's rows when the resource is rows, at 80 % of ceiling or more (Warns): once,
 // where the count crosses it (Crossed). The caller nudges n once tx commits.
 func Notice(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UUID, resource, module string, count, ceiling int64) error {
+	return warn(ctx, tx, n, household, message, "fair_use:"+resource+":"+module,
+		i18n.Args{"resource": resource, "module": module, "held": count, "ceiling": ceiling})
+}
+
+// syncMessage is the push that warns a household's owners of the mutations its replicas pushed today.
+const syncMessage = "notification.fair_use_sync"
+
+// SyncNotice queues, in tx in household's context, the push that tells each of its owners its
+// replicas pushed count mutations today, 80 % of SyncMutations or more: once a day, where the count
+// crosses it (Crossed). The caller nudges n once tx commits.
+func SyncNotice(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UUID, count int64) error {
+	return warn(ctx, tx, n, household, syncMessage, "fair_use:sync_mutations",
+		i18n.Args{"held": count, "ceiling": int64(SyncMutations)})
+}
+
+// warn queues, in tx in household's context, msg with args to each of its owners, a household
+// notification that links to it, its repeats coalesced under key.
+func warn(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UUID, msg, key string, args i18n.Args) error {
 	owners, err := tenant.Owners(ctx, tx, household)
 	if err != nil {
 		return err
 	}
-	args := i18n.Args{"resource": resource, "module": module, "held": count, "ceiling": ceiling}
 	ns := make([]notify.Notification, 0, len(owners))
 	for _, o := range owners {
 		ns = append(ns, notify.Notification{
-			To: o, Category: notify.Household, Message: message, Args: args,
-			Link: "/households/" + household.String(), Coalesce: "fair_use:" + resource + ":" + module,
+			To: o, Category: notify.Household, Message: msg, Args: args,
+			Link: "/households/" + household.String(), Coalesce: key,
 		})
 	}
 	return n.Queue(ctx, tx, ns...)

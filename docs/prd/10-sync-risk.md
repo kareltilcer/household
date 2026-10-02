@@ -22,8 +22,9 @@ imprecision is what makes it feel unmanageable. There are two distinct things:
 | **The sync engine** | **Contained** — one package, one protocol version, no data migration | The change feed, the mutation queue, conflict resolution, retraction, compaction, the client replica |
 
 > **Under D-93** the replicated path reads no change row: PowerSync's streams read the access fields
-> on each entity's own row, and plan item 17 decides how a row that a private item or an audience
-> bounds carries them ([ADR 0001](../adr/0001-sync-engine.md)).
+> on each entity's own row, and a row that a private item or an audience bounds carries them itself,
+> rewritten when the item or the audience changes, which is no edit of it (**D-123**,
+> [ADR 0001](../adr/0001-sync-engine.md), [ADR 0018](../adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)).
 
 The schema half is **cheap to get right and must be right on day one**. It is four columns, an id
 strategy and a registry. None of it requires the engine to exist. All of it is enforceable by the
@@ -151,7 +152,7 @@ is the single most valuable artefact produced in Phase 0.
 | # | Scenario | Expected |
 |---|---|---|
 | 1 | Two clients offline edit **different fields** of one row (`lww_field`) | Both changes survive; no conflict shown |
-| 2 | Two clients offline edit **the same field** | One wins by server receipt; the loser is surfaced, not silently dropped |
+| 2 | Two clients offline edit **the same field** | One wins by server receipt; the loser is surfaced, not silently dropped. Under D-93: the later write is answered `merged`, carrying the row, and the activity log keeps the value it replaced (**D-122**) |
 | 3 | Two clients offline check the **same** shopping item | One check; idempotent; no conflict dialog |
 | 4 | Client A creates X offline and edits it twice before syncing | One entity, final state, no id remapping |
 | 5 | Client A creates X, edits X, deletes X — all offline | Server sees three mutations for an id it never had; net effect is a tombstone and **no error storm** |
@@ -206,10 +207,14 @@ alerting metric** ([07-nonfunctional.md](07-nonfunctional.md) §5), not a suppor
 > **Under D-93** PowerSync verifies a checksum per bucket at every checkpoint and downloads a
 > bucket again when it does not match, which holds a replica to PowerSync's buckets. It does not
 > hold the buckets to PostgreSQL: a replication fault, or a generated stream that disagrees with an
-> entity's declared access, passes every checksum. The digest, computed from PostgreSQL, remains
-> the check on that, but it is evaluated above at the client's cursor, and a PowerSync client holds
-> no feed cursor. Plan item 17 decides whether it keeps an endpoint of its own and, if it does, the
-> point it is computed at.
+> entity's declared access, passes every checksum. **The digest stays, as the replica's report
+> (D-125):** sent at rest, it carries per entity type the rows held and the hash of their
+> `(entity_id, version)` pairs, and the replica's health (checkpoint, queue, unresolved conflicts,
+> checksum failures). A PowerSync client holds no feed cursor and PostgreSQL keeps no row's history,
+> so the server computes the same over what the caller may see as the report arrives, and a mismatch
+> is divergence only when the next report, a minute or more later, mismatches again while the
+> server's own hash held still. A replica found divergent downloads itself again once its queue has
+> drained. Plan item 18 builds both halves.
 
 ## 6. The interaction with the no-content-access guarantee
 
@@ -227,8 +232,9 @@ Three consequences, all requirements rather than observations:
    view anyone gets of what went wrong.
 2. **The diagnostic bundle carries sync state** — cursor, queue depth, per-entity digest mismatch,
    the last N mutation outcomes and their reasons, with **no field values**. Under D-93 the cursor
-   is the replica's last checkpoint, and the mismatches are its bucket-checksum failures and any
-   digest item 17 keeps. That makes it metadata, which means it can be sent without the member
+   is the replica's last checkpoint, and the mismatches are its bucket-checksum failures and the
+   entity types its digest disagreed on, the replica's report (**D-125**). That makes it metadata,
+   which means it can be sent without the member
    having to expose content.
 3. **Every mutation outcome but `applied` carries a machine-readable `code`, always.** "Rejected"
    with no reason is undebuggable by anyone, and here there is no second route to the answer. An

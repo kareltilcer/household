@@ -101,6 +101,18 @@ var allowed = map[string]bool{
 	"module":   true,
 	"attempts": true,
 	"objects":  true,
+
+	// Sync's metrics (internal/platform/sync, LogMetrics): an entity's registered type, a mutation's
+	// outcome and its problem code, how many mutations a batch carried and a replica holds queued, and
+	// a replication slot of PowerSync's by its name, whether it is connected, and its lag in bytes. A
+	// divergence names its kind and its entity, never a row.
+	"entity":    true,
+	"outcome":   true,
+	"code":      true,
+	"mutations": true,
+	"pending":   true,
+	"slot":      true,
+	"active":    true,
 }
 
 // The correlation keys the logger adds from the request's scope.

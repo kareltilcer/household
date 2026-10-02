@@ -26,7 +26,9 @@ import (
 	"github.com/kareltilcer/household/server/internal/conformance"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/files"
 	"github.com/kareltilcer/household/server/internal/platform/health"
+	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
@@ -59,6 +61,7 @@ type world struct {
 	router   chi.Router
 	// failures counts the records the API logged at ERROR.
 	failures *atomic.Int64
+	files    *files.Service
 }
 
 func newWorld(t *testing.T, o apptest.Options) *world {
@@ -82,6 +85,17 @@ func newWorldOf(t *testing.T, o apptest.Options, m module.Module) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
+	catalog, err := registry.WithPlatform(household.Admin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The hook the API runs (app.Run): a member removed from a household leaves every audience.
+	if o.Hooks.Lost == nil {
+		o.Hooks.Lost = app.Retract(catalog)
+	}
+	if o.Files == nil {
+		o.Files = apptest.Files(t, pool, log, o)
+	}
 	accounts, outbox := apptest.Accounts(t, pool, log, o)
 	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, o)
 	router, err := app.NewRouter(app.Deps{
@@ -95,7 +109,9 @@ func newWorldOf(t *testing.T, o apptest.Options, m module.Module) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
-	around, err := conformance.Around(apptest.TokenKeys)(router, app.Served{Pool: pool, Devices: accounts.Devices})
+	around, err := conformance.Around(apptest.TokenKeys)(router, app.Served{
+		Pool: pool, Devices: accounts.Devices, Files: o.Files, Catalog: catalog, Log: log,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +119,7 @@ func newWorldOf(t *testing.T, o apptest.Options, m module.Module) *world {
 	if !ok {
 		t.Fatalf("Around answered a %T", around)
 	}
-	return &world{t: t, admin: d.Pool(t, ""), pool: pool, accounts: accounts, router: root, failures: failures}
+	return &world{t: t, admin: d.Pool(t, ""), pool: pool, accounts: accounts, router: root, failures: failures, files: o.Files}
 }
 
 // testLog writes a log's lines to the test's, and counts those at ERROR in failures: the handler
@@ -244,8 +260,9 @@ func at(m map[string]any, t time.Time) map[string]any {
 
 func key() string { return idgen.New().String() }
 
-// Every mutation goes through the spine: its row, its audit event, recorded via sync, and its
-// change; each answered with the version it committed at and the row as the API serialises it.
+// Every mutation goes through the spine: its row and its audit event, recorded via sync; each answered
+// with the version it committed at and the row as the API serialises it. The change feed is written no
+// longer (D-121).
 func TestPushWritesItemsThroughTheSpine(t *testing.T) {
 	w := newWorld(t, apptest.Options{})
 	household, member := w.household("contribute")
@@ -280,17 +297,14 @@ func TestPushWritesItemsThroughTheSpine(t *testing.T) {
 	if n := w.count("SELECT count(*) FROM audit_events WHERE entity_id = $1 AND meta->>'via' = 'sync'", milk); n != 4 {
 		t.Errorf("%d audit events via sync, want 4", n)
 	}
-	if n := w.count("SELECT count(*) FROM sync_changes WHERE entity_id = $1", milk); n != 4 {
-		t.Errorf("%d changes, want 4", n)
-	}
-	if last := w.count("SELECT max(seq) FROM sync_changes WHERE household_id = $1", household); got.Seq != int64(last) {
-		t.Errorf("seq %d, want the feed's %d", got.Seq, last)
+	if n := w.count("SELECT count(*) FROM sync_changes WHERE household_id = $1", household); n != 0 {
+		t.Errorf("%d rows of the change feed written, want none", n)
 	}
 }
 
 // Each mutation is answered in order, every outcome but applied with a code: a refused field, a
-// mutation after a failure to write what it depends on (the row, or one a field names), an entity
-// this push does not write yet, a row that is not there, and a field the entity does not take.
+// mutation after a failure to write what it depends on (the row, or one a field names), a create that
+// does not name what it must, a row that is not there, and a field the entity does not take.
 func TestPushAnswersEveryMutation(t *testing.T) {
 	w := newWorld(t, apptest.Options{})
 	household, member := w.household("contribute")
@@ -769,6 +783,31 @@ func TestPushAnswersAMemberRemovedWhileTheirBatchRuns(t *testing.T) {
 	}
 	if n := w.count("SELECT count(*) FROM conformance_items WHERE id = $1", milk); n != 0 {
 		t.Errorf("%d items written, want none", n)
+	}
+	if n := w.failures.Load(); n != 0 {
+		t.Errorf("%d failures logged, want none", n)
+	}
+}
+
+// A mutation two deliveries race to answer counts towards the household's day once (D-127): the
+// delivery that answers it first counts it, and the other, answered with what the first kept, does not.
+func TestPushCountsAMutationTwoDeliveriesRaceForOnce(t *testing.T) {
+	var take func()
+	w := newWorldOf(t, apptest.Options{}, takeover{take: func() { take() }})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	milk := mutationOf(conformance.Item, "create", idgen.New(), map[string]any{"title": "Milk"})
+	// The mutation sent again under a key of its own, as a client sends it once D-92's minutes have
+	// passed, runs whole while the first delivery is about to write.
+	var again push.BatchResult
+	take = func() {
+		take = func() {}
+		again = w.results(w.push(household, token, key(), milk))
+	}
+	w.want(w.results(w.push(household, token, key(), milk)), push.Applied)
+	w.want(again, push.Applied)
+	if n := w.count("SELECT coalesce(sum(mutations), 0) FROM sync_usage WHERE household_id = $1", household); n != 1 {
+		t.Errorf("the household's day counts %d mutations, want the one", n)
 	}
 	if n := w.failures.Load(); n != 0 {
 		t.Errorf("%d failures logged, want none", n)

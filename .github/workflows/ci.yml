@@ -72,6 +72,25 @@ jobs:
           cache-dependency-path: |
             server/go.sum
             server/tools/golangci-lint.sum
+      # A service container takes no command, so PostgreSQL gets the settings docker-compose.yml
+      # starts it with here, and is restarted: logical replication among them, in which the test of
+      # PowerSync's replication lag makes a slot (tooling/src/workspace.test.ts holds the two lists
+      # to one).
+      - name: PostgreSQL as docker-compose.yml runs it
+        env:
+          POSTGRES: ${{ job.services.postgres.id }}
+        run: |
+          for setting in wal_level=logical max_replication_slots=10 max_wal_senders=10 max_slot_wal_keep_size=2GB; do
+            docker exec "$POSTGRES" psql --username=postgres --dbname=household \
+              --command="ALTER SYSTEM SET ${setting%%=*} = '${setting#*=}'"
+          done
+          docker restart "$POSTGRES"
+          for _ in $(seq 60); do
+            [ "$(docker inspect --format '{{.State.Health.Status}}' "$POSTGRES")" = healthy ] && break
+            sleep 1
+          done
+          docker exec "$POSTGRES" psql --username=postgres --dbname=household --tuples-only --no-align \
+            --command="SHOW wal_level" | grep --quiet --line-regexp logical
       - name: Modules are tidy and verified
         run: |
           go mod tidy -diff

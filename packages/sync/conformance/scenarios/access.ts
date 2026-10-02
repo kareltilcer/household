@@ -2,8 +2,11 @@
 // lists, which item 17 proves each retract as a row leaving every bucket a member holds, and the
 // one cause that is not on the list, a lapsed entitlement (FR-BI2, item 16).
 //
-// The access changes are the administrator's, standing in for item 10's routes and for the
-// audience mutations items 17 and 85 build (Admin).
+// A grant and a module's enablement are the administrator's, standing in for item 10's routes, which
+// cannot name the conformance module (Admin). Every other access change is the server's: a member
+// leaving a conversation and a note made private are pushed, and the server rewrites the readers, the
+// visibility and the owner the rows carry (ADR 0018); a removal from the household goes through item
+// 10's route, whose hook takes the member out of every audience (World).
 
 import { expect } from 'vitest'
 import type { Household, Member } from '../harness/admin.ts'
@@ -83,11 +86,13 @@ export const access: readonly Scenario[] = [
       expect(await petr.rows('conformance_messages')).toHaveLength(3)
       await offline(petr)
       await petr.create('conformance_messages', { conversation_id: talk.id, body: 'And milk' })
-      await w.admin.leaveConversation(talk.id, f.petr)
+      await w.leaveConversation(f.home, talk.id, f.petr, f.jana)
       await online(w, petr)
 
       expect(await petr.rows('conformance_messages')).toEqual([])
-      expect(answersOf(w, petr).map((a) => a.outcome)).toEqual(['rejected'])
+      expect(answersOf(w, petr).map((a) => [a.outcome, a.code])).toEqual([
+        ['rejected', 'not_found'],
+      ])
       expect(await eva.rows('conformance_messages')).toEqual([
         expect.objectContaining({ id: talk.messages[2] }),
       ])
@@ -147,53 +152,87 @@ export const access: readonly Scenario[] = [
       const jana = w.client({ name: 'jana', member: f.jana, household: f.home })
       const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
       await online(w, jana, petr)
-      await w.admin.leaveConversation(talk.id, f.petr)
+      await w.leaveConversation(f.home, talk.id, f.petr, f.jana)
       expect(await w.settle()).toBe(true)
       expect(await petr.rows('conformance_messages')).toEqual([])
       expect(await jana.rows('conformance_messages')).toHaveLength(3)
+      // The rewrite of their readers is no edit of the messages: each is at the version it was made.
+      for (const m of (await w.admin.rows('conformance_messages', f.home)).values())
+        expect(m).toMatchObject({ version: 1 })
     },
   },
   {
     key: 'loss-private',
     title: 'Access loss: an item moved from shared to private, while connected',
     expected:
-      "The note leaves every other member's replica, whose redacted form arrives in its place (D-88); its owner keeps it whole",
+      "The note and the comment it bounds leave every other member's replica, whose redacted form of the note arrives " +
+      'in its place (D-88); its owner keeps both whole, and an edit she queued against the comment applies, the rewrite ' +
+      'of its visibility being no edit of it',
     enabledBy: 17,
-    needs: [],
-    replicates: ['conformance_notes', 'conformance_notes_redacted'],
+    needs: ['conformance.note', 'conformance.note_comment'],
+    replicates: ['conformance_notes_redacted'],
     async run(w) {
       const f = await family(w)
-      const plan = w.rng.uuid()
+      const [plan, remark] = [w.rng.uuid(), w.rng.uuid()]
       await w.admin.insert('conformance_notes', f.home, [
         { id: plan, visibility: 'shared', title: 'Holiday plan', body: 'Book the cottage' },
+      ])
+      await w.admin.insert('conformance_note_comments', f.home, [
+        { id: remark, note_id: plan, visibility: 'shared', body: 'Two weeks?' },
       ])
       const jana = w.client({ name: 'jana', member: f.jana, household: f.home })
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
       await online(w, jana, eva)
       expect(await eva.row('conformance_notes', plan)).toMatchObject({ title: 'Holiday plan' })
-      await w.admin.makePrivate(plan, f.jana)
-      expect(await w.settle()).toBe(true)
+      expect(await eva.row('conformance_note_comments', remark)).toMatchObject({
+        body: 'Two weeks?',
+      })
+      // Jana edits the comment on her phone, offline, and makes the note private from elsewhere.
+      await offline(jana)
+      await jana.update('conformance_note_comments', remark, { body: 'Ten days' })
+      await w.makePrivate(f.home, plan, f.jana)
+      await online(w, jana)
+
       expect(await eva.row('conformance_notes', plan)).toBeNull()
+      expect(await eva.row('conformance_note_comments', remark)).toBeNull()
       expect(await eva.row('conformance_notes_redacted', plan)).toMatchObject({
         owner_id: f.jana.id,
       })
       expect(await jana.row('conformance_notes', plan)).toMatchObject({ body: 'Book the cottage' })
+      // Her edit was made against the comment's version, which the move left as it was: applied, not
+      // merged over a change she never saw.
+      expect(answersOf(w, jana).map((a) => a.outcome)).toEqual(['applied'])
+      expect((await w.admin.rows('conformance_note_comments', f.home)).get(remark)).toMatchObject({
+        body: 'Ten days',
+        visibility: 'private',
+        owner_id: f.jana.id,
+        version: 2,
+      })
     },
   },
   {
     key: 'loss-removal',
     title: 'Access loss: removal from the household, while connected',
-    expected: "Every row of the household leaves the removed member's replica",
+    expected:
+      "Every row of the household leaves the removed member's replica, and the removal takes them out of the " +
+      'readers of every audience they were in',
     enabledBy: 17,
     needs: [],
-    replicates: ['conformance_items'],
+    replicates: ['conformance_items', 'conformance_messages'],
     async run(w) {
       const f = await family(w)
+      const talk = await conversation(w, f.home, f.jana, f.petr, f.eva)
       const eva = w.client({ name: 'eva', member: f.eva, household: f.home })
       await online(w, eva)
-      await w.admin.remove(f.home, f.eva)
+      expect(await eva.rows('conformance_messages')).toHaveLength(1)
+      await w.removeMember(f.home, f.eva, f.jana)
       expect(await w.settle()).toBe(true)
       expect(await eva.rows('conformance_items')).toEqual([])
+      expect(await eva.rows('conformance_messages')).toEqual([])
+      expect(await eva.rows('households')).toEqual([])
+      const messages = [...(await w.admin.rows('conformance_messages', f.home)).values()]
+      expect(messages.map((m) => m['id']).sort()).toEqual([...talk.messages].sort())
+      for (const m of messages) expect(m['readers']).not.toContain(f.eva.id)
     },
   },
   {

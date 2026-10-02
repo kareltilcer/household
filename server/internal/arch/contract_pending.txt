@@ -31,7 +31,6 @@ getBillingUsage
 getSyncState
 postSyncReset
 postSyncDigest
-getStream
 getSearch
 getActivity
 getActivityByEventId

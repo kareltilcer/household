@@ -586,17 +586,16 @@ func TestEndedInvitationsAreDeletedAMonthOn(t *testing.T) {
 		t.Fatalf("purged %d: %v", n, err)
 	}
 	var left []uuid.UUID
-	var events, deletions int
+	var events int
 	if err := s.admin.QueryRow(t.Context(), `
 		SELECT array(SELECT id FROM invitations WHERE household_id = $1 ORDER BY id),
-		  (SELECT count(*) FROM audit_events WHERE household_id = $1 AND module = 'admin' AND action = 'invitation.purge'),
-		  (SELECT count(*) FROM sync_changes WHERE household_id = $1 AND entity_type = 'admin.invitation' AND op = 'delete')`, h.ID).
-		Scan(&left, &events, &deletions); err != nil {
+		  (SELECT count(*) FROM audit_events WHERE household_id = $1 AND module = 'admin' AND action = 'invitation.purge')`, h.ID).
+		Scan(&left, &events); err != nil {
 		t.Fatal(err)
 	}
 	want := []uuid.UUID{recent, waiting}
 	slices.SortFunc(want, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
-	if !slices.Equal(left, want) || events != 2 || deletions != 2 {
-		t.Fatalf("left %v (want %v), %d events, %d deletions", left, want, events, deletions)
+	if !slices.Equal(left, want) || events != 2 {
+		t.Fatalf("left %v (want %v), %d events", left, want, events)
 	}
 }

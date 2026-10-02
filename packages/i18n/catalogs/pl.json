@@ -73,6 +73,8 @@
   "notification.fair_use.title": "Gospodarstwo {household} zbliża się do limitu uczciwego użytkowania",
   "notification.fair_use_households.body": "Z gospodarstwem {household} masz {held, plural, one {# gospodarstwo} few {# gospodarstwa} many {# gospodarstw} other {# gospodarstwa}}, czyli 80 % z {ceiling, number}, które może mieć jedno konto. Powyżej tego limitu nie założysz kolejnego.",
   "notification.fair_use_households.title": "Zbliżasz się do limitu uczciwego użytkowania dla gospodarstw",
+  "notification.fair_use_sync.body": "Urządzenia gospodarstwa {household} wysłały dziś {held, number} zmian, czyli 80 % z {ceiling, number}, które mogą wysłać w ciągu dnia. Powyżej tego limitu zmiany poczekają na synchronizację do następnego dnia.",
+  "notification.fair_use_sync.title": "Gospodarstwo {household} zbliża się do dziennego limitu synchronizacji",
   "notification.invitation_declined.body": "{invitee} nie dołączy do gospodarstwa {household}. Zaproszenie jest zamknięte; możesz wysłać je ponownie z listy członków gospodarstwa.",
   "notification.invitation_declined.title": "{invitee} odrzuca Twoje zaproszenie"
 }

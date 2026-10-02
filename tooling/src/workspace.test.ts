@@ -344,6 +344,23 @@ describe('a developer machine and CI', () => {
     )
   })
 
+  // A service container takes no command, so CI's Go job gives its PostgreSQL the settings
+  // docker-compose.yml starts the development one with, through ALTER SYSTEM and a restart:
+  // logical replication among them, in which the test of PowerSync's replication lag makes a slot
+  // (plan item 17).
+  it("start CI's PostgreSQL with the settings docker-compose.yml starts it with", () => {
+    const command = field(readRecord('docker-compose.yml'), 'services', 'postgres', 'command')
+    const words: unknown[] = Array.isArray(command) ? command : []
+    const settings = words.filter((_, i) => words[i - 1] === '-c').map(String)
+    expect(settings).toContain('wal_level=logical')
+    const steps = field(readRecord('.github/workflows/ci.yml'), 'jobs', 'go', 'steps')
+    const configured = (Array.isArray(steps) ? (steps as unknown[]) : [])
+      .map((step) => field(step, 'run'))
+      .filter((run): run is string => typeof run === 'string' && run.includes('ALTER SYSTEM'))
+      .join('\n')
+    for (const setting of settings) expect(configured, setting).toContain(setting)
+  })
+
   // The Go tests keep files in a bucket of their own on the object store (plan item 14): CI's is
   // the image a developer's compose runs, pinned to a release, and started with the credentials
   // the tests sign in with.
@@ -371,9 +388,13 @@ describe('a developer machine and CI', () => {
     expect(field(stack, 'services', 'powersync', 'image')).toMatch(
       /^journeyapps\/powersync-service:\d+\.\d+\.\d+$/,
     )
-    // The development PowerSync (item 13) is the one the suite proves.
+    // The development PowerSync (item 13) is the one the suite proves, and its nightly compaction
+    // (item 17) runs the same release's command.
     expect(field(compose, 'services', 'powersync', 'image')).toBe(
       field(stack, 'services', 'powersync', 'image'),
+    )
+    expect(field(compose, 'services', 'powersync-compact', 'image')).toBe(
+      field(compose, 'services', 'powersync', 'image'),
     )
   })
 

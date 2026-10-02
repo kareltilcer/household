@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
@@ -34,6 +35,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/storage"
+	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
@@ -109,6 +111,27 @@ func Gate(r *http.Request) error {
 		operation = op.ID
 	}
 	return entitlement.Gate(scope.Entitlement(), scope.Role(), operation, r.Method)
+}
+
+// Retract is the household surface's Lost hook (household.Hooks), which runs in the transaction of
+// every change that takes access from members (PRD 03 §2.6, FR-SY7): a member removed from the
+// household, or gone from it, leaves the readers of every row an audience of catalog's entities bounds
+// (sync.RemoveReader, D-90). No other cause needs a write of its own: the streams read the grants, the
+// modules' enablement and the memberships the change wrote, and a row that leaves every bucket a
+// member holds leaves their replicas.
+func Retract(catalog *module.Registry) func(context.Context, pgx.Tx, household.Loss) error {
+	entities := catalog.Entities()
+	return func(ctx context.Context, tx pgx.Tx, loss household.Loss) error {
+		for member, modules := range loss.Members {
+			if modules != nil {
+				continue
+			}
+			if err := sync.RemoveReader(ctx, tx, entities, loss.Household, member); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 // NewRouter returns the server's whole HTTP surface: the platform middleware, and under
@@ -190,7 +213,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	}
 	catalog := mutation.Catalog(registry)
 	ceilings := mutation.Ceilings(storage.NewRowCeiling(d.Meter, d.Modules).Check)
-	pushes, err := push.New(push.Config{Registry: registry, Logger: d.Logger})
+	pushes, err := push.New(push.Config{Registry: registry, Logger: d.Logger, Notify: d.Notify})
 	if err != nil {
 		return nil, fmt.Errorf("app: %w", err)
 	}
@@ -340,10 +363,9 @@ func Serve(ctx context.Context, log *slog.Logger, srv *http.Server, ln net.Liste
 
 // NewServer returns the http.Server for handler. Reading a request's headers is bounded,
 // against slow-loris clients. Reading a body and writing a response are not bounded here:
-// an upload over a slow connection (item 14) and the sync stream (item 17) legitimately
-// take minutes, which a server-wide timeout would cut off. A body is bounded per request
-// instead, by httpx.BodyDeadline (Deps.BodyTimeout), which such a handler extends through
-// http.ResponseController.
+// an upload over a slow connection (item 14) legitimately takes minutes, which a server-wide
+// timeout would cut off. A body is bounded per request instead, by httpx.BodyDeadline
+// (Deps.BodyTimeout), which such a handler extends through http.ResponseController.
 func NewServer(handler http.Handler, log *slog.Logger) *http.Server {
 	return &http.Server{
 		Handler:           handler,

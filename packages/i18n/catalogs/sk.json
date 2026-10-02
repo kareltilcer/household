@@ -73,6 +73,8 @@
   "notification.fair_use.title": "Domácnosť {household} sa blíži k limitu férového používania",
   "notification.fair_use_households.body": "S domácnosťou {household} vlastníte {held, plural, one {# domácnosť} few {# domácnosti} many {# domácnosti} other {# domácností}}, teda 80 % z {ceiling, number}, ktoré smie mať jeden účet. Nad tento limit už ďalšiu nezaložíte.",
   "notification.fair_use_households.title": "Blížite sa k limitu férového používania pre domácnosti",
+  "notification.fair_use_sync.body": "Zariadenia domácnosti {household} dnes odoslali {held, number} zmien, teda 80 % z {ceiling, number}, ktoré smú odoslať za deň. Nad tento limit budú zmeny čakať na synchronizáciu do ďalšieho dňa.",
+  "notification.fair_use_sync.title": "Domácnosť {household} sa blíži k dennému limitu synchronizácie",
   "notification.invitation_declined.body": "{invitee} sa k domácnosti {household} nepripojí. Pozvánka je uzavretá; znova ju môžete poslať z prehľadu členov domácnosti.",
   "notification.invitation_declined.title": "{invitee} odmieta vašu pozvánku"
 }

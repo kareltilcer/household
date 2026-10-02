@@ -1,12 +1,15 @@
-// What the suite runs against: the engine (plan item 13, ADR 0014). The server's own API with the
-// conformance module registered (server/cmd/conformance-api), its push writing every entity whose
-// merge policy the item built, its credentials handing out PowerSync tokens signed with the API's
-// keys, and PowerSync on the streams generated from the entity registry. Item 12's stand-ins, a
-// hand-written configuration and a push of their own, were replaced by it; a scenario asks the
-// target for what it needs, so a later item's engine is a target the same scenarios run against.
+// What the suite runs against: the engine (plan items 13 and 17, ADR 0014, ADR 0018). The server's
+// own API with the conformance module registered (server/cmd/conformance-api), its push writing every
+// entity of the module, across the five merge policies, its credentials handing out PowerSync tokens
+// signed with the API's keys, and PowerSync on the streams generated from the entity registry, its
+// compaction run on demand. Item 12's stand-ins, a hand-written configuration and a push of their
+// own, were replaced by it; a scenario asks the target for what it needs, so a later item's engine is
+// a target the same scenarios run against.
 
+import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
+import { composeFile } from '../stack/stack.ts'
 import { adminDatabaseUrl, apiUrl, powerSyncUrl } from './env.ts'
 import { tables, type EntityType, type TableName } from './schema.ts'
 
@@ -44,20 +47,19 @@ export interface Target {
    * fresh one as well, by per-mutation idempotency (FR-SY5, item 13).
    */
   readonly replay: 'same-key' | 'fresh-key'
-  /** Runs PowerSync's compact job (item 17), which scenario 6 needs. */
+  /** Runs PowerSync's compaction (item 17), which scenario 6 needs. */
   readonly compact?: () => Promise<void>
   /** Sets household's entitlement (item 16), which scenario 14 needs. */
   readonly setEntitlement?: (household: string, state: 'active' | 'read_only') => Promise<void>
   /**
-   * Uploads an attachment's bytes (item 14), which scenario 12 needs, and answers the upload's
-   * status.
+   * Uploads an attachment's bytes (item 14), named fileName, which scenario 12 needs, and answers the
+   * upload's status.
    */
   readonly uploadAttachment?: (
     credential: string,
     household: string,
     attachment: string,
-    bytes: Uint8Array,
-    contentType: string,
+    file: { readonly bytes: Uint8Array; readonly contentType: string; readonly fileName: string },
   ) => Promise<number>
 }
 
@@ -113,7 +115,7 @@ const entitlements = {
     lapsed_at = NULL, retained_until = NULL, retention_warnings = 0 WHERE id = $1`,
 } as const
 
-/** The engine (plan item 13). */
+/** The engine (plan items 13 and 17). */
 export const engine: Target = {
   name: 'engine',
   async signIn(user, via, options) {
@@ -146,14 +148,51 @@ export const engine: Target = {
   pushUrl: (household) => `${apiUrl}/api/v1/households/${household}/sync/mutations`,
   streams: generated.map((g) => g.stream),
   replicates: new Set(generated.map((g) => g.table).filter(isTable)),
-  writes: new Set<EntityType>([
-    'conformance.item',
-    'conformance.item_checked',
-    'conformance.reading',
-    'conformance.completion',
-  ]),
+  writes: new Set<EntityType>(
+    tables.flatMap((t) => (t.entity?.startsWith('conformance.') === true ? [t.entity] : [])),
+  ),
   tombstones: 'kept',
   replay: 'fresh-key',
+  // PowerSync's own command, in the stack's service, as the deployment's nightly schedule runs it
+  // (deploy/powersync/compact.sh): it supersedes the operations of a bucket a later one replaced. It
+  // runs as a child the suite waits for without blocking, so that the clients connected meanwhile go
+  // on reading their streams, as a replica does while the nightly compaction runs.
+  compact() {
+    return new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        'docker',
+        [
+          'compose',
+          '--file',
+          composeFile,
+          'exec',
+          '-T',
+          'powersync',
+          'node',
+          'service/lib/entry.js',
+          'compact',
+        ],
+        { stdio: 'ignore' },
+      )
+      child.on('error', reject)
+      child.on('exit', (code, signal) => {
+        if (code === 0) resolve()
+        else reject(new Error(`PowerSync's compaction ended ${String(code ?? signal)}`))
+      })
+    })
+  },
+  // The conformance API's own route (server/internal/conformance/upload.go), through item 14's
+  // pipeline: the contract names no operation of the conformance module's.
+  async uploadAttachment(credential, household, attachment, file) {
+    const form = new FormData()
+    form.append('file', new Blob([file.bytes], { type: file.contentType }), file.fileName)
+    const response = await fetch(
+      `${apiUrl}/conformance/households/${household}/attachments/${attachment}/content`,
+      { method: 'POST', headers: { authorization: `Bearer ${credential}` }, body: form },
+    )
+    await response.arrayBuffer()
+    return response.status
+  },
   async setEntitlement(household, state) {
     const client = new pg.Client({ connectionString: adminDatabaseUrl })
     await client.connect()

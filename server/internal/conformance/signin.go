@@ -24,6 +24,8 @@ import (
 //
 //	GET  /conformance/healthz   200 once the API serves
 //	POST /conformance/sign-in   a device's access token for a user the suite made
+//	POST /conformance/households/{household_id}/attachments/{attachment_id}/content
+//	                            an attachment's bytes (upload.go)
 //
 // The sign-in stands in for a device's (item 9): the suite's members have no address, no password
 // and no second step, and it trusts the user id it is given. It signs a new device of theirs in,
@@ -34,12 +36,17 @@ import (
 // API's own.
 func Around(keys *token.Keys) app.Around {
 	return func(router http.Handler, s app.Served) (http.Handler, error) {
+		uploads, err := uploadRoutes(s)
+		if err != nil {
+			return nil, err
+		}
 		root := chi.NewRouter()
 		root.Use(httpx.RequestScope)
 		root.Get("/conformance/healthz", func(w http.ResponseWriter, _ *http.Request) {
 			httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		})
 		root.Post("/conformance/sign-in", signIn(s, keys, time.Now))
+		uploads(root)
 		root.Mount("/", router)
 		return root, nil
 	}

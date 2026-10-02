@@ -121,8 +121,8 @@ through `POST …/sync/digest`, and which entity types disagreed — [D-85](../0
 **force re-snapshot** action. When offline-first goes wrong, this is the screen that tells a member
 why, and its absence is why sync bugs become support tickets. **D-79.** Under D-93 the cursor
 position is the replica's last checkpoint, the replica-digest state is its bucket-checksum state
-(with the digest's, if the plan keeps that endpoint), and the re-snapshot is a re-download of the
-replica.
+with the digest's, both from the replica's report (`POST …/sync/digest`, **D-125**), and the
+re-snapshot is a re-download of the replica once its queue has drained.
 
 **It ships in Phase 0, not with this module** ([10-sync-risk.md](../10-sync-risk.md) §6). Because
 platform staff cannot read household content ([D-3](../09-decisions.md)), nobody can inspect a
@@ -152,8 +152,8 @@ the owning module keeps on each row of the audience, derived from these membersh
 
 | Entity | Policy | Notes |
 |---|---|---|
-| `admin.household_settings` | `strict_version`, never written offline | The household's settings, on `households` |
-| `admin.membership` | `strict_version`, **never written offline** | A member's role **and their grants**, which travel on the membership row as **derived capability state**, never as an editable entity: a grant's change is its membership's change, and moves its version. A client must never believe it can change its own permissions offline. A child profile's row carries whether it is locked and whether its dashboard is, which its PIN, its lock and its graduation change; never its birth year |
+| `admin.household_settings` | `strict_version`, never written offline | The household's settings, on `households`, with its entitlement as its banner shows it to every member: the state of its subscription, its clocks and its restriction (plan item 17, **D-124**) |
+| `admin.membership` | `strict_version`, **never written offline** | A member's role **and their grants**, which travel on the membership row as **derived capability state**, never as an editable entity: a grant's change is its membership's change, and moves its version, which is how a client learns of it, there being no socket (**D-124**). A client must never believe it can change its own permissions offline. A child profile's row carries whether it is locked and whether its dashboard is, which its PIN, its lock and its graduation change; never its birth year |
 | `admin.module_enablement` | `strict_version`, never written offline | Whether the household enables each module |
 | `admin.invitation` | `strict_version`, never written offline | An invitation, without its token |
 | `admin.notification_rule`, `admin.notification_schedule` | `strict_version` | |
@@ -163,8 +163,9 @@ their grant on this module, since every member's app works from them; the invita
 members granted `view` on it ([ADR 0011](../../adr/0011-households-as-the-platforms-own-module.md)).
 Each stream sends only the columns its sync row carries (plan item 13,
 [ADR 0014](../../adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)): the
-settings without the household code, which only owners read, the memberships without a child's birth
-year, and the invitations without their tokens. A membership's row carries its member's grants as
+settings without the household code, which only owners read, nor the clocks only the hourly
+transitions read, the memberships without a child's birth year, and the invitations without their
+tokens. A membership's row carries its member's grants as
 the member list shows them, and a child profile's whether its PIN has locked it, both written by the
 mutation that changes them, which moves the membership's version. A member's display name is the
 account's, no household's, and is not replicated yet.

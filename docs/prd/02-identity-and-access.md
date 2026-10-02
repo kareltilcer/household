@@ -400,8 +400,8 @@ module's tables — see [03-platform-strands.md](03-platform-strands.md) §2.2.
 > entity registry read each entity's own table and the grant through subqueries, and an audience
 > through the readers the server keeps on each row it bounds
 > ([03-platform-strands.md](03-platform-strands.md) §2, [modules/15-chat.md](modules/15-chat.md)
-> and [modules/04-calendar.md](modules/04-calendar.md) Sync, where plan item 17 may resolve a
-> `member_shared` calendar, which has no floor, through its member list instead). The check still
+> and [modules/04-calendar.md](modules/04-calendar.md) Sync, where a `member_shared` calendar, which
+> has no floor, keeps readers on every row as well, **D-126**). The check still
 > lives in one place, the generator. The membership axis stays an interval on both paths: the API
 > evaluates the floor, and a member is a reader of nothing before theirs.
 

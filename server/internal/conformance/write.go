@@ -22,20 +22,22 @@ import (
 // WriteSync writes m, a mutation the push has checked against its entity's declaration, the
 // caller's grant and any invariant: an item's fields, lww_field by server receipt, its soft delete a
 // field like the others (PRD modules/05 Sync, B); an item's checked state and a chore's completion,
-// state_set on their keys resolved by the latest client time; and a meter's reading, additive. The
-// module's other entities are item 17's.
+// state_set on their keys resolved by the latest client time; a meter's reading, additive; a budget,
+// a chore and a conversation, strict_version; a note, lww_row with its loser preserved, and its
+// comments; an attachment's row; and a conversation's members and messages, its audience.
 func (Module) WriteSync(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, error) {
-	switch m.Entity.Name {
-	case Item:
-		return writeItem(ctx, tx, m)
-	case ItemChecked:
-		return writeCheck(ctx, tx, m)
-	case Reading:
-		return writeReading(ctx, tx, m)
-	case Completion:
-		return writeCompletion(ctx, tx, m)
+	write, ok := writers[m.Entity.Name]
+	if !ok {
+		return push.Written{}, push.Refuse(problem.CodeValidationFailed, "%s is not one of the module's entities", m.Entity.Name)
 	}
-	return push.Written{}, push.Refuse(problem.CodeValidationFailed, "%s is written through the push from plan item 17", m.Entity.Name)
+	return write(ctx, tx, m)
+}
+
+// writers are the module's writers, by the entity each writes.
+var writers = map[string]func(context.Context, pgx.Tx, push.Mutation) (push.Written, error){
+	Item: writeItem, ItemChecked: writeCheck, Reading: writeReading, Completion: writeCompletion,
+	Budget: writeBudget, Note: writeNote, NoteComment: writeComment, Chore: writeChore, Attachment: writeAttachment,
+	Conversation: writeConversation, ConversationMember: writeMember, Message: writeMessage,
 }
 
 // written is what a write that recorded ev and changed row came to.
@@ -90,8 +92,10 @@ func (f itemFields) validate() error {
 // writeItem writes an item's create, update or delete. A create of an id the household already
 // holds finds its row and writes nothing. An update sets the fields it names, the others left as
 // they are, whatever wrote them in between, and lands on a deleted item as it would on a live one;
-// one that changes nothing writes nothing. A delete sets deleted_at, and one of a deleted item
-// writes nothing.
+// one that changes nothing writes nothing. Its audit event keeps each field it changed, as it was and
+// as it became, so that a value another member's later write replaced is never dropped unseen
+// (scenario 2): the activity log shows it, and the later write is answered merged (D-122). A delete
+// sets deleted_at, and one of a deleted item writes nothing.
 func writeItem(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, error) {
 	var f itemFields
 	if err := push.Decode(m.Fields, []string{"title", "note", "quantity"}, &f); err != nil {
@@ -103,6 +107,7 @@ func writeItem(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, e
 	household := tenant.From(ctx).HouseholdID()
 	var (
 		it     ItemRow
+		before ItemRow
 		err    error
 		action string
 	)
@@ -139,6 +144,10 @@ func writeItem(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, e
 			err = pgx.ErrNoRows
 			break
 		}
+		// The push holds the row locked: it stands as read here until the update.
+		if before, err = scanItem(tx.QueryRow(ctx, "SELECT "+itemColumns+" FROM conformance_items WHERE id = $1", m.EntityID)); err != nil {
+			break
+		}
 		changed := make([]string, len(sets))
 		for i, set := range sets {
 			changed[i] = strings.Replace(set, " = ", " IS DISTINCT FROM ", 1)
@@ -171,10 +180,26 @@ func writeItem(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, e
 	if err != nil {
 		return push.Written{}, err
 	}
-	return written(audit.Event{
+	ev := audit.Event{
 		Module: Name, Action: action, EntityType: Item, EntityID: it.ID,
 		SummaryKey: Name + "." + action, SummaryArgs: map[string]any{"title": it.Title},
-	}, Item, it.ID, it.Version, it), nil
+	}
+	if m.Op == push.Update {
+		for _, d := range []struct {
+			field     string
+			old, new  any
+			different bool
+		}{
+			{"title", before.Title, it.Title, before.Title != it.Title},
+			{"note", before.Note, it.Note, before.Note != it.Note},
+			{"quantity", before.Quantity, it.Quantity, before.Quantity != it.Quantity},
+		} {
+			if d.different {
+				ev.Changes = append(ev.Changes, audit.Change{Field: d.field, Old: d.old, New: d.new})
+			}
+		}
+	}
+	return written(ev, Item, it.ID, it.Version, it), nil
 }
 
 // CheckRow is an item's checked state as the push answers it.
@@ -311,14 +336,16 @@ type CompletionRow struct {
 	Occurrence  string    `json:"occurrence"`
 	Done        bool      `json:"done"`
 	DoneAt      time.Time `json:"done_at"`
-	Version     int64     `json:"version"`
+	// Rotated says the occurrence advanced its chore's rotation, which it does once (D-52).
+	Rotated bool  `json:"rotated"`
+	Version int64 `json:"version"`
 }
 
-const completionColumns = "id, household_id, chore_id, occurrence::text, done, done_at, version"
+const completionColumns = "id, household_id, chore_id, occurrence::text, done, done_at, rotated, version"
 
 func scanCompletion(row pgx.Row) (CompletionRow, error) {
 	var c CompletionRow
-	err := row.Scan(&c.ID, &c.HouseholdID, &c.ChoreID, &c.Occurrence, &c.Done, &c.DoneAt, &c.Version)
+	err := row.Scan(&c.ID, &c.HouseholdID, &c.ChoreID, &c.Occurrence, &c.Done, &c.DoneAt, &c.Rotated, &c.Version)
 	return c, err
 }
 
@@ -332,7 +359,10 @@ type completionFields struct {
 
 // writeCompletion writes the state a completion wants, keyed on its chore and its occurrence (D-52):
 // two members completing one occurrence offline make one row, applied once, whatever id each gave
-// it, resolved by client time as a check is. The rotation it advances is item 17's.
+// it, resolved by client time as a check is. The occurrence that first comes to be done advances its
+// chore's rotation by one, the server's to advance from the occurrence and never from the mutation
+// (D-52): once, however many completions of it arrive, and not again when it is undone and done again,
+// which its rotated says.
 func writeCompletion(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Written, error) {
 	if m.Op != push.Create && m.Op != push.Update {
 		return push.Written{}, push.Refuse(problem.CodeValidationFailed, "%s takes create and update", Completion)
@@ -348,11 +378,26 @@ func writeCompletion(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Writ
 		return push.Written{}, push.Refuse(problem.CodeValidationFailed, "occurrence is a calendar day, YYYY-MM-DD")
 	}
 	household := tenant.From(ctx).HouseholdID()
+	// The chore is locked until the write commits: its completions, and the rotation they advance,
+	// are written one at a time, so that two first completions of one occurrence cannot each find it
+	// not yet rotated.
+	var rotated bool
+	err := tx.QueryRow(ctx, `
+		SELECT coalesce((SELECT c.rotated FROM conformance_completions c
+		                 WHERE c.household_id = $1 AND c.chore_id = h.id AND c.occurrence = $3::date), false)
+		FROM conformance_chores h WHERE h.household_id = $1 AND h.id = $2 FOR UPDATE OF h`,
+		household, *f.ChoreID, *f.Occurrence).Scan(&rotated)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return push.Written{}, gone("chore")
+	}
+	if err != nil {
+		return push.Written{}, err
+	}
 	c, err := scanCompletion(tx.QueryRow(ctx, `
-		INSERT INTO conformance_completions AS c (id, household_id, chore_id, occurrence, done, done_at)
-		VALUES ($1, $2, $3, $4::date, $5, $6)
+		INSERT INTO conformance_completions AS c (id, household_id, chore_id, occurrence, done, done_at, rotated)
+		VALUES ($1, $2, $3, $4::date, $5, $6, $5)
 		ON CONFLICT (household_id, chore_id, occurrence) DO UPDATE
-		  SET done = excluded.done, done_at = excluded.done_at
+		  SET done = excluded.done, done_at = excluded.done_at, rotated = c.rotated OR excluded.done
 		  WHERE c.done_at <= excluded.done_at AND c.done IS DISTINCT FROM excluded.done
 		RETURNING `+completionColumns, m.EntityID, household, *f.ChoreID, *f.Occurrence, *f.Done, m.ClientTime))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -367,8 +412,23 @@ func writeCompletion(ctx context.Context, tx pgx.Tx, m push.Mutation) (push.Writ
 	if err != nil {
 		return push.Written{}, err
 	}
-	return written(audit.Event{
+	w := written(audit.Event{
 		Module: Name, Action: "completion.set", EntityType: Completion, EntityID: c.ID,
 		SummaryKey: Name + ".completion.set", SummaryArgs: map[string]any{"done": c.Done},
-	}, Completion, c.ID, c.Version, c), nil
+	}, Completion, c.ID, c.Version, c)
+	if c.Rotated && !rotated {
+		chore, err := scanChore(tx.QueryRow(ctx, `
+			UPDATE conformance_chores SET rotation_index = (rotation_index + 1) % cardinality(rotation)
+			WHERE household_id = $1 AND id = $2 AND cardinality(rotation) > 0
+			RETURNING `+choreColumns, household, c.ChoreID))
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			// A chore that rotates through no one has no rotation to advance.
+		case err != nil:
+			return push.Written{}, err
+		default:
+			w.Record.Changes = append(w.Record.Changes, sync.Change{Entity: Chore, ID: chore.ID, Op: sync.Upsert, Version: chore.Version, Row: chore})
+		}
+	}
+	return w, nil
 }

@@ -37,11 +37,11 @@ const base = {
 } as const satisfies Record<string, Kind>
 
 export const tables = [
-  // admin's, which no client writes offline (D-80): the household's settings, without its code;
-  // its memberships, each with its member's grants and a child profile's locks, without a child's
-  // birth year; which modules it enables; and its invitations, without their tokens, which only the
-  // members granted admin replicate. The settings name their household by their own id, and carry
-  // no household_id.
+  // admin's, which no client writes offline (D-80): the household's settings, without its code, with
+  // its entitlement as its banner shows it (D-124); its memberships, each with its member's grants and
+  // a child profile's locks, without a child's birth year; which modules it enables; and its
+  // invitations, without their tokens, which only the members granted admin replicate. The settings
+  // name their household by their own id, and carry no household_id.
   {
     table: 'households',
     entity: 'admin.household_settings',
@@ -54,6 +54,14 @@ export const tables = [
       units: 'text',
       first_day_of_week: 'integer',
       billing_payer_id: 'uuid',
+      billing_state: 'text',
+      trial_ends_at: 'timestamp',
+      grace_ends_at: 'timestamp',
+      retained_until: 'timestamp',
+      restricted_at: 'timestamp',
+      restricted_by: 'uuid',
+      restricted_by_label: 'text',
+      restriction_reason: 'text',
       version: 'integer',
       created_by: 'uuid',
       created_at: 'timestamp',
@@ -138,13 +146,26 @@ export const tables = [
     writes: ['visibility', 'owner_id', 'title', 'body'],
   },
   {
-    // A private note's redacted form (D-88), which item 17's stream writes to a client table of its
+    // A private note's redacted form (D-88), which its own streams write to a client table of its
     // own for everyone with the grant, its owner included (D-93, ADR 0001; Admin.visible).
     table: 'conformance_notes_redacted',
     entity: null,
-    columns: { household_id: 'uuid', owner_id: 'uuid', version: 'integer' },
+    columns: {
+      household_id: 'uuid',
+      owner_id: 'uuid',
+      version: 'integer',
+      deleted_at: 'timestamp',
+    },
     writes: [],
     source: { table: 'conformance_notes', where: "visibility = 'private'" },
+  },
+  {
+    // A note's comment, which carries its note's visibility and owner, rewritten when the note moves
+    // between shared and private, which is no edit of the comment (ADR 0018).
+    table: 'conformance_note_comments',
+    entity: 'conformance.note_comment',
+    columns: { ...base, note_id: 'uuid', visibility: 'text', owner_id: 'uuid', body: 'text' },
+    writes: ['note_id', 'body'],
   },
   {
     table: 'conformance_chores',
@@ -161,6 +182,7 @@ export const tables = [
       occurrence: 'date',
       done: 'boolean',
       done_at: 'timestamp',
+      rotated: 'boolean',
     },
     writes: ['chore_id', 'occurrence', 'done'],
   },

@@ -29,9 +29,6 @@ const (
 // The namespaces of the two-key locks, their first key, each spelling four letters; the second is a
 // hash of what the lock is on.
 const (
-	// FeedLock is a household's change feed, held until the transaction that writes to it ends
-	// (sync.Emit); the second key is the household's hash.
-	FeedLock int32 = 0x73796e63 // "sync"
 	// InvariantLock serialises the creates of one series (push), whose hash is the second key.
 	InvariantLock int32 = 0x696e7672 // "invr"
 	// CoalesceLock serialises queueing a recipient's repeats under one coalescing key (notify.Queue);

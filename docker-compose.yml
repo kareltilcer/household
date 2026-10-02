@@ -111,6 +111,21 @@ services:
       postgres:
         condition: service_healthy
 
+  # PowerSync's compaction, nightly after the API's nightly jobs (deploy/powersync/compact.sh, plan
+  # item 17): the service's own command in its own image, with its configuration.
+  powersync-compact:
+    image: journeyapps/powersync-service:1.26.1
+    profiles: [sync]
+    entrypoint: [sh, /config/compact.sh]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+    volumes:
+      - ./deploy/powersync:/config:ro
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres:
   objectstore:
