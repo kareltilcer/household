@@ -254,7 +254,14 @@ export class Connector {
     if (this.o.now() < notBefore) throw new RateLimited(notBefore)
     await this.o.journal.prune()
     for (;;) {
-      const batch = await queue.peek(this.limit('queue'))
+      const head = await queue.peek(this.limit('queue'))
+      if (head === null) break
+      // Marked as sent before they are read for sending: an edit merges into a queued write only above
+      // the mark (D-129), so one merged into these after the first read and before the mark is in the
+      // second, and none can change them once marked, whatever the sending awaits.
+      const last = head.entries.at(-1)?.clientId
+      if (last !== undefined) await this.o.journal.sent(last)
+      const batch = await queue.peek(head.entries.length)
       if (batch === null) break
       const rebases = await this.o.journal.rebases()
       const queued = batch.entries.map((entry): Queued => {
@@ -270,11 +277,7 @@ export class Connector {
           table: entry.table,
         }
       })
-      const last = batch.entries.at(-1)?.clientId
-      const sent = async (): Promise<void> => {
-        if (last !== undefined) await this.o.journal.sent(last)
-      }
-      if (!(await this.send('queue', queued, () => Promise.resolve(), sent))) continue
+      if (!(await this.send('queue', queued, () => Promise.resolve()))) continue
       await batch.complete()
       this.maxBatch = this.o.maxBatch
     }
@@ -310,7 +313,7 @@ export class Connector {
       // holds it anew.
       const release = (): Promise<void> =>
         this.o.journal.release(held.map((h) => h.mutation.mutation_id))
-      if (!(await this.send(reason, queued, release, () => Promise.resolve()))) continue
+      if (!(await this.send(reason, queued, release))) continue
       this.maxBatch = this.o.maxBatch
       // Every one held again (deferred at the head of its batch, or its entitlement still refused)
       // waits for the next replay, not this one.
@@ -322,13 +325,12 @@ export class Connector {
   /**
    * Sends queued until every one is answered, then runs answered and settles the answers, and returns
    * true; or returns false when the batch must be sent again smaller (a 413). It throws when the batch
-   * must be retried as it is. beforeSending runs before each request.
+   * must be retried as it is.
    */
   private async send(
     source: Attempt['source'],
     queued: readonly Queued[],
     answered: () => Promise<void>,
-    beforeSending: () => Promise<void>,
   ): Promise<boolean> {
     const all = queued.map((q) => q.mutation)
     const ids = all.map((m) => m.mutation_id)
@@ -367,7 +369,6 @@ export class Connector {
       })
       // Before the request: a sign-in that fails sent nothing to the push, and is no attempt at it.
       const credential = await this.o.credential.current()
-      await beforeSending()
       let response: Response
       try {
         response = await this.o.fetch(this.o.pushUrl, {

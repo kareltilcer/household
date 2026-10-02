@@ -3,10 +3,11 @@
 // and is uploaded through its module's route once the server holds the row. An upload the server
 // refuses for what the file is (its size, its type, the household's storage) is not retried: the server
 // marks the row failed with the reason, and the queue keeps the refusal's code for the member. One the
-// network or the server failed is tried again.
+// network or the server failed is tried again, as is one the household's state refused (FR-BI2).
 
 import type { CommonPowerSyncDatabase, LocalStorageAdapter } from '@powersync/common'
 import type { Credential } from './connector.ts'
+import { isEntitlement } from './mutation.ts'
 import { localTables } from './schema.ts'
 
 /** A file waiting to be uploaded, or refused. */
@@ -190,8 +191,14 @@ export class Attachments {
         await this.attempted(a.id)
         return
       }
-      // Refused for what it is: the row is marked failed on the server; the bytes are of no further use.
       const code = await problemCode(response)
+      // Refused for the household's state, which does not upload now (grace, a restriction) and may
+      // again (PRD 04 §3): no refusal of the file, which waits, and its row with it.
+      if (isEntitlement(code)) {
+        await this.attempted(a.id)
+        return
+      }
+      // Refused for what it is: the row is marked failed on the server; the bytes are of no further use.
       if (await this.options.storage.fileExists(a.local_uri))
         await this.options.storage.deleteFile(a.local_uri)
       await this.db.execute(

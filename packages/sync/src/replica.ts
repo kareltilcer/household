@@ -115,6 +115,9 @@ const ops: Record<QueuedRow['op'], SyncMutation['op']> = {
   DELETE: 'delete',
 }
 
+/** The answers of the outcomes table, aliased o, that the inbox lists: each mutation's last, while it asks for attention. */
+const inboxed = `o.unresolved = 1 AND o.position = (SELECT max(position) FROM ${localTables.outcomes} p WHERE p.mutation_id = o.mutation_id)`
+
 export class Replica {
   readonly db: CommonPowerSyncDatabase
   readonly registry: Registry
@@ -226,6 +229,11 @@ export class Replica {
     const every = this.o.reportEveryMs ?? 15 * 60_000
     if (every > 0 && this.reporting === null) {
       this.reporting = setInterval(() => {
+        // At rest on PowerSync's side as well: connected, a checkpoint applied and none downloading. A
+        // replica that cannot reach PowerSync, or is still downloading itself, holds less than the server
+        // through no fault, and two reports of it would be found divergent and told to clear it (D-125).
+        const status = this.db.currentStatus
+        if (!status.connected || status.downloading || status.hasSynced !== true) return
         void this.report().catch(() => undefined)
       }, every)
     }
@@ -364,6 +372,14 @@ export class Replica {
     return toStored(tableOf(this.registry, table).columns[name], value)
   }
 
+  /** names, or a throw for one that is no column of table's: each is written into the statement itself. */
+  private columnsOf(table: string, names: readonly string[]): readonly string[] {
+    const known = new Set(Object.keys(tableOf(this.registry, table).columns))
+    const unknown = names.find((n) => !known.has(n))
+    if (unknown !== undefined) throw new Error(`${table} has no column ${unknown} a client writes`)
+    return names
+  }
+
   /**
    * Creates a row of table with fields, and returns its id. local are columns the replica shows until
    * the server's row arrives, which the server sets itself and the mutation does not carry; carry are
@@ -386,7 +402,7 @@ export class Replica {
       ...(options.carry === undefined ? {} : { fields: options.carry }),
     })
     const columns = { ...fields, ...local }
-    const names = Object.keys(columns)
+    const names = this.columnsOf(table, Object.keys(columns))
     const withHousehold = 'household_id' in tableOf(this.registry, table).columns
     await this.db.execute(
       `INSERT INTO ${table} (id${withHousehold ? ', household_id' : ''}${names.map((n) => `, ${n}`).join('')}, _metadata)
@@ -422,7 +438,7 @@ export class Replica {
     this.writableEntity(table)
     const local = options.local ?? {}
     const columns = { ...fields, ...local }
-    const names = Object.keys(columns)
+    const names = this.columnsOf(table, Object.keys(columns))
     const mutationId = await this.db.writeTransaction(async (tx) => {
       const current = await tx.getOptional<{ version: number | null }>(
         `SELECT version FROM ${table} WHERE id = ?`,
@@ -496,9 +512,7 @@ export class Replica {
    */
   async inbox(): Promise<RecordedOutcome[]> {
     const rows = await this.db.getAll<Parameters<typeof outcomeOf>[0]>(
-      `SELECT ${outcomeColumns} FROM ${localTables.outcomes} o
-       WHERE unresolved = 1 AND position = (SELECT max(position) FROM ${localTables.outcomes} p WHERE p.mutation_id = o.mutation_id)
-       ORDER BY position`,
+      `SELECT ${outcomeColumns} FROM ${localTables.outcomes} o WHERE ${inboxed} ORDER BY position`,
     )
     return rows.map(outcomeOf)
   }
@@ -605,10 +619,12 @@ export class Replica {
     const module = entityOf(this.registry, table).module
     let seen = false
     let deleting = false
+    // A create the server refused: the row it wrote leaves the replica, which is no withdrawal.
+    let refused = false
     let last = ''
     const emit = async (): Promise<void> => {
       let state = await this.rowState(table, id)
-      if (state.kind === 'absent' && seen && !deleting) {
+      if (state.kind === 'absent' && seen && !deleting && !refused) {
         const enablement = await this.db.getOptional<{ enabled: number | null }>(
           'SELECT enabled FROM module_enablement WHERE module = ?',
           [module],
@@ -618,16 +634,19 @@ export class Replica {
       if (state.kind === 'synced' || state.kind === 'pending' || state.kind === 'syncing') {
         seen = true
         deleting = state.kind !== 'synced' && state.op === 'delete'
+        if (state.kind !== 'synced') refused = false
       }
       if (state.kind === 'synced' && state.deleted) deleting = true
+      if ((state.kind === 'rejected' || state.kind === 'conflict') && state.outcome.op === 'create')
+        refused = true
       const text = JSON.stringify(state)
       if (text === last) return
       last = text
       onChange(state)
     }
-    void emit()
     // PowerSync tells a watcher only of the tables it names: the row's own, what the server answered,
-    // the holds, the upload queue, and the modules' enablement, which says why a row left.
+    // the holds, the upload queue, and the modules' enablement, which says why a row left. It runs one
+    // emit at a time, the first at once, so that none reports after one that started later.
     return this.db.onChange(
       {
         onChange: async () => {
@@ -637,6 +656,7 @@ export class Replica {
       {
         tables: [table, localTables.outcomes, localTables.held, 'ps_crud', 'module_enablement'],
         throttleMs: 30,
+        triggerImmediate: true,
       },
     )
   }
@@ -665,11 +685,14 @@ export class Replica {
    */
   async report(): Promise<ReplicaDigestVerdict | null> {
     if ((await this.queued()) > 0) return null
-    const held = await this.held()
     const listed = await entries(this.db, this.registry)
     if (listed === null) return null
     const checkpoint = await this.db.getOptional<{ op: number | string | null }>(
       "SELECT max(last_applied_op) AS op FROM ps_buckets WHERE name <> '$local'",
+    )
+    const counts = await this.db.get<{ held: number; unresolved: number }>(
+      `SELECT (SELECT count(*) FROM ${localTables.held}) AS held,
+              (SELECT count(*) FROM ${localTables.outcomes} o WHERE ${inboxed}) AS unresolved`,
     )
     const failures = this.o.checksums?.count ?? 0
     const body: ReplicaDigest = {
@@ -677,8 +700,8 @@ export class Replica {
       checkpoint: String(checkpoint?.op ?? 0),
       algorithm,
       health: {
-        pending_mutations: held.length,
-        unresolved: (await this.inbox()).length,
+        pending_mutations: counts.held,
+        unresolved: counts.unresolved,
         checksum_failures: failures,
       },
       entries: listed,
@@ -737,7 +760,20 @@ export class Replica {
       this.stopReporting()
       for (const s of this.subscriptions ?? []) s.unsubscribe()
       this.subscriptions = null
-      await this.db.disconnectAndClear({ clearLocal: false })
+      await this.db.disconnect()
+      // PowerSync's clear, as disconnectAndClear({ clearLocal: false }) runs it, empties the upload
+      // queue too: the queue is found empty in the transaction that clears, so that a write made while
+      // the replica disconnected is never cleared with it, and waits for the next upload to drain it.
+      const cleared = await this.db.writeTransaction(async (tx) => {
+        const queue = await tx.get<{ writes: number }>('SELECT count(*) AS writes FROM ps_crud')
+        if (queue.writes > 0) return false
+        await tx.execute('SELECT powersync_clear(0)')
+        return true
+      })
+      if (!cleared) {
+        if (reconnect) await this.connect()
+        return
+      }
       await this.db.execute(`DELETE FROM ${localTables.rebase}`)
       await this.journal.setMeta(metaKeys.sent, '0')
       await this.journal.setMeta(metaKeys.resnapshot, null)
@@ -759,9 +795,11 @@ export class Replica {
     this.stopReporting()
     for (const s of this.subscriptions ?? []) s.unsubscribe()
     this.subscriptions = null
-    await this.db.disconnectAndClear({ clearLocal: true })
+    // The files first: the rows that name them leave with the local tables. One the storage fails to
+    // delete keeps none of the rows from leaving.
     for (const a of (await this.attachmentQueue?.list()) ?? [])
-      await this.attachmentQueue?.remove(a.id)
+      await this.attachmentQueue?.remove(a.id).catch(() => undefined)
+    await this.db.disconnectAndClear({ clearLocal: true })
     this.o.onRevoked?.()
   }
 
@@ -775,9 +813,10 @@ export class Replica {
 
 /**
  * Merges the row write just queued for table's row id into the row's write queued before it, when that
- * one has not been sent and neither acts: the earlier keeps its mutation id and the version it was
- * made against, and takes the later's columns, fields and client time. A queued write at or below the
- * replica's sent mark may be in flight, and a retry must send it unchanged, so it is never merged into.
+ * one has not been sent, neither acts, and the later names no row created between them: the earlier
+ * keeps its mutation id and the version it was made against, and takes the later's columns, fields and
+ * client time. A queued write at or below the replica's sent mark may be in flight, and a retry must
+ * send it unchanged, so it is never merged into.
  * It returns the mutation id the write was merged into, or null when it stays a mutation of its own.
  */
 async function mergeIntoPending(
@@ -815,6 +854,15 @@ async function mergeIntoPending(
   const first = JSON.parse(earlier.metadata) as WriteMetadata
   const second = JSON.parse(later.metadata) as WriteMetadata
   if (first.action !== undefined || second.action !== undefined) return null
+  // Merged, the later write is sent where the earlier one is, before the writes queued between them:
+  // one that names a row created between them would reach the push before the row it names does.
+  const created = await tx.getAll<{ id: string }>(
+    `SELECT json_extract(data, '$.id') AS id FROM ps_crud
+     WHERE id > ? AND id < ? AND json_extract(data, '$.op') = 'PUT'`,
+    [earlierRow.id, latest.id],
+  )
+  const named = JSON.stringify([later.data ?? {}, second.fields ?? {}]).toLowerCase()
+  if (created.some((c) => named.includes(c.id.toLowerCase()))) return null
   const laterLocal = new Set(second.local ?? [])
   const earlierSends = Object.keys(earlier.data ?? {}).filter(
     (c) => !(first.local ?? []).includes(c),

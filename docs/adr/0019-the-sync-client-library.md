@@ -60,11 +60,12 @@ as a boolean, an array and a JSON value as themselves). A write to an entity not
 refused `NeedsConnection` before anything is queued (D-84).
 
 **An edit merges into its row's queued write while that write has not been sent (D-129).** The
-connector marks the highest queued write it is about to send, before each request, in the replica's
-own table; an edit whose row's latest queued write is above the mark, and neither acts nor is a
+connector marks the highest queued write it is about to send in the replica's own table, and then reads
+the batch it sends; an edit whose row's latest queued write is above the mark, and neither acts nor is a
 delete, is folded into it in the edit's transaction (`ps_crud`): the earlier keeps its mutation id and
 base version and takes the later's columns, fields and client time. A write at or below the mark may be
-in flight, and a retry must send it unchanged, so a later edit is a mutation of its own.
+in flight, and a retry must send it unchanged, so a later edit is a mutation of its own; so is one that
+names a row created between the two, which, sent in the earlier's place, would reach the push before it.
 
 **A mutation of the queue is sent against the version its row's earlier mutation's answer returned
 (D-122).** Each `applied` or `merged` answer of the queue records, per row, the version the mutation was
@@ -100,22 +101,25 @@ id, its own table's first and then those only its redacted projection's table ho
 counts the same, every row its streams reach the caller by: a shared row, an owned private one, every
 private one where a projection reaches the rest, and where an audience bounds the entity only those
 whose readers name the caller (`replica.Expected`). A replica is at rest when its upload queue is empty
-and every row it holds has a version the server gave; its id is minted once and kept. The server
+and every row it holds has a version the server gave, and reports itself on its own only while PowerSync
+is connected and nothing is downloading; its id is minted once and kept. The server
 compares only the entity types a report names, answers an entity type it does not sync as disagreeing
 and never as divergence, and keeps each replica's last report (`sync_replicas`, D-128). A replica told
 `resnapshot_required` waits for its queue to drain, clears its synced rows with its own tables kept
-(`disconnectAndClear({ clearLocal: false })`), forgets its rebase and sent mark, and connects again;
+(PowerSync's clear, as `disconnectAndClear({ clearLocal: false })` runs it, in the transaction that finds
+the queue empty), forgets its rebase and sent mark, and connects again;
 the server shows it as needing the download until its next report. Bucket checksum failures are counted
 from PowerSync's log (`ChecksumWatch`), the only place it says so.
 
 **A device whose sign-in has ended discards its replica (FR-ID7).** The app's credential throws
-`Revoked` when it cannot be renewed; the replica then clears everything, its own tables and its waiting
-files too, and tells the app.
+`Revoked` when it cannot be renewed; the replica then clears everything, its waiting files first and
+then its tables, its own among them, and tells the app.
 
 **Files wait in a pending queue (D-25)**: the bytes in the platform's storage (`LocalStorageAdapter`:
 Node's file system, the browser's IndexedDB, the app's on React Native), a row in the replica's own table,
 uploaded through the module's route once the replica holds the row at a version, after each checkpoint;
-a refusal of the file itself is kept with its code, the bytes dropped, and the server marks the row.
+a refusal of the file itself is kept with its code, the bytes dropped, and the server marks the row; a
+refusal for the household's state (`entitlement_*`) is not one, and the file waits.
 
 **Three builds over one core**: `@household/sync/node`, `@household/sync/web` (wa-sqlite over IndexedDB,
 one tab one replica by default) and `@household/sync/native` (op-sqlite) each open a replica on their

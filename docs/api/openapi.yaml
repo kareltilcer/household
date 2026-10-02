@@ -9877,6 +9877,7 @@ components:
         replica_id: { $ref: '#/components/schemas/Uuid' }
         checkpoint:
           type: string
+          maxLength: 64
           description: The checkpoint the replica last applied, as PowerSync names it, which the sync-health screen shows (FR-HA19). The server compares against what the caller may see as the report arrives (D-125).
         algorithm:
           type: string
@@ -9887,9 +9888,9 @@ components:
           type: object
           required: [pending_mutations, unresolved, checksum_failures]
           properties:
-            pending_mutations: { type: integer, minimum: 0, description: The mutations the replica holds queued or held to replay. }
-            unresolved: { type: integer, minimum: 0, description: The conflicts and rejections the member has not resolved. }
-            checksum_failures: { type: integer, minimum: 0, description: The bucket checksums PowerSync found failing since the replica last reported. }
+            pending_mutations: { type: integer, minimum: 0, maximum: 2147483647, description: The mutations the replica holds queued or held to replay. }
+            unresolved: { type: integer, minimum: 0, maximum: 2147483647, description: The conflicts and rejections the member has not resolved. }
+            checksum_failures: { type: integer, minimum: 0, maximum: 2147483647, description: The bucket checksums PowerSync found failing since the replica last reported. }
         entries:
           type: array
           maxItems: 200

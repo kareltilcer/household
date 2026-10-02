@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Revoked, type Credential } from './connector.ts'
 import { localTables, metaKeys } from './schema.ts'
 import { NodeFileSystemAdapter, multipart, openReplica } from './node.ts'
@@ -133,6 +133,8 @@ describe('a replica', () => {
     expect(replica.writable('items')).toBe(true)
     await expect(replica.create('settings', { name: 'x' })).rejects.toThrow(NeedsConnection)
     expect(() => replica.writable('notes_redacted')).toThrow('redacted projection')
+    // Nor a column the table does not have, whose name would be written into the statement.
+    await expect(replica.create('items', { titel: 'Milk' })).rejects.toThrow('no column titel')
     expect(await replica.queued()).toBe(0)
   })
 
@@ -172,6 +174,21 @@ describe('a replica', () => {
     // An action is never merged: it is its own mutation.
     await replica.update('items', milk, { quantity: 3 }, { action: 'complete' })
     expect(await replica.queued()).toBe(3)
+  })
+
+  it('keeps an edit naming a row created after its queued write a mutation of its own (D-129)', async () => {
+    const { replica } = await open()
+    const milk = await replica.create('items', { title: 'Milk' })
+    const check = await replica.create('checks', { item_id: milk, checked: false })
+    const bread = await replica.create('items', { title: 'Bread' })
+    // Merged into the check's create, the edit would reach the push before the bread it names.
+    await replica.update('checks', check, { item_id: bread })
+    expect((await queue(replica)).map((q) => q.op)).toEqual(['PUT', 'PUT', 'PUT', 'PATCH'])
+    // An edit that names no such row merges into the write before it.
+    await replica.update('checks', check, { checked: true })
+    const queued = await queue(replica)
+    expect(queued.map((q) => q.op)).toEqual(['PUT', 'PUT', 'PUT', 'PATCH'])
+    expect(queued[3]?.data).toMatchObject({ item_id: bread, checked: 1 })
   })
 
   it('keeps its queue, its rows and what it was answered when it is closed and opened again (03 §2.1)', async () => {
@@ -275,6 +292,36 @@ describe('a replica', () => {
     stopBread()
   })
 
+  it('tells a refused create the member discards, which leaves the replica, from a withdrawn row', async () => {
+    const { fetch } = routes({
+      '/sync/mutations': (_url, init) => {
+        const { mutations } = JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }
+        return json(200, {
+          results: mutations.map((m) => ({
+            mutation_id: m.mutation_id,
+            outcome: 'rejected',
+            code: 'validation_failed',
+          })),
+        })
+      },
+    })
+    const { replica } = await open({ fetch })
+    const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 120))
+    const milk = await replica.create('items', { title: 'Milk' })
+    const states: RowState[] = []
+    const stop = replica.watchRowState('items', milk, (s) => states.push(s))
+    await settle()
+    await replica.flush()
+    // The next checkpoint takes away the row the server never had.
+    await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [milk])
+    await settle()
+    const [refused] = await replica.inbox()
+    await replica.discard(refused?.mutation_id ?? '')
+    await settle()
+    expect(states.map((s) => s.kind)).toEqual(['pending', 'rejected', 'absent'])
+    stop()
+  })
+
   it('offers its conflicts and rejections until they are retried or discarded (DD-4)', async () => {
     let outcome: Record<string, unknown> = { outcome: 'rejected', code: 'validation_failed' }
     const bodies: SyncMutation[][] = []
@@ -356,6 +403,24 @@ describe('a replica', () => {
     expect(await replica.journal.meta(metaKeys.resnapshot)).toBeNull()
   })
 
+  it('keeps a write made while it disconnects to download itself again, and waits for it (D-125)', async () => {
+    const { replica } = await open()
+    const milk = newId()
+    await arrive(replica, 'items', milk, { household_id: household, title: 'Milk', version: 3 })
+    await replica.journal.setMeta(metaKeys.resnapshot, '2026-10-02T10:00:00Z')
+    const disconnect = replica.db.disconnect.bind(replica.db)
+    const spy = vi.spyOn(replica.db, 'disconnect').mockImplementation(async () => {
+      await disconnect()
+      // The member writes while the replica disconnects, after it found its queue empty.
+      await replica.update('items', milk, { title: 'Oat milk' })
+    })
+    await replica.resnapshot()
+    spy.mockRestore()
+    expect(await replica.queued()).toBe(1)
+    expect(await replica.db.getAll('SELECT title FROM items')).toEqual([{ title: 'Oat milk' }])
+    expect(await replica.journal.meta(metaKeys.resnapshot)).not.toBeNull()
+  })
+
   it('discards itself, its own tables too, once its device is signed out (FR-ID7)', async () => {
     let revoked = false
     const credential: Credential = {
@@ -363,20 +428,32 @@ describe('a replica', () => {
       renew: () => Promise.reject(new Revoked('the device was signed out')),
     }
     const { fetch } = routes({ '/sync/mutations': () => json(401, { code: 'unauthenticated' }) })
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
     const { replica } = await open({
       fetch,
       credential,
+      storage,
       onRevoked: () => {
         revoked = true
       },
     })
-    await replica.create('items', { title: 'Milk' })
+    const milk = await replica.create('items', { title: 'Milk' })
+    await replica.attach('items', milk, {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'r.pdf',
+    })
+    const [waiting] = await replica.attachments().list()
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(true)
     await replica.journal.setMeta(metaKeys.notBefore, '0')
     await expect(replica.flush()).rejects.toThrow(Revoked)
     await new Promise((r) => setTimeout(r, 100))
     expect(revoked).toBe(true)
     expect(await replica.db.getAll('SELECT id FROM items')).toEqual([])
     expect(await replica.db.getAll(`SELECT id FROM ${localTables.meta}`)).toEqual([])
+    // The file waiting for the row left the device with it.
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(false)
     await expect(replica.connect()).rejects.toThrow(Revoked)
   })
 
@@ -384,8 +461,9 @@ describe('a replica', () => {
     const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
     dirs.push(storage)
     let status = 201
+    let refusal = 'unsupported_media_type'
     const { fetch, calls } = routes({
-      '/content': () => json(status, status === 201 ? {} : { code: 'unsupported_media_type' }),
+      '/content': () => json(status, status === 201 ? {} : { code: refusal }),
       '/sync/mutations': applying(1),
     })
     const { replica } = await open({ fetch, storage })
@@ -409,10 +487,19 @@ describe('a replica', () => {
     expect(calls.filter((c) => c.url.endsWith('/content'))).toHaveLength(1)
     expect(await replica.attachments().list()).toEqual([])
 
-    status = 415
+    // Refused for the household's state, which may upload again: the file waits (FR-BI2).
+    status = 402
+    refusal = 'entitlement_read_only'
     const scan = newId()
     await arrive(replica, 'items', scan, { household_id: household, title: 'Scan', version: 1 })
     await replica.attach('items', scan, { ...file, fileName: 'scan.exe' })
+    await replica.attachments().upload()
+    const [waiting] = await replica.attachments().list()
+    expect(waiting).toMatchObject({ id: scan, status: 'pending', attempts: 1, code: null })
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(true)
+
+    status = 415
+    refusal = 'unsupported_media_type'
     await replica.attachments().upload()
     expect(await replica.attachments().list()).toMatchObject([
       { id: scan, status: 'failed', code: 'unsupported_media_type' },

@@ -231,8 +231,35 @@ describe('the connector', () => {
       ['m-3', 'rejected', 'not_found'],
     ])
     expect(journal.holding).toEqual([])
-    // Each before its request, the queue's writes sent so far: none of them is merged into again.
+    // Each before it is read for sending, the queue's writes sent so far: none of them is merged into again.
     expect(journal.sentThrough).toBe(3)
+  })
+
+  it('sends a batch as it stands once marked sent: an edit merged into it before the mark goes with it (D-129)', async () => {
+    const q = new Queue()
+    q.write('Milk')
+    const peek = q.peek.bind(q)
+    let merged = false
+    q.peek = async (limit) => {
+      const batch = await peek(limit)
+      if (!merged && batch !== null) {
+        // An edit of the row merges into its queued write after the connector has read it, and before
+        // the connector has marked it sent.
+        merged = true
+        const [first] = q.entries
+        if (first !== undefined) q.entries[0] = { ...first, opData: { title: 'Oat milk' } }
+      }
+      return batch
+    }
+    const bodies: SyncMutation[][] = []
+    const fetch: typeof globalThis.fetch = (_input, init) => {
+      const { mutations } = JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }
+      bodies.push(mutations)
+      return Promise.resolve(results([])(mutations.map((m) => m.mutation_id)))
+    }
+    await connector(fetch, new Memory()).c.upload(q)
+    expect(bodies.map((b) => b.map((m) => m.fields))).toEqual([[{ title: 'Oat milk' }]])
+    expect(q.entries).toEqual([])
   })
 
   it('sends the queue in order, a batch at a time, each under a key of its own', async () => {
