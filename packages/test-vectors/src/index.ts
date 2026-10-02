@@ -24,7 +24,9 @@ export interface VectorFile {
 }
 
 /** Every vector file, by the name its file has in vectors/. */
-export const vectors = { i18n, money, 'replica-digest': replicaDigest } satisfies Readonly<Record<string, VectorFile>>
+export const vectors = { i18n, money, 'replica-digest': replicaDigest } satisfies Readonly<
+  Record<string, VectorFile>
+>
 
 const fileFields: ReadonlySet<string> = new Set(['description', 'sources', 'groups'])
 const caseFields: ReadonlySet<string> = new Set(['name', 'input', 'output', 'error'])

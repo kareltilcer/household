@@ -129,7 +129,7 @@ The engine is in [03-platform-strands.md](03-platform-strands.md) §2. What the 
 |---|---|
 | **Online, synced** | Nothing. The absence of an indicator is the indicator |
 | **Offline** | A persistent, unobtrusive bar: *"Offline — changes are saved and will sync"* |
-| **Pending** | The row carries a subtle pending mark. It is fully editable; edits merge into the queued mutation |
+| **Pending** | The row carries a subtle pending mark. It is fully editable; edits merge into the queued mutation until it is sent (**D-129**) |
 | **Syncing** | A progress indication only when it takes longer than a moment |
 | **Conflict** | The row is flagged and tappable, opening a plain comparison: *"You set the amount to 450. Petr set it to 500 at 18:40. Which is right?"* — with both values, both authors, both times, and no jargon |
 | **Rejected** | Flagged with the actual reason in a sentence, and an action: retry, edit, or discard |

@@ -2187,6 +2187,13 @@ paths:
         of it has not moved between the two: rows that held still for a minute, which a replica at
         rest would have received.
 
+        An entity type's rows are counted once each by id, across its own client table and its
+        redacted projection's: the rows any of its streams reach the caller by (D-128). Only the
+        entity types the report names are compared, since an app older than the server subscribes to
+        fewer streams; one the server does not sync is answered as disagreeing, and is never
+        divergence. A report naming an entity type twice is refused `422`. The replica's id is its
+        own, minted once; another member's is not found.
+
         Divergence, or a re-download an owner asked for (`POST …/sync/reset`), is answered
         `resnapshot_required`: the replica downloads itself again once its queue has drained.
         **Divergence rate is an alerting metric, not a support ticket.** Neither the report nor the
