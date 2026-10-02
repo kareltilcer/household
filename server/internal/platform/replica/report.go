@@ -156,10 +156,17 @@ func (s *Reports) digest(w http.ResponseWriter, r *http.Request) {
 		seen[e.EntityType] = true
 	}
 	scope := tenant.From(ctx)
+	// Only the entity types the report names are compared, so only theirs are read.
+	reported := make([]sync.Entity, 0, len(in.Entries))
+	for _, e := range s.entities {
+		if seen[e.Name] {
+			reported = append(reported, e)
+		}
+	}
 	var expected map[string]Digest
 	if err := tenant.InTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		expected, err = Expected(ctx, tx, scope, s.entities)
+		expected, err = Expected(ctx, tx, scope, reported)
 		return err
 	}); err != nil {
 		s.fail(ctx, w, err)

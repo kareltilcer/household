@@ -42,6 +42,7 @@ export {
   entries,
   pairHash,
   type DigestEntry,
+  type RowReader,
   type ReplicaDigest,
   type ReplicaDigestVerdict,
 } from './digest.ts'

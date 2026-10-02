@@ -262,6 +262,34 @@ describe('the connector', () => {
     expect(q.entries).toEqual([])
   })
 
+  it('ends a queued write no mutation can be made of, rejected and unsent, rather than retrying the queue for ever', async () => {
+    const q = new Queue()
+    q.write('Milk')
+    // A table the registry no longer holds, as after an app update; then one written around the library.
+    q.write('Gone', UpdateType.PUT, { table: 'gone' })
+    q.write('Bread')
+    q.write('Raw', UpdateType.PUT, { id: 'raw' })
+    const written = q.entries.pop()
+    if (written !== undefined) {
+      const { clientId, op, table, id } = written
+      q.entries.push({ clientId, op, table, id })
+    }
+    q.write('Eggs')
+    const journal = new Memory()
+    const { fetch, sent } = server()
+    await connector(fetch, journal).c.upload(q)
+    expect(q.entries).toEqual([])
+    // The writes around each are sent in order, as batches of their own.
+    expect(sent.map((s) => s.ids)).toEqual([['m-1'], ['m-3'], ['m-5']])
+    expect(
+      journal.recorded.map(([m, r, s]) => [m.entity_type, m.entity_id, r.outcome, s.unresolved]),
+    ).toEqual([
+      ['gone', 'item-2', 'rejected', true],
+      ['test.item', 'raw', 'rejected', true],
+    ])
+    expect(journal.recorded[0]?.[0].mutation_id).toBe('m-2')
+  })
+
   it('sends the queue in order, a batch at a time, each under a key of its own', async () => {
     const q = new Queue()
     for (const t of ['Milk', 'Bread', 'Eggs']) q.write(t)

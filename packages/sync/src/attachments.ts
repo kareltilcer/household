@@ -169,9 +169,12 @@ export class Attachments {
       if (url === null) continue
       const data = await this.options.storage.readFile(a.local_uri)
       const file: AttachmentFile = { data, contentType: a.content_type, fileName: a.file_name }
+      // Read before the request: a credential that cannot be had is no failed upload, and one that
+      // says the device's sign-in has ended (Revoked) is thrown to the replica, as renew()'s is.
+      const credential = await this.credential.current()
       let response: Response
       try {
-        response = await transport(url, await this.credential.current(), file, this.fetch)
+        response = await transport(url, credential, file, this.fetch)
       } catch {
         await this.attempted(a.id)
         return

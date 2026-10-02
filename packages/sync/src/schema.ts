@@ -33,8 +33,6 @@ export const metaKeys = {
   sent: 'sent_through',
   /** When the push may next be sent to, after a 429 (Retry-After), as milliseconds since the epoch. */
   notBefore: 'not_before',
-  /** The bucket checksum failures PowerSync logged since the replica last reported. */
-  checksumFailures: 'checksum_failures',
   /** Whether the server told the replica to download itself again, which it does once its queue drains. */
   resnapshot: 'resnapshot',
 } as const
@@ -87,7 +85,12 @@ export function schemaOf(registry: Registry): Schema {
       // The fields of a merge the row it returned does not say what the member set, as JSON.
       overridden: column.text,
     },
-    { localOnly: true },
+    {
+      localOnly: true,
+      // It keeps every answer but applied: a row's state and the inbox look answers up by their row
+      // and by their mutation.
+      indexes: { row: ['entity_type', 'entity_id'], mutation: ['mutation_id'] },
+    },
   )
   tables[localTables.held] = new Table(
     {

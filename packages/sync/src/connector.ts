@@ -4,7 +4,9 @@
 // answered the mutations: a transport failure, a 5xx, a 401, a 409 or a 429. A response outside the
 // contract (a 200 that does not answer the batch, a 422 that neither locates a mutation nor refuses
 // the batch's size, a status handled below by none of these rules) answers nothing either: it is
-// reported as a protocol fault (Observer.malformed), and thrown on.
+// reported as a protocol fault (Observer.malformed), and thrown on. A queued write no mutation can be
+// made of (one with no metadata, or of a table the registry no longer holds), which no answer would
+// ever end, is ended unsent, recorded as rejected.
 //
 // It sends the queue in order, several queued transactions to a batch up to maxBatch, under one
 // Idempotency-Key per batch that stays with the batch until it is answered, a held batch's as well
@@ -33,7 +35,14 @@
 // made against, and is sent against the version the earlier one's answer returned (D-122): its own
 // earlier write is no change it had not seen. The push holds the mutations of one batch so itself.
 
-import { toMutation, isEntitlement, overridden, terminal, type QueuedWrite } from './mutation.ts'
+import {
+  toMutation,
+  isEntitlement,
+  overridden,
+  terminal,
+  unsendable,
+  type QueuedWrite,
+} from './mutation.ts'
 import type { SyncMutation, SyncMutationResult } from './mutation.ts'
 import type { Registry } from './registry.ts'
 
@@ -261,11 +270,26 @@ export class Connector {
       // second, and none can change them once marked, whatever the sending awaits.
       const last = head.entries.at(-1)?.clientId
       if (last !== undefined) await this.o.journal.sent(last)
-      const batch = await queue.peek(head.entries.length)
+      let batch = await queue.peek(head.entries.length)
       if (batch === null) break
+      const { read, refused } = readable(this.o.registry, batch.entries)
+      if (refused !== null) {
+        // A write no mutation can be made of, made around the library or of a table the registry no
+        // longer holds: no push would ever answer it, and PowerSync applies no checkpoint while it
+        // waits. The writes before it are a batch of their own, sent first; at the head of the queue
+        // it is ended alone, rejected, for the member to see.
+        if (read.length === 0) {
+          const alone = await queue.peek(1)
+          if (alone === null) break
+          await this.refuse(refused.entry, refused.reason)
+          await alone.complete()
+          continue
+        }
+        batch = await queue.peek(read.length)
+        if (batch === null) break
+      }
       const rebases = await this.o.journal.rebases()
-      const queued = batch.entries.map((entry): Queued => {
-        const mutation = toMutation(this.o.registry, entry)
+      const queued = read.map(({ mutation, table }): Queued => {
         const madeAgainst = mutation.base_version ?? null
         const rebase = rebases.get(rowKey(mutation.entity_type, mutation.entity_id))
         return {
@@ -274,7 +298,7 @@ export class Connector {
               ? { ...mutation, base_version: rebase.to }
               : mutation,
           madeAgainst,
-          table: entry.table,
+          table,
         }
       })
       if (!(await this.send('queue', queued, () => Promise.resolve()))) continue
@@ -490,6 +514,23 @@ export class Connector {
     }
   }
 
+  /** Ends a queued write no mutation can be made of: recorded as rejected, for the member to see. */
+  private async refuse(entry: QueuedWrite, reason: string): Promise<void> {
+    const at = new Date(this.o.now()).toISOString()
+    const mutation = unsendable(this.o.registry, entry, this.o.newKey(), at)
+    await this.o.journal.record(
+      mutation,
+      {
+        mutation_id: mutation.mutation_id,
+        outcome: 'rejected',
+        code: 'validation_failed',
+        message: reason,
+        version: null,
+      },
+      { unresolved: true, overridden: [] },
+    )
+  }
+
   /** Moves flight to a fresh key, whose D-92 window starts with its first request, now. */
   private rekey(flight: InFlight): void {
     flight.key = this.o.newKey()
@@ -594,6 +635,34 @@ export class Connector {
       return result as SyncMutationResult
     })
   }
+}
+
+/** A queued write that toMutation could not read, and why. */
+interface Unreadable {
+  readonly entry: QueuedWrite
+  readonly reason: string
+}
+
+/**
+ * The mutations entries stand for, each with its client table, in order up to the first write
+ * toMutation cannot read; and that write, or null when it read every one.
+ */
+function readable(
+  registry: Registry,
+  entries: QueuedBatch['entries'],
+): { read: { mutation: SyncMutation; table: string }[]; refused: Unreadable | null } {
+  const read: { mutation: SyncMutation; table: string }[] = []
+  for (const entry of entries) {
+    try {
+      read.push({ mutation: toMutation(registry, entry), table: entry.table })
+    } catch (error) {
+      return {
+        read,
+        refused: { entry, reason: error instanceof Error ? error.message : String(error) },
+      }
+    }
+  }
+  return { read, refused: null }
 }
 
 function isEntitlementRejection(r: SyncMutationResult): boolean {

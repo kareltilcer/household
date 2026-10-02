@@ -79,7 +79,10 @@ in the replica's own table: every upload before then throws at once, without sen
 again after its retry delay, and a restart keeps the wait. The rest of the connector is ADR 0001's,
 moved from the suite: a 401 renews the credential, a 413 halves the batch, a 422 rejects what it locates,
 a 402 or a 404 answers the batch alike, a 409 is sent again and rekeyed past D-92's five minutes. A
-`merged` answer asks for the member's attention only where the row it carries does not say what a field
+queued write no mutation can be made of (one made around the library, with no metadata, or one of a
+table the registry no longer holds) is ended unsent and recorded as rejected, the writes before it sent
+as a batch of their own: no answer would ever end it, and PowerSync would apply no checkpoint while it
+waited. A `merged` answer asks for the member's attention only where the row it carries does not say what a field
 they set says (a time compared as the instant it is), or where the entity keeps its loser (`lww_row`,
 whose module offers it); a conflict and a rejection always do; an answer to a held mutation that ends
 it marks the attention its earlier answers asked for as given.
@@ -91,7 +94,8 @@ is a tombstone (item 13 keeps them); else absent. A watcher of a row that held i
 neither deleted by its member nor refused, reports it `withdrawn`, by `module` when the replica's
 `module_enablement` row says its module is off, by `access` otherwise. The inbox lists each mutation's
 last answer that asks for attention; retry writes the member's change again, every field carried, as a
-new mutation against the row as the replica holds it; discard gives up the hold and the attention.
+new mutation against the row as the replica holds it, and gives up the old one's hold, which would
+otherwise replay the change a second time; discard gives up the hold and the attention.
 
 **The report is computed from what the replica holds, at rest, and sent with its health (D-125).**
 Each pair hashes as the XXH3-64 of `<entity_id>:<version>`, the id lowercase, an entry as the sum
@@ -102,12 +106,14 @@ counts the same, every row its streams reach the caller by: a shared row, an own
 private one where a projection reaches the rest, and where an audience bounds the entity only those
 whose readers name the caller (`replica.Expected`). A replica is at rest when its upload queue is empty
 and every row it holds has a version the server gave, and reports itself on its own only while PowerSync
-is connected and nothing is downloading; its id is minted once and kept. The server
+is connected and nothing is downloading; it reads its tables in one transaction, which no checkpoint
+lands inside, and its id is minted once, in the transaction that finds none, and kept. The server
 compares only the entity types a report names, answers an entity type it does not sync as disagreeing
 and never as divergence, and keeps each replica's last report (`sync_replicas`, D-128). A replica told
 `resnapshot_required` waits for its queue to drain, clears its synced rows with its own tables kept
 (PowerSync's clear, as `disconnectAndClear({ clearLocal: false })` runs it, in the transaction that finds
-the queue empty), forgets its rebase and sent mark, and connects again;
+the queue empty), forgets its rebase and sent mark, and connects again unless it is being closed, a
+disconnect waiting for it so that it cannot connect a replica the app has disconnected;
 the server shows it as needing the download until its next report. Bucket checksum failures are counted
 from PowerSync's log (`ChecksumWatch`), the only place it says so.
 

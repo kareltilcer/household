@@ -36,17 +36,17 @@ export class Digest {
   }
 }
 
+/** What a report reads a replica's rows with: its database, or a transaction of it. */
+export type RowReader = Pick<CommonPowerSyncDatabase, 'getAll'>
+
 /**
  * The entries of db's report, one for each entity the registry's streams send: its rows in its own
  * client table, and those only its redacted projection's table holds, each id once, since the server
  * counts an entity's rows by id whichever of its streams reach the caller. Null when a row the
  * replica holds has no version, a write the server has not answered, which a report at rest never
- * holds.
+ * holds. db is best a read transaction, in which every table is read as one checkpoint left it.
  */
-export async function entries(
-  db: CommonPowerSyncDatabase,
-  registry: Registry,
-): Promise<DigestEntry[] | null> {
+export async function entries(db: RowReader, registry: Registry): Promise<DigestEntry[] | null> {
   const out: DigestEntry[] = []
   const reported = new Set(registry.streams.map((s) => s.entity))
   for (const [name, entity] of Object.entries(registry.entities)) {

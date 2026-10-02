@@ -356,6 +356,32 @@ describe('a replica', () => {
     ])
   })
 
+  it('gives up the hold of a mutation the member retries, whose change the new one carries', async () => {
+    const { fetch } = routes({
+      '/sync/mutations': (_url, init) => {
+        const { mutations } = JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }
+        return json(200, {
+          results: mutations.map((m) => ({
+            mutation_id: m.mutation_id,
+            outcome: 'rejected',
+            code: 'entitlement_read_only',
+          })),
+        })
+      },
+    })
+    const { replica } = await open({ fetch })
+    const milk = newId()
+    await arrive(replica, 'items', milk, { household_id: household, title: 'Milk', version: 1 })
+    await replica.update('items', milk, { title: 'Oat milk' })
+    await replica.flush()
+    const [refused] = await replica.inbox()
+    expect(await replica.held('entitlement')).toHaveLength(1)
+    expect(await replica.retry(refused?.mutation_id ?? '')).toBe(true)
+    // Only the retry waits: the old hold replaying beside it would make the change twice.
+    expect(await replica.held()).toEqual([])
+    expect(await replica.queued()).toBe(1)
+  })
+
   it('reports itself at rest and downloads itself again when told to, its own tables kept (D-125)', async () => {
     let verdict = { matched: true, resnapshot_required: false, entries: [] }
     const { fetch, calls } = routes({
@@ -421,6 +447,25 @@ describe('a replica', () => {
     expect(await replica.journal.meta(metaKeys.resnapshot)).not.toBeNull()
   })
 
+  it('stays closed when it is closed while it downloads itself again (D-125)', async () => {
+    const { fetch } = routes({ '/sync/credentials': () => json(503, {}) })
+    const { replica } = await open({ fetch })
+    await replica.connect()
+    await replica.journal.setMeta(metaKeys.resnapshot, '2026-10-02T10:00:00Z')
+    const disconnect = replica.db.disconnect.bind(replica.db)
+    const closing: Promise<void>[] = []
+    const spy = vi.spyOn(replica.db, 'disconnect').mockImplementation(async () => {
+      await disconnect()
+      // The app closes the replica while the download disconnects it.
+      if (closing.length === 0) closing.push(replica.close())
+    })
+    await replica.resnapshot()
+    await Promise.all(closing)
+    spy.mockRestore()
+    expect(closing).toHaveLength(1)
+    expect(replica.connected).toBe(false)
+  })
+
   it('discards itself, its own tables too, once its device is signed out (FR-ID7)', async () => {
     let revoked = false
     const credential: Credential = {
@@ -455,6 +500,26 @@ describe('a replica', () => {
     // The file waiting for the row left the device with it.
     expect(existsSync(waiting?.local_uri ?? '')).toBe(false)
     await expect(replica.connect()).rejects.toThrow(Revoked)
+  })
+
+  it('discards itself when its report finds the device signed out (FR-ID7)', async () => {
+    let revoked = false
+    const credential: Credential = {
+      current: () => Promise.reject(new Revoked('the device was signed out')),
+      renew: () => Promise.reject(new Revoked('the device was signed out')),
+    }
+    const { replica } = await open({
+      credential,
+      onRevoked: () => {
+        revoked = true
+      },
+    })
+    // Two first reports at once name one replica.
+    const [one, two] = await Promise.all([replica.id(), replica.id()])
+    expect(one).toBe(two)
+    await expect(replica.report()).rejects.toThrow(Revoked)
+    await new Promise((r) => setTimeout(r, 100))
+    expect(revoked).toBe(true)
   })
 
   it('uploads a file once the server holds its row, and keeps a refusal for the member (D-25)', async () => {

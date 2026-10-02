@@ -136,6 +136,8 @@ export class Replica {
   private unlisten: (() => void) | null = null
   private resnapshotting: Promise<void> | null = null
   private discarded = false
+  /** Set once close() is called: no download starts after it. */
+  private closing = false
   /** A flush replayHeld started that has not finished. */
   private replaying: Promise<void> | null = null
 
@@ -183,9 +185,20 @@ export class Replica {
   async id(): Promise<string> {
     const kept = await this.journal.meta(metaKeys.replica)
     if (kept !== null) return kept
-    const id = this.newId()
-    await this.journal.setMeta(metaKeys.replica, id)
-    return id
+    // Minted in the transaction that finds none, so that two first reports cannot each mint one.
+    return this.db.writeTransaction(async (tx) => {
+      const found = await tx.getOptional<{ value: string | null }>(
+        `SELECT value FROM ${localTables.meta} WHERE id = ?`,
+        [metaKeys.replica],
+      )
+      if (found !== null && found.value !== null) return found.value
+      const id = this.newId()
+      await tx.execute(`INSERT OR REPLACE INTO ${localTables.meta} (id, value) VALUES (?, ?)`, [
+        metaKeys.replica,
+        id,
+      ])
+      return id
+    })
   }
 
   /** Whether the replica is connected: between connect() and disconnect(). */
@@ -222,7 +235,7 @@ export class Replica {
       const queue = this.attachmentQueue
       this.unlisten = this.db.registerListener({
         statusChanged: (status) => {
-          if (status.connected && !status.downloading) void queue.upload().catch(() => undefined)
+          if (status.connected && !status.downloading) this.uploadFiles(queue)
         },
       })
     }
@@ -243,18 +256,23 @@ export class Replica {
 
   /** Disconnects from PowerSync: the replica goes offline, its rows and its queue kept. */
   async disconnect(): Promise<void> {
+    // A download under way connects the replica again once it has cleared it: it is waited for, so
+    // that it cannot connect the replica after this has disconnected it.
+    await this.resnapshotting?.catch(() => undefined)
     this.connectedNow = false
     this.stopReporting()
     await this.db.disconnect()
   }
 
+  /** Closes the replica's database, once the flush and the download under way, if any, have ended. */
   async close(): Promise<void> {
+    this.closing = true
+    await this.replaying
+    await this.resnapshotting?.catch(() => undefined)
     this.connectedNow = false
     this.stopReporting()
     for (const s of this.subscriptions ?? []) s.unsubscribe()
     this.subscriptions = null
-    await this.replaying
-    await this.resnapshotting
     await this.db.close()
   }
 
@@ -313,8 +331,18 @@ export class Replica {
       if (error instanceof Revoked) this.discardSoon()
       throw error
     }
-    if (this.attachmentQueue !== null) void this.attachmentQueue.upload().catch(() => undefined)
+    if (this.attachmentQueue !== null) this.uploadFiles(this.attachmentQueue)
     if ((await this.journal.meta(metaKeys.resnapshot)) !== null) this.whenDrained()
+  }
+
+  /**
+   * Uploads the waiting files, without waiting for them: a failure is tried again at the next run, and
+   * a device found signed out discards the replica (FR-ID7).
+   */
+  private uploadFiles(queue: Attachments): void {
+    void queue.upload().catch((error: unknown) => {
+      if (error instanceof Revoked) this.discardSoon()
+    })
   }
 
   /**
@@ -531,7 +559,9 @@ export class Replica {
   /**
    * Writes again what a refused or conflicting mutation set, as a new mutation against the row as the
    * replica now holds it (the member's "retry", or their choice of their own value), and marks the old
-   * one seen to. It reports whether it wrote: a row neither held nor created by the mutation is not.
+   * one seen to, giving up its hold if it was held: the new mutation carries the change, and the old
+   * one replaying as well would make it twice. It reports whether it wrote: a row neither held nor
+   * created by the mutation is not.
    */
   async retry(mutationId: string): Promise<boolean> {
     const [last] = (await this.outcomes()).filter((o) => o.mutation_id === mutationId).slice(-1)
@@ -565,7 +595,10 @@ export class Replica {
           : { action: mutation.action }),
       })
     }
-    if (wrote) await this.journal.settled(mutationId)
+    if (wrote) {
+      await this.journal.release([mutationId])
+      await this.journal.settled(mutationId)
+    }
     return wrote
   }
 
@@ -666,7 +699,7 @@ export class Replica {
     if (this.attachmentQueue === null)
       throw new Error('the replica was opened with no attachment storage')
     await this.attachmentQueue.add(entityOf(this.registry, table).name, table, id, file)
-    if (this.connectedNow) void this.attachmentQueue.upload().catch(() => undefined)
+    if (this.connectedNow) this.uploadFiles(this.attachmentQueue)
   }
 
   /** The files waiting to be uploaded, and those refused. */
@@ -685,11 +718,16 @@ export class Replica {
    */
   async report(): Promise<ReplicaDigestVerdict | null> {
     if ((await this.queued()) > 0) return null
-    const listed = await entries(this.db, this.registry)
+    // Read in one transaction, which no checkpoint lands inside: rows read from either side of one,
+    // a row moving from a redacted projection's table to its entity's own, say, are no state the
+    // replica ever held.
+    const { listed, checkpoint } = await this.db.readTransaction(async (tx) => ({
+      listed: await entries(tx, this.registry),
+      checkpoint: await tx.getOptional<{ op: number | string | null }>(
+        "SELECT max(last_applied_op) AS op FROM ps_buckets WHERE name <> '$local'",
+      ),
+    }))
     if (listed === null) return null
-    const checkpoint = await this.db.getOptional<{ op: number | string | null }>(
-      "SELECT max(last_applied_op) AS op FROM ps_buckets WHERE name <> '$local'",
-    )
     const counts = await this.db.get<{ held: number; unresolved: number }>(
       `SELECT (SELECT count(*) FROM ${localTables.held}) AS held,
               (SELECT count(*) FROM ${localTables.outcomes} o WHERE ${inboxed}) AS unresolved`,
@@ -715,16 +753,18 @@ export class Replica {
         },
         body: JSON.stringify(body),
       })
-    let response = await send()
-    if (response.status === 401) {
-      await drain(response)
-      try {
-        await this.o.credential.renew()
-      } catch (error) {
-        if (error instanceof Revoked) this.discardSoon()
-        throw error
-      }
+    let response: Response
+    try {
       response = await send()
+      if (response.status === 401) {
+        await drain(response)
+        await this.o.credential.renew()
+        response = await send()
+      }
+    } catch (error) {
+      // The credential, read or renewed, says the device's sign-in has ended (FR-ID7).
+      if (error instanceof Revoked) this.discardSoon()
+      throw error
     }
     if (response.status !== 200) {
       await drain(response)
@@ -750,11 +790,13 @@ export class Replica {
    * Downloads the replica again (D-125): once its upload queue has drained, so that nothing queued is
    * lost, it clears every synced row, keeps its own local tables (the outcomes, the holds, the files
    * waiting), and connects afresh, PowerSync sending every bucket whole. A queue that holds writes
-   * leaves it marked, to be done after the next upload drains it.
+   * leaves it marked, to be done after the next upload drains it; a replica being closed is left
+   * marked as well, to be done once it is opened and connected again.
    */
   resnapshot(): Promise<void> {
+    if (this.closing) return Promise.resolve()
     this.resnapshotting ??= (async () => {
-      if ((await this.queued()) > 0 || this.discarded) return
+      if (this.discarded || (await this.queued()) > 0) return
       const reconnect = this.connectedNow
       this.connectedNow = false
       this.stopReporting()
@@ -770,14 +812,13 @@ export class Replica {
         await tx.execute('SELECT powersync_clear(0)')
         return true
       })
-      if (!cleared) {
-        if (reconnect) await this.connect()
-        return
+      if (cleared) {
+        await this.db.execute(`DELETE FROM ${localTables.rebase}`)
+        await this.journal.setMeta(metaKeys.sent, '0')
+        await this.journal.setMeta(metaKeys.resnapshot, null)
       }
-      await this.db.execute(`DELETE FROM ${localTables.rebase}`)
-      await this.journal.setMeta(metaKeys.sent, '0')
-      await this.journal.setMeta(metaKeys.resnapshot, null)
-      if (reconnect) await this.connect()
+      // Connected again as it was, unless close() was called meanwhile; disconnect() waits for this.
+      if (reconnect && !this.closing) await this.connect()
     })().finally(() => {
       this.resnapshotting = null
     })

@@ -135,6 +135,38 @@ export function toMutation(registry: Registry, entry: QueuedWrite): SyncMutation
   }
 }
 
+/**
+ * What can be told of a queued write toMutation cannot read, for the outcomes table to keep: one made
+ * around the library, with no metadata, or one of a table the registry no longer holds. Its mutation
+ * id and client time are its metadata's where it names them, id and at where it does not; the rest is
+ * what the write itself says.
+ */
+export function unsendable(
+  registry: Registry,
+  entry: QueuedWrite,
+  id: string,
+  at: string,
+): SyncMutation {
+  let meta: Partial<WriteMetadata> = {}
+  try {
+    const parsed: unknown = JSON.parse(entry.metadata ?? '')
+    if (parsed !== null && typeof parsed === 'object') meta = parsed
+  } catch {
+    // No metadata to read: the write is told by its row alone.
+  }
+  return {
+    mutation_id: typeof meta.mutation_id === 'string' ? meta.mutation_id : id,
+    entity_type: registry.tables[entry.table]?.entity ?? entry.table,
+    entity_id: entry.id,
+    op:
+      entry.op === UpdateType.PUT ? 'create' : entry.op === UpdateType.DELETE ? 'delete' : 'update',
+    base_version: null,
+    action: null,
+    fields: { ...(entry.opData ?? {}) },
+    client_time: typeof meta.client_time === 'string' ? meta.client_time : at,
+  }
+}
+
 /** The outcomes that end a mutation (PRD 10 §4, invariant 6); `deferred` does not. */
 export const terminal: ReadonlySet<Outcome> = new Set(['applied', 'merged', 'conflict', 'rejected'])
 
