@@ -1,9 +1,15 @@
-// The tables a client of the suite holds, declared once: the conformance module's
-// (server/internal/conformance) and admin's, whose streams every member subscribes to (PRD
-// modules/17 Sync); the PowerSync schema each client opens, the fields its connector sends for each
-// entity, and the form in which a replica's rows and the server's are compared.
+// The tables a client of the suite holds, as the suite's oracle reads them: the conformance module's
+// (server/internal/conformance) and admin's, whose streams every member subscribes to (PRD modules/17
+// Sync); the fields a client writes of each entity, and the form in which a replica's rows and the
+// server's are compared. The schema each client opens is the library's, built from the suite's
+// generated registry (suiteRegistry); harness.test.ts holds these declarations to it, so the oracle
+// cannot drift from what a replica holds.
 
-import { Schema, Table, column } from '@powersync/node'
+import { asRegistry, type Registry } from '../../src/index.ts'
+import generated from '../stack/powersync/registry.json'
+
+/** The suite's client registry, generated from the entity registry (server/internal/syncconfig). */
+export const suiteRegistry: Registry = asRegistry(generated)
 
 /** How a column's value is compared: a replica holds booleans as 0 and 1, and times as text. */
 export type Kind =
@@ -232,65 +238,6 @@ export function entitySpec(entity: string): TableSpec {
   if (spec === undefined) throw new Error(`no conformance entity ${entity}`)
   return spec
 }
-
-/** The local-only tables the suite's connector keeps (ADR 0001): what the next checkpoint must not replace. */
-export const outcomesTable = 'conformance_outcomes'
-export const heldTable = 'conformance_held'
-
-function clientColumn(kind: Kind): typeof column.text | typeof column.integer {
-  return kind === 'integer' || kind === 'boolean' ? column.integer : column.text
-}
-
-/**
- * The schema each client opens. Every table a client writes tracks the metadata of each write
- * (`_metadata`): the mutation id, the client time and the base version its mutation carries,
- * which a row write does not (ADR 0001).
- */
-export const schema = new Schema({
-  ...Object.fromEntries(
-    tables.map((spec) => [
-      spec.table,
-      new Table(
-        Object.fromEntries(
-          Object.entries(spec.columns).map(([name, kind]) => [name, clientColumn(kind)]),
-        ),
-        { trackMetadata: spec.writes.length > 0 },
-      ),
-    ]),
-  ),
-  // Each answer that was not `applied`, with its mutation: the conflict inbox and a rejection keep
-  // what the member wrote from it. position orders them as they were answered, which answered_at,
-  // in milliseconds, cannot within a batch.
-  [outcomesTable]: new Table(
-    {
-      mutation_id: column.text,
-      entity_type: column.text,
-      entity_id: column.text,
-      op: column.text,
-      outcome: column.text,
-      code: column.text,
-      message: column.text,
-      version: column.integer,
-      row: column.text,
-      mutation: column.text,
-      answered_at: column.text,
-      position: column.integer,
-    },
-    { localOnly: true },
-  ),
-  // The mutations held to replay: a `deferred` one once its batch is answered, an `entitlement`
-  // one once the household may write again.
-  [heldTable]: new Table(
-    {
-      mutation_id: column.text,
-      reason: column.text,
-      position: column.integer,
-      mutation: column.text,
-      held_at: column.text,
-    },
-    { localOnly: true },
-  ),
-})
 
 /** A column value in the form both sides are compared in. */
 export type Canonical = string | number | boolean | null | readonly string[]

@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Admin, Household, Member, MemberSpec } from './admin.ts'
 import { Client, type ClientOptions } from './client.ts'
-import type { Attempt, HoldReason } from './connector.ts'
 import {
   acknowledgedWrites,
   answeredAs,
@@ -22,10 +21,12 @@ import { Recorder } from './recorder.ts'
 import { Rng } from './rng.ts'
 import {
   ends,
+  type Attempt,
+  type HoldReason,
   type SyncMutation,
   type SyncMutationBatchResult,
   type SyncMutationResult,
-} from './mutation.ts'
+} from '../../src/index.ts'
 import type { Target } from './target.ts'
 import { sleep, until } from './wait.ts'
 

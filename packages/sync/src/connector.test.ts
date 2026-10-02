@@ -1,36 +1,53 @@
 import { UpdateType } from '@powersync/common'
 import { describe, expect, it } from 'vitest'
 import {
-  ConformanceConnector,
+  Connector,
+  RateLimited,
   inProgressWindowMs,
   locate,
+  retryAfterMs,
+  rowKey,
   type ConnectorOptions,
   type Held,
   type HoldReason,
   type Journal,
   type QueuedBatch,
+  type Rebase,
+  type RebaseEntry,
+  type Surface,
   type UploadQueue,
 } from './connector.ts'
 import { encodeMetadata, type SyncMutation, type SyncMutationResult } from './mutation.ts'
+import { testRegistry } from './testing.ts'
 
 const push = 'https://standin.test/api/v1/households/h/sync/mutations'
+
+/** The body a request was sent with, which the library always sends as text. */
+function bodyOf(init: RequestInit | undefined): string {
+  return typeof init?.body === 'string' ? init.body : ''
+}
 
 /** An upload queue of item writes, which a completed batch leaves. */
 class Queue implements UploadQueue {
   readonly entries: QueuedBatch['entries'][number][] = []
   private next = 1
 
-  write(title: string, op: UpdateType = UpdateType.PUT): string {
-    const id = `item-${String(this.next)}`
+  write(
+    title: string,
+    op: UpdateType = UpdateType.PUT,
+    row: { readonly id?: string; readonly base?: number; readonly table?: string } = {},
+  ): string {
+    const id = row.id ?? `item-${String(this.next)}`
     this.entries.push({
       clientId: this.next,
       op,
-      table: 'conformance_items',
+      table: row.table ?? 'items',
       id,
       opData: { title },
       metadata: encodeMetadata({
         mutation_id: `m-${String(this.next)}`,
         client_time: '2026-09-29T10:00:00Z',
+        ...(row.base === undefined ? {} : { base_version: row.base }),
       }),
     })
     this.next++
@@ -52,11 +69,48 @@ class Queue implements UploadQueue {
 
 /** A journal in memory. */
 class Memory implements Journal {
-  readonly recorded: [SyncMutation, SyncMutationResult][] = []
+  readonly recorded: [SyncMutation, SyncMutationResult, Surface][] = []
   holding: Held[] = []
+  readonly rows = new Map<string, Rebase>()
+  readonly seen = new Set<string>()
+  sentThrough = 0
+  waitUntil = 0
 
-  record(mutation: SyncMutation, result: SyncMutationResult): Promise<void> {
-    this.recorded.push([mutation, result])
+  record(mutation: SyncMutation, result: SyncMutationResult, surface: Surface): Promise<void> {
+    this.recorded.push([mutation, result, surface])
+    return Promise.resolve()
+  }
+
+  settled(mutationId: string): Promise<void> {
+    this.seen.add(mutationId)
+    return Promise.resolve()
+  }
+
+  rebases(): Promise<ReadonlyMap<string, Rebase>> {
+    return Promise.resolve(new Map(this.rows))
+  }
+
+  rebase(entries: readonly RebaseEntry[]): Promise<void> {
+    for (const e of entries)
+      this.rows.set(rowKey(e.entityType, e.entityId), { from: e.from, to: e.to })
+    return Promise.resolve()
+  }
+
+  prune(): Promise<void> {
+    return Promise.resolve()
+  }
+
+  sent(clientId: number): Promise<void> {
+    this.sentThrough = Math.max(this.sentThrough, clientId)
+    return Promise.resolve()
+  }
+
+  notBefore(): Promise<number> {
+    return Promise.resolve(this.waitUntil)
+  }
+
+  setNotBefore(at: number): Promise<void> {
+    this.waitUntil = at
     return Promise.resolve()
   }
 
@@ -124,7 +178,12 @@ function results(
       results: ids.map((mutation_id, i) => {
         const o = outcomes[i] ?? 'applied'
         const [outcome, code] = typeof o === 'string' ? [o, o === 'applied' ? null : o] : o
-        return { mutation_id, outcome, code, version: outcome === 'applied' ? 1 : null }
+        return {
+          mutation_id,
+          outcome,
+          code,
+          version: outcome === 'applied' || outcome === 'merged' ? 1 : null,
+        }
       }),
     })
 }
@@ -137,8 +196,8 @@ function connector(
   let keys = 0
   let token = 0
   const renewed: number[] = []
-  const slept: number[] = []
-  const c = new ConformanceConnector({
+  const c = new Connector({
+    registry: testRegistry,
     pushUrl: push,
     fetch,
     journal,
@@ -151,13 +210,9 @@ function connector(
       },
     },
     newKey: () => `key-${String(++keys)}`,
-    sleep: (ms) => {
-      slept.push(ms)
-      return Promise.resolve()
-    },
     ...options,
   })
-  return { c, renewed, slept }
+  return { c, renewed }
 }
 
 describe('the connector', () => {
@@ -176,6 +231,8 @@ describe('the connector', () => {
       ['m-3', 'rejected', 'not_found'],
     ])
     expect(journal.holding).toEqual([])
+    // Each before its request, the queue's writes sent so far: none of them is merged into again.
+    expect(journal.sentThrough).toBe(3)
   })
 
   it('sends the queue in order, a batch at a time, each under a key of its own', async () => {
@@ -221,14 +278,33 @@ describe('the connector', () => {
     ])
   })
 
-  it('waits out a 429 and throws', async () => {
+  it('sends nothing more until a 429 has been waited out, across restarts', async () => {
     const q = new Queue()
     q.write('Milk')
-    const { fetch } = server(json(429, { code: 'rate_limited' }, { 'retry-after': '3' }))
-    const { c, slept } = connector(fetch, new Memory())
-    await expect(c.upload(q)).rejects.toThrow('rate limited')
-    expect(slept).toEqual([3000])
-    expect(q.entries).toHaveLength(1)
+    let now = 1_000_000
+    const journal = new Memory()
+    const { fetch, sent } = server(json(429, { code: 'rate_limited' }, { 'retry-after': '3' }))
+    const { c } = connector(fetch, journal, { now: () => now })
+    await expect(c.upload(q)).rejects.toThrow(RateLimited)
+    expect(journal.waitUntil).toBe(now + 3000)
+    // Before then, a restarted connector, which keeps its journal, sends nothing either.
+    now += 2_000
+    const restarted = connector(fetch, journal, { now: () => now }).c
+    await expect(restarted.upload(q)).rejects.toThrow(RateLimited)
+    expect(sent).toHaveLength(1)
+    now += 1_000
+    await restarted.upload(q)
+    expect(sent).toHaveLength(2)
+    expect(q.entries).toEqual([])
+  })
+
+  it("reads a Retry-After's seconds or its date", () => {
+    const now = Date.parse('2026-10-02T23:00:00Z')
+    expect(retryAfterMs('3', now)).toBe(3000)
+    // A household past its day's mutations waits for the UTC day's end (D-127).
+    expect(retryAfterMs('Sat, 03 Oct 2026 00:00:00 GMT', now)).toBe(3_600_000)
+    expect(retryAfterMs(null, now)).toBe(1000)
+    expect(retryAfterMs('soon', now)).toBe(1000)
   })
 
   it('halves a batch the push finds too large', async () => {
@@ -402,7 +478,8 @@ describe('the connector', () => {
     q.write('Milk')
     const { fetch, sent } = server()
     const attempts: string[] = []
-    const c = new ConformanceConnector({
+    const c = new Connector({
+      registry: testRegistry,
       pushUrl: push,
       fetch,
       journal: new Memory(),
@@ -569,6 +646,90 @@ describe('the connector', () => {
     for (let i = 0; i < 3; i++) await expect(c.upload(q)).rejects.toThrow('retries a rejection')
     expect(sent.map((s) => s.key)).toEqual(['key-1', 'key-1', 'key-1'])
     expect(q.entries).toHaveLength(1)
+  })
+})
+
+describe('the connector, across batches', () => {
+  it("sends a later mutation of a row against the version an earlier one's answer returned (D-122)", async () => {
+    const q = new Queue()
+    q.write('Oat milk', UpdateType.PATCH, { id: 'milk', base: 3 })
+    const journal = new Memory()
+    const bodies: SyncMutation[][] = []
+    const fetch: typeof globalThis.fetch = (_input, init) => {
+      const batch = (JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }).mutations
+      bodies.push(batch)
+      const version = 3 + bodies.length
+      return Promise.resolve(
+        json(200, {
+          results: batch.map((m) => ({ mutation_id: m.mutation_id, outcome: 'applied', version })),
+        }),
+      )
+    }
+    const { c } = connector(fetch, journal)
+    await c.upload(q)
+    // Made while the first was in flight, against the version the replica still held.
+    q.write('Soy milk', UpdateType.PATCH, { id: 'milk', base: 3 })
+    // A row created and then edited before the server answered either: the edit names no version.
+    q.write('Bread', UpdateType.PUT, { id: 'bread' })
+    await c.upload(q)
+    q.write('Rye bread', UpdateType.PATCH, { id: 'bread' })
+    // Another row's write against its own version is not touched.
+    q.write('Eggs', UpdateType.PATCH, { id: 'eggs', base: 7 })
+    await c.upload(q)
+    expect(bodies.map((b) => b.map((m) => [m.entity_id, m.base_version]))).toEqual([
+      [['milk', 3]],
+      [
+        ['milk', 4],
+        ['bread', null],
+      ],
+      [
+        ['bread', 5],
+        ['eggs', 7],
+      ],
+    ])
+    expect(journal.rows.get(rowKey('test.item', 'milk'))).toEqual({ from: 3, to: 5 })
+  })
+
+  it('tells the member of a merge only where it overrode what they set, or where the module keeps the loser', async () => {
+    const q = new Queue()
+    q.write('Oat milk', UpdateType.PATCH, { id: 'milk', base: 1 })
+    q.write('Bread', UpdateType.PATCH, { id: 'bread', base: 1 })
+    q.write('Plan', UpdateType.PATCH, { id: 'plan', base: 1, table: 'notes' })
+    const journal = new Memory()
+    const titles = ['Soy milk', 'Bread', 'Plan']
+    const fetch: typeof globalThis.fetch = (_input, init) => {
+      const batch = (JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }).mutations
+      return Promise.resolve(
+        json(200, {
+          results: batch.map((m, i) => ({
+            mutation_id: m.mutation_id,
+            outcome: 'merged',
+            code: 'concurrent_change',
+            version: 2,
+            row: { title: titles[i] },
+          })),
+        }),
+      )
+    }
+    await connector(fetch, journal).c.upload(q)
+    expect(journal.recorded.map(([m, , s]) => [m.entity_id, s.unresolved, s.overridden])).toEqual([
+      ['milk', true, ['title']],
+      ['bread', false, []],
+      ['plan', true, []],
+    ])
+  })
+
+  it('marks what a held mutation asked of the member seen to once its replay ends', async () => {
+    const q = new Queue()
+    q.write('Honey')
+    const journal = new Memory()
+    const { fetch } = server(results([['rejected', 'entitlement_read_only']]))
+    const { c } = connector(fetch, journal)
+    await c.upload(q)
+    expect(journal.recorded[0]?.[2].unresolved).toBe(true)
+    c.resume()
+    await c.upload(q)
+    expect([...journal.seen]).toEqual(['m-1'])
   })
 })
 

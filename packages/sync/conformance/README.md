@@ -25,15 +25,15 @@ the keys it verifies a client's token with from that API at `host.docker.interna
 where the container does not reach the host's loopback, the API listens where it does
 (`CONFORMANCE_API_ADDR=0.0.0.0:8091`, as CI sets it).
 
-| Variable | Default | What |
-|---|---|---|
-| `CONFORMANCE_FUZZ_RUNS` | 3 | Seeded schedules in a fuzz run |
-| `CONFORMANCE_FUZZ_STEPS` | 30 | Steps in each |
-| `CONFORMANCE_FUZZ_SEED` | 1 | The first seed; a failing one is named in the report |
-| `CONFORMANCE_SCENARIOS` | | `all` runs every scenario the target can, switched on or not |
-| `HOUSEHOLD_CONFORMANCE_PG_PORT`, `HOUSEHOLD_CONFORMANCE_POWERSYNC_PORT` | 5442, 8090 | The stack's ports |
-| `CONFORMANCE_ADMIN_DATABASE_URL`, `CONFORMANCE_API_URL`, `CONFORMANCE_POWERSYNC_URL` | the stack's | Where the suite reaches each |
-| `CONFORMANCE_API_ADDR` | the API URL's host | Where the API the suite starts listens |
+| Variable                                                                             | Default            | What                                                         |
+| ------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------------ |
+| `CONFORMANCE_FUZZ_RUNS`                                                              | 3                  | Seeded schedules in a fuzz run                               |
+| `CONFORMANCE_FUZZ_STEPS`                                                             | 30                 | Steps in each                                                |
+| `CONFORMANCE_FUZZ_SEED`                                                              | 1                  | The first seed; a failing one is named in the report         |
+| `CONFORMANCE_SCENARIOS`                                                              |                    | `all` runs every scenario the target can, switched on or not |
+| `HOUSEHOLD_CONFORMANCE_PG_PORT`, `HOUSEHOLD_CONFORMANCE_POWERSYNC_PORT`              | 5442, 8090         | The stack's ports                                            |
+| `CONFORMANCE_ADMIN_DATABASE_URL`, `CONFORMANCE_API_URL`, `CONFORMANCE_POWERSYNC_URL` | the stack's        | Where the suite reaches each                                 |
+| `CONFORMANCE_API_ADDR`                                                               | the API URL's host | Where the API the suite starts listens                       |
 
 A long fuzz run, as the nightly workflow runs it:
 
@@ -43,12 +43,12 @@ CONFORMANCE_FUZZ_RUNS=150 CONFORMANCE_FUZZ_STEPS=150 pnpm --filter @household/sy
 
 ## What is where
 
-| Path | What |
-|---|---|
-| `stack/` | The compose file, PowerSync's configuration with its generated streams and their manifest, and `conformance:up` |
-| `harness/` | Clients, the suite's connector, the network, the seeded generator, the invariants, the fuzzer; `*.test.ts` beside them are its unit tests, run by `pnpm test` |
-| `scenarios/` | The 18 scenarios and the access-loss cases, and `enabled`: the ones switched on |
-| `suite/` | What `conformance` runs: the harness's self-tests and negative controls, the scenarios, the fuzzer |
+| Path                                   | What                                                                                                                                                                                |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stack/`                               | The compose file, PowerSync's configuration with its generated streams and their manifest, and `conformance:up`                                                                     |
+| `harness/`                             | Clients, the suite's connector, the network, the seeded generator, the invariants, the fuzzer; `*.test.ts` beside them are its unit tests, run by `pnpm test`                       |
+| `scenarios/`                           | The 18 scenarios and the access-loss cases, and `enabled`: the ones switched on                                                                                                     |
+| `suite/`                               | What `conformance` runs: the harness's self-tests and negative controls, the scenarios, the fuzzer                                                                                  |
 | `../../../server/internal/conformance` | The conformance module the scenarios write, its writers for every entity, and the suite's sign-in and attachments' uploads; `cmd/conformance-api` serves them with the server's API |
 
 ## The engine
@@ -66,8 +66,8 @@ removal from the household goes through item 10's route (`World`). PowerSync's c
 stack's service on demand (`target.compact`). A scenario is skipped until the item that builds its
 engine switches it on, and since item 17, gate G-B, every one is:
 
-| Item | Switches on |
-|---|---|
-| 13 | 1, 3, 4, 5, 8, 9, 10, 13, 15, 17 |
-| 16 | 14, `no-loss-lapse` and `suspension` |
-| 17 | 2, 6, 7, 11, 12, 13-rotation, 16, 18, and the five `loss-*` cases |
+| Item | Switches on                                                       |
+| ---- | ----------------------------------------------------------------- |
+| 13   | 1, 3, 4, 5, 8, 9, 10, 13, 15, 17                                  |
+| 16   | 14, `no-loss-lapse` and `suspension`                              |
+| 17   | 2, 6, 7, 11, 12, 13-rotation, 16, 18, and the five `loss-*` cases |

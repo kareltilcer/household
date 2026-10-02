@@ -4,26 +4,54 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts",
+    "./web": "./web/index.ts",
+    "./native": "./native/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit --project web && tsc --noEmit --project native",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run src conformance/harness",
     "conformance:up": "node conformance/stack/up.ts",
     "conformance:down": "docker compose --file conformance/stack/docker-compose.yml down --volumes",
     "conformance": "vitest run --config conformance/vitest.config.ts",
-    "conformance:fuzz": "vitest run --config conformance/vitest.config.ts conformance/suite/fuzz.test.ts"
+    "conformance:fuzz": "vitest run --config conformance/vitest.config.ts conformance/suite/fuzz.test.ts",
+    "conformance:web": "vitest run --config conformance/web/vitest.config.ts"
+  },
+  "dependencies": {
+    "@household/api": "workspace:*",
+    "@powersync/common": "2.3.1"
+  },
+  "peerDependencies": {
+    "@powersync/node": "1.1.1",
+    "@powersync/react-native": "2.3.1",
+    "@powersync/web": "2.4.2"
+  },
+  "peerDependenciesMeta": {
+    "@powersync/node": {
+      "optional": true
+    },
+    "@powersync/react-native": {
+      "optional": true
+    },
+    "@powersync/web": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@household/api": "workspace:*",
-    "@powersync/common": "2.3.0",
-    "@powersync/node": "1.1.0",
+    "@household/test-vectors": "workspace:*",
+    "@op-engineering/op-sqlite": "18.2.5",
+    "@powersync/node": "1.1.1",
+    "@powersync/react-native": "2.3.1",
+    "@powersync/web": "2.4.2",
     "@types/node": "catalog:",
     "@types/pg": "8.23.1",
     "better-sqlite3": "13.0.3",
     "eslint": "catalog:",
     "pg": "8.23.0",
+    "react": "19.3.0",
+    "react-native": "0.87.1",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

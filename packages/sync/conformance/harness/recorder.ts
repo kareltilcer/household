@@ -2,8 +2,7 @@
 // connector made, every answer it ended a mutation with, and every checkpoint its replica was
 // seen at. The invariants are judged on it.
 
-import type { Attempt } from './connector.ts'
-import type { SyncMutation, SyncMutationResult } from './mutation.ts'
+import type { Attempt, SyncMutation, SyncMutationResult } from '../../src/index.ts'
 import type { TableName } from './schema.ts'
 
 export interface Written {

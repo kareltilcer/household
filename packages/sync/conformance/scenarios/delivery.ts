@@ -52,7 +52,7 @@ export const delivery: readonly Scenario[] = [
     title: 'Batch where mutation 3 fails',
     expected:
       '1–2 apply, 3 rejected, 4 and on deferred; the retry resolves: the deferred ones are replayed once the queue has ' +
-      'drained, after a later write to the same row queued behind them (PRD 10 §4, D-93), and each ends once',
+      'drained, after a later write queued behind them (PRD 10 §4, D-93), and each ends once',
     enabledBy: 13,
     needs: ['conformance.item'],
     async run(w) {
@@ -61,15 +61,22 @@ export const delivery: readonly Scenario[] = [
       const petr = w.client({ name: 'petr', member: f.petr, household: f.home, maxBatch: 5 })
       await online(w, petr)
       await offline(petr)
+      // Each write a row of its own, or one no write before it is queued for: an edit of a row whose
+      // write is still queued merges into it (06-clients §5).
       const rice = await petr.create('conformance_items', { title: 'Rice' })
-      await petr.update('conformance_items', rice, { title: 'Brown rice' })
+      await petr.update('conformance_items', f.milk, { title: 'Whole milk' })
       // Out of the item's range (1 to 999): the server refuses it.
-      await petr.update('conformance_items', rice, { quantity: 0 })
-      await petr.update('conformance_items', rice, { note: 'organic' })
-      await petr.update('conformance_items', rice, { title: 'Basmati' })
-      // A later write to the same row, queued behind the two the server defers: they replay after
-      // it, the one reorder of a client's own uploads (PRD 10 §4).
-      await petr.update('conformance_items', rice, { quantity: 2 })
+      await petr.update('conformance_items', f.bread, { quantity: 0 })
+      // Two writes that name the refused row in a field: the server defers them (FR-SY6).
+      const loaf = await petr.check(f.bread, true)
+      const photo = await petr.create('conformance_attachments', {
+        item_id: f.bread,
+        file_name: 'loaf.jpg',
+        attachment_status: 'pending',
+      })
+      // A later write, queued behind the two the server defers: they replay after it, the one
+      // reorder of a client's own uploads (PRD 10 §4).
+      const basmati = await petr.create('conformance_items', { title: 'Basmati' })
       await online(w, petr)
 
       const outcomes = answersOf(w, petr).map((a) => a.outcome)
@@ -94,10 +101,19 @@ export const delivery: readonly Scenario[] = [
           .filter((a) => a.client === 'petr' && a.status === 200)
           .map((a) => a.source),
       ).toEqual(['queue', 'queue', 'deferred'])
-      expect((await w.admin.rows('conformance_items', f.home)).get(rice)).toMatchObject({
-        title: 'Basmati',
-        note: 'organic',
-        quantity: 2,
+      const items = await w.admin.rows('conformance_items', f.home)
+      expect(items.get(rice)).toMatchObject({ title: 'Rice' })
+      expect(items.get(f.milk)).toMatchObject({ title: 'Whole milk' })
+      expect(items.get(f.bread)).toMatchObject({ quantity: 1 })
+      expect(items.get(basmati)).toMatchObject({ title: 'Basmati' })
+      expect((await w.admin.rows('conformance_item_checks', f.home)).get(loaf ?? '')).toMatchObject(
+        {
+          item_id: f.bread,
+          checked: true,
+        },
+      )
+      expect((await w.admin.rows('conformance_attachments', f.home)).get(photo)).toMatchObject({
+        item_id: f.bread,
       })
       expect(await petr.held()).toEqual([])
     },
