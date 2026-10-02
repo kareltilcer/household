@@ -101,7 +101,8 @@ export type StorageCeilingReached = Envelope &
  * `403 fair_use_ceiling`: a create that would take the household past a fair-use ceiling (PRD 04
  * §5, D-116), naming the `resource`, its `ceiling` and, for rows, the `module`; and `403
  * household_limit_reached`, the households a user may own, naming its `ceiling`. Waiting does not
- * help either: the count falls only when something is removed.
+ * help either: the count never falls while a client waits, and a module's deleted rows count until
+ * they are erased, so past a ceiling the household asks support to raise it.
  */
 export type FairUseRefusal = Envelope &
   Omit<Schemas['FairUseProblem'], keyof Schemas['Problem']> &

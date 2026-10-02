@@ -713,12 +713,18 @@ func (s *Service) unlockChild(w http.ResponseWriter, r *http.Request) {
 // The picture is the child's account's, as a member's own is theirs (D-107), and counts against no
 // household's storage; the membership's version moves with it, so an owner's edit made against the
 // profile as it was is refused as a conflict. A member who is not a child profile is not found, and
-// is looked for before the upload is read.
+// is looked for before the upload is read. It is an upload, which grace refuses as it refuses every
+// other (PRD 04 §3), before the upload is read; the gate refuses it in every state that does not
+// write.
 func (s *Service) putChildAvatar(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
 	if err := owner(ctx); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if status := scope.Entitlement(); !status.State().Uploads() {
+		s.fail(w, r, status.Refusal(scope.Role()))
 		return
 	}
 	user, err := pathUUID(r, "user_id")

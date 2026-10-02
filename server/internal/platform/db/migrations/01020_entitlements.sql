@@ -42,10 +42,12 @@ ALTER TABLE households
 -- household's in one statement, which row-level security would hide from the migrate role as from any
 -- other: FORCE is lifted from the table for this statement alone and put back before the migration
 -- commits, inside the transaction goose runs it in, whose ALTER TABLE lock keeps every other session
--- out of the table until then (as 01013 does).
-ALTER TABLE households NO FORCE ROW LEVEL SECURITY;
+-- out of the table until then (as 01013 does). touch_entity is held off for it too: filling in a
+-- column the household never had is no change of its settings, and would otherwise move every
+-- household's version past the last change recorded of it.
+ALTER TABLE households NO FORCE ROW LEVEL SECURITY, DISABLE TRIGGER touch_entity;
 UPDATE households SET trial_ends_at = created_at + interval '720 hours';
-ALTER TABLE households FORCE ROW LEVEL SECURITY;
+ALTER TABLE households FORCE ROW LEVEL SECURITY, ENABLE TRIGGER touch_entity;
 
 ALTER TABLE households
   ALTER COLUMN trial_ends_at SET DEFAULT now() + interval '720 hours',

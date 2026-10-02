@@ -141,11 +141,12 @@ func AccountTx(ctx context.Context, pool Beginner, user uuid.UUID, fn func(pgx.T
 }
 
 // Outside runs fn in tx, a transaction of ctx's household, with the household taken out of its
-// context and the caller left in it, then puts the household back: what the caller reads of their
-// own memberships and of the households they are in, which row-level security admits outside any
-// household alone, read in the transaction that writes, so that a lock it holds covers the read too,
-// as the households a user may own are counted where one is created (fair use). Nothing else is
-// admitted there: a tenant table reads nothing and refuses every write, as in AccountTx.
+// context and the caller left in it, then puts the household back, whether fn failed or not: what
+// the caller reads of their own memberships and of the households they are in, which row-level
+// security admits outside any household alone, read in the transaction that writes, so that a lock
+// it holds covers the read too, as the households a user may own are counted where one is created
+// (fair use). Nothing else is admitted there: a tenant table reads nothing and refuses every write,
+// as in AccountTx. fn's error is returned before one putting the household back met.
 func Outside(ctx context.Context, tx pgx.Tx, fn func() error) error {
 	s := From(ctx)
 	if s == nil {
@@ -158,10 +159,11 @@ func Outside(ctx context.Context, tx pgx.Tx, fn func() error) error {
 	if err := enter(ctx, tx, "", user); err != nil {
 		return err
 	}
-	if err := fn(); err != nil {
-		return err
+	err := fn()
+	if back := enter(ctx, tx, s.householdID.String(), user); err == nil {
+		err = back
 	}
-	return enter(ctx, tx, s.householdID.String(), user)
+	return err
 }
 
 func inTx(ctx context.Context, mode pgx.TxAccessMode, fn func(pgx.Tx) error) error {

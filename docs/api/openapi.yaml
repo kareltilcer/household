@@ -40,12 +40,16 @@ info:
     No read is refused `402` in any state. `grace` refuses uploads alone. A `suspended` household
     answers every household-scoped request `404`, the exempt ones too, as a household its caller
     cannot see; the household list (`getHouseholds`) still names it, with its state, for the
-    lockout a client shows.
+    lockout a client shows. Accepting an invitation (`postMeInvitationsByTokenAccept`), the one
+    write into a household outside its routes, is held to the same: `402` in a state that does not
+    write, and not found in a `suspended` household (D-120).
 
     A fair-use ceiling on what a household or a user holds (PRD 04 §5: members, owned households,
     rows per module, objects) refuses the create that would pass it `403`, `fair_use_ceiling`, or
-    `household_limit_reached` for the households a user may own: the count falls only when
-    something is removed, so waiting does not help. A ceiling on a rate answers `429`.
+    `household_limit_reached` for the households a user may own: waiting does not lower the count,
+    so a retry does not help. A module's rows are the rows the database holds, its deleted ones
+    among them until they are erased; past a ceiling, support raises it. A ceiling on a rate
+    answers `429`.
 
     ## Authentication
 
@@ -1147,11 +1151,17 @@ paths:
         must be the one it was sent to, which is otherwise not found. The membership has exactly the
         role and the levels the invitation proposed. Someone already a member is answered their
         membership as it is.
+
+        A membership is a write to the household, held to its entitlement as every other is (D-120):
+        a household in a state that does not write is joined by nobody, `402` naming its state with
+        the remedy `contact_owner`, and a `suspended` one is not found. A household with twelve
+        members already, the ceiling of fair use, is refused `403 fair_use_ceiling` (PRD 04 §5).
       parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '200': { description: Membership created, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: The account is unverified and cannot accept invitations, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
+        '403': { description: 'The account is unverified and cannot accept invitations (`account_unverified`), or the household has twelve members, the ceiling of fair use (`fair_use_ceiling`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/FairUseProblem' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '410': { description: Expired or already used, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }

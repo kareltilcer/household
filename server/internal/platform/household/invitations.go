@@ -888,7 +888,8 @@ func addressed(ctx context.Context, tx pgx.Tx, i invitation, user uuid.UUID) err
 // acceptInvitation makes the caller a member of the invitation's household with exactly the role and
 // the levels it proposed (FR-HH3). Their address must be verified, and an email invitation's must be
 // its own. Someone already a member is answered their membership as it is, and the invitation is left
-// for its addressee.
+// for its addressee. A household that does not write is joined by nobody, and a suspended one is
+// not found (joinable, D-120).
 func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -933,6 +934,9 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		i, err := readInvitation(ctx, tx, held.id)
 		if err == nil {
 			err = usable(i, now)
+		}
+		if err == nil {
+			err = joinable(ctx, tx, household)
 		}
 		if err != nil {
 			return mutation.Record{}, err

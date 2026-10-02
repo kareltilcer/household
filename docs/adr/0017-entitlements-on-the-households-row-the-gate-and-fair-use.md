@@ -5,7 +5,7 @@
 - **Plan item:** 16
 - **Decides for:** [PRD 04](../prd/04-billing-and-entitlements.md) §1, §3, §5 (FR-BI1, FR-BI2, FR-BI7);
   [PRD 03](../prd/03-platform-strands.md) §2.6 and §5; [PRD 10](../prd/10-sync-risk.md) §4 (scenario 14);
-  D-30–D-32, D-87, D-93, D-114–D-119
+  D-30–D-32, D-87, D-93, D-114–D-120
 
 ## Context
 
@@ -55,10 +55,14 @@ other is `402`, with `entitlement_read_only` or `entitlement_restricted`, the st
 the caller. A request no route matches is refused like any unsafe one. `NewRouter` installs the gate
 unless a test replaces it. A test holds the list to the contract both ways: the household-scoped unsafe
 operations that declare no `402` are exactly the list, and every operation in every state answers as
-the list says.
+the list says. Accepting an invitation is the one write into a household outside its routes, which
+the gate never sees: it asks the same of the household's state under the household's lock
+(`household.joinable`, D-120), `404` when suspended and the `402` otherwise.
 
-**Grace's refusal is the files pipeline's** (`files.Put`): an upload in a state that does not upload is
-refused with the same `402`, and the storage ceiling's `402` names the state the request found.
+**Grace's refusal is the files pipeline's** (`files.Put`, and `files.Receive` before it reads a byte of
+the body): an upload in a state that does not upload is refused with the same `402`, and the storage
+ceiling's `402` names the state the request found. A child profile's picture, the one upload outside
+the pipeline, asks the same of the state before it reads its upload.
 
 **The streams hold a suspension.** Every lookup the generator writes (`sync.Streams`) joins the
 subscribed household, `h.id = subscription.parameter('household_id') AND h.suspended_at IS NULL`, and
@@ -76,7 +80,10 @@ connector records each mutation with the `402`'s code and holds it.
 rows (an upsert at its first version): `storage.RowCeiling` reads the module's row count in the
 household's last daily sample, one indexed read in the mutation's transaction, and only at 80 % of the
 ceiling counts the module's tables live, as the meter role reads them. A refusal is a `403`, which the
-push answers `rejected`. The files pipeline counts objects beside the bytes it already sums; a household
+push answers `rejected`. What is counted is the rows the database holds, as the sample counts them: a
+row a module deletes stays a tombstone (ADR 0006) and counts until it is erased, so a module at its
+ceiling is a support conversation that raises it (PRD 04 §5, D-116), not one a member clears by
+deleting. The files pipeline counts objects beside the bytes it already sums; a household
 creation counts the caller's owned households under an advisory lock of the user's (`db.OwnerLock`),
 reading them outside the new household's context in its own transaction (`tenant.Outside`); joining
 counts the members under the household's lock. The nightly sample warns the owners of a crossing of
@@ -94,8 +101,9 @@ a clock run out as the meter role, which reads the schedule columns and nothing 
 | The gate deciding by path patterns of its own | A second spelling of the contract's paths, beside the router's and the edge's, which drifts from them silently. The edge has matched the operation already; its `operationId` is what the contract and the test both name |
 | Exemptions read from the contract (an unsafe operation that declares no `402` is exempt) | FR-BI1's list is closed in the PRD; a contract edit that forgot a `402` would open a write path. The list is code and the test holds the two to each other |
 | Refusing the credentials of a suspended household, and nothing else | The credential names its user: a member of two households subscribes to a suspended one with the token the other's route hands out, until it expires and after |
-| A live count of a module's rows on every create | A scan of up to 250 000 rows per write, every write, for a ceiling that exists to catch automation. The sample bounds the count to households already near it, and a household below 80 % cannot reach the ceiling within a day |
-| Counting only from the sample | A household at the ceiling would stay refused until the next night after it deleted rows |
+| A live count of a module's rows on every create | A scan of up to 250 000 rows per write, every write, for a ceiling that exists to catch automation. The sample bounds the count to households already near it. The cost is that a household below 80 % is not counted until the next night: only automation creates a fifth of the ceiling in a day, and it may pass the ceiling by what it creates before that sample, bounded by its request limits (and item 17's ceiling on a day's sync mutations), which the sample then holds it to |
+| Counting only from the sample | A household at the ceiling would stay refused until the next night after its rows fell back, an erasure or a raised ceiling, and one that crossed it during the day would go on creating |
+| Counting only live rows, tombstones left out | The ceiling is on what the database holds unbilled (PRD 04 §5, §8), and a tombstone is held as any row is: automation that creates and deletes in a loop would never meet it. The meter role would also have to read `deleted_at` on every module's table |
 
 ## Consequences
 
@@ -108,5 +116,6 @@ a clock run out as the meter role, which reads the schedule columns and nothing 
   until then.
 - Item 17 decides whether the state reaches a client by the realtime frame `entitlement_changed`; until
   then a client reads it from the household and learns of a lapse from a `402`.
-- Two creates at once near a ceiling may pass it by one each, and a suspended household's replica on a
-  device that never connects again keeps what it held (FR-SY8). Revisit if either matters.
+- Two creates at once near a ceiling may pass it by one each, automation may pass a module's ceiling by
+  a day's creates before the next sample holds it, and a suspended household's replica on a device that
+  never connects again keeps what it held (FR-SY8). Revisit if any of them matters.

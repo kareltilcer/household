@@ -106,7 +106,9 @@ billing logic whatsoever, and `402` is declared on every household-scoped unsafe
 | `POST …/sync/credentials` | It writes nothing: it hands out the credential a replica pulls with, and a household that does not write still pulls (**D-117**) |
 
 Nothing else is exempt, and **no read is ever refused with `402` in any state**. A `suspended`
-household answers every household route `404`, these too (**D-115**).
+household answers every household route `404`, these too (**D-115**). Accepting an invitation, the
+one write into a household that is not one of its routes, is held to the same: a household that
+does not write is joined by nobody (`402`), and a `suspended` one is not found (**D-120**).
 
 **FR-BI2 — Entering `read_only` emits sync retractions for nothing.** The client keeps its
 replica and switches to read-only UI. A member's queued offline mutations are refused by the push's
@@ -190,7 +192,9 @@ removed, and `429` for a rate (**D-116**).
 | Object count | 100 000 |
 
 Exceeding a ceiling is a support conversation, not an automatic charge. `platform_admin` can
-raise any of them per household.
+raise any of them per household. A module's rows are the rows the database holds: a row a member
+deletes stays, a tombstone, and counts until it is erased, so deleting does not bring a household
+back below the ceiling (**D-116**).
 
 ## 6. Payments
 

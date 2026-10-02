@@ -210,7 +210,7 @@ func Gate(s Status, role access.Role, operation, method string) error {
 	switch {
 	case !st.Reads():
 		return problem.NotFound()
-	case safe(method), st.Writes(), exempt[operation]:
+	case safe(method), st.Writes(), Exempt(operation):
 		return nil
 	}
 	return s.Refusal(role)

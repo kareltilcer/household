@@ -15,23 +15,22 @@ const TenantRoot = "households"
 
 // The tables a generated stream looks a caller's access up in, every one of them replicated as the
 // streams' own are (replicate): a member's role, their grants, which modules their household
-// enables, and whether the household is suspended.
+// enables. Each lookup also reads the tenant root, whether the household is suspended (unsuspended).
 const (
 	membershipsTable = "memberships"
 	grantsTable      = "module_grants"
 	enablementTable  = "module_enablement"
 )
 
-// unsuspended is the term every stream's lookup joins the subscribed household by, h, and holds it
-// to: a suspended household replicates nothing to any member's device, a new one included, and every
-// row of it leaves the replicas that connect (PRD 04 §3, D-115). The credentials a client connects
-// with name no household, and another household's route hands them out, so the streams alone hold a
-// suspension on the replicated path.
-const unsuspended = `      JOIN households h ON h.id = %[1]s.household_id
-`
-
-const unsuspendedWhere = `      AND h.id = subscription.parameter('household_id') AND h.suspended_at IS NULL
-`
+// unsuspended returns the join every stream's lookup joins the subscribed household by, h, from the
+// lookup's table aliased alias, and the terms it holds h to: a suspended household replicates nothing
+// to any member's device, a new one included, and every row of it leaves the replicas that connect
+// (PRD 04 §3, D-115). The credentials a client connects with name no household, and another
+// household's route hands them out, so the streams alone hold a suspension on the replicated path.
+func unsuspended(alias string) (join, where string) {
+	return "      JOIN households h ON h.id = " + alias + ".household_id\n",
+		"      AND h.id = subscription.parameter('household_id') AND h.suspended_at IS NULL\n"
+}
 
 // Stream is one stream of PowerSync's sync configuration (edition 3), generated from an entity's
 // declared access (ADR 0001, D-93): a client subscribes to it with its household as the
@@ -103,23 +102,26 @@ func Streams(entities []Entity) ([]Stream, error) {
 		//nolint:exhaustive // Owner and Audience were passed over above, and any other set is refused below.
 		switch e.Access {
 		case Members:
+			join, where := unsuspended("m")
 			err = add(base, `    SELECT m.household_id FROM memberships m
-`+fmt.Sprintf(unsuspended, "m")+`    WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
-`+unsuspendedWhere, membershipsTable, TenantRoot)
+`+join+`    WHERE m.user_id = auth.user_id() AND m.household_id = subscription.parameter('household_id')
+`+where, membershipsTable, TenantRoot)
 		case Grant:
 			module := e.Module()
+			join, where := unsuspended("m")
 			err = add(base+"_owner", fmt.Sprintf(`    SELECT m.household_id FROM memberships m
       JOIN module_enablement e ON e.household_id = m.household_id
-`+fmt.Sprintf(unsuspended, "m")+`    WHERE m.user_id = auth.user_id() AND m.role = 'owner'
+%s    WHERE m.user_id = auth.user_id() AND m.role = 'owner'
       AND e.household_id = subscription.parameter('household_id')
       AND e.module = '%s' AND e.enabled
-`+unsuspendedWhere, module), membershipsTable, enablementTable, TenantRoot)
+%s`, join, module, where), membershipsTable, enablementTable, TenantRoot)
 			if err == nil {
+				join, where = unsuspended("g")
 				err = add(base+"_granted", fmt.Sprintf(`    SELECT g.household_id FROM module_grants g
       JOIN module_enablement e ON e.household_id = g.household_id AND e.module = g.module
-`+fmt.Sprintf(unsuspended, "g")+`    WHERE g.user_id = auth.user_id() AND g.module = '%s' AND g.level <> 'none'
+%s    WHERE g.user_id = auth.user_id() AND g.module = '%s' AND g.level <> 'none'
       AND e.household_id = subscription.parameter('household_id') AND e.enabled
-`+unsuspendedWhere, module), grantsTable, enablementTable, TenantRoot)
+%s`, join, module, where), grantsTable, enablementTable, TenantRoot)
 			}
 		default:
 			err = fmt.Errorf("sync: %s declares access %d, which no stream is generated for", e.Name, e.Access)

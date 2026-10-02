@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
 // Upload is a file a request carried, read to a temporary file and checked: its size, its digest,
@@ -73,6 +74,9 @@ const (
 // Receive reads the multipart/form-data body of r, whose file is in its "file" field, to a temporary
 // file, and returns it once it has been checked (FR-FL1). It refuses, as problems:
 //
+//   - 402 entitlement_read_only, or entitlement_restricted, in a household whose state does not
+//     upload (grace, the one that writes and does not upload, PRD 04 §3), before any of the body is
+//     read, as Put refuses it too;
 //   - 413 payload_too_large, a file over the cap, as soon as the body's length or its bytes show it;
 //   - 415 unsupported_media_type, a program, or a type the route does not take;
 //   - 422 validation_failed, a body that is not a form, a form with no file or more than one, an
@@ -82,6 +86,11 @@ const (
 // (httpx.BodyDeadline); a client that sends it slower is disconnected. The caller closes what it
 // returns.
 func (s *Service) Receive(w http.ResponseWriter, r *http.Request, rules Rules) (*Upload, error) {
+	if scope := tenant.From(r.Context()); scope != nil {
+		if status := scope.Entitlement(); !status.State().Uploads() {
+			return nil, status.Refusal(scope.Role())
+		}
+	}
 	limit := s.maxBytes
 	if rules.MaxBytes > 0 {
 		limit = min(limit, rules.MaxBytes)

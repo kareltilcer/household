@@ -3,10 +3,11 @@
 // catch automation and abuse, not an enthusiastic family, and are far above what a family keeps.
 //
 // A ceiling on a count, of members, owned households, rows or objects, refuses the create that
-// would pass it with 403 (D-116): the count falls only when something is removed, so a client told to
-// wait and send again, as a 429 tells it, would send it again for ever. A ceiling on a rate, of
-// requests (ratelimit), answers 429. Each warns at 80 % first: the owners are told once, as the
-// count crosses it.
+// would pass it with 403 (D-116): the count never falls while a client waits, so a client told to
+// wait and send again, as a 429 tells it, would send it again for ever. A module's rows are the rows
+// the database holds, its tombstones among them until they are erased (storage.RowCeiling). A ceiling
+// on a rate, of requests (ratelimit), answers 429. Each warns at 80 % first: the owners are told once,
+// as the count crosses it.
 package fairuse
 
 import (

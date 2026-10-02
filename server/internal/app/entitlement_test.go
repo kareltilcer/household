@@ -316,6 +316,41 @@ func TestASuspendedHouseholdIsListedAndNothingMore(t *testing.T) {
 	expect(t, jana.delete(householdPath(h.ID, "/restriction")), http.StatusNotFound, problem.CodeNotFound)
 }
 
+// Accepting an invitation is held to the household's entitlement (D-120): a household that does not
+// write is joined by nobody, 402 naming its state, the invitee told to ask an owner, and a suspended
+// one is not found. The invitation still works once the household writes again.
+func TestAnInvitationIsHeldToTheHouseholdsState(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	jana.invite(h.ID, map[string]any{"kind": "email", "email": s.a("eva@tilcerovi.cz"), "role": "member"})
+	eva := s.person("Eva", s.a("eva@tilcerovi.cz"))
+	accept := "/me/invitations/" + s.invitationToken(s.a("eva@tilcerovi.cz")) + "/accept"
+	suspend := func(suspended bool) {
+		t.Helper()
+		if _, err := s.admin.Exec(t.Context(), "UPDATE households SET suspended_at = CASE WHEN $2 THEN now() END WHERE id = $1",
+			h.ID, suspended); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	expect(t, jana.post(householdPath(h.ID, "/restriction"), ""), http.StatusOK, "")
+	rec := eva.post(accept, "")
+	expect(t, rec, http.StatusPaymentRequired, problem.CodeEntitlementRestricted)
+	if r := refusalOf(t, rec); r.State != "restricted" || r.Remedy != entitlement.RemedyContactOwner {
+		t.Fatalf("the refusal: %+v", r)
+	}
+	suspend(true)
+	expect(t, eva.post(accept, ""), http.StatusNotFound, problem.CodeNotFound)
+	if n := s.count("SELECT count(*) FROM memberships WHERE household_id = $1", h.ID); n != 1 {
+		t.Fatalf("%d members", n)
+	}
+
+	suspend(false)
+	expect(t, jana.delete(householdPath(h.ID, "/restriction")), http.StatusOK, "")
+	expect(t, eva.post(accept, ""), http.StatusOK, "")
+}
+
 // adminCatalog is the module registry with admin, which the platform's own mutations are checked
 // against.
 func adminCatalog(t *testing.T) *module.Registry {
@@ -496,7 +531,8 @@ func TestAHouseholdHoldsSoManyObjects(t *testing.T) {
 // A module of a household holds 250 000 rows at most (PRD 04 §5, D-116), counted where the night's
 // sample says it is near them: a household its sample puts below 80 % creates without a count, and
 // the next night's sample holds it; one at the ceiling is refused the create, 403 fair_use_ceiling
-// naming the module, and creates again as soon as it deletes.
+// naming the module. The rows are the ones the database holds: a row deleted, a tombstone, still
+// counts, and the household creates again as soon as rows are erased.
 func TestAModuleHoldsSoManyRows(t *testing.T) {
 	w := newWorld(t)
 	h := w.household(true)
@@ -517,7 +553,9 @@ func TestAModuleHoldsSoManyRows(t *testing.T) {
 	if w.count(it) != 0 {
 		t.Fatal("the refused create was written")
 	}
-	w.exec("DELETE FROM probe_items WHERE id IN (SELECT id FROM probe_items WHERE household_id = $1 LIMIT 2)", h)
+	w.exec("UPDATE probe_items SET deleted_at = now() WHERE id IN (SELECT id FROM probe_items WHERE household_id = $1 LIMIT 2)", h)
+	expect(t, w.do(http.MethodPost, items(h), jana, itemBody(it, h)), http.StatusForbidden, problem.CodeFairUseCeiling)
+	w.exec("DELETE FROM probe_items WHERE id IN (SELECT id FROM probe_items WHERE household_id = $1 AND deleted_at IS NOT NULL)", h)
 	expect(t, w.do(http.MethodPost, items(h), jana, itemBody(it, h)), http.StatusCreated, "")
 }
 

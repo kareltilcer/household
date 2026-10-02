@@ -42,6 +42,25 @@ func readStatus(ctx context.Context, tx pgx.Tx, household uuid.UUID) (entitlemen
 	return e.Status()
 }
 
+// joinable refuses, in tx in household's context, an invitation's acceptance into a household whose
+// state does not permit it (D-120): accepting is an account route, which the tenant middleware's gate
+// never sees, and a membership is a write. A suspended household is not found, as it is on every
+// route (D-115); one that does not write is refused 402 naming its state, and the invitee, who holds
+// no role there yet, is told to ask an owner.
+func joinable(ctx context.Context, tx pgx.Tx, household uuid.UUID) error {
+	status, err := readStatus(ctx, tx, household)
+	if err != nil {
+		return err
+	}
+	switch st := status.State(); {
+	case !st.Reads():
+		return problem.NotFound()
+	case !st.Writes():
+		return status.Refusal("")
+	}
+	return nil
+}
+
 // restrictRequest is postHouseholdRestriction's body, which it may leave out.
 type restrictRequest struct {
 	Reason *string `json:"reason"`
@@ -170,7 +189,9 @@ func (s *Service) unrestrict(w http.ResponseWriter, r *http.Request) {
 // item 20's, of a household whose retained_until has passed with its three warnings sent.
 //
 // catalog is the module registry the mutations are checked against. It returns how many households it
-// changed; a household that fails is logged and the rest go on, and every failure is returned.
+// changed; a household that fails is logged and the rest go on, and every failure is returned. A
+// move's audit change is the subscription's (billing_state): the resolved state of a household
+// restricted or suspended beneath it is the same before and after.
 func (s *Service) Transition(ctx context.Context, meter Querier, catalog *module.Registry) (int, error) {
 	now := s.Now()
 	rows, err := meter.Query(ctx, `
@@ -250,7 +271,7 @@ func (s *Service) transition(ctx context.Context, household uuid.UUID, catalog *
 				Module: Name, Action: actionEntitlement, EntityType: entitySettings, EntityID: h.id,
 				SummaryKey:  Name + "." + actionEntitlement,
 				SummaryArgs: map[string]any{"state": string(next.Billing), "from": string(old.Billing)},
-				Changes:     []audit.Change{{Field: "state", Old: string(old.State()), New: string(next.State())}},
+				Changes:     []audit.Change{{Field: "billing_state", Old: string(old.Billing), New: string(next.Billing)}},
 			},
 			Changes: []sync.Change{settingsChange(h)},
 		}, nil
