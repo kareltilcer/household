@@ -648,7 +648,7 @@ Phase 0 · after 10, 13, 15 · size M
 - **Done when**
   - A table-driven test over state × method × path proves the exemption list exactly.
   - Scenario 14 is green.
-- **PR:** —
+- **PR:** [#21](https://github.com/kareltilcer/household/pull/21)
 
 ### 17 · Sync engine II — conflicts, retraction, visibility, audiences, observability · `planned`
 
