@@ -314,7 +314,7 @@ func TestAPictureIsRefused(t *testing.T) {
 // A child profile's picture is set and removed by its household's owners: the profile answers with
 // it, its version moving and the change recorded; the member list and the profile picker, which the
 // household code opens, link to it. A member who is not an owner may not set it, and a member who is
-// not a child profile has no picture an owner sets.
+// not a child profile has no picture an owner sets. In grace, which uploads nothing, it is refused.
 func TestAChildProfilesPicture(t *testing.T) {
 	s, _ := newPictureSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
@@ -382,5 +382,16 @@ func TestAChildProfilesPicture(t *testing.T) {
 	})
 	if strings.Join(changes, ",") != "set,cleared" {
 		t.Fatalf("recorded %v", changes)
+	}
+
+	// A picture is an upload, which grace refuses as it refuses every other (PRD 04 §3).
+	if _, err := s.admin.Exec(t.Context(), `UPDATE households SET billing_state = 'grace', grace_ends_at = now() + interval '14 days'
+		WHERE id = $1`, h.ID); err != nil {
+		t.Fatal(err)
+	}
+	rec = jana.sendPicture(http.MethodPut, path, picture(t, 64, 64))
+	expect(t, rec, http.StatusPaymentRequired, problem.CodeEntitlementReadOnly)
+	if r := refusalOf(t, rec); r.State != "grace" {
+		t.Fatalf("grace's refusal: %+v", r)
 	}
 }

@@ -41,4 +41,7 @@ const (
 	// another: a web session's browser subscription, and the installations that hold one Expo token
 	// (notify); the second key is the hash of the session or of the token.
 	PushTargetLock int32 = 0x70757368 // "push"
+	// OwnerLock serialises the households one user creates, so that two at once count each other
+	// against the households a user may own (fair use, PRD 04 §5); the second key is the user's hash.
+	OwnerLock int32 = 0x6f776e72 // "ownr"
 )

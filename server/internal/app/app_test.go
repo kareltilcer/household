@@ -66,7 +66,7 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second, checks...),
-		Pool: pool, MaxBodyBytes: 1 << 10, Accounts: accounts,
+		Pool: pool, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 10, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, notifier, apptest.Options{}),
 		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
@@ -381,7 +381,7 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
-		Pool: pool, MaxBodyBytes: 1 << 10, BodyTimeout: timeout, Accounts: accounts,
+		Pool: pool, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 10, BodyTimeout: timeout, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, notifier, apptest.Options{}),
 		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, apptest.Options{}),

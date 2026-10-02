@@ -15,8 +15,6 @@ getMeExportsByExportId
 postMeDiagnostics
 postDeletion
 deleteDeletion
-postHouseholdRestriction
-deleteHouseholdRestriction
 getExports
 postExports
 getExportsByExportId

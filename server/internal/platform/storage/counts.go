@@ -18,8 +18,8 @@ type Counts struct {
 }
 
 // Count counts, now, what household holds, as meter, the meter role's pool, reads it from one
-// snapshot: the counters item 16's fair-use ceilings compare with, before a write, where the daily
-// sample holds the same figures as of the night, read the same way (Sampler).
+// snapshot: what fair use counts, which the daily sample holds as of the night, read the same way
+// (Sampler), and the ceiling on a module's rows counts live near it (RowCeiling).
 //
 // It reads as the meter role, never in the caller's context as the request role: a module narrows
 // what the request role reads with a restrictive policy, a private item's owner's (ADR 0005), which
@@ -38,14 +38,23 @@ func Count(ctx context.Context, meter tenant.Beginner, household uuid.UUID, modu
 		if err := tx.QueryRow(ctx, "SELECT count(*) FROM files WHERE household_id = $1", household).Scan(&out.Objects); err != nil {
 			return err
 		}
-		for _, t := range tables {
-			var n int64
-			if err := tx.QueryRow(ctx, "SELECT count(*) FROM "+t.name.Sanitize()+" WHERE household_id = $1", household).Scan(&n); err != nil {
-				return err
-			}
-			out.Rows[t.module] += n
-		}
-		return nil
+		var err error
+		out.Rows, err = countRows(ctx, tx, household, tables)
+		return err
 	})
 	return out, err
+}
+
+// countRows counts household's rows in each of tables, in tx, a transaction of the meter role's, by
+// the module that declares it.
+func countRows(ctx context.Context, tx pgx.Tx, household uuid.UUID, tables []countedTable) (map[string]int64, error) {
+	out := map[string]int64{}
+	for _, t := range tables {
+		var n int64
+		if err := tx.QueryRow(ctx, "SELECT count(*) FROM "+t.name.Sanitize()+" WHERE household_id = $1", household).Scan(&n); err != nil {
+			return nil, err
+		}
+		out[t.module] += n
+	}
+	return out, nil
 }

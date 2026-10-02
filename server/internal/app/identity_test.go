@@ -100,7 +100,7 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 	notifier := apptest.Notify(t, pool, log, outbox, pushes, o)
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
-		Pool: pool, MaxBodyBytes: 1 << 16, Accounts: accounts,
+		Pool: pool, Meter: d.Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 16, Accounts: accounts,
 		Households: apptest.Households(t, pool, log, accounts, notifier, o),
 		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, o),

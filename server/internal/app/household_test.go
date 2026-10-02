@@ -30,19 +30,12 @@ import (
 // hookLog records what the household surface tells the items that plug into it.
 type hookLog struct {
 	mu      sync.Mutex
-	created []uuid.UUID
 	lost    []household.Loss
 	changed []household.Change
 }
 
 func (h *hookLog) hooks() household.Hooks {
 	return household.Hooks{
-		Created: func(_ context.Context, _ pgx.Tx, id uuid.UUID) error {
-			h.mu.Lock()
-			defer h.mu.Unlock()
-			h.created = append(h.created, id)
-			return nil
-		},
 		Lost: func(_ context.Context, _ pgx.Tx, loss household.Loss) error {
 			h.mu.Lock()
 			defer h.mu.Unlock()
@@ -58,12 +51,12 @@ func (h *hookLog) hooks() household.Hooks {
 }
 
 // take returns what h recorded, and forgets it.
-func (h *hookLog) take() ([]uuid.UUID, []household.Loss, []household.Change) {
+func (h *hookLog) take() ([]household.Loss, []household.Change) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	created, lost, changed := h.created, h.lost, h.changed
-	h.created, h.lost, h.changed = nil, nil, nil
-	return created, lost, changed
+	lost, changed := h.lost, h.changed
+	h.lost, h.changed = nil, nil
+	return lost, changed
 }
 
 // newHouseholdSite is a site whose household surface reports to a hook log.
@@ -294,7 +287,7 @@ func mapsEqual(a, b map[string]string) bool {
 // starts with every module enabled and its owner on Manage, its country's units and first day, a
 // household code, and its trial; its creation is recorded, and changes every row it made.
 func TestCreatingAHousehold(t *testing.T) {
-	s, hooks := newHouseholdSite(t)
+	s, _ := newHouseholdSite(t)
 	jana := s.unverified("Jana", s.a("jana@tilcerovi.cz"))
 	id := idgen.New()
 	body := jsonBody(t, map[string]any{
@@ -313,8 +306,9 @@ func TestCreatingAHousehold(t *testing.T) {
 		t.Errorf("household code %q", h.JoinCode)
 	}
 	equal(t, "the creator's levels", h.MyGrants, all("manage"))
-	if created, _, _ := hooks.take(); !slices.Equal(created, []uuid.UUID{id}) {
-		t.Errorf("the trial hook ran for %v", created)
+	// Its trial began with it (FR-HH1), in the version it was created at.
+	if n := s.count("SELECT count(*) FROM households WHERE id = $1 AND billing_state = 'trialing' AND trial_ends_at = created_at + interval '720 hours'", id); n != 1 {
+		t.Errorf("the household's trial did not begin with it")
 	}
 
 	// A repeat with the key is answered as the first was, and makes nothing.
@@ -868,7 +862,7 @@ func TestChangingAMembersAccess(t *testing.T) {
 	if got := petr.levels(h.ID); got["tasks"] != "none" || got["garden"] != "manage" {
 		t.Errorf("Petr's next request: %v", got)
 	}
-	_, lost, changed := hooks.take()
+	lost, changed := hooks.take()
 	if len(lost) != 1 || lost[0].Cause != household.CauseGrant || !slices.Equal(lost[0].Members[petrID], []string{"tasks"}) {
 		t.Errorf("retracted %+v", lost)
 	}
@@ -952,7 +946,7 @@ func TestRemovingAMember(t *testing.T) {
 	expect(t, petr.delete(householdPath(h.ID, "/members/"+klaraID.String())), http.StatusNoContent, "")
 	expect(t, klara.get(householdPath(h.ID, "")), http.StatusNotFound, problem.CodeNotFound)
 	expect(t, jana.delete(householdPath(h.ID, "/members/"+klaraID.String())), http.StatusNotFound, problem.CodeNotFound)
-	_, lost, changed := hooks.take()
+	lost, changed := hooks.take()
 	if len(lost) != 1 || lost[0].Cause != household.CauseRemoved || lost[0].Members[klaraID] != nil || len(lost[0].Members) != 1 {
 		t.Errorf("retracted %+v", lost)
 	}
@@ -995,7 +989,7 @@ func TestLeavingAHousehold(t *testing.T) {
 	expect(t, petr.send(request{method: http.MethodPost, path: householdPath(h.ID, "/leave"), header: key}), http.StatusNoContent, "")
 	expect(t, petr.send(request{method: http.MethodPost, path: householdPath(h.ID, "/leave"), header: key}), http.StatusNoContent, "")
 	expect(t, petr.get(householdPath(h.ID, "")), http.StatusNotFound, problem.CodeNotFound)
-	_, lost, changed := hooks.take()
+	lost, changed := hooks.take()
 	if len(lost) != 1 || lost[0].Cause != household.CauseLeft || len(lost[0].Members) != 1 || len(changed) != 0 {
 		t.Errorf("retracted %+v, told %+v", lost, changed)
 	}
@@ -1140,7 +1134,7 @@ func TestTurningAModuleOffAndOn(t *testing.T) {
 	if got := milos.levels(h.ID)["garden"]; got != "none" {
 		t.Errorf("Miloš's garden is %s", got)
 	}
-	_, lost, _ := hooks.take()
+	lost, _ := hooks.take()
 	if len(lost) != 1 || lost[0].Cause != household.CauseModule || len(lost[0].Members) != 2 ||
 		!slices.Equal(lost[0].Members[milosID], []string{"garden"}) || lost[0].Members[petrID] != nil {
 		t.Errorf("retracted %+v", lost)

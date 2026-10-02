@@ -24,6 +24,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/entitlement"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
 )
@@ -44,13 +45,14 @@ type Beginner interface {
 	BeginTx(ctx context.Context, options pgx.TxOptions) (pgx.Tx, error)
 }
 
-// Scope is the resolved tenant of one request: the household, the caller, their role there and
-// their effective level on each module.
+// Scope is the resolved tenant of one request: the household, the caller, their role there, their
+// effective level on each module, and the household's entitlement.
 type Scope struct {
 	householdID uuid.UUID
 	userID      uuid.UUID
 	role        access.Role
 	levels      map[string]access.Level
+	entitlement entitlement.Status
 	pool        Beginner
 }
 
@@ -74,6 +76,11 @@ func (s *Scope) Role() access.Role { return s.role }
 // Level returns the caller's effective level on module: None for a module the household does
 // not enable, and for one it has no row for. grant.Require is how a handler asks.
 func (s *Scope) Level(module string) access.Level { return s.levels[module] }
+
+// Entitlement returns the household's entitlement as the request found it, resolved once per request
+// (PRD 04 §3): the zero Status, which reads as trialing, in a scope the middleware did not resolve
+// (Assume).
+func (s *Scope) Entitlement() entitlement.Status { return s.entitlement }
 
 // Assume returns ctx carrying the scope of household for user, whose role there is role, without
 // the membership check the middleware makes: the scope through which the platform reads and
@@ -133,6 +140,33 @@ func AccountTx(ctx context.Context, pool Beginner, user uuid.UUID, fn func(pgx.T
 	})
 }
 
+// Outside runs fn in tx, a transaction of ctx's household, with the household taken out of its
+// context and the caller left in it, then puts the household back, whether fn failed or not: what
+// the caller reads of their own memberships and of the households they are in, which row-level
+// security admits outside any household alone, read in the transaction that writes, so that a lock
+// it holds covers the read too, as the households a user may own are counted where one is created
+// (fair use). Nothing else is admitted there: a tenant table reads nothing and refuses every write,
+// as in AccountTx. fn's error is returned before one putting the household back met. It is the
+// platform's, as AccountTx and Assume are: architecture test 4 keeps it out of every module.
+func Outside(ctx context.Context, tx pgx.Tx, fn func() error) error {
+	s := From(ctx)
+	if s == nil {
+		return ErrNoTenant
+	}
+	user := ""
+	if s.userID != uuid.Nil {
+		user = s.userID.String()
+	}
+	if err := enter(ctx, tx, "", user); err != nil {
+		return err
+	}
+	err := fn()
+	if back := enter(ctx, tx, s.householdID.String(), user); err == nil {
+		err = back
+	}
+	return err
+}
+
 func inTx(ctx context.Context, mode pgx.TxAccessMode, fn func(pgx.Tx) error) error {
 	s := From(ctx)
 	if s == nil {
@@ -171,10 +205,11 @@ type Config struct {
 	Pool Beginner
 	// Logger records a resolution that failed.
 	Logger *slog.Logger
-	// Entitlement, when not nil, is asked once the tenant is resolved whether the household's
-	// entitlement state permits the request (item 16). The request goes on when it returns nil
-	// and is answered with the problem it returns otherwise, or with 500 for an error that is
-	// not a problem.
+	// Entitlement is asked once the tenant is resolved whether the household's entitlement state
+	// permits the request (FR-BI1, entitlement.Gate), with the scope, its entitlement among it, in
+	// the request's context. The request goes on when it returns nil and is answered with the
+	// problem it returns otherwise, or with 500 for an error that is not a problem. Nil asks
+	// nothing.
 	Entitlement func(*http.Request) error
 }
 
@@ -236,8 +271,8 @@ func Middleware(cfg Config) (func(http.Handler) http.Handler, error) {
 
 // resolve returns user's scope in household, or errNotMember. The membership is read with only
 // the caller in context, through the policy that lets a user read their own memberships; the
-// household enters the context once the membership proves it, and its enablement and the
-// caller's grants are read under the tenant policy.
+// household enters the context once the membership proves it, and its entitlement, its enablement
+// and the caller's grants are read under the tenant policy.
 func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Scope, error) {
 	s := &Scope{householdID: household, userID: user, levels: map[string]access.Level{}, pool: pool}
 	err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
@@ -259,6 +294,13 @@ func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Sc
 		}
 
 		if err := enter(ctx, tx, household.String(), user.String()); err != nil {
+			return err
+		}
+		var e entitlement.Row
+		if err := tx.QueryRow(ctx, entitlement.Query, household).Scan(e.Dest()...); err != nil {
+			return err
+		}
+		if s.entitlement, err = e.Status(); err != nil {
 			return err
 		}
 		s.levels, err = Levels(ctx, tx, household, user, s.role)
@@ -300,6 +342,17 @@ func Levels(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, role acce
 		return nil, err
 	}
 	return levels, nil
+}
+
+// Owners are household's owners, read in tx in its context, in the order of their ids: whom the
+// platform tells of what is the owners' to act on, a child profile that locked, a ceiling of fair use
+// nearing, a lapsed household's data about to be deleted.
+func Owners(ctx context.Context, tx pgx.Tx, household uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := tx.Query(ctx, "SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'owner' ORDER BY user_id", household)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }
 
 // Effective is a member's level on a module: the minimum of the household's enablement and the

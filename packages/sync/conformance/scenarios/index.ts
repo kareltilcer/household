@@ -24,7 +24,9 @@ export const scenarios: readonly Scenario[] = [...merge, ...delivery, ...access,
 
 /**
  * The scenarios switched on: item 13's, whose engine writes the merge policies they test (lww_field,
- * state_set and additive) and replicates through the generated streams.
+ * state_set and additive) and replicates through the generated streams; and item 16's, whose engine
+ * refuses a household that does not write with a 402 its connector holds, and retracts nothing when it
+ * lapses.
  */
 export const enabled: ReadonlySet<string> = new Set<string>([
   '1',
@@ -35,6 +37,9 @@ export const enabled: ReadonlySet<string> = new Set<string>([
   '9',
   '10',
   '13',
+  '14',
   '15',
   '17',
+  'no-loss-lapse',
+  'suspension',
 ])

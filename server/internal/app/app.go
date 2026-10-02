@@ -18,6 +18,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/device"
+	"github.com/kareltilcer/household/server/internal/platform/entitlement"
 	"github.com/kareltilcer/household/server/internal/platform/grant"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/household"
@@ -58,10 +59,13 @@ type Deps struct {
 	// Pool opens every transaction of a household-scoped request, connected as the request
 	// role (tenant.InTx, and the mutation spine's tenant.InWriteTx).
 	Pool tenant.Beginner
+	// Meter is the meter role's pool, which counts a household's rows for the ceiling of fair use
+	// the mutation spine holds each module to (storage.RowCeiling).
+	Meter tenant.Beginner
 	// Modules are the modules served, each under /households/{household_id}/<name>.
 	Modules *module.Registry
-	// Entitlement is the tenant middleware's entitlement check (tenant.Config), nil until item
-	// 16 fills it in.
+	// Entitlement replaces the tenant middleware's entitlement gate (Gate) when not nil: a test's,
+	// which asks what it wants of each household-scoped request.
 	Entitlement func(*http.Request) error
 	// MaxBodyBytes caps a JSON request body at the edge.
 	MaxBodyBytes int64
@@ -89,6 +93,22 @@ type Deps struct {
 type Sync struct {
 	Replica   *replica.Service
 	PushLimit *ratelimit.Buckets
+}
+
+// Gate is FR-BI1's gate (entitlement.Gate), which the tenant middleware asks of every
+// household-scoped request: the household's state as the middleware resolved it, the caller's role
+// there, and the operation the contract's edge matched the request to.
+func Gate(r *http.Request) error {
+	ctx := r.Context()
+	scope := tenant.From(ctx)
+	if scope == nil {
+		return tenant.ErrNoTenant
+	}
+	operation := ""
+	if op, ok := contract.OperationOf(ctx); ok {
+		operation = op.ID
+	}
+	return entitlement.Gate(scope.Entitlement(), scope.Role(), operation, r.Method)
 }
 
 // NewRouter returns the server's whole HTTP surface: the platform middleware, and under
@@ -131,7 +151,11 @@ type Sync struct {
 // the module (PRD modules/00 §1), and behind the Idempotency-Key middleware, which answers a
 // repeated unsafe request with its first response.
 func NewRouter(d Deps) (*chi.Mux, error) {
-	tenancy, err := tenant.Middleware(tenant.Config{Pool: d.Pool, Logger: d.Logger, Entitlement: d.Entitlement})
+	check := d.Entitlement
+	if check == nil {
+		check = Gate
+	}
+	tenancy, err := tenant.Middleware(tenant.Config{Pool: d.Pool, Logger: d.Logger, Entitlement: check})
 	if err != nil {
 		return nil, fmt.Errorf("app: %w", err)
 	}
@@ -151,6 +175,9 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	if d.Notify == nil {
 		return nil, errors.New("app: the router needs the notification transport")
 	}
+	if d.Meter == nil {
+		return nil, errors.New("app: the router needs the meter role's pool")
+	}
 	// The picture labels the largest items by the modules the router serves, unless it was given
 	// others: without them it would name each by its file, whatever its module calls it.
 	picture := *d.Storage
@@ -162,6 +189,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		return nil, fmt.Errorf("app: %w", err)
 	}
 	catalog := mutation.Catalog(registry)
+	ceilings := mutation.Ceilings(storage.NewRowCeiling(d.Meter, d.Modules).Check)
 	pushes, err := push.New(push.Config{Registry: registry, Logger: d.Logger})
 	if err != nil {
 		return nil, fmt.Errorf("app: %w", err)
@@ -224,12 +252,12 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		})
 		// Leaving keeps its key on the account, found before the membership it ended is looked for,
 		// so that a repeat is answered as the first request was rather than as a stranger.
-		signedIn.With(auth.Required, idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes), tenancy, perHousehold, catalog).
+		signedIn.With(auth.Required, idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes), tenancy, perHousehold, catalog, ceilings).
 			Group(d.Households.LeaveRoutes)
 		// A group rather than a router mounted at /households/{household_id}, whose mount point
 		// would then be no route of its own (httpx.MountPoint): the household's own route is there.
 		signedIn.Group(func(inHousehold chi.Router) {
-			inHousehold.Use(tenancy, perHousehold, catalog)
+			inHousehold.Use(tenancy, perHousehold, catalog, ceilings)
 			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Households.HouseholdRoutes)
 			// A replica's credentials keep no key: a credential is never kept to be answered with.
 			inHousehold.Group(d.Sync.Replica.HouseholdRoutes)

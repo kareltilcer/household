@@ -185,6 +185,17 @@ export class Admin {
     )
   }
 
+  /**
+   * Suspends household, or lifts its suspension: the platform's, which item 21's staff set (PRD 04
+   * §3). Every replica of a suspended household is emptied of it (D-115).
+   */
+  async setSuspended(household: Household, suspended: boolean): Promise<void> {
+    await this.pool.query(
+      `UPDATE households SET suspended_at = CASE WHEN $2 THEN now() END WHERE id = $1`,
+      [household.id, suspended],
+    )
+  }
+
   /** Removes member from household (FR-HH5); their grants go with the membership. */
   async remove(household: Household, member: Member): Promise<void> {
     await this.pool.query('DELETE FROM memberships WHERE household_id = $1 AND user_id = $2', [
@@ -316,9 +327,9 @@ export class Admin {
    * only to its owner, and its redacted form to everyone with the grant; a message to its readers.
    * Admin's (PRD modules/17 Sync): the household's settings, its memberships and which modules it
    * enables to every member, whatever their grant; its invitations as a module's rows, admin's
-   * grant holding them. Tombstones are the target's to keep or drop. This is the suite's own
-   * statement of the predicate, never a stream's, so that a stream that disagrees with it is
-   * caught.
+   * grant holding them. Nothing of a suspended household (PRD 04 §3, D-115). Tombstones are the
+   * target's to keep or drop. This is the suite's own statement of the predicate, never a stream's,
+   * so that a stream that disagrees with it is caught.
    */
   async visible(
     table: TableName,
@@ -336,6 +347,7 @@ export class Admin {
     ]
     const conditions = [
       't.household_id = $1',
+      'EXISTS (SELECT FROM households h WHERE h.id = $1 AND h.suspended_at IS NULL)',
       ...(membersSee.has(table)
         ? ['EXISTS (SELECT FROM memberships m WHERE m.household_id = $1 AND m.user_id = $2)']
         : granted(table === 'invitations' ? 'admin' : moduleId)),

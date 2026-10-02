@@ -292,6 +292,11 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 		if no = FromDatabase(err); no != nil {
 			return s.end(ctx, fp, reject(res, no))
 		}
+		// The spine's own refusal of a create past the rows its module may hold (fair use).
+		var p *problem.Problem
+		if errors.As(err, &p) && p.Code == problem.CodeFairUseCeiling {
+			return s.end(ctx, fp, reject(res, Refuse(p.Code, "%s holds as many rows as it may", e.Module())))
+		}
 		return res, err
 	case applied.Seq == 0:
 		// Nothing written: the state the mutation asks for is in place.

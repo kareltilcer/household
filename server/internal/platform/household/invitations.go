@@ -767,17 +767,26 @@ type moduleLevel struct {
 	Level  access.Level `json:"level"`
 }
 
+// errSuspended is forInvitee's answer for an invitation into a suspended household, which nobody is
+// shown, as nothing in the household is found (D-115): accepting and declining it answer 404 too.
+var errSuspended = errors.New("household: the invitation's household is suspended")
+
 // forInvitee reads what i's invitee is shown, in its household's context, as the caller user: its
 // household's name, and the level it gives on each module the household enables. token is how the
-// request named it.
+// request named it. It returns errSuspended while the household is suspended.
 func (s *Service) forInvitee(ctx context.Context, i invitation, token string, user uuid.UUID) (forInvitee, error) {
 	out := forInvitee{
 		Token: token, InvitedBy: i.inviterName, Role: i.role, Message: i.message, ExpiresAt: i.expires.UTC(),
 		Modules: []moduleLevel{},
 	}
 	err := s.readTx(ctx, i.household, user, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, "SELECT name FROM households WHERE id = $1", i.household).Scan(&out.HouseholdName); err != nil {
+		var suspended bool
+		if err := tx.QueryRow(ctx, "SELECT name, suspended_at IS NOT NULL FROM households WHERE id = $1", i.household).
+			Scan(&out.HouseholdName, &suspended); err != nil {
 			return err
+		}
+		if suspended {
+			return errSuspended
 		}
 		modules := Modules
 		enabled, err := enabledModules(ctx, tx, i.household)
@@ -811,7 +820,8 @@ func joining(i invitation, modules []string) map[string]access.Level {
 }
 
 // previewInvitation shows an invitation's holder what accepting it gives (FR-HH3, A-24), signed in or
-// not: its link opens before the invitee has an account.
+// not: its link opens before the invitee has an account. One into a suspended household is not
+// found, as accepting it is not (D-115, D-120).
 func (s *Service) previewInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -823,6 +833,9 @@ func (s *Service) previewInvitation(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		body, err = s.forInvitee(ctx, i, chi.URLParam(r, "token"), user)
 	}
+	if errors.Is(err, errSuspended) {
+		err = problem.NotFound()
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -832,7 +845,8 @@ func (s *Service) previewInvitation(w http.ResponseWriter, r *http.Request) {
 
 // myInvitations lists the email invitations waiting for the caller's verified address, each with its
 // id as its token, which they may accept or decline by signed in: those of the households they are not
-// in yet, since one they have joined since, by another invitation, asks them into nothing.
+// in yet, since one they have joined since, by another invitation, asks them into nothing, and none
+// into a suspended household, which is not found (D-115).
 func (s *Service) myInvitations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -859,6 +873,9 @@ func (s *Service) myInvitations(w http.ResponseWriter, r *http.Request) {
 	items := make([]forInvitee, 0, len(invitations))
 	for _, i := range invitations {
 		item, err := s.forInvitee(ctx, i, i.id.String(), user)
+		if errors.Is(err, errSuspended) {
+			continue
+		}
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -888,7 +905,8 @@ func addressed(ctx context.Context, tx pgx.Tx, i invitation, user uuid.UUID) err
 // acceptInvitation makes the caller a member of the invitation's household with exactly the role and
 // the levels it proposed (FR-HH3). Their address must be verified, and an email invitation's must be
 // its own. Someone already a member is answered their membership as it is, and the invitation is left
-// for its addressee.
+// for its addressee. A household that does not write is joined by nobody, and a suspended one is
+// not found (writable, D-120), by its members either (D-115).
 func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -915,11 +933,21 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		m       membership
 		payer   *uuid.UUID
 		modules = Modules
+		noticed bool
 	)
 	_, err = mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
 		var err error
 		if payer, err = lockHousehold(ctx, tx, household); err != nil {
 			return mutation.Record{}, err
+		}
+		// A suspended household is not found, by its members either, as on every route of it (D-115),
+		// so before a member is answered their membership in it.
+		entitled, err := readStatus(ctx, tx, household)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		if !entitled.State().Reads() {
+			return mutation.Record{}, problem.NotFound()
 		}
 		existing, err := readMemberships(ctx, tx, household, &user, false)
 		if err != nil {
@@ -933,11 +961,22 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			err = usable(i, now)
 		}
+		if err == nil {
+			// What writable asks, of the state read under the lock above (D-120).
+			err = entitled.Writable("")
+		}
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		members, err := memberCeiling(ctx, tx, household)
 		if err != nil {
 			return mutation.Record{}, err
 		}
 		grants := joining(i, modules)
 		if m, err = insertMembership(ctx, tx, household, user, i.role, grants); err != nil {
+			return mutation.Record{}, err
+		}
+		if noticed, err = s.membersNotice(scoped, tx, household, members); err != nil {
 			return mutation.Record{}, err
 		}
 		status := i.status
@@ -967,6 +1006,9 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if noticed {
+		s.Notify.Nudge(ctx, household)
+	}
 	httpx.WriteJSON(w, http.StatusOK, s.member(ctx, tenant.From(scoped), payer, modules, m))
 }
 
@@ -975,7 +1017,9 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 // an account with its address; one that no longer works is not found, and neither is one into a
 // household the caller is in already, which asks them into nothing, as accepting it and sending it
 // again treat it: closing it would close a link for those it may still bring in, and tell its
-// inviter of a refusal that is not one.
+// inviter of a refusal that is not one. It is a write into the household, held to its state as
+// accepting is (writable, D-120): refused 402 while the household does not write, and not found while
+// it is suspended.
 func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -1011,6 +1055,11 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		case in:
 			return mutation.Record{}, problem.NotFound()
+		}
+		// Closing the invitation, recording it and telling its inviter write into the household, which
+		// a household that does not write refuses, and a suspended one is not found for (D-120).
+		if err := writable(ctx, tx, i.household); err != nil {
+			return mutation.Record{}, err
 		}
 		if i, err = setStatus(ctx, tx, i, statusDeclined); err != nil {
 			return mutation.Record{}, err

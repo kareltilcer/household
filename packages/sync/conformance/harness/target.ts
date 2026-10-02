@@ -6,7 +6,8 @@
 // target for what it needs, so a later item's engine is a target the same scenarios run against.
 
 import { readFileSync } from 'node:fs'
-import { apiUrl, powerSyncUrl } from './env.ts'
+import pg from 'pg'
+import { adminDatabaseUrl, apiUrl, powerSyncUrl } from './env.ts'
 import { tables, type EntityType, type TableName } from './schema.ts'
 
 export interface PowerSyncCredentials {
@@ -98,6 +99,20 @@ function isTable(name: string): name is TableName {
   return tables.some((t) => t.table === name)
 }
 
+/**
+ * The subscription states setEntitlement writes onto a household's row, as the hourly transitions
+ * and Stripe's webhooks will (item 16, item 19): a lapse into read_only starts its countdown to
+ * deletion, twelve months and thirty days (D-119), and a resumed subscription clears every clock.
+ * It writes as the database's administrator, as the suite's access changes do (admin.ts): the API
+ * reads the state anew on every request (PRD 04 §3).
+ */
+const entitlements = {
+  read_only: `UPDATE households SET billing_state = 'read_only', lapsed_at = now(),
+    retained_until = now() + interval '1 year' + interval '720 hours', retention_warnings = 0 WHERE id = $1`,
+  active: `UPDATE households SET billing_state = 'active', dunning_ends_at = NULL, grace_ends_at = NULL,
+    lapsed_at = NULL, retained_until = NULL, retention_warnings = 0 WHERE id = $1`,
+} as const
+
 /** The engine (plan item 13). */
 export const engine: Target = {
   name: 'engine',
@@ -139,6 +154,16 @@ export const engine: Target = {
   ]),
   tombstones: 'kept',
   replay: 'fresh-key',
+  async setEntitlement(household, state) {
+    const client = new pg.Client({ connectionString: adminDatabaseUrl })
+    await client.connect()
+    try {
+      const { rowCount } = await client.query(entitlements[state], [household])
+      if (rowCount !== 1) throw new Error(`no household ${household} to set ${state}`)
+    } finally {
+      await client.end()
+    }
+  },
 }
 
 /** The configuration's deliberately broken stream, which only the negative control subscribes to. */

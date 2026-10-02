@@ -260,7 +260,8 @@ var methods = []string{
 }
 
 // Safe reports whether method is one RFC 9110 calls safe, a request for nothing to change: one
-// the CSRF defences leave be, and whose repeat needs no Idempotency-Key.
+// the CSRF defences leave be, whose repeat needs no Idempotency-Key, and which the entitlement gate
+// never refuses 402 (entitlement.Gate).
 func Safe(method string) bool {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:

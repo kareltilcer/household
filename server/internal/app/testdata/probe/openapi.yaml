@@ -93,6 +93,10 @@ paths:
   /households/{household_id}/leave:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     post: { operationId: postLeave, responses: { '204': { description: Left }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/restriction:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postHouseholdRestriction, requestBody: { required: false, content: { application/json: { schema: { type: object } } } }, responses: { '200': { description: Restricted }, default: { $ref: '#/components/responses/Problem' } } }
+    delete: { operationId: deleteHouseholdRestriction, responses: { '200': { description: Lifted }, default: { $ref: '#/components/responses/Problem' } } }
   /households/{household_id}/members:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get: { operationId: getMembers, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
@@ -280,3 +284,11 @@ components:
                 properties:
                   field: { type: string }
                   code: { type: string }
+    FairUseProblem:
+      allOf:
+        - { $ref: '#/components/schemas/Problem' }
+        - type: object
+          properties:
+            resource: { type: string, enum: [members, rows, objects] }
+            ceiling: { type: integer }
+            module: { type: string }

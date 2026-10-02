@@ -13,8 +13,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/kareltilcer/household/server/internal/platform/fairuse"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
@@ -23,7 +25,9 @@ import (
 // tables, which fair use watches (PRD 04 §5). The meter role measures every household at once, as
 // it alone may, and each household's sample is written in its own context by the request role: no
 // role both reads across households and writes. Item 15's scheduler runs it nightly; billing
-// averages the samples over its period (item 19).
+// averages the samples over its period (item 19). A household whose objects, or whose rows in a
+// module, cross 80 % of their fair-use ceiling since the sample before has its owners told (PRD 04
+// §5), in the sample's transaction.
 type Sampler struct {
 	// Meter measures, connected as the meter role.
 	Meter tenant.Beginner
@@ -34,6 +38,9 @@ type Sampler struct {
 	Log     *slog.Logger
 	// Now is the clock, time.Now when nil: a sample is the day's it is taken on, in UTC.
 	Now func() time.Time
+	// Notify tells the owners of a household that crossed 80 % of a fair-use ceiling; nil tells
+	// nobody.
+	Notify *notify.Service
 }
 
 // batch is how many households one measurement reads at once.
@@ -250,10 +257,16 @@ func (s *Sampler) measure(ctx context.Context, after uuid.UUID, tables []counted
 	return out, err
 }
 
-// write replaces u's household's sample of day in its own context.
+// write replaces u's household's sample of day in its own context, and tells its owners of each
+// fair-use ceiling it crossed since the sample it replaces or follows (warn).
 func (s *Sampler) write(ctx context.Context, day, at time.Time, u *usage) error {
 	scoped := tenant.Assume(ctx, s.Pool, u.household, uuid.Nil, "")
-	return tenant.InWriteTx(scoped, func(tx pgx.Tx) error {
+	warned := false
+	err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error {
+		before, err := last(ctx, tx, u.household, day)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO usage_samples (household_id, sampled_on, sampled_at, stored_bytes, derived_bytes, object_count)
 			VALUES ($1, $2, $3, $4, $5, $6)
@@ -283,6 +296,80 @@ func (s *Sampler) write(ctx context.Context, day, at time.Time, u *usage) error 
 				return err
 			}
 		}
+		warned, err = s.warn(scoped, tx, before, u)
+		return err
+	})
+	if err == nil && warned {
+		s.Notify.Nudge(ctx, u.household)
+	}
+	return err
+}
+
+// counted is what a sample counted that fair use bounds: the household's objects, and each module's
+// rows.
+type counted struct {
+	objects int64
+	rows    map[string]int64
+}
+
+// last reads household's last sample up to day, in tx in its context: the one a sample of day
+// replaces, or else the one before it, which fair use's warnings compare with, so that a sample taken
+// again the same day warns of nothing the first did. None reads as nothing counted.
+func last(ctx context.Context, tx pgx.Tx, household uuid.UUID, day time.Time) (counted, error) {
+	out := counted{rows: map[string]int64{}}
+	var on time.Time
+	err := tx.QueryRow(ctx, `
+		SELECT sampled_on, object_count FROM usage_samples WHERE household_id = $1 AND sampled_on <= $2
+		ORDER BY sampled_on DESC LIMIT 1`, household, day).Scan(&on, &out.objects)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, nil
+	}
+	if err != nil {
+		return out, err
+	}
+	rows, err := tx.Query(ctx, "SELECT module, row_count FROM usage_sample_modules WHERE household_id = $1 AND sampled_on = $2",
+		household, on)
+	if err != nil {
+		return out, err
+	}
+	var (
+		name string
+		n    int64
+	)
+	_, err = pgx.ForEachRow(rows, []any{&name, &n}, func() error {
+		out.rows[name] = n
 		return nil
 	})
+	return out, err
+}
+
+// warn tells u's household's owners, in tx, of each fair-use ceiling its counts crossed since before
+// (fairuse.Crossed), and reports whether it told them of any.
+func (s *Sampler) warn(ctx context.Context, tx pgx.Tx, before counted, u *usage) (bool, error) {
+	if s.Notify == nil {
+		return false, nil
+	}
+	warned := false
+	if fairuse.Crossed(before.objects, u.objects, fairuse.Objects) {
+		if err := fairuse.Notice(ctx, tx, s.Notify, u.household, fairuse.ResourceObjects, "", u.objects, fairuse.Objects); err != nil {
+			return false, err
+		}
+		warned = true
+	}
+	names := make([]string, 0, len(u.modules))
+	for name := range u.modules {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		rows := u.modules[name].rows
+		if !fairuse.Crossed(before.rows[name], rows, fairuse.Rows) {
+			continue
+		}
+		if err := fairuse.Notice(ctx, tx, s.Notify, u.household, fairuse.ResourceRows, name, rows, fairuse.Rows); err != nil {
+			return false, err
+		}
+		warned = true
+	}
+	return warned, nil
 }

@@ -30,6 +30,31 @@ info:
     grants, private items, and conversation membership alike. A `403` is an existence oracle.
     `403` is reserved for cases where the caller may see the resource but not perform the action.
 
+    ## Entitlement
+
+    A household is always in one of eight entitlement states (`EntitlementState`), resolved once
+    per request (PRD 04 §3). A state that does not write refuses every household-scoped unsafe
+    request `402` (`PaymentRequired`), except the closed list of operations that declare no `402`:
+    everything under `…/billing`, `POST …/exports`, `POST` and `DELETE …/deletion`, `POST …/leave`,
+    `POST` and `DELETE …/restriction`, and `POST …/sync/credentials`, with which a replica pulls.
+    No read is refused `402` in any state. `grace` refuses uploads alone. A `suspended` household
+    answers every household-scoped request `404`, the exempt ones too, as a household its caller
+    cannot see; the household list (`getHouseholds`) still names it, with its state, for the
+    lockout a client shows. The writes into a household from outside its routes, accepting an
+    invitation (`postMeInvitationsByTokenAccept`), declining one (`postMeInvitationsByTokenDecline`)
+    and confirming a graduation (`postAuthGraduationConfirm`), are held to the same: `402` in a
+    state that does not write, and not found in a `suspended` household (D-120), whose invitations
+    are neither previewed nor listed either, and whose household code opens nothing for a child's
+    sign-in (`postAuthChildProfiles`, `postAuthChildLogin`).
+
+    A fair-use ceiling on what a household or a user holds (PRD 04 §5: members, owned households,
+    rows per module, objects) refuses the create that would pass it `403`, `fair_use_ceiling`, or
+    `household_limit_reached` for the households a user may own: waiting does not lower the count,
+    so a retry does not help. The owners are told once as a count reaches 80 % of its ceiling, and
+    a user as they create the household that brings them to 80 % of theirs. A module's rows are the
+    rows the database holds, its deleted ones among them until they are erased; past a ceiling,
+    support raises it. A ceiling on a rate answers `429`.
+
     ## Authentication
 
     Two credential presentations, one authorization path:
@@ -116,8 +141,9 @@ info:
     (`validation_failed`) for a request the document does not admit, and any operation that takes
     a body `413` (`payload_too_large`) or `415` (`unsupported_media_type`). Any operation that
     accepts `Idempotency-Key` can also answer `409` (`idempotency_in_progress`), any unsafe
-    operation `403` (`csrf_failed`, see Authentication), and any operation `400`
-    (`update_required`, see Clients). None of these is declared on each operation.
+    operation `403` (`csrf_failed`, see Authentication, or `fair_use_ceiling`, a
+    `FairUseProblem`, see Entitlement), and any operation `400` (`update_required`, see Clients).
+    None of these is declared on each operation.
 
     In a `ValidationProblem`, each `errors[].field` is an RFC 6901 JSON Pointer into the request
     body (`/name`, `/items/0/amount_minor`, or an empty string for the body as a whole), or, for a
@@ -340,7 +366,8 @@ paths:
         household and authenticates nobody (FR-CH1); an adult, who signs in by email, is not listed
         (D-104). Case, spaces and dashes in the code do not matter. A code that opens no household
         answers `404`, and thirty of those in an hour from a client's network answer `429` until the
-        hour that counted them ends.
+        hour that counted them ends. A `suspended` household's code opens nothing, as nothing in it
+        is found (D-115).
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -364,8 +391,9 @@ paths:
         and switches between the sign-ins it holds (D-104). Case, spaces and dashes in the code do not
         matter.
 
-        A code, a profile or a PIN that does not match, and a profile that is not a child's, answer
-        `401` (`invalid_credentials`) alike, in the same time. Sixty sign-ins that fail in fifteen
+        A code, a profile or a PIN that does not match, a profile that is not a child's, and a profile
+        of a `suspended` household (D-115), answer `401` (`invalid_credentials`) alike, in the same
+        time. Sixty sign-ins that fail in fifteen
         minutes from a client's network, those answered `423` among them, answer `429`, as a
         password's sign-in's do. Ten wrong PINs since the last right one lock the profile until an
         owner unlocks it or sets a new PIN (FR-CH5): every attempt at a locked profile, the tenth
@@ -477,6 +505,11 @@ paths:
         it is withdrawn, and stays withdrawn if they are made an owner again. An address another
         account has taken since the link was sent answers `409` (`email_taken`). A password found in
         the breached-password screen is refused `422`, naming `/password` with the code `invalid`.
+
+        The membership is the household's, held to its entitlement as an invitation's acceptance is
+        (D-120): a household in a state that does not write graduates nobody until it writes again,
+        `402` naming its state with the remedy `contact_owner`, the link left as it was, and a
+        `suspended` one is not found.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -484,6 +517,7 @@ paths:
         content: { application/json: { schema: { type: object, required: [token, password], properties: { token: { type: string }, password: { type: string, minLength: 12 } } } } }
       responses:
         '204': { description: Graduated }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: 'Another account has the address (`email_taken`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '410': { description: 'The link has expired (`token_expired`), or has been used, replaced or withdrawn with its sender''s ownership (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
@@ -1096,7 +1130,7 @@ paths:
         The pending email invitations to the signed-in user's address, once it is verified, to the
         households they are not a member of. Each carries the invitation's id as its `token`, which its
         addressee, signed in with that verified address, may use in place of the token the email
-        carries.
+        carries. An invitation into a `suspended` household is not listed (D-115).
       responses:
         '200': { description: Invitations, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/InvitationForInvitee' } } } } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1111,7 +1145,8 @@ paths:
         Shows exactly what is being granted — household, inviter, role, and the module levels — before
         acceptance. Signed in or not: the token its email or link carries opens it before the invitee
         has an account, and its id opens it for its addressee alone, signed in. A signed-in caller's
-        requests count against their own limit (`429`).
+        requests count against their own limit (`429`). An invitation into a `suspended` household
+        is not found, as accepting it is not (D-115, D-120).
       security: [{}, { bearerAuth: [] }, { sessionCookie: [] }]
       parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }]
       responses:
@@ -1130,11 +1165,18 @@ paths:
         must be the one it was sent to, which is otherwise not found. The membership has exactly the
         role and the levels the invitation proposed. Someone already a member is answered their
         membership as it is.
+
+        A membership is a write to the household, held to its entitlement as every other is (D-120):
+        a household in a state that does not write is joined by nobody, `402` naming its state with
+        the remedy `contact_owner`, and a `suspended` one is not found, by its members either. A
+        household with twelve members already, the ceiling of fair use, is refused `403
+        fair_use_ceiling` (PRD 04 §5).
       parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '200': { description: Membership created, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: The account is unverified and cannot accept invitations, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
+        '403': { description: 'The account is unverified and cannot accept invitations (`account_unverified`), or the household has twelve members, the ceiling of fair use (`fair_use_ceiling`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/FairUseProblem' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '410': { description: Expired or already used, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1149,9 +1191,14 @@ paths:
         invitation is declined only from the account with its address; an invitation that no longer
         works is not found, and neither is one into a household the caller is already a member of,
         which asks them into nothing.
+
+        Declining writes into the household, held to its entitlement as accepting is (D-120): a
+        household in a state that does not write records no decline until it writes again, `402`
+        naming its state with the remedy `contact_owner`, and a `suspended` one is not found.
       parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Declined }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '404': { $ref: '#/components/responses/NotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1247,7 +1294,7 @@ paths:
       responses:
         '201': { headers: { ETag: { $ref: '#/components/headers/ETag' } }, description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Household' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: 'The per-user household ceiling is reached, or the caller is a child profile', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '403': { description: 'The caller owns five households already, the ceiling of fair use (`household_limit_reached`, PRD 04 §5), or is a child profile (`forbidden`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/FairUseProblem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -1476,7 +1523,10 @@ paths:
         two it is looking at.
 
         Every member sees who restricted the household and when. A household that has silently
-        stopped accepting writes is a support ticket.
+        stopped accepting writes is a support ticket. A lapse outranks a restriction (D-114): while
+        the household is also `read_only` or `canceled` its state is that one, whose deletion date it
+        is shown, and `restriction` still names who restricted it. Restricting a household already
+        restricted changes nothing and answers as it stands.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: false
@@ -1493,7 +1543,8 @@ paths:
       summary: Lift the restriction
       description: |
         Any `owner`. Returns the household to whatever state its subscription puts it in — which
-        may not be `active`, if the subscription lapsed while the household was restricted.
+        may not be `active`, if the subscription lapsed while the household was restricted. Lifting a
+        restriction there is none of changes nothing and answers as the household stands.
 
         **Never refused with `402`.** A restriction you cannot lift is a household nobody can use.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
@@ -1988,6 +2039,11 @@ paths:
         expires, and a revoked device, a session that has ended or a caller no longer in the household
         is refused here. A web session is handed credentials as a device is. Nothing is kept under an
         `Idempotency-Key`: a repeat is handed another token.
+
+        A household in a state that does not write is still handed them, since its replicas keep
+        pulling (PRD 04 §3, D-117); a `suspended` household is not, and its streams hold nothing for
+        any member, so it replicates nothing further to any device, a new one included, and a replica
+        that connects is emptied of it (D-115).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '200':
@@ -2033,6 +2089,12 @@ paths:
         A batch holds at most 500 mutations: a larger one is refused whole, `413`
         (`batch_too_large`), for the client to send in smaller ones. A device, or a web session,
         sends at most 60 batches a minute, and is answered `429` past them.
+
+        A household in a state that does not write refuses the batch whole, `402`, and nothing in it
+        is applied or kept: the client records each of its mutations `rejected` with the problem's
+        `code`, `entitlement_read_only` or `entitlement_restricted`, holds them, and sends them again
+        once the household writes again (FR-BI2, D-118). A create that would take a module past its
+        rows' fair-use ceiling is `rejected` (`fair_use_ceiling`).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKeyRequired' }]
       requestBody:
         required: true
@@ -8592,12 +8654,15 @@ components:
     Forbidden:
       description: |
         The caller may see the resource but not perform this action. **Never used for a resource
-        the caller may not see** — that is `404`, because a `403` is an existence oracle.
-      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+        the caller may not see** — that is `404`, because a `403` is an existence oracle. A create
+        that would take the household past a fair-use ceiling is `fair_use_ceiling`, naming the
+        `resource` and its `ceiling` (PRD 04 §5).
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/FairUseProblem' } } }
     NotFound:
       description: |
         Not found, **or** not visible to the caller — a module they have `none` on, a private item
-        they do not own, or a conversation they are not in. The two are deliberately indistinguishable.
+        they do not own, a conversation they are not in, or anything in a `suspended` household. The
+        two are deliberately indistinguishable.
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     Unprocessable:
       description: Validation failed. `errors` names each offending field.
@@ -8620,8 +8685,12 @@ components:
         stores as much as it may": an upload that would take it past the storage ceiling (FR-FL4,
         D-33), with `over_by_bytes` and `blocks_at_ceiling`, whose remedy is `free_storage`.
 
-        **Reads, downloads and exports are never blocked, in any state**, and neither are billing,
-        export, household deletion, leaving, or lifting a restriction.
+        **Reads, downloads and exports are never blocked with `402`, in any state**, and neither are
+        billing, export, household deletion, leaving, setting or lifting a restriction, or a
+        replica's credentials; a `suspended` household answers every one of its routes `404`
+        instead, these too (D-115). `remedy` is what fixes it, for the caller: an owner is told to
+        `subscribe`, to `update_payment_method` after a failed payment, or to `lift_restriction`;
+        anyone else to `contact_owner`, since only an owner can (FR-BI5).
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/EntitlementProblem' } } }
     StorageUnavailable:
       description: |
@@ -8752,6 +8821,7 @@ components:
         - redirect_uri_not_registered
         # Households, membership and billing
         - household_limit_reached
+        - fair_use_ceiling
         - last_owner
         - billing_payer
         - storage_ceiling_reached
@@ -8861,9 +8931,19 @@ components:
           required: [state, remedy]
           properties:
             state: { $ref: '#/components/schemas/EntitlementState' }
-            remedy: { type: string, enum: [subscribe, update_payment_method, free_storage, contact_owner] }
+            remedy: { type: string, enum: [subscribe, update_payment_method, free_storage, contact_owner, lift_restriction] }
             over_by_bytes: { type: integer, format: int64 }
             blocks_at_ceiling: { type: integer, description: 'Set when the block ceiling was reached. Uploads stop; reads, downloads and exports never do.' }
+
+    FairUseProblem:
+      description: 'A `403`. When `code` is `fair_use_ceiling` or `household_limit_reached`, a create that would pass a fair-use ceiling (PRD 04 §5): `resource` names it, and `module` the module whose rows they are.'
+      allOf:
+        - { $ref: '#/components/schemas/Problem' }
+        - type: object
+          properties:
+            resource: { type: string, enum: [members, rows, objects] }
+            ceiling: { type: integer }
+            module: { $ref: '#/components/schemas/ModuleKeyValue' }
 
     AccountDeletionBlocked:
       allOf:
@@ -9443,11 +9523,26 @@ components:
 
     EntitlementSummary:
       type: object
+      description: The household's state, what it permits, and what its banner says, which every member reads (DD-9, FR-BI7, D-32).
       properties:
         state: { $ref: '#/components/schemas/EntitlementState' }
-        trial_ends_at: { type: [string, 'null'], format: date-time }
+        trial_ends_at: { type: [string, 'null'], format: date-time, description: Set while the subscription is trialing. }
+        trial_notice: { type: string, enum: [none, notice, banner], description: 'DD-9''s stage of the trial: none for twenty days, a dismissible `notice` on days 21 to 25, then a persistent `banner` for the last five. `none` outside the trial.' }
         can_write: { type: boolean }
         can_upload: { type: boolean }
+        grace_ends_at: { type: [string, 'null'], format: date-time, description: Set while the subscription is in grace. }
+        data_retained_until: { type: [string, 'null'], format: date-time, description: 'Set while it is `read_only` or `canceled`: the day the household''s data is deleted, 12 months after it lapsed and 30 days of warnings more (D-32, D-119). Shown from the day it lapses.' }
+        restriction:
+          description: 'An owner''s restriction of processing, null for none: who restricted the household, when and why (FR-BI7). Set whatever the state, so that a household whose lapse outranks it is still told of it (D-114).'
+          oneOf:
+            - { type: 'null' }
+            - type: object
+              required: [restricted_by, restricted_at]
+              properties:
+                restricted_by: { $ref: '#/components/schemas/ActorRef' }
+                restricted_at: { type: string, format: date-time }
+                reason: { type: [string, 'null'] }
+        suspended_at: { type: [string, 'null'], format: date-time, description: 'When the platform suspended the household, for the lockout.' }
         storage_used_bytes: { type: integer, format: int64 }
         storage_included_bytes: { type: integer, format: int64, description: 'The base allowance plus any blocks currently in effect.' }
         storage_blocks: { type: integer, description: '10 GB blocks currently in effect, above the base allowance.' }
@@ -9462,7 +9557,7 @@ components:
         cancel_at_period_end: { type: boolean }
         trial_ends_at: { type: [string, 'null'], format: date-time }
         grace_ends_at: { type: [string, 'null'], format: date-time }
-        data_retained_until: { type: [string, 'null'], format: date-time, description: 'A lapsed household is retained 12 months, then warned three times over 30 days. Export works in every state.' }
+        data_retained_until: { type: [string, 'null'], format: date-time, description: 'When a lapsed household''s data is deleted: it is retained 12 months, then its owners are warned three times over 30 days, a month, a week and a day before (D-119). Export works in every state.' }
         payer: { $ref: '#/components/schemas/ActorRef' }
         payment_method:
           oneOf:

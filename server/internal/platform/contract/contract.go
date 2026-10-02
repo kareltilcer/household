@@ -47,6 +47,9 @@ type Operation struct {
 	validating *openapi3.Operation
 }
 
+// Declares reports whether o declares a response with status.
+func (o *Operation) Declares(status int) bool { return o.op.Responses.Status(status) != nil }
+
 // load parses the committed contract once per process.
 var load = sync.OnceValues(func() (*Contract, error) { return Parse(apispec.OpenAPI) })
 

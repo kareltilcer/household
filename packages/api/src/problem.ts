@@ -27,6 +27,7 @@ const known = every<ProblemCode>()(problemCodes)
 
 type EntitlementState = Schemas['EntitlementState']
 type Remedy = Schemas['EntitlementProblem']['remedy']
+type FairUseResource = NonNullable<Schemas['FairUseProblem']['resource']>
 
 const entitlementStates = every<EntitlementState>()([
   'trialing',
@@ -43,7 +44,9 @@ const remedies = every<Remedy>()([
   'update_payment_method',
   'free_storage',
   'contact_owner',
+  'lift_restriction',
 ])
+const fairUseResources = every<FairUseResource>()(['members', 'rows', 'objects'])
 
 /** Whether `value` is a code this build of the client knows. */
 export function isProblemCode(value: unknown): value is ProblemCode {
@@ -94,6 +97,20 @@ export type StorageCeilingReached = Envelope &
     blocks_at_ceiling: number
   }
 
+/**
+ * `403 fair_use_ceiling`: a create that would take the household past a fair-use ceiling (PRD 04
+ * §5, D-116), naming the `resource`, its `ceiling` and, for rows, the `module`; and `403
+ * household_limit_reached`, the households a user may own, naming its `ceiling`. Waiting does not
+ * help either: the count never falls while a client waits, and a module's deleted rows count until
+ * they are erased, so past a ceiling the household asks support to raise it.
+ */
+export type FairUseRefusal = Envelope &
+  Omit<Schemas['FairUseProblem'], keyof Schemas['Problem']> &
+  (
+    | { code: 'fair_use_ceiling'; resource: FairUseResource; ceiling: number }
+    | { code: 'household_limit_reached'; ceiling: number }
+  )
+
 /** `422 validation_failed`, naming each failure in `errors`. */
 export type ValidationFailure = Envelope &
   Omit<Schemas['ValidationProblem'], keyof Schemas['Problem']> & {
@@ -108,6 +125,7 @@ export type PlainProblem = Envelope & {
     | IdempotencyInProgress['code']
     | EntitlementRefusal['code']
     | StorageCeilingReached['code']
+    | FairUseRefusal['code']
     | ValidationFailure['code']
   >
 }
@@ -118,6 +136,7 @@ export type ApiProblem =
   | IdempotencyInProgress
   | EntitlementRefusal
   | StorageCeilingReached
+  | FairUseRefusal
   | ValidationFailure
   | PlainProblem
 
@@ -163,6 +182,12 @@ export function readProblem(status: number, body: unknown): ApiProblem | Unreada
         isInteger(body.blocks_at_ceiling)
         ? (problem as StorageCeilingReached)
         : unreadable
+    case 'fair_use_ceiling':
+      return isMember(fairUseResources, body.resource) && isInteger(body.ceiling)
+        ? (problem as FairUseRefusal)
+        : unreadable
+    case 'household_limit_reached':
+      return isInteger(body.ceiling) ? (problem as FairUseRefusal) : unreadable
     case 'validation_failed':
       return Array.isArray(body.errors) ? (problem as ValidationFailure) : unreadable
     default:

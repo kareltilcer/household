@@ -317,6 +317,11 @@ household, and a module disabled household-wide.
 see [04-billing-and-entitlements.md](04-billing-and-entitlements.md) FR-BI2, which is the
 authoritative statement of what happens to a client when the money stops.
 
+**Nor is a suspension**, which takes no member's access but the household's own: a `suspended`
+household ([04](04-billing-and-entitlements.md) §3) refuses reads, and every stream holds it to
+nothing, so each replica that connects is emptied of it and fills again when it is lifted
+(**D-115**).
+
 **FR-SY7 — Access loss emits `op: retract` rows addressed to the affected member** (`for_user_id`
 set), covering every entity id they can no longer see. The client deletes those rows from its
 local store on receipt. A retraction carries no payload, so the act of retracting leaks nothing.

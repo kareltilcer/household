@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/entitlement"
+	"github.com/kareltilcer/household/server/internal/platform/fairuse"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
@@ -48,6 +50,11 @@ func (st Stored) SHA256() [32]byte { return st.sha256 }
 // Put writes u's bytes to the store as the original of t's entity in ctx's household (FR-FL1). It
 // answers, as problems:
 //
+//   - 402 entitlement_read_only, or entitlement_restricted, an upload in a state that does not upload:
+//     grace, the one state that writes and does not (PRD 04 §3), since the tenant middleware's gate
+//     answers every other before the handler runs;
+//   - 403 fair_use_ceiling, an upload that would take the household past the objects it may hold
+//     (PRD 04 §5, D-116);
 //   - 402 storage_ceiling_reached, an upload that would take the household past its storage ceiling
 //     (FR-FL4, D-33), naming by how much; below the ceiling an upload always succeeds;
 //   - 422 validation_failed naming t.Field, an entity whose original is other bytes, since bytes are
@@ -62,11 +69,15 @@ func (s *Service) Put(ctx context.Context, u *Upload, t Target) (Stored, error) 
 	if scope == nil {
 		return Stored{}, tenant.ErrNoTenant
 	}
+	if err := scope.Entitlement().Uploadable(scope.Role()); err != nil {
+		return Stored{}, err
+	}
 	household := scope.HouseholdID()
 	st := Stored{household: household, target: t, typ: u.Type, size: u.Size, sha256: u.SHA256, filename: u.Filename}
 	var (
 		recorded []byte
 		used     int64
+		objects  int64
 	)
 	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
@@ -75,7 +86,8 @@ func (s *Service) Put(ctx context.Context, u *Upload, t Target) (Stored, error) 
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		return tx.QueryRow(ctx, "SELECT coalesce(sum(byte_size), 0) FROM files WHERE household_id = $1", household).Scan(&used)
+		return tx.QueryRow(ctx, "SELECT coalesce(sum(byte_size), 0), count(*) FROM files WHERE household_id = $1", household).
+			Scan(&used, &objects)
 	})
 	switch {
 	case err != nil:
@@ -85,8 +97,11 @@ func (s *Service) Put(ctx context.Context, u *Upload, t Target) (Stored, error) 
 	case recorded != nil:
 		return Stored{}, taken(t.Field)
 	}
+	if objects >= fairuse.Objects {
+		return Stored{}, fairuse.Refusal(fairuse.ResourceObjects, fairuse.Objects, "")
+	}
 	if ceiling := s.allowance.Ceiling(); used+u.Size > ceiling {
-		return Stored{}, s.overCeiling(ctx, household, used+u.Size-ceiling)
+		return Stored{}, s.overCeiling(scope, used+u.Size-ceiling)
 	}
 	// Bytes the same as these, written before and never recorded, are a retry's of an upload whose
 	// mutation did not commit.
@@ -110,26 +125,14 @@ func taken(field string) *problem.Problem {
 	return problem.Validation(problem.FieldError{Field: field, Code: problem.FieldInvalid})
 }
 
-// freeStorage is the remedy the 402 for the ceiling tells a client of (the contract's
-// EntitlementProblem): freeing storage.
-const freeStorage = "free_storage"
-
-// defaultState is the entitlement state a 402 names before item 16 keeps one: a household's trial
-// starts with it (FR-HH1).
-const defaultState = "trialing"
-
-// overCeiling is the 402 for an upload over the storage ceiling by over bytes.
-func (s *Service) overCeiling(ctx context.Context, household uuid.UUID, over int64) error {
-	state := defaultState
-	if s.state != nil {
-		var err error
-		if state, err = s.state(ctx, household); err != nil {
-			return err
-		}
-	}
+// overCeiling is the 402 for an upload over the storage ceiling by over bytes, in scope's household,
+// naming its entitlement state as the request found it, and freeing storage as the remedy (the
+// contract's EntitlementProblem).
+func (s *Service) overCeiling(scope *tenant.Scope, over int64) error {
 	p := problem.New(http.StatusPaymentRequired, problem.CodeStorageCeilingReached)
 	p.Extensions = map[string]any{
-		"state": state, "remedy": freeStorage, "over_by_bytes": over, "blocks_at_ceiling": s.allowance.MaxBlocks,
+		"state": scope.Entitlement().State(), "remedy": entitlement.RemedyFreeStorage, "over_by_bytes": over,
+		"blocks_at_ceiling": s.allowance.MaxBlocks,
 	}
 	return p
 }
