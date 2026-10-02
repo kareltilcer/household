@@ -71,6 +71,24 @@ func (s Status) WarningsDue(now time.Time) int {
 	return due
 }
 
+// Warn returns s as it stands once the warning due at now has gone out, and whether one was due:
+// every warning due counted as sent, since one that fell due while nobody sent it is overtaken by
+// the latest, which goes alone. A warning sent late still gives the notice it promises: when less
+// than its lead is left, the deletion moves out to its lead from now, so that the household is never
+// told a day, and deleted, sooner than a month, a week or a day after it is warned.
+func (s Status) Warn(now time.Time) (Status, bool) {
+	due := s.WarningsDue(now)
+	if due <= s.RetentionWarnings {
+		return s, false
+	}
+	next := s
+	next.RetentionWarnings = due
+	if least := now.Add(Warnings[due-1]); next.RetainedUntil.Before(least) {
+		next.RetainedUntil = &least
+	}
+	return next, true
+}
+
 // DaysLeft is how many days, rounded up, are left at now before s's data is deleted, which a
 // warning says: 30, 7 and 1 when each goes out on time.
 func (s Status) DaysLeft(now time.Time) int {

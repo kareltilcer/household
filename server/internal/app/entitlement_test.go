@@ -415,21 +415,23 @@ func TestTheClockMovesAHouseholdAlong(t *testing.T) {
 			}
 		}
 	}
-	set("retained_until = $2", s.clock.now().Add(20*24*time.Hour))
+	month := s.clock.now().Add(30 * 24 * time.Hour).Truncate(time.Microsecond)
+	set("retained_until = $2", month)
 	transition(1)
-	warned("Tilcerovi’s data will be deleted in 20 days", 1)
+	warned("Tilcerovi’s data will be deleted in 30 days", 1)
 	transition(0)
-	warned("Tilcerovi’s data will be deleted in 20 days", 1)
-	if r := read(); r.warnings != 1 {
-		t.Fatalf("%d warnings counted", r.warnings)
+	warned("Tilcerovi’s data will be deleted in 30 days", 1)
+	if r := read(); r.warnings != 1 || !r.retained.Equal(month) {
+		t.Fatalf("after the first warning: %+v", r)
 	}
-	// The job did not run for the week and the day: the latest warning goes, once.
+	// The job did not run for the week and the day: the latest warning goes, once, and the deletion
+	// moves out to give the day's notice it promises.
 	set("retained_until = $2", s.clock.now().Add(12*time.Hour))
 	transition(1)
 	warned("Tilcerovi’s data will be deleted in 1 day", 1)
 	transition(0)
-	if r := read(); r.warnings != 3 {
-		t.Fatalf("%d warnings counted", r.warnings)
+	if r := read(); r.warnings != 3 || !r.retained.Equal(s.clock.now().Add(24*time.Hour).Truncate(time.Microsecond)) {
+		t.Fatalf("after the last warning: %+v", r)
 	}
 	if n := s.count("SELECT count(*) FROM audit_events WHERE household_id = $1 AND action = 'household.retention_warning'", h.ID); n != 2 {
 		t.Fatalf("%d warnings recorded", n)

@@ -84,7 +84,7 @@ counts the members under the household's lock. The nightly sample warns the owne
 
 **The hourly job** (`household.Service.Transition`, `entitlement.transitions`) finds the households with
 a clock run out as the meter role, which reads the schedule columns and nothing else (architecture test
-11), and moves each along in a mutation of the system's, then sends the warning due.
+11), and moves each along in a mutation of the system's, then sends the warning due: the latest of those that fell due, alone, and when it goes late it moves `retained_until` out to its lead from now (`Status.Warn`), so that no household is deleted sooner than a warning said.
 
 ## Alternatives rejected
 

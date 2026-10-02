@@ -192,6 +192,30 @@ func TestTheRetentionCountdown(t *testing.T) {
 	if due := status(entitlement.Active).WarningsDue(until); due != 0 {
 		t.Errorf("an active household is warned %d times", due)
 	}
+
+	// On time, a warning leaves the date as it was, and is sent once.
+	first, ok := s.Warn(until.Add(-30 * day))
+	if !ok || first.RetentionWarnings != 1 || !first.RetainedUntil.Equal(until) {
+		t.Fatalf("the first warning: %+v", first)
+	}
+	if _, ok := first.Warn(until.Add(-20 * day)); ok {
+		t.Fatal("the first warning went twice")
+	}
+	// Late, the latest due goes alone, and moves the deletion out to give its notice.
+	late := until.Add(-2 * time.Hour)
+	last, ok := first.Warn(late)
+	if !ok || last.RetentionWarnings != 3 || !last.RetainedUntil.Equal(late.Add(day)) || last.DaysLeft(late) != 1 {
+		t.Fatalf("a last warning two hours before the date: %+v", last)
+	}
+	if _, ok := last.Warn(late.Add(time.Hour)); ok {
+		t.Fatal("a warning went after the last")
+	}
+	missed := s
+	missed.RetentionWarnings = 0
+	gone, ok := missed.Warn(until.Add(10 * day))
+	if !ok || gone.RetentionWarnings != 3 || !gone.RetainedUntil.Equal(until.Add(11*day)) {
+		t.Fatalf("every warning missed: %+v", gone)
+	}
 }
 
 // DD-9: the trial is silent for twenty days, a dismissible notice on days 21 to 25, then a banner.

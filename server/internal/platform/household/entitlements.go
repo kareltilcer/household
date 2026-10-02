@@ -221,7 +221,8 @@ func warningSeconds() []float64 {
 
 // transition advances household's subscription to now, then sends the warning due, each its own
 // mutation, reading the household again under its lock: an owner's subscription that resumed
-// meanwhile (item 19) leaves nothing to do. It reports whether it changed anything.
+// meanwhile (item 19) leaves nothing to do. A warning sent late moves the deletion out to give the
+// notice it promises (entitlement.Status.Warn). It reports whether it changed anything.
 func (s *Service) transition(ctx context.Context, household uuid.UUID, catalog *module.Registry, now time.Time) (bool, error) {
 	scoped := mutation.WithVia(mutation.WithCatalog(tenant.Assume(ctx, s.Pool, household, uuid.Nil, ""), catalog), audit.ViaSystem)
 	advanced, err := mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
@@ -265,16 +266,17 @@ func (s *Service) transition(ctx context.Context, household uuid.UUID, catalog *
 		if err != nil {
 			return mutation.Record{}, err
 		}
-		due := status.WarningsDue(now)
-		if due <= status.RetentionWarnings {
+		warned, due := status.Warn(now)
+		if !due {
 			return mutation.Record{}, nil
 		}
-		h, err := scanSettings(tx.QueryRow(ctx, `UPDATE households SET retention_warnings = $2 WHERE id = $1 RETURNING `+settingsColumns,
-			household, due))
+		h, err := scanSettings(tx.QueryRow(ctx, `
+			UPDATE households SET retention_warnings = $2, retained_until = $3 WHERE id = $1
+			RETURNING `+settingsColumns, household, warned.RetentionWarnings, warned.RetainedUntil))
 		if err != nil {
 			return mutation.Record{}, err
 		}
-		days := status.DaysLeft(now)
+		days := warned.DaysLeft(now)
 		owners, err := ownersOf(ctx, tx, household)
 		if err != nil {
 			return mutation.Record{}, err
