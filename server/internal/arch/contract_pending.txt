@@ -28,9 +28,6 @@ postBillingTransferAccept
 getBillingInvoices
 getBillingInvoicesByInvoiceId
 getBillingUsage
-getSyncState
-postSyncReset
-postSyncDigest
 getSearch
 getActivity
 getActivityByEventId

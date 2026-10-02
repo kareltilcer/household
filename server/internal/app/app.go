@@ -217,6 +217,10 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	if err != nil {
 		return nil, fmt.Errorf("app: %w", err)
 	}
+	reports, err := replica.NewReports(replica.ReportsConfig{Registry: registry, Logger: d.Logger})
+	if err != nil {
+		return nil, fmt.Errorf("app: %w", err)
+	}
 	// Behind the tenant middleware: a device's batches, or a web session's, share one budget.
 	perDevice := ratelimit.Middleware(d.Sync.PushLimit, func(r *http.Request) (string, bool) {
 		user, ok := auth.User(r.Context())
@@ -284,6 +288,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Households.HouseholdRoutes)
 			// A replica's credentials keep no key: a credential is never kept to be answered with.
 			inHousehold.Group(d.Sync.Replica.HouseholdRoutes)
+			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(reports.Routes)
 			inHousehold.Group(picture.Routes)
 			inHousehold.With(perDevice, idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(pushes.Routes)
 			// A child profile's PIN keeps no key, as a password does not (D-97).

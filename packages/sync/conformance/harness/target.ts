@@ -90,12 +90,14 @@ interface Generated {
 
 /**
  * The streams the suite's clients subscribe to, as server/internal/syncconfig generated them beside
- * the configuration PowerSync runs (stack/powersync/streams.json): every stream but the negative
- * control's.
+ * the configuration PowerSync runs, in the suite's client registry (stack/powersync/registry.json):
+ * every stream but the negative control's.
  */
-const generated = JSON.parse(
-  readFileSync(new URL('../stack/powersync/streams.json', import.meta.url), 'utf8'),
-) as readonly Generated[]
+const generated = (
+  JSON.parse(
+    readFileSync(new URL('../stack/powersync/registry.json', import.meta.url), 'utf8'),
+  ) as { readonly streams: readonly Generated[] }
+).streams
 
 function isTable(name: string): name is TableName {
   return tables.some((t) => t.table === name)

@@ -120,6 +120,9 @@ const (
 // audience bounds names its readers, an array of user ids. Neither the visibility nor the readers is
 // ever NULL, which no stream matches: a row would reach nobody (test 10).
 const (
+	// VersionColumn is every entity's version (add_entity_columns), which every client table carries:
+	// a replica's report hashes each row by it (D-125).
+	VersionColumn    = "version"
 	VisibilityColumn = "visibility"
 	OwnerColumn      = "owner_id"
 	ReadersColumn    = "readers"
@@ -196,7 +199,7 @@ var (
 // nor every member, or every member beside another axis; a redacted projection on an entity that is
 // never private; columns, or a redacted projection's, that do not start with id, or name one that is
 // not an identifier, or one twice; a redacted projection's column that the entity's columns leave
-// out; and a create operation named twice.
+// out, or that leave out version; and a create operation named twice.
 func Violations(module string, entities []Entity) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -284,6 +287,11 @@ func Violations(module string, entities []Entity) []string {
 						bad("%s naming %s twice", list.what, c)
 					}
 					named[c] = true
+				}
+				// A replica's report hashes each row it holds by its id and its version (D-125), so every
+				// client table an entity's streams write carries both.
+				if !named[VersionColumn] {
+					bad("%s that leave out %s, which a replica's report hashes each row by", list.what, VersionColumn)
 				}
 			}
 		}

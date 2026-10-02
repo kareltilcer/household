@@ -1,7 +1,6 @@
 package sync_test
 
 import (
-	"encoding/json"
 	"regexp"
 	"slices"
 	"strings"
@@ -162,8 +161,8 @@ func TestStreamsRefuseTwoOfOneName(t *testing.T) {
 }
 
 // The configuration is PowerSync's edition 3, its header a comment, each query indented under its
-// stream; the manifest names each stream with its entity and its table.
-func TestTheConfigurationAndTheManifest(t *testing.T) {
+// stream; each stream names its entity and the client table it replicates into.
+func TestTheConfigurationAndTheOutputs(t *testing.T) {
 	streams, err := sync.Streams(declared[:1])
 	if err != nil {
 		t.Fatal(err)
@@ -173,25 +172,16 @@ func TestTheConfigurationAndTheManifest(t *testing.T) {
 		!strings.Contains(config, "\n\n  shopping_item_granted:\n") {
 		t.Errorf("the configuration:\n%s", config)
 	}
-	manifest, err := sync.Manifest(streams)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var entries []map[string]string
-	if err := json.Unmarshal(manifest, &entries); err != nil || len(entries) != 2 ||
-		entries[1]["stream"] != "shopping_item_granted" || entries[1]["entity"] != "shopping.item" || entries[1]["table"] != "shopping_items" {
-		t.Errorf("the manifest: %s %v", manifest, err)
+	if len(streams) != 2 || streams[1].Name != "shopping_item_granted" || streams[1].Entity != "shopping.item" || streams[1].Output != "shopping_items" {
+		t.Errorf("the streams: %+v", streams)
 	}
 	// A redacted projection's streams name the client table they replicate into.
 	redacted, err := sync.Streams(declared[3:4])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest, err = sync.Manifest(redacted); err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(manifest, &entries); err != nil || len(entries) != 6 || entries[0]["table"] != "notes" || entries[5]["table"] != "notes_redacted" {
-		t.Errorf("the manifest: %s %v", manifest, err)
+	if len(redacted) != 6 || redacted[0].Output != "notes" || redacted[5].Output != "notes_redacted" {
+		t.Errorf("the streams: %+v", redacted)
 	}
 	// A table in a schema of its own names its redacted client table without the schema, which an
 	// alias cannot carry.
