@@ -73,6 +73,8 @@
   "notification.fair_use.title": "{household} nähert sich der Fair-Use-Grenze",
   "notification.fair_use_households.body": "Mit {household} besitzen Sie {held, plural, one {# Haushalt} other {# Haushalte}}, 80 % der {ceiling, number}, die ein Konto haben darf. Darüber hinaus können Sie keinen weiteren anlegen.",
   "notification.fair_use_households.title": "Sie nähern sich der Fair-Use-Grenze für Haushalte",
+  "notification.fair_use_sync.body": "Die Geräte von {household} haben heute {held, number} Änderungen gesendet, 80 % der {ceiling, number}, die pro Tag erlaubt sind. Darüber hinaus warten Änderungen bis zum nächsten Tag auf die Synchronisation.",
+  "notification.fair_use_sync.title": "{household} nähert sich der täglichen Synchronisationsgrenze",
   "notification.invitation_declined.body": "{invitee} tritt dem Haushalt {household} nicht bei. Die Einladung ist geschlossen; Sie können sie in der Mitgliederliste des Haushalts erneut senden.",
   "notification.invitation_declined.title": "{invitee} hat Ihre Einladung abgelehnt"
 }

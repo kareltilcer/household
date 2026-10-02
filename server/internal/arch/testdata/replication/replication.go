@@ -18,11 +18,16 @@ func Streams() []sync.Stream {
 	}
 }
 
-// Entities are kept in the testdata's tables, one replicating a column its table does not have, and
-// one whose table no stream reads yet, as an entity's whose streams plan item 17 generates.
+// Entities are kept in the testdata's tables: one replicating a column its table does not have; one
+// whose table no stream reads, which keeps it from no violation; a private one whose table has no
+// owner and whose redacted projection names a column its table does not have; and an audience's,
+// whose table keeps no readers.
 func Entities() []sync.Entity {
 	return []sync.Entity{
 		{Name: "probe.published", Table: "arch_testdata.published_items", Columns: []string{"id", "title", "colour"}},
 		{Name: "probe.withheld", Table: "arch_testdata.withheld_items"},
+		{Name: "probe.private", Table: "arch_testdata.published_items", Access: sync.Grant | sync.Owner,
+			Redacted: []string{"id", "secret"}},
+		{Name: "probe.heard", Table: "arch_testdata.published_items", Access: sync.Grant | sync.Audience},
 	}
 }

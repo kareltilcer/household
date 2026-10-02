@@ -339,8 +339,9 @@ func TestCreatingAHousehold(t *testing.T) {
 		AND summary_args ->> 'household' = 'Tilcerovi' AND actor_label = 'Jana'`, id); n != 1 {
 		t.Errorf("%d creation events", n)
 	}
-	if n := s.count(`SELECT count(*) FROM sync_changes WHERE household_id = $1`, id); n != len(household.Modules)+2 {
-		t.Errorf("%d changes: want the settings, the membership and every module's enablement", n)
+	if n := s.count(`SELECT (SELECT count(*) FROM memberships WHERE household_id = $1) + (SELECT count(*) FROM module_enablement WHERE household_id = $1)`,
+		id); n != len(household.Modules)+1 {
+		t.Errorf("%d rows: want the membership and every module's enablement", n)
 	}
 
 	rec = jana.get("/households")
@@ -953,8 +954,8 @@ func TestRemovingAMember(t *testing.T) {
 	if len(changed) != 1 || changed[0].Member != klaraID || changed[0].Cause != household.CauseRemoved {
 		t.Errorf("told %+v", changed)
 	}
-	if n := s.count(`SELECT count(*) FROM sync_changes WHERE household_id = $1 AND entity_type = 'admin.membership' AND op = 'delete'`, h.ID); n != 1 {
-		t.Errorf("%d deletions in the feed", n)
+	if n := s.count(`SELECT count(*) FROM memberships WHERE household_id = $1 AND user_id = $2`, h.ID, klaraID); n != 0 {
+		t.Errorf("%d memberships of Klára left", n)
 	}
 }
 
@@ -1045,9 +1046,9 @@ func TestAnOwnersInvitationsLapseWithTheirOwnership(t *testing.T) {
 		if status[i.ID] != "revoked" {
 			t.Errorf("invitation %s is %s", i.ID, status[i.ID])
 		}
-		if n := s.count(`SELECT count(*) FROM sync_changes WHERE household_id = $1 AND entity_type = 'admin.invitation'
-			AND entity_id = $2 AND payload ->> 'status' = 'revoked'`, h.ID, i.ID); n != 1 {
-			t.Errorf("%d withdrawals of %s in the feed", n, i.ID)
+		if n := s.count(`SELECT count(*) FROM invitations WHERE household_id = $1 AND id = $2 AND status = 'revoked' AND version > 1`,
+			h.ID, i.ID); n != 1 {
+			t.Errorf("%d withdrawals of %s", n, i.ID)
 		}
 	}
 

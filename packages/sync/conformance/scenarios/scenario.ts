@@ -95,6 +95,22 @@ export async function staysQuiet(w: World, quietMs = 1_500): Promise<void> {
   expect(w.recorder.attempts.length, 'requests made after the run settled').toBe(before)
 }
 
+/** What household's audit log keeps of entity's field, each change as it was and as it became, oldest first. */
+export async function fieldHistory(
+  w: World,
+  household: Household,
+  entity: string,
+  field: string,
+): Promise<{ old: unknown; new: unknown }[]> {
+  const result = await w.admin.pool.query<{ old: unknown; new: unknown }>(
+    `SELECT c.old_value AS old, c.new_value AS new FROM audit_changes c
+     JOIN audit_events e ON e.household_id = c.household_id AND e.id = c.event_id
+     WHERE e.household_id = $1 AND e.entity_id = $2 AND c.field = $3 ORDER BY e.occurred_at`,
+    [household.id, entity, field],
+  )
+  return result.rows
+}
+
 /** The audit events household recorded about entity, as their actions. */
 export async function eventsAbout(
   w: World,

@@ -17,11 +17,13 @@ const Publication = "powersync"
 // Replication returns what is wrong, in the database tx reads, with what streams and entities need
 // of it (architecture test 10), one line each: a table a stream reads that is not in the powersync
 // publication, that is not at REPLICA IDENTITY FULL, or that the replication role may not read; a
-// table the replication role may SELECT that no stream reads and no entity is kept in, since the
-// role queries past row-level security and must query nothing it does not replicate; and a column an
-// entity replicates that its table does not have. A table is named bare in the public schema, and
-// with its schema elsewhere. It holds the role's queries, not its REPLICATION, which decodes every
-// table's changes whatever the role is granted (db.RolePowerSync).
+// table the replication role may SELECT that no stream reads, since the role queries past row-level
+// security and must query nothing it does not replicate; a column an entity replicates, in full or in
+// its redacted projection, that its table does not have; and a column its access holds its rows to,
+// their visibility and owner or their readers (sync.Entity.AccessColumns), that its table does not
+// have. A table is named bare in the public schema, and with its schema elsewhere. It holds the role's
+// queries, not its REPLICATION, which decodes every table's changes whatever the role is granted
+// (db.RolePowerSync).
 func Replication(ctx context.Context, tx pgx.Tx, streams []sync.Stream, entities []sync.Entity) ([]string, error) {
 	type table struct {
 		published, full, readable bool
@@ -71,16 +73,19 @@ func Replication(ctx context.Context, tx pgx.Tx, streams []sync.Stream, entities
 			out = append(out, name+": a stream reads it, and "+db.RolePowerSync+" may not read it; publish it with replicate")
 		}
 	}
-	kept := map[string]bool{}
 	for _, e := range entities {
-		kept[e.Table] = true
 		t, ok := tables[e.Table]
 		if !ok {
 			continue
 		}
-		for _, c := range e.Columns {
+		for _, c := range append(slices.Clone(e.Columns), e.Redacted...) {
 			if !slices.Contains(t.columns, c) {
 				out = append(out, fmt.Sprintf("%s: %s replicates its column %s, which it does not have", e.Table, e.Name, c))
+			}
+		}
+		for _, c := range e.AccessColumns() {
+			if !slices.Contains(t.columns, c) {
+				out = append(out, fmt.Sprintf("%s: %s holds its rows to their column %s, which it does not have", e.Table, e.Name, c))
 			}
 		}
 	}
@@ -90,7 +95,7 @@ func Replication(ctx context.Context, tx pgx.Tx, streams []sync.Stream, entities
 	}
 	slices.Sort(names)
 	for _, name := range names {
-		if tables[name].readable && !slices.Contains(read, name) && !kept[name] {
+		if tables[name].readable && !slices.Contains(read, name) {
 			out = append(out, name+": "+db.RolePowerSync+" may read it, and no stream reads it: the role reads past row-level security, and only what it replicates")
 		}
 	}

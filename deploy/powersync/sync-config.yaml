@@ -8,7 +8,7 @@ config:
 streams:
   admin_household_settings:
     query: |
-      SELECT id, name, country, timezone, base_currency, locale, units, first_day_of_week, billing_payer_id, version, created_by, created_at, updated_by, updated_at, deleted_at FROM households
+      SELECT id, name, country, timezone, base_currency, locale, units, first_day_of_week, billing_payer_id, billing_state, trial_ends_at, grace_ends_at, retained_until, restricted_at, restricted_by, restricted_by_label, restriction_reason, version, created_by, created_at, updated_by, updated_at, deleted_at FROM households
       WHERE id = subscription.parameter('household_id')
         AND id IN (
           SELECT m.household_id FROM memberships m

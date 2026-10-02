@@ -1,4 +1,5 @@
 # Every violation architecture test 4 must report for this directory, file by file in walk order.
+modules/chat/chat.go:13: module chat names the access rewrite; a module rewrites the access a row carries through sync.RewriteAccess, which touch_entity holds to the access columns and leaves unversioned
 modules/chores/chores.go:3: module chores dot-imports the tenant package, which hides tenant.InWriteTx, tenant.AccountTx, tenant.Assume and tenant.Outside from this test
 modules/garden/garden_test.go:6: module garden opens a write transaction of its own; a module writes through mutation.Apply, which records the audit event and the sync change
 modules/notes/notes.go:13: module notes opens a write transaction of its own; a module writes through mutation.Apply, which records the audit event and the sync change

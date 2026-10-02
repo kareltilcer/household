@@ -15,14 +15,16 @@ var declared = []sync.Entity{
 	{Name: "admin.household_settings", Table: sync.TenantRoot, Policy: sync.StrictVersion, Access: sync.Members,
 		Columns: []string{"id", "name"}},
 	{Name: "admin.membership", Table: "memberships", Policy: sync.StrictVersion, Access: sync.Members},
-	// Item 17's: private, and bounded by an audience.
-	{Name: "notes.note", Table: "notes", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner},
+	// Private to an owner, with a redacted projection, and bounded by an audience.
+	{Name: "notes.note", Table: "notes", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner,
+		Redacted: []string{"id", "household_id", "owner_id", "version"}},
 	{Name: "chat.message", Table: "chat_messages", Policy: sync.Additive, Access: sync.Grant | sync.Audience},
 }
 
 // The grant is two streams, an owner's and a granted member's; every member is one; the tenant root
-// names its household by its own id; an entity's columns are what its stream selects; and the
-// private and the audience's entities reach no replica yet.
+// names its household by its own id; an entity's columns are what its stream selects; a private
+// entity's shared and private rows are streams of their own, and its redacted projection two more;
+// and an audience holds each of its entity's streams to the rows the caller reads.
 func TestStreamsHoldEachEntityToItsAccess(t *testing.T) {
 	streams, err := sync.Streams(declared)
 	if err != nil {
@@ -37,6 +39,14 @@ func TestStreamsHoldEachEntityToItsAccess(t *testing.T) {
 		"shopping_item_granted shopping.item shopping_items,module_grants,module_enablement,households",
 		"admin_household_settings admin.household_settings households,memberships",
 		"admin_membership admin.membership memberships,households",
+		"notes_note_shared_owner notes.note notes,memberships,module_enablement,households",
+		"notes_note_shared_granted notes.note notes,module_grants,module_enablement,households",
+		"notes_note_private_owner notes.note notes,memberships,module_enablement,households",
+		"notes_note_private_granted notes.note notes,module_grants,module_enablement,households",
+		"notes_note_redacted_owner notes.note notes,memberships,module_enablement,households",
+		"notes_note_redacted_granted notes.note notes,module_grants,module_enablement,households",
+		"chat_message_owner chat.message chat_messages,memberships,module_enablement,households",
+		"chat_message_granted chat.message chat_messages,module_grants,module_enablement,households",
 	}
 	if !slices.Equal(names, want) {
 		t.Fatalf("streams\n  %s\nwant\n  %s", strings.Join(names, "\n  "), strings.Join(want, "\n  "))
@@ -56,8 +66,40 @@ func TestStreamsHoldEachEntityToItsAccess(t *testing.T) {
 	if !strings.HasPrefix(streams[2].Query, "SELECT id, name FROM households\nWHERE id = subscription.parameter('household_id')\n  AND id IN (") {
 		t.Errorf("the tenant root's:\n%s", streams[2].Query)
 	}
-	if got := sync.Tables(streams); !slices.Equal(got, []string{"shopping_items", "memberships", "module_enablement", "households", "module_grants"}) {
+	if got := sync.Tables(streams); !slices.Equal(got, []string{"shopping_items", "memberships", "module_enablement", "households", "module_grants",
+		"notes", "chat_messages"}) {
 		t.Errorf("tables %v", got)
+	}
+	byName := map[string]sync.Stream{}
+	for _, s := range streams {
+		byName[s.Name] = s
+	}
+	for name, want := range map[string][]string{
+		// A shared row reaches the grant; a private row its owner alone, by equality with the caller.
+		"notes_note_shared_granted":  {"SELECT * FROM notes\n", "  AND visibility = 'shared'\n"},
+		"notes_note_private_granted": {"SELECT * FROM notes\n", "  AND visibility = 'private'\n  AND owner_id = auth.user_id()\n"},
+		// The redacted projection reaches everyone with the grant, the owner among them, into a table
+		// of its own, and sends only its columns.
+		"notes_note_redacted_owner": {"SELECT id, household_id, owner_id, version FROM notes AS notes_redacted\n",
+			"  AND visibility = 'private'\n  AND household_id IN ("},
+		// A row an audience bounds reaches its readers alone.
+		"chat_message_granted": {"SELECT * FROM chat_messages\n", "  AND auth.user_id() IN readers\n"},
+	} {
+		for _, part := range want {
+			if !strings.Contains(byName[name].Query, part) {
+				t.Errorf("%s does not say %q:\n%s", name, part, byName[name].Query)
+			}
+		}
+	}
+	if q := byName["notes_note_redacted_granted"].Query; strings.Contains(q, "owner_id = auth.user_id()") {
+		t.Errorf("the redacted projection is held to its owner:\n%s", q)
+	}
+	for name, output := range map[string]string{
+		"notes_note_redacted_granted": "notes_redacted", "notes_note_private_owner": "notes", "chat_message_owner": "chat_messages",
+	} {
+		if got := byName[name].Output; got != output {
+			t.Errorf("%s replicates into %s, want %s", name, got, output)
+		}
 	}
 }
 
@@ -138,6 +180,17 @@ func TestTheConfigurationAndTheManifest(t *testing.T) {
 	var entries []map[string]string
 	if err := json.Unmarshal(manifest, &entries); err != nil || len(entries) != 2 ||
 		entries[1]["stream"] != "shopping_item_granted" || entries[1]["entity"] != "shopping.item" || entries[1]["table"] != "shopping_items" {
+		t.Errorf("the manifest: %s %v", manifest, err)
+	}
+	// A redacted projection's streams name the client table they replicate into.
+	redacted, err := sync.Streams(declared[3:4])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest, err = sync.Manifest(redacted); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(manifest, &entries); err != nil || len(entries) != 6 || entries[0]["table"] != "notes" || entries[5]["table"] != "notes_redacted" {
 		t.Errorf("the manifest: %s %v", manifest, err)
 	}
 }

@@ -33,15 +33,21 @@ export const admission: readonly Scenario[] = [
         await petr.credentialNow(),
         f.home.id,
         receipt,
-        new TextEncoder().encode('MZ'),
-        'application/x-msdownload',
+        {
+          bytes: new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]),
+          contentType: 'application/x-msdownload',
+          fileName: 'receipt.exe',
+        },
       )
-      expect(status).toBeGreaterThanOrEqual(400)
+      expect(status).toBe(415)
       expect(await w.settle()).toBe(true)
 
+      // The reason is the refusal's code, which a member's client words as something they can act on.
       const row = (await w.admin.rows('conformance_attachments', f.home)).get(receipt)
-      expect(row).toMatchObject({ attachment_status: 'failed' })
-      expect(String(row?.['failure_reason'])).not.toBe('')
+      expect(row).toMatchObject({
+        attachment_status: 'failed',
+        failure_reason: 'unsupported_media_type',
+      })
       expect(await jana.row('conformance_attachments', receipt)).toMatchObject({
         attachment_status: 'failed',
       })

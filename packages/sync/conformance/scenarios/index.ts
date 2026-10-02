@@ -23,23 +23,38 @@ export const scenarios: readonly Scenario[] = [...merge, ...delivery, ...access,
 )
 
 /**
- * The scenarios switched on: item 13's, whose engine writes the merge policies they test (lww_field,
- * state_set and additive) and replicates through the generated streams; and item 16's, whose engine
- * refuses a household that does not write with a 402 its connector holds, and retracts nothing when it
- * lapses.
+ * The scenarios switched on, which is every one since item 17 (gate G-B): item 13's, whose engine
+ * writes lww_field, state_set and additive and replicates through the generated streams; item 16's,
+ * whose engine refuses a household that does not write with a 402 its connector holds, and retracts
+ * nothing when it lapses; and item 17's, whose engine answers lww_row and strict_version, generates
+ * the visibility and audience streams, rewrites the access a row carries, retracts for each cause of
+ * access loss, and compacts.
  */
 export const enabled: ReadonlySet<string> = new Set<string>([
   '1',
+  '2',
   '3',
   '4',
   '5',
+  '6',
+  '7',
   '8',
   '9',
   '10',
+  '11',
+  '12',
   '13',
+  '13-rotation',
   '14',
   '15',
+  '16',
   '17',
+  '18',
+  'loss-grant',
+  'loss-audience',
+  'loss-private',
+  'loss-removal',
+  'loss-disabled',
   'no-loss-lapse',
   'suspension',
 ])

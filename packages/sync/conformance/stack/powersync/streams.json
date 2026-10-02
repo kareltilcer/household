@@ -105,6 +105,66 @@
     "table": "conformance_item_checks"
   },
   {
+    "stream": "conformance_message_owner",
+    "entity": "conformance.message",
+    "table": "conformance_messages"
+  },
+  {
+    "stream": "conformance_message_granted",
+    "entity": "conformance.message",
+    "table": "conformance_messages"
+  },
+  {
+    "stream": "conformance_note_shared_owner",
+    "entity": "conformance.note",
+    "table": "conformance_notes"
+  },
+  {
+    "stream": "conformance_note_shared_granted",
+    "entity": "conformance.note",
+    "table": "conformance_notes"
+  },
+  {
+    "stream": "conformance_note_private_owner",
+    "entity": "conformance.note",
+    "table": "conformance_notes"
+  },
+  {
+    "stream": "conformance_note_private_granted",
+    "entity": "conformance.note",
+    "table": "conformance_notes"
+  },
+  {
+    "stream": "conformance_note_redacted_owner",
+    "entity": "conformance.note",
+    "table": "conformance_notes_redacted"
+  },
+  {
+    "stream": "conformance_note_redacted_granted",
+    "entity": "conformance.note",
+    "table": "conformance_notes_redacted"
+  },
+  {
+    "stream": "conformance_note_comment_shared_owner",
+    "entity": "conformance.note_comment",
+    "table": "conformance_note_comments"
+  },
+  {
+    "stream": "conformance_note_comment_shared_granted",
+    "entity": "conformance.note_comment",
+    "table": "conformance_note_comments"
+  },
+  {
+    "stream": "conformance_note_comment_private_owner",
+    "entity": "conformance.note_comment",
+    "table": "conformance_note_comments"
+  },
+  {
+    "stream": "conformance_note_comment_private_granted",
+    "entity": "conformance.note_comment",
+    "table": "conformance_note_comments"
+  },
+  {
     "stream": "conformance_reading_owner",
     "entity": "conformance.reading",
     "table": "conformance_readings"

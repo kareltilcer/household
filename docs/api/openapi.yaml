@@ -2076,7 +2076,14 @@ paths:
 
         The HTTP status is `200` whenever the batch was processed at all — **per-mutation outcomes
         are in the body**, and a client must read them rather than the status. Every outcome but
-        `applied` carries a `code`. A mutation is `rejected` when its entity is not one that syncs
+        `applied` carries a `code`. A write to an entity whose merge policy compares versions is held
+        to the `base_version` it carries, the version of the row the client wrote against (D-122):
+        an `lww_field` or `lww_row` write made against an older version than the row is at is applied
+        over the change it had not seen and answered `merged` (`concurrent_change`) with the row, and
+        an `lww_row` write keeps the row it replaced, the loser, for the member to be offered; a
+        `strict_version` update, delete or action names its `base_version`, and one made against
+        another version than the row's is answered `conflict` (`version_conflict`) with the row as it
+        stands, so that the member's change can be re-presented beside it. A mutation is `rejected` when its entity is not one that syncs
         (`validation_failed`), when the caller cannot see the entity's module (`not_found`) or may
         not contribute to it (`forbidden`), when the entity is read-only offline (`forbidden`: its
         merge policy does not yet take offline writes, D-84), when its policy does not take its op
@@ -2088,7 +2095,10 @@ paths:
 
         A batch holds at most 500 mutations: a larger one is refused whole, `413`
         (`batch_too_large`), for the client to send in smaller ones. A device, or a web session,
-        sends at most 60 batches a minute, and is answered `429` past them.
+        sends at most 60 batches a minute, and is answered `429` past them. A household's replicas
+        push at most 100 000 mutations a day, the UTC day, between them (PRD 04 §5, D-127): once they
+        have, a batch is refused whole, `429` (`rate_limited`), its `Retry-After` the end of the day,
+        and its owners were warned once as they passed 80 %.
 
         A household in a state that does not write refuses the batch whole, `402`, and nothing in it
         is applied or kept: the client records each of its mutations `rejected` with the problem's
@@ -2112,8 +2122,14 @@ paths:
     get:
       operationId: getSyncState
       tags: [sync]
-      summary: Sync health for the caller's devices
-      description: Last sync, cursor position, pending mutations and unresolved conflicts per device — the screen that stops sync bugs becoming support tickets.
+      summary: Sync health for the caller's replicas
+      description: |
+        Each of the caller's replicas of the household as it last reported itself
+        (`POST …/sync/digest`): when, the checkpoint it had applied, the mutations it held queued and
+        the conflicts and rejections it had not resolved, its bucket checksum failures, the entity
+        types whose digest disagreed, and whether it is marked to download itself again — the screen
+        that stops sync bugs becoming support tickets (FR-HA19). Under D-93 the server holds no
+        replica's cursor or queue: what it knows of one is what the replica reported (D-125).
       responses:
         '200': { description: State, content: { application/json: { schema: { $ref: '#/components/schemas/SyncState' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -2125,13 +2141,18 @@ paths:
     post:
       operationId: postSyncReset
       tags: [sync]
-      summary: Force a device to re-snapshot
+      summary: Download one of the caller's replicas again
+      description: |
+        Marks one of the caller's replicas of the household to download itself again: answered with
+        `resnapshot_required` at its next report (`POST …/sync/digest`), it waits for its queue to
+        drain, so that no mutation it holds is discarded, then clears its replica and connects afresh,
+        PowerSync sending every bucket whole (D-125). Another member's replica is not found.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [device_id], properties: { device_id: { $ref: '#/components/schemas/Uuid' } } } } }
+        content: { application/json: { schema: { type: object, required: [replica_id], properties: { replica_id: { $ref: '#/components/schemas/Uuid' } } } } }
       responses:
-        '204': { description: The device will re-snapshot on next contact }
+        '204': { description: The replica downloads itself again after its next report }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -2142,20 +2163,31 @@ paths:
     post:
       operationId: postSyncDigest
       tags: [sync]
-      summary: Verify a replica against the server (D-85)
+      summary: A replica's report, verified against the server (D-85)
       description: |
         **The production convergence check.** Divergence between a device's replica and the server
         is the bug class unit tests miss and users never report clearly, because the symptom is
-        "something looked wrong for a while".
+        "something looked wrong for a while". PowerSync verifies each bucket's checksum at every
+        checkpoint, which holds a replica to its buckets; this holds the buckets to PostgreSQL, which
+        a replication fault, or a stream that disagrees with an entity's declared access, would pass
+        every checksum against (D-125).
 
-        The client periodically computes, per entity type, a cheap rolling hash over the
-        `(entity_id, version)` pairs it holds, and posts them here alongside its cursor. The server
-        computes the same hash over what that client **should** hold — the visibility predicate of
-        `GET /sync/changes` applied at `cursor` — and answers per entity type.
+        The client reports its replica periodically, whenever it is at rest, its queue empty and its
+        last checkpoint applied: per entity type, the rows it holds and an order-independent hash
+        over their `(entity_id, version)` pairs; and its health, which the sync-health screen shows
+        (`GET …/sync/state`). The server computes the same over what the caller may see as the report
+        arrives, as the generated streams send it, tombstones included, and answers per entity type.
+        A PowerSync client holds no feed cursor to compute it at, and a household being written to
+        moves under any report, so a mismatch is **divergence** only when the replica's next report,
+        a minute or more later, disagrees again on the same entity type while the server's own hash
+        of it has not moved between the two: rows that held still for a minute, which a replica at
+        rest would have received.
 
-        A mismatch forces a re-snapshot for that device and raises a telemetry event. **Divergence
-        rate is an alerting metric, not a support ticket.** The verdict carries no row data, so this
-        endpoint discloses nothing the caller could not already read.
+        Divergence, or a re-download an owner asked for (`POST …/sync/reset`), is answered
+        `resnapshot_required`: the replica downloads itself again once its queue has drained.
+        **Divergence rate is an alerting metric, not a support ticket.** Neither the report nor the
+        verdict carries row data, so this endpoint discloses nothing the caller could not already
+        read.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -2165,34 +2197,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '410': { description: 'The cursor is below the compaction horizon; re-snapshot without comparing', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-
-  /households/{household_id}/stream:
-    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
-    get:
-      operationId: getStream
-      tags: [sync]
-      summary: WebSocket — change notifications
-      description: |
-        Upgrades to a WebSocket authenticated by the same credential as the API. The default frame
-        is a **nudge** carrying only the sequence the feed has advanced to; the client then pulls.
-        Chat message payloads are the single exception and ride the socket to resolved conversation
-        members.
-
-        Frames are documented as `#/components/schemas/StreamFrame`; this operation exists in the
-        contract so the endpoint is discoverable, and OpenAPI does not describe the socket itself.
-      responses:
-        '101':
-          description: |
-            Switching protocols. Every message the socket then carries is a `StreamFrame`; the
-            schema is referenced here so a generated client gets the frame union as a type.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/StreamFrame' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /households/{household_id}/search:
@@ -8041,9 +8046,9 @@ paths:
       tags: [chat]
       summary: Send a message
       description: |
-        Message payloads are the **single exception** to the nudge-only WebSocket — they ride the
-        socket to resolved conversation members, marshalled once per audience, because a pull
-        round-trip is visible latency in a chat and nowhere else.
+        The message reaches its conversation's members through its stream on PowerSync's
+        connection, as every row does (D-93, D-124): its readers, the members whose floor it is at or
+        above, are written with it.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -9834,10 +9839,13 @@ components:
           type: string
           enum: [applied, merged, conflict, rejected, deferred]
           description: |
-            `applied` — committed. `merged` — committed but the server's row differs from what the
-            client expected. `conflict` — refused on `base_version`; the server's row is attached so
-            the member's change can be re-presented. `rejected` — invalid, unauthorised, or a
-            dangling reference. `deferred` — a dependency earlier in this batch failed.
+            `applied` — committed. `merged` — committed, but over a change the client had not seen:
+            an `lww_field` or `lww_row` write made against an older version than the row's
+            (`concurrent_change`), its row attached, so that a field the member set and another's
+            write overrode can be surfaced. `conflict` — refused on `base_version`; the server's row
+            is attached so the member's change can be re-presented. `rejected` — invalid,
+            unauthorised, or a dangling reference. `deferred` — a dependency earlier in this batch
+            failed.
         version: { type: [integer, 'null'], format: int64 }
         row: { description: 'The canonical representation after the mutation, or the server''s current one on conflict.' }
         code: { type: [string, 'null'] }
@@ -9845,26 +9853,32 @@ components:
 
     SyncMutationBatchResult:
       type: object
-      required: [results, seq]
+      required: [results]
+      description: The answer to each mutation, in the order the batch carried them. Under D-93 no client pulls a feed, so no feed sequence comes with it (D-121).
       properties:
         results: { type: array, items: { $ref: '#/components/schemas/SyncMutationResult' } }
-        seq: { type: integer, format: int64, description: 'The feed sequence after this batch: the household''s latest change once the batch is answered. Plan item 17 decides its fate, since under D-93 no client pulls the feed.' }
 
     ReplicaDigest:
       type: object
-      required: [device_id, cursor, entries]
-      description: What one device believes it holds, as hashes only. No row data is sent.
+      required: [replica_id, checkpoint, entries, health]
+      description: What one replica believes it holds, as hashes only, and its health. No row data is sent.
       properties:
-        device_id: { $ref: '#/components/schemas/Uuid' }
-        cursor:
-          type: integer
-          format: int64
-          description: The sequence the digest was taken at. The server compares against this point, not against now.
+        replica_id: { $ref: '#/components/schemas/Uuid' }
+        checkpoint:
+          type: string
+          description: The checkpoint the replica last applied, as PowerSync names it, which the sync-health screen shows (FR-HA19). The server compares against what the caller may see as the report arrives (D-125).
         algorithm:
           type: string
           enum: [xxh3-64]
           default: xxh3-64
-          description: Named so it can be changed without guessing what an old client sent.
+          description: 'Named so it can be changed without guessing what an old client sent: each pair''s hash is the xxh3-64 of `<entity_id>:<version>`, and an entry''s is their sum modulo 2^64.'
+        health:
+          type: object
+          required: [pending_mutations, unresolved, checksum_failures]
+          properties:
+            pending_mutations: { type: integer, minimum: 0, description: The mutations the replica holds queued or held to replay. }
+            unresolved: { type: integer, minimum: 0, description: The conflicts and rejections the member has not resolved. }
+            checksum_failures: { type: integer, minimum: 0, description: The bucket checksums PowerSync found failing since the replica last reported. }
         entries:
           type: array
           maxItems: 200
@@ -9884,8 +9898,10 @@ components:
         resnapshot_required:
           type: boolean
           description: |
-            When true the device must re-bootstrap through `POST …/sync/snapshot`. The server has
-            already marked it, so `GET …/sync/state` will report `needs_resnapshot` for it too.
+            When true the replica downloads itself again: once its queue has drained it clears its
+            replica and connects afresh, PowerSync sending every bucket whole. The server has marked
+            it, divergent or asked for (`POST …/sync/reset`), so `GET …/sync/state` reports
+            `needs_resnapshot` for it until it reports again.
         entries:
           type: array
           items:
@@ -9898,24 +9914,22 @@ components:
 
     SyncState:
       type: object
-      description: When offline-first goes wrong, this is the screen that tells a member why — and its absence is why sync bugs become support tickets.
+      description: When offline-first goes wrong, this is the screen that tells a member why — and its absence is why sync bugs become support tickets. Each of the caller's replicas as it last reported itself (D-125).
       properties:
-        compaction_horizon: { type: integer, format: int64 }
-        current_seq: { type: integer, format: int64 }
-        devices:
+        replicas:
           type: array
           items:
             type: object
             properties:
-              device_id: { $ref: '#/components/schemas/Uuid' }
-              label: { type: string }
-              cursor: { type: [integer, 'null'], format: int64 }
-              behind_by: { type: integer }
-              last_sync_at: { type: [string, 'null'], format: date-time }
+              replica_id: { $ref: '#/components/schemas/Uuid' }
+              device_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }], description: The device the replica reported from; null for a web session's. }
+              label: { type: string, description: 'The device''s label, or the browser''s.' }
+              checkpoint: { type: [string, 'null'], description: The checkpoint it had applied when it last reported. }
+              last_report_at: { type: [string, 'null'], format: date-time, description: When it last reported through `POST …/sync/digest`. }
               pending_mutations: { type: integer }
               unresolved_conflicts: { type: integer }
+              checksum_failures: { type: integer, description: 'The bucket checksums PowerSync found failing, as its last report said.' }
               needs_resnapshot: { type: boolean }
-              last_digest_at: { type: [string, 'null'], format: date-time, description: When this device last verified its replica through `POST …/sync/digest`. }
               digest_mismatch_entity_types:
                 type: array
                 items: { type: string }
@@ -9923,34 +9937,6 @@ components:
                   Entity types whose replica hash disagreed at the last check (D-85). Empty is the
                   healthy state. It is metadata — no row values — which is why the diagnostic
                   bundle can carry it.
-
-    StreamFrame:
-      type: object
-      description: |
-        What the WebSocket carries. The default is a **nudge** — the feed has advanced, pull it.
-        Chat messages are the single exception and carry their payload.
-      oneOf:
-        - type: object
-          required: [type, seq]
-          properties:
-            type: { const: sync_nudge }
-            seq: { type: integer, format: int64 }
-        - type: object
-          required: [type, conversation_id, message]
-          properties:
-            type: { const: chat_message }
-            conversation_id: { $ref: '#/components/schemas/Uuid' }
-            message: { $ref: '#/components/schemas/Message' }
-        - type: object
-          required: [type, state]
-          properties:
-            type: { const: entitlement_changed }
-            state: { $ref: '#/components/schemas/EntitlementState' }
-        - type: object
-          required: [type, grants]
-          properties:
-            type: { const: access_changed }
-            grants: { type: object, additionalProperties: { $ref: '#/components/schemas/AccessLevel' } }
 
     SearchHit:
       type: object

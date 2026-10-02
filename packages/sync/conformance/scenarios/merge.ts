@@ -5,6 +5,7 @@ import {
   answersOf,
   eventsAbout,
   family,
+  fieldHistory,
   offline,
   online,
   staysQuiet,
@@ -49,7 +50,8 @@ export const merge: readonly Scenario[] = [
     title: 'Two clients offline edit the same field',
     expected:
       'One wins by server receipt; the loser is surfaced, not silently dropped: the later write answers merged, ' +
-      'carrying the row, and the earlier value is not what either replica ends with',
+      'carrying the row, the earlier value is not what either replica ends with, and the activity log keeps it as ' +
+      'the value the later write replaced (D-122)',
     enabledBy: 17,
     needs: ['conformance.item'],
     async run(w) {
@@ -74,6 +76,11 @@ export const merge: readonly Scenario[] = [
       expect(won?.outcome).toBe('merged')
       expect(won?.row).toMatchObject({ title: 'Soy milk' })
       expect((await eva.outcomes()).map((o) => o.outcome)).toEqual(['merged'])
+      // Petr's value is not lost: the log keeps it, the one Eva's write replaced.
+      expect(await fieldHistory(w, f.home, f.milk, 'title')).toEqual([
+        { old: 'Milk', new: 'Oat milk' },
+        { old: 'Oat milk', new: 'Soy milk' },
+      ])
     },
   },
   {

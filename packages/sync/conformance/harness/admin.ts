@@ -1,10 +1,13 @@
 // The server's side of a run, as the database's administrator: households seeded for a scenario,
 // the access changes a scenario makes, and the truth every replica is compared against.
 //
-// The access changes are written here directly, as the spike's harness wrote them, standing in
-// for the routes item 10 built: the conformance module is not among the contract's
+// A grant and a module's enablement are written here directly, as the spike's harness wrote them,
+// standing in for the routes item 10 built: the conformance module is not among the contract's
 // ModuleKeyValue, so those routes cannot grant it. A stream reads the tables they write whichever
-// path wrote them, so a replica follows either the same way.
+// path wrote them, so a replica follows either the same way. The access a row carries, an audience's
+// readers and a private note's visibility, the server rewrites itself (ADR 0018), as a removal from
+// the household takes its member out of every audience: those a scenario makes through the server
+// (World), never here.
 
 import { randomInt } from 'node:crypto'
 import pg from 'pg'
@@ -196,7 +199,11 @@ export class Admin {
     )
   }
 
-  /** Removes member from household (FR-HH5); their grants go with the membership. */
+  /**
+   * Removes member from household (FR-HH5) as the administrator, past item 10's route and the hook it
+   * runs; their grants go with the membership. A scenario removes a member through the route
+   * (World.removeMember).
+   */
   async remove(household: Household, member: Member): Promise<void> {
     await this.pool.query('DELETE FROM memberships WHERE household_id = $1 AND user_id = $2', [
       household.id,
@@ -205,8 +212,8 @@ export class Admin {
   }
 
   /**
-   * A conversation of household whose members join it at the floors given, each the household's
-   * feed sequence at which they joined (D-90), 0 for the start.
+   * A conversation of household whose members join it at the floors given, each the place in the
+   * conversation of the first message they read (D-90), 0 for the start.
    */
   async conversation(
     rng: Rng,
@@ -232,8 +239,8 @@ export class Admin {
   }
 
   /**
-   * A message at seq in conversation, whose readers are the members whose floor it is at or above,
-   * as item 17's mutation will write them (ADR 0001).
+   * A message at seq in conversation, whose readers are the members whose floor it is at or above, as
+   * the server's own write of a message gives them (ADR 0001): a scenario's starting state.
    */
   async message(
     rng: Rng,
@@ -246,30 +253,10 @@ export class Admin {
     await this.pool.query(
       `INSERT INTO conformance_messages (id, household_id, conversation_id, seq, body, readers)
        SELECT $1, $2, $3, $4, $5, coalesce(array_agg(user_id), '{}')
-       FROM conformance_conversation_members WHERE conversation_id = $3 AND floor_seq <= $4`,
+       FROM conformance_conversation_members WHERE conversation_id = $3 AND floor_seq <= $4 AND deleted_at IS NULL`,
       [id, household.id, conversation, seq, body],
     )
     return id
-  }
-
-  /** Takes member out of conversation and out of the readers of every message in it (ADR 0001). */
-  async leaveConversation(conversation: string, member: Member): Promise<void> {
-    await this.pool.query(
-      'UPDATE conformance_messages SET readers = array_remove(readers, $2::uuid) WHERE conversation_id = $1',
-      [conversation, member.id],
-    )
-    await this.pool.query(
-      'DELETE FROM conformance_conversation_members WHERE conversation_id = $1 AND user_id = $2',
-      [conversation, member.id],
-    )
-  }
-
-  /** Makes a shared note private to owner, which retracts it from everyone else (PRD 03 §2.6). */
-  async makePrivate(note: string, owner: Member): Promise<void> {
-    await this.pool.query(
-      `UPDATE conformance_notes SET visibility = 'private', owner_id = $2 WHERE id = $1`,
-      [note, owner.id],
-    )
   }
 
   /** Rows as the administrator inserts them, past the push: a scenario's starting state. */
@@ -308,23 +295,34 @@ export class Admin {
     )
   }
 
-  /** How many audit events and feed changes household has: what a replayed batch must not add to. */
-  async history(household: Household): Promise<{ events: number; changes: number }> {
+  /** How many audit events household has: what a replayed batch must not add to. */
+  async history(household: Household): Promise<{ events: number }> {
     const events = await this.pool.query<{ n: string }>(
       'SELECT count(*) AS n FROM audit_events WHERE household_id = $1',
       [household.id],
     )
-    const changes = await this.pool.query<{ n: string }>(
-      'SELECT count(*) AS n FROM sync_changes WHERE household_id = $1',
-      [household.id],
+    return { events: Number(events.rows[0]?.n ?? 0) }
+  }
+
+  /** The id and the version of member's membership of conversation, which a removal is made against. */
+  async conversationMember(
+    conversation: string,
+    member: Member,
+  ): Promise<{ id: string; version: number }> {
+    const result = await this.pool.query<{ id: string; version: string }>(
+      'SELECT id, version FROM conformance_conversation_members WHERE conversation_id = $1 AND user_id = $2',
+      [conversation, member.id],
     )
-    return { events: Number(events.rows[0]?.n ?? 0), changes: Number(changes.rows[0]?.n ?? 0) }
+    const row = result.rows[0]
+    if (row === undefined) throw new Error(`${member.name} is not in conversation ${conversation}`)
+    return { id: row.id, version: Number(row.version) }
   }
 
   /**
    * The rows of table member may see in household (PRD 03 §2.3): a conformance module's row while
-   * the module is enabled, to an owner, or to a member whose grant is above none; a private note
-   * only to its owner, and its redacted form to everyone with the grant; a message to its readers.
+   * the module is enabled, to an owner, or to a member whose grant is above none; a private note, and
+   * a comment on one, only to its owner, and the note's redacted form to everyone with the grant; a
+   * message to its readers.
    * Admin's (PRD modules/17 Sync): the household's settings, its memberships and which modules it
    * enables to every member, whatever their grant; its invitations as a module's rows, admin's
    * grant holding them. Nothing of a suspended household (PRD 04 §3, D-115). Tombstones are the
@@ -354,7 +352,7 @@ export class Admin {
     ]
     if (tombstones === 'dropped') conditions.push('t.deleted_at IS NULL')
     if (where !== null) conditions.push(`(${where})`)
-    if (table === 'conformance_notes')
+    if (table === 'conformance_notes' || table === 'conformance_note_comments')
       conditions.push(`(t.visibility = 'shared' OR t.owner_id = $2)`)
     if (table === 'conformance_messages') conditions.push('$2 = ANY (t.readers)')
     const result = await this.pool.query<Record<string, unknown>>(

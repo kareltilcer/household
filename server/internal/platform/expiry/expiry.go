@@ -38,6 +38,9 @@ const (
 	// Steps is how long a sign-in's second step and a provider's sign-in are kept past their end or
 	// their expiry, for the same answer.
 	Steps = 24 * time.Hour
+	// UsageDays is how many UTC days past one the count of a household's pushed mutations on it is
+	// kept: the fair-use ceiling reads only the day it is, and a week is what support asks about.
+	UsageDays = 7
 )
 
 // Querier runs a query: the meter role's pool.
@@ -115,6 +118,12 @@ var (
 			"SELECT DISTINCT household_id FROM sync_mutations WHERE created_at < now() - make_interval(secs => $1)",
 			"DELETE FROM sync_mutations WHERE household_id = $1 AND created_at < now() - make_interval(secs => $2)",
 			[]any{Keys.Seconds()}},
+		// The count of a household's pushed mutations on a UTC day, which the fair-use ceiling of a day
+		// reads only for the day it is (item 17), a week after it.
+		{"pushed mutations' days",
+			"SELECT DISTINCT household_id FROM sync_usage WHERE day < (now() AT TIME ZONE 'UTC')::date - $1::integer",
+			"DELETE FROM sync_usage WHERE household_id = $1 AND day < (now() AT TIME ZONE 'UTC')::date - $2::integer",
+			[]any{UsageDays}},
 		// What a notification said, past the seven days its delivery kept it for (FR-HA12): the
 		// outcome is kept for as long as the household is.
 		{"notification bodies",

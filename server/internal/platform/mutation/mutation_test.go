@@ -183,18 +183,16 @@ func create(ctx context.Context, id uuid.UUID, title string) func(pgx.Tx) (mutat
 	}
 }
 
-// written counts what a mutation of the spine item id left behind: the item, its audit events
-// and its changes.
-func (w *world) written(id uuid.UUID) (items, events, changes int) {
+// written counts what a mutation of the spine item id left behind: the item and its audit events.
+func (w *world) written(id uuid.UUID) (items, events int) {
 	w.t.Helper()
 	return w.count("SELECT count(*) FROM spine_items WHERE id = $1", id),
-		w.count("SELECT count(*) FROM audit_events WHERE entity_id = $1", id),
-		w.count("SELECT count(*) FROM sync_changes WHERE entity_id = $1", id)
+		w.count("SELECT count(*) FROM audit_events WHERE entity_id = $1", id)
 }
 
-// The row, its audit event with its diff, and its change commit together, with the actor, how
-// the change arrived, and the feed's authorising fields.
-func TestApplyWritesTheRowTheEventAndTheChange(t *testing.T) {
+// The row and its audit event with its diff commit together, with the actor and how the change
+// arrived; and the change feed, which nothing reads under D-93, is no longer written (D-121).
+func TestApplyWritesTheRowAndTheEvent(t *testing.T) {
 	w := newWorld(t)
 	h, u := w.member()
 	id := idgen.New()
@@ -205,8 +203,8 @@ func TestApplyWritesTheRowTheEventAndTheChange(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if items, events, changes := w.written(id); items != 1 || events != 1 || changes != 1 {
-		t.Fatalf("wrote %d items, %d events, %d changes; want one of each", items, events, changes)
+	if items, events := w.written(id); items != 1 || events != 1 {
+		t.Fatalf("wrote %d items, %d events; want one of each", items, events)
 	}
 
 	var (
@@ -226,21 +224,8 @@ func TestApplyWritesTheRowTheEventAndTheChange(t *testing.T) {
 	if createdBy != u || version != 1 || actor != u || actorType != "user" || via != "web" || argTitle != "Milk" || string(diff) != `"Milk"` {
 		t.Fatalf("created_by %s version %d, actor %s %s via %s, args title %q, diff %s", createdBy, version, actor, actorType, via, argTitle, diff)
 	}
-
-	var (
-		seq        int64
-		op, module string
-		rowVersion int64
-		changeBy   uuid.UUID
-		payload    map[string]any
-	)
-	if err := w.admin.QueryRow(t.Context(), `
-		SELECT seq, op::text, module, row_version, actor_id, payload FROM sync_changes WHERE entity_id = $1`, id,
-	).Scan(&seq, &op, &module, &rowVersion, &changeBy, &payload); err != nil {
-		t.Fatal(err)
-	}
-	if seq != res.Seq || op != "upsert" || module != "spine" || rowVersion != 1 || changeBy != u || payload["title"] != "Milk" {
-		t.Fatalf("change seq %d (result %d) %s %s version %d by %s payload %v", seq, res.Seq, op, module, rowVersion, changeBy, payload)
+	if n := w.count("SELECT count(*) FROM sync_changes WHERE household_id = $1", h); n != 0 {
+		t.Fatalf("the spine wrote %d rows of the change feed, which it writes no longer", n)
 	}
 }
 
@@ -304,16 +289,16 @@ func TestADiffOfNoValueIsNull(t *testing.T) {
 	}
 }
 
-// A mutation's writes, its event and its change roll back together: when the mutation fails,
-// when its event cannot be recorded, and when its change cannot be written after the event was.
+// A mutation's writes, its event and its change roll back together: when the mutation fails, when
+// its event cannot be recorded, and when its change's row does not serialise, or serialises to null.
 func TestApplyRollsBackTogether(t *testing.T) {
 	w := newWorld(t)
 	h, u := w.member()
 	for name, spoil := range map[string]func(*mutation.Record) error{
-		"the mutation fails":           func(*mutation.Record) error { return errors.New("refused") },
-		"the event cannot be recorded": func(r *mutation.Record) error { r.Event.Meta = map[string]any{"bad": make(chan int)}; return nil },
-		"the change cannot be written": func(r *mutation.Record) error { r.Changes[0].Row = make(chan int); return nil },
-		"the change's row is nil":      func(r *mutation.Record) error { r.Changes[0].Row = (*struct{})(nil); return nil },
+		"the mutation fails":                    func(*mutation.Record) error { return errors.New("refused") },
+		"the event cannot be recorded":          func(r *mutation.Record) error { r.Event.Meta = map[string]any{"bad": make(chan int)}; return nil },
+		"the change's row cannot be serialised": func(r *mutation.Record) error { r.Changes[0].Row = make(chan int); return nil },
+		"the change's row is nil":               func(r *mutation.Record) error { r.Changes[0].Row = (*struct{})(nil); return nil },
 	} {
 		t.Run(name, func(t *testing.T) {
 			id := idgen.New()
@@ -329,8 +314,8 @@ func TestApplyRollsBackTogether(t *testing.T) {
 					t.Error("Apply succeeded")
 				}
 			})
-			if items, events, changes := w.written(id); items+events+changes != 0 {
-				t.Fatalf("left %d items, %d events, %d changes", items, events, changes)
+			if items, events := w.written(id); items+events != 0 {
+				t.Fatalf("left %d items, %d events", items, events)
 			}
 		})
 	}
@@ -358,8 +343,8 @@ func TestApplyRefusesAHalfRecord(t *testing.T) {
 					t.Error("Apply succeeded")
 				}
 			})
-			if items, events, changes := w.written(id); items+events+changes != 0 {
-				t.Fatalf("left %d items, %d events, %d changes", items, events, changes)
+			if items, events := w.written(id); items+events != 0 {
+				t.Fatalf("left %d items, %d events", items, events)
 			}
 		})
 	}
@@ -415,7 +400,7 @@ func TestApplyRollsBackAMutationThatReportsNothing(t *testing.T) {
 	if n := w.count("SELECT count(*) FROM spine_items WHERE id = $1 AND title = 'Milk' AND version = 1", existing); n != 1 {
 		t.Fatal("an update or a delete reported as nothing was committed")
 	}
-	if items, _, _ := w.written(inserted); items != 0 {
+	if items, _ := w.written(inserted); items != 0 {
 		t.Fatal("an insert reported as nothing was committed")
 	}
 }
@@ -482,11 +467,9 @@ func TestApplyChecksTheRecordAgainstTheModules(t *testing.T) {
 			r.Changes[0].Entity, r.Changes[0].Visibility, r.Changes[0].Owner = "spine.note", sync.Private, u
 			r.Event.Visibility, r.Event.Owner = audit.Private, idgen.New()
 		},
-		"an audience it has none of": func(r *mutation.Record) { r.Changes[0].Audience = idgen.New() },
-		"a row on a delete":          func(r *mutation.Record) { r.Changes[0].Op = sync.Delete },
-		"a retraction to no one": func(r *mutation.Record) {
-			r.Changes[0].Op, r.Changes[0].Row, r.Changes[0].Version = sync.Retract, nil, 0
-		},
+		"a row on a delete":         func(r *mutation.Record) { r.Changes[0].Op = sync.Delete },
+		"no version":                func(r *mutation.Record) { r.Changes[0].Version = 0 },
+		"an op of its own":          func(r *mutation.Record) { r.Changes[0].Op = "retract" },
 		"an event with a bad level": func(r *mutation.Record) { r.Event.Level = "loud" },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -501,14 +484,14 @@ func TestApplyChecksTheRecordAgainstTheModules(t *testing.T) {
 					t.Error("Apply succeeded")
 				}
 			})
-			if items, events, changes := w.written(id); items+events+changes != 0 {
-				t.Fatalf("left %d items, %d events, %d changes", items, events, changes)
+			if items, events := w.written(id); items+events != 0 {
+				t.Fatalf("left %d items, %d events", items, events)
 			}
 		})
 	}
 
 	// A private row of an entity that may have them, with its owner, in an event private to them,
-	// is written as such.
+	// is written.
 	id := idgen.New()
 	w.in(h, u, func(ctx context.Context) {
 		_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
@@ -521,8 +504,8 @@ func TestApplyChecksTheRecordAgainstTheModules(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if n := w.count("SELECT count(*) FROM sync_changes WHERE entity_id = $1 AND visibility = 'private' AND owner_id = $2", id, u); n != 1 {
-		t.Fatalf("%d private changes, want 1", n)
+	if n := w.count("SELECT count(*) FROM audit_events WHERE entity_id = $1 AND visibility = 'private' AND owner_id = $2", id, u); n != 1 {
+		t.Fatalf("%d private events, want 1", n)
 	}
 }
 
@@ -560,7 +543,7 @@ func TestReadsCannotWrite(t *testing.T) {
 			t.Errorf("a write through InTx: %v, want read_only_sql_transaction", err)
 		}
 	})
-	if items, _, _ := w.written(id); items != 0 {
+	if items, _ := w.written(id); items != 0 {
 		t.Fatal("a write through InTx was written")
 	}
 }
@@ -600,17 +583,14 @@ func TestAnUpdateGrowsTheVersion(t *testing.T) {
 		version              int64
 		createdBy, updatedBy uuid.UUID
 		createdEarlier       bool
-		rowVersions          []int64
 	)
 	if err := w.admin.QueryRow(t.Context(), `
-		SELECT version, created_by, updated_by, created_at < updated_at,
-		  array(SELECT row_version FROM sync_changes WHERE entity_id = $1 ORDER BY seq)
-		FROM spine_items WHERE id = $1`, id).Scan(&version, &createdBy, &updatedBy, &createdEarlier, &rowVersions); err != nil {
+		SELECT version, created_by, updated_by, created_at < updated_at FROM spine_items WHERE id = $1`, id).
+		Scan(&version, &createdBy, &updatedBy, &createdEarlier); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 || createdBy != u || updatedBy != editor || !createdEarlier || len(rowVersions) != 2 || rowVersions[1] != 2 {
-		t.Fatalf("version %d, created by %s, updated by %s, created before the update %v, change versions %v",
-			version, createdBy, updatedBy, createdEarlier, rowVersions)
+	if version != 2 || createdBy != u || updatedBy != editor || !createdEarlier {
+		t.Fatalf("version %d, created by %s, updated by %s, created before the update %v", version, createdBy, updatedBy, createdEarlier)
 	}
 }
 
@@ -641,61 +621,6 @@ func TestTheBaseColumnsScanIntoBase(t *testing.T) {
 		t.Fatalf("created by %v, updated by %v; want %s, and nobody for the administrator's update", b.CreatedBy, b.UpdatedBy, u)
 	case !b.Deleted() || !b.DeletedAt.Equal(b.CreatedAt.Add(time.Hour)) || b.UpdatedAt.Before(b.CreatedAt):
 		t.Fatalf("created %s, updated %s, deleted %v", b.CreatedAt, b.UpdatedAt, b.DeletedAt)
-	}
-}
-
-// A household's changes become visible in seq order: while one mutation holds the household's
-// feed lock, uncommitted, another of the same household waits to draw its seq, and so commits
-// after it with a greater one, where without the lock a pull could read the later seq first and
-// step past the earlier for good. Another household's mutation does not wait.
-func TestAHouseholdsChangesCommitInSeqOrder(t *testing.T) {
-	w := newWorld(t)
-	h, u := w.member()
-	h2, u2 := w.member()
-	paused, release := make(chan struct{}), make(chan struct{})
-	var seqA, seqB int64
-	doneA, doneB := make(chan struct{}), make(chan struct{})
-	go func() {
-		defer close(doneA)
-		w.in(h, u, func(ctx context.Context) {
-			ctx = mutation.WithBeforeCommit(ctx, func() { close(paused); <-release })
-			res, err := mutation.Apply(ctx, create(ctx, idgen.New(), "first"))
-			if err != nil {
-				t.Error(err)
-			}
-			seqA = res.Seq
-		})
-	}()
-	select {
-	case <-paused:
-	case <-doneA:
-		t.Fatal("the first mutation ended without reaching its commit")
-	}
-	go func() {
-		defer close(doneB)
-		w.in(h, u, func(ctx context.Context) {
-			res, err := mutation.Apply(ctx, create(ctx, idgen.New(), "second"))
-			if err != nil {
-				t.Error(err)
-			}
-			seqB = res.Seq
-		})
-	}()
-	w.in(h2, u2, func(ctx context.Context) {
-		if _, err := mutation.Apply(ctx, create(ctx, idgen.New(), "elsewhere")); err != nil {
-			t.Error(err)
-		}
-	})
-	select {
-	case <-doneB:
-		t.Error("the second mutation committed while the first held the household's feed lock")
-	case <-time.After(300 * time.Millisecond):
-	}
-	close(release)
-	<-doneA
-	<-doneB
-	if seqB <= seqA {
-		t.Fatalf("the second mutation drew seq %d, the first %d", seqB, seqA)
 	}
 }
 
@@ -745,8 +670,8 @@ func TestAMutationCommitsItsIdempotencyKey(t *testing.T) {
 		!strings.Contains(rec.Body.String(), `"code":"idempotency_in_progress"`) {
 		t.Fatalf("a request whose key was taken over answered %d %s", rec.Code, rec.Body)
 	}
-	if items, events, changes := w.written(c); items+events+changes != 0 {
-		t.Fatalf("a mutation whose key was taken over left %d items, %d events, %d changes", items, events, changes)
+	if items, events := w.written(c); items+events != 0 {
+		t.Fatalf("a mutation whose key was taken over left %d items, %d events", items, events)
 	}
 	if n := w.count("SELECT count(*) FROM idempotency_keys WHERE household_id = $1 AND key = 'lost' AND state = 'in_flight'", h); n != 1 {
 		t.Fatal("the request whose key was taken over released it from the request that took it")
@@ -842,12 +767,10 @@ func TestAnInformationalResponseIsNotTheOneStored(t *testing.T) {
 	}
 }
 
-// A mutation holding the household's feed lock waits on no row another mutation may hold: the
-// key is marked committed before the lock is taken. Here the owner removes a member, whose
-// membership takes their Idempotency-Keys with it, while that member's own keyed request is
-// committing; the removal commits, and the member's request finds its key gone, rather than
-// the two waiting on each other until PostgreSQL aborts one as a deadlock.
-func TestAKeyIsCommittedOutsideTheFeedLock(t *testing.T) {
+// A member removed while their own keyed request is committing: the owner's removal, whose
+// membership takes the member's Idempotency-Keys with it, commits, and the member's request finds
+// its key gone, rather than the two waiting on each other until PostgreSQL aborts one as a deadlock.
+func TestARemovalTakesTheKeyOfARequestCommitting(t *testing.T) {
 	w := newWorld(t)
 	h, owner := w.member()
 	member := idgen.New()
@@ -879,7 +802,7 @@ func TestAKeyIsCommittedOutsideTheFeedLock(t *testing.T) {
 				return mutation.Record{}, err
 			}
 			// The member's key is locked now, with their membership. Their request goes on to
-			// commit, and waits on it; this one then takes the feed lock.
+			// commit, and waits on it.
 			close(removing)
 			time.Sleep(300 * time.Millisecond)
 			return create(ctx, id, "Removed")(tx)

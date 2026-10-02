@@ -32,6 +32,10 @@ const (
 	Objects    = 100_000
 )
 
+// SyncMutations is the mutations a household's replicas may push on one UTC day (PRD 04 §5): a
+// ceiling on a rate, which the push answers 429 past, until the day ends (D-127).
+const SyncMutations = 100_000
+
 // The resources a refusal and a warning name, as the contract's FairUseProblem spells them.
 const (
 	ResourceMembers = "members"
@@ -84,6 +88,28 @@ func Notice(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UU
 		ns = append(ns, notify.Notification{
 			To: o, Category: notify.Household, Message: message, Args: args,
 			Link: "/households/" + household.String(), Coalesce: "fair_use:" + resource + ":" + module,
+		})
+	}
+	return n.Queue(ctx, tx, ns...)
+}
+
+// syncMessage is the push that warns a household's owners of the mutations its replicas pushed today.
+const syncMessage = "notification.fair_use_sync"
+
+// SyncNotice queues, in tx in household's context, the push that tells each of its owners its
+// replicas pushed count mutations today, 80 % of SyncMutations or more: once a day, where the count
+// crosses it (Crossed). The caller nudges n once tx commits.
+func SyncNotice(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UUID, count int64) error {
+	owners, err := tenant.Owners(ctx, tx, household)
+	if err != nil {
+		return err
+	}
+	args := i18n.Args{"held": count, "ceiling": int64(SyncMutations)}
+	ns := make([]notify.Notification, 0, len(owners))
+	for _, o := range owners {
+		ns = append(ns, notify.Notification{
+			To: o, Category: notify.Household, Message: syncMessage, Args: args,
+			Link: "/households/" + household.String(), Coalesce: "fair_use:sync_mutations",
 		})
 	}
 	return n.Queue(ctx, tx, ns...)

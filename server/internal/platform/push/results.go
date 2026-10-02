@@ -32,9 +32,10 @@ type Result struct {
 	Message    *string   `json:"message"`
 }
 
-// The outcomes of a mutation (PRD 03 §2.4). This item's push answers applied, rejected and
-// deferred, and conflict when a module refuses a mutation on its row's version; merged, and the
-// policies that merge or conflict on a base version, are item 17's.
+// The outcomes of a mutation (PRD 03 §2.4): applied; merged, an lww_field or lww_row write applied
+// over a row another write changed since the client saw it (Mutation.Behind); conflict, a write
+// refused on its row's version, strict_version's (Mutation.Admit) or a module's own; rejected; and
+// deferred.
 const (
 	Applied  = "applied"
 	Merged   = "merged"

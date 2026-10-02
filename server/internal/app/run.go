@@ -41,6 +41,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/scheduler"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/storage"
+	syncs "github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
 // Served is what the API Run serves is built from, for an Around to reach.
@@ -49,10 +50,17 @@ type Served struct {
 	Pool *pgxpool.Pool
 	// Devices are the devices' sign-ins, whose access tokens the API authenticates.
 	Devices *device.Store
+	// Files is the files pipeline, which every upload goes through.
+	Files *files.Service
+	// Catalog is the module registry with the platform's own, which every mutation is checked against.
+	Catalog *module.Registry
+	// Log is the API's logger.
+	Log *slog.Logger
 }
 
-// Around is what a command adds around the API it serves: the conformance suite's own sign-in, for
-// one (cmd/conformance-api). It returns the handler to serve in place of router.
+// Around is what a command adds around the API it serves: the conformance suite's own sign-in and its
+// attachments' uploads, for one (cmd/conformance-api). It returns the handler to serve in place of
+// router.
 type Around func(router http.Handler, s Served) (http.Handler, error)
 
 // Run serves the API for cfg, with the modules registry holds, until ctx ends: the platform, the
@@ -84,16 +92,17 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	if err != nil {
 		return err
 	}
-	background := identity.NewBackground(log, 4, 1024, time.Minute)
-	accounts, households, notifier, closeAccounts, err := newAccounts(ctx, cfg, log, pool, meter, background, avatars)
-	if err != nil {
-		return err
-	}
-	defer closeAccounts()
 	catalog, err := registry.WithPlatform(household.Admin())
 	if err != nil {
 		return err
 	}
+	background := identity.NewBackground(log, 4, 1024, time.Minute)
+	accounts, households, notifier, closeAccounts, err := newAccounts(ctx, cfg, log, pool, meter, background, avatars,
+		household.Hooks{Lost: Retract(catalog)})
+	if err != nil {
+		return err
+	}
+	defer closeAccounts()
 	jobs, err := newScheduler(log, pool, meter, registry, catalog, pipeline, avatars, households, notifier)
 	if err != nil {
 		return err
@@ -122,7 +131,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	}
 	var handler http.Handler = router
 	if around != nil {
-		if handler, err = around(router, Served{Pool: pool, Devices: accounts.Devices}); err != nil {
+		if handler, err = around(router, Served{Pool: pool, Devices: accounts.Devices, Files: pipeline, Catalog: catalog, Log: log}); err != nil {
 			return err
 		}
 	}
@@ -192,10 +201,10 @@ func newFiles(ctx context.Context, cfg *config.Config, log *slog.Logger, pool, m
 }
 
 // newAccounts builds the account surfaces (items 8 and 9) from cfg, the notification transport (item
-// 15), and the household surface (item 10), which sends what it tells people through it, and returns
-// what closes them.
+// 15), and the household surface (item 10) with hooks, which sends what it tells people through it,
+// and returns what closes them.
 func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool,
-	background *identity.Background, avatars *avatar.Service,
+	background *identity.Background, avatars *avatar.Service, hooks household.Hooks,
 ) (Accounts, *household.Service, *notify.Service, func(), error) {
 	closeAll := func() {}
 	catalogs, err := i18n.Default()
@@ -254,7 +263,7 @@ func newAccounts(ctx context.Context, cfg *config.Config, log *slog.Logger, pool
 		return Accounts{}, nil, nil, closeAll, err
 	}
 	households, err := household.New(household.Config{
-		Pool: pool, Log: log, Throttles: throttles, Notify: notifier, WebURL: cfg.WebURL, Accounts: id,
+		Pool: pool, Log: log, Throttles: throttles, Notify: notifier, WebURL: cfg.WebURL, Accounts: id, Hooks: hooks,
 	})
 	if err != nil {
 		return Accounts{}, nil, nil, closeAll, err
@@ -303,8 +312,9 @@ const (
 // sweeps of the objects no row records, a household's and the accounts' pictures (item 14), and the
 // expiry sweep; hourly, the expiry of single-use tokens and of the invitations that stopped working a
 // month ago (D-110), and the households' trial, dunning and grace transitions with the warnings before
-// a lapsed household's data is deleted (item 16); and every fifteen minutes, Expo's receipts. Each is
-// a job of its own, so that one that fails is tried again alone, not with the others that ran.
+// a lapsed household's data is deleted (item 16); every fifteen minutes, Expo's receipts; and every
+// minute, PowerSync's replication lag (item 17). Each is a job of its own, so that one that fails is
+// tried again alone, not with the others that ran.
 // catalog is the module registry with admin, which the invitations' deletions and the transitions are
 // checked against.
 func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog *module.Registry, pipeline *files.Service,
@@ -334,5 +344,8 @@ func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog
 			return err
 		}},
 		scheduler.Job{Name: "notify.receipts", Cadence: scheduler.Every(15 * time.Minute), Run: notifier.CheckReceipts},
+		scheduler.Job{Name: "sync.replication_lag", Cadence: scheduler.Every(time.Minute), Run: func(ctx context.Context) error {
+			return syncs.SampleLag(ctx, meter, syncs.LogMetrics{Log: log})
+		}},
 	)
 }

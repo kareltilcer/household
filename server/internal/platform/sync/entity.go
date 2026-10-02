@@ -1,9 +1,10 @@
 // Package sync is the platform's half of offline-first replication (PRD 03 §2): the registry
 // of the entities that replicate, each with the merge policy and the access it declares; the
 // streams PowerSync replicates them through, generated from those declarations (Streams, D-93,
-// ADR 0014); and the writer of the change feed, sync_changes, which the mutation spine calls in
-// every mutation's transaction and whose fate plan item 17 decides. The push that applies a
-// client's mutations is internal/platform/push.
+// ADR 0014, ADR 0018); the record of each row a mutation writes (Change), which the mutation spine
+// checks against those declarations; the rewrite of the access a row carries, which is not an edit of
+// it (RewriteAccess); and the hooks its metrics are reported through (Metrics). The push that applies
+// a client's mutations is internal/platform/push.
 package sync
 
 import (
@@ -77,9 +78,11 @@ type Invariant struct {
 	Field string
 }
 
-// Access is the access axes an entity's rows are held to in the feed and in the streams generated
-// from it (PRD 03 §2.3, D-22), as a set. Grant or Members is every entity's; the others are what a
-// row may carry beyond the grant.
+// Access is the access axes an entity's rows are held to in the streams generated from it (PRD 03
+// §2.3, D-22), as a set. Grant or Members is every entity's; the others are what a row may carry
+// beyond the grant, each in columns of its own row (ADR 0018): a stream reads the entity's own table,
+// so a row a private item or an audience bounds carries the visibility, the owner or the readers it
+// takes from them, rewritten when they change (RewriteAccess).
 type Access uint8
 
 const (
@@ -87,11 +90,13 @@ const (
 	// enables it. Every module's entity declares it: a zero Access is an entity that declared
 	// nothing.
 	Grant Access = 1 << iota
-	// Owner lets a row be private to one member, and the entity's redacted projection, where it
-	// declares one, reach everyone else (D-88).
+	// Owner lets a row be private to one member, when its visibility column says private and its
+	// owner_id names them; the entity's redacted projection, where it declares one, reaches everyone
+	// with the grant, the owner too, whose client shows the full row over it (D-88, D-93).
 	Owner
 	// Audience lets a row belong to an enumerated member list, a chat conversation or a
-	// member_shared calendar, and reach only its members from their floor on (D-90).
+	// member_shared calendar, and reach only the members its readers column names: those whose floor
+	// it is at or above (D-90, D-93).
 	Audience
 	// Members holds a row to every member of its household, whatever their grant on its module: what
 	// every member's app works from, the household's settings, its memberships and which modules it
@@ -104,6 +109,27 @@ const (
 
 	allAccess = Grant | Owner | Audience | Members
 )
+
+// The columns the access axes read on an entity's own rows, which its table has (architecture test
+// 10): a row that may be private says whether it is, and whose; a row an audience bounds names its
+// readers, an array of user ids.
+const (
+	VisibilityColumn = "visibility"
+	OwnerColumn      = "owner_id"
+	ReadersColumn    = "readers"
+)
+
+// AccessColumns are the columns e's access reads on its rows, beside its household's.
+func (e Entity) AccessColumns() []string {
+	var out []string
+	if e.Access&Owner != 0 {
+		out = append(out, VisibilityColumn, OwnerColumn)
+	}
+	if e.Access&Audience != 0 {
+		out = append(out, ReadersColumn)
+	}
+	return out
+}
 
 // Entity is an entity that replicates offline, as its module declares it (module.SyncSource).
 type Entity struct {
@@ -123,12 +149,13 @@ type Entity struct {
 	// column: a row that holds what no member's replica may, an invitation's token or a household's
 	// code, names the rest (Streams). A column the table does not have fails architecture test 10.
 	Columns []string
-	// Redact is its redacted projection (D-88), for an entity whose private rows others may see
-	// in part, as a busy block stands in for a private event: it returns the representation
-	// that may reach everyone but the owner, from the full one. Nil for an entity that has none;
-	// only an Owner entity may have one. What is safe to reveal is the entity's to say, so the
-	// platform has no generic field-stripper.
-	Redact func(row any) (any, error)
+	// Redacted is its redacted projection (D-88), for an entity whose private rows others may see in
+	// part, as a busy block stands in for a private event: the columns of Table, id first, that a
+	// private row shows everyone with the grant, in a client table of its own named for Table with
+	// _redacted after it, which its owner holds as well (D-93). Nil for an entity that has none; only an
+	// Owner entity may have one. What is safe to reveal is the entity's to say, so the platform has no
+	// generic field-stripper. A column the table does not have fails architecture test 10.
+	Redacted []string
 	// OfflineWrites is its offline-write flag (D-84): false until its policy's phase lets a
 	// client queue writes to it, and read-only offline until then.
 	OfflineWrites bool
@@ -155,8 +182,8 @@ var (
 // resolution, or a key and resolution on another policy; an invariant on an entity that is not
 // additive, or one that names no rule or no fields; no access, one that includes neither the grant
 // nor every member, or every member beside another axis; a redacted projection on an entity that is
-// never private; columns that do not start with id, or name one that is not an identifier, or one
-// twice; and a create operation named twice.
+// never private; columns, or a redacted projection's, that do not start with id, or name one that is
+// not an identifier, or one twice; and a create operation named twice.
 func Violations(module string, entities []Entity) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -222,20 +249,26 @@ func Violations(module string, entities []Entity) []string {
 		case e.Access&(Grant|Members) == 0:
 			bad("access without the module grant, which holds every entity not every member's")
 		}
-		if e.Redact != nil && e.Access&Owner == 0 {
+		if e.Redacted != nil && e.Access&Owner == 0 {
 			bad("a redacted projection on an entity whose rows are never private")
 		}
-		if e.Columns != nil {
+		for _, list := range []struct {
+			what    string
+			columns []string
+		}{{"columns", e.Columns}, {"a redacted projection's columns", e.Redacted}} {
+			if list.columns == nil {
+				continue
+			}
 			switch {
-			case len(e.Columns) == 0 || e.Columns[0] != "id":
-				bad("columns that do not start with id, which a replica keys every row on")
-			case slices.ContainsFunc(e.Columns, func(c string) bool { return !column.MatchString(c) }):
-				bad("a column that is not a lowercase identifier")
+			case len(list.columns) == 0 || list.columns[0] != "id":
+				bad("%s that do not start with id, which a replica keys every row on", list.what)
+			case slices.ContainsFunc(list.columns, func(c string) bool { return !column.MatchString(c) }):
+				bad("%s naming one that is not a lowercase identifier", list.what)
 			default:
 				named := map[string]bool{}
-				for _, c := range e.Columns {
+				for _, c := range list.columns {
 					if named[c] {
-						bad("column %s named twice", c)
+						bad("%s naming %s twice", list.what, c)
 					}
 					named[c] = true
 				}

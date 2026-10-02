@@ -6,13 +6,13 @@ import "github.com/kareltilcer/household/server/internal/platform/sync"
 
 // Declared are declarations for test 5's descriptor rules, by the module that declares them.
 func Declared() map[string][]sync.Entity {
-	redact := func(row any) (any, error) { return row, nil }
 	return map[string][]sync.Entity{
 		"garden": {
 			// Keeps it: every axis, a state_set with its key and resolution.
 			{Name: "garden.task_completion", Table: "garden_task_completions", Policy: sync.StateSet,
 				StateSet: &sync.StateSetRule{Key: []string{"task_id", "user_id"}, Resolution: sync.LatestClientTime},
-				Access:   sync.Grant | sync.Owner | sync.Audience, Redact: redact, Creates: []string{"postGardenTasksCompletions"}},
+				Access:   sync.Grant | sync.Owner | sync.Audience, Redacted: []string{"id", "task_id", "owner_id"},
+				Creates: []string{"postGardenTasksCompletions"}},
 			// Keeps it: an additive series with its invariant.
 			{Name: "garden.harvest", Table: "garden_harvests", Policy: sync.Additive, Access: sync.Grant,
 				Invariant: &sync.Invariant{Rule: sync.NonDecreasing, Series: []string{"planting_id"}, Order: "harvested_on", Field: "total_grams"},
@@ -32,7 +32,9 @@ func Declared() map[string][]sync.Entity {
 			{Name: "garden.photo", Table: "garden_photos", Policy: sync.LWWRow},
 			{Name: "garden.season", Table: "garden_seasons", Policy: sync.StrictVersion, Access: sync.Owner},
 			{Name: "garden.weather", Table: "garden_weather", Policy: sync.LWWField, Access: sync.Grant | 1<<6},
-			{Name: "garden.rule", Table: "garden_rules", Policy: sync.LWWField, Access: sync.Grant, Redact: redact},
+			{Name: "garden.rule", Table: "garden_rules", Policy: sync.LWWField, Access: sync.Grant, Redacted: []string{"id"}},
+			{Name: "garden.diary", Table: "garden_diaries", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner, Redacted: []string{"owner_id", "id"}},
+			{Name: "garden.log", Table: "garden_logs", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner, Redacted: []string{"id", "Owner", "id"}},
 			{Name: "garden.zone", Table: "garden_zones", Policy: sync.LWWField, Access: sync.Members | sync.Grant},
 			{Name: "garden.shed", Table: "garden_sheds", Policy: sync.LWWField, Access: sync.Grant, Columns: []string{"title", "id"}},
 			{Name: "garden.path", Table: "garden_paths", Policy: sync.LWWField, Access: sync.Grant, Columns: []string{"id", "Title"}},

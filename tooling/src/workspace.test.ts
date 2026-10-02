@@ -371,9 +371,13 @@ describe('a developer machine and CI', () => {
     expect(field(stack, 'services', 'powersync', 'image')).toMatch(
       /^journeyapps\/powersync-service:\d+\.\d+\.\d+$/,
     )
-    // The development PowerSync (item 13) is the one the suite proves.
+    // The development PowerSync (item 13) is the one the suite proves, and its nightly compaction
+    // (item 17) runs the same release's command.
     expect(field(compose, 'services', 'powersync', 'image')).toBe(
       field(stack, 'services', 'powersync', 'image'),
+    )
+    expect(field(compose, 'services', 'powersync-compact', 'image')).toBe(
+      field(compose, 'services', 'powersync', 'image'),
     )
   })
 

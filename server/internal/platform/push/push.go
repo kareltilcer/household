@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,8 +21,10 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
+	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
@@ -36,6 +39,10 @@ const ClockClamp = 24 * time.Hour
 // DependencyFailed is the code of a deferred mutation: an earlier mutation of its batch, to the
 // row it writes or to one it names, was not applied (FR-SY6).
 const DependencyFailed = "dependency_failed"
+
+// ConcurrentChange is the code of a merged mutation: the row changed after the client made it, by a
+// write the client had not seen, and it was applied over that change (D-122).
+const ConcurrentChange = "concurrent_change"
 
 // In is one mutation of a pushed batch, the contract's SyncMutation.
 type In struct {
@@ -56,7 +63,6 @@ type batchIn struct {
 // BatchResult is the answer to a batch, the contract's SyncMutationBatchResult.
 type BatchResult struct {
 	Results []Result `json:"results"`
-	Seq     int64    `json:"seq"`
 }
 
 // Config is what the push needs.
@@ -65,6 +71,11 @@ type Config struct {
 	// entity whose module implements no Writer is refused.
 	Registry *module.Registry
 	Logger   *slog.Logger
+	// Notify tells a household's owners it nears its day's fair use of mutations (DailyMutations);
+	// nil tells no one.
+	Notify *notify.Service
+	// Metrics is told of each batch and each answer; sync.LogMetrics on Logger when nil.
+	Metrics sync.Metrics
 	// Now is the clock, time.Now when nil.
 	Now func() time.Time
 }
@@ -74,6 +85,8 @@ type Service struct {
 	registry *module.Registry
 	writers  map[string]Writer
 	log      *slog.Logger
+	notify   *notify.Service
+	metrics  sync.Metrics
 	now      func() time.Time
 }
 
@@ -85,13 +98,16 @@ func New(cfg Config) (*Service, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if cfg.Metrics == nil {
+		cfg.Metrics = sync.LogMetrics{Log: cfg.Logger}
+	}
 	writers := map[string]Writer{}
 	for _, m := range cfg.Registry.All() {
 		if w, ok := m.(Writer); ok {
 			writers[m.Name()] = w
 		}
 	}
-	return &Service{registry: cfg.Registry, writers: writers, log: cfg.Logger, now: cfg.Now}, nil
+	return &Service{registry: cfg.Registry, writers: writers, log: cfg.Logger, notify: cfg.Notify, metrics: cfg.Metrics, now: cfg.Now}, nil
 }
 
 // Routes registers the push, which the router mounts in the household, behind the tenant
@@ -106,8 +122,8 @@ func (s *Service) Routes(r chi.Router) {
 // and answers every one (FR-SY6): a mutation that fails does not stop the ones after it, and one
 // that writes a row an earlier mutation of the batch failed to, or names one in a field, is
 // deferred. The answer is 200 whenever the batch was processed at all; each mutation's outcome is in
-// the body, and seq is the household's latest change once the batch is answered, the batch's own or
-// another member's since.
+// the body. A household whose replicas pushed DailyMutations mutations already this UTC day is
+// answered 429 until the day ends, the batch untouched (fair use, D-127).
 //
 // The answers kept for the batch's mutations are read at once, before the first is applied. A
 // mutation id the batch repeats is looked up again when it recurs, since its first delivery has kept
@@ -142,6 +158,16 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, requestID, problem.Internal())
 		}
 	}
+	s.metrics.Batch(ctx, len(batch.Mutations))
+	if err := s.count(ctx, len(batch.Mutations)); err != nil {
+		var p *problem.Problem
+		if errors.As(err, &p) {
+			problem.Write(w, requestID, p)
+			return
+		}
+		fail(err)
+		return
+	}
 	ids := make([]uuid.UUID, len(batch.Mutations))
 	for i, m := range batch.Mutations {
 		ids[i] = m.MutationID
@@ -173,14 +199,12 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 		if res.Outcome != Applied && res.Outcome != Merged {
 			failed[m.EntityID] = true
 		}
+		code := ""
+		if res.Code != nil {
+			code = *res.Code
+		}
+		s.metrics.Answered(ctx, m.EntityType, res.Outcome, code)
 		out.Results = append(out.Results, res)
-	}
-	if err := tenant.InTx(ctx, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, "SELECT coalesce(max(seq), 0) FROM sync_changes WHERE household_id = $1",
-			tenant.From(ctx).HouseholdID()).Scan(&out.Seq)
-	}); err != nil {
-		fail(fmt.Errorf("push: read the feed: %w", err))
-		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
@@ -195,8 +219,11 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 // may be written offline (D-84); no earlier mutation of the batch failed on what it depends on, else
 // it is deferred, and kept for its replay; its entity's policy admits its op; and its module writes
 // the entity through the push. Then it is written, the client's clock held to ClockClamp, in
-// mutation.Apply's transaction, with an additive series' invariant checked first. Every answer but
-// deferred is kept.
+// mutation.Apply's transaction, with an additive series' invariant checked first, and the row an
+// update, a delete or an action names locked, for the version its policy compares the mutation's base
+// version with (Mutation.Prior): a strict_version write over another version is a conflict, which its
+// writer answers (Mutation.Admit), and an lww_field or lww_row write behind the row is answered merged
+// (Mutation.Behind). Every answer but deferred is kept.
 func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uuid.UUID]bool, found *kept) (Result, error) {
 	res := Result{MutationID: in.MutationID}
 	fp, err := fingerprint(in)
@@ -261,15 +288,22 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 			return mutation.Record{}, err
 		}
 		var err error
+		if m.Prior, err = lockRow(ctx, tx, m); err != nil {
+			return mutation.Record{}, err
+		}
 		if written, err = writer.WriteSync(ctx, tx, m); err != nil {
 			return mutation.Record{}, asRefusal(err, e.Name)
 		}
 		if len(written.Record.Changes) == 0 && written.Record.Event.Module == "" {
 			return mutation.Record{}, nil
 		}
+		if e.Policy == sync.StrictVersion && m.Admit(written.Row) != nil {
+			return mutation.Record{}, fmt.Errorf("push: %s wrote mutation %s over a version it does not admit: a strict_version writer calls Admit",
+				e.Name, m.ID)
+		}
 		// The answer is kept in the effect's own transaction: a mutation that took effect is never
 		// run a second time, however its answer was lost.
-		kept, err := keep(ctx, tx, fp, appliedResult(res, written))
+		kept, err := keep(ctx, tx, fp, appliedResult(res, m, written))
 		switch {
 		case err != nil:
 			return mutation.Record{}, err
@@ -298,11 +332,37 @@ func (s *Service) apply(ctx context.Context, in In, now time.Time, failed map[uu
 			return s.end(ctx, fp, reject(res, Refuse(p.Code, "%s holds as many rows as it may", e.Module())))
 		}
 		return res, err
-	case applied.Seq == 0:
+	case applied.EventID == uuid.Nil:
 		// Nothing written: the state the mutation asks for is in place.
-		return s.end(ctx, fp, appliedResult(res, written))
+		return s.end(ctx, fp, appliedResult(res, m, written))
 	}
-	return appliedResult(res, written), nil
+	return appliedResult(res, m, written), nil
+}
+
+// lockRow locks the row m names FOR UPDATE, until the mutation's transaction ends, and returns its
+// version, 0 when no row of its entity's table has the id: for an update, a delete or an action of an
+// entity whose policy compares a base version with the row's. Its writer then finds the row at that
+// version, and no other write reaches it before this one commits. The version alone is read, which
+// says nothing of the row's content to a caller its module would not show it.
+func lockRow(ctx context.Context, tx pgx.Tx, m Mutation) (int64, error) {
+	switch m.Entity.Policy {
+	case sync.LWWField, sync.LWWRow, sync.StrictVersion:
+	case sync.Additive, sync.StateSet:
+		return 0, nil
+	}
+	if m.Op == Create {
+		return 0, nil
+	}
+	var version int64
+	err := tx.QueryRow(ctx, "SELECT version FROM "+pgx.Identifier(strings.Split(m.Entity.Table, ".")).Sanitize()+" WHERE id = $1 FOR UPDATE",
+		m.EntityID).Scan(&version)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return 0, nil
+	case err != nil:
+		return 0, fmt.Errorf("push: lock %s %s: %w", m.Entity.Name, m.EntityID, err)
+	}
+	return version, nil
 }
 
 // errAnswered rolls back a mutation whose answer another delivery of it kept first, while this one
@@ -343,9 +403,17 @@ func (s *Service) answered(ctx context.Context, res Result, fp []byte) (Result, 
 	return found.answer(res, fp), nil
 }
 
-func appliedResult(res Result, w Written) Result {
+// appliedResult returns res answering m, which w wrote, or found in place: applied, or merged when m is
+// an lww_field or lww_row write behind the row it landed on (Mutation.Behind), its row attached either
+// way.
+func appliedResult(res Result, m Mutation, w Written) Result {
 	version := w.Version
 	res.Outcome, res.Version, res.Row = Applied, &version, w.Row
+	if (m.Entity.Policy == sync.LWWField || m.Entity.Policy == sync.LWWRow) && m.Behind() {
+		res.Outcome = Merged
+		res.Code = ptr(ConcurrentChange)
+		res.Message = ptr("the row changed after this mutation was made, and it was applied over that change")
+	}
 	return res
 }
 

@@ -383,9 +383,9 @@ func TestTenWrongPINsLockAProfileUntilAnOwnerUnlocksIt(t *testing.T) {
 		AND actor_type = 'system' AND actor_id IS NULL`, h.ID); n != 1 {
 		t.Errorf("%d lock events", n)
 	}
-	if n := s.count("SELECT count(*) FROM sync_changes WHERE household_id = $1 AND entity_id = $2 AND payload->'child'->>'pin_locked' = 'true'",
+	if n := s.count("SELECT count(*) FROM memberships WHERE household_id = $1 AND user_id = $2 AND pin_locked AND version > 1",
 		h.ID, adam.UserID); n != 1 {
-		t.Errorf("%d changes carry the lock", n)
+		t.Errorf("%d memberships carry the lock, which replicates with them", n)
 	}
 
 	// Only an owner unlocks, a child profile alone. The unlock moves the PIN's updated_at, as a new PIN

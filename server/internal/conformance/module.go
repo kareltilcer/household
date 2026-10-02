@@ -4,21 +4,21 @@
 // no other.
 //
 // The module, conformance, declares one entity for each shape a scenario needs, across all five
-// merge policies (migrations/98001_conformance.sql). It is never among the modules the server
-// serves (internal/modules). Its entities' streams are generated with every other entity's
-// (internal/syncconfig), and the push writes them as it writes any module's, through this module's
-// Writer: the entities whose policies item 13 builds, an item's fields (lww_field), its checked
-// state and a chore's completion (state_set) and a meter's readings (additive, with their
-// invariant). The others are item 17's.
+// merge policies (migrations/98001_conformance.sql), private rows with their redacted projection and
+// the rows a private note bounds, and an audience whose messages keep their readers on the row
+// (98003). It is never among the modules the server serves (internal/modules). Its entities' streams
+// are generated with every other entity's (internal/syncconfig), and the push writes every one of
+// them as it writes any module's, through this module's Writer (write.go, audience.go).
 //
 // The suite signs its members in through Around, which stands in for a device's sign-in (item 9):
 // the suite's members have no address and no password, and a client needs only an access token.
+// Around serves an attachment's upload too (upload.go), which no contract operation does for a module
+// the contract does not name.
 package conformance
 
 import (
 	"context"
 	"embed"
-	"errors"
 	"io"
 	"io/fs"
 
@@ -42,8 +42,25 @@ const (
 	ItemChecked = "conformance.item_checked"
 	// Reading is a meter reading: additive, non_decreasing over its meter.
 	Reading = "conformance.reading"
+	// Budget is an amount of money: strict_version.
+	Budget = "conformance.budget"
+	// Note is a note, shared or private to its owner, with a redacted projection: lww_row, its loser
+	// preserved.
+	Note = "conformance.note"
+	// NoteComment is a comment on a note, which reaches whom its note reaches: lww_field.
+	NoteComment = "conformance.note_comment"
+	// Chore is a rotating chore: strict_version, its rotation advanced by the server.
+	Chore = "conformance.chore"
 	// Completion is a chore's completion: state_set on (chore_id, occurrence), latest_client_time.
 	Completion = "conformance.completion"
+	// Attachment is a file's row, whose bytes are uploaded apart: lww_field.
+	Attachment = "conformance.attachment"
+	// Conversation is a conversation: strict_version.
+	Conversation = "conformance.conversation"
+	// ConversationMember is a member of a conversation, from the floor they joined at: strict_version.
+	ConversationMember = "conformance.conversation_member"
+	// Message is a message in a conversation, which its readers read: additive, with an audience.
+	Message = "conformance.message"
 )
 
 //go:embed migrations/*.sql
@@ -87,7 +104,14 @@ func (Module) RegisterRoutes(chi.Router) {}
 // AuditActions returns the actions the module's writes record.
 func (Module) AuditActions() []module.AuditAction {
 	var out []module.AuditAction
-	for _, a := range []string{"item.create", "item.update", "item.delete", "item_checked.set", "reading.create", "completion.set"} {
+	for _, a := range []string{
+		"item.create", "item.update", "item.delete", "item_checked.set", "reading.create", "completion.set",
+		"budget.create", "budget.update", "budget.delete", "note.create", "note.update", "note.delete",
+		"note_comment.create", "note_comment.update", "note_comment.delete", "chore.create", "chore.update", "chore.delete",
+		"attachment.create", "attachment.update", "attachment.delete", "attachment.upload",
+		"conversation.create", "conversation.update", "conversation.delete",
+		"conversation_member.create", "conversation_member.delete", "message.create",
+	} {
 		out = append(out, module.AuditAction{Key: Name + "." + a, SummaryKey: Name + "." + a})
 	}
 	return out
@@ -95,8 +119,8 @@ func (Module) AuditActions() []module.AuditAction {
 
 // SyncEntities returns the module's entities: every merge policy, with the key and resolution of
 // each state_set, the invariant of an additive series, a private entity with its redacted
-// projection, and an audience. Every one may be written offline, since the suite exercises each
-// policy's offline path (D-84 gates the modules, not the engine).
+// projection and the comments it bounds, and an audience. Every one may be written offline, since
+// the suite exercises each policy's offline path (D-84 gates the modules, not the engine).
 func (Module) SyncEntities() []sync.Entity {
 	return []sync.Entity{
 		{Name: Item, Table: "conformance_items", Policy: sync.LWWField, Access: sync.Grant, OfflineWrites: true},
@@ -110,24 +134,27 @@ func (Module) SyncEntities() []sync.Entity {
 			Invariant: &sync.Invariant{Rule: sync.NonDecreasing, Series: []string{"meter_id"}, Order: "read_at", Field: "value"},
 			Access:    sync.Grant, OfflineWrites: true,
 		},
-		{Name: "conformance.budget", Table: "conformance_budgets", Policy: sync.StrictVersion, Access: sync.Grant, OfflineWrites: true},
+		{Name: Budget, Table: "conformance_budgets", Policy: sync.StrictVersion, Access: sync.Grant, OfflineWrites: true},
+		// What a private note shows everyone with the grant: that it exists, whose it is, and whether it
+		// was deleted; never its title or its body (D-88).
 		{
-			Name: "conformance.note", Table: "conformance_notes", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner,
-			Redact: redactNote, OfflineWrites: true,
+			Name: Note, Table: "conformance_notes", Policy: sync.LWWRow, Access: sync.Grant | sync.Owner,
+			Redacted: []string{"id", "household_id", "owner_id", "version", "deleted_at"}, OfflineWrites: true,
 		},
-		{Name: "conformance.chore", Table: "conformance_chores", Policy: sync.StrictVersion, Access: sync.Grant, OfflineWrites: true},
+		{Name: NoteComment, Table: "conformance_note_comments", Policy: sync.LWWField, Access: sync.Grant | sync.Owner, OfflineWrites: true},
+		{Name: Chore, Table: "conformance_chores", Policy: sync.StrictVersion, Access: sync.Grant, OfflineWrites: true},
 		{
 			Name: Completion, Table: "conformance_completions", Policy: sync.StateSet,
 			StateSet: &sync.StateSetRule{Key: []string{"chore_id", "occurrence"}, Resolution: sync.LatestClientTime},
 			Access:   sync.Grant, OfflineWrites: true,
 		},
-		{Name: "conformance.attachment", Table: "conformance_attachments", Policy: sync.LWWField, Access: sync.Grant, OfflineWrites: true},
-		{Name: "conformance.conversation", Table: "conformance_conversations", Policy: sync.StrictVersion, Access: sync.Grant, OfflineWrites: true},
+		{Name: Attachment, Table: "conformance_attachments", Policy: sync.LWWField, Access: sync.Grant, OfflineWrites: true},
+		{Name: Conversation, Table: "conformance_conversations", Policy: sync.StrictVersion, Access: sync.Grant, OfflineWrites: true},
 		{
-			Name: "conformance.conversation_member", Table: "conformance_conversation_members", Policy: sync.StrictVersion,
+			Name: ConversationMember, Table: "conformance_conversation_members", Policy: sync.StrictVersion,
 			Access: sync.Grant, OfflineWrites: true,
 		},
-		{Name: "conformance.message", Table: "conformance_messages", Policy: sync.Additive, Access: sync.Grant | sync.Audience, OfflineWrites: true},
+		{Name: Message, Table: "conformance_messages", Policy: sync.Additive, Access: sync.Grant | sync.Audience, OfflineWrites: true},
 	}
 }
 
@@ -143,35 +170,6 @@ func LeakyStream() sync.Stream {
 		Query: "SELECT * FROM conformance_items\n" +
 			"WHERE household_id IN (SELECT m.household_id FROM memberships m WHERE m.user_id = auth.user_id())\n",
 	}
-}
-
-// Note is a conformance note as the API would serialise it.
-type Note struct {
-	ID         uuid.UUID  `json:"id"`
-	Visibility string     `json:"visibility"`
-	OwnerID    *uuid.UUID `json:"owner_id"`
-	Title      string     `json:"title"`
-	Body       string     `json:"body"`
-	Version    int64      `json:"version"`
-}
-
-// RedactedNote is what a private note shows everyone with the grant: that it exists, and whose it
-// is. Under D-93 it reaches the owner as well, whose client shows the full note over it (ADR 0001).
-type RedactedNote struct {
-	ID      uuid.UUID  `json:"id"`
-	OwnerID *uuid.UUID `json:"owner_id"`
-	Version int64      `json:"version"`
-}
-
-var errNotANote = errors.New("conformance: the note's projection takes a Note")
-
-// redactNote is the note's redacted projection.
-func redactNote(row any) (any, error) {
-	n, ok := row.(Note)
-	if !ok {
-		return nil, errNotANote
-	}
-	return RedactedNote{ID: n.ID, OwnerID: n.OwnerID, Version: n.Version}, nil
 }
 
 // Export writes nothing: the module holds only the suite's test rows.
