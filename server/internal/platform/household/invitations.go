@@ -906,7 +906,7 @@ func addressed(ctx context.Context, tx pgx.Tx, i invitation, user uuid.UUID) err
 // the levels it proposed (FR-HH3). Their address must be verified, and an email invitation's must be
 // its own. Someone already a member is answered their membership as it is, and the invitation is left
 // for its addressee. A household that does not write is joined by nobody, and a suspended one is
-// not found (writable, D-120).
+// not found (writable, D-120), by its members either (D-115).
 func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -940,6 +940,15 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		if payer, err = lockHousehold(ctx, tx, household); err != nil {
 			return mutation.Record{}, err
 		}
+		// A suspended household is not found, by its members either, as on every route of it (D-115),
+		// so before a member is answered their membership in it.
+		entitled, err := readStatus(ctx, tx, household)
+		if err != nil {
+			return mutation.Record{}, err
+		}
+		if !entitled.State().Reads() {
+			return mutation.Record{}, problem.NotFound()
+		}
 		existing, err := readMemberships(ctx, tx, household, &user, false)
 		if err != nil {
 			return mutation.Record{}, err
@@ -953,7 +962,8 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 			err = usable(i, now)
 		}
 		if err == nil {
-			err = writable(ctx, tx, household)
+			// What writable asks, of the state read under the lock above (D-120).
+			err = entitled.Writable("")
 		}
 		if err != nil {
 			return mutation.Record{}, err

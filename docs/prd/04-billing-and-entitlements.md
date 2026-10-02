@@ -110,7 +110,7 @@ household answers every household route `404`, these too (**D-115**). The writes
 that are not its routes, accepting an invitation, declining one and confirming a child profile's
 graduation, are held to the same: a household that does not write is joined, declined and graduated
 in by nobody (`402`), and a `suspended` one is not found, nor is an invitation into it previewed or
-listed (**D-120**).
+listed (**D-120**), nor does its household code list its child profiles or sign one in (**D-115**).
 
 **FR-BI2 — Entering `read_only` emits sync retractions for nothing.** The client keeps its
 replica and switches to read-only UI. A member's queued offline mutations are refused by the push's

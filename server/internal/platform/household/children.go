@@ -89,7 +89,8 @@ type childEntry struct {
 // one from. An adult, who signs in by email, is not listed (D-104). A code that opens no household
 // answers 404 and counts against the client's network, which may look up thirty such an hour
 // (ratelimit.ChildCodeNetwork): the code identifies a household and authenticates nobody, so guessing
-// codes is what is limited.
+// codes is what is limited. The code of a suspended household opens nothing, as nothing in it is
+// found (D-115).
 func (s *Service) childProfiles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -115,7 +116,8 @@ func (s *Service) childProfiles(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(ctx, "SELECT set_config('app.join_code', $1, true)", code); err != nil {
 			return err
 		}
-		return tx.QueryRow(ctx, "SELECT id, name FROM households WHERE join_code = $1", code).Scan(&household, &name)
+		return tx.QueryRow(ctx, "SELECT id, name FROM households WHERE join_code = $1 AND suspended_at IS NULL", code).
+			Scan(&household, &name)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = problem.NotFound()
@@ -168,8 +170,9 @@ type pin struct {
 }
 
 // findPIN reads profile's PIN in tx, locked for it, when profile is a child profile of the household
-// whose code is code, and reports false for any other code and profile. tx's caller is profile, whose
-// own memberships, and the households they are in, it reads outside any household's context.
+// whose code is code, and reports false for any other code and profile, and for a suspended
+// household's, which signs nobody in (D-115). tx's caller is profile, whose own memberships, and the
+// households they are in, it reads outside any household's context.
 func findPIN(ctx context.Context, tx pgx.Tx, code string, profile uuid.UUID) (pin, bool, error) {
 	var p pin
 	err := tx.QueryRow(ctx, `
@@ -177,7 +180,7 @@ func findPIN(ctx context.Context, tx pgx.Tx, code string, profile uuid.UUID) (pi
 		FROM credentials c
 		JOIN memberships m ON m.user_id = c.user_id AND m.role = 'child'
 		JOIN households h ON h.id = m.household_id
-		WHERE c.user_id = $1 AND c.type = 'child_pin' AND h.join_code = $2
+		WHERE c.user_id = $1 AND c.type = 'child_pin' AND h.join_code = $2 AND h.suspended_at IS NULL
 		FOR UPDATE OF c`, profile, code).Scan(&p.household, &p.secret, &p.set, &p.failures)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return pin{}, false, nil
@@ -187,9 +190,9 @@ func findPIN(ctx context.Context, tx pgx.Tx, code string, profile uuid.UUID) (pi
 
 // childLogin is postAuthChildLogin (FR-CH1, FR-CH5): the household's code, a profile and its PIN sign
 // the child in on the device the body names, with a device's token pair and no second step (FR-ID5,
-// identity.SignInChild). A code, a profile or a PIN that does not match, and a profile that is not a
-// child's, are one 401 in one time, as a password's sign-in's failures are, and count against the
-// client's network as those do (ratelimit.LoginNetwork).
+// identity.SignInChild). A code, a profile or a PIN that does not match, a profile that is not a
+// child's, and a profile of a suspended household (D-115), are one 401 in one time, as a password's
+// sign-in's failures are, and count against the client's network as those do (ratelimit.LoginNetwork).
 //
 // A wrong PIN counts against the profile. It is counted before the PIN is checked, so that attempts
 // sent at once meet the lock one by one, and a right PIN clears the count: LockAfter wrong ones in a

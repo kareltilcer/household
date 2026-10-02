@@ -301,14 +301,20 @@ func TestRestrictingAHousehold(t *testing.T) {
 }
 
 // A suspended household (D-115) is on the list of its members' households, so that a client shows
-// its lockout, and nowhere else: its own routes answer 404.
+// its lockout, and nowhere else: its own routes answer 404, its household code opens nothing for a
+// child's sign-in, and a member accepting an invitation into it is not answered their membership.
+// Lifted, it opens again.
 func TestASuspendedHouseholdIsListedAndNothingMore(t *testing.T) {
 	s, _ := newHouseholdSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
 	h := jana.create("Tilcerovi")
-	if _, err := s.admin.Exec(t.Context(), "UPDATE households SET suspended_at = now() WHERE id = $1", h.ID); err != nil {
-		t.Fatal(err)
-	}
+	petrs, _ := s.joined(jana, h.ID, "Petr", s.a("petr@tilcerovi.cz"), "member", nil)
+	adam := jana.child(h.ID, "Adam", "1234", nil)
+	link := jana.invite(h.ID, map[string]any{"kind": "link", "role": "member"})
+	accept := "/me/invitations/" + invitationLink.FindStringSubmatch(*link.URL)[1] + "/accept"
+	phone := s.phone("Adam's phone")
+
+	s.suspension(h.ID, true)
 	listed := listHouseholds(t, jana)
 	if len(listed) != 1 || listed[0].Name != "Tilcerovi" || listed[0].Entitlement.State != "suspended" ||
 		listed[0].Entitlement.SuspendedAt == nil || listed[0].Entitlement.CanWrite {
@@ -317,6 +323,14 @@ func TestASuspendedHouseholdIsListedAndNothingMore(t *testing.T) {
 	expect(t, jana.get(householdPath(h.ID, "")), http.StatusNotFound, problem.CodeNotFound)
 	expect(t, jana.get(householdPath(h.ID, "/members")), http.StatusNotFound, problem.CodeNotFound)
 	expect(t, jana.delete(householdPath(h.ID, "/restriction")), http.StatusNotFound, problem.CodeNotFound)
+	expect(t, phone.profiles(h.JoinCode), http.StatusNotFound, problem.CodeNotFound)
+	expect(t, phone.childLogin(h.JoinCode, adam.UserID, "1234"), http.StatusUnauthorized, problem.CodeInvalidCredentials)
+	expect(t, petrs.post(accept, ""), http.StatusNotFound, problem.CodeNotFound)
+
+	s.suspension(h.ID, false)
+	expect(t, phone.profiles(h.JoinCode), http.StatusOK, "")
+	expect(t, phone.childLogin(h.JoinCode, adam.UserID, "1234"), http.StatusOK, "")
+	expect(t, petrs.post(accept, ""), http.StatusOK, "")
 }
 
 // suspension suspends household h, or lifts its suspension, as the platform's staff will (item 21).

@@ -44,7 +44,8 @@ info:
     invitation (`postMeInvitationsByTokenAccept`), declining one (`postMeInvitationsByTokenDecline`)
     and confirming a graduation (`postAuthGraduationConfirm`), are held to the same: `402` in a
     state that does not write, and not found in a `suspended` household (D-120), whose invitations
-    are neither previewed nor listed either.
+    are neither previewed nor listed either, and whose household code opens nothing for a child's
+    sign-in (`postAuthChildProfiles`, `postAuthChildLogin`).
 
     A fair-use ceiling on what a household or a user holds (PRD 04 §5: members, owned households,
     rows per module, objects) refuses the create that would pass it `403`, `fair_use_ceiling`, or
@@ -365,7 +366,8 @@ paths:
         household and authenticates nobody (FR-CH1); an adult, who signs in by email, is not listed
         (D-104). Case, spaces and dashes in the code do not matter. A code that opens no household
         answers `404`, and thirty of those in an hour from a client's network answer `429` until the
-        hour that counted them ends.
+        hour that counted them ends. A `suspended` household's code opens nothing, as nothing in it
+        is found (D-115).
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -389,8 +391,9 @@ paths:
         and switches between the sign-ins it holds (D-104). Case, spaces and dashes in the code do not
         matter.
 
-        A code, a profile or a PIN that does not match, and a profile that is not a child's, answer
-        `401` (`invalid_credentials`) alike, in the same time. Sixty sign-ins that fail in fifteen
+        A code, a profile or a PIN that does not match, a profile that is not a child's, and a profile
+        of a `suspended` household (D-115), answer `401` (`invalid_credentials`) alike, in the same
+        time. Sixty sign-ins that fail in fifteen
         minutes from a client's network, those answered `423` among them, answer `429`, as a
         password's sign-in's do. Ten wrong PINs since the last right one lock the profile until an
         owner unlocks it or sets a new PIN (FR-CH5): every attempt at a locked profile, the tenth
@@ -1165,8 +1168,9 @@ paths:
 
         A membership is a write to the household, held to its entitlement as every other is (D-120):
         a household in a state that does not write is joined by nobody, `402` naming its state with
-        the remedy `contact_owner`, and a `suspended` one is not found. A household with twelve
-        members already, the ceiling of fair use, is refused `403 fair_use_ceiling` (PRD 04 §5).
+        the remedy `contact_owner`, and a `suspended` one is not found, by its members either. A
+        household with twelve members already, the ceiling of fair use, is refused `403
+        fair_use_ceiling` (PRD 04 §5).
       parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '200': { description: Membership created, content: { application/json: { schema: { $ref: '#/components/schemas/Membership' } } } }

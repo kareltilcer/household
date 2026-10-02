@@ -43,8 +43,9 @@ func readStatus(ctx context.Context, tx pgx.Tx, household uuid.UUID) (entitlemen
 
 // writable refuses, in tx in household's context, a write into a household from outside its routes,
 // which the tenant middleware's gate never sees, when the household's state does not permit it
-// (D-120): accepting an invitation and declining one, which are account routes, and confirming a
-// graduation, a public one. It asks what the gate asks (entitlement.Status.Writable): a suspended
+// (D-120): declining an invitation, an account route, and confirming a graduation, a public one;
+// accepting one asks the same of the state it reads first, to find a suspension before it answers a
+// member their membership. It asks what the gate asks (entitlement.Status.Writable): a suspended
 // household is not found, as it is on every route (D-115); one that does not write is refused 402
 // naming its state, and the caller, who holds no role there or a child's, is told to ask an owner.
 func writable(ctx context.Context, tx pgx.Tx, household uuid.UUID) error {

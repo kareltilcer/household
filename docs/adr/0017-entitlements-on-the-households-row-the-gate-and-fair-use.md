@@ -58,7 +58,10 @@ operations that declare no `402` are exactly the list, and every operation in ev
 the list says. Accepting an invitation, declining one and confirming a child profile's graduation are
 the writes into a household outside its routes, which the gate never sees: each asks the same of the
 household's state under the household's lock (`household.writable`, D-120), `404` when suspended and
-the `402` otherwise.
+the `402` otherwise; accepting asks it before it answers someone already a member their membership,
+so that a suspended household is not found by its members either. A household code opens no
+suspended household for a child's sign-in (`childProfiles`, `findPIN`), which reads the household
+from outside its routes too.
 
 **Grace's refusal is the files pipeline's** (`files.Put`, and `files.Receive` before it reads a byte of
 the body): an upload in a state that does not upload is refused with the same `402`, and the storage

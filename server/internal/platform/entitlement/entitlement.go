@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/kareltilcer/household/server/internal/platform/access"
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
 
@@ -233,17 +234,8 @@ func Gate(s Status, role access.Role, operation, method string) error {
 	switch {
 	case !s.State().Reads():
 		return problem.NotFound()
-	case safe(method), Exempt(operation):
+	case httpx.Safe(method), Exempt(operation):
 		return nil
 	}
 	return s.Writable(role)
-}
-
-// safe reports whether method is safe (RFC 9110 §9.2.1), which reads and changes nothing.
-func safe(method string) bool {
-	switch method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
-		return true
-	}
-	return false
 }
