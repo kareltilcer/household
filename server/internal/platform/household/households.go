@@ -212,7 +212,7 @@ var errIDTaken = invalid("/id", problem.FieldInvalid)
 
 // createHousehold creates a household (FR-HH1): any user, verified or not, may, and becomes its
 // owner and its payer of record. It enables every module, grants its owner Manage on each, gives it
-// a household code, and starts its trial (Hooks.Created). Its units and first day of the week are
+// a household code, and starts its trial, which its row's insert begins (FR-HH1). Its units and first day of the week are
 // its country's unless the request says, and a country Household has no profile of is refused. A
 // child profile is refused 403: it is a profile an owner manages in their household, never a
 // household's owner and payer (D-17, D-104).
@@ -272,9 +272,6 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 				return mutation.Record{}, err
 			}
 			changes = append(changes, e.change())
-		}
-		if err := s.Hooks.created(ctx, tx, created.id); err != nil {
-			return mutation.Record{}, err
 		}
 		// Its trial began with it (FR-HH1), by the row's own default, in the version the change above
 		// records.

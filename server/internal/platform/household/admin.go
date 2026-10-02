@@ -179,9 +179,6 @@ type Change struct {
 
 // Hooks are what later items plug into the household surface, each nil until its item fills it in.
 type Hooks struct {
-	// Created runs in the transaction that creates a household, once its rows are written: item
-	// 16 starts its trial there (FR-HH1). An error rolls the creation back.
-	Created func(ctx context.Context, tx pgx.Tx, household uuid.UUID) error
 	// Lost runs in the transaction of every change that takes access from members, the grant
 	// lowered to none, the module disabled, the member removed or gone: item 17 retracts what
 	// their replicas may no longer hold there (FR-SY7), and item 20 starts a leaving member's
@@ -190,14 +187,6 @@ type Hooks struct {
 	// Changed runs after a change of a member's role or grants, or their removal, commits: item 15
 	// tells them (D-78, FR-HA5).
 	Changed func(ctx context.Context, change Change)
-}
-
-// created runs the Created hook, when one is set.
-func (h Hooks) created(ctx context.Context, tx pgx.Tx, household uuid.UUID) error {
-	if h.Created == nil {
-		return nil
-	}
-	return h.Created(ctx, tx, household)
 }
 
 // lost runs the Lost hook for loss, when one is set and anyone lost anything.

@@ -2,6 +2,7 @@ package entitlement
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,9 +41,7 @@ func (r *Row) Status() (Status, error) {
 		Billing: State(r.billing), TrialEndsAt: r.trial, DunningEndsAt: r.dunning, GraceEndsAt: r.grace,
 		LapsedAt: r.lapsed, RetainedUntil: r.retained, RetentionWarnings: int(r.warnings), SuspendedAt: r.suspended,
 	}
-	switch s.Billing {
-	case Trialing, Active, PastDue, Grace, ReadOnly, Canceled:
-	default:
+	if !slices.Contains(billing, s.Billing) {
 		return Status{}, fmt.Errorf("entitlement: %q is no subscription state", r.billing)
 	}
 	if r.restrictedAt != nil {
@@ -99,6 +98,7 @@ func (s Status) Summary(now time.Time) Summary {
 		out.GraceEndsAt = utc(s.GraceEndsAt)
 	case ReadOnly, Canceled:
 		out.DataRetainedUntil = utc(s.RetainedUntil)
+	case Active, PastDue, Restricted, Suspended:
 	}
 	if r := s.Restriction; r != nil {
 		out.Restriction = &RestrictionSummary{

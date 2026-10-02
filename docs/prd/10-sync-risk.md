@@ -163,7 +163,7 @@ is the single most valuable artefact produced in Phase 0.
 | 11 | `strict_version` mismatch | `conflict` carrying the server's current row |
 | 12 | Attachment row syncs, bytes fail permanently | Row marked `failed` with a reason a member can act on; the row is never lost |
 | 13 | Two rotating-chore completions offline | Rotation advances **once** |
-| 14 | Entitlement lapses with a queue outstanding | `rejected` with `entitlement`, held locally, replayed if the subscription resumes |
+| 14 | Entitlement lapses with a queue outstanding | `rejected` with the push's `402` code, `entitlement_read_only` (**D-118**), held locally, replayed if the subscription resumes |
 | 15 | Two devices of the **same** member, both offline | Converge; no self-echo loops |
 | 16 | Member removed from a conversation while offline | Messages retracted; the floor still holds for everyone else |
 | 17 | **Offline `additive` create that violates a cross-row invariant on arrival** — a meter reading back-filled below a neighbour the replica did not hold | `rejected` with `monotonicity_violation`, surfaced once with the offending neighbour named, never retried in a loop, and the member's typed value preserved so they can correct it rather than re-read the meter |

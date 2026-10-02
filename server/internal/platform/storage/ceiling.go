@@ -18,26 +18,23 @@ import (
 // A household's last daily sample says how many rows each module held the night before: one indexed
 // read, in the mutation's own transaction. Below 80 % of the ceiling that is enough, since the
 // ceiling exists to catch automation rather than a family, and a household that far below it does not
-// reach it in a day of either. At or above, the module's rows are counted now, as the meter role
+// reach it within a day. At or above, the module's rows are counted now, as the meter role
 // reads them all, every member's private rows among them (Count), and a create that would pass the
 // ceiling is refused 403 fair_use_ceiling. So a household near the ceiling pays for a count with each
-// create, and one that deletes rows to come back below it is let in at once, not the next night.
+// create, and one that deletes rows to come back below it is let in at once, not the next night. Two
+// creates at once each count the rows committed before them, and so may pass the ceiling by the
+// other's: fair use catches automation, not the last row.
 type RowCeiling struct {
 	// Meter is the meter role's pool, which counts every row of a household.
 	Meter tenant.Beginner
 	// Modules declare their tables (module.StorageSource).
 	Modules *module.Registry
-	// Ceiling is the rows a module may hold, fairuse.Rows when zero.
-	Ceiling int64
 }
 
 // Check is the mutation spine's ceiling (mutation.Ceiling). A module that declares no tables, as the
 // platform's own do not, holds no rows fair use counts.
 func (c RowCeiling) Check(ctx context.Context, tx pgx.Tx, household uuid.UUID, mod string, creates int64) error {
-	ceiling := c.Ceiling
-	if ceiling == 0 {
-		ceiling = fairuse.Rows
-	}
+	const ceiling = fairuse.Rows
 	tables, err := declaredTables(c.Modules)
 	if err != nil {
 		return err
@@ -61,21 +58,16 @@ func (c RowCeiling) Check(ctx context.Context, tx pgx.Tx, household uuid.UUID, m
 	if !fairuse.Warns(sampled+creates, ceiling) {
 		return nil
 	}
-	var rows int64
+	var rows map[string]int64
 	err = pgx.BeginTxFunc(ctx, c.Meter, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(mtx pgx.Tx) error {
-		for _, t := range own {
-			var n int64
-			if err := mtx.QueryRow(ctx, "SELECT count(*) FROM "+t.name.Sanitize()+" WHERE household_id = $1", household).Scan(&n); err != nil {
-				return err
-			}
-			rows += n
-		}
-		return nil
+		var err error
+		rows, err = countRows(ctx, mtx, household, own)
+		return err
 	})
 	if err != nil {
 		return err
 	}
-	if rows+creates > ceiling {
+	if rows[mod]+creates > ceiling {
 		return fairuse.Refusal(fairuse.ResourceRows, ceiling, mod)
 	}
 	return nil

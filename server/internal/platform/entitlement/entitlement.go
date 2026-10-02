@@ -41,6 +41,9 @@ const (
 // States are the eight, in the contract's order.
 var States = []State{Trialing, Active, PastDue, Grace, ReadOnly, Restricted, Canceled, Suspended}
 
+// billing are the six states a subscription is in, which billing_state holds.
+var billing = []State{Trialing, Active, PastDue, Grace, ReadOnly, Canceled}
+
 // Reads reports whether a household in st may be read: in every state but suspended, which refuses
 // reads outright, for abuse or legal reasons (PRD 04 §3, DD-15).
 func (st State) Reads() bool { return st != Suspended }
@@ -51,6 +54,7 @@ func (st State) Writes() bool {
 	switch st {
 	case Trialing, Active, PastDue, Grace:
 		return true
+	case ReadOnly, Canceled, Restricted, Suspended:
 	}
 	return false
 }
@@ -60,6 +64,7 @@ func (st State) Uploads() bool {
 	switch st {
 	case Trialing, Active, PastDue:
 		return true
+	case Grace, ReadOnly, Canceled, Restricted, Suspended:
 	}
 	return false
 }

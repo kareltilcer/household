@@ -86,6 +86,38 @@ describe('a problem document', () => {
     }
   })
 
+  it('from the gate of a restricted household tells its owner to lift it', () => {
+    const read = readProblem(
+      402,
+      problem('entitlement_restricted', 402, { state: 'restricted', remedy: 'lift_restriction' }),
+    )
+    if (!isEntitlementRefusal(read)) throw new Error('not a refusal')
+    expect(read.remedy).toBe('lift_restriction')
+  })
+
+  it('from a fair-use ceiling names what it counts, and its ceiling', () => {
+    const read = readProblem(
+      403,
+      problem('fair_use_ceiling', 403, { resource: 'rows', ceiling: 250000, module: 'shopping' }),
+    )
+    if (read.code !== 'fair_use_ceiling') throw new Error('not a fair-use refusal')
+    expect(read.resource).toBe('rows')
+    expect(read.ceiling).toBe(250000)
+    expect(read.module).toBe('shopping')
+    const owned = readProblem(403, problem('household_limit_reached', 403, { ceiling: 5 }))
+    if (owned.code !== 'household_limit_reached')
+      throw new Error('not the households a user may own')
+    expect(owned.ceiling).toBe(5)
+    const unreadable: [string, Record<string, unknown>][] = [
+      ['fair_use_ceiling', { resource: 'rows' }],
+      ['fair_use_ceiling', { resource: 'messages', ceiling: 500000 }],
+      ['household_limit_reached', {}],
+    ]
+    for (const [code, extra] of unreadable) {
+      expect(readProblem(403, problem(code, 403, extra)).code).toBeUndefined()
+    }
+  })
+
   it('with validation_failed names its failures', () => {
     const errors = [{ field: '/name', code: 'required' }]
     const read = readProblem(422, problem('validation_failed', 422, { errors }))

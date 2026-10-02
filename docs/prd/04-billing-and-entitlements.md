@@ -69,7 +69,11 @@ A household is always in exactly one state, and the state is resolved once per r
 | `read_only` | ✓ | ✗ | ✗ | pull only | After grace. Data intact and fully exportable throughout the **12-month** retention window, then warned and deleted — D-32 |
 | `canceled` | ✓ | ✗ | ✗ | pull only | Customer cancelled. Same as `read_only`, same retention window, different messaging |
 | `restricted` | ✓ | ✗ | ✗ | pull only | **Owner-initiated**, not billing-related. GDPR Art. 18. Reversible by any owner at any time — see FR-BI7 |
-| `suspended` | ✗ | ✗ | ✗ | ✗ | Abuse or legal. Rare, staff-initiated, always with notice |
+| `suspended` | ✗ | ✗ | ✗ | ✗ | Abuse or legal. Rare, staff-initiated, always with notice. Every household route answers `404`; the household list still names it, for the lockout; its replicas are emptied (**D-115**) |
+
+The states are resolved by a precedence (**D-114**): a suspension outranks everything; a lapse
+(`read_only`, `canceled`) outranks a restriction, since only a lapse carries a deletion date; and a
+restriction outranks the states that still write.
 
 **D-32: lapsed households become read-only, never deleted and never locked out of their own
 data.** Export works in every state including `read_only` and `canceled`. Deleting a paying-
@@ -80,7 +84,9 @@ deleted. **"Never deleted" means never deleted *for lapsing*, not kept forever**
 long enough that a household which comes back within a year finds everything, and short enough that
 the platform is not storing abandoned data indefinitely at its own cost. Resuming the subscription
 at any point in the window restores `active` and clears the countdown; the household is told the
-date on the banner from the day it enters the state, so nobody is deleted by surprise.
+date on the banner from the day it enters the state, so nobody is deleted by surprise. The date is
+the day the data is deleted, 12 months and 30 days after the lapse, and the three warnings are
+emailed to every owner a month, a week and a day before it (**D-119**).
 
 **FR-BI1 — `read_only` is enforced in one place.** The tenant middleware resolves the
 entitlement state and, in a non-writing state, refuses every unsafe method with `402 Payment
@@ -97,13 +103,16 @@ billing logic whatsoever, and `402` is declared on every household-scoped unsafe
 | `POST` / `DELETE …/deletion` | A household must be able to leave in any state |
 | `POST …/leave` | A member is not held in a household by somebody else's billing |
 | `POST` / `DELETE …/restriction` | A restriction you cannot lift is a household nobody can use (FR-BI7) |
+| `POST …/sync/credentials` | It writes nothing: it hands out the credential a replica pulls with, and a household that does not write still pulls (**D-117**) |
 
-Nothing else is exempt, and **no read is ever refused with `402` in any state**.
+Nothing else is exempt, and **no read is ever refused with `402` in any state**. A `suspended`
+household answers every household route `404`, these too (**D-115**).
 
 **FR-BI2 — Entering `read_only` emits sync retractions for nothing.** The client keeps its
-replica and switches to read-only UI. A member's queued offline mutations are returned
-`rejected` with reason `entitlement`, held locally, and offered for replay if the subscription
-resumes within the retention window.
+replica and switches to read-only UI. A member's queued offline mutations are refused by the push's
+`402`, whose code, `entitlement_read_only` or `entitlement_restricted`, each is recorded `rejected`
+with (**D-118**), held locally, and offered for replay if the subscription resumes within the
+retention window.
 
 **FR-BI7 — `restricted` is the owner's own switch, and it is the only state that is not about
 money.** It exists because [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §3 offers
@@ -165,8 +174,9 @@ household's currency. An invoice is never the first time a customer learns the n
 ## 5. Fair use on rows
 
 Database rows are not billed, so they need a ceiling. These are generous, exist to catch
-automation and abuse rather than enthusiastic families, and are enforced with a warning at 80 %
-and a `429` at the limit.
+automation and abuse rather than enthusiastic families, and are enforced with a warning to the
+owners at 80 %, then a refusal at the limit: `403` for a count, which falls only when something is
+removed, and `429` for a rate (**D-116**).
 
 | Resource | Ceiling |
 |---|---|

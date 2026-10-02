@@ -123,6 +123,12 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
 - **`404`, not `403`,** for anything the caller may not see: a module they hold `none` on, a
   disabled module, a private item, a conversation they are not in. `403` means "you can see
   it and may not do this to it".
+- **Entitlement and fair use are the platform's, never a module's.** A household's state is resolved
+  once per request, and the tenant middleware's gate refuses an unsafe request `402` in a state that
+  does not write, but for FR-BI1's closed list (`entitlement.Exemptions`), which a test holds to the
+  household-scoped unsafe operations that declare no `402`: a new one declares it. A suspended
+  household answers `404`. The spine refuses a create past a module's rows, and the files pipeline an
+  upload past the objects or in grace ([ADR 0017](docs/adr/0017-entitlements-on-the-households-row-the-gate-and-fair-use.md)).
 - **The mutation spine.** Every mutation writes its row, an audit event and a sync change
   in one transaction, through one service-layer entry point, `mutation.Apply`, which commits
   only what it records. REST and sync both write through it: a module whose entities a client

@@ -80,7 +80,7 @@ func Notice(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UU
 	if err != nil {
 		return err
 	}
-	args := i18n.Args{"resource": resource, "module": module, "count": count, "ceiling": ceiling}
+	args := i18n.Args{"resource": resource, "module": module, "held": count, "ceiling": ceiling}
 	ns := make([]notify.Notification, 0, len(owners))
 	for _, o := range owners {
 		ns = append(ns, notify.Notification{
