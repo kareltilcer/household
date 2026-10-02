@@ -889,7 +889,7 @@ func addressed(ctx context.Context, tx pgx.Tx, i invitation, user uuid.UUID) err
 // the levels it proposed (FR-HH3). Their address must be verified, and an email invitation's must be
 // its own. Someone already a member is answered their membership as it is, and the invitation is left
 // for its addressee. A household that does not write is joined by nobody, and a suspended one is
-// not found (joinable, D-120).
+// not found (writable, D-120).
 func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -936,7 +936,7 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 			err = usable(i, now)
 		}
 		if err == nil {
-			err = joinable(ctx, tx, household)
+			err = writable(ctx, tx, household)
 		}
 		if err != nil {
 			return mutation.Record{}, err
@@ -990,7 +990,9 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 // an account with its address; one that no longer works is not found, and neither is one into a
 // household the caller is in already, which asks them into nothing, as accepting it and sending it
 // again treat it: closing it would close a link for those it may still bring in, and tell its
-// inviter of a refusal that is not one.
+// inviter of a refusal that is not one. It is a write into the household, held to its state as
+// accepting is (writable, D-120): refused 402 while the household does not write, and not found while
+// it is suspended.
 func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -1026,6 +1028,11 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		case in:
 			return mutation.Record{}, problem.NotFound()
+		}
+		// Closing the invitation, recording it and telling its inviter write into the household, which
+		// a household that does not write refuses, and a suspended one is not found for (D-120).
+		if err := writable(ctx, tx, i.household); err != nil {
+			return mutation.Record{}, err
 		}
 		if i, err = setStatus(ctx, tx, i, statusDeclined); err != nil {
 			return mutation.Record{}, err

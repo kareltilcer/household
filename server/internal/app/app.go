@@ -189,7 +189,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		return nil, fmt.Errorf("app: %w", err)
 	}
 	catalog := mutation.Catalog(registry)
-	ceilings := mutation.Ceilings(storage.RowCeiling{Meter: d.Meter, Modules: d.Modules}.Check)
+	ceilings := mutation.Ceilings(storage.NewRowCeiling(d.Meter, d.Modules).Check)
 	pushes, err := push.New(push.Config{Registry: registry, Logger: d.Logger})
 	if err != nil {
 		return nil, fmt.Errorf("app: %w", err)

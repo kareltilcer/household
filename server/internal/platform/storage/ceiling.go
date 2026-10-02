@@ -32,25 +32,30 @@ import (
 // household's ceiling (PRD 04 §5, item 21). Two creates at once each count the rows committed before
 // them, and so may pass the ceiling by the other's: fair use catches automation, not the last row.
 type RowCeiling struct {
-	// Meter is the meter role's pool, which counts every row of a household.
-	Meter tenant.Beginner
-	// Modules declare their tables (module.StorageSource).
-	Modules *module.Registry
+	// meter is the meter role's pool, which counts every row of a household.
+	meter tenant.Beginner
+	// tables are the tables each module declares (module.StorageSource), by its name.
+	tables map[string][]countedTable
+}
+
+// NewRowCeiling returns the ceiling that counts, as meter, the meter role's pool, the tables modules
+// declare, which it reads from the registry once. A declaration that is no table's name is left out,
+// as the sampler leaves it out and reports it each night (Sampler.Sample), rather than failing every
+// create of its module.
+func NewRowCeiling(meter tenant.Beginner, modules *module.Registry) *RowCeiling {
+	declared, _ := declaredTables(modules)
+	tables := map[string][]countedTable{}
+	for _, t := range declared {
+		tables[t.module] = append(tables[t.module], t)
+	}
+	return &RowCeiling{meter: meter, tables: tables}
 }
 
 // Check is the mutation spine's ceiling (mutation.Ceiling). A module that declares no tables, as the
-// platform's own do not, holds no rows fair use counts. A declaration that is no table's name is left
-// out, as the sampler leaves it out and reports it each night (Sampler.Sample), rather than failing
-// every create of every module.
-func (c RowCeiling) Check(ctx context.Context, tx pgx.Tx, household uuid.UUID, mod string, creates int64) error {
+// platform's own do not, holds no rows fair use counts.
+func (c *RowCeiling) Check(ctx context.Context, tx pgx.Tx, household uuid.UUID, mod string, creates int64) error {
 	const ceiling = fairuse.Rows
-	tables, _ := declaredTables(c.Modules)
-	var own []countedTable
-	for _, t := range tables {
-		if t.module == mod {
-			own = append(own, t)
-		}
-	}
+	own := c.tables[mod]
 	if len(own) == 0 {
 		return nil
 	}
@@ -69,7 +74,7 @@ func (c RowCeiling) Check(ctx context.Context, tx pgx.Tx, household uuid.UUID, m
 		return nil
 	}
 	var rows map[string]int64
-	err = pgx.BeginTxFunc(ctx, c.Meter, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(mtx pgx.Tx) error {
+	err = pgx.BeginTxFunc(ctx, c.meter, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(mtx pgx.Tx) error {
 		var err error
 		rows, err = countRows(ctx, mtx, household, own)
 		return err

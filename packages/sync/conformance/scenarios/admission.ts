@@ -51,8 +51,8 @@ export const admission: readonly Scenario[] = [
     key: '14',
     title: 'Entitlement lapses with a queue outstanding',
     expected:
-      'Rejected with entitlement, held locally, and replayed once the subscription resumes; nothing is retracted in ' +
-      'the meantime (FR-BI2)',
+      "Rejected with the push's 402 code, entitlement_read_only, held locally, and replayed once the subscription " +
+      'resumes; nothing is retracted in the meantime (FR-BI2, D-118)',
     enabledBy: 16,
     needs: ['conformance.item'],
     capabilities: ['setEntitlement'],

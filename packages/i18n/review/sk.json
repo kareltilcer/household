@@ -71,6 +71,8 @@
   "notification.child_locked.title": "{member}’s profile is locked",
   "notification.fair_use.body": "{household} holds {held, number} {resource, select, members {members} objects {files} other {rows in {module, select, dashboard {Dashboard} tasks {Tasks} reminders {Reminders} calendar {Calendar} shopping {Shopping} chores {Chores} notes {Notes} documents {Documents} finance {Finance} utilities {Utilities} garden {Garden} property {Property} vehicles {Vehicles} pets {Pets} chat {Chat} activity {Activity log} admin {Household settings} other {{module}}}}}, 80 % of the {ceiling, number} it may. Past that, nothing more can be added.",
   "notification.fair_use.title": "{household} is near its fair-use limit",
+  "notification.fair_use_households.body": "With {household}, you own {held, plural, one {# household} other {# households}}, 80 % of the {ceiling, number} one account may. Past that, you can’t create another.",
+  "notification.fair_use_households.title": "You are near the fair-use limit on households",
   "notification.invitation_declined.body": "{invitee} won’t be joining {household}. The invitation is closed; you can send it again from the household’s members.",
   "notification.invitation_declined.title": "{invitee} declined your invitation"
 }

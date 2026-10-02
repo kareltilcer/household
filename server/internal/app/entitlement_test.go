@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -316,39 +317,86 @@ func TestASuspendedHouseholdIsListedAndNothingMore(t *testing.T) {
 	expect(t, jana.delete(householdPath(h.ID, "/restriction")), http.StatusNotFound, problem.CodeNotFound)
 }
 
-// Accepting an invitation is held to the household's entitlement (D-120): a household that does not
-// write is joined by nobody, 402 naming its state, the invitee told to ask an owner, and a suspended
-// one is not found. The invitation still works once the household writes again.
+// suspension suspends household h, or lifts its suspension, as the platform's staff will (item 21).
+func (s *site) suspension(h uuid.UUID, suspended bool) {
+	s.t.Helper()
+	if _, err := s.admin.Exec(s.t.Context(), "UPDATE households SET suspended_at = CASE WHEN $2 THEN now() END WHERE id = $1",
+		h, suspended); err != nil {
+		s.t.Fatal(err)
+	}
+}
+
+// Accepting an invitation and declining one are held to the household's entitlement (D-120): a
+// household that does not write is joined and declined by nobody, 402 naming its state, the invitee
+// told to ask an owner, and a suspended one is not found. The invitation is left as it was, and works
+// once the household writes again.
 func TestAnInvitationIsHeldToTheHouseholdsState(t *testing.T) {
 	s, _ := newHouseholdSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
 	h := jana.create("Tilcerovi")
 	jana.invite(h.ID, map[string]any{"kind": "email", "email": s.a("eva@tilcerovi.cz"), "role": "member"})
 	eva := s.person("Eva", s.a("eva@tilcerovi.cz"))
-	accept := "/me/invitations/" + s.invitationToken(s.a("eva@tilcerovi.cz")) + "/accept"
-	suspend := func(suspended bool) {
-		t.Helper()
-		if _, err := s.admin.Exec(t.Context(), "UPDATE households SET suspended_at = CASE WHEN $2 THEN now() END WHERE id = $1",
-			h.ID, suspended); err != nil {
-			t.Fatal(err)
+	token := s.invitationToken(s.a("eva@tilcerovi.cz"))
+	accept, decline := "/me/invitations/"+token+"/accept", "/me/invitations/"+token+"/decline"
+
+	expect(t, jana.post(householdPath(h.ID, "/restriction"), ""), http.StatusOK, "")
+	for _, path := range []string{accept, decline} {
+		rec := eva.post(path, "")
+		expect(t, rec, http.StatusPaymentRequired, problem.CodeEntitlementRestricted)
+		if r := refusalOf(t, rec); r.State != "restricted" || r.Remedy != entitlement.RemedyContactOwner {
+			t.Fatalf("%s's refusal: %+v", path, r)
 		}
+	}
+	s.suspension(h.ID, true)
+	expect(t, eva.post(accept, ""), http.StatusNotFound, problem.CodeNotFound)
+	expect(t, eva.post(decline, ""), http.StatusNotFound, problem.CodeNotFound)
+	if n := s.count("SELECT count(*) FROM memberships WHERE household_id = $1", h.ID); n != 1 {
+		t.Fatalf("%d members", n)
+	}
+	if n := s.count("SELECT count(*) FROM invitations WHERE household_id = $1 AND status = 'pending'", h.ID); n != 1 {
+		t.Fatal("a refused decline closed the invitation")
+	}
+
+	s.suspension(h.ID, false)
+	expect(t, jana.delete(householdPath(h.ID, "/restriction")), http.StatusOK, "")
+	expect(t, eva.post(accept, ""), http.StatusOK, "")
+}
+
+// Confirming a child profile's graduation makes it a member of its household, a write held to the
+// household's entitlement as an invitation's acceptance is (D-120): refused 402 while the household
+// does not write, not found while it is suspended, and the link works once the household writes again.
+func TestAGraduationIsHeldToTheHouseholdsState(t *testing.T) {
+	s, _ := newHouseholdSite(t)
+	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	adam := jana.child(h.ID, "Adam", "1234", nil)
+	address := s.a("adam@tilcerovi.cz")
+	expect(t, jana.post(householdPath(h.ID, "/children/"+adam.UserID.String()+"/graduate"), jsonBody(t, map[string]string{"email": address})),
+		http.StatusAccepted, "")
+	link := s.graduationToken(address)
+	confirm := func() *httptest.ResponseRecorder {
+		t.Helper()
+		return s.browser().post("/auth/graduation/confirm", jsonBody(t, map[string]string{"token": link, "password": passphrase}))
 	}
 
 	expect(t, jana.post(householdPath(h.ID, "/restriction"), ""), http.StatusOK, "")
-	rec := eva.post(accept, "")
+	rec := confirm()
 	expect(t, rec, http.StatusPaymentRequired, problem.CodeEntitlementRestricted)
 	if r := refusalOf(t, rec); r.State != "restricted" || r.Remedy != entitlement.RemedyContactOwner {
 		t.Fatalf("the refusal: %+v", r)
 	}
-	suspend(true)
-	expect(t, eva.post(accept, ""), http.StatusNotFound, problem.CodeNotFound)
-	if n := s.count("SELECT count(*) FROM memberships WHERE household_id = $1", h.ID); n != 1 {
-		t.Fatalf("%d members", n)
-	}
+	s.suspension(h.ID, true)
+	expect(t, confirm(), http.StatusNotFound, problem.CodeNotFound)
 
-	suspend(false)
+	s.suspension(h.ID, false)
+	if m := jana.members(h.ID)["Adam"]; m.Role != "child" {
+		t.Fatalf("Adam graduated in a household that writes nothing: %+v", m)
+	}
 	expect(t, jana.delete(householdPath(h.ID, "/restriction")), http.StatusOK, "")
-	expect(t, eva.post(accept, ""), http.StatusOK, "")
+	expect(t, confirm(), http.StatusNoContent, "")
+	if m := jana.members(h.ID)["Adam"]; m.Role != "member" {
+		t.Fatalf("Adam once the household writes again: %+v", m)
+	}
 }
 
 // adminCatalog is the module registry with admin, which the platform's own mutations are checked
@@ -559,17 +607,29 @@ func TestAModuleHoldsSoManyRows(t *testing.T) {
 	expect(t, w.do(http.MethodPost, items(h), jana, itemBody(it, h)), http.StatusCreated, "")
 }
 
-// A user owns five households at most (PRD 04 §5, D-116): the sixth they make is refused 403
-// household_limit_reached. A household someone else made, which they are in, counts for nothing.
+// A user owns five households at most (PRD 04 §5, D-116): the fourth they make tells them they are
+// at 80 % of it, once, and the sixth is refused 403 household_limit_reached. A household someone else
+// made, which they are in, counts for nothing.
 func TestAUserOwnsFiveHouseholdsAtMost(t *testing.T) {
 	s, _ := newHouseholdSite(t)
 	jana := s.person("Jana", s.a("jana@tilcerovi.cz"))
+	janaID := jana.me().ID
+	jana.subscribe()
 	petr := s.person("Petr", s.a("petr@tilcerovi.cz"))
 	h := petr.create("Petrovi")
 	petr.invite(h.ID, map[string]any{"kind": "email", "email": s.a("jana@tilcerovi.cz"), "role": "member"})
 	expect(t, jana.post("/me/invitations/"+s.invitationToken(s.a("jana@tilcerovi.cz"))+"/accept", ""), http.StatusOK, "")
 	for i := range fairuse.Households {
 		jana.create(fmt.Sprintf("Tilcerovi %d", i))
+	}
+	var told []string
+	for _, p := range s.pushes.To(janaID) {
+		if p.Push.Title == "You are near the fair-use limit on households" {
+			told = append(told, p.Push.Body)
+		}
+	}
+	if len(told) != 1 || !strings.Contains(told[0], "With Tilcerovi 3, you own 4 households, 80 % of the 5") {
+		t.Fatalf("Jana was told %q", told)
 	}
 	rec := jana.post("/households", jsonBody(t, map[string]any{
 		"id": idgen.New(), "name": "One too many", "country": "CZ", "timezone": "Europe/Prague", "base_currency": "CZK", "locale": "cs",
@@ -624,37 +684,41 @@ func TestAHouseholdHasTwelveMembersAtMost(t *testing.T) {
 }
 
 // The nightly sample tells a household's owners when its objects, or a module's rows, cross 80 % of
-// their fair-use ceiling (PRD 04 §5): once, as the sample crosses it, and not again while it stays
-// above, whether the sample is taken again that day or on the next.
+// their fair-use ceiling (PRD 04 §5): once for each, as the sample crosses it, and not again while it
+// stays above, whether the sample is taken again that day or on the next.
 func TestTheSampleWarnsOfAFairUseCeilingOnce(t *testing.T) {
 	w := newFileWorld(t)
 	h := w.household(true)
 	jana := w.member(h, access.Owner, nil)
-	petr := w.member(h, access.Member, level(access.Contribute))
+	// A member, who is told nothing of it.
+	w.member(h, access.Member, level(access.Contribute))
 	w.exec(`INSERT INTO files (household_id, module, entity_id, variant, content_type, byte_size, sha256, variants)
 		SELECT $1, 'probe', gen_random_uuid(), 'original', 'text/plain', 1, sha256(i::text::bytea), 'none'
 		FROM generate_series(1, $2::int) i`, h, fairuse.Objects*4/5)
+	w.exec("INSERT INTO probe_items (id, household_id) SELECT gen_random_uuid(), $1 FROM generate_series(1, $2::int)", h, fairuse.Rows*4/5)
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
 	log := logging.New(io.Discard, slog.LevelDebug)
 	outbox := &apptest.Outbox{}
 	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
-	warnings := func() map[uuid.UUID]int {
+	// Each warning by whom it went to and what it counted.
+	warnings := func() map[string]int {
 		t.Helper()
-		rows, err := w.admin.Query(t.Context(), `SELECT user_id, count(*) FROM notifications
-			WHERE household_id = $1 AND message = 'notification.fair_use' GROUP BY 1`, h)
+		rows, err := w.admin.Query(t.Context(), `SELECT user_id::text || ' ' || (args->>'resource') || ' ' || (args->>'module'), count(*)
+			FROM notifications WHERE household_id = $1 AND message = 'notification.fair_use' GROUP BY 1`, h)
 		if err != nil {
 			t.Fatal(err)
 		}
-		out := map[uuid.UUID]int{}
+		out := map[string]int{}
 		var (
-			user uuid.UUID
-			n    int
+			key string
+			n   int
 		)
-		if _, err := pgx.ForEachRow(rows, []any{&user, &n}, func() error { out[user] = n; return nil }); err != nil {
+		if _, err := pgx.ForEachRow(rows, []any{&key, &n}, func() error { out[key] = n; return nil }); err != nil {
 			t.Fatal(err)
 		}
 		return out
 	}
+	want := map[string]int{jana.String() + " objects ": 1, jana.String() + " rows probe": 1}
 	night := time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)
 	for _, at := range []time.Time{night, night.Add(time.Hour), night.Add(24 * time.Hour)} {
 		s := w.sampler(at)
@@ -662,8 +726,8 @@ func TestTheSampleWarnsOfAFairUseCeilingOnce(t *testing.T) {
 		if _, err := s.Sample(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		if got := warnings(); len(got) != 1 || got[jana] != 1 || got[petr] != 0 {
-			t.Fatalf("sampled at %s, the owners were warned %v", at, got)
+		if got := warnings(); !maps.Equal(got, want) {
+			t.Fatalf("sampled at %s, the owners were warned %v, want %v", at, got, want)
 		}
 	}
 }

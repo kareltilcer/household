@@ -71,6 +71,8 @@
   "notification.child_locked.title": "Profil {member} je zamčený",
   "notification.fair_use.body": "Domácnost {household} má {held, number} {resource, select, members {členů} objects {souborů} other {záznamů v modulu {module, select, dashboard {Přehled} tasks {Úkoly} reminders {Připomínky} calendar {Kalendář} shopping {Nákupy} chores {Domácí práce} notes {Poznámky} documents {Dokumenty} finance {Finance} utilities {Energie a služby} garden {Zahrada} property {Nemovitost} vehicles {Vozidla} pets {Zvířata} chat {Konverzace} activity {Historie změn} admin {Nastavení domácnosti} other {{module}}}}}, tedy 80 % z {ceiling, number}, které smí mít. Nad tento limit už nepůjde nic přidat.",
   "notification.fair_use.title": "Domácnost {household} se blíží limitu férového používání",
+  "notification.fair_use_households.body": "S domácností {household} vlastníte {held, plural, one {# domácnost} few {# domácnosti} many {# domácnosti} other {# domácností}}, tedy 80 % z {ceiling, number}, které smí mít jeden účet. Nad tento limit už další nezaložíte.",
+  "notification.fair_use_households.title": "Blížíte se limitu férového používání pro domácnosti",
   "notification.invitation_declined.body": "{invitee} se k domácnosti {household} nepřipojí. Pozvánka je uzavřená; znovu ji můžete poslat z přehledu členů domácnosti.",
   "notification.invitation_declined.title": "{invitee} odmítá vaši pozvánku"
 }

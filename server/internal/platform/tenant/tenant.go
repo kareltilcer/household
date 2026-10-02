@@ -296,8 +296,7 @@ func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Sc
 			return err
 		}
 		var e entitlement.Row
-		if err := tx.QueryRow(ctx, "SELECT "+entitlement.Columns+" FROM households h WHERE h.id = $1", household).
-			Scan(e.Dest()...); err != nil {
+		if err := tx.QueryRow(ctx, entitlement.Query, household).Scan(e.Dest()...); err != nil {
 			return err
 		}
 		if s.entitlement, err = e.Status(); err != nil {
@@ -342,6 +341,17 @@ func Levels(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, role acce
 		return nil, err
 	}
 	return levels, nil
+}
+
+// Owners are household's owners, read in tx in its context, in the order of their ids: whom the
+// platform tells of what is the owners' to act on, a child profile that locked, a ceiling of fair use
+// nearing, a lapsed household's data about to be deleted.
+func Owners(ctx context.Context, tx pgx.Tx, household uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := tx.Query(ctx, "SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'owner' ORDER BY user_id", household)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }
 
 // Effective is a member's level on a module: the minimum of the household's enablement and the

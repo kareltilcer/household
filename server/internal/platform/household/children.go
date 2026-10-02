@@ -390,11 +390,7 @@ const messageChildLocked = "notification.child_locked"
 // lockNotices are the notices to each of household's owners, read in tx, that m, a child profile's
 // membership, locked: someone who means them, the child asking to be let in.
 func lockNotices(ctx context.Context, tx pgx.Tx, household uuid.UUID, m membership) ([]notify.Notification, error) {
-	rows, err := tx.Query(ctx, "SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'owner' ORDER BY user_id", household)
-	if err != nil {
-		return nil, err
-	}
-	owners, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	owners, err := tenant.Owners(ctx, tx, household)
 	if err != nil {
 		return nil, err
 	}
@@ -1000,6 +996,10 @@ func findGraduation(ctx context.Context, tx pgx.Tx, token string, now time.Time,
 // sender's invitations (withdraw), so that it stays spent once they are an owner again, and the
 // sending reads their role under the household's lock, which every change of a role takes, so that
 // none is written after that; it is checked here too, under the same lock.
+//
+// It writes into the household from outside its routes, so it is held to the household's state as
+// accepting an invitation is (writable, D-120): a household that does not write graduates nobody until
+// it writes again, 402, and a suspended one is not found. The link stays as it was for when it does.
 func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -1052,6 +1052,11 @@ func (s *Service) confirmGraduation(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		case m.child == nil:
 			return mutation.Record{}, problem.NotFound()
+		}
+		// A membership changed from outside the household's routes, held to its state as an
+		// invitation's acceptance is (D-120).
+		if err := writable(ctx, tx, household); err != nil {
+			return mutation.Record{}, err
 		}
 		// The profile's account before its link, in the order a sending takes them (graduate), which
 		// holds the account while it retires the links before its own: taken the other way round, a

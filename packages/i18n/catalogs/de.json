@@ -71,6 +71,8 @@
   "notification.child_locked.title": "Das Profil von {member} ist gesperrt",
   "notification.fair_use.body": "{household} hat {held, number} {resource, select, members {Mitglieder} objects {Dateien} other {Einträge in {module, select, dashboard {Übersicht} tasks {Aufgaben} reminders {Erinnerungen} calendar {Kalender} shopping {Einkaufen} chores {Hausarbeiten} notes {Notizen} documents {Dokumente} finance {Finanzen} utilities {Energie und Dienste} garden {Garten} property {Immobilie} vehicles {Fahrzeuge} pets {Haustiere} chat {Unterhaltungen} activity {Aktivitätsprotokoll} admin {Haushaltseinstellungen} other {{module}}}}}, 80 % der {ceiling, number}, die erlaubt sind. Darüber hinaus kann nichts mehr hinzugefügt werden.",
   "notification.fair_use.title": "{household} nähert sich der Fair-Use-Grenze",
+  "notification.fair_use_households.body": "Mit {household} besitzen Sie {held, plural, one {# Haushalt} other {# Haushalte}}, 80 % der {ceiling, number}, die ein Konto haben darf. Darüber hinaus können Sie keinen weiteren anlegen.",
+  "notification.fair_use_households.title": "Sie nähern sich der Fair-Use-Grenze für Haushalte",
   "notification.invitation_declined.body": "{invitee} tritt dem Haushalt {household} nicht bei. Die Einladung ist geschlossen; Sie können sie in der Mitgliederliste des Haushalts erneut senden.",
   "notification.invitation_declined.title": "{invitee} hat Ihre Einladung abgelehnt"
 }

@@ -40,16 +40,18 @@ info:
     No read is refused `402` in any state. `grace` refuses uploads alone. A `suspended` household
     answers every household-scoped request `404`, the exempt ones too, as a household its caller
     cannot see; the household list (`getHouseholds`) still names it, with its state, for the
-    lockout a client shows. Accepting an invitation (`postMeInvitationsByTokenAccept`), the one
-    write into a household outside its routes, is held to the same: `402` in a state that does not
-    write, and not found in a `suspended` household (D-120).
+    lockout a client shows. The writes into a household from outside its routes, accepting an
+    invitation (`postMeInvitationsByTokenAccept`), declining one (`postMeInvitationsByTokenDecline`)
+    and confirming a graduation (`postAuthGraduationConfirm`), are held to the same: `402` in a
+    state that does not write, and not found in a `suspended` household (D-120).
 
     A fair-use ceiling on what a household or a user holds (PRD 04 §5: members, owned households,
     rows per module, objects) refuses the create that would pass it `403`, `fair_use_ceiling`, or
     `household_limit_reached` for the households a user may own: waiting does not lower the count,
-    so a retry does not help. A module's rows are the rows the database holds, its deleted ones
-    among them until they are erased; past a ceiling, support raises it. A ceiling on a rate
-    answers `429`.
+    so a retry does not help. The owners are told once as a count reaches 80 % of its ceiling, and
+    a user as they create the household that brings them to 80 % of theirs. A module's rows are the
+    rows the database holds, its deleted ones among them until they are erased; past a ceiling,
+    support raises it. A ceiling on a rate answers `429`.
 
     ## Authentication
 
@@ -498,6 +500,11 @@ paths:
         it is withdrawn, and stays withdrawn if they are made an owner again. An address another
         account has taken since the link was sent answers `409` (`email_taken`). A password found in
         the breached-password screen is refused `422`, naming `/password` with the code `invalid`.
+
+        The membership is the household's, held to its entitlement as an invitation's acceptance is
+        (D-120): a household in a state that does not write graduates nobody until it writes again,
+        `402` naming its state with the remedy `contact_owner`, the link left as it was, and a
+        `suspended` one is not found.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -505,6 +512,7 @@ paths:
         content: { application/json: { schema: { type: object, required: [token, password], properties: { token: { type: string }, password: { type: string, minLength: 12 } } } } }
       responses:
         '204': { description: Graduated }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: 'Another account has the address (`email_taken`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '410': { description: 'The link has expired (`token_expired`), or has been used, replaced or withdrawn with its sender''s ownership (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
@@ -1176,9 +1184,14 @@ paths:
         invitation is declined only from the account with its address; an invitation that no longer
         works is not found, and neither is one into a household the caller is already a member of,
         which asks them into nothing.
+
+        Declining writes into the household, held to its entitlement as accepting is (D-120): a
+        household in a state that does not write records no decline until it writes again, `402`
+        naming its state with the remedy `contact_owner`, and a `suspended` one is not found.
       parameters: [{ name: token, in: path, required: true, description: 'The token the invitation''s email or link carries, or the invitation''s id for its addressee signed in with the verified address it was sent to.', schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Declined }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '404': { $ref: '#/components/responses/NotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -8665,9 +8678,10 @@ components:
         stores as much as it may": an upload that would take it past the storage ceiling (FR-FL4,
         D-33), with `over_by_bytes` and `blocks_at_ceiling`, whose remedy is `free_storage`.
 
-        **Reads, downloads and exports are never blocked, in any state**, and neither are billing,
-        export, household deletion, leaving, setting or lifting a restriction, or a replica's
-        credentials. `remedy` is what fixes it, for the caller: an owner is told to `subscribe`, to
+        **Reads, downloads and exports are never blocked with `402`, in any state**, and neither are
+        billing, export, household deletion, leaving, setting or lifting a restriction, or a
+        replica's credentials; a `suspended` household answers every one of its routes `404`
+        instead, these too (D-115). `remedy` is what fixes it, for the caller: an owner is told to `subscribe`, to
         `update_payment_method` after a failed payment, or to `lift_restriction`; anyone else to
         `contact_owner`, since only an owner can (FR-BI5).
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/EntitlementProblem' } } }

@@ -106,9 +106,10 @@ billing logic whatsoever, and `402` is declared on every household-scoped unsafe
 | `POST …/sync/credentials` | It writes nothing: it hands out the credential a replica pulls with, and a household that does not write still pulls (**D-117**) |
 
 Nothing else is exempt, and **no read is ever refused with `402` in any state**. A `suspended`
-household answers every household route `404`, these too (**D-115**). Accepting an invitation, the
-one write into a household that is not one of its routes, is held to the same: a household that
-does not write is joined by nobody (`402`), and a `suspended` one is not found (**D-120**).
+household answers every household route `404`, these too (**D-115**). The writes into a household
+that are not its routes, accepting an invitation, declining one and confirming a child profile's
+graduation, are held to the same: a household that does not write is joined, declined and graduated
+in by nobody (`402`), and a `suspended` one is not found (**D-120**).
 
 **FR-BI2 — Entering `read_only` emits sync retractions for nothing.** The client keeps its
 replica and switches to read-only UI. A member's queued offline mutations are refused by the push's

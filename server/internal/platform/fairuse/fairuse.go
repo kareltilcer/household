@@ -20,6 +20,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
 // The ceilings on counts (PRD 04 §5). Rows and Objects are per household, Rows per module of it;
@@ -73,11 +74,7 @@ const message = "notification.fair_use"
 // of resource, of module's rows when the resource is rows, at 80 % of ceiling or more (Warns): once,
 // where the count crosses it (Crossed). The caller nudges n once tx commits.
 func Notice(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UUID, resource, module string, count, ceiling int64) error {
-	rows, err := tx.Query(ctx, "SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'owner' ORDER BY user_id", household)
-	if err != nil {
-		return err
-	}
-	owners, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	owners, err := tenant.Owners(ctx, tx, household)
 	if err != nil {
 		return err
 	}

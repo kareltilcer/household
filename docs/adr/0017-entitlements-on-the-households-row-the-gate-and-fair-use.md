@@ -55,9 +55,10 @@ other is `402`, with `entitlement_read_only` or `entitlement_restricted`, the st
 the caller. A request no route matches is refused like any unsafe one. `NewRouter` installs the gate
 unless a test replaces it. A test holds the list to the contract both ways: the household-scoped unsafe
 operations that declare no `402` are exactly the list, and every operation in every state answers as
-the list says. Accepting an invitation is the one write into a household outside its routes, which
-the gate never sees: it asks the same of the household's state under the household's lock
-(`household.joinable`, D-120), `404` when suspended and the `402` otherwise.
+the list says. Accepting an invitation, declining one and confirming a child profile's graduation are
+the writes into a household outside its routes, which the gate never sees: each asks the same of the
+household's state under the household's lock (`household.writable`, D-120), `404` when suspended and
+the `402` otherwise.
 
 **Grace's refusal is the files pipeline's** (`files.Put`, and `files.Receive` before it reads a byte of
 the body): an upload in a state that does not upload is refused with the same `402`, and the storage
@@ -87,7 +88,8 @@ deleting. The files pipeline counts objects beside the bytes it already sums; a 
 creation counts the caller's owned households under an advisory lock of the user's (`db.OwnerLock`),
 reading them outside the new household's context in its own transaction (`tenant.Outside`); joining
 counts the members under the household's lock. The nightly sample warns the owners of a crossing of
-80 %, compared with the sample before it, and so does the tenth member's arrival.
+80 %, compared with the sample before it, and so does the tenth member's arrival; a user is told as
+they create their fourth household.
 
 **The hourly job** (`household.Service.Transition`, `entitlement.transitions`) finds the households with
 a clock run out as the meter role, which reads the schedule columns and nothing else (architecture test

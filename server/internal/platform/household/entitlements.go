@@ -35,19 +35,19 @@ const emailRetention mail.Template = "email.retention_warning"
 // readStatus reads household's entitlement, in tx in its context.
 func readStatus(ctx context.Context, tx pgx.Tx, household uuid.UUID) (entitlement.Status, error) {
 	var e entitlement.Row
-	if err := tx.QueryRow(ctx, "SELECT "+entitlement.Columns+" FROM households h WHERE h.id = $1", household).
-		Scan(e.Dest()...); err != nil {
+	if err := tx.QueryRow(ctx, entitlement.Query, household).Scan(e.Dest()...); err != nil {
 		return entitlement.Status{}, err
 	}
 	return e.Status()
 }
 
-// joinable refuses, in tx in household's context, an invitation's acceptance into a household whose
-// state does not permit it (D-120): accepting is an account route, which the tenant middleware's gate
-// never sees, and a membership is a write. A suspended household is not found, as it is on every
-// route (D-115); one that does not write is refused 402 naming its state, and the invitee, who holds
-// no role there yet, is told to ask an owner.
-func joinable(ctx context.Context, tx pgx.Tx, household uuid.UUID) error {
+// writable refuses, in tx in household's context, a write into a household from outside its routes,
+// which the tenant middleware's gate never sees, when the household's state does not permit it
+// (D-120): accepting an invitation and declining one, which are account routes, and confirming a
+// graduation, a public one. A suspended household is not found, as it is on every route (D-115); one
+// that does not write is refused 402 naming its state, and the caller, who holds no role there or a
+// child's, is told to ask an owner.
+func writable(ctx context.Context, tx pgx.Tx, household uuid.UUID) error {
 	status, err := readStatus(ctx, tx, household)
 	if err != nil {
 		return err
@@ -298,7 +298,7 @@ func (s *Service) transition(ctx context.Context, household uuid.UUID, catalog *
 			return mutation.Record{}, err
 		}
 		days := warned.DaysLeft(now)
-		owners, err := ownersOf(ctx, tx, household)
+		owners, err := tenant.Owners(ctx, tx, household)
 		if err != nil {
 			return mutation.Record{}, err
 		}
@@ -331,35 +331,46 @@ func (s *Service) transition(ctx context.Context, household uuid.UUID, catalog *
 	return advanced.EventID != uuid.Nil || warned.EventID != uuid.Nil, nil
 }
 
-// ownersOf are household's owners, read in tx in its context.
-func ownersOf(ctx context.Context, tx pgx.Tx, household uuid.UUID) ([]uuid.UUID, error) {
-	rows, err := tx.Query(ctx, "SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'owner' ORDER BY user_id", household)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-}
-
 // ownedCeiling refuses user, in tx, the transaction that creates a household of theirs, when they own
-// fairuse.Households already (PRD 04 §5, D-116). The households a user creates are serialised on a
-// lock of theirs, which the transaction holds until it commits, so that two at once count each
-// other; their memberships are read outside the new household's context, where row-level security
-// admits a user's own (tenant.Outside). Being made an owner of a household someone else made is that
-// household's owners' decision, and is not counted against them here.
-func ownedCeiling(ctx context.Context, tx pgx.Tx, user uuid.UUID) error {
+// fairuse.Households already (PRD 04 §5, D-116), and otherwise returns how many they own. The
+// households a user creates are serialised on a lock of theirs, which the transaction holds until it
+// commits, so that two at once count each other; their memberships are read outside the new
+// household's context, where row-level security admits a user's own (tenant.Outside). Being made an
+// owner of a household someone else made is that household's owners' decision, and is not counted
+// against them here.
+func ownedCeiling(ctx context.Context, tx pgx.Tx, user uuid.UUID) (int64, error) {
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, hashtext($2))", db.OwnerLock, user.String()); err != nil {
-		return err
+		return 0, err
 	}
 	var owned int64
 	if err := tenant.Outside(ctx, tx, func() error {
 		return tx.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE user_id = $1 AND role = 'owner'", user).Scan(&owned)
 	}); err != nil {
-		return err
+		return 0, err
 	}
 	if owned >= fairuse.Households {
-		return fairuse.HouseholdLimit()
+		return owned, fairuse.HouseholdLimit()
 	}
-	return nil
+	return owned, nil
+}
+
+// messageOwnedNotice is the push that tells a user the household they made brings them to 80 % of
+// the households they may own.
+const messageOwnedNotice = "notification.fair_use_households"
+
+// ownedNotice queues, in tx in household's context, the push that tells user that household, which
+// they have just made after owning before, brings them to 80 % of the households they may own (D-116),
+// and reports whether it did, for the caller to nudge the transport once tx commits: once, at the
+// creation that crosses it.
+func (s *Service) ownedNotice(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, before int64) (bool, error) {
+	if !fairuse.Crossed(before, before+1, fairuse.Households) {
+		return false, nil
+	}
+	return true, s.Notify.Queue(ctx, tx, notify.Notification{
+		To: user, Category: notify.Direct, Message: messageOwnedNotice,
+		Args: i18n.Args{"held": before + 1, "ceiling": int64(fairuse.Households)},
+		Link: "/households/" + household.String(),
+	})
 }
 
 // memberCeiling refuses a new member of household, in tx under the household's lock (lockHousehold),

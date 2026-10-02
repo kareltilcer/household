@@ -17,6 +17,10 @@ const Columns = `h.billing_state::text, h.trial_ends_at, h.dunning_ends_at, h.gr
 	h.restricted_by IS NOT NULL AND NOT EXISTS (
 	  SELECT FROM memberships rm WHERE rm.household_id = h.id AND rm.user_id = h.restricted_by)`
 
+// Query reads Columns of the household its one argument names, in its context: the one statement the
+// tenant middleware resolves the state with and the household surface reads it again with.
+const Query = "SELECT " + Columns + " FROM households h WHERE h.id = $1"
+
 // Row receives Columns from a query, for Status.
 type Row struct {
 	billing                                     string

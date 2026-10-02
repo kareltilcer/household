@@ -212,10 +212,12 @@ var errIDTaken = invalid("/id", problem.FieldInvalid)
 
 // createHousehold creates a household (FR-HH1): any user, verified or not, may, and becomes its
 // owner and its payer of record. It enables every module, grants its owner Manage on each, gives it
-// a household code, and starts its trial, which its row's insert begins (FR-HH1). Its units and first day of the week are
-// its country's unless the request says, and a country Household has no profile of is refused. A
-// child profile is refused 403: it is a profile an owner manages in their household, never a
-// household's owner and payer (D-17, D-104).
+// a household code, and starts its trial, which its row's insert begins (FR-HH1). Its units and first
+// day of the week are its country's unless the request says, and a country Household has no profile
+// of is refused. A child profile is refused 403: it is a profile an owner manages in their household,
+// never a household's owner and payer (D-17, D-104). A user who owns as many households as they may
+// is refused 403 household_limit_reached, and one this household brings to 80 % of them is told
+// (PRD 04 §5, D-116).
 func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -233,6 +235,7 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 		created settings
 		status  entitlement.Status
 		modules = Modules
+		noticed bool
 	)
 	_, err := mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
 		switch child, err := identity.IsChild(ctx, tx, user); {
@@ -248,7 +251,8 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 		case !ok:
 			return mutation.Record{}, invalid("/country", problem.FieldInvalid)
 		}
-		if err := ownedCeiling(scoped, tx, user); err != nil {
+		owned, err := ownedCeiling(scoped, tx, user)
+		if err != nil {
 			return mutation.Record{}, err
 		}
 		units, firstDay := p.units, p.firstDayOfWeek
@@ -278,6 +282,10 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 		if status, err = readStatus(ctx, tx, created.id); err != nil {
 			return mutation.Record{}, err
 		}
+		// Told in the household it made, of which it is a member now.
+		if noticed, err = s.ownedNotice(scoped, tx, created.id, user, owned); err != nil {
+			return mutation.Record{}, err
+		}
 		return mutation.Record{
 			Event: audit.Event{
 				Module: Name, Action: actionCreate, EntityType: entitySettings, EntityID: created.id,
@@ -289,6 +297,9 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if noticed {
+		s.Notify.Nudge(ctx, created.id)
 	}
 	// The creator is its owner, with Manage on every module, each of which it enables.
 	manage := func(string) access.Level { return access.Manage }
