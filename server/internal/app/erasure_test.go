@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
@@ -385,6 +387,126 @@ func TestTheLastOwnerErasedIsSucceededByAnAdultWhoMayStillComeBack(t *testing.T)
 	expect(t, p.browser().post("/auth/deletion/cancel", jsonBody(t, map[string]string{"token": *d.CancelToken})), http.StatusNotFound, problem.CodeNotFound)
 }
 
+// A household its only owner chose to delete with their account goes the night the account does,
+// whoever owns it by then (D-131): an owner who came back to it and left its deletion standing was
+// told the day, and it is not kept a night past that day for them.
+func TestAHouseholdChosenWithAnAccountGoesWithItWhoeverOwnsItByThen(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	janaID := jana.me().ID
+	h := jana.create("Tilcerovi")
+	address := p.a("petr@tilcerovi.cz")
+	petr, petrID := p.joined(jana, h.ID, "Petr", address, "member", nil)
+	expect(t, jana.post(householdPath(h.ID, "/ownership/transfer"), jsonBody(t, map[string]any{"user_id": petrID})), http.StatusOK, "")
+
+	// Petr goes first, so Jana is the only owner who will still be there, and names the household.
+	rec := petr.deleteAccount(passphrase)
+	expect(t, rec, http.StatusAccepted, "")
+	var d deletionDoc
+	decode(t, rec, &d)
+	expect(t, jana.deleteAccount(passphrase, h.ID), http.StatusAccepted, "")
+	// He comes back, an owner of a household that is to be deleted, and leaves its deletion as it is.
+	expect(t, p.browser().post("/auth/deletion/cancel", jsonBody(t, map[string]string{"token": *d.CancelToken})), http.StatusNoContent, "")
+	back := p.browser()
+	back.login(address, passphrase)
+	at := back.scheduledFor(h.ID)
+	if at == nil {
+		t.Fatal("his own cancellation cancelled the deletion of a household that follows her account")
+	}
+
+	p.clock.advance(30*24*time.Hour + time.Minute)
+	p.erase()
+	if p.count("SELECT count(*) FROM users WHERE id = $1 AND deleted_at IS NOT NULL", janaID) != 1 {
+		t.Fatal("her account was not erased")
+	}
+	if rows := p.rowsOf(h.ID); len(rows) != 0 {
+		t.Fatalf("the night her account went, past %s, the household she chose to delete with it keeps %v", at, rows)
+	}
+	if n := p.count("SELECT count(*) FROM erasures WHERE kind = 'household' AND id = $1 AND cause = 'account'", h.ID); n != 1 {
+		t.Error("no tombstone of the household")
+	}
+	if p.count("SELECT count(*) FROM users WHERE id = $1 AND deleted_at IS NULL", petrID) != 1 {
+		t.Error("his account went with the household")
+	}
+}
+
+// An account that declined a household's invitation, and never joined it, is named by that
+// household's log all the same, as who declined. Erased, it reads as a former member there too
+// (FR-PR4, D-135): the job finds the household by the record the decline left, which keeps nothing
+// of theirs for a window and gives their own export nothing.
+func TestAnErasedAccountsNameLeavesTheLogOfAHouseholdItOnlyDeclined(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	address := p.a("eva@tilcerovi.cz")
+	eva := p.person("Eva", address)
+	evaID := eva.me().ID
+	jana.invite(h.ID, map[string]any{"kind": "email", "email": address, "role": "member"})
+	expect(t, eva.post("/me/invitations/"+p.invitationToken(address)+"/decline", ""), http.StatusNoContent, "")
+	const named = "SELECT count(*) FROM audit_events WHERE household_id = $1 AND actor_id = $2 AND actor_label IS NOT NULL"
+	if n := p.count(named, h.ID, evaID); n != 1 {
+		t.Fatalf("%d of the household's events name her, want the one that says she declined", n)
+	}
+	if n := p.count("SELECT count(*) FROM departures WHERE household_id = $1 AND user_id = $2 AND cause = 'declined' AND erased_at IS NOT NULL",
+		h.ID, evaID); n != 1 {
+		t.Fatal("nothing records that the household's log names her")
+	}
+	// The record is no window: her own export takes nothing of a household she never joined.
+	e := exportOf(t, eva.post("/me/exports", ""), http.StatusAccepted)
+	p.work()
+	if _, m := p.stored(e.ID); len(m.Households) != 0 {
+		t.Errorf("her export takes a part of %+v", m.Households)
+	}
+
+	expect(t, eva.deleteAccount(passphrase), http.StatusAccepted, "")
+	p.clock.advance(30*24*time.Hour + time.Minute)
+	p.erase()
+	if p.count("SELECT count(*) FROM users WHERE id = $1 AND deleted_at IS NOT NULL", evaID) != 1 {
+		t.Fatal("her account was not erased")
+	}
+	if n := p.count(named, h.ID, evaID); n != 0 {
+		t.Errorf("%d of the events she caused still carry her name", n)
+	}
+	if n := p.count("SELECT count(*) FROM departures WHERE household_id = $1 AND user_id = $2", h.ID, evaID); n != 0 {
+		t.Error("the record outlived her account")
+	}
+}
+
+// A sign-in never waits for a deletion being scheduled: it is refused as a wrong password is while
+// the scheduling holds the account's row (FR-PR4). Waiting for it, a second step's answer, which
+// holds its challenge, would deadlock with the scheduling, which ends the account's challenges.
+func TestASignInBesideADeletionBeingScheduledIsRefusedAndNeverWaits(t *testing.T) {
+	p := newPrivacySite(t)
+	address := p.a("jana@tilcerovi.cz")
+	jana := p.person("Jana", address)
+	janaID := jana.me().ID
+
+	// The scheduling's transaction, as far as the lock it takes first.
+	tx, err := p.admin.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(t.Context())) }()
+	if err := identity.LockAccount(t.Context(), tx, janaID); err != nil {
+		t.Fatal(err)
+	}
+	body := jsonBody(t, map[string]string{"email": address, "password": passphrase, "client_type": "web"})
+	answered := make(chan *httptest.ResponseRecorder, 1)
+	go func() { answered <- p.browser().post("/auth/login", body) }()
+	select {
+	case rec := <-answered:
+		expect(t, rec, http.StatusUnauthorized, problem.CodeInvalidCredentials)
+	case <-time.After(15 * time.Second):
+		t.Fatal("the sign-in waited for the deletion being scheduled")
+	}
+
+	// The scheduling given up, the account signs in as it did.
+	if err := tx.Rollback(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	p.browser().login(address, passphrase)
+}
+
 // An erasure that fails partway is finished the next night, with nothing of it left undone (FR-PR4):
 // while a module's part of a household fails, the account stays scheduled and its membership stays,
 // which is how the job finds the household again.
@@ -676,7 +798,11 @@ func TestConsentsAndDiagnosticBundles(t *testing.T) {
 	id := idgen.New()
 	bundle := map[string]any{
 		"id": id, "screen": "sync-health", "household_id": h.ID, "ticket_reference": "HH-1042",
-		"payload":         map[string]any{"last_checkpoint": "184467", "queue_depth": 3, "outcomes": []string{"conflict", "rejected"}},
+		// A number past 2^53, which a float64 does not hold: the bundle is kept as it was sent, not as
+		// the server would write it again.
+		"payload": map[string]any{
+			"last_checkpoint": "184467", "queue_depth": 3, "last_op_id": int64(9007199254740993), "outcomes": []string{"conflict", "rejected"},
+		},
 		"redacted_fields": []string{"/payload/device_label"},
 	}
 	rec = jana.post("/me/diagnostics", jsonBody(t, bundle))
@@ -691,7 +817,8 @@ func TestConsentsAndDiagnosticBundles(t *testing.T) {
 	}
 	var payload json.RawMessage
 	if err := p.admin.QueryRow(t.Context(), "SELECT payload FROM diagnostic_bundles WHERE id = $1 AND household_id = $2 AND redacted_fields = $3",
-		id, h.ID, []string{"/payload/device_label"}).Scan(&payload); err != nil || !strings.Contains(string(payload), `"queue_depth": 3`) {
+		id, h.ID, []string{"/payload/device_label"}).Scan(&payload); err != nil || !strings.Contains(string(payload), `"queue_depth": 3`) ||
+		!strings.Contains(string(payload), `"last_op_id": 9007199254740993`) {
 		t.Fatalf("the bundle is kept as %s (%v)", payload, err)
 	}
 	// Sent again, it is kept once and answered as it was; another's id is nobody else's to take.

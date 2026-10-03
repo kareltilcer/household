@@ -99,7 +99,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	}
 	background := identity.NewBackground(log, 4, 1024, time.Minute)
 	accounts, households, notifier, closeAccounts, err := newAccounts(ctx, cfg, log, pool, meter, background, avatars,
-		household.Hooks{Lost: Lost(catalog, nil)})
+		household.Hooks{Lost: Lost(catalog, nil), Named: privacy.Named(nil)})
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,8 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	}
 	// The files workers, the notification workers, the export worker and the scheduler run for as
 	// long as the API serves, and release what they hold before the process ends: the jobs and the
-	// notifications claimed, and the scheduler's lead. An export it was building is left to its lease.
+	// notifications claimed, the export being built, which goes back to the queue unbuilt, and the
+	// scheduler's lead.
 	working, stopWorking := context.WithCancel(ctx)
 	defer stopWorking()
 	var workers sync.WaitGroup
@@ -316,8 +317,10 @@ func newNotify(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool, 
 // day of (D-109), the sweeps of the objects no row records an hour after it, the erasure at 02:30
 // UTC and the expiry sweep at 03:00 UTC, once they are done. PowerSync's compaction runs at 04:00
 // UTC, after them all (deploy/powersync/compact.sh): a job that fails is tried again fifteen minutes
-// later, four times a night at most, so the erasure's last try starts at 03:15, and the rows it
-// deleted leave bucket storage the same night (D-93, runbooks/compaction.md).
+// after it failed, four times a night at most, so the erasure's last try starts at 03:15 at the
+// earliest, and later by as long as the tries before it ran. The rows it deleted by 04:00 leave
+// bucket storage the same night, and those of a try still running then the night after (D-93,
+// runbooks/compaction.md).
 const (
 	nightlySample  = localtime.Clock(1 * 60)
 	nightlySweeps  = localtime.Clock(2 * 60)

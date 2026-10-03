@@ -27,20 +27,33 @@ const purposeCancelDeletion = "cancel_deletion"
 // disabled reports whether user's account is scheduled for deletion, and so signs nobody in
 // (FR-PR4): read in tx, the transaction that would admit them, once it holds the user's row against
 // a deletion being scheduled meanwhile. Scheduling one takes the row FOR UPDATE (LockAccount) before
-// it ends the account's sessions, so either this waits for it and finds the account disabled, or it
-// waits for this and ends the session this made. The two are statements of their own: one that
-// waited for the row would still read the deletions as they were before it waited.
+// it ends the account's sessions, so either this holds the row first, and the scheduling waits for
+// it and ends the session this made, or the scheduling holds it, and the account is disabled as far
+// as this sign-in goes.
+//
+// It never waits for the row: SKIP LOCKED passes over one a deletion being scheduled holds, the one
+// thing that takes it FOR UPDATE, and a row passed over reads as the account disabled. A sign-in
+// reaches here holding rows of its own, the challenge a second step answers among them, which the
+// scheduling then waits for in order to end them (Disable): waiting for each other, the two would
+// deadlock, and PostgreSQL would end one of them, the deletion as likely as the sign-in. A
+// scheduling that then fails has refused one sign-in it need not have, which signs in again.
 func disabled(ctx context.Context, tx pgx.Tx, user uuid.UUID) (bool, error) {
-	if _, err := tx.Exec(ctx, "SELECT FROM users WHERE id = $1 FOR KEY SHARE", user); err != nil {
+	tag, err := tx.Exec(ctx, "SELECT FROM users WHERE id = $1 FOR KEY SHARE SKIP LOCKED", user)
+	if err != nil {
 		return false, err
 	}
+	if tag.RowsAffected() == 0 {
+		return true, nil
+	}
+	// A statement of its own: the row held, whatever scheduled a deletion before it has committed.
 	var is bool
-	err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM account_deletions WHERE user_id = $1)", user).Scan(&is)
+	err = tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM account_deletions WHERE user_id = $1)", user).Scan(&is)
 	return is, err
 }
 
 // LockAccount locks user's row in tx against every sign-in to the account until tx ends (disabled):
-// what schedules the account's deletion takes it first.
+// what schedules the account's deletion takes it first. Nothing else takes a user's row FOR UPDATE,
+// which a sign-in reads as the account being disabled.
 func LockAccount(ctx context.Context, tx pgx.Tx, user uuid.UUID) error {
 	_, err := tx.Exec(ctx, "SELECT FROM users WHERE id = $1 FOR UPDATE", user)
 	return err

@@ -1082,6 +1082,11 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 		}); err != nil {
 			return mutation.Record{}, err
 		}
+		// The event names the caller as who declined, in the log of a household they are no member of:
+		// the one record of that, by which their account's erasure finds the log, is the hook's to keep.
+		if err := s.Hooks.named(scoped, tx, i.household, user); err != nil {
+			return mutation.Record{}, err
+		}
 		return mutation.Record{
 			Event: audit.Event{
 				Module: Name, Action: actionInviteDecline, EntityType: entityInvitation, EntityID: i.id,

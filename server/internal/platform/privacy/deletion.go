@@ -258,6 +258,27 @@ func (s *Service) cancelDeletion(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Named is the household surface's Named hook, which runs in the transaction of a mutation a user
+// makes in a household they are no member of, declining its invitation: the event it records names
+// them as who did it, and an erased account's name comes off the events it caused (FR-PR4, D-135),
+// which the nightly job finds household by household, by the account's memberships and its
+// departures (eraseAccount). So the household keeps a departure of theirs that says only that its log
+// names them: nothing was kept there to delete, so it is written as erased already, which no window
+// waits on and no export takes. A departure of theirs that is there already, one who left and whose
+// window is open, stays as it is. now is the clock, time.Now when nil.
+func Named(now func() time.Time) func(ctx context.Context, tx pgx.Tx, household, user uuid.UUID) error {
+	if now == nil {
+		now = time.Now
+	}
+	return func(ctx context.Context, tx pgx.Tx, household, user uuid.UUID) error {
+		at := now()
+		_, err := tx.Exec(ctx, `
+			INSERT INTO departures (household_id, user_id, cause, departed_at, erase_after, erased_at) VALUES ($1, $2, 'declined', $3, $4, $3)
+			ON CONFLICT (household_id, user_id) DO NOTHING`, household, user, at, at.Add(PrivateKept))
+		return err
+	}
+}
+
 // Departed is the household surface's Lost hook for a member who left a household or was removed
 // from it (FR-PR7), which runs in the transaction that ends their membership: what they kept
 // privately there is theirs to export for 30 days more, and is deleted then (Erase). A child profile

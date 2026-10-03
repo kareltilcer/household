@@ -204,6 +204,12 @@ type Hooks struct {
 	// Changed runs after a change of a member's role or grants, or their removal, commits: item 15
 	// tells them (D-78, FR-HA5).
 	Changed func(ctx context.Context, change Change)
+	// Named runs in the transaction of a mutation its caller makes in a household they hold no
+	// membership in and keep none in, declining its invitation (FR-HH3): the event names them as who
+	// did it, and nothing else of the household's says its log does. Item 20 keeps that record
+	// (privacy.Named), by which the erasure of their account finds the log to take their name off
+	// (FR-PR4, D-135). An error rolls the mutation back.
+	Named func(ctx context.Context, tx pgx.Tx, household, user uuid.UUID) error
 }
 
 // lost runs the Lost hook for loss, when one is set and anyone lost anything.
@@ -212,4 +218,13 @@ func (h Hooks) lost(ctx context.Context, tx pgx.Tx, loss Loss) error {
 		return nil
 	}
 	return h.Lost(ctx, tx, loss)
+}
+
+// named runs the Named hook for user, who acts in household without being its member, when one is
+// set.
+func (h Hooks) named(ctx context.Context, tx pgx.Tx, household, user uuid.UUID) error {
+	if h.Named == nil {
+		return nil
+	}
+	return h.Named(ctx, tx, household, user)
 }

@@ -312,20 +312,26 @@ const (
 
 // activity writes household's activity log as CSV, rendered in locale, as reader would read it on
 // screen (FR-PR2, FR-AU4): every event, oldest first, with an event about a private item that is not
-// theirs redacted, its summary the generic one and its entity dropped. only, when not nil, keeps the
-// events reader caused themself, in the modules it names: what a member's own export takes.
-func (s *Service) activity(ctx context.Context, tx pgx.Tx, w io.Writer, household, reader uuid.UUID, locale i18n.Locale, only []string) error {
+// theirs redacted, its summary the generic one and its entity dropped. own keeps the events reader
+// caused themself, in the modules of theirs: what a member's own export takes. Whether the log is
+// narrowed is said by own and never read off the list, which is empty for a member who sees no
+// module, and then takes no event rather than every one.
+func (s *Service) activity(ctx context.Context, tx pgx.Tx, w io.Writer, household, reader uuid.UUID, locale i18n.Locale, own bool, theirs []string,
+) error {
 	out := csv.NewWriter(w)
 	out.UseCRLF = true
 	if err := out.Write([]string{"occurred_at", "actor", "module", "action", "entity_type", "entity_id", "summary"}); err != nil {
 		return err
 	}
+	if theirs == nil {
+		theirs = []string{}
+	}
 	rows, err := tx.Query(ctx, `
 		SELECT e.occurred_at, e.actor_type::text, e.actor_label, e.module, e.action, coalesce(e.entity_type, ''), e.entity_id,
 		  e.summary_key, e.summary_args, e.visibility::text, e.owner_id
 		FROM audit_events e
-		WHERE e.household_id = $1 AND ($3::text[] IS NULL OR (e.actor_id = $2 AND e.module = ANY ($3)))
-		ORDER BY e.occurred_at, e.id`, household, reader, only)
+		WHERE e.household_id = $1 AND (NOT $3::boolean OR (e.actor_id = $2 AND e.module = ANY ($4::text[])))
+		ORDER BY e.occurred_at, e.id`, household, reader, own, theirs)
 	if err != nil {
 		return err
 	}
@@ -371,13 +377,24 @@ func (s *Service) activity(ctx context.Context, tx pgx.Tx, w io.Writer, househol
 				id = entityID.String()
 			}
 		}
-		return out.Write([]string{at.UTC().Format(time.RFC3339), actor, mod, action, entity, id, summary})
+		return out.Write([]string{at.UTC().Format(time.RFC3339), cell(actor), mod, action, entity, id, cell(summary)})
 	})
 	if err != nil {
 		return err
 	}
 	out.Flush()
 	return out.Error()
+}
+
+// cell is s as a spreadsheet reads it for text. The log's two columns of words, who did a thing and
+// what they did, carry what members typed, a name or a title, and a program that opens a CSV runs a
+// cell that begins as a formula does, with =, +, - or @, or with a tab or a carriage return before
+// one: such a cell is written behind an apostrophe, which the program shows as the text it is.
+func cell(s string) string {
+	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+		return "'" + s
+	}
+	return s
 }
 
 // visible are the modules of sources whose export a member with levels takes: every one they hold

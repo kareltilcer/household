@@ -391,6 +391,11 @@ type Fate struct {
 	// only owner chose to delete it with their account, or nobody is left in it who could own it.
 	Erase bool
 	Cause string
+	// Members is how many members the household had when that was read, the account among them. The
+	// read's transaction has ended by the time the household is erased, so whoever erases it holds
+	// it to the number under the row's lock: a member who joined since makes it a household to
+	// resolve again, not one to erase.
+	Members int
 }
 
 // Depart takes an erased account out of household (FR-PR3, FR-PR4), as the system, checked against
@@ -431,8 +436,13 @@ func (s *Service) Depart(ctx context.Context, catalog *module.Registry, househol
 			return mutation.Record{}, err
 		}
 		switch {
-		case st.Members == 1, st.SoleOwner && st.WithAccount:
-			fate = Fate{Erase: true, Cause: causeWithAccount}
+		// A deletion that follows the account's goes with it whoever owns the household by now: an
+		// owner it has gained since cancels it as any owner cancels a household's deletion, and one
+		// who did not left it scheduled (D-131). Kept for them here, it would be erased the night
+		// after all the same, its deletion still standing and the account it follows gone
+		// (privacy.Service.eraseDue), a day past the day its members were told.
+		case st.Members == 1, st.WithAccount:
+			fate = Fate{Erase: true, Cause: causeWithAccount, Members: st.Members}
 			return mutation.Record{}, nil
 		case !st.SoleOwner:
 			return mutation.Record{}, nil
@@ -467,7 +477,7 @@ func (s *Service) Depart(ctx context.Context, catalog *module.Registry, househol
 			case owned:
 				return mutation.Record{}, nil
 			case none:
-				fate = Fate{Erase: true, Cause: causeOwnerless}
+				fate = Fate{Erase: true, Cause: causeOwnerless, Members: st.Members}
 				return mutation.Record{}, nil
 			}
 		}

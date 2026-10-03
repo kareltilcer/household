@@ -49,9 +49,23 @@ type quietProbe struct {
 	// refuse, while set, fails the erasure of a member's private items: a night on which a module's
 	// part of an erasure does not go through.
 	refuse *atomic.Bool
+	// panics, while set, panics in the middle of the module's part of an export, as a module's bug
+	// would.
+	panics *atomic.Bool
 }
 
 func (quietProbe) RegisterRoutes(chi.Router) {}
+
+func (q quietProbe) Export(ctx context.Context, tx pgx.Tx, e module.Export, a module.Archive) error {
+	if q.panics.Load() {
+		// Its own entry begun, as a module's bug strikes: halfway through what it was writing.
+		if _, err := a.Create("probe-items.csv"); err != nil {
+			return err
+		}
+		panic(errors.New("probe: a bug in the module's export"))
+	}
+	return q.Module.Export(ctx, tx, e, a)
+}
 
 func (q quietProbe) Erase(ctx context.Context, tx pgx.Tx, e module.Erasure) error {
 	if e.Member != uuid.Nil && q.refuse.Load() {
@@ -66,16 +80,17 @@ type privacySite struct {
 	*site
 	files *files.Service
 	store *objectstore.Store
-	// refuse fails the probe's erasure of a member's private items while it is set.
-	refuse *atomic.Bool
+	// refuse fails the probe's erasure of a member's private items while it is set, and panics makes
+	// its part of an export panic.
+	refuse, panics *atomic.Bool
 }
 
 func newPrivacySite(t *testing.T) *privacySite {
 	t.Helper()
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
 	fs := apptest.Files(t, pool, logging.New(io.Discard, slog.LevelDebug), apptest.Options{})
-	refuse := &atomic.Bool{}
-	registry, err := module.NewRegistry(quietProbe{Module: probe.Module{Files: fs}, refuse: refuse})
+	refuse, panics := &atomic.Bool{}, &atomic.Bool{}
+	registry, err := module.NewRegistry(quietProbe{Module: probe.Module{Files: fs}, refuse: refuse, panics: panics})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,14 +98,17 @@ func newPrivacySite(t *testing.T) *privacySite {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The hook reads the site's clock, which the site makes.
+	// The hooks read the site's clock, which the site makes.
 	var now func() time.Time
 	lost := func(ctx context.Context, tx pgx.Tx, loss household.Loss) error {
 		return app.Lost(catalog, now)(ctx, tx, loss)
 	}
-	s := newSite(t, apptest.Options{Files: fs, Hooks: household.Hooks{Lost: lost}}, func(d *app.Deps) { d.Modules = registry })
+	named := func(ctx context.Context, tx pgx.Tx, h, user uuid.UUID) error {
+		return privacy.Named(now)(ctx, tx, h, user)
+	}
+	s := newSite(t, apptest.Options{Files: fs, Hooks: household.Hooks{Lost: lost, Named: named}}, func(d *app.Deps) { d.Modules = registry })
 	now = s.clock.now
-	return &privacySite{site: s, files: fs, store: fs.Store(), refuse: refuse}
+	return &privacySite{site: s, files: fs, store: fs.Store(), refuse: refuse, panics: panics}
 }
 
 func (p *privacySite) exec(sql string, args ...any) {
@@ -512,6 +530,37 @@ func TestAnExportThatFailsThreeTimesHasFailed(t *testing.T) {
 	// Having failed, it is in nobody's way: a new one is queued.
 	if again := exportOf(t, jana.post("/me/exports", ""), http.StatusAccepted); again.ID == e.ID {
 		t.Fatal("a new request answered the failed export")
+	}
+}
+
+// A module that panics in the middle of its part of an export ends the export, not the server: the
+// worker, which builds archives in goroutines of the process's own, answers the panic as an export
+// that failed for good, keeps nothing of its archive, and goes on to the next.
+func TestAnExportThatPanicsHasFailedAndTheWorkerGoesOn(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	janaID := jana.me().ID
+	h := jana.create("Tilcerovi")
+	p.probe(h.ID, map[uuid.UUID]string{janaID: "manage"})
+	p.item(h.ID, janaID, false, "smlouva.txt", "shared")
+	path := householdPath(h.ID, "/exports")
+
+	p.panics.Store(true)
+	e := exportOf(t, jana.post(path, ""), http.StatusAccepted)
+	p.work()
+	if got := exportOf(t, jana.get(path+"/"+e.ID.String()), http.StatusOK); got.Status != "failed" || got.DownloadURL != nil {
+		t.Fatalf("an export whose module panicked reads %+v", got)
+	}
+	if keys := p.objects("u/" + janaID.String() + "/exports/"); len(keys) != 0 {
+		t.Errorf("the store keeps %v of an export that panicked", keys)
+	}
+
+	// The worker is still there, and the next export of the same household is built.
+	p.panics.Store(false)
+	e = exportOf(t, jana.post(path, ""), http.StatusAccepted)
+	p.work()
+	if got := exportOf(t, jana.get(path+"/"+e.ID.String()), http.StatusOK); got.Status != "ready" {
+		t.Fatalf("the export after it is %q", got.Status)
 	}
 }
 

@@ -48,14 +48,17 @@ household's row does not reach. The platform's own module, admin, names its two 
 **An export is a row of its requester's, global, and a job (D-133).** `exports` is keyed by its user
 and names a household or none; it is listed and linked to that user alone. A worker in every instance
 claims the export that waited longest by moving it past a six-hour lease, builds it, and settles it
-under the claim it took, so that a try whose lease another took writes nothing. The archive is a ZIP
+under the claim it took, so that a try whose lease another took writes nothing. A build that panics,
+in a module's `Export` or anywhere else, is recovered and the export failed for good, as the files
+workers answer a job that panics: left to pass it would end the process. The archive is a ZIP
 written to a pipe and sent to the store as it is built, in 32 MiB parts (`objectstore.Store.Upload`),
 at a key under the requester's own prefix that names the try, `u/{user_id}/exports/{id}/{claim}`: no
 archive is ever on a disk, and one part of it is in memory. `manifest.json` is its last entry and names
 every other with its length and its SHA-256. The platform writes the activity log, rendered in the
 requester's language and redacted by the one rule every reader of the log applies
-(`audit.Redacted`). An archive's link is pre-signed per read of the job, as every link is (D-9); the
-email that says it is ready links to the list.
+(`audit.Redacted`), a name or a summary that begins as a formula does written behind an apostrophe,
+so that the spreadsheet that opens the log shows it and runs nothing. An archive's link is pre-signed
+per read of the job, as every link is (D-9); the email that says it is ready links to the list.
 
 **A household is erased by deleting its row (D-134).** `privacy.EraseRows` asks each module, then
 deletes the household's row, as the request role in the household's context: every tenant table
@@ -71,12 +74,16 @@ takes their name off the events they caused, a `SECURITY DEFINER` function that 
 of a log the request role otherwise only appends to (D-135). Then the household surface says what
 becomes of the household (`household.Service.Depart`, D-131): it goes with the account and is erased
 as above, or it goes on, the membership ended by a mutation of the system's through the spine, with
-the owner who succeeds, where one must, made by a mutation before it. The account's own tables go in
-one transaction at the end, which empties the `users` row and sets `deleted_at`: a failure before it
-leaves the deletion scheduled, and the next night goes over the households again, each step a no-op
-where it was done. It finds them by the account's memberships and its departures, so in each
-household whichever of the two it is goes last: a membership ended before what the household keeps
-of the member was deleted would leave a failed night's remainder there for good.
+the owner who succeeds, where one must, made by a mutation before it. A household that goes is erased
+under its row's lock only with the members it was resolved with: one who joined since leaves the
+account scheduled, and the household is resolved again on the job's next run. One whose deletion
+follows the account's goes with it whoever owns it by then, as it would the night after were it kept.
+The account's own tables go in one transaction at the end, which empties the `users` row and sets
+`deleted_at`: a failure before it leaves the deletion scheduled, and the next night goes over the
+households again, each step a no-op where it was done. It finds them by the account's memberships and
+its departures, so in each household whichever of the two it is goes last: a membership ended before
+what the household keeps of the member was deleted would leave a failed night's remainder there for
+good.
 
 **Erasure records no audit event, and leaves a tombstone.** It writes through `tenant.InWriteTx` and
 `tenant.AccountTx`, the platform's own paths, as the expiry sweep's deletions do. `erasures` keeps the
@@ -90,9 +97,14 @@ written through the spine as its settings are, so that its members' replicas lea
 records who scheduled it; the meter role reads `deletion_scheduled_at` to find the households due, as
 it reads the entitlement's clocks. An account's is a row of `account_deletions`, whose existence
 disables the account: identity's admission reads it under a lock on the user's row, which scheduling
-takes first, so that no sign-in commits beside it. `departures` records each member who left, with the
-day their private data goes, and stays while the household does, as the way an account's erasure finds
-the households it was once in.
+takes first, so that no sign-in commits beside it. Admission never waits for that row: one a
+scheduling holds reads as the account disabled, since a sign-in that waited for it while holding the
+challenge its second step answers would deadlock with the scheduling that ends the challenges.
+`departures` records each member who left, with the day their private data goes, and stays while the
+household does, as the way an account's erasure finds the households it was once in. An invitee who
+declined is recorded there too, as erased already (the household surface's `Named` hook): the
+decline's event names them in the log of a household they never joined, which nothing else would
+find.
 
 **The job runs nightly at 02:30 UTC**, between the sweeps at 02:00 and the expiry sweep at 03:00,
 ninety minutes before PowerSync's compaction, which then drops the erased rows from bucket storage

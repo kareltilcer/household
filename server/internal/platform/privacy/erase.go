@@ -28,6 +28,10 @@ const (
 	kindAccount   = "account"
 )
 
+// errResolveAgain leaves a household that was to go with an erased account as it is, and the account
+// scheduled: its members changed between the read that decided it and the lock it is erased under.
+var errResolveAgain = errors.New("privacy: the household's members changed since its fate was read; it is resolved again on the next run")
+
 // Erased is what a run of the nightly job erased.
 type Erased struct {
 	Households, Accounts, Departures, Objects int
@@ -341,7 +345,8 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 // household keeps of the user is deleted (forget), what they kept privately by its modules, what was
 // sent to them, and their name on the events they caused; and the household surface ends their
 // membership and says what becomes of the household (household.Service.Depart): one that goes with
-// the account is erased. The households they had left before are found by their departures, and
+// the account is erased. The households they had left before, and those whose invitation they
+// declined without ever joining, whose logs name them too (Named), are found by their departures, and
 // treated the same. The account's own tables go last, in one transaction, which leaves the tombstone.
 //
 // A failure before that leaves the account scheduled, and the next night goes over the households
@@ -395,7 +400,20 @@ func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Tim
 		if !fate.Erase {
 			continue
 		}
-		erased, err := s.eraseHousehold(ctx, id, fate.Cause, now, nil)
+		// The household's fate was read in a transaction that has ended: it is erased only as it was
+		// read, with the members it had then. One who joined since, by an invitation the account sent
+		// before it was disabled, makes it theirs to run (D-131): the account stays scheduled, and the
+		// job's next run resolves the household again.
+		erased, err := s.eraseHousehold(ctx, id, fate.Cause, now, func(ctx context.Context, tx pgx.Tx) (bool, error) {
+			var members int
+			if err := tx.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE household_id = $1", id).Scan(&members); err != nil {
+				return false, err
+			}
+			if members != fate.Members {
+				return false, errResolveAgain
+			}
+			return true, nil
+		})
 		if erased {
 			households++
 		}

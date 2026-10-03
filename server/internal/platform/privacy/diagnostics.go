@@ -1,6 +1,7 @@
 package privacy
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -29,18 +30,22 @@ const maxPayload = 256 << 10
 func (s *Service) sendDiagnostics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
+	// The payload is kept as its bytes were sent, never decoded and encoded again: a number read into
+	// a float64 on the way would come back another number past 2^53, and the bundle would no longer
+	// be what its member saw (D-136).
 	var req struct {
-		ID              *uuid.UUID     `json:"id"`
-		Screen          string         `json:"screen"`
-		HouseholdID     *uuid.UUID     `json:"household_id"`
-		TicketReference *string        `json:"ticket_reference"`
-		Payload         map[string]any `json:"payload"`
-		RedactedFields  []string       `json:"redacted_fields"`
+		ID              *uuid.UUID      `json:"id"`
+		Screen          string          `json:"screen"`
+		HouseholdID     *uuid.UUID      `json:"household_id"`
+		TicketReference *string         `json:"ticket_reference"`
+		Payload         json.RawMessage `json:"payload"`
+		RedactedFields  []string        `json:"redacted_fields"`
 	}
 	if err := decode(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	payload := bytes.TrimSpace(req.Payload)
 	switch {
 	case req.Screen == "" || len([]rune(req.Screen)) > 200:
 		s.fail(w, r, invalid("/screen", problem.FieldInvalid))
@@ -48,17 +53,13 @@ func (s *Service) sendDiagnostics(w http.ResponseWriter, r *http.Request) {
 	case req.TicketReference != nil && len([]rune(*req.TicketReference)) > 200:
 		s.fail(w, r, invalid("/ticket_reference", problem.FieldInvalid))
 		return
-	case req.Payload == nil:
+	case len(payload) == 0 || payload[0] != '{' || len(payload) > maxPayload:
+		// An object, which the edge has held it to already, and one of a size worth keeping.
 		s.fail(w, r, invalid("/payload", problem.FieldInvalid))
 		return
 	}
 	if req.TicketReference != nil && *req.TicketReference == "" {
 		req.TicketReference = nil
-	}
-	payload, err := json.Marshal(req.Payload)
-	if err != nil || len(payload) > maxPayload {
-		s.fail(w, r, invalid("/payload", problem.FieldInvalid))
-		return
 	}
 	if req.RedactedFields == nil {
 		req.RedactedFields = []string{}
@@ -69,7 +70,7 @@ func (s *Service) sendDiagnostics(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.cfg.Now()
 	expires := now.Add(BundlesKept)
-	err = tenant.AccountTx(ctx, s.cfg.Pool, user, func(tx pgx.Tx) error {
+	err := tenant.AccountTx(ctx, s.cfg.Pool, user, func(tx pgx.Tx) error {
 		if req.HouseholdID != nil {
 			// Outside any household, a user reads their own memberships and nobody else's.
 			var member bool

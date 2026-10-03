@@ -17,8 +17,10 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/entitlement"
 	"github.com/kareltilcer/household/server/internal/platform/files"
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
+	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
@@ -71,11 +73,44 @@ func (s *Service) Work(ctx context.Context) int {
 		if !ok {
 			return done
 		}
-		if s.run(ctx, j, claim) {
+		if s.guard(ctx, j, claim) {
 			done++
 		}
 	}
 	return done
+}
+
+// errPanicked ends an export whose build panicked: what made it panic is in the household's data or
+// in the code that reads it, and a second try would meet it again.
+var errPanicked = errors.New("privacy: the export panicked")
+
+// panicked logs a panic in j's build by its value's type and the stack, never the value, which may
+// quote what the export was reading.
+func (s *Service) panicked(ctx context.Context, j job, v any) {
+	s.cfg.Log.LogAttrs(ctx, slog.LevelError, "privacy: an export panicked", slog.String("export_id", j.id.String()),
+		slog.String("user_id", j.user.String()), slog.String("panic", httpx.TypeName(v)), slog.String("stack", logging.Stack()))
+}
+
+// guard runs j under claim, and answers a panic in it as an export that failed for good, with nothing
+// of its archive kept. The worker runs every module's Export, over whatever a household holds, in
+// goroutines of the server's own: a panic left to pass would end the process, the requests it was
+// serving with it, and the job, never settled, would end the next instance that claimed it once its
+// lease had passed. It reports whether j ended.
+//
+// The archive goes only where the try was still this claim's to fail: an export settled ready before
+// the panic, in telling its requester, keeps the archive its row names.
+func (s *Service) guard(ctx context.Context, j job, claim uuid.UUID) (ended bool) {
+	defer func() {
+		if v := recover(); v != nil {
+			s.panicked(ctx, j, v)
+			log := []slog.Attr{slog.String("export_id", j.id.String()), slog.String("user_id", j.user.String())}
+			if s.settle(ctx, j, claim, statusFailed, "", 0, nil, log) {
+				_ = s.cfg.Files.Store().Delete(context.WithoutCancel(ctx), objectKey(j.user, j.id, claim))
+			}
+			ended = true
+		}
+	}()
+	return s.run(ctx, j, claim)
 }
 
 // claim takes the export that has waited longest, moving it past the lease, and returns it, with
@@ -136,7 +171,7 @@ func (s *Service) run(ctx context.Context, j job, claim uuid.UUID) bool {
 			return false
 		}
 		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "privacy: an export failed", append(log, slog.Int("attempt", j.attempts), slog.Any("error", err))...)
-		if j.attempts >= maxAttempts || errors.Is(err, errGone) {
+		if j.attempts >= maxAttempts || errors.Is(err, errGone) || errors.Is(err, errPanicked) {
 			s.settle(ctx, j, claim, statusFailed, "", 0, nil, log)
 			return true
 		}
@@ -242,7 +277,8 @@ func (s *Service) ready(ctx context.Context, j job) {
 var errGone = errors.New("privacy: the export's requester may no longer take it")
 
 // build writes j's archive to the store at object, as it is built, and returns its length and its
-// top-level entries.
+// top-level entries. A panic in the writer, which runs every module's Export in a goroutine of its
+// own, is answered as errPanicked rather than ending the process (guard).
 func (s *Service) build(ctx context.Context, j job, object string) (int64, []string, error) {
 	pr, pw := io.Pipe()
 	var (
@@ -252,13 +288,30 @@ func (s *Service) build(ctx context.Context, j job, object string) (int64, []str
 	)
 	go func() {
 		defer close(done)
+		defer func() {
+			if v := recover(); v != nil {
+				s.panicked(ctx, j, v)
+				contents, written = nil, errPanicked
+				_ = pw.CloseWithError(written)
+			}
+		}()
 		contents, written = s.write(ctx, j, pw)
 		_ = pw.CloseWithError(written)
 	}()
-	size, err := s.cfg.Files.Store().Upload(ctx, object, pr, "application/zip")
-	// The writer ends once the reader is closed, with the upload's error if that failed first.
-	_ = pr.CloseWithError(err)
-	<-done
+	var (
+		size int64
+		err  error
+	)
+	func() {
+		// The writer ends once the reader is closed, with the upload's error if that failed first:
+		// whatever ended the upload, a panic among it, so that the writer never waits on a reader
+		// that is gone, holding its household's transaction open.
+		defer func() {
+			_ = pr.CloseWithError(err)
+			<-done
+		}()
+		size, err = s.cfg.Files.Store().Upload(ctx, object, pr, "application/zip")
+	}()
 	if written != nil {
 		return 0, nil, written
 	}
@@ -490,11 +543,7 @@ func (s *Service) household(ctx context.Context, a *archive, prefix string, id, 
 		if err != nil {
 			return err
 		}
-		var only []string
-		if e.Scope == module.ExportPersonal {
-			only = asked
-		}
-		return s.activity(ctx, tx, w, id, user, locale, only)
+		return s.activity(ctx, tx, w, id, user, locale, e.Scope == module.ExportPersonal, asked)
 	})
 	if err != nil {
 		return out, err

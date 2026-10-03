@@ -42,6 +42,26 @@ func TestAnEntrysNameIsCleaned(t *testing.T) {
 
 func long(n int) string { return string(bytes.Repeat([]byte("x"), n)) }
 
+// A cell of the activity log that begins as a formula does is text to the spreadsheet that opens it,
+// whatever a member named themself or titled a thing; any other is written as it is.
+func TestACellThatBeginsAsAFormulaIsWrittenAsText(t *testing.T) {
+	for value, want := range map[string]string{
+		"Jana":                             "Jana",
+		"":                                 "",
+		"Renamed the list to =2+2":         "Renamed the list to =2+2",
+		`=HYPERLINK("https://x.test","Y")`: `'=HYPERLINK("https://x.test","Y")`,
+		"+420 777 123 456":                 "'+420 777 123 456",
+		"-5 °C":                            "'-5 °C",
+		"@jana":                            "'@jana",
+		"\t=1+1":                           "'\t=1+1",
+		"\r=1+1":                           "'\r=1+1",
+	} {
+		if got := cell(value); got != want {
+			t.Errorf("cell(%q) = %q, want %q", value, got, want)
+		}
+	}
+}
+
 // Two entries a module names alike are both kept, the second under a suffix, whatever their case;
 // the platform's own names are never a module's; and the manifest, written last, names every entry
 // before it.

@@ -56,7 +56,8 @@ ALTER TABLE households
   ADD COLUMN deletion_account uuid REFERENCES users (id),
   ADD CONSTRAINT households_deletion CHECK (
     (deletion_id IS NULL AND deletion_requested_at IS NULL AND deletion_scheduled_at IS NULL AND deletion_account IS NULL)
-    OR (deletion_id IS NOT NULL AND deletion_requested_at IS NOT NULL AND deletion_scheduled_at > deletion_requested_at));
+    OR (deletion_id IS NOT NULL AND deletion_requested_at IS NOT NULL AND deletion_scheduled_at IS NOT NULL
+      AND deletion_scheduled_at > deletion_requested_at));
 
 CREATE INDEX households_deletion_due ON households (deletion_scheduled_at) WHERE deletion_scheduled_at IS NOT NULL;
 
@@ -71,10 +72,14 @@ GRANT SELECT (deletion_scheduled_at) ON households TO household_meter;
 -- does, as the record that the user was once its member: when their account is erased, it is how the
 -- job finds the households whose logs still name them. A member who comes back before erase_after
 -- keeps what they had, and the row goes.
+--
+-- A user who declined a household's invitation was never its member, and its log names them all the
+-- same, as who declined: their row, cause 'declined', is that record alone. They kept nothing there,
+-- so it is written with erased_at set: no window is kept for it and no export takes it.
 CREATE TABLE departures (
   household_id uuid NOT NULL REFERENCES households (id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES users (id),
-  cause text NOT NULL CHECK (cause IN ('left', 'removed')),
+  cause text NOT NULL CHECK (cause IN ('left', 'removed', 'declined')),
   departed_at timestamptz NOT NULL DEFAULT now(),
   erase_after timestamptz NOT NULL,
   erased_at timestamptz,
