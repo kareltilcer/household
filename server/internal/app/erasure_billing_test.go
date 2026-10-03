@@ -255,11 +255,14 @@ func TestALapsedHouseholdWhosePaymentIsRecordedIsKeptBeforeItsRowIsSettled(t *te
 }
 
 // A lapsed household's own subscription, which the processor could not collect, is ended with the
-// household only while the processor still says so (PRD 04 §3, D-32, D-140). Where its payer has paid
-// what was owed and no event of it has arrived, the rows say past due and the processor says paid:
-// nothing is ended, the record is brought up to the processor's, and the household is active and no
-// longer due. One still owed is ended, and the household erased.
-func TestALapsedHouseholdsOwnSubscriptionIsEndedOnlyWhileItIsStillOwed(t *testing.T) {
+// household only once the processor has given it up (PRD 04 §3, D-32, D-140). Where its payer has
+// paid what was owed and no event of it has arrived, the rows say past due and the processor says
+// paid: nothing is ended, the record is brought up to the processor's, and the household is active
+// and no longer due. One the processor is still collecting, as it does only when set to leave a
+// subscription past due once its retries end, may have a payment on its way that its status does not
+// show: nothing is ended and the household is kept, the job reporting it each night, until the
+// processor has given the subscription up.
+func TestALapsedHouseholdsOwnSubscriptionIsEndedOnlyOnceTheProcessorHasGivenItUp(t *testing.T) {
 	// owed is a household whose subscription went past due, whose retention then ran out with its three
 	// warnings sent, and the invoice the processor could not collect.
 	owed := func(t *testing.T) (p *privacySite, stripe *billingtest.Stripe, h uuid.UUID, subscription, invoice string) {
@@ -304,14 +307,46 @@ func TestALapsedHouseholdsOwnSubscriptionIsEndedOnlyWhileItIsStillOwed(t *testin
 		}
 	})
 
-	t.Run("still owed", func(t *testing.T) {
+	t.Run("still collected", func(t *testing.T) {
 		p, stripe, h, subscription, _ := owed(t)
+		// The processor has it past due still, and says so each night it is asked.
+		for night := range 2 {
+			if _, err := p.privacy.Erase(t.Context()); !errors.Is(err, billing.ErrCollecting) {
+				t.Errorf("night %d: the job's failure is %v, want the subscription the processor still collects", night, err)
+			}
+			if p.count("SELECT count(*) FROM households WHERE id = $1 AND billing_state = 'read_only'", h) != 1 {
+				t.Fatalf("night %d: the household was erased, or moved, with its subscription still collected", night)
+			}
+			if status, _, _ := stripe.Subscription(subscription); status != billing.StatusPastDue {
+				t.Fatalf("night %d: the subscription still collected is %s at the processor", night, status)
+			}
+			if row := p.subscriptionRow(h, subscription); row != "current/past_due" {
+				t.Fatalf("night %d: the subscription's row reads %q", night, row)
+			}
+		}
+		// Given up, with no event of it: nothing is paid for or may yet be, and the household goes.
+		stripe.GiveUp(subscription)
 		p.erase()
 		if rows := p.rowsOf(h); len(rows) != 0 {
-			t.Fatalf("its retention run out and its subscription still owed, the household keeps %v", rows)
+			t.Fatalf("its retention run out and its subscription given up, the household keeps %v", rows)
 		}
 		if status, _, _ := stripe.Subscription(subscription); status != billing.StatusCanceled {
 			t.Errorf("the subscription of the erased household is %s at the processor", status)
+		}
+	})
+
+	// A deletion the household's owner scheduled waits for no payment: a subscription the processor is
+	// still collecting is ended with it.
+	t.Run("deleted by its owner", func(t *testing.T) {
+		p, stripe, h, subscription, _ := owed(t)
+		p.exec("UPDATE households SET deletion_id = $2, deletion_requested_at = $3, deletion_scheduled_at = $4 WHERE id = $1",
+			h, uuid.Must(uuid.NewV7()), p.clock.now().Add(-30*24*time.Hour), p.clock.now().Add(-time.Minute))
+		p.erase()
+		if rows := p.rowsOf(h); len(rows) != 0 {
+			t.Fatalf("its deletion come due, the household keeps %v", rows)
+		}
+		if status, _, _ := stripe.Subscription(subscription); status != billing.StatusCanceled {
+			t.Errorf("the subscription of the deleted household is %s at the processor", status)
 		}
 	})
 }

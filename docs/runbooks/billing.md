@@ -66,10 +66,12 @@ step in the mode the environment uses.
    Stripe goes on issuing an invoice each period for a subscription it has not given up on, and the
    server knows such a subscription to be paid for by its status alone, which Stripe makes `active`
    only once a payment has succeeded. A payer who paid what was owed by bank debit in the last days
-   of a lapsed household's retention would be past due still while the debit cleared, and the
-   nightly erasure would end that subscription and erase the household, which PRD 04 §3 promises it
-   does not. With the subscription cancelled or unpaid, the payer of a lapsed household subscribes
-   again, and a debit on its way is waited for. The invoice may be left open or marked
+   of a lapsed household's retention would be past due still while the debit cleared, which the
+   server cannot tell from nobody paying: so the nightly erasure ends no subscription of a lapsed
+   household that Stripe is still collecting, and with this setting no lapsed household that had a
+   subscription would ever be erased (below, step 7). With the subscription cancelled or unpaid,
+   the payer of a lapsed household subscribes again, and a debit on its way is waited for. The
+   invoice may be left open or marked
    uncollectible: the last retry is emailed either way.
    Turn Stripe's own customer emails for failed payments and invoices **off**: the server sends its
    own, in the payer's language.
@@ -159,6 +161,15 @@ customers there with their rows.
    longer due, and one whose owner scheduled its deletion is erased, its subscription ended. Seen
    more than once a night, look at the webhook endpoint's deliveries in Stripe's dashboard: events
    are not arriving.
+7. `privacy: an erasure failed` with `billing: the processor is still collecting a lapsed
+   household's subscription` means a household's retention ran out, its three warnings sent, while
+   Stripe has its subscription `past_due` still, a year and more after the payment failed. Nothing
+   was ended or erased, and the line repeats each night: the household is kept past its retention
+   until Stripe says the subscription is over, or paid for. Stripe gives a subscription up when its
+   retries end unless it is set to leave it past due, which "Before the first deploy", step 4,
+   rules out: put the setting right, then look at the subscription's latest invoice in Stripe's
+   dashboard. With a payment on its way, leave it: paid, the household is `active`. With none,
+   cancel the subscription there, and the household is erased the next night.
 
 ## A key leaks or is rotated
 

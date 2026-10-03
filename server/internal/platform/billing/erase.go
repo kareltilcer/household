@@ -24,6 +24,16 @@ import (
 // record brought up to what the processor says (Refresh), and decides again from that.
 var ErrBehind = errors.New("billing: the processor has a payment the household's record has not")
 
+// ErrCollecting is Close's refusal to end the own subscription of a household erased for having
+// lapsed while the processor has not given it up: past due there still, a year and more after the
+// payment failed. Nothing of the household's was ended, and nothing is recorded, since the rows say
+// the same. The processor gives a subscription up within days of its last retry unless it is set to
+// leave one past due, which it is not to be (the billing runbook): left so, the subscription is still
+// one its payer may pay into, and a bank debit begun for what it owes leaves it past due for the days
+// the debit takes, where nothing tells one being paid from one nobody pays. The household is kept
+// until the processor has given the subscription up, or says it is paid for.
+var ErrCollecting = errors.New("billing: the processor is still collecting a lapsed household's subscription")
+
 // owing reports whether s is one the rows say is not paid for: one that waits and charges nothing
 // yet, its first payment not confirmed, or the household's own with a payment the processor could
 // not collect. The rows are what the processor's events said so far, so these are the ones a payment
@@ -56,7 +66,14 @@ func (s subscription) owing() bool {
 // the processor says either is paid for, or one that waits charges, nothing is ended and the answer
 // is ErrBehind: a lapsed household would otherwise be erased, and the subscription just paid for it
 // ended unrefunded, where paying restores it at any point of its retention (PRD 04 §3, D-32).
-func (s *Service) Close(ctx context.Context, tx pgx.Tx, household uuid.UUID) error {
+//
+// lapsed says the household is erased for its retention having run out, and for nothing its owner
+// asked: its own subscription is then ended only once the processor has given it up. One the
+// processor still has past due is one a payment may be on its way for, which the processor's word
+// for the subscription does not tell from none, so nothing is ended and the answer is ErrCollecting.
+// A deletion its owner scheduled, or one that follows their account's, waits for no payment, and
+// ends it.
+func (s *Service) Close(ctx context.Context, tx pgx.Tx, household uuid.UUID, lapsed bool) error {
 	subs, err := readSubscriptions(ctx, tx, household)
 	if err != nil {
 		return err
@@ -76,15 +93,21 @@ func (s *Service) Close(ctx context.Context, tx pgx.Tx, household uuid.UUID) err
 			continue
 		default:
 			// The household's own, as the processor has it now: one it no longer has is over already,
-			// and one it says is over, or still could not collect, is ended with the rest.
+			// and one it says is over is ended with the rest, as is one it still could not collect
+			// where the household's owner asked for the deletion.
 			said, err := s.Processor.Subscription(ctx, sub.id)
 			switch {
 			case missing(err):
 			case err != nil:
 				return err
 			default:
-				if next := sub.said(said, now); next.standing == standingCurrent && next.paidUp() {
+				next := sub.said(said, now)
+				switch {
+				case next.standing != standingCurrent:
+				case next.paidUp():
 					return ErrBehind
+				case lapsed && next.live():
+					return ErrCollecting
 				}
 			}
 		}

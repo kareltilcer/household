@@ -97,7 +97,9 @@ is deleted that night (**D-140**). Nor is one whose payment the processor alread
 has no word of yet: the processor is asked before a subscription the server's record says is not
 paid for is ended, one that waits to be confirmed or the household's own that could not be
 collected. Nor is one whose payment the server has recorded and whose own state has not caught up
-with that record yet.
+with that record yet. Nor is one whose own subscription the processor has not given up collecting:
+a payment may be on its way for it that the subscription's state does not show, so the household is
+kept until the processor says the subscription is over, or paid for.
 
 **FR-BI1 — `read_only` is enforced in one place.** The tenant middleware resolves the
 entitlement state and, in a non-writing state, refuses every unsafe method with `402 Payment

@@ -304,7 +304,9 @@ func eraseMember(ctx context.Context, tx pgx.Tx, reg *module.Registry, household
 //
 // A household with a subscription the processor says is paid for, or being paid, where the rows do
 // not, one that waits or its own, is not erased: the record is brought up to the processor's, and
-// the failure returned is billing.ErrBehind, for the job to run again.
+// the failure returned is billing.ErrBehind, for the job to run again. Nor is a lapsed household
+// whose own subscription the processor has not given up (billing.ErrCollecting): it is kept, and
+// the failure reported each night, until the processor says the subscription is over or paid for.
 func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause string, now time.Time,
 	still func(context.Context, pgx.Tx) (bool, error),
 ) (bool, error) {
@@ -359,8 +361,10 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 		// before the rows that name them go (billing.Service.Close). The processor is asked inside the
 		// transaction, which is held meanwhile: a failure there leaves the household as it was, for the
 		// next night, where a subscription ended and then not erased would be the lesser harm, a
-		// household due for deletion that lapses a night early.
-		if err := s.cfg.Billing.Close(ctx, tx, household); err != nil {
+		// household due for deletion that lapses a night early. One erased for having lapsed is left,
+		// and the failure reported, while the processor has not given its own subscription up
+		// (billing.ErrCollecting): nothing its owner asked for is waiting on it.
+		if err := s.cfg.Billing.Close(ctx, tx, household, cause == causeLapsed); err != nil {
 			return err
 		}
 		if err := EraseRows(scoped, tx, s.cfg.Registry, household); err != nil {

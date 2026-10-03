@@ -205,10 +205,16 @@ that moment would be one it had not seen.
   already takes it (`errGone`).
 - The erasure of a lapsed household knows its own subscription to be paid for by the status the
   processor gives it, which is `active` only once a payment has succeeded: a bank debit begun for
-  an invoice it could not collect leaves it past due while the debit clears. Stripe is therefore
-  set to cancel a subscription, or mark it unpaid, once its retries end, never to leave it past due
-  ([the billing runbook](../runbooks/billing.md)): a lapsed household then has no subscription of
-  its own left to pay into, its payer subscribes again, and that payment is waited for.
+  an invoice it could not collect leaves it past due while the debit clears, and nothing the
+  server reads tells that from a subscription nobody pays. So `Close` ends a lapsed household's own
+  subscription only once the processor has given it up, and refuses one it still collects
+  (`ErrCollecting`): the household is kept and the job reports it each night. Stripe is set to
+  cancel a subscription, or mark it unpaid, once its retries end
+  ([the billing runbook](../runbooks/billing.md)), so that a lapsed household has no subscription
+  of its own left to pay into, its payer subscribes again, and that payment is waited for; set to
+  leave one past due, no lapsed household that had a subscription is erased until someone ends it
+  there. That errs towards keeping data past its retention, which an operator sees and can put
+  right, over erasing a household somebody is paying to keep, which nobody can.
 - Item 21 reads `diagnostic_bundles` (`getPlatformDiagnosticsByBundleId`), and may record erasures in
   the platform audit log.
 - Items 25 and 29 build A-20 over `postMeDeletion`, and item 25 the page the email's link opens,
