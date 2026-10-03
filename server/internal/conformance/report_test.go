@@ -10,12 +10,15 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/app/apptest"
 	"github.com/kareltilcer/household/server/internal/conformance"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/push"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
+	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
 // entry is one entity type of a replica's report.
@@ -48,6 +51,12 @@ func entryOf(entity string, rows map[uuid.UUID]int64) entry {
 // report sends household's replica's report, as token's member, with entries and its health.
 func (w *world) report(household uuid.UUID, token string, replicaID uuid.UUID, entries ...entry) *httptest.ResponseRecorder {
 	w.t.Helper()
+	return w.reportAs(household, bearer(token), replicaID, entries...)
+}
+
+// reportAs is report, signed in by header: a device's token, or a web session's cookies.
+func (w *world) reportAs(household uuid.UUID, header http.Header, replicaID uuid.UUID, entries ...entry) *httptest.ResponseRecorder {
+	w.t.Helper()
 	body, err := json.Marshal(map[string]any{
 		"replica_id": replicaID, "checkpoint": "42", "algorithm": replica.Algorithm,
 		"health":  map[string]int{"pending_mutations": 0, "unresolved": 1, "checksum_failures": 0},
@@ -56,15 +65,28 @@ func (w *world) report(household uuid.UUID, token string, replicaID uuid.UUID, e
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	return w.post(household, token, "digest", body)
+	return w.send(http.MethodPost, household, header, "digest", body)
 }
 
 func (w *world) post(household uuid.UUID, token, what string, body []byte) *httptest.ResponseRecorder {
 	w.t.Helper()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost,
+	return w.send(http.MethodPost, household, bearer(token), what, body)
+}
+
+// send sends household's sync route what a request of method, signed in by header, with body when
+// it is not nil.
+func (w *world) send(method string, household uuid.UUID, header http.Header, what string, body []byte) *httptest.ResponseRecorder {
+	w.t.Helper()
+	req := httptest.NewRequestWithContext(context.Background(), method,
 		"/api/v1/households/"+household.String()+"/sync/"+what, bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for name, values := range header {
+		for _, v := range values {
+			req.Header.Add(name, v)
+		}
+	}
 	return w.serve(req)
 }
 
@@ -104,9 +126,13 @@ type syncState struct {
 
 func (w *world) state(household uuid.UUID, token string) syncState {
 	w.t.Helper()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/households/"+household.String()+"/sync/state", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := w.serve(req)
+	return w.stateAs(household, bearer(token))
+}
+
+// stateAs is state, signed in by header.
+func (w *world) stateAs(household uuid.UUID, header http.Header) syncState {
+	w.t.Helper()
+	rec := w.send(http.MethodGet, household, header, "state", nil)
 	if rec.Code != http.StatusOK {
 		w.t.Fatalf("the state answered %d: %s", rec.Code, rec.Body)
 	}
@@ -292,5 +318,48 @@ func TestAReplicaWithoutTheGrantHoldsNothingOfTheModule(t *testing.T) {
 	v := w.verdict(w.report(household, token, idgen.New(), entryOf(conformance.Item, nil)))
 	if !v.Matched || v.Entries[0].ServerCount != 0 {
 		t.Errorf("a replica without the grant: %+v", v)
+	}
+}
+
+// A replica is shown by where it last reported from: a device's by the device and its label, a web
+// session's by its browser, with no device.
+func TestAReplicaIsShownByWhereItReportedFrom(t *testing.T) {
+	w := newWorld(t, apptest.Options{})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	var tokens session.Tokens
+	if err := tenant.AccountTx(t.Context(), w.pool, member, func(tx pgx.Tx) error {
+		var err error
+		_, tokens, err = w.accounts.Sessions.Create(t.Context(), tx, member, "a browser")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	web := http.Header{
+		"Cookie":           {session.Cookie + "=" + tokens.Session + "; " + session.CSRFCookie + "=" + tokens.CSRF},
+		session.CSRFHeader: {tokens.CSRF},
+		"Origin":           {apptest.WebOrigin},
+	}
+	onDevice, inBrowser := idgen.New(), idgen.New()
+	w.verdict(w.report(household, token, onDevice, entryOf(conformance.Item, nil)))
+	w.verdict(w.reportAs(household, web, inBrowser, entryOf(conformance.Item, nil)))
+	// Either sign-in reads both: they are the member's.
+	s := w.stateAs(household, web)
+	if len(s.Replicas) != 2 {
+		t.Fatalf("the member's replicas: %+v", s)
+	}
+	for _, r := range s.Replicas {
+		switch r.ReplicaID {
+		case onDevice:
+			if r.DeviceID == nil || r.Label != "conformance" {
+				t.Errorf("the replica that reported from a device: %+v", r)
+			}
+		case inBrowser:
+			if r.DeviceID != nil || r.Label != "a browser" {
+				t.Errorf("the replica that reported from a web session: %+v", r)
+			}
+		default:
+			t.Errorf("a replica nobody reported: %+v", r)
+		}
 	}
 }

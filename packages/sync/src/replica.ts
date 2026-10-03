@@ -13,6 +13,7 @@ import type { ChecksumWatch } from './checksums.ts'
 import {
   Connector,
   Revoked,
+  rowKey,
   type Credential,
   type Held,
   type HoldReason,
@@ -140,6 +141,8 @@ export class Replica {
   private closing = false
   /** A flush replayHeld started that has not finished. */
   private replaying: Promise<void> | null = null
+  /** Whether replayHeld was called while that flush was under way: it is called again once it ends. */
+  private replayAgain = false
 
   constructor(options: ReplicaOptions) {
     this.o = options
@@ -240,13 +243,16 @@ export class Replica {
       this.o.connection ?? {},
     )
     this.connectedNow = true
-    // A file waits for its row to reach the server and come back with a version: each checkpoint
-    // that lands may bring one.
-    if (this.attachmentQueue !== null && this.unlisten === null) {
-      const queue = this.attachmentQueue
+    // What waits outside PowerSync's upload queue is looked at each time its status moves while it is
+    // connected: a file waits for its row to reach the server and come back with a version, which a
+    // checkpoint that lands may bring; and a held mutation replays only in an upload, which PowerSync
+    // starts only for a queued write, so one whose replay failed would wait for the member's next.
+    if (this.unlisten === null) {
       this.unlisten = this.db.registerListener({
         statusChanged: (status) => {
-          if (status.connected && !status.downloading) this.uploadFiles(queue)
+          if (!status.connected || status.downloading) return
+          if (this.attachmentQueue !== null) this.uploadFiles(this.attachmentQueue)
+          this.replaySoon()
         },
       })
     }
@@ -259,6 +265,8 @@ export class Replica {
     }
     // A download the server asked for before the replica last closed, which waited for its queue.
     if ((await this.journal.meta(metaKeys.resnapshot)) !== null) this.whenDrained()
+    // And the mutations it was holding when it last closed, or disconnected.
+    this.replaySoon()
   }
 
   /** Disconnects from PowerSync: the replica goes offline, its rows and its queue kept. */
@@ -360,24 +368,49 @@ export class Replica {
     return this.upload()
   }
 
-  /** Lets the mutations the household's entitlement refused replay (FR-BI2). */
+  /**
+   * Lets the mutations the household's entitlement refused replay (FR-BI2), now when the replica is
+   * connected with nothing queued, and at its next upload otherwise.
+   */
   resume(): void {
     this.connector.resume()
+    this.replaySoon()
   }
 
   /**
    * Starts a flush when the queue is empty and mutations whose cause has cleared wait to replay:
    * PowerSync calls uploadData only while its queue holds a write. It does not wait for the flush,
-   * whose failure the next call tries again.
+   * whose failure the next call tries again. The replica calls it itself when it connects, when
+   * PowerSync's status moves while it is connected, and on resume(): an app need not.
    */
   async replayHeld(): Promise<void> {
-    if (!this.connectedNow || this.replaying !== null || (await this.queued()) > 0) return
-    if (!(await this.replayable())) return
+    if (this.closing || !this.connectedNow) return
+    if (this.replaying !== null) {
+      // The flush under way may be past the holds this call asks it to replay, the entitlement's when
+      // resume() came during it: they are looked at again once it ends.
+      this.replayAgain = true
+      return
+    }
+    if ((await this.queued()) > 0 || !(await this.replayable())) return
+    // Looked at again: another call, a disconnect or close() may have come while the queue was read.
+    if (!this.mayReplay()) return
+    this.replayAgain = false
     this.replaying = this.flush()
       .catch(() => undefined)
       .finally(() => {
         this.replaying = null
+        if (this.replayAgain) this.replaySoon()
       })
+  }
+
+  /** Whether a flush of the held mutations may start: connected, not being closed, none under way. */
+  private mayReplay(): boolean {
+    return !this.closing && this.connectedNow && this.replaying === null
+  }
+
+  /** replayHeld, not waited for: what fails, a closed database among it, the next call tries again. */
+  private replaySoon(): void {
+    void this.replayHeld().catch(() => undefined)
   }
 
   /** Whether held mutations wait to replay: every deferred one, and the entitlement holds resume() let through. */
@@ -429,6 +462,23 @@ export class Replica {
       readonly carry?: Readonly<Record<string, unknown>>
     } = {},
   ): Promise<string> {
+    return this.insert('INSERT', table, fields, options)
+  }
+
+  /**
+   * create, as the statement verb writes it: INSERT, or INSERT OR REPLACE over a row the replica holds
+   * that the server never did (retry), which queues the same create.
+   */
+  private async insert(
+    verb: 'INSERT' | 'INSERT OR REPLACE',
+    table: string,
+    fields: Readonly<Record<string, unknown>>,
+    options: {
+      readonly id?: string
+      readonly local?: Readonly<Record<string, unknown>>
+      readonly carry?: Readonly<Record<string, unknown>>
+    },
+  ): Promise<string> {
     this.writableEntity(table)
     const id = options.id ?? this.newId()
     const local = options.local ?? {}
@@ -440,7 +490,7 @@ export class Replica {
     const names = this.columnsOf(table, Object.keys(columns))
     const withHousehold = 'household_id' in tableOf(this.registry, table).columns
     await this.db.execute(
-      `INSERT INTO ${table} (id${withHousehold ? ', household_id' : ''}${names.map((n) => `, ${n}`).join('')}, _metadata)
+      `${verb} INTO ${table} (id${withHousehold ? ', household_id' : ''}${names.map((n) => `, ${n}`).join('')}, _metadata)
        VALUES (?${withHousehold ? ', ?' : ''}${names.map(() => ', ?').join('')}, ?)`,
       [
         id,
@@ -566,16 +616,7 @@ export class Replica {
     await this.journal.release([mutationId])
     await this.journal.settled(mutationId)
     if (this.attachmentQueue === null) return
-    const last = await this.db.getOptional<{
-      entity_type: string
-      entity_id: string
-      op: string
-      outcome: string
-    }>(
-      `SELECT entity_type, entity_id, op, outcome FROM ${localTables.outcomes}
-       WHERE mutation_id = ? ORDER BY position DESC LIMIT 1`,
-      [mutationId],
-    )
+    const last = await this.lastOutcome(mutationId)
     if (last === null || last.op !== 'create' || last.outcome !== 'rejected') return
     const table = this.registry.entities[last.entity_type]?.table
     const row =
@@ -588,16 +629,56 @@ export class Replica {
     if (typeof row?.version !== 'number') await this.attachmentQueue.remove(last.entity_id)
   }
 
+  /** The last answer the replica recorded for a mutation, or null when it recorded none. */
+  private async lastOutcome(mutationId: string): Promise<RecordedOutcome | null> {
+    const row = await this.db.getOptional<Parameters<typeof outcomeOf>[0]>(
+      `SELECT ${outcomeColumns} FROM ${localTables.outcomes}
+       WHERE mutation_id = ? ORDER BY position DESC LIMIT 1`,
+      [mutationId],
+    )
+    return row === null ? null : outcomeOf(row)
+  }
+
+  /**
+   * Whether writing table's row id again is a create: the replica does not hold it, or holds only what
+   * a refused create left of it, a row at no version with no write of it queued and no answer that
+   * gave it a version (the rebase an applied write keeps until its checkpoint). The checkpoint that
+   * takes such a row away lands only once the queue is empty, and not at all offline, so the member
+   * may retry before it does, and an update would then be one of a row the server never had.
+   */
+  private neverHeld(table: string, entityType: string, id: string): Promise<boolean> {
+    return this.db.readTransaction(async (tx) => {
+      const row = await tx.getOptional<{ version: number | null }>(
+        `SELECT version FROM ${table} WHERE id = ?`,
+        [id],
+      )
+      if (row === null) return true
+      if (row.version !== null) return false
+      const queued = await tx.getOptional<{ id: number }>(
+        `SELECT id FROM ps_crud
+         WHERE json_extract(data, '$.type') = ? AND json_extract(data, '$.id') = ? LIMIT 1`,
+        [table, id],
+      )
+      if (queued !== null) return false
+      const answered = await tx.getOptional<{ id: string }>(
+        `SELECT id FROM ${localTables.rebase} WHERE id = ?`,
+        [rowKey(entityType, id)],
+      )
+      return answered === null
+    })
+  }
+
   /**
    * Writes again what a refused or conflicting mutation set, as a new mutation against the row as the
    * replica now holds it (the member's "retry", or their choice of their own value), and marks the old
    * one seen to, giving up its hold if it was held: the new mutation carries the change, and the old
-   * one replaying as well would make it twice. It reports whether it wrote: a row neither held nor
-   * created by the mutation is not.
+   * one replaying as well would make it twice. A create the server never held the row of is written as
+   * a create again, over what the refused one left when the replica still shows it (neverHeld). It
+   * reports whether it wrote: a row neither held nor created by the mutation is not.
    */
   async retry(mutationId: string): Promise<boolean> {
-    const [last] = (await this.outcomes()).filter((o) => o.mutation_id === mutationId).slice(-1)
-    if (last === undefined) return false
+    const last = await this.lastOutcome(mutationId)
+    if (last === null) return false
     const { mutation } = last
     const table = this.registry.entities[mutation.entity_type]?.table
     if (table === undefined) return false
@@ -614,10 +695,9 @@ export class Replica {
     if (mutation.op === 'delete') wrote = await this.remove(table, mutation.entity_id)
     else if (
       mutation.op === 'create' &&
-      (await this.db.getOptional(`SELECT id FROM ${table} WHERE id = ?`, [mutation.entity_id])) ===
-        null
+      (await this.neverHeld(table, mutation.entity_type, mutation.entity_id))
     ) {
-      await this.create(table, fields, { id: mutation.entity_id, ...extra })
+      await this.insert('INSERT OR REPLACE', table, fields, { id: mutation.entity_id, ...extra })
       wrote = true
     } else {
       wrote = await this.update(table, mutation.entity_id, fields, {

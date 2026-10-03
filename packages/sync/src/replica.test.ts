@@ -443,6 +443,76 @@ describe('a replica', () => {
     expect(await replica.queued()).toBe(1)
   })
 
+  it('retries a refused create as a create, over the row it left, before a checkpoint takes it away', async () => {
+    let outcome: Record<string, unknown> = { outcome: 'rejected', code: 'validation_failed' }
+    const bodies: SyncMutation[][] = []
+    const { fetch } = routes({
+      '/sync/mutations': (_url, init) => {
+        const { mutations } = JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }
+        bodies.push(mutations)
+        return json(200, {
+          results: mutations.map((m) => ({ mutation_id: m.mutation_id, ...outcome })),
+        })
+      },
+    })
+    const { replica } = await open({ fetch })
+    const milk = await replica.create('items', { title: 'Milk', quantity: 0 })
+    await replica.flush()
+    const [refused] = await replica.inbox()
+    // No checkpoint has landed, as none does offline or while more is queued: the replica still shows
+    // the row the refused create wrote, which the server never held.
+    expect(await replica.db.getAll('SELECT id, version FROM items')).toEqual([
+      { id: milk, version: null },
+    ])
+    outcome = { outcome: 'applied', version: 1 }
+    expect(await replica.retry(refused?.mutation_id ?? '')).toBe(true)
+    expect((await queue(replica)).map((q) => q.op)).toEqual(['PUT'])
+    await replica.flush()
+    expect(bodies.at(-1)?.map((m) => [m.entity_id, m.op, m.base_version, m.fields])).toEqual([
+      [milk, 'create', null, { title: 'Milk', quantity: 0 }],
+    ])
+    expect(await replica.inbox()).toEqual([])
+    // Applied, its checkpoint still to come: the server holds the row now, at the version the answer
+    // returned, and writing it again is an update against that.
+    expect(await replica.retry(refused?.mutation_id ?? '')).toBe(true)
+    await replica.flush()
+    expect(bodies.at(-1)?.map((m) => [m.entity_id, m.op, m.base_version])).toEqual([
+      [milk, 'update', 1],
+    ])
+  })
+
+  it('replays what it holds on its own: when it connects, and when resume() lets the entitlement holds through', async () => {
+    const { fetch, calls } = routes({
+      '/sync/mutations': applying(1),
+      // PowerSync itself is out of reach: the push is the API's, which answers.
+      '/sync/credentials': () => json(503, {}),
+    })
+    const { replica } = await open({ fetch })
+    const held = (title: string): SyncMutation => ({
+      mutation_id: newId(),
+      entity_type: 'test.item',
+      entity_id: newId(),
+      op: 'create',
+      fields: { title },
+      client_time: '2026-10-02T10:00:00Z',
+    })
+    // Held when the replica last closed: a replay the network failed, with nothing queued behind it.
+    await replica.journal.hold('deferred', held('Milk'))
+    await replica.journal.hold('entitlement', held('Bread'))
+    const pushed = (): string[][] =>
+      calls
+        .filter((c) => c.url.endsWith('/sync/mutations'))
+        .map((c) => (c.body as { mutations: SyncMutation[] }).mutations.map((m) => m.op))
+    await replica.connect()
+    await eventually(async () => (await replica.held('deferred')).length === 0)
+    // The entitlement's wait for the household to write again.
+    expect((await replica.held()).map((h) => h.reason)).toEqual(['entitlement'])
+    replica.resume()
+    await eventually(async () => (await replica.held()).length === 0)
+    expect(await replica.held()).toEqual([])
+    expect(pushed()).toEqual([['create'], ['create']])
+  })
+
   it('reports itself at rest and downloads itself again when told to, its own tables kept (D-125)', async () => {
     let verdict = { matched: true, resnapshot_required: false, entries: [] }
     const { fetch, calls } = routes({
@@ -633,5 +703,45 @@ describe('a replica', () => {
     expect(await replica.attachments().list()).toMatchObject([
       { id: scan, status: 'failed', code: 'unsupported_media_type' },
     ])
+  })
+
+  it('uploads a file added while a run is under way in the run that follows it', async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    let sending = (): void => undefined
+    const underWay = new Promise<void>((resolve) => {
+      sending = resolve
+    })
+    let answer = (): void => undefined
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const { fetch, calls } = routes({
+      '/content': async () => {
+        sending()
+        await answered
+        return json(201, {})
+      },
+    })
+    const { replica } = await open({ fetch, storage })
+    const file = {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'r.pdf',
+    }
+    const [receipt, scan] = [newId(), newId()]
+    for (const id of [receipt, scan])
+      await arrive(replica, 'items', id, { household_id: household, title: 'Paper', version: 1 })
+    await replica.attach('items', receipt, file)
+    const run = replica.attachments().upload()
+    await underWay
+    // Added while the first is being sent: the run under way listed the files before it, and the call
+    // that joins it must not be the last the file gets.
+    await replica.attach('items', scan, file)
+    const joined = replica.attachments().upload()
+    answer()
+    await Promise.all([run, joined])
+    expect(calls.filter((c) => c.url.endsWith('/content'))).toHaveLength(2)
+    expect(await replica.attachments().list()).toEqual([])
   })
 })

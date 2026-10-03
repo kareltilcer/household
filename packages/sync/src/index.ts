@@ -21,6 +21,7 @@ export {
   Revoked,
   inProgressWindowMs,
   locate,
+  maxRetryAfterMs,
   retryAfterMs,
   rowKey,
   type Attempt,

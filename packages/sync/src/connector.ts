@@ -24,10 +24,11 @@
 // And to a response that answers no mutation: a 401 renews the API credential and throws; a 429 sets
 // the time the push may next be sent to, its Retry-After, kept across restarts, and throws, every
 // upload before then throwing without sending (a household past its day's mutations waits for the
-// UTC day's end, D-127); a 413 halves the batch, and rejects a mutation too large to send alone; a 422
-// rejects the mutations it locates and sends the rest again; a 402 or a 404 answers every mutation of
-// the batch alike, `entitlement` or `not_found`; a 409 idempotency_in_progress throws, and past D-92's
-// five minutes the batch is sent under a fresh key, which per-mutation idempotency answers (FR-SY5).
+// UTC day's end, D-127, and no wait is longer than a day: maxRetryAfterMs); a 413 halves the batch,
+// and rejects a mutation too large to send alone; a 422 rejects the mutations it locates and sends the
+// rest again; a 402 or a 404 answers every mutation of the batch alike, `entitlement` or `not_found`;
+// a 409 idempotency_in_progress throws, and past D-92's five minutes the batch is sent under a fresh
+// key, which per-mutation idempotency answers (FR-SY5).
 //
 // A replica makes each write against the version of the row it holds, which moves only when a
 // checkpoint reaches it, and PowerSync applies none while the queue holds anything. So a mutation of
@@ -49,6 +50,13 @@ import type { Registry } from './registry.ts'
 
 /** How long a key whose first request never answered is kept before the batch gets a fresh one (D-92). */
 export const inProgressWindowMs = 5 * 60_000
+
+/**
+ * The longest a 429 is waited out for: a household past its day's mutations waits for the UTC day's
+ * end (D-127), which is the longest the push asks. A wait kept beyond it is no wait the push named
+ * but a clock that has moved since, and is not waited out.
+ */
+export const maxRetryAfterMs = 24 * 60 * 60_000
 
 /** The oldest writes in a replica's upload queue, and the means to end them. */
 export interface QueuedBatch {
@@ -261,7 +269,8 @@ export class Connector {
 
   private async drain(queue: UploadQueue): Promise<void> {
     const notBefore = await this.o.journal.notBefore()
-    if (this.o.now() < notBefore) throw new RateLimited(notBefore)
+    const wait = notBefore - this.o.now()
+    if (wait > 0 && wait <= maxRetryAfterMs) throw new RateLimited(notBefore)
     await this.o.journal.prune()
     for (;;) {
       const head = await queue.peek(this.limit('queue'))
@@ -438,7 +447,12 @@ export class Connector {
           await this.o.credential.renew()
           throw new Error('the push refused the API credential; renewed, to be sent again')
         case 429: {
-          const at = this.o.now() + retryAfterMs(response.headers.get('retry-after'), this.o.now())
+          const at =
+            this.o.now() +
+            Math.min(
+              maxRetryAfterMs,
+              retryAfterMs(response.headers.get('retry-after'), this.o.now()),
+            )
           await this.o.journal.setNotBefore(at)
           throw new RateLimited(at)
         }

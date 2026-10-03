@@ -7,6 +7,7 @@
 // losing nothing queued.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { metaKeys } from '../../src/index.ts'
 import { Admin } from '../harness/admin.ts'
 import { adminDatabaseUrl, apiUrl } from '../harness/env.ts'
 import { engine } from '../harness/target.ts'
@@ -125,8 +126,19 @@ describe('@household/sync against the engine', () => {
       ).not.toBeNull()
       expect(await w.settle()).toBe(true)
       expect(await petr.replica.report()).toMatchObject({ resnapshot_required: true })
-      // It clears itself and fills again from PowerSync: Jam among the rows, sent before it cleared.
-      expect(await w.settle()).toBe(true)
+      // It clears itself and connects again: waited for by the mark it clears once it has, since a
+      // replica downloading itself is offline to the run, which settle() would not wait for, and one
+      // about to is still whole, which settle() would find settled.
+      expect(
+        await until(
+          async () =>
+            petr.isOnline && (await petr.replica.journal.meta(metaKeys.resnapshot)) === null,
+          20_000,
+        ),
+        'the replica clears itself and connects again',
+      ).not.toBeNull()
+      // And fills again from PowerSync: Jam among the rows, sent before it cleared.
+      expect(await w.settle({ clients: [petr] })).toBe(true)
       expect(await petr.row('conformance_items', jam)).toMatchObject({ title: 'Jam' })
       expect(await petr.replica.report()).toMatchObject({
         matched: true,

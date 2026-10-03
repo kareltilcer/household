@@ -83,6 +83,8 @@ export class Attachments {
   private readonly fetch: typeof globalThis.fetch
   private readonly now: () => Date
   private running: Promise<void> | null = null
+  /** How many times upload() was called: a run that ends with more calls than it listed for is followed by another. */
+  private calls = 0
 
   constructor(
     db: CommonPowerSyncDatabase,
@@ -146,10 +148,19 @@ export class Attachments {
 
   /**
    * Uploads the files whose rows the server holds, oldest first, until one fails on the network or the
-   * server: the rest wait for the next run. A run already under way is joined, not doubled.
+   * server: the rest wait for the next run. A run already under way is joined, not doubled, and is
+   * followed by another: it listed the files before this call, and one added since, or one whose row
+   * a checkpoint has brought since, would otherwise wait for a call that may be long in coming.
    */
   upload(): Promise<void> {
-    this.running ??= this.run().finally(() => {
+    this.calls++
+    this.running ??= (async () => {
+      let listed: number
+      do {
+        listed = this.calls
+        await this.run()
+      } while (listed !== this.calls)
+    })().finally(() => {
       this.running = null
     })
     return this.running

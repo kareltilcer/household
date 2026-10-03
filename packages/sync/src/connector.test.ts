@@ -5,6 +5,7 @@ import {
   RateLimited,
   inProgressWindowMs,
   locate,
+  maxRetryAfterMs,
   retryAfterMs,
   rowKey,
   type ConnectorOptions,
@@ -349,6 +350,24 @@ describe('the connector', () => {
     expect(sent).toHaveLength(1)
     now += 1_000
     await restarted.upload(q)
+    expect(sent).toHaveLength(2)
+    expect(q.entries).toEqual([])
+  })
+
+  it('waits out a 429 for a day at most, and no wait a clock that moved left behind', async () => {
+    const q = new Queue()
+    q.write('Milk')
+    let now = Date.parse('2026-10-02T23:00:00Z')
+    const journal = new Memory()
+    // Ten days: longer than the push ever asks, which is the end of the UTC day (D-127).
+    const { fetch, sent } = server(json(429, { code: 'rate_limited' }, { 'retry-after': '864000' }))
+    const { c } = connector(fetch, journal, { now: () => now })
+    await expect(c.upload(q)).rejects.toThrow(RateLimited)
+    expect(journal.waitUntil).toBe(now + maxRetryAfterMs)
+    // The device's clock was a year ahead when the wait was kept, and has been put right since: the
+    // wait is longer than any the push names, and would hold the queue for the year.
+    now -= 365 * maxRetryAfterMs
+    await c.upload(q)
     expect(sent).toHaveLength(2)
     expect(q.entries).toEqual([])
   })
