@@ -756,7 +756,7 @@ Phase 0 · after 16, 14 · size L
 - **Done when**
   - Stripe test-mode fixtures pass: the server, its Stripe adapter and its signature check included, passes against a stand-in for Stripe's API whose objects are shaped as test mode's (`billingtest`), and every request it sends passes Stripe's own mock in CI. A payment in Stripe's test mode itself is item 30's, on staging.
   - The block vectors hold: an 18 GB average is 2 blocks and €2; a 40 GB upload deleted the same day is about 1.3 GB on the average (`packages/test-vectors/vectors/storage.json`).
-- **PR:** —
+- **PR:** [#24](https://github.com/kareltilcer/household/pull/24)
 
 ### 20 · Export, erasure and diagnostics · `planned`
 
