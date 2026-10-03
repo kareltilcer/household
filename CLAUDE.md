@@ -30,6 +30,7 @@ pnpm run up           # Postgres 17 (logical replication), RustFS (S3) and Mailp
 pnpm run db:setup     # create the database roles and PowerSync's storage, then apply the migrations
 pnpm run up:sync      # PowerSync, once db:setup has made its role, its publication and its storage
 pnpm run up:convert   # build and start the converter sidecar (LibreOffice, poppler): office and PDF previews
+pnpm run up:stripe    # Stripe's own mock server, which the test of what billing sends Stripe runs against
 pnpm run dev:api      # serve the API on 127.0.0.1:8080 (/api/v1/healthz, /api/v1/readyz)
 pnpm test             # Vitest through turbo, then go test against the compose Postgres
 pnpm run lint         # ESLint, golangci-lint, Redocly and Prettier
@@ -50,7 +51,9 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   PostgreSQL or RustFS is not reachable, and run with `-count=1` so that no cached result stands in
   for a run. Set `HOUSEHOLD_TEST_DATABASE_URL` and `HOUSEHOLD_TEST_OBJECT_STORE_URL` to point them
   elsewhere; `testsupport.ObjectStore` gives a test a bucket of its own. The converter's real-sidecar
-  test runs only when `HOUSEHOLD_TEST_CONVERTER_URL` names one, as CI's converter job does. A package that touches the
+  test runs only when `HOUSEHOLD_TEST_CONVERTER_URL` names one, as CI's converter job does, and the
+  test of what billing's Stripe processor sends only when `HOUSEHOLD_TEST_STRIPE_URL` names Stripe's
+  mock, as CI's stripe job does. A package that touches the
   database calls `testsupport.Main` from its `TestMain` and gets its own clone of a
   migrated template (`testsupport.Open`); `testsupport.Serve` checks every response a test
   sees against `openapi.yaml`.
@@ -171,6 +174,16 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   account's (D-107). What the platform keeps of the work after a commit is no entity's history
   either, and goes through `tenant.InWriteTx` in the household's context, with no caller: the
   workers' claims on `file_jobs` and the variants they record, and the usage sampler's samples.
+- **Billing** is the platform's, `internal/platform/billing`, and asks the payment processor only
+  through `billing.Processor`, which Stripe implements; a card never reaches the server (PRD 04 §6).
+  A webhook names what to read, and the handler reads it from Stripe under the household's row lock,
+  records it through `tenant.InWriteTx` (the platform's record of what the processor said, no
+  entity's history), and then settles the household's row from what is recorded, through
+  `mutation.Apply` and `household.Bill`: a delivery repeated or out of order settles the same state.
+  Storage is billed by the calendar month, UTC's, from `storage.Allowance.Blocks` over the daily
+  samples, whose arithmetic `vectors/storage.json` holds both sides to. A test asks `billingtest`'s
+  stand-in, never Stripe ([ADR 0019](docs/adr/0019-billing-the-processor-webhooks-the-payer-and-storage-lines.md),
+  [runbook](docs/runbooks/billing.md)).
 - **Notifications** go through `internal/platform/notify`: a module tells a member something by
   queueing a `notify.Notification` in its mutation's transaction (`Queue`), a catalog key and
   arguments, its category, the module whose view the recipient must hold and, for a private item, its
