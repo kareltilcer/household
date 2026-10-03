@@ -1,0 +1,40 @@
+{
+  "id": "sub_test",
+  "object": "subscription",
+  "livemode": false,
+  "status": "incomplete",
+  "customer": "cus_test",
+  "currency": "eur",
+  "collection_method": "charge_automatically",
+  "cancel_at_period_end": false,
+  "cancellation_details": { "comment": null, "feedback": null, "reason": null },
+  "default_payment_method": null,
+  "items": {
+    "object": "list",
+    "has_more": false,
+    "url": "/v1/subscription_items?subscription=sub_test",
+    "data": [
+      {
+        "id": "si_test",
+        "object": "subscription_item",
+        "subscription": "sub_test",
+        "quantity": 1,
+        "current_period_start": 0,
+        "current_period_end": 0,
+        "price": {
+          "id": "price_test",
+          "object": "price",
+          "active": true,
+          "currency": "eur",
+          "type": "recurring",
+          "unit_amount": 5988,
+          "recurring": { "interval": "year", "interval_count": 1, "usage_type": "licensed" }
+        }
+      }
+    ]
+  },
+  "latest_invoice": null,
+  "metadata": {},
+  "pending_invoice_item_interval": null,
+  "trial_end": null
+}

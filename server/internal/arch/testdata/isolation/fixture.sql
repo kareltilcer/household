@@ -116,3 +116,26 @@ INSERT INTO notification_deliveries (household_id, id, notification_id, user_id,
    '01900000-0000-7000-8000-0000000000b1', 'direct', 'web_push', 'sent', 'Milk', 'Milk', now()),
   ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000e4', '01900000-0000-7000-8000-0000000000e2',
    '01900000-0000-7000-8000-0000000000b1', 'direct', 'web_push', 'sent', 'Bread', 'Bread', now());
+
+-- What the platform keeps of each household's billing (item 19): household B's owner pays for both,
+-- by a subscription in each with an invoice and a month of storage billed, and household A's owner
+-- has offered them billing there.
+INSERT INTO billing_customers (user_id, currency, stripe_customer_id) VALUES
+  ('01900000-0000-7000-8000-0000000000b1', 'EUR', 'cus_isolation_b');
+
+INSERT INTO billing_subscriptions (household_id, stripe_subscription_id, stripe_customer_id, payer_id, standing, status, billing_interval, currency) VALUES
+  ('01900000-0000-7000-8000-00000000000a', 'sub_isolation_a', 'cus_isolation_b', '01900000-0000-7000-8000-0000000000b1', 'current', 'active', 'year', 'EUR'),
+  ('01900000-0000-7000-8000-00000000000b', 'sub_isolation_b', 'cus_isolation_b', '01900000-0000-7000-8000-0000000000b1', 'current', 'active', 'month', 'EUR');
+
+INSERT INTO billing_invoices (household_id, id, stripe_invoice_id, payer_id, number, status, currency, total_minor, tax_minor, issued_at, period_start, period_end, lines) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000e5', 'in_isolation_a', '01900000-0000-7000-8000-0000000000b1',
+   'HH-0001', 'paid', 'EUR', 5988, 0, now(), now(), now() + interval '1 year', '[{"kind": "base", "description": "Milk", "quantity": null, "amount_minor": 5988}]'),
+  ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000e6', 'in_isolation_b', '01900000-0000-7000-8000-0000000000b1',
+   'HH-0002', 'paid', 'EUR', 599, 0, now(), now(), now() + interval '1 month', '[{"kind": "base", "description": "Bread", "quantity": null, "amount_minor": 599}]');
+
+INSERT INTO billing_storage_months (household_id, month, sampled_days, average_bytes, blocks, stripe_invoice_item_id) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '2026-09-01', 30, 18000000000, 2, 'ii_isolation_a'),
+  ('01900000-0000-7000-8000-00000000000b', '2026-09-01', 30, 4000000000, 0, NULL);
+
+INSERT INTO billing_transfers (household_id, offered_by, offered_to, expires_at) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000a1', '01900000-0000-7000-8000-0000000000b1', now() + interval '14 days');

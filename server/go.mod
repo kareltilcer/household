@@ -43,6 +43,8 @@ require (
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
+	github.com/shopspring/decimal v1.4.0 // indirect
+	github.com/stripe/stripe-go/v87 v87.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )

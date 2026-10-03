@@ -82,7 +82,8 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 	}))
 	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachCorpusVar,
 		config.TokenKeysVar, config.MFAKeysVar, config.PowerSyncURLVar, config.MeterDatabaseURLVar, config.ObjectStoreURLVar,
-		config.ConverterURLVar, config.NotifyKeysVar, config.VAPIDKeyVar} {
+		config.ConverterURLVar, config.NotifyKeysVar, config.VAPIDKeyVar, config.StripeSecretKeyVar, config.StripePublishableKeyVar,
+		config.StripeWebhookSecretVar} {
 		if err == nil || !strings.Contains(err.Error(), key) {
 			t.Errorf("serving in production without %s: %v", key, err)
 		}
@@ -121,8 +122,32 @@ func serving(vars map[string]string) map[string]string {
 			vars[key] = value
 		}
 	}
+
+	// Stripe's keys, live in production and test-mode anywhere else, and a price for every plan.
+	mode := "test"
+	if vars[config.EnvVar] == "production" {
+		mode = "live"
+	}
+	for key, value := range map[string]string{
+		config.StripeSecretKeyVar:      "sk_" + mode + "_key",
+		config.StripePublishableKeyVar: "pk_" + mode + "_key",
+		config.StripeWebhookSecretVar:  "whsec_" + "key",
+		config.BillingPricesVar:        prices,
+	} {
+		if _, ok := vars[key]; !ok {
+			vars[key] = value
+		}
+	}
 	return vars
 }
+
+// prices are a deployment's plans, each price with its Stripe price.
+const prices = `{
+	"EUR": {"year": {"amount_minor": 5988, "price": "price_eur_year"}, "month": {"amount_minor": 599, "price": "price_eur_month"},
+	        "block": {"amount_minor": 100, "price": "price_eur_block"}},
+	"CZK": {"year": {"amount_minor": 154800, "price": "price_czk_year"}, "month": {"amount_minor": 14900, "price": "price_czk_month"},
+	        "block": {"amount_minor": 2500, "price": "price_czk_block"}}
+}`
 
 // In development the files pipeline defaults to the compose object store, its bucket and its
 // published credentials, and to the converter of the compose convert profile; elsewhere each is
@@ -579,5 +604,82 @@ func TestTheNotificationSettings(t *testing.T) {
 	}
 	if !slices.Equal(c.PushHosts, []string{"push.example", "other.example"}) || c.ExpoAccessToken != "expo-token" {
 		t.Errorf("production: hosts %v, token %q", c.PushHosts, c.ExpoAccessToken)
+	}
+}
+
+// In development billing has no payment processor unless its three keys are set, and charges PRD 04
+// §1's EUR and GBP figures. Elsewhere the keys are required, a live key is production's alone and a
+// test key never production's, no key is quoted, and with keys every price names its Stripe price.
+func TestTheBillingSettings(t *testing.T) {
+	c, err := config.Load(config.Serve, env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.StripeSecretKey != "" || c.StripePublishableKey != "" || c.StripeWebhookSecret != "" || c.StripeAutomaticTax {
+		t.Fatalf("development: %+v", c)
+	}
+	if eur, gbp := c.BillingPrices["EUR"], c.BillingPrices["GBP"]; eur.Year.AmountMinor != 5988 || eur.Month.AmountMinor != 599 ||
+		eur.Block.AmountMinor != 100 || gbp.Year.AmountMinor != 5388 || gbp.Month.AmountMinor != 549 || gbp.Block.AmountMinor != 100 ||
+		len(c.BillingPrices) != 2 {
+		t.Fatalf("the development prices: %+v", c.BillingPrices)
+	}
+
+	production := func(vars map[string]string) (*config.Config, error) {
+		vars[config.EnvVar] = "production"
+		vars[config.DatabaseURLVar] = dsn("household_app", "s3cret", "db.internal:5432", "household")
+		return config.Load(config.Serve, env(serving(vars)))
+	}
+	c, err = production(map[string]string{config.StripeAutomaticTaxVar: "true"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.StripeSecretKey == "" || c.StripePublishableKey == "" || c.StripeWebhookSecret == "" || !c.StripeAutomaticTax {
+		t.Fatalf("production: %+v", c)
+	}
+	// CZK has figures of its own once they are configured; PLN, with none, is charged EUR's.
+	if czk, pln := c.BillingPrices.For("CZK"), c.BillingPrices.For("PLN"); czk.Currency != "CZK" || czk.Block.ID != "price_czk_block" ||
+		pln.Currency != "EUR" || pln.Year.ID != "price_eur_year" {
+		t.Fatalf("the plans: CZK %+v, PLN %+v", czk, pln)
+	}
+
+	for _, tc := range []struct {
+		name, key, value, want string
+	}{
+		{"a test key in production", config.StripeSecretKeyVar, "sk_" + "test_key", "test key"},
+		{"a test publishable key in production", config.StripePublishableKeyVar, "pk_" + "test_key", "test key"},
+		{"a secret key as the publishable key", config.StripePublishableKeyVar, "sk_" + "live_key", "pk_"},
+		{"a webhook secret that is none", config.StripeWebhookSecretVar, "secret", "whsec_"},
+		{"automatic tax that is neither", config.StripeAutomaticTaxVar, "yes", "true or false"},
+		{"prices that are not JSON", config.BillingPricesVar, "EUR=5988", "JSON"},
+		{"prices with no EUR", config.BillingPricesVar, `{"GBP": {"year": {"amount_minor": 1, "price": "p"}, "month": {"amount_minor": 1, "price": "p"}, "block": {"amount_minor": 1, "price": "p"}}}`, "EUR"},
+		{"a currency that is none", config.BillingPricesVar, `{"EUR": {"year": {"amount_minor": 1, "price": "p"}, "month": {"amount_minor": 1, "price": "p"}, "block": {"amount_minor": 1, "price": "p"}}, "EURO": {"year": {"amount_minor": 1}, "month": {"amount_minor": 1}, "block": {"amount_minor": 1}}}`, "ISO 4217"},
+		{"a price of nothing", config.BillingPricesVar, `{"EUR": {"year": {"amount_minor": 0, "price": "p"}, "month": {"amount_minor": 1, "price": "p"}, "block": {"amount_minor": 1, "price": "p"}}}`, "positive"},
+		{"a price with no Stripe price", config.BillingPricesVar, `{"EUR": {"year": {"amount_minor": 1, "price": "p"}, "month": {"amount_minor": 1}, "block": {"amount_minor": 1, "price": "p"}}}`, "EUR month"},
+		{"a field the prices do not have", config.BillingPricesVar, `{"EUR": {"year": {"amount": 1}}}`, "JSON"},
+	} {
+		_, err := production(map[string]string{tc.key: tc.value})
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v; want an error saying %q", tc.name, err, tc.want)
+			continue
+		}
+		if tc.key != config.BillingPricesVar && tc.key != config.StripeAutomaticTaxVar && strings.Contains(err.Error(), tc.value) {
+			t.Errorf("%s: the error quotes the key: %v", tc.name, err)
+		}
+	}
+
+	// A live key takes real payments: staging and development may not hold one.
+	for _, e := range []string{"staging", "development"} {
+		_, err := config.Load(config.Serve, env(serving(map[string]string{
+			config.EnvVar: e, config.DatabaseURLVar: dsn("household_app", "household_app", "127.0.0.1:5432", "household"),
+			config.StripeSecretKeyVar: "sk_" + "live_key",
+		})))
+		if err == nil || !strings.Contains(err.Error(), "live key") {
+			t.Errorf("%s with a live key: %v", e, err)
+		}
+	}
+	// One key without the others is a deployment half configured.
+	_, err = config.Load(config.Serve, env(map[string]string{config.StripeSecretKeyVar: "sk_" + "test_key"}))
+	if err == nil || !strings.Contains(err.Error(), "together") {
+		t.Errorf("development with one key of three: %v", err)
 	}
 }

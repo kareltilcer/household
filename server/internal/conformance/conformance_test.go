@@ -105,6 +105,7 @@ func newWorldOf(t *testing.T, o apptest.Options, m module.Module) *world {
 		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, o),
 		Storage:    &storage.Picture{Log: log},
+		Billing:    apptest.Billing(t, pool, log, notifier, o),
 	})
 	if err != nil {
 		t.Fatal(err)

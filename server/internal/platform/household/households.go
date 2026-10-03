@@ -24,6 +24,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/money"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/text"
@@ -109,10 +110,25 @@ func (h settings) body(role access.Role, level func(string) access.Level, module
 	return b
 }
 
-// bodyFor is h as scope's caller reads it at now, with the entitlement the request found: the state
-// is resolved once per request (PRD 04 §3).
-func (h settings) bodyFor(scope *tenant.Scope, modules []string, now time.Time) householdBody {
-	return h.body(scope.Role(), scope.Level, modules, scope.Entitlement().Summary(now))
+// bodyFor is h as scope's caller reads it at now, with the entitlement the request found, the state
+// being resolved once per request (PRD 04 §3), and its storage standing at st against its allowance.
+func (h settings) bodyFor(scope *tenant.Scope, modules []string, now time.Time, st storage.Standing) householdBody {
+	return h.body(scope.Role(), scope.Level, modules, withStorage(scope.Entitlement().Summary(now), st))
+}
+
+// withStorage is e saying the household's storage as st has it.
+func withStorage(e entitlement.Summary, st storage.Standing) entitlement.Summary {
+	return e.WithStorage(st.Used, st.Included, st.Blocks)
+}
+
+// standing reads, in tx in household's context, what it stores against its allowance: what its
+// entitlement says of its storage, beside its state (PRD 04 §4).
+func (s *Service) standing(ctx context.Context, tx pgx.Tx, household uuid.UUID) (storage.Standing, error) {
+	usage, err := storage.ReadUsage(ctx, tx, household, s.Now())
+	if err != nil {
+		return storage.Standing{}, err
+	}
+	return s.Allowance.Standing(usage), nil
 }
 
 // settingsChange is the sync change of h, as it stands after a mutation.
@@ -304,7 +320,9 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 	// The creator is its owner, with Manage on every module, each of which it enables.
 	manage := func(string) access.Level { return access.Manage }
 	etag.Set(w, created.version)
-	httpx.WriteJSON(w, http.StatusCreated, created.body(access.Owner, manage, modules, status.Summary(s.Now())))
+	// It stores nothing yet, against the base allowance.
+	fresh := s.Allowance.Standing(storage.Usage{})
+	httpx.WriteJSON(w, http.StatusCreated, created.body(access.Owner, manage, modules, withStorage(status.Summary(s.Now()), fresh)))
 }
 
 // insertHousehold writes the household req names, with its creator as its payer, and returns it. An
@@ -382,7 +400,11 @@ func (s *Service) listHouseholds(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
-			summary := status.Summary(now)
+			st, err := s.standing(ctx, tx, items[i].ID)
+			if err != nil {
+				return err
+			}
+			summary := withStorage(status.Summary(now), st)
 			items[i].Entitlement = &summary
 			return nil
 		})
@@ -399,10 +421,16 @@ func (s *Service) listHouseholds(w http.ResponseWriter, r *http.Request) {
 func (s *Service) getHousehold(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
-	var h settings
+	var (
+		h  settings
+		st storage.Standing
+	)
 	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		h, err = readSettings(ctx, tx, scope.HouseholdID())
+		if h, err = readSettings(ctx, tx, scope.HouseholdID()); err != nil {
+			return err
+		}
+		st, err = s.standing(ctx, tx, scope.HouseholdID())
 		return err
 	})
 	if err != nil {
@@ -410,7 +438,7 @@ func (s *Service) getHousehold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag.Set(w, h.version)
-	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, Modules, s.Now()))
+	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, Modules, s.Now(), st))
 }
 
 // updateHousehold changes the household's settings (FR-HA1), an owner's to change, under If-Match. A
@@ -436,6 +464,7 @@ func (s *Service) updateHousehold(w http.ResponseWriter, r *http.Request) {
 	precondition := etag.IfMatch(r)
 	var (
 		h       settings
+		st      storage.Standing
 		modules = Modules
 	)
 	_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
@@ -447,8 +476,11 @@ func (s *Service) updateHousehold(w http.ResponseWriter, r *http.Request) {
 			return mutation.Record{}, err
 		}
 		h = old
+		if st, err = s.standing(ctx, tx, old.id); err != nil {
+			return mutation.Record{}, err
+		}
 		if !precondition.Allows(old.version) {
-			return mutation.Record{}, problem.Conflict(old.bodyFor(scope, modules, s.Now()), old.version)
+			return mutation.Record{}, problem.Conflict(old.bodyFor(scope, modules, s.Now(), st), old.version)
 		}
 		if req.BaseCurrency != nil && *req.BaseCurrency != old.currency {
 			return mutation.Record{}, invalid("/base_currency", problem.FieldInvalid)
@@ -492,7 +524,7 @@ func (s *Service) updateHousehold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag.Set(w, h.version)
-	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, modules, s.Now()))
+	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, modules, s.Now(), st))
 }
 
 // set sets *field to *value when value is not nil.
@@ -531,6 +563,7 @@ func (s *Service) regenerateJoinCode(w http.ResponseWriter, r *http.Request) {
 	}
 	var (
 		h       settings
+		st      storage.Standing
 		modules = Modules
 	)
 	_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
@@ -539,6 +572,9 @@ func (s *Service) regenerateJoinCode(w http.ResponseWriter, r *http.Request) {
 		}
 		var err error
 		if h, err = setJoinCode(ctx, tx, scope.HouseholdID()); err != nil {
+			return mutation.Record{}, err
+		}
+		if st, err = s.standing(ctx, tx, h.id); err != nil {
 			return mutation.Record{}, err
 		}
 		return mutation.Record{
@@ -554,7 +590,7 @@ func (s *Service) regenerateJoinCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag.Set(w, h.version)
-	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, modules, s.Now()))
+	httpx.WriteJSON(w, http.StatusOK, h.bodyFor(scope, modules, s.Now(), st))
 }
 
 // setJoinCode gives household a new code, drawn again under a savepoint while another household has

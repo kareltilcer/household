@@ -150,6 +150,39 @@ paths:
   /households/{household_id}/storage:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get: { operationId: getStorage, responses: { '200': { description: The picture }, default: { $ref: '#/components/responses/Problem' } } }
+  # Billing's routes, which the router always serves (item 19), declared as loosely as the tests need.
+  /households/{household_id}/billing/subscription:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getBillingSubscription, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+    post: { operationId: postBillingSubscription, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Begun }, default: { $ref: '#/components/responses/Problem' } } }
+    patch: { operationId: patchBillingSubscription, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Changed }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/billing/payment-method:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postBillingPaymentMethod, responses: { '200': { description: Begun }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/billing/cancel:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postBillingCancel, responses: { '200': { description: Cancelled }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/billing/resume:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postBillingResume, responses: { '200': { description: Resumed }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/billing/transfer:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postBillingTransfer, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Offered }, default: { $ref: '#/components/responses/Problem' } } }
+    delete: { operationId: deleteBillingTransfer, responses: { '204': { description: None open }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/billing/transfer/accept:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postBillingTransferAccept, responses: { '200': { description: Accepted }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/billing/invoices:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getBillingInvoices, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/billing/invoices/{invoice_id}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: invoice_id, in: path, required: true, schema: { type: string } }]
+    get: { operationId: getBillingInvoicesByInvoiceId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/billing/usage:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getBillingUsage, responses: { '200': { description: Usage }, default: { $ref: '#/components/responses/Problem' } } }
+  /webhooks/stripe:
+    post: { operationId: postWebhooksStripe, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Taken }, default: { $ref: '#/components/responses/Problem' } } }
   /push/vapid-key:
     get: { operationId: getPushVapidKey, responses: { '200': { description: The key }, default: { $ref: '#/components/responses/Problem' } } }
   /push/subscriptions:

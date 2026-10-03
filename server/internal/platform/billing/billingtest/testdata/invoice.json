@@ -1,0 +1,27 @@
+{
+  "id": "in_test",
+  "object": "invoice",
+  "livemode": false,
+  "number": "HH-0001",
+  "status": "open",
+  "customer": "cus_test",
+  "currency": "eur",
+  "billing_reason": "subscription_create",
+  "collection_method": "charge_automatically",
+  "created": 0,
+  "period_start": 0,
+  "period_end": 0,
+  "total": 5988,
+  "amount_due": 5988,
+  "attempt_count": 0,
+  "next_payment_attempt": null,
+  "invoice_pdf": "https://pay.stripe.com/invoice/acct_test/in_test/pdf",
+  "status_transitions": { "finalized_at": 0, "marked_uncollectible_at": null, "paid_at": null, "voided_at": null },
+  "total_taxes": [],
+  "confirmation_secret": null,
+  "parent": {
+    "type": "subscription_details",
+    "quote_details": null,
+    "subscription_details": { "subscription": "sub_test", "metadata": {} }
+  }
+}

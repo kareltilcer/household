@@ -1,0 +1,104 @@
+{
+  "description": "Storage blocks: the daily average of a month's samples, the whole 10 GB blocks it needs above the 5 GB included, capped at 20, the charge they come to, and the average a month is projected to end on. Run by @household/domain (storage.test.ts) and by the server's twin (internal/platform/storage).",
+  "sources": [
+    "PRD 04-billing-and-entitlements §4, FR-BI3: blocks = ceil(max(0, avg_bytes - 5 GB) / 10 GB), charge = blocks x the block price",
+    "PRD 04 §4's worked examples: an average of 18 GB is 2 blocks and €2.00; 4 GB is none; 40 GB uploaded and deleted the same day moves a monthly average by about 1.3 GB",
+    "PRD 09-decisions D-31 (the daily average, never the peak), D-33 (20 blocks at most, 205 GB) and D-34 (5 GB included, 10 GB blocks)",
+    "PRD 04 FR-BI4: the projected month-end average and charge, shown before they are billed",
+    "design/v1 household.js blocksFor and its check: a month-to-date average of 18.2 GB and a projected 18.9 GB are 2 blocks each"
+  ],
+  "groups": {
+    "average": [
+      { "name": "no samples yet", "input": [], "output": 0 },
+      { "name": "one sample is its own average", "input": [18000000000], "output": 18000000000 },
+      { "name": "the mean is rounded down to a byte", "input": [1, 2], "output": 1 },
+      {
+        "name": "40 GB uploaded and deleted the same day is about 1.3 GB on a thirty-day average",
+        "input": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 40000000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0
+        ],
+        "output": 1333333333
+      },
+      {
+        "name": "a month that grew",
+        "input": [4000000000, 6000000000, 26000000000],
+        "output": 12000000000
+      }
+    ],
+    "blocks": [
+      { "name": "nothing stored", "input": 0, "output": 0 },
+      { "name": "an average of 4 GB is no block", "input": 4000000000, "output": 0 },
+      { "name": "the whole allowance is no block", "input": 5000000000, "output": 0 },
+      { "name": "a byte over the allowance is a block", "input": 5000000001, "output": 1 },
+      { "name": "the whole of the first block", "input": 15000000000, "output": 1 },
+      { "name": "a byte into the second", "input": 15000000001, "output": 2 },
+      { "name": "an average of 18 GB is 2 blocks", "input": 18000000000, "output": 2 },
+      { "name": "design/v1's month to date, 18.2 GB", "input": 18200000000, "output": 2 },
+      { "name": "design/v1's projection, 18.9 GB", "input": 18900000000, "output": 2 },
+      {
+        "name": "the 40 GB day, at 1.3 GB on the average, costs nothing",
+        "input": 1333333333,
+        "output": 0
+      },
+      { "name": "the ceiling, 205 GB, is 20 blocks", "input": 205000000000, "output": 20 },
+      { "name": "past the ceiling it is still 20", "input": 300000000000, "output": 20 }
+    ],
+    "charge": [
+      {
+        "name": "18 GB is 2 blocks and €2.00",
+        "input": { "average_bytes": 18000000000, "unit_amount_minor": 100 },
+        "output": { "blocks": 2, "amount_minor": 200 }
+      },
+      {
+        "name": "4 GB costs nothing",
+        "input": { "average_bytes": 4000000000, "unit_amount_minor": 100 },
+        "output": { "blocks": 0, "amount_minor": 0 }
+      },
+      {
+        "name": "the storage line never passes 20 blocks, €20.00",
+        "input": { "average_bytes": 205000000000, "unit_amount_minor": 100 },
+        "output": { "blocks": 20, "amount_minor": 2000 }
+      },
+      {
+        "name": "a block priced in another currency's minor units",
+        "input": { "average_bytes": 26000000000, "unit_amount_minor": 2500 },
+        "output": { "blocks": 3, "amount_minor": 7500 }
+      }
+    ],
+    "projected": [
+      {
+        "name": "before the month's first sample it is what is stored now",
+        "input": { "samples": [], "current": 7000000000, "remaining": 30 },
+        "output": 7000000000
+      },
+      {
+        "name": "with no samples and no days left it is still what is stored now",
+        "input": { "samples": [], "current": 7000000000, "remaining": 0 },
+        "output": 7000000000
+      },
+      {
+        "name": "ten days at 10 GB, then twenty at the 20 GB stored now",
+        "input": {
+          "samples": [
+            10000000000, 10000000000, 10000000000, 10000000000, 10000000000, 10000000000,
+            10000000000, 10000000000, 10000000000, 10000000000
+          ],
+          "current": 20000000000,
+          "remaining": 20
+        },
+        "output": 16666666666
+      },
+      {
+        "name": "a month fully sampled ends on its average, whatever is stored now",
+        "input": { "samples": [6000000000, 8000000000], "current": 90000000000, "remaining": 0 },
+        "output": 7000000000
+      },
+      {
+        "name": "the 40 GB day falls out of the projection once it is deleted",
+        "input": { "samples": [0, 40000000000], "current": 0, "remaining": 28 },
+        "output": 1333333333
+      }
+    ]
+  }
+}

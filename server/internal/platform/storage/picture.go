@@ -93,8 +93,8 @@ type trendDay struct {
 }
 
 // picture is getStorage. A member without view on the household settings is answered 404: the
-// screen is absent for them (C-54). The totals are what the household keeps now; the trend is its
-// samples. Every member's bytes count in the totals and the split by member, which say how much and
+// screen is absent for them (C-54). The totals are what the household keeps now, against the
+// allowance its base and the blocks in effect come to; the trend is its samples. Every member's bytes count in the totals and the split by member, which say how much and
 // whose, never what. The split by module leaves out every module the reader cannot see, which is
 // absent for them (FR-AC2): its line would tell a member kept out of Finance that the household keeps
 // Finance's files, and how many (D-16). The largest items leave out what the reader could not open,
@@ -119,6 +119,12 @@ func (p *Picture) picture(w http.ResponseWriter, r *http.Request) {
 	out := report{IncludedBytes: allowance.Base, ByModule: []moduleLine{}, ByMember: []memberLine{}, Largest: []item{}, Trend: []trendDay{}}
 	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
 		household := scope.HouseholdID()
+		// The allowance is the base and the blocks the month's daily average has put in effect (FR-BI3).
+		usage, err := ReadUsage(ctx, tx, household, now())
+		if err != nil {
+			return err
+		}
+		out.IncludedBytes = allowance.Standing(usage).Included
 		rows, err := tx.Query(ctx, `
 			SELECT module,
 			  coalesce(sum(byte_size) FILTER (WHERE variant = 'original'), 0)::bigint,
