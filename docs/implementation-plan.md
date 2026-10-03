@@ -788,7 +788,7 @@ Phase 0 · after 14, 15, 17 · size L
 - **Done when**
   - Each archive's structure validates against its manifest.
   - A generic erasure test over the registry leaves zero tenant rows for the household.
-- **PR:** —
+- **PR:** [#25](https://github.com/kareltilcer/household/pull/25)
 
 ### 21 · Platform staff, feature flags and reference-data admin · `planned`
 
