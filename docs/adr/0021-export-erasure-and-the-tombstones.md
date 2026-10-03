@@ -212,8 +212,8 @@ that moment would be one it had not seen.
   cancel a subscription, or mark it unpaid, once its retries end
   ([the billing runbook](../runbooks/billing.md)), so that a lapsed household has no subscription
   of its own left to pay into, its payer subscribes again, and that payment is waited for; set to
-  leave one past due, no lapsed household that had a subscription is erased until someone ends it
-  there. That errs towards keeping data past its retention, which an operator sees and can put
+  leave one past due, a household that lapsed on a failed payment is not erased until someone ends
+  its subscription there. That errs towards keeping data past its retention, which an operator sees and can put
   right, over erasing a household somebody is paying to keep, which nobody can.
 - Item 21 reads `diagnostic_bundles` (`getPlatformDiagnosticsByBundleId`), and may record erasures in
   the platform audit log.

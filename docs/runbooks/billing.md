@@ -68,10 +68,10 @@ step in the mode the environment uses.
    only once a payment has succeeded. A payer who paid what was owed by bank debit in the last days
    of a lapsed household's retention would be past due still while the debit cleared, which the
    server cannot tell from nobody paying: so the nightly erasure ends no subscription of a lapsed
-   household that Stripe is still collecting, and with this setting no lapsed household that had a
-   subscription would ever be erased (below, step 7). With the subscription cancelled or unpaid,
-   the payer of a lapsed household subscribes again, and a debit on its way is waited for. The
-   invoice may be left open or marked
+   household that Stripe is still collecting, and with this setting a household that lapsed on a
+   failed payment would never be erased (below, step 7). With the subscription cancelled or
+   unpaid, the payer of a lapsed household subscribes again, and a debit on its way is waited for.
+   The invoice may be left open or marked
    uncollectible: the last retry is emailed either way.
    Turn Stripe's own customer emails for failed payments and invoices **off**: the server sends its
    own, in the payer's language.
