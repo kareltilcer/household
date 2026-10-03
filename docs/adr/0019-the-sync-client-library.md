@@ -214,7 +214,7 @@ download losing nothing queued; the web build passes the same in Playwright's Ch
   session is a cookie and a CSRF header. The browser smoke test signs in as a device; the web app
   passes a `fetch` that carries its session with the bearer left out, and decides what a `401` means
   where nothing can be renewed.
-- **Items 27 and 28** open a replica per household with `@household/sync/web` and `/native`: the
+- **Items 25 and 28** open a replica per household with `@household/sync/web` and `/native`: the
   mobile app installs a `crypto.getRandomValues` polyfill before it (as `@household/api` already asks),
   supplies an attachment storage and transport, and gives the replica a credential that throws
   `Revoked` when its refresh is refused. They render RowState, the inbox and `NeedsConnection` with the
@@ -223,7 +223,7 @@ download losing nothing queued; the web build passes the same in Playwright's Ch
   files its state refused. A replica reports itself on its
   own only while PowerSync has caught up (`caughtUp`), and an app that calls `report()` itself, a
   sync-health screen's "check now", waits for the same.
-- **Item 27** keeps one tab's replica of a household open at a time (a Web Lock on its database, say):
+- **Item 25** also keeps one tab's replica of a household open at a time (a Web Lock on its database, say):
   every tab opens the household's one database, and each tab's replica runs a connector of its own, so
   two tabs uploading at once send the same queued writes twice under keys of their own, and one tab's
   download or discard clears the database under the other. PowerSync's shared worker (`multiTab`)
