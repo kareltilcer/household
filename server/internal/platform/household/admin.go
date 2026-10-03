@@ -50,11 +50,14 @@ const (
 	actionChildAvatar   = "child.avatar"
 	actionGraduate      = "member.graduate"
 	// The household's entitlement (PRD 04 §3): an owner's restriction and its lifting (FR-BI7), the
-	// clock's moves of its subscription, and a lapsed household's warnings (D-119).
+	// clock's moves of its subscription and the payment processor's (item 19), and a lapsed
+	// household's warnings (D-119).
 	actionRestrict         = "household.restrict"
 	actionUnrestrict       = "household.unrestrict"
 	actionEntitlement      = "household.entitlement"
 	actionRetentionWarning = "household.retention_warning"
+	// Billing moved from one owner to another (FR-BI6, item 19).
+	actionPayer = "household.payer"
 )
 
 // Admin is what admin declares to the module registry: the audit actions its mutations record and
@@ -66,7 +69,7 @@ func Admin() module.PlatformModule {
 		actionInviteCreate, actionInviteResend, actionInviteRevoke, actionInviteDecline, actionInvitePurge,
 		actionModuleEnable, actionModuleDisable,
 		actionChildCreate, actionChildPIN, actionChildLock, actionChildUnlock, actionChildAvatar, actionGraduate,
-		actionRestrict, actionUnrestrict, actionEntitlement, actionRetentionWarning,
+		actionRestrict, actionUnrestrict, actionEntitlement, actionRetentionWarning, actionPayer,
 	}
 	p := module.PlatformModule{Name: Name}
 	for _, a := range actions {

@@ -2,7 +2,8 @@
 // account surfaces (app.Accounts), with password hashing cheap enough for a test, a
 // breached-password corpus of the test's choosing, mail kept in memory, keys of the test's own for
 // access tokens and the second step, every job the identity service defers run before the request
-// that deferred it returns, and the files pipeline the users' pictures go through.
+// that deferred it returns, the files pipeline the users' pictures go through, and billing, with the
+// payment processor a test gives it.
 package apptest
 
 import (
@@ -23,6 +24,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/platform/avatar"
+	"github.com/kareltilcer/household/server/internal/platform/billing"
 	"github.com/kareltilcer/household/server/internal/platform/breach"
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
@@ -35,6 +37,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mfa"
+	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/password"
@@ -126,6 +129,10 @@ type Options struct {
 	// pipeline over a bucket nobody made stands in: a link to a picture is signed without asking the
 	// store, and an upload fails 502.
 	Files *files.Service
+	// Processor is the payment processor billing asks (Billing), none when nil, as a development
+	// server has none, and Prices its plans, billing's defaults when nil.
+	Processor billing.Processor
+	Prices    billing.Prices
 }
 
 // Files returns the files pipeline over pool, with a bucket of t's own on the test object store,
@@ -312,6 +319,39 @@ func Households(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.
 	s, err := household.New(household.Config{
 		Pool: pool, Log: log, Throttles: ratelimit.NewThrottles(pool, o.Now), Notify: notifier, WebURL: web,
 		Now: o.Now, Hooks: o.Hooks, Accounts: accounts.Identity,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// PublishableKey is the payment processor's key the tests' billing hands a client.
+const PublishableKey = "pk_test_apptest"
+
+// Billing returns billing for a router over pool, logging to log, on the clock of o, with its
+// processor and its prices, telling people what it tells them through notifier.
+func Billing(t testing.TB, pool session.Pool, log *slog.Logger, notifier *notify.Service, o Options) *billing.Service {
+	t.Helper()
+	beginner, ok := pool.(tenant.Beginner)
+	if !ok {
+		t.Fatalf("apptest: %T opens no transactions", pool)
+	}
+	catalogs, err := i18n.Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := module.NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := registry.WithPlatform(household.Admin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := billing.New(billing.Config{
+		Pool: beginner, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Log: log, Processor: o.Processor, Prices: o.Prices,
+		PublishableKey: PublishableKey, Notify: notifier, Catalogs: catalogs, Catalog: catalog, Now: o.Now,
 	})
 	if err != nil {
 		t.Fatal(err)

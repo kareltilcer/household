@@ -83,6 +83,17 @@ services:
     ports:
       - 127.0.0.1:${HOUSEHOLD_CONVERTER_PORT:-3100}:3100
 
+  # Stripe's own mock server (ADR 0020), for the test of what billing's Stripe processor sends
+  # (HOUSEHOLD_TEST_STRIPE_URL): it answers every call with a fixture once it has validated the
+  # request against Stripe's OpenAPI description, so a parameter Stripe does not take fails there as
+  # it would at Stripe. It keeps no state and takes no payment: a development server that should
+  # take test payments is given Stripe's test-mode keys instead (docs/runbooks/billing.md).
+  stripe-mock:
+    image: stripe/stripe-mock:v0.206.0
+    profiles: [stripe]
+    ports:
+      - 127.0.0.1:${HOUSEHOLD_STRIPE_MOCK_PORT:-12111}:12111
+
   # Catches every email the server sends; nothing leaves the machine.
   mail:
     image: axllent/mailpit:v1.31.2

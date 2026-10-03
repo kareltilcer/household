@@ -1860,45 +1860,101 @@ paths:
       operationId: getBillingSubscription
       tags: [billing]
       summary: Subscription and entitlement state
-      description: Owners see the full record; the payer additionally sees the payment-method summary.
+      description: |
+        The household's subscription, the state it leaves the household in, what it pays or would
+        (`plans`, in the currency it is charged in: its base currency where that has prices of its
+        own, EUR otherwise), and the payer's offer of billing while one is open. An owner's to read.
+        The payer additionally reads the payment method's summary, which is null for anyone else. A
+        member or a child is answered `404`, here and on every billing operation: billing is no part
+        of their app (FR-BI5).
+      responses:
+        '200': { description: The subscription, content: { application/json: { schema: { $ref: '#/components/schemas/Subscription' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    post:
+      operationId: postBillingSubscription
+      tags: [billing]
+      summary: Subscribe
+      description: |
+        The payer subscribes the household, paying yearly or monthly, in the plan of its base
+        currency. The subscription is made at the payment processor, unpaid, and the answer is what
+        the client confirms its first payment with there, in the processor's own payment form
+        (Stripe's Payment Element): **card details never reach Household's servers** (PRD 04 §6).
+        Nothing about the household changes until the processor says the payment went through, when
+        its state becomes `active`; a subscription never paid expires on its own.
+
+        A payment by bank debit takes days to go through. Until the processor says how it went the
+        household is as it was, and its subscription reads `payment_pending`; a debit that fails
+        ends the subscription, which its payer is emailed, and they may subscribe again.
+
+        Asked again while one waits unpaid at the same interval, it answers that one's secret again;
+        at the other interval, the one waiting is cancelled for a new one. No `Idempotency-Key` is
+        kept: the answer is a secret, and is never kept to be answered with again.
+
+        Only the payer subscribes, and only once their address is verified (PRD 02 §3). A household
+        with a subscription already is refused `409`, `already_subscribed`, as is one whose payment
+        for one is on its way: a subscription's interval is changed with `PATCH`, and a cancellation
+        taken back with `…/billing/resume`.
+
+        A subscription with nothing to pay, a credit of the payer's at the processor covering its
+        first invoice, has no payment to confirm and so no secret to answer: the household is
+        `active` as the request returns, which is answered `409`, `already_subscribed`, as any other
+        for a household that is subscribed.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BillingInterval' } } }
+      responses:
+        '200': { description: What the client confirms with the processor, content: { application/json: { schema: { $ref: '#/components/schemas/BillingIntent' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 'The caller is an owner who is not the payer (`forbidden`), or their address is not verified (`account_unverified`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'The household has a subscription already, a payment for one on its way, or one this request made with nothing to pay (`already_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/BillingUnavailable' }
+    patch:
+      operationId: patchBillingSubscription
+      tags: [billing]
+      summary: Change the billing interval
+      description: |
+        The payer moves the subscription between paying yearly and monthly. The processor prorates
+        what was paid against what is now owed (PRD 04 §6). The interval the subscription has already
+        answers as it stands.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BillingInterval' } } }
       responses:
         '200': { description: The subscription, content: { application/json: { schema: { $ref: '#/components/schemas/Subscription' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'The household has no subscription (`not_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/BillingUnavailable' }
 
-  /households/{household_id}/billing/checkout-session:
+  /households/{household_id}/billing/payment-method:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     post:
-      operationId: postBillingCheckoutSession
+      operationId: postBillingPaymentMethod
       tags: [billing]
-      summary: Start a hosted checkout to subscribe
-      description: Card details never reach Household's servers.
-      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { type: object, required: [interval, return_url], properties: { interval: { type: string, enum: [month, year] }, return_url: { type: string, format: uri } } } } }
+      summary: Begin replacing the payment method
+      description: |
+        The payer begins replacing the payment method the subscription is charged with, and is
+        answered what the client confirms the new one with at the payment processor, in its own
+        payment form. The subscription is charged with it once the processor says it was confirmed;
+        while a payment is being retried, it is tried with the new method at once. No
+        `Idempotency-Key` is kept, since the answer is a secret.
       responses:
-        '200': { description: Redirect the browser here, content: { application/json: { schema: { type: object, properties: { url: { type: string, format: uri } } } } } }
+        '200': { description: What the client confirms with the processor, content: { application/json: { schema: { $ref: '#/components/schemas/BillingIntent' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'The household has no subscription (`not_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
-
-  /households/{household_id}/billing/portal-session:
-    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
-    post:
-      operationId: postBillingPortalSession
-      tags: [billing]
-      summary: Open the hosted billing portal
-      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
-      responses:
-        '200': { description: Redirect the browser here, content: { application/json: { schema: { type: object, properties: { url: { type: string, format: uri } } } } } }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/BillingUnavailable' }
 
   /households/{household_id}/billing/cancel:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
@@ -1906,14 +1962,20 @@ paths:
       operationId: postBillingCancel
       tags: [billing]
       summary: Cancel the subscription at period end
-      description: The household becomes `read_only` after the paid period and grace, and its data is retained for 12 months.
+      description: |
+        The payer cancels the subscription at the end of the period it is paid up for. Until then
+        nothing changes, and the cancellation may be taken back (`…/billing/resume`). Then the
+        household is `canceled`: read-only, with its data retained for 12 months and exportable
+        throughout (D-32).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '200': { description: Cancelled, content: { application/json: { schema: { $ref: '#/components/schemas/Subscription' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'The household has no subscription (`not_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/BillingUnavailable' }
 
   /households/{household_id}/billing/resume:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
@@ -1921,13 +1983,19 @@ paths:
       operationId: postBillingResume
       tags: [billing]
       summary: Resume a cancelled subscription
+      description: |
+        The payer takes a cancellation back while the period paid for still runs. A subscription
+        that has ended is subscribed to again (`postBillingSubscription`), which restores the
+        household at any point of its retention (D-32).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '200': { description: Resumed, content: { application/json: { schema: { $ref: '#/components/schemas/Subscription' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'The household has no subscription (`not_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/BillingUnavailable' }
 
   /households/{household_id}/billing/transfer:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
@@ -1935,13 +2003,33 @@ paths:
       operationId: postBillingTransfer
       tags: [billing]
       summary: Offer billing responsibility to another owner
-      description: A two-step handshake; the subscription does not lapse in between.
+      description: |
+        The payer offers billing to another of the household's owners, who is emailed (FR-BI6,
+        FR-HH6). A two-step handshake: nothing about the subscription changes, and the payer goes on
+        paying, until the other owner accepts. An offer replaces the one before it and lapses in 14
+        days. Billing moves only between owners: anyone else named is refused `422`.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [user_id], properties: { user_id: { $ref: '#/components/schemas/Uuid' } } } } }
       responses:
         '202': { description: Offered }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    delete:
+      operationId: deleteBillingTransfer
+      tags: [billing]
+      summary: Withdraw or decline the offer of billing
+      description: |
+        The payer takes their offer back, or the owner it was made to declines it, which the payer is
+        told. Either way the subscription carries on as it is. With no offer open it answers the
+        same. An owner the offer neither comes from nor goes to is refused `403`.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '204': { description: No offer is open }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -1953,12 +2041,28 @@ paths:
       operationId: postBillingTransferAccept
       tags: [billing]
       summary: Accept billing responsibility
-      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      description: |
+        The owner the payer offered billing to takes it over (FR-BI6). Where the household has a
+        subscription, the answer carries what the client confirms their card with at the payment
+        processor, and **billing moves once the processor says it was confirmed**: until then the
+        payer goes on paying, and a card that is not accepted changes nothing. Their own
+        subscription then starts when the period the household is already paid up for ends, so
+        that nothing lapses in between and nobody pays for it twice; where the period's own payment
+        is being retried, it starts at once. Charged at once by a bank debit, it takes billing over
+        only when the debit clears, days later: until then the payer goes on paying and the
+        subscription reads `payment_pending`, and a debit that fails moves nothing, which the caller
+        is emailed. Where the household has no subscription there is no card to supply yet:
+        `confirmation` is null, and they are the payer at once.
+
+        Only an owner whose address is verified takes billing over. With no offer open to the caller
+        it answers `404`. No `Idempotency-Key` is kept, since the answer may carry a secret.
       responses:
-        '200': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Subscription' } } } }
+        '200': { description: 'The subscription, and what is left to confirm', content: { application/json: { schema: { $ref: '#/components/schemas/BillingTransferAcceptance' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 'The caller''s address is not verified (`account_unverified`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/BillingUnavailable' }
 
   /households/{household_id}/billing/invoices:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }]
@@ -1966,6 +2070,11 @@ paths:
       operationId: getBillingInvoices
       tags: [billing]
       summary: Invoice history
+      description: |
+        The invoices the caller paid, the newest first, each with the base fee and the storage blocks
+        as lines of their own (PRD 04 §6). An invoice is its payer's: another owner, who sees
+        billing's state and none of its invoices (FR-BI5), is answered `403`, unless they paid some
+        before handing billing on, which they still read.
       responses:
         '200': { description: Invoices, content: { application/json: { schema: { $ref: '#/components/schemas/InvoicePage' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1980,6 +2089,10 @@ paths:
       operationId: getBillingInvoicesByInvoiceId
       tags: [billing]
       summary: One invoice, with a download link
+      description: |
+        One invoice the caller paid, with where its PDF is downloaded: the payment processor's own
+        link, read as it is asked for and never kept. `pdf_url` is null while the processor cannot
+        be asked. Someone else's invoice is not found.
       responses:
         '200': { description: The invoice, content: { application/json: { schema: { $ref: '#/components/schemas/Invoice' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1991,16 +2104,48 @@ paths:
     get:
       operationId: getBillingUsage
       tags: [billing]
-      summary: Metered usage this period
+      summary: Metered usage this month
       description: |
         Current stored bytes, the month-to-date daily average, the projected month-end average and
-        the projected charge. An invoice is never the first time a customer learns the number.
+        the projected charge, an owner's to read. An invoice is never the first time a customer
+        learns the number (FR-BI4). The month is the calendar month, UTC's (D-130).
       responses:
         '200': { description: Usage, content: { application/json: { schema: { $ref: '#/components/schemas/UsageSummary' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
+
+  /webhooks/stripe:
+    post:
+      operationId: postWebhooksStripe
+      tags: [billing]
+      summary: The payment processor's webhook
+      description: |
+        What Stripe tells the platform as it happens: a subscription that changed, an invoice that
+        was issued, paid or could not be collected, a payment method that was confirmed. It is no
+        client's to call. The `Stripe-Signature` header, a signature of the body under the
+        endpoint's secret, is what proves it: one that does not verify, or is older than five
+        minutes, is refused `422`.
+
+        An event says only what to look at. The server reads the object from Stripe as it stands
+        and records that, so an event delivered twice, late or out of order leaves the same state,
+        and moves the household's entitlement from what it recorded (PRD 04 §3): `active` once a
+        payment goes through, `past_due` while one is retried, `grace` once the retries are given
+        up, `canceled` once a cancelled subscription's period ends. An event about something that
+        is not a household's is answered `204` and ignored. A failure answers `500`, and Stripe
+        delivers the event again.
+      security: []
+      parameters:
+        - { name: Stripe-Signature, in: header, required: true, schema: { type: string, maxLength: 2048 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, description: 'A Stripe event, whose shape is Stripe''s and is not held to this contract.' } } }
+      responses:
+        '204': { description: Taken }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/BillingUnavailable' }
+
   /sync/jwks:
     get:
       operationId: getSyncJwks
@@ -8706,12 +8851,22 @@ components:
         replica's credentials; a `suspended` household answers every one of its routes `404`
         instead, these too (D-115). `remedy` is what fixes it, for the caller: an owner is told to
         `subscribe`, to `update_payment_method` after a failed payment, or to `lift_restriction`;
-        anyone else to `contact_owner`, since only an owner can (FR-BI5).
+        anyone else to `contact_owner`, since only an owner can (FR-BI5). After a failed payment the
+        method is replaced on the subscription while it has one (`postBillingPaymentMethod`), and by
+        subscribing again once the processor has ended it (`getBillingSubscription`'s `interval` is
+        then null).
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/EntitlementProblem' } } }
     StorageUnavailable:
       description: |
         The object store could not be reached, and nothing was committed: the upload may be sent
         again (FR-NF3). What is already stored still reads, and its links still work.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    BillingUnavailable:
+      description: |
+        The payment processor could not be asked, or failed on its own side (`billing_unavailable`):
+        the request may be sent again. The household's state, its invoices and its usage still read,
+        from what the platform keeps, and nothing lapses for it: the state moves only on what the
+        processor says (FR-NF3).
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     RateLimited:
       description: Too many requests. Limits are per user **and** per household, so one tenant cannot degrade another.
@@ -8840,6 +8995,9 @@ components:
         - fair_use_ceiling
         - last_owner
         - billing_payer
+        - already_subscribed
+        - not_subscribed
+        - billing_unavailable
         - storage_ceiling_reached
         - account_deletion_blocked
         - layout_locked
@@ -9559,47 +9717,109 @@ components:
                 restricted_at: { type: string, format: date-time }
                 reason: { type: [string, 'null'] }
         suspended_at: { type: [string, 'null'], format: date-time, description: 'When the platform suspended the household, for the lockout.' }
-        storage_used_bytes: { type: integer, format: int64 }
+        storage_used_bytes: { type: integer, format: int64, description: 'Every byte the household stores now, derived variants included.' }
         storage_included_bytes: { type: integer, format: int64, description: 'The base allowance plus any blocks currently in effect.' }
-        storage_blocks: { type: integer, description: '10 GB blocks currently in effect, above the base allowance.' }
+        storage_blocks: { type: integer, description: '10 GB blocks currently in effect, above the base allowance: those the daily average of the calendar month so far needs (PRD 04 §4).' }
 
     Subscription:
       type: object
+      required: [household_id, state, interval, current_period_end, cancel_at_period_end, payment_pending, trial_ends_at, grace_ends_at, data_retained_until, payer, payment_method, base_price, plans, included_storage_bytes, storage_block_bytes, price_per_storage_block, max_storage_blocks, transfer]
+      description: |
+        The household's subscription as an owner reads it: its state, what it pays, and who pays
+        (FR-BI5). `interval`, `current_period_end` and `base_price` are null while it has no
+        subscription, when `plans` say what one would cost. They are those of the subscription the
+        household has: one whose first payment is still on its way shows only as `payment_pending`.
       properties:
         household_id: { $ref: '#/components/schemas/Uuid' }
         state: { $ref: '#/components/schemas/EntitlementState' }
         interval: { type: [string, 'null'], enum: [month, year, null] }
-        current_period_end: { type: [string, 'null'], format: date-time }
+        current_period_end: { type: [string, 'null'], format: date-time, description: 'When the period paid for ends: the next charge, or, with `cancel_at_period_end`, when the subscription ends.' }
         cancel_at_period_end: { type: boolean }
+        payment_pending: { type: boolean, description: 'A subscription''s first payment is on its way and the processor has not yet said how it went, as a bank debit''s is for the days it takes to clear. The household''s state does not change until it has, and another subscription is refused meanwhile.' }
         trial_ends_at: { type: [string, 'null'], format: date-time }
         grace_ends_at: { type: [string, 'null'], format: date-time }
         data_retained_until: { type: [string, 'null'], format: date-time, description: 'When a lapsed household''s data is deleted: it is retained 12 months, then its owners are warned three times over 30 days, a month, a week and a day before (D-119). Export works in every state.' }
-        payer: { $ref: '#/components/schemas/ActorRef' }
+        payer:
+          description: The payer of record, null once their account is gone.
+          oneOf: [{ $ref: '#/components/schemas/ActorRef' }, { type: 'null' }]
         payment_method:
+          description: 'The method the subscription is charged with, for its payer alone to read: null for another owner, and while there is none.'
           oneOf:
             - { type: 'null' }
             - type: object
               description: A summary only. Card data never touches Household's servers.
+              required: [brand, last4, exp_month, exp_year]
               properties:
-                brand: { type: string }
-                last4: { type: string }
-                exp_month: { type: integer }
-                exp_year: { type: integer }
-        base_price: { $ref: '#/components/schemas/Money' }
+                brand: { type: string, description: 'A card''s brand, or the kind of another method, such as `sepa_debit`.' }
+                last4: { type: [string, 'null'], description: 'Its last four digits. Null for a method that has none: a bank account whose IBAN ends in letters is one.' }
+                exp_month: { type: [integer, 'null'] }
+                exp_year: { type: [integer, 'null'] }
+        base_price:
+          description: 'The base fee each `interval`, null with no subscription.'
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+        plans:
+          type: array
+          description: 'The base fee paid yearly and paid monthly, in the currency the household is charged in: its subscription''s, or the one a subscription would be made in. Prices are set per currency, never converted (PRD 04 §1).'
+          items:
+            type: object
+            required: [interval, price]
+            properties:
+              interval: { type: string, enum: [month, year] }
+              price: { $ref: '#/components/schemas/Money' }
         included_storage_bytes: { type: integer, format: int64, description: 'The base allowance. 5 GB at launch.' }
         storage_block_bytes: { type: integer, format: int64, description: 'The size of one purchasable block. 10 GB at launch.' }
         price_per_storage_block: { $ref: '#/components/schemas/Money' }
         max_storage_blocks: { type: integer, description: 'The hard ceiling. Set so the storage line cannot exceed roughly four times the base fee; 20 at launch.' }
+        transfer:
+          description: 'The payer''s offer of billing to another owner while it is open (FR-BI6), null for none.'
+          oneOf:
+            - { type: 'null' }
+            - type: object
+              required: [offered_by, offered_to, offered_at, expires_at]
+              properties:
+                offered_by: { $ref: '#/components/schemas/ActorRef' }
+                offered_to: { $ref: '#/components/schemas/ActorRef' }
+                offered_at: { type: string, format: date-time }
+                expires_at: { type: string, format: date-time }
+
+    BillingInterval:
+      type: object
+      required: [interval]
+      properties:
+        interval: { type: string, enum: [month, year], description: 'Paying yearly, or month to month.' }
+
+    BillingIntent:
+      type: object
+      required: [client_secret, intent, publishable_key]
+      description: |
+        What a client confirms with the payment processor, in the processor's own payment form
+        (Stripe's Payment Element): a `payment`, charged as it is confirmed, or the `setup` of a
+        payment method for later charges. Card details go from the form to the processor and never
+        to Household (PRD 04 §6).
+      properties:
+        client_secret: { type: string, description: 'The secret of the payment or the setup, which the payment form confirms. It is handed out once and never kept.' }
+        intent: { type: string, enum: [payment, setup] }
+        publishable_key: { type: string, description: 'The processor''s publishable key the payment form is made with.' }
+
+    BillingTransferAcceptance:
+      type: object
+      required: [subscription, confirmation]
+      properties:
+        subscription: { $ref: '#/components/schemas/Subscription' }
+        confirmation:
+          description: 'What the caller confirms their card with before billing moves, null where the household has no subscription and billing has moved already.'
+          oneOf: [{ $ref: '#/components/schemas/BillingIntent' }, { type: 'null' }]
 
     Invoice:
       type: object
-      required: [id]
+      required: [id, number, issued_on, period_from, period_to, status, total, tax, lines, pdf_url]
+      description: 'An invoice as the payment processor issued it. Its days are UTC''s, as the storage month it may bill is (D-109).'
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
-        number: { type: string }
+        number: { type: [string, 'null'] }
         issued_on: { type: string, format: date }
-        period_from: { type: string, format: date }
-        period_to: { type: string, format: date }
+        period_from: { type: string, format: date, description: 'The first day of the period its base fee pays for, or, for an invoice of storage alone, of the month it bills.' }
+        period_to: { type: string, format: date, description: 'The last day of that period.' }
         status: { type: string, enum: [draft, open, paid, uncollectible, void] }
         total: { $ref: '#/components/schemas/Money' }
         tax: { $ref: '#/components/schemas/Money' }
@@ -9607,12 +9827,13 @@ components:
           type: array
           items:
             type: object
+            required: [kind, description, quantity, amount]
             properties:
-              kind: { type: string, enum: [base, storage_blocks, credit, adjustment] }
+              kind: { type: string, enum: [base, storage_blocks, credit, adjustment], description: 'The base fee, a month''s storage blocks, a credit, or an adjustment, which a proration is.' }
               description: { type: string }
-              quantity: { type: [string, 'null'], description: 'For `storage_blocks`, the whole number of 10 GB blocks billed for the period.' }
+              quantity: { type: [string, 'null'], description: 'For `storage_blocks`, the whole number of 10 GB blocks billed for the month.' }
               amount: { $ref: '#/components/schemas/Money' }
-        pdf_url: { type: [string, 'null'], format: uri }
+        pdf_url: { type: [string, 'null'], format: uri, description: 'Where the PDF is downloaded, on the invoice read alone (`getBillingInvoicesByInvoiceId`); null in a listing.' }
 
     InvoicePage:
       type: object
@@ -9623,9 +9844,10 @@ components:
 
     UsageSummary:
       type: object
+      required: [period_from, period_to, current_bytes, mtd_average_bytes, projected_average_bytes, included_bytes, included_bytes_base, blocks_now, blocks_projected, projected_charge, bytes_to_next_block, bytes_to_drop_a_block, upload_blocked, hard_ceiling_bytes]
       description: |
-        Extra storage is sold in whole **10 GB blocks**, computed once per period from the daily
-        samples:
+        Extra storage is sold in whole **10 GB blocks**, computed once per calendar month, UTC's,
+        from the daily samples (D-130), and billed in arrears as one line of the next invoice:
 
         ```
         blocks = ceil( max(0, mean(daily stored_bytes) - included_bytes_base) / block_bytes )
@@ -9635,19 +9857,19 @@ components:
         monthly average by about 1.3 GB and therefore costs nothing. An invoice is never the first
         time a customer learns the number.
       properties:
-        period_from: { type: string, format: date }
-        period_to: { type: string, format: date }
+        period_from: { type: string, format: date, description: 'The first day of the month.' }
+        period_to: { type: string, format: date, description: 'Its last day.' }
         current_bytes: { type: integer, format: int64 }
-        mtd_average_bytes: { type: integer, format: int64 }
-        projected_average_bytes: { type: integer, format: int64 }
-        included_bytes: { type: integer, format: int64 }
+        mtd_average_bytes: { type: integer, format: int64, description: 'The mean of the month''s daily samples so far, and what is stored now before its first.' }
+        projected_average_bytes: { type: integer, format: int64, description: 'The average the month ends on if the household goes on storing what it stores now.' }
+        included_bytes: { type: integer, format: int64, description: 'The base allowance and the blocks `blocks_now` puts in effect.' }
         included_bytes_base: { type: integer, format: int64, description: 'The base allowance, before blocks.' }
         blocks_now: { type: integer, description: 'Blocks the current daily-average would require.' }
         blocks_projected: { type: integer, description: 'Blocks the projected month-end average would require. This is the number that will be billed.' }
-        projected_charge: { $ref: '#/components/schemas/Money', description: '`blocks_projected` x the block price. Shown daily, so an invoice is never the first time a customer learns the number.' }
-        bytes_to_next_block: { type: integer, format: int64, description: 'How much more the household can store before another block is added.' }
-        bytes_to_drop_a_block: { type: [integer, 'null'], format: int64, description: 'How much would have to be freed to fall back one block. Null at zero blocks.' }
-        upload_blocked: { type: boolean }
+        projected_charge: { $ref: '#/components/schemas/Money', description: '`blocks_projected` x the block price, in the currency the household is charged in. Shown daily, so an invoice is never the first time a customer learns the number.' }
+        bytes_to_next_block: { type: integer, format: int64, description: 'How much more the month''s average can grow before another block is added.' }
+        bytes_to_drop_a_block: { type: [integer, 'null'], format: int64, description: 'How far the month''s average would have to fall to drop one block. Null at zero blocks.' }
+        upload_blocked: { type: boolean, description: 'Whether an upload is refused now: the household stores as much as it may, or its state does not upload.' }
         hard_ceiling_bytes: { type: integer, format: int64, description: 'Unbounded consumer metering ends in a chargeback, so uploads stop here. Reads, downloads and exports never do.' }
 
     StorageReport:
@@ -9662,7 +9884,7 @@ components:
         a module they cannot see (D-108).
       properties:
         total_bytes: { type: integer, format: int64, description: 'Every byte stored, derived variants included (FR-ST3).' }
-        included_bytes: { type: integer, format: int64, description: 'The base allowance. Billing adds the blocks in effect (plan item 19).' }
+        included_bytes: { type: integer, format: int64, description: 'The base allowance and the 10 GB blocks in effect: those the daily average of the calendar month so far needs (PRD 04 §4).' }
         object_count: { type: integer, format: int64 }
         by_module:
           type: array

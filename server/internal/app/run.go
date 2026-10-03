@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kareltilcer/household/server/internal/platform/avatar"
+	"github.com/kareltilcer/household/server/internal/platform/billing"
 	"github.com/kareltilcer/household/server/internal/platform/breach"
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
 	"github.com/kareltilcer/household/server/internal/platform/config"
@@ -103,7 +104,11 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 		return err
 	}
 	defer closeAccounts()
-	jobs, err := newScheduler(log, pool, meter, registry, catalog, pipeline, avatars, households, notifier)
+	bills, err := newBilling(cfg, log, pool, meter, catalog, notifier)
+	if err != nil {
+		return err
+	}
+	jobs, err := newScheduler(log, pool, meter, registry, catalog, pipeline, avatars, households, notifier, bills)
 	if err != nil {
 		return err
 	}
@@ -125,6 +130,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 		Sync:         Sync{Replica: replicas, PushLimit: ratelimit.NewBuckets(ratelimit.PushPerDevice, nil)},
 		Storage:      &storage.Picture{Log: log},
 		Notify:       notifier,
+		Billing:      bills,
 	})
 	if err != nil {
 		return err
@@ -298,17 +304,44 @@ func newNotify(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool, 
 	})
 }
 
+// newBilling builds billing (item 19) from cfg: Stripe when its keys are configured, and no processor
+// when they are not, as development may leave them, when every route that would ask it answers 503.
+func newBilling(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool, catalog *module.Registry, notifier *notify.Service,
+) (*billing.Service, error) {
+	catalogs, err := i18n.Default()
+	if err != nil {
+		return nil, err
+	}
+	var processor billing.Processor
+	if cfg.StripeSecretKey != "" {
+		if processor, err = billing.NewStripe(billing.StripeConfig{SecretKey: cfg.StripeSecretKey, WebhookSecret: cfg.StripeWebhookSecret}); err != nil {
+			return nil, err
+		}
+	} else {
+		// Only development gets this far without one (config).
+		log.LogAttrs(context.Background(), slog.LevelWarn, "billing takes no payments: no payment processor configured")
+	}
+	return billing.New(billing.Config{
+		Pool: pool, Meter: meter, Log: log, Processor: processor, Prices: cfg.BillingPrices,
+		PublishableKey: cfg.StripePublishableKey, AutomaticTax: cfg.StripeAutomaticTax,
+		Notify: notifier, Catalogs: catalogs, Catalog: catalog,
+	})
+}
+
 // The scheduler's jobs' times (PRD 03 §5): the usage sample at 01:00 UTC, the day the sample is the
-// day of (D-109), the sweeps of the objects no row records an hour after it, and the expiry sweep at
-// 03:00 UTC, once they are done.
+// day of (D-109), the month's storage lines half an hour after it, which bill a month that ended from
+// samples all taken before it did (D-130), the sweeps of the objects no row records at 02:00, and the
+// expiry sweep at 03:00 UTC, once they are done.
 const (
-	nightlySample = localtime.Clock(1 * 60)
-	nightlySweeps = localtime.Clock(2 * 60)
-	nightlyExpiry = localtime.Clock(3 * 60)
+	nightlySample  = localtime.Clock(1 * 60)
+	nightlyStorage = localtime.Clock(1*60 + 30)
+	nightlySweeps  = localtime.Clock(2 * 60)
+	nightlyExpiry  = localtime.Clock(3 * 60)
 )
 
 // newScheduler builds the scheduler of the platform's jobs (PRD 03 §5): nightly, the usage sample
-// (FR-ST2), which warns the owners of a household nearing a fair-use ceiling (PRD 04 §5), and then the
+// (FR-ST2), which warns the owners of a household nearing a fair-use ceiling (PRD 04 §5) or its storage
+// allowance (FR-BI3), the storage lines of the month that ended (item 19), and then the
 // sweeps of the objects no row records, a household's and the accounts' pictures (item 14), and the
 // expiry sweep; hourly, the expiry of single-use tokens and of the invitations that stopped working a
 // month ago (D-110), and the households' trial, dunning and grace transitions with the warnings before
@@ -318,7 +351,7 @@ const (
 // catalog is the module registry with admin, which the invitations' deletions and the transitions are
 // checked against.
 func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog *module.Registry, pipeline *files.Service,
-	avatars *avatar.Service, households *household.Service, notifier *notify.Service,
+	avatars *avatar.Service, households *household.Service, notifier *notify.Service, bills *billing.Service,
 ) (*scheduler.Scheduler, error) {
 	sampler := &storage.Sampler{Meter: meter, Pool: pool, Modules: registry, Log: log, Notify: notifier}
 	sweeper, err := expiry.New(expiry.Config{Pool: pool, Meter: meter, Log: log, Invitations: func(ctx context.Context) (int, error) {
@@ -330,6 +363,10 @@ func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog
 	return scheduler.New(scheduler.Config{Pool: pool, Log: log},
 		scheduler.Job{Name: "storage.sample", Cadence: scheduler.Daily(nightlySample), Run: func(ctx context.Context) error {
 			_, err := sampler.Sample(ctx)
+			return err
+		}},
+		scheduler.Job{Name: "billing.storage", Cadence: scheduler.Daily(nightlyStorage), Run: func(ctx context.Context) error {
+			_, err := bills.BillStorage(ctx)
 			return err
 		}},
 		scheduler.Job{Name: "files.sweep", Cadence: scheduler.Daily(nightlySweeps), Run: pipeline.SweepAll},

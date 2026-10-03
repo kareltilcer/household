@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/fairuse"
+	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
@@ -25,9 +26,10 @@ import (
 // tables, which fair use watches (PRD 04 §5). The meter role measures every household at once, as
 // it alone may, and each household's sample is written in its own context by the request role: no
 // role both reads across households and writes. Item 15's scheduler runs it nightly; billing
-// averages the samples over its period (item 19). A household whose objects, or whose rows in a
-// module, cross 80 % of their fair-use ceiling since the sample before has its owners told (PRD 04
-// §5), in the sample's transaction.
+// averages the samples over the calendar month (item 19). A household whose objects, or whose rows in
+// a module, cross 80 % of their fair-use ceiling since the sample before has its owners told (PRD 04
+// §5), in the sample's transaction, and so has one whose stored bytes cross 80 % or the whole of its
+// storage allowance (FR-BI3).
 type Sampler struct {
 	// Meter measures, connected as the meter role.
 	Meter tenant.Beginner
@@ -38,9 +40,11 @@ type Sampler struct {
 	Log     *slog.Logger
 	// Now is the clock, time.Now when nil: a sample is the day's it is taken on, in UTC.
 	Now func() time.Time
-	// Notify tells the owners of a household that crossed 80 % of a fair-use ceiling; nil tells
-	// nobody.
+	// Notify tells the owners of a household that crossed 80 % of a fair-use ceiling, or 80 % or the
+	// whole of its storage allowance; nil tells nobody.
 	Notify *notify.Service
+	// Allowance is what a household may store, Default when zero.
+	Allowance Allowance
 }
 
 // batch is how many households one measurement reads at once.
@@ -296,7 +300,7 @@ func (s *Sampler) write(ctx context.Context, day, at time.Time, u *usage) error 
 				return err
 			}
 		}
-		warned, err = s.warn(scoped, tx, before, u)
+		warned, err = s.warn(scoped, tx, before, u, day)
 		return err
 	})
 	if err == nil && warned {
@@ -305,11 +309,11 @@ func (s *Sampler) write(ctx context.Context, day, at time.Time, u *usage) error 
 	return err
 }
 
-// counted is what a sample counted that fair use bounds: the household's objects, and each module's
-// rows.
+// counted is what a sample counted that fair use bounds, the household's objects and each module's
+// rows, and what the storage allowance does, its stored bytes.
 type counted struct {
-	objects int64
-	rows    map[string]int64
+	objects, stored int64
+	rows            map[string]int64
 }
 
 // last reads household's last sample up to day, in tx in its context: the one a sample of day
@@ -319,8 +323,8 @@ func last(ctx context.Context, tx pgx.Tx, household uuid.UUID, day time.Time) (c
 	out := counted{rows: map[string]int64{}}
 	var on time.Time
 	err := tx.QueryRow(ctx, `
-		SELECT sampled_on, object_count FROM usage_samples WHERE household_id = $1 AND sampled_on <= $2
-		ORDER BY sampled_on DESC LIMIT 1`, household, day).Scan(&on, &out.objects)
+		SELECT sampled_on, object_count, stored_bytes FROM usage_samples WHERE household_id = $1 AND sampled_on <= $2
+		ORDER BY sampled_on DESC LIMIT 1`, household, day).Scan(&on, &out.objects, &out.stored)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
 	}
@@ -344,12 +348,16 @@ func last(ctx context.Context, tx pgx.Tx, household uuid.UUID, day time.Time) (c
 }
 
 // warn tells u's household's owners, in tx, of each fair-use ceiling its counts crossed since before
-// (fairuse.Crossed), and reports whether it told them of any.
-func (s *Sampler) warn(ctx context.Context, tx pgx.Tx, before counted, u *usage) (bool, error) {
+// (fairuse.Crossed), and of its storage allowance once its stored bytes cross 80 % or the whole of it
+// (notice), and reports whether it told them of any.
+func (s *Sampler) warn(ctx context.Context, tx pgx.Tx, before counted, u *usage, day time.Time) (bool, error) {
 	if s.Notify == nil {
 		return false, nil
 	}
-	warned := false
+	warned, err := s.notice(ctx, tx, before, u, day)
+	if err != nil {
+		return false, err
+	}
 	if fairuse.Crossed(before.objects, u.objects, fairuse.Objects) {
 		if err := fairuse.Notice(ctx, tx, s.Notify, u.household, fairuse.ResourceObjects, "", u.objects, fairuse.Objects); err != nil {
 			return false, err
@@ -373,3 +381,57 @@ func (s *Sampler) warn(ctx context.Context, tx pgx.Tx, before counted, u *usage)
 	}
 	return warned, nil
 }
+
+// The pushes that tell a household's owners where its storage stands against its allowance (FR-BI3).
+const (
+	messageNearing = "notification.storage_nearing"
+	messageReached = "notification.storage_reached"
+)
+
+// notice tells u's household's owners, in tx, where its storage stands against its allowance as the
+// sample of day leaves it (FR-BI3): once as what it stores crosses 80 % of the allowance, the base
+// and the blocks the month's average has put in effect, and once as it crosses the whole of it, where
+// the next block will be added, or, with every block in effect, uploads stop. In the app and by push,
+// never by email, and to the owners alone (FR-BI5). It reports whether it told them.
+func (s *Sampler) notice(ctx context.Context, tx pgx.Tx, before counted, u *usage, day time.Time) (bool, error) {
+	allowance := s.Allowance
+	if allowance == (Allowance{}) {
+		allowance = Default
+	}
+	month, err := MonthUsage(ctx, tx, u.household, day)
+	if err != nil {
+		return false, err
+	}
+	blocks := allowance.Blocks(month.Average)
+	included := allowance.Included(blocks)
+	message := ""
+	switch {
+	case before.stored < included && u.stored >= included:
+		message = messageReached
+	case fairuse.Crossed(before.stored, u.stored, included):
+		message = messageNearing
+	default:
+		return false, nil
+	}
+	last := "no"
+	if blocks >= allowance.MaxBlocks {
+		last = "yes"
+	}
+	owners, err := tenant.Owners(ctx, tx, u.household)
+	if err != nil {
+		return false, err
+	}
+	ns := make([]notify.Notification, 0, len(owners))
+	for _, o := range owners {
+		ns = append(ns, notify.Notification{
+			To: o, Category: notify.Household, Message: message, Module: Admin,
+			Args:     i18n.Args{"stored_gb": gigabytes(u.stored), "included_gb": gigabytes(included), "last": last},
+			Link:     "/households/" + u.household.String() + "/settings/storage",
+			Coalesce: "storage:allowance",
+		})
+	}
+	return len(ns) > 0, s.Notify.Queue(ctx, tx, ns...)
+}
+
+// gigabytes is bytes in whole gigabytes, rounded down, as a notice says them.
+func gigabytes(bytes int64) int64 { return bytes / GB }

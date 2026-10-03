@@ -18,6 +18,7 @@ require (
 	github.com/pquerna/otp v1.5.0
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
+	github.com/stripe/stripe-go/v87 v87.0.0
 	github.com/zeebo/xxh3 v1.1.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/image v0.46.0
@@ -45,6 +46,7 @@ require (
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
+	github.com/shopspring/decimal v1.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )

@@ -505,7 +505,7 @@ minutes until it.
 | Reminder materialisation | Hourly | Reminders |
 | Weather poll | Twice daily | Garden |
 | Storage sampling | Nightly | Storage |
-| Usage rollup and billing sync | Nightly | Billing |
+| The storage lines of the month that ended (`billing.storage`), after the storage sample | Nightly, 01:30 UTC | Billing |
 | PowerSync's compaction, after the erasure and the expiry sweep (`deploy/powersync/compact.sh`) | Nightly, 04:00 UTC | Sync |
 | PowerSync's replication lag, sampled for alerting | Every minute | Sync |
 | Trial and dunning transitions | Hourly | Billing |

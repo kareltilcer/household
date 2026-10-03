@@ -23,6 +23,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/text"
@@ -90,12 +91,18 @@ func (s *Service) restrict(w http.ResponseWriter, r *http.Request) {
 			reason = &kept
 		}
 	}
-	var status entitlement.Status
+	var (
+		status entitlement.Status
+		st     storage.Standing
+	)
 	_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		if _, err := lockAsOwner(ctx, tx); err != nil {
 			return mutation.Record{}, err
 		}
 		var err error
+		if st, err = s.standing(ctx, tx, scope.HouseholdID()); err != nil {
+			return mutation.Record{}, err
+		}
 		if status, err = readStatus(ctx, tx, scope.HouseholdID()); err != nil || status.Restriction != nil {
 			return mutation.Record{}, err
 		}
@@ -126,7 +133,7 @@ func (s *Service) restrict(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, status.Summary(s.Now()))
+	httpx.WriteJSON(w, http.StatusOK, withStorage(status.Summary(s.Now()), st))
 }
 
 // unrestrict lifts the household's restriction, any owner's to do, at once (FR-BI7): the household
@@ -140,12 +147,18 @@ func (s *Service) unrestrict(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var status entitlement.Status
+	var (
+		status entitlement.Status
+		st     storage.Standing
+	)
 	_, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		if _, err := lockAsOwner(ctx, tx); err != nil {
 			return mutation.Record{}, err
 		}
 		var err error
+		if st, err = s.standing(ctx, tx, scope.HouseholdID()); err != nil {
+			return mutation.Record{}, err
+		}
 		if status, err = readStatus(ctx, tx, scope.HouseholdID()); err != nil || status.Restriction == nil {
 			return mutation.Record{}, err
 		}
@@ -172,7 +185,7 @@ func (s *Service) unrestrict(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, status.Summary(s.Now()))
+	httpx.WriteJSON(w, http.StatusOK, withStorage(status.Summary(s.Now()), st))
 }
 
 // Transition moves every household whose subscription's clock has run out along it, as the meter

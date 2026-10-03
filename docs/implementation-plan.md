@@ -159,7 +159,7 @@ you**, not from the implementing session.
 
 | # | Question | Source | Settle in |
 |---|---|---|---|
-| Q1 ★ | **CZK and PLN prices.** [04 §1](prd/04-billing-and-entitlements.md) says local prices are set "on the same basis" but names no figures. The prototype assumed EUR everywhere, which contradicts the PRD | 04 §1; design/v1 `household.js` | 19 |
+| Q1 ★ | **CZK and PLN prices.** [04 §1](prd/04-billing-and-entitlements.md) says local prices are set "on the same basis" but names no figures. The prototype assumed EUR everywhere, which contradicts the PRD. **Settled for the build by item 19 (your answer, 2026-10-03): prices are configuration, and a CZK or a PLN household is charged in EUR until its figures are configured ([D-132](prd/09-decisions.md)). The figures themselves are still yours, and a GA prerequisite** | 04 §1; design/v1 `household.js` | 19, then the GA checklist |
 | Q2 | **Sync engine: build or adopt.** A verdict of *adopt* rewrites items 12, 13, 17 and 18. **Settled by item 5: adopt PowerSync for replication, keep the write path ([D-93](prd/09-decisions.md))** | 10-sync-risk §2 | 5 |
 | Q3 | **FR-CT1 against grants.** The general conversation should contain every member, but two of the five fixture members (Petr and Miloš) hold `none` on Chat. The prototype lets the grant win | 15-chat; design/v1 `chat.js` | 85 |
 | Q4 | **Finance shares.** The prototype settled that a share may only name a member who holds Finance. Confirm it and write it into FR-FI11. **The Finance fixture breaks this rule**: only Jana holds Finance, yet its shares and balances name Petr and Miloš. If the rule is confirmed, either the seed grants them Finance (which moves other personas' vectors) or the Finance fixture is re-cut. Record the choice under Q16 | 09-finance, D-59; design/v1 `finance.js`, `fixtures.js` | 63 |
@@ -175,7 +175,7 @@ you**, not from the implementing session.
 | Q14 | **Vendors not named in the PRD**, each EU-established: weather provider, email provider, analytics store, error aggregation, and an IP-to-place source for the session and device lists and the takeover notice (FR-ID7; items 8 and 9 answer `approximate_location` null, and item 9 moved the choice to item 30). The office-to-PDF converter: **settled by item 14**, LibreOffice headless and poppler in a sidecar of our own, built from Debian's packages (`deploy/converter`, [ADR 0015](adr/0015-files-object-storage-the-meter-and-pictures.md)) | 05 §10, 07 §5 | 71, 30/88, 92, 30, 30, 14 |
 | Q15 ★ | **UK Online Safety Act** (OQ-1). Counsel's answer decides whether Chat ships disabled in the UK. Item 85 ships a per-country switch either way | 05 §11, DD-11 | counsel → 85 |
 | Q16 | **Fixture drifts** to fix when porting the seed: Stage 8 has Property and Pets toggled off; the vehicles widget date; the washing-machine warranty date; `garden.task_due` names the wrong bed and crop; Petr's persona note is stale | design/v1 `github.md` | 30 and each module |
-| Q17 | **Subscribe flow.** The PRD says Stripe Elements / PaymentSheet; the contract's `billing/checkout-session` and `billing/portal-session` describe a hosted checkout and a hosted portal. The PRD wins, so those operations are amended in `openapi.yaml` before the client is generated | 04 §6; `openapi.yaml` tag `billing` | 19 |
+| Q17 | **Subscribe flow.** The PRD says Stripe Elements / PaymentSheet; the contract's `billing/checkout-session` and `billing/portal-session` describe a hosted checkout and a hosted portal. The PRD wins, so those operations are amended in `openapi.yaml` before the client is generated. **Settled by item 19: `postBillingSubscription` and `postBillingPaymentMethod` answer the secret confirmed in the Payment Element ([D-131](prd/09-decisions.md))** | 04 §6; `openapi.yaml` tag `billing` | 19 |
 
 ---
 
@@ -729,34 +729,34 @@ Phase 0 · after 17, 6 · size L
   - The web build's replica and connector pass a smoke test in a real browser, and the React Native build typechecks against it.
 - **PR:** [#23](https://github.com/kareltilcer/household/pull/23)
 
-### 19 · Stripe billing and storage blocks · `planned`
+### 19 · Stripe billing and storage blocks · `done`
 
 Phase 0 · after 16, 14 · size L
 
 - **Scope**
   - **Subscriptions** on Stripe Billing (EU entity):
     - A customer per payer.
-    - Annual and monthly prices per currency, from config: EUR and GBP from [04 §1](prd/04-billing-and-entitlements.md); **CZK and PLN need figures (Q1)**.
-    - Payment Element on web: card, SEPA Direct Debit, Apple Pay, Google Pay; SCA. The `billing` operations are amended in the contract to match (Q17).
-  - **Webhooks**: signature-verified and idempotent. They drive the state machine: the columns item 16 keeps on the household's row ([ADR 0017](adr/0017-entitlements-on-the-households-row-the-gate-and-fair-use.md)), entering `past_due` with its `dunning_ends_at`, `canceled` with its `lapsed_at` and `retained_until` (`entitlement.RetainedUntil`), and `active` with every clock cleared, each through the mutation spine as item 16's hourly moves are; that job stays the backstop.
+    - Annual and monthly prices per currency, from config (`HOUSEHOLD_BILLING_PRICES`): EUR and GBP from [04 §1](prd/04-billing-and-entitlements.md); a currency with no prices of its own, CZK and PLN until their figures are set, is charged EUR's (Q1, [D-132](prd/09-decisions.md)).
+    - Payment Element on web: card, SEPA Direct Debit, Apple Pay, Google Pay; SCA. The `billing` operations are amended in the contract to match (Q17, [D-131](prd/09-decisions.md)): the server answers the secret a payment or a card is confirmed with at Stripe, and item 27 builds the form.
+  - **Webhooks**: signature-verified and idempotent, each reading from Stripe what it names rather than acting on what it carries ([D-134](prd/09-decisions.md), [ADR 0020](adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md)). They drive the state machine: the columns item 16 keeps on the household's row ([ADR 0017](adr/0017-entitlements-on-the-households-row-the-gate-and-fair-use.md)), entering `past_due` with its `dunning_ends_at`, `canceled` with its `lapsed_at` and `retained_until` (`entitlement.RetainedUntil`), and `active` with every clock cleared, each through the mutation spine as item 16's hourly moves are; that job stays the backstop.
   - **Stored data**: a payment-method summary only.
-  - **Invoices**: list, download and email.
-  - **Dunning**: emails at 1, 3, 5 and 7 days, plus owner banners.
+  - **Invoices**: list, download and email, each its payer's ([D-135](prd/09-decisions.md)).
+  - **Dunning**: an email as each of Stripe's retries fails, over the seven days after the first failure, plus owner banners from the first failure. The retry schedule is the Stripe account's, which cannot be set to days 1, 3, 5 and 7 exactly: the [runbook](runbooks/billing.md) gives the two settings nearest them, and the choice between them is yours.
   - **Payer**:
     - Must be verified.
-    - Take-over handshake (FR-BI6).
-    - Proration.
-  - **Storage blocks**: blocks = ceil(max(0, daily-average − 5 GB) / 10 GB), capped at 20, beyond which uploads get `402`. They are reported as metered usage. The average is of item 14's daily samples (`usage_samples.stored_bytes`), the ceiling item 14's `storage.Allowance`, and `StorageReport.included_bytes`, the base allowance until now, adds the blocks in effect. So do the storage fields of `EntitlementSummary` (`storage_used_bytes`, `storage_included_bytes`, `storage_blocks`), which item 16 leaves out.
+    - Take-over handshake (FR-BI6): offer, accept, and the move once the new payer's card is confirmed, their subscription starting when the paid period ends ([D-133](prd/09-decisions.md)).
+    - Proration, of a change between paying yearly and monthly (`patchBillingSubscription`).
+  - **Storage blocks**: blocks = ceil(max(0, daily-average − 5 GB) / 10 GB), capped at 20, beyond which uploads get `402`. They are billed by the calendar month, UTC's, in arrears, as one invoice item on the subscription, a yearly plan's invoiced monthly ([D-130](prd/09-decisions.md)), not as usage reported to a meter. The average is of item 14's daily samples (`usage_samples.stored_bytes`), the ceiling item 14's `storage.Allowance`, and `StorageReport.included_bytes`, the base allowance until now, adds the blocks in effect. So do the storage fields of `EntitlementSummary` (`storage_used_bytes`, `storage_included_bytes`, `storage_blocks`), which item 16 leaves out.
   - **Transparency**: the projected charge (FR-BI4) and notices at 80 % and 100 %. Members and children never see billing (FR-BI5).
-  - **Support actions** for item 21: extend trial, credit, re-issue invoice.
+  - **Support actions** for item 21: extend trial, credit, re-issue invoice (`billing.Service.ExtendTrial`, `Credit`, `ResendInvoice`).
 - **Inputs**
   - PRD: [04 §1, §4, §6](prd/04-billing-and-entitlements.md); D-31, D-33, D-34
   - API: tag `billing`
   - Design: A-27–A-29, C-55; `household.js`
 - **Done when**
-  - Stripe test-mode fixtures pass.
-  - The block vectors hold: an 18 GB average is 2 blocks and €2; a 40 GB upload deleted the same day is about 1.3 GB on the average.
-- **PR:** —
+  - Stripe test-mode fixtures pass: the server, its Stripe adapter and its signature check included, passes against a stand-in for Stripe's API whose objects are shaped as test mode's (`billingtest`), and every request it sends passes Stripe's own mock in CI. A payment in Stripe's test mode itself is item 30's, on staging.
+  - The block vectors hold: an 18 GB average is 2 blocks and €2; a 40 GB upload deleted the same day is about 1.3 GB on the average (`packages/test-vectors/vectors/storage.json`).
+- **PR:** [#24](https://github.com/kareltilcer/household/pull/24)
 
 ### 20 · Export, erasure and diagnostics · `planned`
 
@@ -772,7 +772,7 @@ Phase 0 · after 14, 15, 17 · size L
     - A 30-day window: the account is disabled and revoked immediately, and an email carries a cancel link. A disabled account's sign-in fails as a wrong password does (`401 invalid_credentials`, FR-ID3), and its sessions end. `POST /me/deletion` keeps no `Idempotency-Key`, since its body carries the password ([D-97](prd/09-decisions.md)).
     - A nightly job then runs `EraseSource` everywhere, deletes object prefixes, the account's pictures under `u/{user_id}/` among them ([D-107](prd/09-decisions.md)), writes an identity tombstone, and relabels authorship as *Former member*.
     - PowerSync's compaction (item 17, `deploy/powersync/compact.sh`, 04:00 UTC) runs after that job each night, so an erased row's superseded data leaves bucket storage with it ([05 §6](prd/05-privacy-and-compliance.md), [D-93](prd/09-decisions.md)): the job is scheduled to end before it, or moves `HOUSEHOLD_COMPACT_AT` after itself.
-  - **Household deletion** (FR-PR6): the owner types the household name, every member is notified, and the same 30-day window applies. Its erasure deletes the prefix `h/{household_id}/`, every module's objects and their variants, with its `files` rows (item 14).
+  - **Household deletion** (FR-PR6): the owner types the household name, every member is notified, and the same 30-day window applies. Its erasure deletes the prefix `h/{household_id}/`, every module's objects and their variants, with its `files` rows (item 14). A household deleted is no longer charged: its subscription is cancelled at Stripe through item 19's `billing.Processor` before its billing rows go, and an account's erasure deletes its Stripe customers with its `billing_customers` rows ([ADR 0020](adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md)).
   - **Private roots** when a member leaves (FR-PR7), from item 10's `household.Hooks.Lost` with the cause `left` or `removed`. Admin's tables, the platform's (item 10), are exported and erased with the household.
   - **A child profile removed from its household** (item 11) is an account nobody can sign in to, since it is nothing outside its household: it is erased as a deleted account is, from the same hook.
   - **Lapsed deletion**: households past item 16's retention window: a `read_only` or `canceled` household whose `retained_until` has passed with its three warnings sent (`retention_warnings = 3`, [D-119](prd/09-decisions.md)).
@@ -795,7 +795,7 @@ Phase 0 · after 10, 7 · size M
 
 - **Scope**
   - **Staff identities**: `support` and `platform_admin`, with MFA required.
-  - **Staff API** (`/platform/*`): metadata-only endpoints, plus the support actions in [02 §8](prd/02-identity-and-access.md), among them unlocking a locked second step and turning one off whose owner has lost both the authenticator and the codes (D-100), which clears `mfa_totp` and `mfa_recovery_codes`.
+  - **Staff API** (`/platform/*`): metadata-only endpoints, plus the support actions in [02 §8](prd/02-identity-and-access.md), billing's being item 19's `billing.Service.ExtendTrial`, `Credit` and `ResendInvoice`, among them unlocking a locked second step and turning one off whose owner has lost both the authenticator and the codes (D-100), which clears `mfa_totp` and `mfa_recovery_codes`.
   - **Platform audit log**: a separate schema, append-only, kept 7 years.
   - **Double logging** into the household's own activity ([D-75](prd/09-decisions.md), FR-PS2).
   - **Feature flags** per household and per platform, so a module can ship dark.
@@ -971,9 +971,9 @@ Phase 0 · after 26, 16, 19, 20 · size L
 
 - **Scope**
   - **Billing**:
-    - Subscribe (A-27, Payment Element).
-    - Manage billing (A-28 = C-55): invoices, the method summary, cancel and resume.
-    - Take over billing (A-29).
+    - Subscribe (A-27, Payment Element), confirming the `BillingIntent` item 19's `postBillingSubscription` answers; the prices are the `plans` of `getBillingSubscription`, EUR's for a household whose currency has none ([D-132](prd/09-decisions.md)), where A-27's copy shows them.
+    - Manage billing (A-28 = C-55): invoices, the method summary and its replacement (`postBillingPaymentMethod`), the interval (`patchBillingSubscription`), cancel and resume.
+    - Take over billing (A-29): the offer, its acceptance with the card confirmed in the same form, and its decline (`deleteBillingTransfer`), [D-133](prd/09-decisions.md).
   - **Entitlement banners** (A-30): the trial stages, `past_due`, `grace`, `read_only` with its deletion date, `canceled`, and `restricted` naming who and when.
   - **Suspended lockout** (A-31): no export button ([DD-15](design/08-decisions.md)).
   - **Read-only mode** app-wide: writes are absent, and a banner explains.
@@ -1070,7 +1070,7 @@ Phase 0 · after 27, 29, 20 · size L · **Phase 0 exit**
     - Postgres 17 and S3-compatible storage;
     - PowerSync with its bucket storage, the Postgres at `wal_level=logical` (item 13), and its nightly compaction (`deploy/powersync/compact.sh`, item 17);
     - the object store's bucket, its edge adding `nosniff`, and the converter sidecar with no route out, per [item 14's runbook](runbooks/object-storage.md), with `HOUSEHOLD_METER_DATABASE_URL`, which `serve` reads since item 14;
-    - EU SMTP (Q14) and Stripe test mode;
+    - EU SMTP (Q14) and Stripe test mode: its keys, its prices and its webhook endpoint per [item 19's runbook](runbooks/billing.md), whose last step, a household subscribed and a renewal failed in test mode, is the first payment the code meets;
     - item 8's settings: `HOUSEHOLD_WEB_URL`, the proxies to trust, and the breached-password corpus, built per [the runbook](runbooks/breached-passwords.md);
     - item 9's: `HOUSEHOLD_TOKEN_KEYS`, `HOUSEHOLD_MFA_KEYS`, the redirect URIs and the Google and Apple credentials, per [their runbook](runbooks/sign-in-keys-and-providers.md), and the IP-to-place source for `approximate_location` (Q14), which item 9 left null;
     - migrations run as `household_migrate`;
@@ -2301,7 +2301,7 @@ Phase 5 · after 1–87 (the Phase 4 exit, crop catalog included) · size L
   - **Services**:
     - An EU email provider with SPF, DKIM and DMARC.
     - The breached-password corpus on a volume beside each API instance, about 8 GB, refreshed quarterly ([runbook](runbooks/breached-passwords.md)), and `HOUSEHOLD_TRUSTED_PROXIES` set to the load balancer's addresses, without which every client shares one sign-in budget.
-    - Live Stripe.
+    - Live Stripe: the account, its prices, retries, restricted key and webhook endpoint per [the runbook](runbooks/billing.md), with the CZK and PLN prices once Q1's figures exist.
     - Expo push credentials.
     - Item 9's keys and provider credentials in the secret store, rotated per [their runbook](runbooks/sign-in-keys-and-providers.md).
 - **Inputs**
@@ -2475,3 +2475,4 @@ Tracked here so they are not forgotten. None of them takes a numbered slot.
 | 2026-10-02 | 17, 18, 20, 27, 30, 34, 75, 88, 89, 90 | Item 17 (ADR 0018): the push locks the row a write names and holds it to its `base_version`, `strict_version` answering `conflict` with the row and `lww_field`/`lww_row` `merged` (`concurrent_change`), an `lww_row` writer keeping its loser in its module, and a replica's own earlier write never merged over or conflicting, within a batch by the push and across batches by item 18's client (D-122); private rows, redacted projections (a column list, `sync.Entity.Redacted`) and audiences are generated streams, each row carrying its `visibility`, `owner_id` or `readers`, rewritten through `sync.RewriteAccess`, which `touch_entity` keeps out of the version (D-123); retraction is a row leaving the buckets, the household surface's Lost hook taking a removed member out of every audience; the spine writes no change feed and the push no `seq` (D-121), so item 34 drops `sync_changes` once G-C passes; the socket is gone, the household's entitlement replicating with its row (D-124); the digest stays as the replica's report, whose two halves, with `postSyncReset` and `getSyncState`, move to item 18 (D-125), and item 27 shows it; a `member_shared` calendar keeps readers on every row (D-126, item 75), and since the generator holds every row of an `Audience` entity to its readers, item 75 keeps the events no audience bounds apart from a `member_shared` calendar's or extends the generator; the push refuses past 100 000 mutations a UTC day (D-127); PowerSync compacts nightly at 04:00 UTC beside the service, which items 20, 30 and 88 schedule around and deploy; `sync.Metrics` logs until item 89 alerts on it; item 90 measures PowerSync's connections, not a socket's |
 | 2026-10-02 | 18, 25, 28 | Item 18 (ADR 0019): `@household/sync` builds its replica from a client registry generated from the entity registry and the migrated schema, which `pnpm run gen` writes through a test against PostgreSQL; an edit merges into its row's queued mutation until that one is sent (D-129); the replica's report is kept 90 days and compared on the entity types it names (D-128). Item 28 gives the native replica a file storage and an upload transport, and a credential that throws `Revoked`. Item 25 gives the web replica its session's cookie and CSRF header in place of the bearer token the library sends, and keeps one tab's replica of a household open at a time |
 | 2026-10-03 | 18, 28 | Item 18: react-native is installed for its types, and its CLI plugin, which brings Metro and through it `braces` (GHSA-vfj7-8cjw-p6xm, no patched version), is left out by a pnpm override so that `pnpm audit` holds. Item 28, which bundles with Metro, removes the override and settles the advisory |
+| 2026-10-03 | 19, 20, 21, 27, 30, 88, Q1, Q17 | Item 19: billing is the platform's (`internal/platform/billing`), asking Stripe through one `Processor` interface (stripe-go v87); a customer confirms a payment or a card in Stripe's Payment Element by a secret the server hands out, so the contract's hosted `checkout-session` and `portal-session` are replaced by `postBillingSubscription`, `postBillingPaymentMethod` and `patchBillingSubscription` (Q17, D-131); `POST /webhooks/stripe` is proved by its signature and reads from Stripe what each event names, records it in tenant tables of its own (`01023`) and settles the household's row from what is recorded, through the spine (`household.Bill`), `active`, `past_due` with a clock a day past the retries, `grace` or `canceled` (D-134); billing moves between owners once the new payer's card is confirmed, their subscription starting when the paid period ends (D-133); an invoice is its payer's (D-135); and prices are configuration, a currency with none of its own charged EUR's, which settles Q1 for the build and leaves the CZK and PLN figures a GA prerequisite (D-132) ([ADR 0020](adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md); PRD 01 §2.4, 03 §5, 04 §1, §4, §6 and modules/17 amended). **Storage is billed by the calendar month as an invoice item, not as metered usage** as this item's scope first said (D-130): a metered price bills on the subscription's own interval, so a yearly plan's blocks would arrive twelve months at once, past D-33's ceiling on one invoice, and the block count is a ceiling of a mean the storage screen must show before it is billed. The Done-when's fixtures are a stand-in for Stripe's API (`billingtest`) that the real adapter runs against, and Stripe's own mock in a CI job, which validates every request; a payment in Stripe's test mode is item 30's. The contract also gains `deleteBillingTransfer`, `postWebhooksStripe`, `BillingIntent`, `BillingInterval`, `BillingTransferAcceptance` and the codes `already_subscribed`, `not_subscribed` and `billing_unavailable`. Item 20 cancels a deleted household's subscription and deletes an erased account's customers; item 21 calls the support actions; item 27 confirms the intents in the Payment Element and shows `plans`; items 30 and 88 set up Stripe per the new runbook |

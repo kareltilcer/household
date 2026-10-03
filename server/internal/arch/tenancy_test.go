@@ -120,6 +120,9 @@ var exemptions = map[string]exemption{
 	"public.push_subscriptions":    {why: "FR-NT1: a browser's Web Push subscription, its user's while their web session lives"},
 	"public.push_receipts":         {why: "FR-NT6: Expo's tickets for a user's device, awaiting their receipts"},
 	"public.notification_defaults": {why: "FR-NT2: a user's account-wide notification preferences"},
+	// Item 19's: a payer's customer at the payment processor is their account's, whichever households
+	// they pay for.
+	"public.billing_customers": {why: "PRD 04 §6: a payer's customer at the payment processor, their account's and no household's"},
 	// PRD 01 §2.4's global reference data, which the request role only reads (item 7).
 	"public.reference_datasets": {why: "the version of each reference dataset the loader has loaded"},
 	"public.country_profiles":   {why: "PRD 01 §2.4: reference data, the same for every household"},

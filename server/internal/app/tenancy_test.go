@@ -83,6 +83,7 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
+		Billing:    apptest.Billing(t, pool, log, notifier, apptest.Options{}),
 	}
 	for _, o := range options {
 		o(&deps)

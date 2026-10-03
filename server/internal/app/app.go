@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/auth"
+	"github.com/kareltilcer/household/server/internal/platform/billing"
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/device"
@@ -87,6 +88,9 @@ type Deps struct {
 	// Notify is the notification transport (item 15), whose routes are the caller's own: where their
 	// browsers and devices are reached, and what they want to be told.
 	Notify *notify.Service
+	// Billing is the household's subscription at the payment processor (item 19): its routes under
+	// …/billing, and the processor's webhook.
+	Billing *billing.Service
 }
 
 // Sync is the sync surfaces (item 13, ADR 0014): the credentials a client's replica connects to
@@ -158,12 +162,14 @@ func Retract(catalog *module.Registry) func(context.Context, pgx.Tx, household.L
 // the registry for the changes they record.
 //
 // PowerSync's keys under /sync/jwks answer anyone, PowerSync among them, which verifies with them
-// the tokens a replica's credentials carry (item 13).
+// the tokens a replica's credentials carry (item 13). The payment processor's webhook under /webhooks
+// answers whoever signs it as the processor does (item 19).
 //
 // Everything under /households/{household_id} passes the tenant middleware, which answers a
 // caller who is not a member of the household before any route does, and carries the module
 // registry the mutation spine checks each mutation against, and the household's API limit, which
-// its members share. The household's own routes are there, behind the member's Idempotency-Key,
+// its members share. The household's own routes are there, behind the member's Idempotency-Key, and
+// so are billing's (item 19), but those that answer the secret a payment is confirmed with;
 // but leaving, whose key is the account's and answers a repeat before the tenant middleware looks
 // for the membership leaving ended: a member's keys go with their membership; and the two whose body
 // carries a child profile's PIN, which keep none (D-97). A replica's credentials are there too, and
@@ -200,6 +206,9 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	}
 	if d.Meter == nil {
 		return nil, errors.New("app: the router needs the meter role's pool")
+	}
+	if d.Billing == nil {
+		return nil, errors.New("app: the router needs billing")
 	}
 	// The picture labels the largest items by the modules the router serves, unless it was given
 	// others: without them it would name each by its file, whatever its module calls it.
@@ -261,6 +270,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	d.Sync.Replica.PublicRoutes(api)
 	a.Identity.PublicRoutes(api)
 	api.With(catalog).Group(d.Households.PublicRoutes)
+	d.Billing.PublicRoutes(api)
 
 	api.Group(func(signedIn chi.Router) {
 		signedIn.Use(authenticate(a.Devices.Authenticate, a.Sessions.Authenticate), perUser)
@@ -286,7 +296,10 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		signedIn.Group(func(inHousehold chi.Router) {
 			inHousehold.Use(tenancy, perHousehold, catalog, ceilings)
 			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Households.HouseholdRoutes)
-			// A replica's credentials keep no key: a credential is never kept to be answered with.
+			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Billing.HouseholdRoutes)
+			// A replica's credentials keep no key: a credential is never kept to be answered with. Nor
+			// does the secret a payment or a card is confirmed with at the payment processor.
+			inHousehold.Group(d.Billing.SecretRoutes)
 			inHousehold.Group(d.Sync.Replica.HouseholdRoutes)
 			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(reports.Routes)
 			inHousehold.Group(picture.Routes)

@@ -1,0 +1,299 @@
+package billing
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	households "github.com/kareltilcer/household/server/internal/platform/household"
+	"github.com/kareltilcer/household/server/internal/platform/httpx"
+	"github.com/kareltilcer/household/server/internal/platform/i18n"
+	"github.com/kareltilcer/household/server/internal/platform/notify"
+	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/tenant"
+)
+
+// OfferFor is how long the payer's offer of billing stands before it lapses, as an invitation does.
+const OfferFor = 14 * 24 * time.Hour
+
+// offerKey is what an offer's email waits under in its household (notify.Notification.Replaces): a
+// later offer's replaces it, and an offer taken back, declined or spent, as billing moves, drops it,
+// so that no offer arrives that is no longer open once the mail server takes mail again.
+const offerKey = "billing:offer"
+
+// takeoverRoute is the web client's take-over screen of household (A-29), which the offer's email
+// opens.
+func takeoverRoute(household uuid.UUID) string {
+	return "households/" + household.String() + "/billing/takeover"
+}
+
+// offerRequest is postBillingTransfer's body.
+type offerRequest struct {
+	UserID uuid.UUID `json:"user_id"`
+}
+
+// offer is postBillingTransfer: the payer offers billing to another of the household's owners
+// (FR-BI6, FR-HH6), who is emailed. Nothing about the subscription changes, and the payer goes on
+// paying, until the other owner accepts; an offer replaces the one before it, and lapses in 14 days.
+// Billing moves only between owners, so anyone else named is refused 422.
+func (s *Service) offer(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req offerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.fail(w, r, problem.Validation(problem.FieldError{Field: "", Code: problem.FieldMalformed}))
+		return
+	}
+	scope, err := owner(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	household := scope.HouseholdID()
+	err = tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
+		if err := lock(ctx, tx, household); err != nil {
+			return err
+		}
+		if _, _, err := payer(ctx, tx); err != nil {
+			return err
+		}
+		to, err := isOwner(ctx, tx, household, req.UserID)
+		if err != nil {
+			return err
+		}
+		if !to || req.UserID == scope.UserID() {
+			return problem.Validation(problem.FieldError{Field: "/user_id", Code: problem.FieldInvalid})
+		}
+		now := s.Now()
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO billing_transfers (household_id, offered_by, offered_to, offered_at, expires_at) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (household_id) DO UPDATE SET offered_by = excluded.offered_by, offered_to = excluded.offered_to,
+			  offered_at = excluded.offered_at, expires_at = excluded.expires_at`,
+			household, scope.UserID(), req.UserID, now, now.Add(OfferFor)); err != nil {
+			return err
+		}
+		var name string
+		if err := tx.QueryRow(ctx, "SELECT display_name FROM users WHERE id = $1", scope.UserID()).Scan(&name); err != nil {
+			return err
+		}
+		// The latest offer's email alone: one to someone the payer offered it to before is dropped.
+		return s.Notify.Queue(ctx, tx, notify.Notification{
+			To: req.UserID, Category: notify.Direct, Message: emailBillingOffer, Email: true,
+			Args: i18n.Args{"member": name}, Route: takeoverRoute(household), Replaces: offerKey,
+		})
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.Notify.Nudge(ctx, household)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// withdraw is deleteBillingTransfer: the payer takes their offer back, or the owner it was made to
+// declines it, which the payer is told. Either way the subscription carries on as it is. With no
+// offer open there is nothing to do, and it answers the same.
+func (s *Service) withdraw(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	scope, err := owner(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	household, user := scope.HouseholdID(), scope.UserID()
+	declined := false
+	err = tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
+		if err := lock(ctx, tx, household); err != nil {
+			return err
+		}
+		offer, ok, err := readOffer(ctx, tx, household, s.Now())
+		if err != nil {
+			return err
+		}
+		if !ok {
+			// One that lapsed is gone for whoever asks.
+			_, err := tx.Exec(ctx, "DELETE FROM billing_transfers WHERE household_id = $1 AND (offered_by = $2 OR offered_to = $2)", household, user)
+			return err
+		}
+		if offer.by != user && offer.to != user {
+			return forbidden()
+		}
+		if _, err := tx.Exec(ctx, "DELETE FROM billing_transfers WHERE household_id = $1", household); err != nil {
+			return err
+		}
+		if err := s.Notify.Withdraw(ctx, tx, offerKey); err != nil {
+			return err
+		}
+		if offer.to != user {
+			return nil
+		}
+		declined = true
+		return s.Notify.Queue(ctx, tx, notify.Notification{
+			To: offer.by, Category: notify.Direct, Message: messageDeclined,
+			Args: i18n.Args{"member": offer.toLabel}, Link: "/" + billingRoute(household),
+		})
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if declined {
+		s.Notify.Nudge(ctx, household)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// acceptDoc is postBillingTransferAccept's answer: the subscription as it stands, and what the
+// caller confirms with the processor before billing moves, null when nothing is left to confirm.
+type acceptDoc struct {
+	Subscription subscriptionDoc `json:"subscription"`
+	Confirmation *intentDoc      `json:"confirmation"`
+}
+
+// accept is postBillingTransferAccept: the owner the payer offered billing to takes it over (FR-BI6).
+// Where the household has a subscription, they are answered the secret their card is confirmed with
+// at the processor, and billing moves once it is (takeOver): until then the payer goes on paying,
+// and a card that is not accepted changes nothing. Where it has none, there is no card to supply
+// yet, and they are the payer at once. Only an owner whose address is verified takes billing over,
+// as only one subscribes.
+func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	scope, err := owner(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	household, user := scope.HouseholdID(), scope.UserID()
+	var (
+		f   facts
+		cur subscription
+		has bool
+	)
+	read := func() error {
+		return tenant.InTx(ctx, func(tx pgx.Tx) error {
+			offer, ok, err := readOffer(ctx, tx, household, s.Now())
+			if err != nil {
+				return err
+			}
+			if !ok || offer.to != user {
+				return problem.NotFound()
+			}
+			if ok, err := verified(ctx, tx, user); err != nil || !ok {
+				if err == nil {
+					err = problem.New(http.StatusForbidden, problem.CodeAccountUnverified)
+				}
+				return err
+			}
+			if f, err = readFacts(ctx, tx, household); err != nil {
+				return err
+			}
+			subs, err := readSubscriptions(ctx, tx, household)
+			if err != nil {
+				return err
+			}
+			cur, has = standing(subs, standingCurrent)
+			return nil
+		})
+	}
+	if err := read(); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !has {
+		stood, err := s.acceptAlone(ctx, household, user)
+		switch {
+		case errors.Is(err, errSubscribedSince):
+			// Paid for since it was read: there is a card to confirm after all. Were that subscription
+			// over again already, the request is one to send again.
+			if err = read(); err == nil && !has {
+				err = errUnavailable
+			}
+		case err == nil && !stood:
+			err = problem.NotFound()
+		}
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	var confirmation *intentDoc
+	if has {
+		p, err := s.processor()
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		customer, err := s.customer(ctx, p, user, cur.currency, f.country)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		c, err := p.Setup(ctx, NewSetup{Customer: customer, Household: household, User: user, Purpose: PurposeTakeover})
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		doc := s.intent(c)
+		confirmation = &doc
+	}
+	var out acceptDoc
+	out.Confirmation = confirmation
+	err = tenant.InTx(ctx, func(tx pgx.Tx) error {
+		status, err := readStatus(ctx, tx, household)
+		if err != nil {
+			return err
+		}
+		out.Subscription, err = s.document(ctx, tx, household, user, status)
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// errSubscribedSince is acceptAlone's refusal to move the payer of a household that has a
+// subscription by the time its lock is held: billing then moves on a confirmed card, never alone.
+var errSubscribedSince = errors.New("billing: the household has a subscription to take over")
+
+// acceptAlone makes user the payer of household, which has no subscription to take over, while the
+// offer made them still stands and they are an owner still: all three read again under the
+// household's lock, in the mutation that moves the payer. One whose payer's first payment was
+// recorded since its caller looked has a subscription, which would otherwise be left its former
+// payer's to pay and its new payer's to cancel: nothing moves, and errSubscribedSince says so. It
+// reports whether the offer stood. ctx is in the household's context: the caller's, as they accept,
+// or the system's, as the card they confirmed for a subscription that has ended since arrives
+// (takeOver).
+func (s *Service) acceptAlone(ctx context.Context, household, user uuid.UUID) (bool, error) {
+	gone := false
+	err := s.bill(ctx, household, func(tx pgx.Tx, b households.Billing) (households.Billing, error) {
+		subs, err := readSubscriptions(ctx, tx, household)
+		if err != nil {
+			return b, err
+		}
+		if _, has := standing(subs, standingCurrent); has {
+			return b, errSubscribedSince
+		}
+		offer, ok, err := readOffer(ctx, tx, household, s.Now())
+		if err != nil {
+			return b, err
+		}
+		if !ok || offer.to != user {
+			gone = true
+			return b, nil
+		}
+		// An owner still, under the lock: billing moves only between owners (D-103).
+		if owner, err := isOwner(ctx, tx, household, user); err != nil || !owner {
+			gone = true
+			return b, err
+		}
+		b.Payer = &user
+		return b, nil
+	})
+	return err == nil && !gone, err
+}

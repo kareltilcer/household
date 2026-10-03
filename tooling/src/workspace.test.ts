@@ -403,6 +403,24 @@ describe('a developer machine and CI', () => {
     }
   })
 
+  // Billing's Stripe processor is held to what Stripe's API takes by Stripe's own mock server
+  // (plan item 19): CI's is the image a developer's compose runs, pinned to a release, since a
+  // newer one validates against a newer description of the API.
+  it('run the same Stripe mock, pinned to a release', () => {
+    const local = field(readRecord('docker-compose.yml'), 'services', 'stripe-mock', 'image')
+    expect(local).toMatch(/^stripe\/stripe-mock:v\d+\.\d+\.\d+$/)
+    expect(
+      field(
+        readRecord('.github/workflows/ci.yml'),
+        'jobs',
+        'stripe',
+        'services',
+        'stripe-mock',
+        'image',
+      ),
+    ).toBe(local)
+  })
+
   // The conformance suite's stack (plan item 12) runs its own PostgreSQL, with logical
   // replication, beside PowerSync. The two PostgreSQLs are one image, and PowerSync is pinned to a
   // release, never a moving tag: the suite is what tells an upgrade apart.

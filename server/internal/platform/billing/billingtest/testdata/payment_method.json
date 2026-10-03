@@ -1,0 +1,8 @@
+{
+  "id": "pm_test",
+  "object": "payment_method",
+  "livemode": false,
+  "type": "card",
+  "customer": "cus_test",
+  "card": { "brand": "visa", "display_brand": "visa", "last4": "4242", "exp_month": 12, "exp_year": 2030, "funding": "credit", "country": "CZ" }
+}

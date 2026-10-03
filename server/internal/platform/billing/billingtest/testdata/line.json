@@ -1,0 +1,22 @@
+{
+  "id": "il_test",
+  "object": "line_item",
+  "livemode": false,
+  "invoice": "in_test",
+  "amount": 5988,
+  "currency": "eur",
+  "description": "1 × Household (at €59.88 / year)",
+  "quantity": 1,
+  "metadata": {},
+  "period": { "start": 0, "end": 0 },
+  "parent": {
+    "type": "subscription_item_details",
+    "invoice_item_details": null,
+    "subscription_item_details": {
+      "invoice_item": null,
+      "proration": false,
+      "subscription": "sub_test",
+      "subscription_item": "si_test"
+    }
+  }
+}

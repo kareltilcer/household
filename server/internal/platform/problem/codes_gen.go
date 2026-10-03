@@ -39,6 +39,9 @@ const (
 	CodeFairUseCeiling           Code = "fair_use_ceiling"
 	CodeLastOwner                Code = "last_owner"
 	CodeBillingPayer             Code = "billing_payer"
+	CodeAlreadySubscribed        Code = "already_subscribed"
+	CodeNotSubscribed            Code = "not_subscribed"
+	CodeBillingUnavailable       Code = "billing_unavailable"
 	CodeStorageCeilingReached    Code = "storage_ceiling_reached"
 	CodeAccountDeletionBlocked   Code = "account_deletion_blocked"
 	CodeLayoutLocked             Code = "layout_locked"
@@ -103,6 +106,9 @@ var Codes = []Code{
 	CodeFairUseCeiling,
 	CodeLastOwner,
 	CodeBillingPayer,
+	CodeAlreadySubscribed,
+	CodeNotSubscribed,
+	CodeBillingUnavailable,
 	CodeStorageCeilingReached,
 	CodeAccountDeletionBlocked,
 	CodeLayoutLocked,

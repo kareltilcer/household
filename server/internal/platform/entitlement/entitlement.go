@@ -192,12 +192,14 @@ func (s Status) remedy(role access.Role) string {
 // test holds the two to.
 var exempt = map[string]bool{
 	// Everything under …/billing: it is the action that fixes the state.
-	"postBillingCheckoutSession": true,
-	"postBillingPortalSession":   true,
-	"postBillingCancel":          true,
-	"postBillingResume":          true,
-	"postBillingTransfer":        true,
-	"postBillingTransferAccept":  true,
+	"postBillingSubscription":   true,
+	"patchBillingSubscription":  true,
+	"postBillingPaymentMethod":  true,
+	"postBillingCancel":         true,
+	"postBillingResume":         true,
+	"postBillingTransfer":       true,
+	"deleteBillingTransfer":     true,
+	"postBillingTransferAccept": true,
 	// Export works in every state, and generating one is a write (D-32, G5).
 	"postExports": true,
 	// A household must be able to leave in any state.
