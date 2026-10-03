@@ -727,7 +727,7 @@ Phase 0 · after 17, 6 · size L
   - The conformance suite's 18 scenarios pass through `@household/sync` on Node.
   - A queued write and the replica survive the database being closed and reopened before the queue drains ([03 §2.1](prd/03-platform-strands.md), *nothing is lost*). The spike never restarted a client, so this is the first proof.
   - The web build's replica and connector pass a smoke test in a real browser, and the React Native build typechecks against it.
-- **PR:** —
+- **PR:** [#23](https://github.com/kareltilcer/household/pull/23)
 
 ### 19 · Stripe billing and storage blocks · `planned`
 
