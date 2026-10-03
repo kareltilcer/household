@@ -135,7 +135,9 @@ func (s *Service) run(ctx context.Context, j job, claim uuid.UUID, attempts int)
 		// What the store kept of a try that failed after its upload is removed past the lease's end.
 		_ = s.cfg.Files.Store().Delete(context.WithoutCancel(ctx), object)
 		if ctx.Err() != nil {
-			// The process is stopping: the job is left to its lease, for whoever runs next.
+			// The process is stopping: the job goes back as it was taken, for whoever runs next, this
+			// try not counted, rather than waiting out a lease nobody holds.
+			s.settle(ctx, j, claim, statusReleased, "", 0, nil, log)
 			return false
 		}
 		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "privacy: an export failed", append(log, slog.Int("attempt", attempts), slog.Any("error", err))...)
@@ -156,6 +158,10 @@ func (s *Service) run(ctx context.Context, j job, claim uuid.UUID, attempts int)
 
 // retry is how long a failed export waits before its next try.
 const retry = 5 * time.Minute
+
+// statusReleased is what settle is told of a try its process ended before it could finish: no state
+// of an export, which is queued again.
+const statusReleased = "released"
 
 // settle writes what became of j's try under claim, and reports whether it did: a try whose claim
 // another has since taken, its lease passed, writes nothing.
@@ -179,6 +185,10 @@ func (s *Service) settle(ctx context.Context, j job, claim uuid.UUID, status, ob
 			args = append(args, object, size, list, now, now.Add(ArchiveKept))
 		case statusFailed:
 			statement = "UPDATE exports SET status = 'failed', claim = NULL, ended_at = $3 WHERE id = $1 AND claim = $2"
+			args = append(args, now)
+		case statusReleased:
+			statement = `UPDATE exports SET status = 'queued', claim = NULL, run_at = $3, attempts = greatest(attempts - 1, 0)
+				WHERE id = $1 AND claim = $2`
 			args = append(args, now)
 		default:
 			statement = "UPDATE exports SET status = 'queued', claim = NULL, run_at = $3 WHERE id = $1 AND claim = $2"

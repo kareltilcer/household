@@ -51,11 +51,13 @@ type Owner struct {
 	Address, Locale string
 }
 
-// ConfirmDeletion checks that proof authorises the deletion of user's account, which a stolen
-// session alone must not (FR-PR3): the account's password, checked and counted as a sign-in's is
-// (reauthenticate), or, for an account that signs in only with a provider and has none, its own
-// address typed out. A child profile, which is nothing outside its household and which an owner
-// removes instead, is refused 403 (D-104). A wrong proof is answered as a wrong password is.
+// ConfirmDeletion checks that proof authorises the deletion of user's account (FR-PR3): the
+// account's password, checked and counted as a sign-in's is (reauthenticate), which a stolen session
+// does not have. An account that signs in only with a provider has no password to give, and confirms
+// by typing its own address out: that proves a deliberate request and no more, and what undoes a
+// deletion its owner did not ask for is the link sent to that address, for 30 days. A child profile,
+// which is nothing outside its household and which an owner removes instead, is refused 403 (D-104).
+// A wrong proof is answered as a wrong password is.
 func (s *Service) ConfirmDeletion(ctx context.Context, user uuid.UUID, proof string) (Owner, error) {
 	var (
 		address     *string
