@@ -90,6 +90,9 @@ func TestStripeTakesWhatTheProcessorSends(t *testing.T) {
 	if err := p.Cancel(ctx, "sub_mock"); err != nil {
 		t.Fatalf("Cancel: %v", err)
 	}
+	if _, err := p.Abandon(ctx, "sub_mock"); err != nil {
+		t.Fatalf("Abandon: %v", err)
+	}
 	confirmation, err := p.Setup(ctx, billing.NewSetup{
 		Customer: customer, Household: household, User: user, Purpose: billing.PurposeTakeover, Subscription: "sub_mock",
 	})
@@ -179,6 +182,60 @@ func TestCancelVoidsWhatTheCancellationLeftOpen(t *testing.T) {
 			}
 			if cancels.Load() != 1 || voids.Load() != tc.voids {
 				t.Fatalf("%d cancellations and %d voids, want 1 and %d", cancels.Load(), voids.Load(), tc.voids)
+			}
+		})
+	}
+}
+
+// Abandon ends a subscription only while Stripe says it still waits: one that charges by the time it
+// is read there, its payment having arrived since its caller last read it, is left as it is, which
+// Cancel, a take-over's end of one past due, does not spare.
+func TestAbandonLeavesASubscriptionThatCharges(t *testing.T) {
+	for name, tc := range map[string]struct {
+		subscription string
+		// abandoned is what Abandon reports, and cancels how many cancellations it asks Stripe for.
+		abandoned bool
+		cancels   int32
+	}{
+		"waiting for its first payment":         {`"status":"incomplete"`, true, 1},
+		"expired unpaid":                        {`"status":"incomplete_expired"`, true, 0},
+		"paid":                                  {`"status":"active"`, false, 0},
+		"past due":                              {`"status":"past_due"`, false, 0},
+		"waiting out a period another paid for": {`"status":"trialing","default_payment_method":"pm_1"`, false, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var cancels atomic.Int32
+			answer := func(w http.ResponseWriter, body string) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, body)
+			}
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /v1/subscriptions/sub_1", func(w http.ResponseWriter, _ *http.Request) {
+				answer(w, `{"id":"sub_1","object":"subscription",`+tc.subscription+`}`)
+			})
+			mux.HandleFunc("DELETE /v1/subscriptions/sub_1", func(w http.ResponseWriter, _ *http.Request) {
+				cancels.Add(1)
+				answer(w, `{"id":"sub_1","object":"subscription","status":"canceled"}`)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+			none := int64(0)
+			p, err := billing.NewStripe(billing.StripeConfig{
+				SecretKey: billingtest.SecretKey, WebhookSecret: billingtest.WebhookSecret, URL: server.URL,
+				HTTPClient: server.Client(), MaxNetworkRetries: &none,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			abandoned, err := p.Abandon(t.Context(), "sub_1")
+			if err != nil || abandoned != tc.abandoned || cancels.Load() != tc.cancels {
+				t.Fatalf("Abandon: %v, %v, with %d cancellations; want %v with %d", abandoned, err, cancels.Load(), tc.abandoned, tc.cancels)
+			}
+			// Cancel ends whatever is not over, one that charges among them.
+			if !tc.abandoned {
+				if err := p.Cancel(t.Context(), "sub_1"); err != nil || cancels.Load() != 1 {
+					t.Fatalf("Cancel: %v, with %d cancellations, want 1", err, cancels.Load())
+				}
 			}
 		})
 	}

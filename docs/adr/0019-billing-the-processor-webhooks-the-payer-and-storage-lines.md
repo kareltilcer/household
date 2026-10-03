@@ -39,7 +39,13 @@ secret of its first invoice's payment, which the web client confirms in Stripe's
 `POST …/billing/payment-method` and the take-over answer the secret of a setup the same way. The
 contract's `checkout-session` and `portal-session` are gone. A route that answers a secret keeps no
 `Idempotency-Key`: the secret is never kept to be answered with again, and the route is safe to
-repeat of itself, since a subscription still waiting is answered again rather than made twice.
+repeat of itself, since a subscription still waiting is answered again rather than made twice. One
+that waits is ended, for another interval or for a take-over's later card, only while Stripe says
+it still waits, asked as it is ended (`Processor.Abandon`): having nothing left to confirm is also
+what a payment that has just gone through looks like, and a payment is never undone by a reading
+older than it. For the same reason a subscription Stripe holds for a household that no row records,
+its request having ended between Stripe's answer and its record, is the household's once it charges,
+whatever waits there, and is ended as a second one waiting only while it waits itself.
 
 **A webhook says what to look at; the handler reads it from Stripe** (D-132). `POST
 /webhooks/stripe` verifies the signature and takes from the event only its type, its object's id and
@@ -90,7 +96,9 @@ unpaid and billing where it was; a later card makes a subscription of its own, t
 cancelled for it. A subscription is always made with its payment method, and never has one set while
 it waits unpaid, which Stripe does not promise to take. A household with no subscription has no card
 to hand over, and the payer moves at accept; so does one whose subscription Stripe says has ended by
-the time the card is confirmed, once that end is settled.
+the time the card is confirmed, once that end is settled. The payer moves alone only while the
+household has none under its lock: one paid for since it was looked at has a card to confirm, and
+is never left its former payer's to pay and its new payer's to cancel.
 
 **Storage is an invoice item for each calendar month, in arrears** (D-128). `storage.Allowance.Blocks`
 is PRD 04 §4's formula over the mean of the month's daily samples, UTC's as the samples are (D-109);

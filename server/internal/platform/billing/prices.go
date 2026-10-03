@@ -38,6 +38,17 @@ type Plan struct {
 	Block    Price  `json:"block"`
 }
 
+// prices are the plan's three, each by the name a deployment configures it under, in order.
+func (p Plan) prices() []namedPrice {
+	return []namedPrice{{Year, p.Year}, {Month, p.Month}, {"block", p.Block}}
+}
+
+// namedPrice is one price of a plan with its name.
+type namedPrice struct {
+	name  string
+	price Price
+}
+
 // Base is the plan's base fee billed each interval.
 func (p Plan) Base(interval string) Price {
 	if interval == Year {
@@ -81,9 +92,9 @@ func ParsePrices(raw string) (Prices, error) {
 		if _, err := money.Exponent(currency); err != nil {
 			return nil, fmt.Errorf("billing: %q is not an ISO 4217 currency", currency)
 		}
-		for name, price := range map[string]Price{Year: plan.Year, Month: plan.Month, "block": plan.Block} {
-			if price.AmountMinor <= 0 {
-				return nil, fmt.Errorf("billing: %s's %s price is not a positive amount of minor units", currency, name)
+		for _, named := range plan.prices() {
+			if named.price.AmountMinor <= 0 {
+				return nil, fmt.Errorf("billing: %s's %s price is not a positive amount of minor units", currency, named.name)
 			}
 		}
 		plan.Currency = currency
@@ -109,11 +120,7 @@ func (p Prices) For(currency string) Plan {
 func (p Prices) Unpriced() []string {
 	var out []string
 	for _, currency := range slices.Sorted(maps.Keys(p)) {
-		plan := p[currency]
-		for _, named := range []struct {
-			name  string
-			price Price
-		}{{Year, plan.Year}, {Month, plan.Month}, {"block", plan.Block}} {
+		for _, named := range p[currency].prices() {
 			if named.price.ID == "" {
 				out = append(out, currency+" "+named.name)
 			}

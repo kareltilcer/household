@@ -30,6 +30,11 @@ type Processor interface {
 	// Cancel ends a subscription now, with no final invoice and no proration, and voids the invoice
 	// it could not collect.
 	Cancel(ctx context.Context, subscription string) error
+	// Abandon ends a subscription that still waits for its first payment, as Cancel does, and reports
+	// whether it is over. One the processor says charges by now is left as it is, and false reported:
+	// its payment arrived since whoever asks last read it, and a payment is never undone by a reading
+	// older than it.
+	Abandon(ctx context.Context, subscription string) (bool, error)
 	// ChangePrice moves a subscription to another base price, prorating (PRD 04 §6); monthly says
 	// whether its storage lines are invoiced monthly, as a yearly plan's are.
 	ChangePrice(ctx context.Context, subscription, price string, monthly bool) (Subscription, error)

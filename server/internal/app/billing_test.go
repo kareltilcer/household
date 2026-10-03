@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -171,7 +172,7 @@ func (s *site) paid(stripe *billingtest.Stripe, b *browser, h uuid.UUID, interva
 	return subscription, invoice
 }
 
-// mailed are the subjects of the mail sent to address since the last call, in order.
+// subjects are the subjects of all the mail sent to address, in order.
 func (s *site) subjects(address string) []string {
 	s.t.Helper()
 	var out []string
@@ -1029,6 +1030,49 @@ func TestATakeOverIsDecidedFromWhatStripeSaysNow(t *testing.T) {
 	})
 }
 
+// A take-over's subscription that waits is ended for a later card's only while Stripe says it still
+// waits (FR-BI6, D-131): one collected since, the event that says so not yet arrived, charges, and is
+// recorded as the household's rather than ended, unrefunded, for another.
+func TestATakeOversWaitingSubscriptionPaidSinceIsKept(t *testing.T) {
+	x := newHandover(t)
+	invoice := x.stripe.FailPayment(x.old, true)
+	x.s.told(x.stripe, "customer.subscription.updated", x.old)
+	x.stripe.Decline(true)
+	x.confirm(t)
+	ids := x.stripe.Subscriptions()
+	if len(ids) != 2 {
+		t.Fatalf("subscriptions at Stripe: %v", ids)
+	}
+	waiting := ids[1]
+	if status, _, _ := x.stripe.Subscription(waiting); status != "incomplete" {
+		t.Fatalf("the subscription whose card was declined is %s", status)
+	}
+
+	// Its charge goes through after all, and Stripe has not said so yet.
+	x.stripe.Decline(false)
+	p := x.stripe.Processor()
+	unpaid, err := p.Subscription(t.Context(), waiting)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Pay(t.Context(), unpaid.LatestInvoice); err != nil {
+		t.Fatal(err)
+	}
+	x.confirm(t)
+	if ids := x.stripe.Subscriptions(); len(ids) != 2 {
+		t.Fatalf("subscriptions at Stripe after the second card: %v, want none made beside the one that was paid", ids)
+	}
+	if status, _, _ := x.stripe.Subscription(waiting); status != "active" {
+		t.Fatalf("the subscription that was paid is %s, want kept", status)
+	}
+	if status, _, _ := x.stripe.Subscription(x.old); status != "canceled" || x.stripe.InvoiceStatus(invoice) != "void" {
+		t.Fatalf("the subscription that could not be collected: %s, its invoice %s", status, x.stripe.InvoiceStatus(invoice))
+	}
+	if sub := x.eva.subscription(x.h); sub.State != "active" || sub.Payer.UserID != x.evaID || sub.Transfer != nil {
+		t.Fatalf("after the second card: %+v", sub)
+	}
+}
+
 // An offer's email that waits for the mail server goes with the offer: once billing has moved,
 // nothing offers it again when the mail server takes mail again.
 func TestAnOffersWaitingEmailGoesOnceBillingMoves(t *testing.T) {
@@ -1113,6 +1157,101 @@ func TestASubscriptionNeverPaidOrNeverRecorded(t *testing.T) {
 	}
 }
 
+// A subscription that waits is ended only while it still waits (D-129): one whose payment goes
+// through as its payer asks to subscribe again, after the server last read it, is the household's.
+// It is not cancelled for another, at the same interval, where what is left to confirm is then
+// nothing, or at the other, and the payer is not handed a second subscription to pay.
+func TestAPaymentThatArrivesAsThePayerAsksAgainIsKept(t *testing.T) {
+	for name, interval := range map[string]string{"at the same interval": "year", "at the other interval": "month"} {
+		t.Run(name, func(t *testing.T) {
+			s, stripe := billingSite(t)
+			jana := s.person("Jana", s.a("jana@example"))
+			h := jana.create("Tilcerovi")
+			first := jana.startPaying(h.ID, "year")
+			waiting := stripe.Subscriptions()[0]
+
+			// Paid once the server has read it twice more: as it records it, and as it decides of it.
+			stripe.PayAfter(first.ClientSecret, 2)
+			expect(t, jana.post(billingPath(h.ID, "/subscription"), `{"interval":"`+interval+`"}`), http.StatusConflict, problem.CodeAlreadySubscribed)
+			if status, _, _ := stripe.Subscription(waiting); status != "active" {
+				t.Fatalf("the subscription paid as its payer asked again is %s", status)
+			}
+			if ids := stripe.Subscriptions(); len(ids) != 1 {
+				t.Fatalf("subscriptions at Stripe: %v, want the one that was paid", ids)
+			}
+			s.told(stripe, "customer.subscription.updated", waiting)
+			if sub := jana.subscription(h.ID); sub.State != "active" || sub.Interval == nil || *sub.Interval != "year" {
+				t.Fatalf("once Stripe says it was paid: %+v", sub)
+			}
+		})
+	}
+}
+
+// A subscription Stripe holds for the household that no row records is the household's once it
+// charges, whatever waits (ADR 0019): it is never cancelled as a second one waiting, which would end
+// a subscription its payer has paid for and leave the household unpaid.
+func TestAnUnrecordedSubscriptionThatChargesIsTakenUp(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	janaID := jana.me().ID
+	jana.startPaying(h.ID, "year")
+	waiting := stripe.Subscriptions()[0]
+
+	p := stripe.Processor()
+	customer, err := p.CreateCustomer(t.Context(), billing.NewCustomer{User: janaID, Email: s.a("jana@example"), Name: "Jana"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	charged, _, err := p.Subscribe(t.Context(), billing.NewSubscription{
+		Customer: customer, Price: billingtest.Prices()[billing.Fallback].Month.ID, Household: h.ID, Payer: janaID, PaymentMethod: "pm_confirmed",
+	})
+	if err != nil || charged.Status != billing.StatusActive {
+		t.Fatalf("a subscription charged at Stripe alone: %+v, %v", charged, err)
+	}
+	s.told(stripe, "customer.subscription.created", charged.ID)
+	if status, _, _ := stripe.Subscription(charged.ID); status != "active" {
+		t.Fatalf("the unrecorded subscription that charges is %s, want kept", status)
+	}
+	if sub := jana.subscription(h.ID); sub.State != "active" || sub.Interval == nil || *sub.Interval != "month" || sub.Payer.UserID != janaID {
+		t.Fatalf("once it was taken up: %+v", sub)
+	}
+	if status, _, _ := stripe.Subscription(waiting); status != "incomplete" {
+		t.Fatalf("the one that waited is %s, want left to expire", status)
+	}
+	expect(t, jana.post(billingPath(h.ID, "/subscription"), `{"interval":"year"}`), http.StatusConflict, problem.CodeAlreadySubscribed)
+}
+
+// A payer whose account has no name, as one a provider made may have none, is made a customer without
+// one: an empty value is the processor's way of unsetting a parameter, and a new customer has none
+// to unset.
+func TestAPayerWithNoNameIsMadeACustomerWithoutOne(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	if _, err := s.admin.Exec(t.Context(), "UPDATE users SET display_name = '' WHERE id = $1", jana.me().ID); err != nil {
+		t.Fatal(err)
+	}
+	stripe.Requests()
+	jana.startPaying(h.ID, "year")
+	made := false
+	for _, r := range stripe.Requests() {
+		if r.Method != http.MethodPost || r.Path != "/v1/customers" {
+			continue
+		}
+		made = true
+		if _, sent := r.Form["name"]; sent {
+			t.Fatalf("the customer was made with name %q, want none sent", r.Form["name"])
+		}
+		if r.Form.Get("email") != s.a("jana@example") {
+			t.Fatalf("the customer's address: %q", r.Form.Get("email"))
+		}
+	}
+	if !made {
+		t.Fatal("no customer was made")
+	}
+}
+
 // usage sets household h's daily samples of the month day falls in, bytes for each day from its
 // first, and what it stores now.
 func (s *site) usage(h uuid.UUID, month time.Time, current int64, bytes ...int64) {
@@ -1147,7 +1286,8 @@ func repeat(bytes int64, days int) []int64 {
 // A month's storage is billed once it has ended, from the mean of its daily samples (D-31, D-128):
 // an average of 18 GB is 2 blocks, one line on the subscription, once however many nights find it;
 // a household that averaged within its allowance, one still on trial and one that subscribed after
-// the month ended are billed nothing. The line then rides the renewal's invoice beside the base fee.
+// the month ended are billed nothing. The line then rides the renewal's invoice beside the base fee,
+// the newest of the payer's invoices, which are listed a page at a time.
 func TestAMonthOfStorageIsBilledOnce(t *testing.T) {
 	s, stripe := billingSite(t)
 	jana := s.person("Jana", s.a("jana@example"))
@@ -1207,19 +1347,34 @@ func TestAMonthOfStorageIsBilledOnce(t *testing.T) {
 	// The renewal: the base fee and the storage blocks, as lines of their own.
 	invoice := stripe.EndPeriod(subscription)
 	s.told(stripe, "invoice.paid", invoice)
-	var page struct {
+	type invoicePage struct {
 		Items []invoiceDoc `json:"items"`
+		Meta  struct {
+			NextCursor *string `json:"next_cursor"`
+			HasMore    bool    `json:"has_more"`
+		} `json:"meta"`
 	}
+	var page invoicePage
 	rec := jana.get(billingPath(heavy.ID, "/invoices?limit=1"))
 	expect(t, rec, http.StatusOK, "")
 	decode(t, rec, &page)
-	if len(page.Items) != 1 || page.Items[0].Total != (moneyDoc{AmountMinor: 799, Currency: "EUR"}) || len(page.Items[0].Lines) != 2 {
-		t.Fatalf("the renewal's invoice: %+v", page.Items)
+	if len(page.Items) != 1 || page.Items[0].Total != (moneyDoc{AmountMinor: 799, Currency: "EUR"}) || len(page.Items[0].Lines) != 2 ||
+		!page.Meta.HasMore || page.Meta.NextCursor == nil {
+		t.Fatalf("the renewal's invoice, with one before it: %+v", page)
 	}
 	lines := page.Items[0].Lines
 	if lines[0].Kind != billing.LineBase || lines[1].Kind != billing.LineStorage || lines[1].Quantity == nil || *lines[1].Quantity != "2" ||
 		lines[1].Amount != (moneyDoc{AmountMinor: 200, Currency: "EUR"}) {
 		t.Fatalf("the invoice's lines: %+v", lines)
+	}
+	// The page after it, by the cursor the first one gave: the first invoice, and no other.
+	var older invoicePage
+	rec = jana.get(billingPath(heavy.ID, "/invoices?limit=1&cursor="+url.QueryEscape(*page.Meta.NextCursor)))
+	expect(t, rec, http.StatusOK, "")
+	decode(t, rec, &older)
+	if len(older.Items) != 1 || older.Items[0].ID == page.Items[0].ID || older.Items[0].Total != (moneyDoc{AmountMinor: 599, Currency: "EUR"}) ||
+		older.Meta.HasMore || older.Meta.NextCursor != nil {
+		t.Fatalf("the page after the renewal's: %+v", older)
 	}
 }
 
@@ -1273,7 +1428,7 @@ func TestTheUsageIsShownBeforeItIsBilled(t *testing.T) {
 }
 
 // The support actions billing gives item 21's staff: a trial extended, on trial or after it lapsed
-// unpaid, a credit to the payer's balance at the processor, and an invoice emailed again.
+// unpaid, a credit to the payer's balance at the processor, and a paid invoice emailed again.
 func TestTheSupportActions(t *testing.T) {
 	s, stripe := billingSite(t)
 	address := s.a("jana@example")
@@ -1330,6 +1485,16 @@ func TestTheSupportActions(t *testing.T) {
 	}
 	if err := s.billing.ResendInvoice(ctx, h.ID, uuid.New()); !errors.Is(err, billing.ErrNoInvoice) {
 		t.Fatalf("an invoice nobody has, sent again: %v", err)
+	}
+	// Only a paid one is sent again: the email says the payment went through.
+	if _, err := s.admin.Exec(ctx, "UPDATE billing_invoices SET status = 'open' WHERE household_id = $1 AND id = $2", h.ID, invoice); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.billing.ResendInvoice(ctx, h.ID, invoice); !errors.Is(err, billing.ErrInvoiceUnpaid) {
+		t.Fatalf("an invoice that is not paid, sent again: %v", err)
+	}
+	if n := has(s.subjects(address), "invoice"); n != 2 {
+		t.Fatalf("%d invoice emails once one that is not paid was asked for, want the two before it", n)
 	}
 }
 

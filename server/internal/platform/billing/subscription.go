@@ -18,30 +18,23 @@ import (
 
 // subscriptionDoc is the contract's Subscription.
 type subscriptionDoc struct {
-	HouseholdID       uuid.UUID         `json:"household_id"`
-	State             entitlement.State `json:"state"`
-	Interval          *string           `json:"interval"`
-	CurrentPeriodEnd  *time.Time        `json:"current_period_end"`
-	CancelAtPeriodEnd bool              `json:"cancel_at_period_end"`
-	TrialEndsAt       *time.Time        `json:"trial_ends_at"`
-	GraceEndsAt       *time.Time        `json:"grace_ends_at"`
-	DataRetainedUntil *time.Time        `json:"data_retained_until"`
-	Payer             *actorRef         `json:"payer"`
-	PaymentMethod     *methodDoc        `json:"payment_method"`
-	BasePrice         *money.Money      `json:"base_price"`
-	Plans             []planDoc         `json:"plans"`
-	IncludedStorage   int64             `json:"included_storage_bytes"`
-	StorageBlock      int64             `json:"storage_block_bytes"`
-	PricePerBlock     money.Money       `json:"price_per_storage_block"`
-	MaxStorageBlocks  int               `json:"max_storage_blocks"`
-	Transfer          *transferDoc      `json:"transfer"`
-}
-
-// actorRef is the contract's ActorRef.
-type actorRef struct {
-	UserID         *uuid.UUID `json:"user_id"`
-	Label          string     `json:"label"`
-	IsFormerMember bool       `json:"is_former_member"`
+	HouseholdID       uuid.UUID             `json:"household_id"`
+	State             entitlement.State     `json:"state"`
+	Interval          *string               `json:"interval"`
+	CurrentPeriodEnd  *time.Time            `json:"current_period_end"`
+	CancelAtPeriodEnd bool                  `json:"cancel_at_period_end"`
+	TrialEndsAt       *time.Time            `json:"trial_ends_at"`
+	GraceEndsAt       *time.Time            `json:"grace_ends_at"`
+	DataRetainedUntil *time.Time            `json:"data_retained_until"`
+	Payer             *entitlement.ActorRef `json:"payer"`
+	PaymentMethod     *methodDoc            `json:"payment_method"`
+	BasePrice         *money.Money          `json:"base_price"`
+	Plans             []planDoc             `json:"plans"`
+	IncludedStorage   int64                 `json:"included_storage_bytes"`
+	StorageBlock      int64                 `json:"storage_block_bytes"`
+	PricePerBlock     money.Money           `json:"price_per_storage_block"`
+	MaxStorageBlocks  int                   `json:"max_storage_blocks"`
+	Transfer          *transferDoc          `json:"transfer"`
 }
 
 // methodDoc is a payment method's summary, which only its payer reads.
@@ -60,10 +53,10 @@ type planDoc struct {
 
 // transferDoc is the payer's offer of billing still open.
 type transferDoc struct {
-	OfferedBy actorRef  `json:"offered_by"`
-	OfferedTo actorRef  `json:"offered_to"`
-	OfferedAt time.Time `json:"offered_at"`
-	ExpiresAt time.Time `json:"expires_at"`
+	OfferedBy entitlement.ActorRef `json:"offered_by"`
+	OfferedTo entitlement.ActorRef `json:"offered_to"`
+	OfferedAt time.Time            `json:"offered_at"`
+	ExpiresAt time.Time            `json:"expires_at"`
 }
 
 // intentDoc is the contract's BillingIntent: what the client confirms with the processor.
@@ -97,7 +90,7 @@ func (s *Service) document(ctx context.Context, tx pgx.Tx, household, user uuid.
 		IncludedStorage:   s.Allowance.Base, StorageBlock: s.Allowance.Block, MaxStorageBlocks: s.Allowance.MaxBlocks,
 	}
 	if f.payer != nil {
-		doc.Payer = &actorRef{UserID: f.payer, IsFormerMember: !f.member}
+		doc.Payer = &entitlement.ActorRef{UserID: f.payer, IsFormerMember: !f.member}
 		if f.label != nil {
 			doc.Payer.Label = *f.label
 		}
@@ -125,7 +118,8 @@ func (s *Service) document(ctx context.Context, tx pgx.Tx, household, user uuid.
 	}
 	if ok {
 		doc.Transfer = &transferDoc{
-			OfferedBy: actorRef{UserID: &offer.by, Label: offer.byLabel}, OfferedTo: actorRef{UserID: &offer.to, Label: offer.toLabel},
+			OfferedBy: entitlement.ActorRef{UserID: &offer.by, Label: offer.byLabel},
+			OfferedTo: entitlement.ActorRef{UserID: &offer.to, Label: offer.toLabel},
 			OfferedAt: offer.offeredAt.UTC(), ExpiresAt: offer.expiry.UTC(),
 		}
 	}
@@ -200,7 +194,10 @@ func payer(ctx context.Context, tx pgx.Tx) (*tenant.Scope, facts, error) {
 // while one waits at the same interval, it answers that one's secret; at another, the one waiting
 // is cancelled for the new. One waiting that the processor says was paid meanwhile is the
 // household's by then, and is never cancelled: it is recorded first, and the request answered 409.
-// Only a payer whose address is verified subscribes (PRD 02 §3).
+// So is one paid after that, as late as the moment it would be ended: the processor is asked to end
+// only one that still waits (Processor.Abandon), since having nothing left to confirm is what a
+// payment that has just gone through looks like too. Only a payer whose address is verified
+// subscribes (PRD 02 §3).
 func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope, err := owner(ctx)
@@ -237,10 +234,13 @@ func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 			return problem.New(http.StatusForbidden, problem.CodeAccountUnverified)
 		}
 		subs, err := readSubscriptions(ctx, tx, household)
+		if err != nil {
+			return err
+		}
 		if pending, ok := standing(subs, standingPending); ok {
 			waiting = pending.id
 		}
-		return err
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -295,9 +295,14 @@ func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 					return err
 				}
 			}
-			// Another plan, or one with nothing left to confirm: it is over, and a new one is made.
-			if err := p.Cancel(ctx, waiting.id); err != nil {
+			// Another plan, or one with nothing left to confirm: it is over, and a new one is made, unless
+			// it was paid since it was read, when it is the household's, as its event will say.
+			gone, err := p.Abandon(ctx, waiting.id)
+			if err != nil {
 				return err
+			}
+			if !gone {
+				return errSubscribed
 			}
 			now := s.Now()
 			waiting.standing, waiting.status, waiting.endedAt = standingEnded, StatusCanceled, &now

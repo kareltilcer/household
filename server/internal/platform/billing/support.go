@@ -31,6 +31,9 @@ var (
 	ErrCurrency = errors.New("billing: the household is charged in another currency")
 	// ErrNoInvoice is ResendInvoice's refusal of an invoice the household does not have.
 	ErrNoInvoice = errors.New("billing: no such invoice")
+	// ErrInvoiceUnpaid is ResendInvoice's refusal of an invoice that is not paid: its email says the
+	// payment went through.
+	ErrInvoiceUnpaid = errors.New("billing: the invoice is not paid")
 )
 
 // ExtendTrial gives household a trial that ends at until, which must lie ahead: a trial still running
@@ -91,21 +94,27 @@ func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.
 	return p.Credit(ctx, NewCredit{Customer: cur.customer, AmountMinor: amount.AmountMinor, Currency: amount.Currency, Note: note})
 }
 
-// ResendInvoice emails household's invoice to its payer again, as it was when it was paid.
+// ResendInvoice emails household's invoice to its payer again, as it was when it was paid. Only a
+// paid one is sent: the email is the one that says the payment went through, and one still open,
+// voided or written off is read on the billing screen.
 func (s *Service) ResendInvoice(ctx context.Context, household, invoice uuid.UUID) error {
 	scoped := s.system(ctx, household)
 	err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error {
 		var (
 			payer  uuid.UUID
 			number *string
+			status string
 		)
-		err := tx.QueryRow(ctx, "SELECT payer_id, number FROM billing_invoices WHERE household_id = $1 AND id = $2", household, invoice).
-			Scan(&payer, &number)
+		err := tx.QueryRow(ctx, "SELECT payer_id, number, status FROM billing_invoices WHERE household_id = $1 AND id = $2", household, invoice).
+			Scan(&payer, &number, &status)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNoInvoice
 		}
 		if err != nil {
 			return err
+		}
+		if status != "paid" {
+			return ErrInvoiceUnpaid
 		}
 		args := i18n.Args{"number": ""}
 		if number != nil {

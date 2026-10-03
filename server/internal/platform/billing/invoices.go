@@ -30,6 +30,11 @@ const (
 	maxLimit     = 200
 )
 
+// linkWait bounds the read of an invoice's link from the processor: an invoice is answered without
+// its link rather than as late as the processor's own timeout and retries would have it, which a
+// request to change something waits out and a read of what is already kept need not.
+const linkWait = 5 * time.Second
+
 // invoiceDoc is the contract's Invoice. Its days are UTC's, as the storage month it may bill is
 // (D-109).
 type invoiceDoc struct {
@@ -213,8 +218,8 @@ func nullTime(t time.Time) *time.Time {
 
 // getInvoice is getBillingInvoicesByInvoiceId: one invoice the caller paid, with where its PDF is
 // downloaded, which the processor hands out as it is asked: the link is not kept. An invoice that
-// is someone else's is not found, and one whose link the processor cannot give now is answered
-// without it.
+// is someone else's is not found, and one whose link the processor cannot give now, or within
+// linkWait, is answered without it.
 func (s *Service) getInvoice(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope, err := owner(ctx)
@@ -250,7 +255,9 @@ func (s *Service) getInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.Processor != nil {
-		pdf, err := s.Processor.InvoicePDF(ctx, row.stripe)
+		bounded, cancel := context.WithTimeout(ctx, linkWait)
+		pdf, err := s.Processor.InvoicePDF(bounded, row.stripe)
+		cancel()
 		switch {
 		case err != nil:
 			s.Log.LogAttrs(ctx, slog.LevelWarn, "billing: an invoice's link was not read", slog.Any("error", err))

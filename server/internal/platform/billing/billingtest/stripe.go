@@ -78,6 +78,9 @@ type Stripe struct {
 	// iban is the last four characters of the account every payment method made from now on debits,
 	// "" for a card.
 	iban string
+	// payAfter is, by subscription, how many more of the server's reads of it pass before its
+	// customer's payment goes through (PayAfter).
+	payAfter map[string]int
 }
 
 // New starts a stand-in that reads the time from now, and stops it when t ends.
@@ -85,7 +88,7 @@ func New(t testing.TB, now func() time.Time) *Stripe {
 	t.Helper()
 	s := &Stripe{
 		t: t, now: now, account: strings.ReplaceAll(uuid.NewString(), "-", "")[:12], subscriptions: map[string]object{}, invoices: map[string]object{}, lines: map[string][]object{},
-		setups: map[string]object{}, methods: map[string]object{}, keyed: map[string]string{},
+		setups: map[string]object{}, methods: map[string]object{}, keyed: map[string]string{}, payAfter: map[string]int{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/customers", s.handle(s.createCustomer))
@@ -373,9 +376,18 @@ func (s *Stripe) render(sub object) object {
 }
 
 func (s *Stripe) getSubscription(r *http.Request, _ url.Values) (any, *apiError) {
-	sub, ok := s.subscriptions[r.PathValue("id")]
+	id := r.PathValue("id")
+	sub, ok := s.subscriptions[id]
 	if !ok {
-		return nil, notFound("subscription", r.PathValue("id"))
+		return nil, notFound("subscription", id)
+	}
+	if left, waits := s.payAfter[id]; waits {
+		if left > 0 {
+			s.payAfter[id] = left - 1
+		} else {
+			delete(s.payAfter, id)
+			s.confirm(sub)
+		}
 	}
 	return s.render(sub), nil
 }
@@ -549,20 +561,44 @@ func (s *Stripe) ConfirmPayment(secret string) (subscription, invoice string) {
 	s.t.Helper()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	subscription, invoice = s.waiting(secret)
+	s.confirm(s.subscriptions[subscription])
+	return subscription, invoice
+}
+
+// PayAfter is the customer confirming the first payment of the subscription whose secret they were
+// handed, as ConfirmPayment is, at a moment of the server's own work: the payment goes through once
+// the server has read the subscription reads more times, so that its next reading finds it paid.
+func (s *Stripe) PayAfter(secret string, reads int) {
+	s.t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	subscription, _ := s.waiting(secret)
+	s.payAfter[subscription] = reads
+}
+
+// waiting is the subscription whose first payment is confirmed with secret, and its invoice.
+func (s *Stripe) waiting(secret string) (subscription, invoice string) {
+	s.t.Helper()
 	for id, inv := range s.invoices {
 		if c, _ := inv["confirmation_secret"].(object); c == nil || c["client_secret"] != secret {
 			continue
 		}
 		for sid, sub := range s.subscriptions {
 			if sub["latest_invoice"] == id {
-				sub["default_payment_method"] = s.method(s.id("pm"))
-				s.paid(inv)
 				return sid, id
 			}
 		}
 	}
 	s.t.Fatalf("billingtest: no payment waits to be confirmed with %s", secret)
 	return "", ""
+}
+
+// confirm is sub's first payment going through, with a payment method of the customer's: its invoice
+// is paid, and it is active.
+func (s *Stripe) confirm(sub object) {
+	sub["default_payment_method"] = s.method(s.id("pm"))
+	s.paid(s.invoices[sub["latest_invoice"].(string)]) //nolint:forcetypeassert // An id.
 }
 
 // ConfirmSetup is the customer confirming the payment method whose setup's secret they were handed:

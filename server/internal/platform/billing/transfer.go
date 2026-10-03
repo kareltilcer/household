@@ -3,6 +3,7 @@ package billing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -172,42 +173,55 @@ func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
 		cur subscription
 		has bool
 	)
-	err = tenant.InTx(ctx, func(tx pgx.Tx) error {
-		offer, ok, err := readOffer(ctx, tx, household, s.Now())
-		if err != nil {
-			return err
-		}
-		if !ok || offer.to != user {
-			return problem.NotFound()
-		}
-		if ok, err := verified(ctx, tx, user); err != nil || !ok {
-			if err == nil {
-				err = problem.New(http.StatusForbidden, problem.CodeAccountUnverified)
+	read := func() error {
+		return tenant.InTx(ctx, func(tx pgx.Tx) error {
+			offer, ok, err := readOffer(ctx, tx, household, s.Now())
+			if err != nil {
+				return err
 			}
-			return err
-		}
-		if f, err = readFacts(ctx, tx, household); err != nil {
-			return err
-		}
-		subs, err := readSubscriptions(ctx, tx, household)
-		cur, has = standing(subs, standingCurrent)
-		return err
-	})
-	if err != nil {
+			if !ok || offer.to != user {
+				return problem.NotFound()
+			}
+			if ok, err := verified(ctx, tx, user); err != nil || !ok {
+				if err == nil {
+					err = problem.New(http.StatusForbidden, problem.CodeAccountUnverified)
+				}
+				return err
+			}
+			if f, err = readFacts(ctx, tx, household); err != nil {
+				return err
+			}
+			subs, err := readSubscriptions(ctx, tx, household)
+			if err != nil {
+				return err
+			}
+			cur, has = standing(subs, standingCurrent)
+			return nil
+		})
+	}
+	if err := read(); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	var confirmation *intentDoc
 	if !has {
 		stood, err := s.acceptAlone(ctx, household, user)
-		if err == nil && !stood {
+		switch {
+		case errors.Is(err, errSubscribedSince):
+			// Paid for since it was read: there is a card to confirm after all. Were that subscription
+			// over again already, the request is one to send again.
+			if err = read(); err == nil && !has {
+				err = errUnavailable
+			}
+		case err == nil && !stood:
 			err = problem.NotFound()
 		}
 		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
-	} else {
+	}
+	var confirmation *intentDoc
+	if has {
 		p, err := s.processor()
 		if err != nil {
 			s.fail(w, r, err)
@@ -243,14 +257,28 @@ func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
+// errSubscribedSince is acceptAlone's refusal to move the payer of a household that has a
+// subscription by the time its lock is held: billing then moves on a confirmed card, never alone.
+var errSubscribedSince = errors.New("billing: the household has a subscription to take over")
+
 // acceptAlone makes user the payer of household, which has no subscription to take over, while the
-// offer made them still stands and they are an owner still: both read again under the household's
-// lock, in the mutation that moves the payer. It reports whether the offer stood. ctx is in the
-// household's context: the caller's, as they accept, or the system's, as the card they confirmed
-// for a subscription that has ended since arrives (takeOver).
+// offer made them still stands and they are an owner still: all three read again under the
+// household's lock, in the mutation that moves the payer. One whose payer's first payment was
+// recorded since its caller looked has a subscription, which would otherwise be left its former
+// payer's to pay and its new payer's to cancel: nothing moves, and errSubscribedSince says so. It
+// reports whether the offer stood. ctx is in the household's context: the caller's, as they accept,
+// or the system's, as the card they confirmed for a subscription that has ended since arrives
+// (takeOver).
 func (s *Service) acceptAlone(ctx context.Context, household, user uuid.UUID) (bool, error) {
 	gone := false
 	err := s.bill(ctx, household, func(tx pgx.Tx, b households.Billing) (households.Billing, error) {
+		subs, err := readSubscriptions(ctx, tx, household)
+		if err != nil {
+			return b, err
+		}
+		if _, has := standing(subs, standingCurrent); has {
+			return b, errSubscribedSince
+		}
 		offer, ok, err := readOffer(ctx, tx, household, s.Now())
 		if err != nil {
 			return b, err

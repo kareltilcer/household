@@ -123,9 +123,12 @@ var errUnknown = errors.New("billing: a subscription that is not the household's
 // that nothing lapses in between and nobody pays twice (FR-BI6), and at once when it is past due.
 //
 // A subscription the processor holds for the household that no row records is one whose request
-// ended between the processor's answer and its own record. It is taken up as waiting, where the
-// household has none waiting, so that it is not left charging its payer for a household that does
-// not know of it; where one waits already, it is a second, and is cancelled.
+// ended between the processor's answer and its own record. It is taken up, so that it is not left
+// charging its payer for a household that does not know of it: as the household's at once when it
+// charges, whatever waits, and as the one waiting when it waits itself and the household has none
+// waiting. Where one waits already, a second that waits too is ended, while it still waits
+// (Processor.Abandon): one that charges is never ended for being unrecorded, which would undo a
+// payment.
 func (s *Service) sync(ctx context.Context, household uuid.UUID, id string) error {
 	now := s.Now()
 	var (
@@ -160,22 +163,28 @@ func (s *Service) sync(ctx context.Context, household uuid.UUID, id string) erro
 			if said.Over() || said.Payer == uuid.Nil {
 				return nil
 			}
+			row = newRow(said, said.Payer, said.Interval)
+		}
+		next := row.said(said, now)
+		if !found && next.standing == standingPending {
 			if _, waiting := standing(subs, standingPending); waiting {
 				second = true
 				return nil
 			}
-			row = newRow(said, said.Payer, said.Interval)
-			if err := row.insert(ctx, tx, household); err != nil {
-				return err
-			}
 		}
-		next := row.said(said, now)
 		if row.standing == standingPending && next.standing == standingCurrent {
 			if old, ok := standing(subs, standingCurrent); ok {
 				old.standing, old.endedAt = standingEnded, &now
 				if err := old.update(ctx, tx, household); err != nil {
 					return err
 				}
+			}
+		}
+		if !found {
+			// As what it is to the household by now: one that charges is its own once the one before it
+			// is over, above, and is never a second one waiting.
+			if err := next.insert(ctx, tx, household); err != nil {
+				return err
 			}
 		}
 		if err := next.update(ctx, tx, household); err != nil {
@@ -202,7 +211,12 @@ func (s *Service) sync(ctx context.Context, household uuid.UUID, id string) erro
 	case err != nil:
 		return err
 	case second:
-		return s.Processor.Cancel(ctx, id)
+		// Ended while it still waits. One paid since it was read above charges, and is taken up after all.
+		gone, err := s.Processor.Abandon(ctx, id)
+		if err != nil || gone {
+			return err
+		}
+		return s.sync(ctx, household, id)
 	}
 	for _, old := range replaced {
 		if err := s.retire(ctx, household, old); err != nil {
@@ -583,17 +597,20 @@ func (s *Service) methodConfirmed(ctx context.Context, intent SetupIntent) error
 // the processor says has ended since leaves none to take over: it is settled, and the payer moves
 // alone.
 //
-// A subscription still waiting is read from the processor before anything is decided of it. One of
-// theirs that charges is this confirmation's own, made by an earlier delivery that did not get as far
-// as recording it: it is recorded, and none is made. Any other is over, one an earlier card could not
-// pay among them, and is cancelled for the one this card makes: a subscription is made with its
-// payment method and never has one changed while it waits unpaid, which the processor does not
-// promise to take. And where the household's subscription is theirs already, an earlier delivery
-// made it and did not get as far as settling: it is recorded and settled again, and none is made.
+// A subscription still waiting is ended for the one this card makes, one an earlier card could not
+// pay among them: a subscription is made with its payment method and never has one changed while it
+// waits unpaid, which the processor does not promise to take. It is ended only while the processor
+// says it still waits (Processor.Abandon). One that charges is a confirmation's own, made by an
+// earlier delivery that did not get as far as recording it: it is recorded and settled, which moves
+// billing to whoever pays it, and none is made. And where the household's subscription is theirs
+// already, an earlier delivery made it and did not get as far as settling: it is recorded and
+// settled again, and none is made.
 func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 	household, now := intent.Household, s.Now()
 	var (
-		made, mine string
+		// made is the subscription this card made, and kept one that charges already, which is recorded
+		// rather than another made.
+		made, kept string
 		alone      bool
 	)
 	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
@@ -618,7 +635,7 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 		}
 		if cur.payer == intent.User {
 			// Theirs already, by an earlier delivery of this confirmation: nothing more is asked for.
-			mine = cur.id
+			kept = cur.id
 			return nil
 		}
 		held, err := s.Processor.Subscription(ctx, cur.id)
@@ -634,16 +651,13 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 			return nil
 		}
 		if waiting, ok := standing(subs, standingPending); ok {
-			said, err := s.Processor.Subscription(ctx, waiting.id)
+			gone, err := s.Processor.Abandon(ctx, waiting.id)
 			if err != nil {
 				return err
 			}
-			if waiting.payer == intent.User && said.Live() {
-				mine = waiting.id
+			if !gone {
+				kept = waiting.id
 				return nil
-			}
-			if err := s.Processor.Cancel(ctx, waiting.id); err != nil {
-				return err
 			}
 			waiting.standing, waiting.status, waiting.endedAt = standingEnded, StatusCanceled, &now
 			if err := waiting.update(ctx, tx, household); err != nil {
@@ -677,8 +691,8 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 		return err
 	case made != "":
 		return s.sync(ctx, household, made)
-	case mine != "":
-		return s.sync(ctx, household, mine)
+	case kept != "":
+		return s.sync(ctx, household, kept)
 	case alone:
 		// What a subscription that ended makes of the household first, which is a function of what is
 		// recorded and changes nothing where its own event has settled it already. Then the payer: an

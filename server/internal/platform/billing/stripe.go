@@ -107,10 +107,14 @@ func missing(err error) bool {
 }
 
 func (s *Stripe) CreateCustomer(ctx context.Context, c NewCustomer) (string, error) {
-	params := &stripe.CustomerCreateParams{
-		Email:    stripe.String(c.Email),
-		Name:     stripe.String(c.Name),
-		Metadata: map[string]string{metaUser: c.User.String()},
+	params := &stripe.CustomerCreateParams{Metadata: map[string]string{metaUser: c.User.String()}}
+	// An empty value is sent as one, which is Stripe's way of unsetting a parameter: an account with no
+	// name, as one a provider made may have none, is a customer without one.
+	if c.Email != "" {
+		params.Email = stripe.String(c.Email)
+	}
+	if c.Name != "" {
+		params.Name = stripe.String(c.Name)
 	}
 	if c.Locale != "" {
 		params.PreferredLocales = []*string{stripe.String(c.Locale)}
@@ -206,12 +210,28 @@ func (s *Stripe) CancelAtPeriodEnd(ctx context.Context, id string, cancel bool) 
 }
 
 func (s *Stripe) Cancel(ctx context.Context, id string) error {
+	_, err := s.end(ctx, id, false)
+	return err
+}
+
+func (s *Stripe) Abandon(ctx context.Context, id string) (bool, error) {
+	return s.end(ctx, id, true)
+}
+
+// end cancels the subscription id now, voids the invoice the cancellation left open, and reports
+// whether it is over. With waiting, one that charges as it is read here is left as it is: the
+// request that ends it follows that reading at once, so that a payment which arrived since its
+// caller's own reading, a request or more ago, is not cancelled with what it paid for.
+func (s *Stripe) end(ctx context.Context, id string, waiting bool) (bool, error) {
 	sub, err := s.retrieve(ctx, id, "latest_invoice")
 	switch {
 	case missing(err):
-		return nil
+		return true, nil
 	case err != nil:
-		return err
+		return false, err
+	}
+	if waiting && subscriptionOf(sub).Live() {
+		return false, nil
 	}
 	if sub.Status != stripe.SubscriptionStatusCanceled && sub.Status != stripe.SubscriptionStatusIncompleteExpired {
 		params := &stripe.SubscriptionCancelParams{InvoiceNow: stripe.Bool(false), Prorate: stripe.Bool(false)}
@@ -220,7 +240,7 @@ func (s *Stripe) Cancel(ctx context.Context, id string) error {
 		switch {
 		case missing(err):
 		case err != nil:
-			return fault(err)
+			return false, fault(err)
 		default:
 			// Its invoice as the cancellation left it, not as it was read before: where ending a
 			// subscription never paid voided its first invoice with it, nothing is left to void.
@@ -231,10 +251,10 @@ func (s *Stripe) Cancel(ctx context.Context, id string) error {
 	// again, against a payer who has handed billing on.
 	if inv := sub.LatestInvoice; inv != nil && inv.Status == stripe.InvoiceStatusOpen {
 		if _, err := s.client.V1Invoices.VoidInvoice(ctx, inv.ID, &stripe.InvoiceVoidInvoiceParams{}); err != nil && !missing(err) {
-			return fault(err)
+			return false, fault(err)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (s *Stripe) ChangePrice(ctx context.Context, id, price string, monthly bool) (Subscription, error) {

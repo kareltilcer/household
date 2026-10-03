@@ -51,12 +51,19 @@ step in the mode the environment uses.
    CZK and PLN have no figures yet (plan Q1): leave them out, and those households are charged in
    EUR. Adding a currency later is adding its three prices at Stripe and its entry here; households
    already subscribed keep the currency they subscribed in.
-4. **Retries** (Billing → Revenue recovery → Retries): Smart Retries off, a custom schedule of four
-   retries at **1, 2, 2 and 2 days after the previous attempt**, which is PRD 04 §6's days 1, 3, 5
-   and 7 after the first failure. When all retries fail: **cancel the subscription**. Marking it
-   `unpaid` instead ends in grace the same way; leaving it `past_due` still ends in grace, a day
-   late, by the hourly job. The invoice may be left open or marked uncollectible: the last retry is
-   emailed either way.
+4. **Retries** (Billing → Revenue recovery → Retries). PRD 04 §6 retries at 1, 3, 5 and 7 days after
+   the first failure, which Stripe's settings cannot say exactly: a custom schedule takes at most
+   three retries, and Smart Retries picks its own days. Choose one: **Smart Retries, 4 retries
+   within 1 week**, which keeps the PRD's four retries inside its seven days, on days Stripe picks;
+   or Smart Retries off and a custom schedule of three, **1, 3 and 3 days after the previous
+   attempt**, which are days 1, 4 and 7. Which of the two stands for the PRD's schedule is the
+   product owner's to say. The server takes either: it emails the payer as each retry fails,
+   whichever days they fall on, and its own clock ends a day after the seventh. Set retries here and
+   **not through an automation**: with one, Stripe sets an invoice's next attempt only after it has
+   sent `invoice.payment_failed`, and each retry's email would say it was the last. When all retries
+   fail: **cancel the subscription**. Marking it `unpaid` instead ends in grace the same way; leaving
+   it `past_due` still ends in grace, a day late, by the hourly job. The invoice may be left open or
+   marked uncollectible: the last retry is emailed either way.
    Turn Stripe's own customer emails for failed payments and invoices **off**: the server sends its
    own, in the payer's language.
 5. **The webhook endpoint**: `https://<api>/api/v1/webhooks/stripe`, at the API version stripe-go is
@@ -111,6 +118,7 @@ both for up to a day. Nothing the server keeps is sealed under these keys.
 
 ## Support
 
-Extending a trial, a credit and an invoice sent again are `billing.Service`'s `ExtendTrial`,
-`Credit` and `ResendInvoice`, which the staff API calls (item 21). Anything else, a refund above
+Extending a trial, a credit and a paid invoice sent again are `billing.Service`'s `ExtendTrial`,
+`Credit` and `ResendInvoice`, which the staff API calls (item 21); an invoice that is not paid is
+not sent again, since the email says the payment went through. Anything else, a refund above
 all, is done in Stripe's dashboard: the server reads what Stripe then says.

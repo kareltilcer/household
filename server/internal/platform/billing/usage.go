@@ -64,10 +64,13 @@ func (s *Service) getUsage(w http.ResponseWriter, r *http.Request) {
 		}
 		plan = s.Prices.For(f.currency)
 		subs, err := readSubscriptions(ctx, tx, household)
+		if err != nil {
+			return err
+		}
 		if cur, ok := standing(subs, standingCurrent); ok {
 			plan = s.Prices.For(cur.currency)
 		}
-		return err
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)
