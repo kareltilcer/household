@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { stateRetryMs } from './attachments.ts'
+import { bytesLost, stateRetryMs } from './attachments.ts'
 import { Revoked, type Credential } from './connector.ts'
 import { localTables, metaKeys } from './schema.ts'
 import { NodeFileSystemAdapter, multipart, openReplica } from './node.ts'
@@ -324,6 +324,24 @@ describe('a replica', waits, () => {
     }
   })
 
+  it("reads a row's state in one transaction, which no answer lands inside", async () => {
+    const { replica } = await open()
+    const milk = await replica.create('items', { title: 'Milk' })
+    const transactions = vi.spyOn(replica.db, 'readTransaction')
+    const apart = [
+      vi.spyOn(replica.db, 'get'),
+      vi.spyOn(replica.db, 'getAll'),
+      vi.spyOn(replica.db, 'getOptional'),
+    ]
+    expect(await replica.rowState('items', milk)).toEqual({
+      kind: 'pending',
+      op: 'create',
+      held: null,
+    })
+    expect(transactions).toHaveBeenCalledTimes(1)
+    for (const read of apart) expect(read).not.toHaveBeenCalled()
+  })
+
   it('tells a refused create the member discards, which leaves the replica, from a withdrawn row', async () => {
     const { fetch } = routes({
       '/sync/mutations': (_url, init) => {
@@ -434,6 +452,69 @@ describe('a replica', waits, () => {
       ])
     } finally {
       stop()
+    }
+  })
+
+  it('tells a row its member deleted from a withdrawn one, though the push answered the delete before the watcher looked', async () => {
+    const [milk, bread] = [newId(), newId()]
+    const { fetch } = routes({
+      '/sync/mutations': (_url, init) => {
+        const { mutations } = JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }
+        return json(200, {
+          results: mutations.map((m) =>
+            m.entity_id === bread
+              ? { mutation_id: m.mutation_id, outcome: 'rejected', code: 'forbidden' }
+              : { mutation_id: m.mutation_id, outcome: 'applied', version: 2 },
+          ),
+        })
+      },
+    })
+    const { replica } = await open({ fetch })
+    for (const id of [milk, bread])
+      await arrive(replica, 'items', id, { household_id: household, title: 'Paper', version: 1 })
+    const milkStates: RowState[] = []
+    const breadStates: RowState[] = []
+    const stops = [
+      replica.watchRowState('items', milk, (s) => milkStates.push(s)),
+      replica.watchRowState('items', bread, (s) => breadStates.push(s)),
+    ]
+    /** What a watcher was told, but the delete waiting or in flight, which it sees only when it looks in time. */
+    const told = (states: RowState[]): string[] =>
+      states.map((s) => s.kind).filter((kind) => kind !== 'pending' && kind !== 'syncing')
+    try {
+      await eventually(() => milkStates.length > 0 && breadStates.length > 0)
+      // Deleted and pushed at once: the queue is empty again before the watcher, throttled, looks.
+      await replica.remove('items', milk)
+      await replica.flush()
+      await eventually(() => told(milkStates).length > 1)
+      expect(told(milkStates)).toEqual(['synced', 'absent'])
+      // Its tombstone arrives with the next checkpoint, and leaves later with no word of a withdrawal.
+      await arrive(replica, 'items', milk, {
+        household_id: household,
+        title: 'Paper',
+        version: 2,
+        deleted_at: '2026-10-02T10:00:00Z',
+      })
+      await eventually(() => milkStates.at(-1)?.kind === 'synced')
+      await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [milk])
+      await eventually(() => milkStates.at(-1)?.kind === 'absent')
+      expect(told(milkStates)).toEqual(['synced', 'absent', 'synced', 'absent'])
+
+      // A delete the server refuses: the row comes back with the next checkpoint, and its leaving
+      // after that is a withdrawal again.
+      await replica.remove('items', bread)
+      await replica.flush()
+      await eventually(() => breadStates.at(-1)?.kind === 'rejected')
+      const [refused] = await replica.inbox()
+      await replica.resolve(refused?.mutation_id ?? '')
+      await eventually(() => breadStates.at(-1)?.kind === 'absent')
+      await arrive(replica, 'items', bread, { household_id: household, title: 'Paper', version: 1 })
+      await eventually(() => breadStates.at(-1)?.kind === 'synced')
+      await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [bread])
+      await eventually(() => breadStates.at(-1)?.kind === 'withdrawn')
+      expect(told(breadStates)).toEqual(['synced', 'rejected', 'absent', 'synced', 'withdrawn'])
+    } finally {
+      for (const stop of stops) stop()
     }
   })
 
@@ -755,6 +836,91 @@ describe('a replica', waits, () => {
     expect(replica.connected).toBe(false)
   })
 
+  it('keeps a connect and a download of itself apart: neither clears the subscriptions the other makes (D-125)', async () => {
+    const { fetch } = routes({ '/sync/credentials': () => json(503, {}) })
+    const { replica } = await open({ fetch })
+    const streams = new Set(testRegistry.streams.map((s) => s.stream)).size
+    const subscribed = async (): Promise<number> =>
+      (await replica.db.get<{ n: number }>('SELECT count(*) AS n FROM ps_stream_subscriptions')).n
+    const held = async (): Promise<number> =>
+      (await replica.db.getAll('SELECT id FROM items')).length
+    await arrive(replica, 'items', newId(), { household_id: household, title: 'Milk', version: 1 })
+
+    // The app connects the replica, on its network coming back, say, while the replica has
+    // disconnected to clear itself: the connect subscribes only once the clear has run.
+    const rows: number[] = []
+    const syncStream = replica.db.syncStream.bind(replica.db)
+    const subscribing = vi.spyOn(replica.db, 'syncStream').mockImplementation((name, params) => {
+      const stream = syncStream(name, params)
+      return {
+        ...stream,
+        subscribe: async (options) => {
+          rows.push(await held())
+          return stream.subscribe(options)
+        },
+      }
+    })
+    const disconnect = replica.db.disconnect.bind(replica.db)
+    const connects: Promise<void>[] = []
+    const disconnecting = vi.spyOn(replica.db, 'disconnect').mockImplementation(async () => {
+      await disconnect()
+      if (connects.length === 0) connects.push(replica.connect())
+    })
+    await replica.resnapshot()
+    await Promise.all(connects)
+    subscribing.mockRestore()
+    expect(connects).toHaveLength(1)
+    expect(rows).toEqual(Array.from({ length: streams }, () => 0))
+    expect(await subscribed()).toBe(streams)
+    expect(replica.connected).toBe(true)
+
+    // Connected when the download began, the replica is connected again by the download itself:
+    // the connect that waited for it has nothing left to do.
+    const connected = vi.spyOn(replica.db, 'connect')
+    connects.length = 0
+    await replica.resnapshot()
+    await Promise.all(connects)
+    disconnecting.mockRestore()
+    expect(connects).toHaveLength(1)
+    expect(connected).toHaveBeenCalledTimes(1)
+    connected.mockRestore()
+    expect(await subscribed()).toBe(streams)
+    expect(replica.connected).toBe(true)
+
+    // And a download that comes while a connect is under way waits for it, and connects the
+    // replica again as that left it.
+    await replica.disconnect()
+    await arrive(replica, 'items', newId(), { household_id: household, title: 'Bread', version: 1 })
+    const connecting = replica.connect()
+    await Promise.all([connecting, replica.resnapshot()])
+    expect(await held()).toBe(0)
+    expect(await subscribed()).toBe(streams)
+    expect(replica.connected).toBe(true)
+  })
+
+  it('disconnects a replica whose connect is still under way only once that has connected it', async () => {
+    const { fetch } = routes({ '/sync/credentials': () => json(503, {}) })
+    const { replica } = await open({ fetch })
+    const calls: string[] = []
+    const connect = replica.db.connect.bind(replica.db)
+    vi.spyOn(replica.db, 'connect').mockImplementation((connector, options) => {
+      calls.push('connect')
+      return connect(connector, options)
+    })
+    const disconnect = replica.db.disconnect.bind(replica.db)
+    vi.spyOn(replica.db, 'disconnect').mockImplementation(() => {
+      calls.push('disconnect')
+      return disconnect()
+    })
+    // The app goes to the background while the replica is still subscribing to its streams.
+    const connecting = replica.connect()
+    await replica.disconnect()
+    await connecting
+    // Disconnected first, PowerSync would have been connected after it, and left so.
+    expect(calls).toEqual(['connect', 'disconnect'])
+    expect(replica.connected).toBe(false)
+  })
+
   it('discards itself, its own tables too, once its device is signed out (FR-ID7)', async () => {
     let revoked = false
     const credential: Credential = {
@@ -946,5 +1112,65 @@ describe('a replica', waits, () => {
     await Promise.all([run, joined])
     expect(calls.filter((c) => c.url.endsWith('/content'))).toHaveLength(2)
     expect(await replica.attachments().list()).toEqual([])
+  })
+
+  it("keeps a file, bytes and all, that a refusal with no problem of the API's leaves: nothing judged it", async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    let now = Date.parse('2026-10-02T10:00:00Z')
+    // A proxy that lost its upstream, or a host that is not the API, answers for the upload's route.
+    let answer = (): Response => new Response('<html>Not Found</html>', { status: 404 })
+    const { fetch, calls } = routes({ '/content': () => answer() })
+    const { replica } = await open({ fetch, storage, now: () => new Date(now) })
+    const sends = (): number => calls.filter((c) => c.url.endsWith('/content')).length
+    const scan = newId()
+    await arrive(replica, 'items', scan, { household_id: household, title: 'Scan', version: 1 })
+    await replica.attach('items', scan, {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'scan.pdf',
+    })
+    await replica.attachments().upload()
+    const [waiting] = await replica.attachments().list()
+    expect(waiting).toMatchObject({ id: scan, status: 'pending', attempts: 1, code: null })
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(true)
+    // Nor is it sent again at every run: what answered the first answers the next.
+    await replica.attachments().upload()
+    expect(sends()).toBe(1)
+    // The API's own refusal, a problem with its code, is one of the file.
+    answer = () => json(404, { code: 'not_found' })
+    now += stateRetryMs
+    await replica.attachments().upload()
+    expect(sends()).toBe(2)
+    expect(await replica.attachments().list()).toMatchObject([
+      { id: scan, status: 'failed', code: 'not_found' },
+    ])
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(false)
+  })
+
+  it('keeps a file whose bytes the device lost as refused, and sends the files behind it', async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    const { fetch, calls } = routes({ '/content': () => json(201, {}) })
+    const { replica } = await open({ fetch, storage })
+    const file = {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'r.pdf',
+    }
+    const [receipt, scan] = [newId(), newId()]
+    for (const id of [receipt, scan]) {
+      await arrive(replica, 'items', id, { household_id: household, title: 'Paper', version: 1 })
+      await replica.attach('items', id, file)
+    }
+    // The first file's bytes are gone, as after a run that ended between deleting them and
+    // forgetting the row, or with the device's storage.
+    const [lost] = await replica.attachments().list()
+    rmSync(lost?.local_uri ?? '')
+    await replica.attachments().upload()
+    expect(calls.filter((c) => c.url.endsWith('/content'))).toHaveLength(1)
+    expect(await replica.attachments().list()).toMatchObject([
+      { id: receipt, status: 'failed', code: bytesLost },
+    ])
   })
 })

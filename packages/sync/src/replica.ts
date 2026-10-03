@@ -137,10 +137,24 @@ export class Replica {
   private unlisten: (() => void) | null = null
   private resnapshotting: Promise<void> | null = null
   /**
+   * The connect() calls under way, settled once the last of them has ended: a download waits for
+   * them, since it clears the subscriptions a connect makes (resnapshot).
+   */
+  private connecting: Promise<void> | null = null
+  /**
    * Set when the replica cleared itself to download itself again, until PowerSync has caught up: a
    * row gone meanwhile left with every other, which is no withdrawal (watchRowState).
    */
   private refilling = false
+  /**
+   * The rows the replica's member deleted since it was opened, by rowKey: one of them gone left by
+   * its member's hand, whether or not a watcher saw the delete wait in the queue, which a quick push
+   * ends before a watcher looks (watchRowState). Each is kept with the count of deletions it was
+   * (removals), infinite while its delete is landing, by which a watcher tells a read of the row from
+   * before the delete from the row come back after it.
+   */
+  private readonly removed = new Map<string, number>()
+  private removals = 0
   private discarded = false
   /** Set once close() is called: no download starts after it. */
   private closing = false
@@ -225,8 +239,35 @@ export class Replica {
     return status.connected && !status.downloading && status.hasSynced === true
   }
 
-  /** Connects to PowerSync, subscribed to the household's streams: the replica comes online. */
+  /**
+   * Connects to PowerSync, subscribed to the household's streams: the replica comes online. A
+   * download under way is waited for, as it waits for a connect under way (resnapshot): it clears
+   * the subscriptions a connect makes, and one that landed inside it would leave the replica
+   * connected and subscribed to nothing, or to some of its streams.
+   */
   async connect(): Promise<void> {
+    if (this.discarded) throw new Revoked('the replica was discarded: its device was signed out')
+    const downloading = this.resnapshotting !== null
+    while (this.resnapshotting !== null) await this.resnapshotting.catch(() => undefined)
+    // The download connected the replica again itself, as it was before it.
+    if (downloading && this.connectedNow) return
+    // After the connects before it, so that the last to end is the one a download waits for.
+    const before = this.connecting ?? Promise.resolve()
+    const established = before.then(() => this.establish())
+    const settled = established.then(
+      () => undefined,
+      () => undefined,
+    )
+    this.connecting = settled
+    try {
+      await established
+    } finally {
+      if (this.connecting === settled) this.connecting = null
+    }
+  }
+
+  /** connect, with no wait for a download: the download connects the replica again through it. */
+  private async establish(): Promise<void> {
     if (this.discarded) throw new Revoked('the replica was discarded: its device was signed out')
     if (this.subscriptions === null) {
       const subscriptions: SyncStreamSubscription[] = []
@@ -278,19 +319,27 @@ export class Replica {
 
   /** Disconnects from PowerSync: the replica goes offline, its rows and its queue kept. */
   async disconnect(): Promise<void> {
-    // A download under way connects the replica again once it has cleared it: it is waited for, so
-    // that it cannot connect the replica after this has disconnected it.
-    await this.resnapshotting?.catch(() => undefined)
+    // A download under way connects the replica again once it has cleared it, and a connect under
+    // way has yet to connect it: both are waited for, so that neither connects the replica after
+    // this has disconnected it.
+    while (this.resnapshotting !== null || this.connecting !== null) {
+      await (this.resnapshotting ?? this.connecting)?.catch(() => undefined)
+    }
     this.connectedNow = false
     this.stopReporting()
     await this.db.disconnect()
   }
 
-  /** Closes the replica's database, once the flush and the download under way, if any, have ended. */
+  /**
+   * Closes the replica's database, once the flush, the download and the connect under way, if any,
+   * have ended.
+   */
   async close(): Promise<void> {
     this.closing = true
     await this.replaying
-    await this.resnapshotting?.catch(() => undefined)
+    while (this.resnapshotting !== null || this.connecting !== null) {
+      await (this.resnapshotting ?? this.connecting)?.catch(() => undefined)
+    }
     this.connectedNow = false
     this.stopReporting()
     for (const s of this.subscriptions ?? []) s.unsubscribe()
@@ -566,22 +615,36 @@ export class Replica {
 
   /** Deletes table's row id, and reports whether the replica held it. */
   async remove(table: string, id: string): Promise<boolean> {
-    this.writableEntity(table)
-    const mutationId = await this.db.writeTransaction(async (tx) => {
-      const current = await tx.getOptional<{ version: number | null }>(
-        `SELECT version FROM ${table} WHERE id = ?`,
-        [id],
-      )
-      if (current === null) return null
-      const meta = this.metadata(current.version === null ? {} : { base_version: current.version })
-      // A delete that carries metadata is written as an update of _deleted (trackMetadata).
-      await tx.execute(`UPDATE ${table} SET _deleted = 1, _metadata = ? WHERE id = ?`, [
-        encodeMetadata(meta),
-        id,
-      ])
-      return meta.mutation_id
-    })
+    const key = rowKey(this.writableEntity(table).name, id)
+    let mutationId: string | null
+    try {
+      mutationId = await this.db.writeTransaction(async (tx) => {
+        const current = await tx.getOptional<{ version: number | null }>(
+          `SELECT version FROM ${table} WHERE id = ?`,
+          [id],
+        )
+        if (current === null) return null
+        const meta = this.metadata(
+          current.version === null ? {} : { base_version: current.version },
+        )
+        // A delete that carries metadata is written as an update of _deleted (trackMetadata).
+        await tx.execute(`UPDATE ${table} SET _deleted = 1, _metadata = ? WHERE id = ?`, [
+          encodeMetadata(meta),
+          id,
+        ])
+        // Kept before the row is seen gone, so that a watcher that finds it gone finds why, and
+        // counted only once the delete has landed: until then no watcher takes a read of the row
+        // from before it for the row come back (watchRowState).
+        this.removed.set(key, Number.POSITIVE_INFINITY)
+        return meta.mutation_id
+      })
+    } catch (error) {
+      // The delete was not made.
+      this.removed.delete(key)
+      throw error
+    }
     if (mutationId === null) return false
+    this.removed.set(key, ++this.removals)
     this.o.onWrite?.({ mutationId, table, entityId: id, op: 'delete' })
     return true
   }
@@ -725,44 +788,58 @@ export class Replica {
     return wrote
   }
 
-  /** Where table's row id stands now (RowState); `absent` for a row the replica does not hold. */
+  /**
+   * Where table's row id stands now (RowState); `absent` for a row the replica does not hold. It is
+   * read in one transaction: the connector records an answer and then ends its write, and a state
+   * read from either side of the two, the answer not yet there and the write already gone, is one
+   * the row never stood in.
+   */
   async rowState(table: string, id: string): Promise<RowState> {
-    const entity = tableOf(this.registry, table).entity
-    const [outcome] = await this.db.getAll<Parameters<typeof outcomeOf>[0]>(
-      `SELECT ${outcomeColumns} FROM ${localTables.outcomes}
-       WHERE entity_type = ? AND entity_id = ? AND unresolved = 1 ORDER BY position DESC LIMIT 1`,
-      [entity, id],
-    )
-    if (outcome !== undefined) {
-      const o = outcomeOf(outcome)
-      const kind =
-        o.outcome === 'conflict' ? 'conflict' : o.outcome === 'merged' ? 'merged' : 'rejected'
-      return { kind, outcome: o }
-    }
-    const queued = await this.db.getOptional<QueuedRow>(
-      `SELECT id, json_extract(data, '$.op') AS op FROM ps_crud
-       WHERE json_extract(data, '$.type') = ? AND json_extract(data, '$.id') = ? ORDER BY id DESC LIMIT 1`,
-      [table, id],
-    )
-    if (queued !== null) {
-      const sent = Number((await this.journal.meta(metaKeys.sent)) ?? '0')
-      const op = ops[queued.op]
-      return queued.id <= sent ? { kind: 'syncing', op } : { kind: 'pending', op, held: null }
-    }
-    const [held] = await this.db.getAll<{ reason: HoldReason; op: SyncMutation['op'] }>(
-      `SELECT reason, json_extract(mutation, '$.op') AS op FROM ${localTables.held}
-       WHERE json_extract(mutation, '$.entity_type') = ? AND json_extract(mutation, '$.entity_id') = ?
-       ORDER BY position DESC LIMIT 1`,
-      [entity, id],
-    )
-    if (held !== undefined) return { kind: 'pending', op: held.op, held: held.reason }
-    const row = await this.db.getOptional<{ deleted_at: string | null }>(
-      'deleted_at' in tableOf(this.registry, table).columns
-        ? `SELECT deleted_at FROM ${table} WHERE id = ?`
-        : `SELECT NULL AS deleted_at FROM ${table} WHERE id = ?`,
-      [id],
-    )
-    return row === null ? { kind: 'absent' } : { kind: 'synced', deleted: row.deleted_at !== null }
+    const { entity, columns } = tableOf(this.registry, table)
+    return this.db.readTransaction(async (tx): Promise<RowState> => {
+      const outcome = await tx.getOptional<Parameters<typeof outcomeOf>[0]>(
+        `SELECT ${outcomeColumns} FROM ${localTables.outcomes}
+         WHERE entity_type = ? AND entity_id = ? AND unresolved = 1 ORDER BY position DESC LIMIT 1`,
+        [entity, id],
+      )
+      if (outcome !== null) {
+        const o = outcomeOf(outcome)
+        const kind =
+          o.outcome === 'conflict' ? 'conflict' : o.outcome === 'merged' ? 'merged' : 'rejected'
+        return { kind, outcome: o }
+      }
+      const queued = await tx.getOptional<QueuedRow>(
+        `SELECT id, json_extract(data, '$.op') AS op FROM ps_crud
+         WHERE json_extract(data, '$.type') = ? AND json_extract(data, '$.id') = ? ORDER BY id DESC LIMIT 1`,
+        [table, id],
+      )
+      if (queued !== null) {
+        const mark = await tx.getOptional<{ value: string | null }>(
+          `SELECT value FROM ${localTables.meta} WHERE id = ?`,
+          [metaKeys.sent],
+        )
+        const op = ops[queued.op]
+        return queued.id <= Number(mark?.value ?? '0')
+          ? { kind: 'syncing', op }
+          : { kind: 'pending', op, held: null }
+      }
+      const held = await tx.getOptional<{ reason: HoldReason; op: SyncMutation['op'] }>(
+        `SELECT reason, json_extract(mutation, '$.op') AS op FROM ${localTables.held}
+         WHERE json_extract(mutation, '$.entity_type') = ? AND json_extract(mutation, '$.entity_id') = ?
+         ORDER BY position DESC LIMIT 1`,
+        [entity, id],
+      )
+      if (held !== null) return { kind: 'pending', op: held.op, held: held.reason }
+      const row = await tx.getOptional<{ deleted_at: string | null }>(
+        'deleted_at' in columns
+          ? `SELECT deleted_at FROM ${table} WHERE id = ?`
+          : `SELECT NULL AS deleted_at FROM ${table} WHERE id = ?`,
+        [id],
+      )
+      return row === null
+        ? { kind: 'absent' }
+        : { kind: 'synced', deleted: row.deleted_at !== null }
+    })
   }
 
   /**
@@ -775,7 +852,9 @@ export class Replica {
    * called.
    */
   watchRowState(table: string, id: string, onChange: (state: RowState) => void): () => void {
-    const module = entityOf(this.registry, table).module
+    const entity = entityOf(this.registry, table)
+    const module = entity.module
+    const key = rowKey(entity.name, id)
     let seen = false
     let deleting = false
     // A write of the row the server has not taken, a create it refused or one held to replay: the row
@@ -785,9 +864,15 @@ export class Replica {
     let stopped = false
     let last = ''
     const emit = async (): Promise<void> => {
+      // The deletions made before the row is read: what the read finds is the row after them.
+      const removals = this.removals
       let state = await this.rowState(table, id)
       const emptied = this.refilling || this.discarded
-      if (state.kind === 'absent' && seen && !deleting && !untaken && !emptied) {
+      // Its member deleted it: the delete is told from the queue when the watcher saw it wait there
+      // (deleting), and from the replica's own count of what it deleted when the push answered it
+      // before the watcher looked.
+      const removed = deleting || this.removed.has(key)
+      if (state.kind === 'absent' && seen && !removed && !untaken && !emptied) {
         const enablement = await this.db.getOptional<{ enabled: number | null }>(
           'SELECT enabled FROM module_enablement WHERE module = ?',
           [module],
@@ -799,6 +884,15 @@ export class Replica {
         deleting = state.kind !== 'synced' && state.op === 'delete'
       }
       if (state.kind === 'synced' && state.deleted) deleting = true
+      // A row its member deleted that is there again, no tombstone: the delete was refused, or
+      // another member brought the row back. Its leaving after this is a withdrawal again.
+      if (
+        state.kind === 'synced' &&
+        !state.deleted &&
+        (this.removed.get(key) ?? Number.POSITIVE_INFINITY) <= removals
+      ) {
+        this.removed.delete(key)
+      }
       if (state.kind === 'pending' && state.held !== null) untaken = true
       else if (state.kind === 'pending' || state.kind === 'syncing') {
         // Queued: the member wrote it again.
@@ -959,6 +1053,9 @@ export class Replica {
   resnapshot(): Promise<void> {
     if (this.closing) return Promise.resolve()
     this.resnapshotting ??= (async () => {
+      // A connect under way subscribes to the streams the clear forgets: it ends first, and one
+      // that comes from here on waits for the download (connect).
+      await this.connecting
       if (this.discarded || (await this.queued()) > 0) return
       const reconnect = this.connectedNow
       this.connectedNow = false
@@ -982,8 +1079,9 @@ export class Replica {
         await this.journal.setMeta(metaKeys.sent, '0')
         await this.journal.setMeta(metaKeys.resnapshot, null)
       }
-      // Connected again as it was, unless close() was called meanwhile; disconnect() waits for this.
-      if (reconnect && !this.closing) await this.connect()
+      // Connected again as it was, unless close() was called meanwhile; disconnect() and connect()
+      // wait for this.
+      if (reconnect && !this.closing) await this.establish()
     })().finally(() => {
       this.resnapshotting = null
     })

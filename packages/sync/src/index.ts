@@ -8,6 +8,7 @@
  */
 export {
   Attachments,
+  bytesLost,
   drain,
   stateRetryMs,
   type AttachmentFile,

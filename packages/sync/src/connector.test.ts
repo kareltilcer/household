@@ -474,6 +474,39 @@ describe('the connector', () => {
     expect(journal.holding).toHaveLength(2)
   })
 
+  it("keeps the queue on a 404 that is no problem of the push's: whatever answered has not seen the batch", async () => {
+    const q = new Queue()
+    q.write('Milk')
+    q.write('Bread')
+    const journal = new Memory()
+    const reasons: string[] = []
+    // A proxy that lost its upstream, or a host that is not the API, answers for the push.
+    const { fetch, sent } = server(
+      new Response('<html>Not Found</html>', { status: 404 }),
+      json(404, { code: 'no_such_page' }),
+    )
+    const { c } = connector(fetch, journal, {
+      observer: {
+        malformed: (_attempt, reason) => {
+          reasons.push(reason)
+        },
+      },
+    })
+    await expect(c.upload(q)).rejects.toThrow('no problem of its own')
+    await expect(c.upload(q)).rejects.toThrow('no problem of its own')
+    expect(q.entries).toHaveLength(2)
+    expect(journal.recorded).toEqual([])
+    expect(reasons).toHaveLength(2)
+    // Sent again unchanged, under its key, once the push itself answers.
+    await c.upload(q)
+    expect(sent.map((s) => [s.key, s.ids])).toEqual([
+      ['key-1', ['m-1', 'm-2']],
+      ['key-1', ['m-1', 'm-2']],
+      ['key-1', ['m-1', 'm-2']],
+    ])
+    expect(q.entries).toEqual([])
+  })
+
   it('holds a deferred mutation and replays it once the queue has drained, after the writes queued behind it', async () => {
     const q = new Queue()
     for (const t of ['Rice', 'Brown rice', 'Basmati', 'Jasmine']) q.write(t, UpdateType.PATCH)

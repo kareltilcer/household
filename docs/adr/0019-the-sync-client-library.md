@@ -87,7 +87,9 @@ the push asks (D-127): a `Retry-After` beyond it is cut to it, and a kept wait f
 which only a device clock that moved since can leave, is not waited out. The rest of the connector is
 ADR 0001's, moved from the suite: a 401 renews the credential, a 413 halves the batch, a 422 rejects
 what it locates, a 402 or a 404 answers the batch alike, a 409 is sent again and rekeyed past D-92's
-five minutes. A
+five minutes. A 404 answers the batch only as the push's own problem, `not_found`: whatever else
+answers 404 in its place, a proxy that lost its upstream or a host that is not the API, has not seen
+the batch, and is a protocol fault the batch is sent again after, its mutations kept in the queue. A
 queued write no mutation can be made of (one made around the library, with no metadata, or one of a
 table the registry no longer holds) is ended unsent and recorded as rejected, the writes before it sent
 as a batch of their own: no answer would ever end it, and PowerSync would apply no checkpoint while it
@@ -107,12 +109,16 @@ while such a flush is under way is answered by another look once it ends.
 **Per-row state is computed, and withdrawal is a row that leaves.** A row is `conflict`, `rejected` or
 `merged` while an answer to a write of it asks for attention; else `syncing` while a write of it is at or
 below the sent mark, `pending` while one is above it or held to replay; else `synced`, `deleted` when it
-is a tombstone (item 13 keeps them); else absent. A watcher is told of each move, the one from pending
+is a tombstone (item 13 keeps them); else absent. It is read in one transaction: the connector records
+an answer and then ends its write, and a state read from either side of the two is one the row never
+stood in. A watcher is told of each move, the one from pending
 to syncing among them, which nothing marks but the replica's own sent mark; once stopped it is told
 nothing more, and what its read of a database being closed fails with stays its own. A watcher of a row
 that held it and finds it gone reports it `withdrawn`, by `module` when the replica's
 `module_enablement` row says its module is off, by `access` otherwise, unless the replica knows another
-cause, and then it is absent: its member deleted it; the server refused its create, or a write of it
+cause, and then it is absent: its member deleted it, which the replica keeps of each row it deletes
+for as long as it is open, since a push may answer the delete before a watcher has seen it wait in the
+queue, and forgets once the row is there again, the delete refused or undone; the server refused its create, or a write of it
 waits held to replay, the row a held create wrote being away from the checkpoint that takes it until
 the one after its replay; or the replica emptied itself, to download itself again, until PowerSync has
 caught up, or because its device was signed out. The inbox lists each mutation's
@@ -142,7 +148,11 @@ with its member's membership, as the answers the push keeps for them do. A repli
 `resnapshot_required` waits for its queue to drain, clears its synced rows with its own tables kept
 (PowerSync's clear, as `disconnectAndClear({ clearLocal: false })` runs it, in the transaction that finds
 the queue empty), forgets its rebase and sent mark, and connects again unless it is being closed, a
-disconnect waiting for it so that it cannot connect a replica the app has disconnected;
+disconnect waiting for it so that it cannot connect a replica the app has disconnected, and a connect
+waiting for it as it waits for a connect under way, since the clear forgets the stream subscriptions a
+connect makes, and one landing inside it would leave the replica connected and subscribed to nothing
+(a disconnect and a close wait for a connect under way as well, which would otherwise connect the
+replica after them);
 the server shows it as needing the download until its next report. Bucket checksum failures are counted
 from PowerSync's log (`ChecksumWatch`), the only place it says so.
 
@@ -155,12 +165,17 @@ Node's file system, the browser's IndexedDB, the app's on React Native), a row i
 uploaded through the module's route once the replica holds the row at a version, after each checkpoint,
 a run that was asked for again while it was under way followed by another, since it listed the files
 before a file added meanwhile; a refusal of the file itself is kept with its code, the bytes dropped,
-and the server marks the row; a refusal for the household's state (`entitlement_*`) is not one, and the
+and the server marks the row; a refusal for the household's state (`entitlement_*`) is not one, nor is
+one that carries no problem of the API's, sent by a proxy or a host that never judged the file, and the
 file waits. After such a refusal the queue sends no file for fifteen minutes, or until the app's
 `resume()`, and after a `429` none until its `Retry-After`, a day at most: a household in grace writes
 and does not upload for days, a run starts at every checkpoint and every upload, and each try sends the
 whole file. The wait is kept in memory, so a replica opened again tries once more. A refused create the
-member discards takes its waiting file with it, its row being one the server will never hold.
+member discards takes its waiting file with it, its row being one the server will never hold. A file
+whose bytes the device no longer holds, lost with its storage or in a run that ended between deleting
+them and forgetting the row, is kept as refused too (`bytes_lost`), and one it cannot read is passed
+over until the next run: left at the head of the queue, either would fail every run before any file
+behind it was sent.
 
 **Three builds over one core**: `@household/sync/node`, `@household/sync/web` (wa-sqlite over IndexedDB,
 each tab connecting on its own by default, every tab on the household's one database) and

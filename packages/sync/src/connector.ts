@@ -3,10 +3,10 @@
 // server answers, whatever the answer, and throws (so that PowerSync retries it) only when nothing
 // answered the mutations: a transport failure, a 5xx, a 401, a 409 or a 429. A response outside the
 // contract (a 200 that does not answer the batch, a 422 that neither locates a mutation nor refuses
-// the batch's size, a status handled below by none of these rules) answers nothing either: it is
-// reported as a protocol fault (Observer.malformed), and thrown on. A queued write no mutation can be
-// made of (one with no metadata, or of a table the registry no longer holds), which no answer would
-// ever end, is ended unsent, recorded as rejected.
+// the batch's size, a 404 that is no not_found problem of the push's, a status handled below by none
+// of these rules) answers nothing either: it is reported as a protocol fault (Observer.malformed), and
+// thrown on. A queued write no mutation can be made of (one with no metadata, or of a table the
+// registry no longer holds), which no answer would ever end, is ended unsent, recorded as rejected.
 //
 // It sends the queue in order, several queued transactions to a batch up to maxBatch, under one
 // Idempotency-Key per batch that stays with the batch until it is answered, a held batch's as well
@@ -187,6 +187,8 @@ export class RateLimited extends Error {
 const inProgress = 'idempotency_in_progress'
 /** The code a 402 that names none is recorded with: the household does not write. */
 const entitlementReadOnly = 'entitlement_read_only'
+/** The ProblemCode of the push's 404: the household is not the caller's to write, or is suspended. */
+const notFound = 'not_found'
 
 /** A batch not yet answered, which a retry must send again unchanged. */
 interface InFlight {
@@ -503,13 +505,21 @@ export class Connector {
         }
         case 402:
         case 404: {
+          const refused = problemCode(text)
+          if (response.status === 404 && refused !== notFound) {
+            // No answer of the push's, whose 404 is a problem that says not_found: whatever else
+            // answers 404 in its place, a proxy that lost its upstream or a host that is not the
+            // API, has not seen the batch, and ending its mutations here would take them from the
+            // queue unsent.
+            this.o.observer?.malformed?.(sent, `a 404 that is no problem of the push's: ${text}`)
+            throw new Error('the push answered 404 with no problem of its own; to be sent again')
+          }
           // A 402 is the household's state refusing the batch (FR-BI2, D-118): each mutation is
           // recorded with the problem's own code, entitlement_read_only or entitlement_restricted, and
           // held.
-          const refused = problemCode(text)
           const code =
             response.status === 404
-              ? 'not_found'
+              ? notFound
               : isEntitlement(refused)
                 ? (refused ?? entitlementReadOnly)
                 : entitlementReadOnly

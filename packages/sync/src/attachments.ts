@@ -4,8 +4,11 @@
 // refuses for what the file is (its size, its type, the household's storage) is not retried: the server
 // marks the row failed with the reason, and the queue keeps the refusal's code for the member. One the
 // network or the server failed is tried again at the next run, as is one the household's state refused
-// (FR-BI2) or the server's limit did (a 429), once the time each asks to be waited has passed: a run
-// starts at every checkpoint, and every try sends the whole file.
+// (FR-BI2), one refused by no problem of the API's (a proxy's answer, which has not judged the file), or
+// one the server's limit refused (a 429), once the time each asks to be waited has passed: a run
+// starts at every checkpoint, and every try sends the whole file. A file whose bytes the device no
+// longer holds is kept as refused too (bytesLost), and one it cannot read is passed over until the next
+// run: neither keeps the files behind it waiting.
 
 import type { CommonPowerSyncDatabase, LocalStorageAdapter } from '@powersync/common'
 import { maxRetryAfterMs, retryAfterMs, type Credential } from './connector.ts'
@@ -15,9 +18,16 @@ import { localTables } from './schema.ts'
 /**
  * How long the queue waits, once the household's state has refused a file, before it sends one again:
  * a household in grace writes and does not upload (PRD 04 §3), for days, and its rows keep syncing
- * meanwhile. The app that sees the household's state change ends the wait at once (resume).
+ * meanwhile. The app that sees the household's state change ends the wait at once (resume). A refusal
+ * that is no problem of the API's is waited out as long.
  */
 export const stateRetryMs = 15 * 60_000
+
+/**
+ * The code a file is kept as refused with when the device no longer holds its bytes: no server's
+ * refusal, but the same end, nothing left to send.
+ */
+export const bytesLost = 'bytes_lost'
 
 /** A file waiting to be uploaded, or refused. */
 export interface PendingAttachment {
@@ -31,7 +41,7 @@ export interface PendingAttachment {
   readonly local_uri: string
   readonly status: 'pending' | 'failed'
   readonly attempts: number
-  /** The refusal's code, for one that failed. */
+  /** The refusal's code, for one that failed; bytesLost for one whose bytes the device lost. */
   readonly code: string | null
 }
 
@@ -74,12 +84,13 @@ function refusesTheFile(status: number): boolean {
   return status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429
 }
 
-async function problemCode(response: Response): Promise<string> {
+/** The code of the problem document response carries, or null when it carries none. */
+async function problemCode(response: Response): Promise<string | null> {
   try {
     const code = ((await response.json()) as { code?: unknown }).code
-    return typeof code === 'string' ? code : String(response.status)
+    return typeof code === 'string' && code !== '' ? code : null
   } catch {
-    return String(response.status)
+    return null
   }
 }
 
@@ -96,8 +107,8 @@ export class Attachments {
   private calls = 0
   /**
    * When a run may next send a file, in milliseconds since the epoch: stateRetryMs after the
-   * household's state refused one, a 429's Retry-After after the server's limit did; 0 for now. It is
-   * kept in memory: a replica opened again tries once more.
+   * household's state refused one, or something that is not the API did; a 429's Retry-After after
+   * the server's limit did; 0 for now. It is kept in memory: a replica opened again tries once more.
    */
   private notBefore = 0
 
@@ -205,7 +216,26 @@ export class Attachments {
       if (row?.version === null || row?.version === undefined) continue
       const url = this.options.uploadUrl(a.entity_type, this.household, a.id)
       if (url === null) continue
-      const data = await this.options.storage.readFile(a.local_uri)
+      // The bytes the row names are gone, with the device's storage or in a run that ended between
+      // deleting them and forgetting the row: nothing is left to send, and it is kept as refused,
+      // for the member to see. Left waiting, its read would fail at every run, and no file behind
+      // it would ever be sent.
+      if (!(await this.options.storage.fileExists(a.local_uri))) {
+        await this.db.execute(
+          `UPDATE ${localTables.attachments} SET status = 'failed', code = ? WHERE id = ?`,
+          [bytesLost, a.id],
+        )
+        continue
+      }
+      let data: ArrayBuffer
+      try {
+        data = await this.options.storage.readFile(a.local_uri)
+      } catch {
+        // Bytes the device holds and cannot read now are tried again at the next run, the files
+        // behind them not kept waiting.
+        await this.attempted(a.id)
+        continue
+      }
       const file: AttachmentFile = { data, contentType: a.content_type, fileName: a.file_name }
       // Read before the request: a credential that cannot be had is no failed upload, and one that
       // says the device's sign-in has ended (Revoked) is thrown to the replica, as renew()'s is.
@@ -239,10 +269,13 @@ export class Attachments {
         return
       }
       const code = await problemCode(response)
-      // Refused for the household's state, which does not upload now (grace, a restriction) and may
-      // again (PRD 04 §3): no refusal of the file, which waits, and its row with it. No file is sent
-      // for a while: the state that refused this one refuses the next.
-      if (isEntitlement(code)) {
+      // No refusal of the file, which waits, and its row with it, in two cases. It was refused for the
+      // household's state, which does not upload now (grace, a restriction) and may again (PRD 04
+      // §3). Or it was refused by no problem of the API's, which says why with a code: whatever
+      // answered in its place, a proxy that lost its upstream or a host that is not the API, has not
+      // judged the file, and its bytes are not dropped on its word. Either way no file is sent for a
+      // while: what refused this one refuses the next.
+      if (code === null || isEntitlement(code)) {
         this.notBefore = this.now().getTime() + stateRetryMs
         await this.attempted(a.id)
         return
