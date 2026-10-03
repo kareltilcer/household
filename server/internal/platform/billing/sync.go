@@ -546,15 +546,18 @@ func (s *Service) methodConfirmed(ctx context.Context, intent SetupIntent) error
 // period does, and so does the trial of the one that takes over from it, so that billing handed on
 // twice within one paid period charges nobody for days already paid for (D-131).
 //
-// A subscription of theirs still waiting is one an earlier card could not pay: it is tried again
-// with this one rather than made a second time. One waiting for someone else is over. And where the
-// household's subscription is theirs already, an earlier delivery made it and did not get as far as
-// settling: it is recorded and settled again, and none is made.
+// A subscription still waiting is read from the processor before anything is decided of it. One of
+// theirs that charges is this confirmation's own, made by an earlier delivery that did not get as far
+// as recording it: it is recorded, and none is made. Any other is over, one an earlier card could not
+// pay among them, and is cancelled for the one this card makes: a subscription is made with its
+// payment method and never has one changed while it waits unpaid, which the processor does not
+// promise to take. And where the household's subscription is theirs already, an earlier delivery
+// made it and did not get as far as settling: it is recorded and settled again, and none is made.
 func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 	household, now := intent.Household, s.Now()
 	var (
-		made, again, mine string
-		alone             bool
+		made, mine string
+		alone      bool
 	)
 	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
 		if err := lock(ctx, tx, household); err != nil {
@@ -582,8 +585,12 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 			return nil
 		}
 		if waiting, ok := standing(subs, standingPending); ok {
-			if waiting.payer == intent.User {
-				again = waiting.id
+			said, err := s.Processor.Subscription(ctx, waiting.id)
+			if err != nil {
+				return err
+			}
+			if waiting.payer == intent.User && said.Live() {
+				mine = waiting.id
 				return nil
 			}
 			if err := s.Processor.Cancel(ctx, waiting.id); err != nil {
@@ -623,32 +630,10 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 		return s.sync(ctx, household, made)
 	case mine != "":
 		return s.sync(ctx, household, mine)
-	case again != "":
-		return s.retry(ctx, household, again, intent.PaymentMethod)
 	case alone:
 		// An offer taken back since it was read, or an owner made a member, moves nothing.
 		_, err := s.acceptAlone(ctx, household, intent.User)
 		return err
 	}
 	return nil
-}
-
-// retry charges household's subscription id, which waits on a payment that failed, with
-// paymentMethod: the processor is told to charge it from now on and to collect what is open, and
-// what it then says is recorded. A method refused as the last was leaves the subscription waiting.
-func (s *Service) retry(ctx context.Context, household uuid.UUID, id, paymentMethod string) error {
-	said, err := s.Processor.SetPaymentMethod(ctx, id, paymentMethod)
-	if err != nil {
-		return err
-	}
-	if said.Status == StatusIncomplete && said.LatestInvoice != "" {
-		if err := s.Processor.Pay(ctx, said.LatestInvoice); err != nil {
-			if errors.Is(err, ErrUnavailable) {
-				return err
-			}
-			s.Log.LogAttrs(ctx, slog.LevelInfo, "billing: a waiting subscription was not paid with the new payment method",
-				slog.String(logging.KeyHouseholdID, household.String()), slog.Any("error", err))
-		}
-	}
-	return s.sync(ctx, household, id)
 }

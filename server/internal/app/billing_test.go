@@ -764,8 +764,8 @@ func TestTakingOverAgainWithinThePaidPeriod(t *testing.T) {
 }
 
 // A card declined as billing is taken over moves nothing: the taker's subscription waits unpaid, and
-// the payer of record stays. A second card is tried on the subscription that waits, rather than
-// another made, and billing moves once it is paid (FR-BI6).
+// the payer of record stays. A second card makes a subscription of its own, the one that waits
+// cancelled for it, and billing moves once that one is paid (FR-BI6).
 func TestATakeOverWhoseCardIsDeclinedIsTriedAgain(t *testing.T) {
 	s, stripe := billingSite(t)
 	jana := s.person("Jana", s.a("jana@example"))
@@ -797,13 +797,18 @@ func TestATakeOverWhoseCardIsDeclinedIsTriedAgain(t *testing.T) {
 		t.Fatalf("after the declined card: %+v", sub)
 	}
 
+	// A second card: the subscription the first could not pay is over, and this one makes its own.
 	stripe.Decline(false)
 	confirm()
-	if ids := stripe.Subscriptions(); len(ids) != 2 {
-		t.Fatalf("a second card made another subscription: %v", ids)
+	ids = stripe.Subscriptions()
+	if len(ids) != 3 {
+		t.Fatalf("subscriptions at Stripe after the second card: %v", ids)
 	}
-	if status, _, _ := stripe.Subscription(ids[1]); status != "active" {
-		t.Fatalf("the subscription tried again is %s", status)
+	if status, _, _ := stripe.Subscription(ids[1]); status != "canceled" {
+		t.Fatalf("the subscription the declined card left waiting is %s", status)
+	}
+	if status, _, _ := stripe.Subscription(ids[2]); status != "active" {
+		t.Fatalf("the second card's subscription is %s", status)
 	}
 	if status, _, _ := stripe.Subscription(old); status != "canceled" || stripe.InvoiceStatus(invoice) != "void" {
 		t.Fatalf("the subscription that could not be collected: %s, its invoice %s", status, stripe.InvoiceStatus(invoice))

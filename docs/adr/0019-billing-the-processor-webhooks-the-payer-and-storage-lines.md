@@ -82,8 +82,11 @@ the third payer's subscription the same end to wait for, and the second's is can
 ever charges. Recording it puts it in the old
 one's place; the old one is cancelled at Stripe at its period's end, or at once with its open invoice
 voided; and settling moves `billing_payer_id`, as an `admin.household.payer` event, drops the offer
-and emails the former payer. A household with no subscription has no card to hand over, and the
-payer moves at accept.
+and emails the former payer. A card Stripe declines at that charge leaves their subscription waiting
+unpaid and billing where it was; a later card makes a subscription of its own, the one waiting
+cancelled for it. A subscription is always made with its payment method, and never has one set while
+it waits unpaid, which Stripe does not promise to take. A household with no subscription has no card
+to hand over, and the payer moves at accept.
 
 **Storage is an invoice item for each calendar month, in arrears** (D-128). `storage.Allowance.Blocks`
 is PRD 04 §4's formula over the mean of the month's daily samples, UTC's as the samples are (D-109);
@@ -109,7 +112,7 @@ fails the build (`HOUSEHOLD_TEST_STRIPE_URL`).
 
 | Alternative | Why not |
 |---|---|
-| Stripe's hosted Checkout and customer portal, as the contract had them | PRD 04 §6 names Elements, and the portal would let a payer change a plan or cancel outside the gate's and the audit log's sight |
+| Stripe's hosted Checkout and customer portal, as the contract had them | PRD 04 §6 names Elements, and the portal is Stripe's own screen, in its words and languages, where a payer changes a plan or cancels outside the product |
 | Acting on the object a webhook carries | Events arrive out of order, and the object is rendered at the endpoint's API version: a late `incomplete` after `active` would undo a payment. Reading costs one request an event |
 | A table of processed event ids for idempotency | The handlers are functions of what Stripe says now, so a repeat changes nothing; the emails are sent on a change of the recorded invoice, once. An events table would be a second thing to keep in step |
 | The record and the settlement in one transaction | The spine rolls back a mutation that records nothing, which is most deliveries; the record would go with it |
