@@ -209,6 +209,11 @@ download losing nothing queued; the web build passes the same in Playwright's Ch
 
 ## Consequences
 
+- **Item 25** gives the web replica its session: the library sends every request with
+  `Authorization: Bearer` and the credential it is given, which is a device's token, while a web
+  session is a cookie and a CSRF header. The browser smoke test signs in as a device; the web app
+  passes a `fetch` that carries its session with the bearer left out, and decides what a `401` means
+  where nothing can be renewed.
 - **Items 27 and 28** open a replica per household with `@household/sync/web` and `/native`: the
   mobile app installs a `crypto.getRandomValues` polyfill before it (as `@household/api` already asks),
   supplies an attachment storage and transport, and gives the replica a credential that throws
