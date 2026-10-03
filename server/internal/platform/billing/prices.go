@@ -18,7 +18,7 @@ const (
 )
 
 // Fallback is the currency a household whose base currency has no plan is charged in (PRD 04 §1:
-// "else EUR"). CZK and PLN are charged in it until their figures are configured (D-130).
+// "else EUR"). CZK and PLN are charged in it until their figures are configured (D-132).
 const Fallback = "EUR"
 
 // Price is one price of a plan: what it charges, in the currency's minor unit, and the processor's

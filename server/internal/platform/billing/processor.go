@@ -47,7 +47,7 @@ type Processor interface {
 	// Invoice reads an invoice as it stands now, with its lines.
 	Invoice(ctx context.Context, id string) (Invoice, error)
 	// InvoicePDF reads where an invoice is downloaded now, "" while it has no PDF: the link is the
-	// processor's, handed out as it is asked for and never kept (D-133).
+	// processor's, handed out as it is asked for and never kept (D-135).
 	InvoicePDF(ctx context.Context, id string) (string, error)
 	// Pay tries to collect an open invoice now.
 	Pay(ctx context.Context, invoice string) error
@@ -110,7 +110,7 @@ type NewSubscription struct {
 	Price     string
 	Household uuid.UUID
 	Payer     uuid.UUID
-	// Monthly invoices the storage lines monthly, as a yearly plan's are (D-128).
+	// Monthly invoices the storage lines monthly, as a yearly plan's are (D-130).
 	Monthly bool
 	// PaymentMethod, when set, is charged, off session; with none the subscription is made incomplete
 	// for the client to confirm.
@@ -195,7 +195,7 @@ const (
 // invoice paid, or waiting out a period another has paid for with a payment method to charge at its
 // end. The processor's own word for the subscription is not enough: one paid for by a bank debit is
 // active from the moment the debit is asked for, days before it clears, and stays active when the
-// debit fails, its invoice voided. Only the invoice says a payment went through (D-129).
+// debit fails, its invoice voided. Only the invoice says a payment went through (D-131).
 func (s Subscription) Paid() bool {
 	switch s.Status {
 	case StatusActive:

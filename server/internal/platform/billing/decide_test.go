@@ -105,7 +105,7 @@ func same(a, b entitlement.Status) bool {
 // its invoice is paid, or, when it waits out another's period, once it has a payment method, and over
 // once it expired; the household's is over once it is cancelled or given up; and one that is over
 // stays over. One the processor has active while its payment, a bank debit, is still on its way waits
-// on, as does one whose debit failed, which is then ended (D-129).
+// on, as does one whose debit failed, which is then ended (D-131).
 func TestWhatTheProcessorSaysMovesASubscriptionsStanding(t *testing.T) {
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	card := &PaymentMethod{ID: "pm_1", Brand: "visa", Last4: "4242", ExpMonth: 12, ExpYear: 2030}

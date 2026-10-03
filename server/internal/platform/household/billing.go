@@ -35,7 +35,7 @@ var ErrPayerNotOwner = errors.New("household: the payer must be one of the house
 // what the payment processor says, entering past_due with its dunning_ends_at, canceled with its
 // lapsed_at and retained_until, and active with every clock cleared, and how billing moves between
 // owners, each through the mutation spine as the hourly job's moves are (Transition), which stays the
-// backstop (ADR 0017, ADR 0019). tx is a mutation's transaction in household's context
+// backstop (ADR 0017, ADR 0020). tx is a mutation's transaction in household's context
 // (mutation.Apply), the system's or a caller's.
 //
 // A move of the subscription records admin.household.entitlement, as the clock's does, and a move of

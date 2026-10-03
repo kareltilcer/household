@@ -330,7 +330,7 @@ func newBilling(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool,
 
 // The scheduler's jobs' times (PRD 03 §5): the usage sample at 01:00 UTC, the day the sample is the
 // day of (D-109), the month's storage lines half an hour after it, which bill a month that ended from
-// samples all taken before it did (D-128), the sweeps of the objects no row records at 02:00, and the
+// samples all taken before it did (D-130), the sweeps of the objects no row records at 02:00, and the
 // expiry sweep at 03:00 UTC, once they are done.
 const (
 	nightlySample  = localtime.Clock(1 * 60)

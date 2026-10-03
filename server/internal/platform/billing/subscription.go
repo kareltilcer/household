@@ -367,7 +367,7 @@ func (s *Service) current(ctx context.Context) (*tenant.Scope, subscription, err
 
 // changeInterval is patchBillingSubscription: the payer moves the subscription between paying
 // yearly and monthly. The processor prorates what was paid against what is now owed (PRD 04 §6), and
-// a yearly plan's storage lines are invoiced monthly (D-128).
+// a yearly plan's storage lines are invoiced monthly (D-130).
 func (s *Service) changeInterval(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req intervalRequest

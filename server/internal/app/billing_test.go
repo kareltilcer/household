@@ -199,7 +199,7 @@ func has(subjects []string, part string) int {
 // once Stripe says it was paid, an event delivered twice changes nothing more, the invoice is kept
 // with its lines and emailed to the payer, who alone reads it and the payment method's summary; other
 // owners see the state, and members and children see nothing of billing at all (FR-BI5). A household
-// whose base currency has no prices of its own is charged in EUR (D-130).
+// whose base currency has no prices of its own is charged in EUR (D-132).
 func TestSubscribing(t *testing.T) {
 	s, stripe := billingSite(t)
 	jana := s.person("Jana", s.a("jana@example"))
@@ -527,7 +527,7 @@ func TestAPayerPaysFromAnAccountWhoseIBANEndsInLetters(t *testing.T) {
 }
 
 // A bank debit takes days to clear, and Stripe has the subscription active from the moment the debit
-// is asked for (D-129): the household changes only once the invoice is paid. Until then it is as it
+// is asked for (D-131): the household changes only once the invoice is paid. Until then it is as it
 // was, its subscription read with a payment pending, and the payer is not handed a second
 // subscription to pay. A debit that fails, which Stripe answers by voiding the invoice and leaving
 // the subscription active, ends the subscription: it is cancelled at Stripe, so that it charges no
@@ -716,7 +716,7 @@ func TestCancellingAndResuming(t *testing.T) {
 
 // The payer moves the subscription between paying yearly and monthly (PRD 04 §6): Stripe is asked for
 // the plan's other price, prorating, a monthly plan's storage rides its renewal and a yearly plan's is
-// invoiced each month (D-128), and the interval it has already asks Stripe nothing. Another owner may
+// invoiced each month (D-130), and the interval it has already asks Stripe nothing. Another owner may
 // not, and a household with no subscription has none to change.
 func TestChangingTheInterval(t *testing.T) {
 	s, stripe := billingSite(t)
@@ -974,7 +974,7 @@ func accepts(t *testing.T, b *browser, h uuid.UUID) acceptedDoc {
 }
 
 // Billing handed on a second time before the period the first payer paid for has ended is paid for
-// by that period still (FR-BI6, D-131): the next payer's subscription waits for its end, as the one
+// by that period still (FR-BI6, D-133): the next payer's subscription waits for its end, as the one
 // it takes over from does, which is then never charged, and nobody pays for days already paid for.
 // A card's confirmation delivered again once the subscription it made is the household's makes no
 // other.
@@ -1155,7 +1155,7 @@ func (x handover) confirm(t *testing.T) {
 }
 
 // A take-over is decided from what Stripe says of the household's subscription as the card is
-// confirmed, not from what the last event to arrive said of it (FR-BI6, D-131, D-132). One that
+// confirmed, not from what the last event to arrive said of it (FR-BI6, D-133, D-134). One that
 // renewed, or whose retried payment was collected, while the event that says so is still on its way
 // is paid up: the new payer's waits for the end of the period just paid for, rather than being
 // charged at once for days the old payer has paid for, and the old one runs to that end, rather than
@@ -1238,7 +1238,7 @@ func TestATakeOverIsDecidedFromWhatStripeSaysNow(t *testing.T) {
 }
 
 // A take-over's subscription that waits is ended for a later card's only while Stripe says it still
-// waits (FR-BI6, D-131): one collected since, the event that says so not yet arrived, charges, and is
+// waits (FR-BI6, D-133): one collected since, the event that says so not yet arrived, charges, and is
 // recorded as the household's rather than ended, unrefunded, for another.
 func TestATakeOversWaitingSubscriptionPaidSinceIsKept(t *testing.T) {
 	x := newHandover(t)
@@ -1281,7 +1281,7 @@ func TestATakeOversWaitingSubscriptionPaidSinceIsKept(t *testing.T) {
 }
 
 // A yearly plan that is past due over a month's storage alone is paid for until its year ends
-// (D-128, D-131): the owner who takes billing over then waits for that end, as with any period
+// (D-130, D-133): the owner who takes billing over then waits for that end, as with any period
 // already paid for, rather than being charged a year at once for days the former payer has paid for,
 // and the subscription that could not collect its storage is ended with that invoice voided.
 func TestTakingOverAYearlyPlanPastDueOverItsStorage(t *testing.T) {
@@ -1364,7 +1364,7 @@ func TestAnOffersWaitingEmailGoesOnceBillingMoves(t *testing.T) {
 	}
 }
 
-// A subscription never paid expires and changes nothing (D-129): the household is as it was. One
+// A subscription never paid expires and changes nothing (D-131): the household is as it was. One
 // Stripe holds for the household that no row records, its request having ended between Stripe's
 // answer and its record, is taken up as the one waiting, so that asking again answers its secret
 // rather than making another, and paying it makes it the household's; a second such is cancelled.
@@ -1421,7 +1421,7 @@ func TestASubscriptionNeverPaidOrNeverRecorded(t *testing.T) {
 	}
 }
 
-// A subscription that waits is ended only while it still waits (D-129): one whose payment goes
+// A subscription that waits is ended only while it still waits (D-131): one whose payment goes
 // through as its payer asks to subscribe again, after the server last read it, is the household's.
 // It is not cancelled for another, at the same interval, where what is left to confirm is then
 // nothing, or at the other, and the payer is not handed a second subscription to pay.
@@ -1452,7 +1452,7 @@ func TestAPaymentThatArrivesAsThePayerAsksAgainIsKept(t *testing.T) {
 }
 
 // A subscription Stripe holds for the household that no row records is the household's once it
-// charges, whatever waits (ADR 0019): it is never cancelled as a second one waiting, which would end
+// charges, whatever waits (ADR 0020): it is never cancelled as a second one waiting, which would end
 // a subscription its payer has paid for and leave the household unpaid.
 func TestAnUnrecordedSubscriptionThatChargesIsTakenUp(t *testing.T) {
 	s, stripe := billingSite(t)
@@ -1594,7 +1594,7 @@ func repeat(bytes int64, days int) []int64 {
 	return out
 }
 
-// A month's storage is billed once it has ended, from the mean of its daily samples (D-31, D-128):
+// A month's storage is billed once it has ended, from the mean of its daily samples (D-31, D-130):
 // an average of 18 GB is 2 blocks, one line on the subscription, once however many nights find it;
 // a household that averaged within its allowance, one still on trial and one that subscribed after
 // the month ended are billed nothing. The line then rides the renewal's invoice beside the base fee,

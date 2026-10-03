@@ -145,7 +145,7 @@ func (s subscription) said(p Subscription, now time.Time) subscription {
 	return next
 }
 
-// fourDigits reports whether s is the four digits the row keeps of a payment method (01022). A card's
+// fourDigits reports whether s is the four digits the row keeps of a payment method (01023). A card's
 // last four are; a bank account's are the last four characters of its IBAN, which in some countries
 // are letters, and are then not kept: the method is known by its kind alone, as one with none is.
 func fourDigits(s string) bool {

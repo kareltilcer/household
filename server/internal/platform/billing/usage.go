@@ -39,7 +39,7 @@ type usageDoc struct {
 // getUsage is getBillingUsage: the month's storage as it will be billed (FR-BI4), an owner's to read:
 // what is stored now, the average of the month's daily samples so far, the average the month is
 // projected to end on, the blocks each needs and what the projected ones cost, in the currency the
-// household is charged in. The month is the calendar month, UTC's (D-128). An invoice is never the
+// household is charged in. The month is the calendar month, UTC's (D-130). An invoice is never the
 // first place the number appears.
 func (s *Service) getUsage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -98,7 +98,7 @@ func (s *Service) getUsage(w http.ResponseWriter, r *http.Request) {
 const storageLineKey = "billing.storage_line"
 
 // BillStorage bills every subscribed household the storage blocks of the calendar month that ended
-// before now (PRD 04 §4, D-31, D-128): one line, added to the subscription's next invoice, for the
+// before now (PRD 04 §4, D-31, D-130): one line, added to the subscription's next invoice, for the
 // blocks the mean of the month's daily samples came to, and none for a month that needs none. The
 // scheduler runs it nightly, after the usage sample; a month is billed once, however many nights
 // find it, and a night that failed is made up by the next. It returns how many lines it added; a

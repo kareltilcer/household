@@ -2100,7 +2100,7 @@ paths:
       description: |
         Current stored bytes, the month-to-date daily average, the projected month-end average and
         the projected charge, an owner's to read. An invoice is never the first time a customer
-        learns the number (FR-BI4). The month is the calendar month, UTC's (D-128).
+        learns the number (FR-BI4). The month is the calendar month, UTC's (D-130).
       responses:
         '200': { description: Usage, content: { application/json: { schema: { $ref: '#/components/schemas/UsageSummary' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -9832,7 +9832,7 @@ components:
       required: [period_from, period_to, current_bytes, mtd_average_bytes, projected_average_bytes, included_bytes, included_bytes_base, blocks_now, blocks_projected, projected_charge, bytes_to_next_block, bytes_to_drop_a_block, upload_blocked, hard_ceiling_bytes]
       description: |
         Extra storage is sold in whole **10 GB blocks**, computed once per calendar month, UTC's,
-        from the daily samples (D-128), and billed in arrears as one line of the next invoice:
+        from the daily samples (D-130), and billed in arrears as one line of the next invoice:
 
         ```
         blocks = ceil( max(0, mean(daily stored_bytes) - included_bytes_base) / block_bytes )

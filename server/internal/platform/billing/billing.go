@@ -1,11 +1,11 @@
 // Package billing is a household's subscription at the payment processor (PRD 04 §1, §4, §6; plan
-// item 19, ADR 0019): one subscription a household, paid by one of its owners, for a flat fee and
+// item 19, ADR 0020): one subscription a household, paid by one of its owners, for a flat fee and
 // whole 10 GB blocks of storage above the 5 GB it includes.
 //
 // The processor is Stripe, behind Processor. A card never reaches this server: the web client
 // confirms a payment, or a card for later charges, with Stripe's Payment Element, by the client
 // secret a route here hands it (Q17). What is kept is the processor's ids, a payment method's summary,
-// and the invoices as it issued them (01022).
+// and the invoices as it issued them (01023).
 //
 // The household's own state stays on its row (ADR 0017), and moves as the processor says: a webhook
 // names a subscription, an invoice or a setup, the handler reads it from the processor as it stands,
@@ -19,7 +19,7 @@
 // arrive: the processor delivers for three days, and one lost after that is sent again from the
 // processor by hand (docs/runbooks/billing.md).
 //
-// Storage is billed by the calendar month, UTC's, in arrears (D-128): each night BillStorage adds the
+// Storage is billed by the calendar month, UTC's, in arrears (D-130): each night BillStorage adds the
 // month that ended as one line to the subscription's next invoice, the blocks its daily average
 // came to (storage.Allowance.Blocks). The storage screen shows the same arithmetic all month
 // (FR-BI4).

@@ -1,4 +1,4 @@
--- Billing (PRD 04 §1, §4, §6; plan item 19, ADR 0019): what the platform keeps of a household's
+-- Billing (PRD 04 §1, §4, §6; plan item 19, ADR 0020): what the platform keeps of a household's
 -- subscription at the payment processor, Stripe. None of it is content, and none of it is a card: a
 -- payment method is kept as its summary alone, brand, last four digits and expiry (PRD 04 §6). The
 -- household's own state, the six states money decides and the clocks that time them, stays on its

@@ -182,7 +182,7 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   `mutation.Apply` and `household.Bill`: a delivery repeated or out of order settles the same state.
   Storage is billed by the calendar month, UTC's, from `storage.Allowance.Blocks` over the daily
   samples, whose arithmetic `vectors/storage.json` holds both sides to. A test asks `billingtest`'s
-  stand-in, never Stripe ([ADR 0019](docs/adr/0019-billing-the-processor-webhooks-the-payer-and-storage-lines.md),
+  stand-in, never Stripe ([ADR 0020](docs/adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md),
   [runbook](docs/runbooks/billing.md)).
 - **Notifications** go through `internal/platform/notify`: a module tells a member something by
   queueing a `notify.Notification` in its mutation's transaction (`Queue`), a catalog key and

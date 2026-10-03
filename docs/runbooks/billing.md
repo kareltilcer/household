@@ -2,7 +2,7 @@
 
 A household's subscription is a Stripe subscription, paid by one of its owners; the server keeps
 Stripe's ids, a payment method's summary and the invoices, and moves the household's entitlement on
-what Stripe's webhooks name ([ADR 0019](../adr/0019-billing-the-processor-webhooks-the-payer-and-storage-lines.md),
+what Stripe's webhooks name ([ADR 0020](../adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md),
 PRD 04). Read this before an environment's first deploy, when a price changes or a currency is
 added, when a key is rotated or leaks, when a payment went through and the household is not
 `active`, and when a month's storage was not billed.

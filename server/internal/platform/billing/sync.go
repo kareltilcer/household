@@ -134,7 +134,7 @@ var errUnknown = errors.New("billing: a subscription that is not the household's
 // payment.
 //
 // A subscription is the household's once its payment went through, which its invoice says and its
-// own status does not (Subscription.Paid, D-129): one paid for by a bank debit is active at the
+// own status does not (Subscription.Paid, D-131): one paid for by a bank debit is active at the
 // processor for the days the debit takes, and waits here until its invoice is paid. A debit that
 // fails leaves it active there with its invoice voided, charging nothing until its next period: it is
 // ended, and its payer told (unpaid).
@@ -253,7 +253,7 @@ func (s *Service) syncOnce(ctx context.Context, household uuid.UUID, id string, 
 // unpaid ends household's subscription id, which waits on a first payment that did not go through:
 // it is cancelled at the processor, where it would otherwise stay active and charge its next period
 // for a household it was never the subscription of, what the processor then says is recorded, and
-// its payer is emailed, once, that the subscription was not started (D-129). The household is as it
+// its payer is emailed, once, that the subscription was not started (D-131). The household is as it
 // was, and its payer may subscribe again.
 func (s *Service) unpaid(ctx context.Context, household uuid.UUID, id string) error {
 	if err := s.Processor.Cancel(ctx, id); err != nil {
@@ -705,7 +705,7 @@ func (s *Service) methodConfirmed(ctx context.Context, intent SetupIntent) error
 // The household is paid up by a subscription that is active, and by one that itself waits out a
 // period another paid for, a take-over's whose period has not begun: its trial ends where that
 // period does, and so does the trial of the one that takes over from it, so that billing handed on
-// twice within one paid period charges nobody for days already paid for (D-131). So is it by one
+// twice within one paid period charges nobody for days already paid for (D-133). So is it by one
 // that is past due over an invoice that bills no base fee, a yearly plan's month of storage: the
 // period itself is paid for, the new subscription waits for its end as for any other's, and the old
 // one is ended at once with that invoice voided (retire), so that what it could not collect is tried
@@ -798,7 +798,7 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 		}
 		// Paid up: the new one waits for the period's end. Its period uncollected, or about to renew, it
 		// starts now. Past due says only that the processor could not collect the subscription's latest
-		// invoice: one that bills no base fee, a yearly plan's month of storage (D-128), leaves the
+		// invoice: one that bills no base fee, a yearly plan's month of storage (D-130), leaves the
 		// period itself paid for, and a new payer charged at once would pay for its days again.
 		paid := cur.paidUp()
 		if cur.status == StatusPastDue && held.LatestInvoice != "" {

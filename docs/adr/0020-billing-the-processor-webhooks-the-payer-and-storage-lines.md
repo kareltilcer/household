@@ -1,10 +1,10 @@
-# 0019 — Billing asks Stripe through one interface, a webhook reads what it names rather than what it carries, the household's row is settled from what is recorded, billing moves once a card is confirmed, and storage is an invoice item a month
+# 0020 — Billing asks Stripe through one interface, a webhook reads what it names rather than what it carries, the household's row is settled from what is recorded, billing moves once a card is confirmed, and storage is an invoice item a month
 
 - **Status:** Accepted
 - **Date:** 2026-10-03
 - **Plan item:** 19
 - **Decides for:** [PRD 04](../prd/04-billing-and-entitlements.md) §1, §4, §6 (FR-BI3–FR-BI6);
-  [PRD 01](../prd/01-architecture.md) §2.4; D-31, D-33, D-34, D-128–D-133; plan Q1 and Q17
+  [PRD 01](../prd/01-architecture.md) §2.4; D-31, D-33, D-34, D-130–D-135; plan Q1 and Q17
 
 ## Context
 
@@ -33,7 +33,7 @@ else in `internal/platform/billing` knows subscriptions, invoices and setups as 
 types. A deployment with no keys has no processor: every route that would ask it answers
 `503 billing_unavailable`, the reads still read what is kept, and nothing lapses for it.
 
-**A customer confirms with Stripe, not with us** (Q17, D-129). `POST …/billing/subscription` makes
+**A customer confirms with Stripe, not with us** (Q17, D-131). `POST …/billing/subscription` makes
 the subscription at Stripe unpaid (`payment_behavior=default_incomplete`) and answers the client
 secret of its first invoice's payment, which the web client confirms in Stripe's Payment Element;
 `POST …/billing/payment-method` and the take-over answer the secret of a setup the same way. The
@@ -49,7 +49,7 @@ whatever waits there, and is ended as a second one waiting only while it waits i
 such a subscription whose event is handled before the subscription's own has it taken up first, and
 is then recorded, rather than dropped for arriving first.
 
-**Paid is the invoice's word, not the subscription's** (D-129). For a payment method that says late
+**Paid is the invoice's word, not the subscription's** (D-131). For a payment method that says late
 how it went, a SEPA Direct Debit, Stripe makes the subscription `active` as the debit is asked for,
 days before it clears, and leaves it `active` when the debit fails, voiding the invoice. A
 subscription that waits is therefore the household's once it is `active` **and its latest invoice is
@@ -62,7 +62,7 @@ that is `void` or `uncollectible` has failed (`Subscription.Failed`): it is canc
 where it would otherwise charge its next period for a household it was never the subscription of,
 and its payer is emailed, once, that it was not started.
 
-**A webhook says what to look at; the handler reads it from Stripe** (D-132). `POST
+**A webhook says what to look at; the handler reads it from Stripe** (D-134). `POST
 /webhooks/stripe` verifies the signature and takes from the event only its type, its object's id and
 the household its metadata names. Under the household's row lock (`SELECT … FOR NO KEY UPDATE`, as
 the household surface's own changes take it) it reads the subscription, the invoice or the setup
@@ -82,7 +82,7 @@ succeeded; with none, a household that was `active` or `past_due` is `canceled`,
 `admin.household.entitlement` event, as the clock's moves are. The record and the settlement are two
 transactions, and each is a function of state: a crash between them is mended by the redelivery.
 
-**What Stripe says is kept in tenant tables; a payer's customer is the account's** (`01022`).
+**What Stripe says is kept in tenant tables; a payer's customer is the account's** (`01023`).
 `billing_subscriptions`, `billing_invoices`, `billing_storage_months` and `billing_transfers` are
 isolated as every tenant table is and written through `tenant.InWriteTx` in the household's context:
 they are the platform's record of what the processor said, no entity's history, and replicate to no
@@ -92,7 +92,7 @@ household: `pending` until its payment or its payer's card is confirmed, `curren
 most one of each of the first two. No "billing service role" exists: the request role reads and
 writes them in context, and the meter role lists the households that have a subscription.
 
-**Billing moves once the new payer's card is confirmed** (FR-BI6, D-131). The payer offers
+**Billing moves once the new payer's card is confirmed** (FR-BI6, D-133). The payer offers
 (`billing_transfers`, 14 days), the other owner accepts and is answered a setup's secret, and
 nothing else happens until `setup_intent.succeeded` arrives. Then, while the offer stands and they
 are an owner still, their own subscription is made on their own customer with the confirmed method:
@@ -119,7 +119,7 @@ the time the card is confirmed, once that end is settled. The payer moves alone 
 household has none under its lock: one paid for since it was looked at has a card to confirm, and
 is never left its former payer's to pay and its new payer's to cancel.
 
-**Storage is an invoice item for each calendar month, in arrears** (D-128). `storage.Allowance.Blocks`
+**Storage is an invoice item for each calendar month, in arrears** (D-130). `storage.Allowance.Blocks`
 is PRD 04 §4's formula over the mean of the month's daily samples, UTC's as the samples are (D-109);
 `packages/test-vectors/vectors/storage.json` holds the Go and TypeScript twins to it. Each night
 after the sample, `billing.BillStorage` bills every subscribed household the month that ended, once:

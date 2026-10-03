@@ -14,7 +14,7 @@
 | **Extra storage** | **10 GB blocks at €1.00/month each** (≈ €0.10/GB), added automatically as needed, computed from the **daily-average** of the month, not the peak |
 | **Metered ceiling** | 20 blocks — 205 GB total. See §4 |
 | **Members** | Unlimited, up to a fair-use ceiling of 12 |
-| **Currency** | Charged in the household's base currency where it has prices of its own, else EUR. **EUR and GBP** have them at launch; **CZK and PLN** are charged in EUR until their figures are set (**D-130**) |
+| **Currency** | Charged in the household's base currency where it has prices of its own, else EUR. **EUR and GBP** have them at launch; **CZK and PLN** are charged in EUR until their figures are set (**D-132**) |
 | **Tax** | VAT per the customer's country: **EU OSS** for EU customers, and a **separate UK VAT registration** for UK customers, which has no small-supplier threshold for a non-established supplier |
 
 **D-30: one paid plan, no tiers.** Feature-gated tiers require an entitlement matrix, upgrade
@@ -32,7 +32,7 @@ instrumentation in §8. CZK and PLN figures are set on the same basis, once they
 a CZK or a PLN household is charged the EUR figures, in EUR. The prices are a deployment's
 configuration, each currency's three figures beside the processor's prices that charge them, so a
 currency is added with no release, and a household that has subscribed keeps the currency it
-subscribed in (**D-130**).
+subscribed in (**D-132**).
 
 **D-31: overage is billed on the monthly daily-average, not the peak.** A member who uploads
 40 GB of video, realises the mistake and deletes it the same day should not receive a bill for
@@ -165,7 +165,7 @@ Worked: an average of 18 GB is 13 GB over, which is **2 blocks, €2.00**. An av
 **0 blocks**. Forty gigabytes uploaded and deleted on the same day moves a monthly average by
 about 1.3 GB, so it costs nothing — which is the whole point of averaging (D-31).
 
-**The period is the calendar month, UTC's, billed in arrears (D-128).** The daily samples are dated
+**The period is the calendar month, UTC's, billed in arrears (D-130).** The daily samples are dated
 by the UTC day (D-109), and a month's blocks are the ones its samples' mean needs. The night after a
 month ends, its line is added to the subscription's next invoice: a monthly plan's renewal carries
 it beside the base fee, and a yearly plan's storage is invoiced each month there is any, so that no
@@ -227,8 +227,8 @@ back below the ceiling (**D-116**).
 | **SCA** | Handled by the processor; off-session charges use saved mandates and fall back to an on-session confirmation email when 3DS is demanded |
 | **Methods** | Card, SEPA Direct Debit, Apple Pay, Google Pay. Bank transfer for annual plans on request |
 | **In-app purchase** | **Not used.** Household is a "multiplatform service" and the subscription is sold on the web. The apps do not offer, and must not link to, an alternative purchase flow inside the binary where store rules forbid it. See §7 |
-| **Invoices** | Issued per billing period with the base fee and metered overage as separate lines; downloadable from the app; emailed to the payer, who alone reads them (**D-133**) |
-| **Dunning** | Retried for seven days after the first failure, at 1, 3, 5 and 7 days as nearly as the processor's settings allow: the schedule is the processor's, which takes either four retries on days of its own choosing within the week or three at days 1, 4 and 7. Email to the payer at each retry that fails; in-app banner to owners from the first failure, which is not emailed (**D-132**) |
+| **Invoices** | Issued per billing period with the base fee and metered overage as separate lines; downloadable from the app; emailed to the payer, who alone reads them (**D-135**) |
+| **Dunning** | Retried for seven days after the first failure, at 1, 3, 5 and 7 days as nearly as the processor's settings allow: the schedule is the processor's, which takes either four retries on days of its own choosing within the week or three at days 1, 4 and 7. Email to the payer at each retry that fails; in-app banner to owners from the first failure, which is not emailed (**D-134**) |
 | **Proration** | Plan changes and cancellations prorate. Metered overage is never prorated — it is measured over actual days |
 
 **FR-BI5 — The payer is a member, not an abstraction.** Billing screens are visible only to the
@@ -239,15 +239,15 @@ Members and children never see billing at all.
 accepts and supplies a payment method. The subscription does not lapse in between. The payer is
 the owner who offers, and billing moves once the other owner's card is confirmed: their own
 subscription then starts when the period already paid for ends, so that nobody pays for the same
-days twice (**D-131**).
+days twice (**D-133**).
 
 **Subscribing** is the payer's, once their address is verified
 ([02](02-identity-and-access.md) §3), in the processor's own payment form on the web: the household
 is `active` once the processor says the payment went through, and the paid period starts then, on
-trial too (**D-129**). A SEPA Direct Debit takes days to go through: until it has, the household is
+trial too (**D-131**). A SEPA Direct Debit takes days to go through: until it has, the household is
 as it was and the billing screen says a payment is on its way; one that fails starts nothing, and
 the payer is emailed so. The household's state then follows the processor's word, read from the
-processor each time it sends any (**D-132**).
+processor each time it sends any (**D-134**).
 
 ## 7. App-store considerations
 

@@ -138,7 +138,7 @@ dashboard is locked; its PIN is the account's `child_pin` credential, which coun
 `notification_rules`,
 `notification_schedules`, `notification_deliveries`, `export_jobs`, `deletion_requests`. Billing's
 tables are the platform's, tenant tables like these
-([ADR 0019](../../adr/0019-billing-the-processor-webhooks-the-payer-and-storage-lines.md)).
+([ADR 0020](../../adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md)).
 
 Audience membership rows — chat conversation members and `member_shared` calendar members — carry
 `floor_seq` beside their own module's membership fields, because the sync pull predicate evaluates

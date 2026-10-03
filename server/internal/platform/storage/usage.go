@@ -10,7 +10,7 @@ import (
 
 // Month is the calendar month at falls in, UTC's, as the daily samples it averages are (D-109): from
 // its first day to the first day of the next, which it excludes. Storage is averaged, shown and
-// billed by it (PRD 04 §4, D-31, D-128).
+// billed by it (PRD 04 §4, D-31, D-130).
 func Month(at time.Time) (from, to time.Time) {
 	at = at.UTC()
 	from = time.Date(at.Year(), at.Month(), 1, 0, 0, 0, 0, time.UTC)

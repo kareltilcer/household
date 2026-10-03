@@ -35,7 +35,7 @@ type Stripe struct {
 }
 
 // DefaultTimeout bounds a request to Stripe. The SDK's own client waits 80 seconds, and billing asks
-// Stripe inside a transaction that holds a pooled connection and the household's row lock (ADR 0019):
+// Stripe inside a transaction that holds a pooled connection and the household's row lock (ADR 0020):
 // a Stripe that answers slowly would otherwise hold both for minutes, a request at a time, until the
 // pool had none left for anyone. A request cut off is sent again by the SDK under the idempotency key
 // it gave it, and what Stripe did meanwhile arrives as an event.
