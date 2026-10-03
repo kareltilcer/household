@@ -1351,8 +1351,9 @@ paths:
         every module is enabled with the creator holding `manage` on each, the household is given its
         code, and a 30-day trial begins. `units` and `first_day_of_week` default to the country's
         profile; a country Household has no profile of is refused `422` naming `/country`, and an `id`
-        another household has `422` naming `/id`. A child profile is refused `403`: it is a profile an
-        owner manages in their household, never a household's owner and payer (D-17, D-104).
+        another household has, or had before it was erased (D-140), `422` naming `/id`. A child
+        profile is refused `403`: it is a profile an owner manages in their household, never a
+        household's owner and payer (D-17, D-104).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true

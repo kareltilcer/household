@@ -18,11 +18,25 @@ import (
 // charged, one being paid for again is not deleted for having lapsed, an erased account's customers
 // go with it, and what billing keeps of a payer is theirs to take.
 
-// ErrBehind is Close's refusal to end a subscription that waits where the processor says it charges
-// and the household's rows do not: a payment made, or on its way, whose event has not been handled.
-// Nothing of the household's was ended. Whoever was erasing it leaves it, has the record brought up
-// to what the processor says (Refresh), and decides again from that.
+// ErrBehind is Close's refusal to end a subscription the household's rows say is not paid for where
+// the processor says it is, or is being paid: a payment made, or on its way, whose event has not
+// been handled. Nothing of the household's was ended. Whoever was erasing it leaves it, has the
+// record brought up to what the processor says (Refresh), and decides again from that.
 var ErrBehind = errors.New("billing: the processor has a payment the household's record has not")
+
+// owing reports whether s is one the rows say is not paid for: one that waits and charges nothing
+// yet, its first payment not confirmed, or the household's own with a payment the processor could
+// not collect. The rows are what the processor's events said so far, so these are the ones a payment
+// made since would change, and the ones the processor is asked of before they are ended (Close).
+func (s subscription) owing() bool {
+	switch s.standing {
+	case standingPending:
+		return !s.live()
+	case standingCurrent:
+		return !s.paidUp()
+	}
+	return false
+}
 
 // Close ends, at the processor, every subscription of household's that is not over there: the one
 // it has, one that waits, and one another took the place of that still runs to its period's end. tx
@@ -34,29 +48,49 @@ var ErrBehind = errors.New("billing: the processor has a payment the household's
 // it again. A household with a subscription and no processor configured to end it at is refused
 // (ErrUnavailable), and is not erased.
 //
-// One that waits, and that the rows say charges nothing yet, is ended only while the processor says
-// so too (Processor.Abandon), and before any other is: whoever decided the household is to be erased
-// read those rows, and a payment that went through since, or whose event is late or lost, is never
-// undone by a reading older than it. Where the processor says it charges, nothing is ended and the
-// answer is ErrBehind: a lapsed household would otherwise be erased, and the subscription just paid
-// for it ended unrefunded, where paying restores it at any point of its retention (PRD 04 §3, D-32).
+// One the rows say is not paid for (owing) is ended only while the processor says so too, and before
+// any other is: whoever decided the household is to be erased read those rows, and a payment that
+// went through since, or whose event is late or lost, is never undone by a reading older than it.
+// The household's own, which the rows say the processor could not collect, is read from the
+// processor first, and one that waits is ended only while it still waits (Processor.Abandon). Where
+// the processor says either is paid for, or one that waits charges, nothing is ended and the answer
+// is ErrBehind: a lapsed household would otherwise be erased, and the subscription just paid for it
+// ended unrefunded, where paying restores it at any point of its retention (PRD 04 §3, D-32).
 func (s *Service) Close(ctx context.Context, tx pgx.Tx, household uuid.UUID) error {
 	subs, err := readSubscriptions(ctx, tx, household)
 	if err != nil {
 		return err
 	}
-	var open []subscription
+	now := s.Now()
+	var waiting, open []subscription
 	for _, sub := range subs {
-		if sub.status == StatusCanceled || sub.status == StatusIncompleteExpired {
+		switch {
+		case sub.status == StatusCanceled || sub.status == StatusIncompleteExpired:
 			continue
-		}
-		if s.Processor == nil {
+		case s.Processor == nil:
 			return fmt.Errorf("%w: no processor to end a deleted household's subscription at", ErrUnavailable)
-		}
-		if sub.standing != standingPending || sub.live() {
-			open = append(open, sub)
+		case !sub.owing():
+			// One the rows know charges, or that another took the place of: ended with the rest, below.
+		case sub.standing == standingPending:
+			waiting = append(waiting, sub)
 			continue
+		default:
+			// The household's own, as the processor has it now: one it no longer has is over already,
+			// and one it says is over, or still could not collect, is ended with the rest.
+			said, err := s.Processor.Subscription(ctx, sub.id)
+			switch {
+			case missing(err):
+			case err != nil:
+				return err
+			default:
+				if next := sub.said(said, now); next.standing == standingCurrent && next.paidUp() {
+					return ErrBehind
+				}
+			}
 		}
+		open = append(open, sub)
+	}
+	for _, sub := range waiting {
 		gone, err := s.Processor.Abandon(ctx, sub.id)
 		switch {
 		case err != nil:
@@ -73,44 +107,63 @@ func (s *Service) Close(ctx context.Context, tx pgx.Tx, household uuid.UUID) err
 	return nil
 }
 
-// Refresh records what the processor says of household's subscription that waits, and settles the
-// household's row from it, as the event that says it does (sync): what an erasure Close refused
-// (ErrBehind) asks for, so that the household is decided again from what the processor has, a
-// payment that made it active or one on its way that it waits for (Awaited), rather than left until
-// an event that may never come. A household with none waiting is left as it is.
+// Refresh records what the processor says of household's subscription that waits, and of its own
+// where the rows say that one is not paid for, and settles the household's row from it, as the event
+// that says it does (sync): what an erasure Close refused (ErrBehind) asks for, so that the household
+// is decided again from what the processor has, a payment that made it active or one on its way that
+// it waits for (Awaited), rather than left until an event that may never come. A household with
+// neither is left as it is.
 func (s *Service) Refresh(ctx context.Context, household uuid.UUID) error {
 	scoped := s.system(ctx, household)
-	var waiting string
+	var behind []string
 	err := tenant.InTx(scoped, func(tx pgx.Tx) error {
 		subs, err := readSubscriptions(ctx, tx, household)
 		if err != nil {
 			return err
 		}
 		if sub, ok := standing(subs, standingPending); ok {
-			waiting = sub.id
+			behind = append(behind, sub.id)
+		}
+		if sub, ok := standing(subs, standingCurrent); ok && sub.owing() {
+			behind = append(behind, sub.id)
 		}
 		return nil
 	})
-	if err != nil || waiting == "" {
+	if err != nil || len(behind) == 0 {
 		return err
 	}
 	if s.Processor == nil {
-		return fmt.Errorf("%w: no processor to read a waiting subscription from", ErrUnavailable)
+		return fmt.Errorf("%w: no processor to read a subscription from", ErrUnavailable)
 	}
-	return s.sync(scoped, household, waiting)
+	for _, id := range behind {
+		if err := s.sync(scoped, household, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// Awaited reports whether household has a subscription that waits on a payment the processor has on
-// its way (D-131): one that is not the household's yet and charges there all the same, as one paid
-// for by a bank debit does for the days the debit takes. A lapsed household in that state is being
-// paid for again, which restores it at any point of its retention (PRD 04 §3, D-32), so its erasure
-// waits for what the processor says of the payment: gone through, the household is active and no
-// longer due, and failed, the subscription is ended and nothing waits any more. tx is a transaction
-// of the household's.
+// Awaited reports whether household is being paid for again, by what billing has recorded of its
+// subscriptions, where its own row may still say it is lapsed. A lapsed household in that state is
+// restored, at any point of its retention (PRD 04 §3, D-32), so its erasure waits. tx is a
+// transaction of the household's. It is so in two cases:
+//
+//   - A subscription waits on a payment the processor has on its way (D-131): one that is not the
+//     household's yet and charges there all the same, as one paid for by a bank debit does for the
+//     days the debit takes. The erasure waits for what the processor says of the payment: gone
+//     through, the household is active and no longer due, and failed, the subscription is ended and
+//     nothing waits any more.
+//   - Its own subscription is recorded as paid up. A payment is recorded in one transaction and the
+//     household's row settled from the record in the next (sync, settle), so a household read between
+//     the two, or after a settling that failed and before its event is delivered again, is lapsed
+//     by its row and paid for by its subscription. Settled, it is active and no longer due.
 func Awaited(ctx context.Context, tx pgx.Tx, household uuid.UUID) (bool, error) {
 	subs, err := readSubscriptions(ctx, tx, household)
 	if err != nil {
 		return false, err
+	}
+	if cur, ok := standing(subs, standingCurrent); ok && cur.paidUp() {
+		return true, nil
 	}
 	waiting, ok := standing(subs, standingPending)
 	return ok && waiting.live(), nil

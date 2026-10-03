@@ -219,6 +219,102 @@ func TestALapsedHouseholdPaidForIsKeptBeforeTheProcessorsWordArrives(t *testing.
 	}
 }
 
+// A lapsed household whose payment is recorded is kept though its own row does not say so yet (PRD 04
+// §3, D-32, D-140). The event of a payment records the subscription as the household's in one
+// transaction and settles the household's row from that record in the next: a household read between
+// the two, or after a settling that failed and before its event is delivered again, is lapsed by its
+// row and paid for by its subscription. The erasure reads it as paid for, and ends nothing; the event
+// delivered again makes it active.
+func TestALapsedHouseholdWhosePaymentIsRecordedIsKeptBeforeItsRowIsSettled(t *testing.T) {
+	p, stripe := paidPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi").ID
+	p.exec(`UPDATE households SET billing_state = 'read_only', lapsed_at = $2, retained_until = $3, retention_warnings = 3 WHERE id = $1`,
+		h, p.clock.now().Add(-395*24*time.Hour), p.clock.now().Add(-time.Hour))
+	subscription, _ := stripe.ConfirmPayment(jana.startPaying(h, "year").ClientSecret)
+	// The record as the event's first transaction leaves it: the subscription is the household's, paid
+	// up, and the household's row has not been settled from it.
+	p.exec(`UPDATE billing_subscriptions SET standing = 'current', status = 'active', started_at = $2 WHERE household_id = $1`, h, p.clock.now())
+
+	p.erase()
+	if p.count("SELECT count(*) FROM households WHERE id = $1", h) != 1 {
+		t.Fatal("the household was erased with its payment recorded and its row not yet settled")
+	}
+	if status, _, _ := stripe.Subscription(subscription); status != billing.StatusActive {
+		t.Fatalf("the subscription she paid for is %s at the processor", status)
+	}
+	p.told(stripe, "customer.subscription.updated", subscription)
+	if n := p.count("SELECT count(*) FROM households WHERE id = $1 AND billing_state = 'active' AND retained_until IS NULL", h); n != 1 {
+		t.Fatal("settled, the household is not active with its countdown cleared")
+	}
+	p.erase()
+	if p.count("SELECT count(*) FROM households WHERE id = $1", h) != 1 {
+		t.Fatal("the household was erased once its payment was settled")
+	}
+}
+
+// A lapsed household's own subscription, which the processor could not collect, is ended with the
+// household only while the processor still says so (PRD 04 §3, D-32, D-140). Where its payer has paid
+// what was owed and no event of it has arrived, the rows say past due and the processor says paid:
+// nothing is ended, the record is brought up to the processor's, and the household is active and no
+// longer due. One still owed is ended, and the household erased.
+func TestALapsedHouseholdsOwnSubscriptionIsEndedOnlyWhileItIsStillOwed(t *testing.T) {
+	// owed is a household whose subscription went past due, whose retention then ran out with its three
+	// warnings sent, and the invoice the processor could not collect.
+	owed := func(t *testing.T) (p *privacySite, stripe *billingtest.Stripe, h uuid.UUID, subscription, invoice string) {
+		t.Helper()
+		p, stripe = paidPrivacySite(t)
+		jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+		h = jana.create("Tilcerovi").ID
+		subscription, _ = p.paid(stripe, jana, h, "month")
+		invoice = stripe.FailPayment(subscription, false)
+		p.told(stripe, "invoice.payment_failed", invoice)
+		p.told(stripe, "customer.subscription.updated", subscription)
+		if n := p.count("SELECT count(*) FROM billing_subscriptions WHERE household_id = $1 AND standing = 'current' AND status = 'past_due'", h); n != 1 {
+			t.Fatalf("%d subscriptions of the household's are past due, want 1", n)
+		}
+		p.exec(`UPDATE households SET billing_state = 'read_only', dunning_ends_at = $2, grace_ends_at = NULL, lapsed_at = $2,
+			retained_until = $3, retention_warnings = 3 WHERE id = $1`,
+			h, p.clock.now().Add(-395*24*time.Hour), p.clock.now().Add(-time.Hour))
+		return p, stripe, h, subscription, invoice
+	}
+
+	t.Run("paid since", func(t *testing.T) {
+		p, stripe, h, subscription, invoice := owed(t)
+		// She pays what was owed, and nothing tells the server.
+		if err := stripe.Processor().Pay(t.Context(), invoice); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := p.privacy.Erase(t.Context()); !errors.Is(err, billing.ErrBehind) {
+			t.Errorf("the job's failure is %v, want the payment its record has not", err)
+		}
+		if p.count("SELECT count(*) FROM households WHERE id = $1", h) != 1 {
+			t.Fatal("the household was erased with its subscription paid for")
+		}
+		if status, _, _ := stripe.Subscription(subscription); status != billing.StatusActive {
+			t.Fatalf("the subscription she paid for is %s at the processor", status)
+		}
+		if n := p.count("SELECT count(*) FROM households WHERE id = $1 AND billing_state = 'active' AND retained_until IS NULL", h); n != 1 {
+			t.Fatal("paid for again, the household is not active with its countdown cleared")
+		}
+		p.erase()
+		if p.count("SELECT count(*) FROM households WHERE id = $1", h) != 1 {
+			t.Fatal("the household was erased once its payment was recorded")
+		}
+	})
+
+	t.Run("still owed", func(t *testing.T) {
+		p, stripe, h, subscription, _ := owed(t)
+		p.erase()
+		if rows := p.rowsOf(h); len(rows) != 0 {
+			t.Fatalf("its retention run out and its subscription still owed, the household keeps %v", rows)
+		}
+		if status, _, _ := stripe.Subscription(subscription); status != billing.StatusCanceled {
+			t.Errorf("the subscription of the erased household is %s at the processor", status)
+		}
+	})
+}
+
 // A deletion its owner scheduled waits for no payment (FR-PR6), and ends none the record has no word
 // of either: where the processor says a subscription that waited is paid for, the erasure leaves the
 // household for its next run, records what the processor says, and then ends the subscription the

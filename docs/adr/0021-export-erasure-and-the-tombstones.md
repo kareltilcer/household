@@ -78,12 +78,14 @@ transaction that erases it, once the row's lock is held and its being due is con
 the rows that name the subscriptions go: a processor that cannot be asked leaves the household as it
 was, for the next night, and one asked that then fails to commit has lapsed a household that was due
 to go. They end at once, with no final invoice and nothing refunded for the days not used (D-140).
-One that waits and that the rows say charges nothing yet is ended only while the processor says so
-too (`Processor.Abandon`), before any other is: the rows are what the events said so far, and a
-payment the processor has taken whose event is late or lost must not be undone, and a lapsed
-household erased, by a reading older than it. Where the processor says such a subscription charges,
-nothing is ended, the erasure fails (`billing.ErrBehind`), what the processor says is recorded as
-its event would have (`billing.Service.Refresh`), and the job's next run decides from that.
+One the rows say is not paid for is ended only while the processor says so too, before any other
+is: the rows are what the events said so far, and a payment the processor has taken whose event is
+late or lost must not be undone, and a lapsed household erased, by a reading older than it. That is
+one that waits and that the rows say charges nothing yet, ended only while it still waits
+(`Processor.Abandon`), and the household's own that the rows say could not be collected, read from
+the processor before it is ended. Where the processor says such a subscription charges, or is paid
+for, nothing is ended, the erasure fails (`billing.ErrBehind`), what the processor says is recorded
+as its event would have (`billing.Service.Refresh`), and the job's next run decides from that.
 `billing.Service.Forget` deletes the account's customers at the processor before the
 transaction that leaves the tombstone deletes their rows; the processor ends whatever subscription a
 customer still has with it, and keeps the invoices it issued as its own record (PRD 05 §1). Whether a
@@ -95,8 +97,12 @@ billing over with a bank debit is before it clears. The same wait keeps a
 lapsed household from being erased by its clock (`billing.Awaited`, D-140): resuming restores a
 household at any point of its retention, a bank debit takes days to clear, and the job reads the
 household as not due, at its search and again under the row's lock, until the processor has said
-how the payment went. An export carries `billing.json`, its requester's own subscriptions and
-invoices and nobody else's (FR-BI5).
+how the payment went. So does a payment already recorded: billing records what the processor says
+in one transaction and settles the household's row from the record in the next, so a household
+whose own subscription the rows say is paid up is read as paid for, whatever its row still says,
+until that settling, or the event delivered again after one that failed, has made it `active`. An
+export carries `billing.json`, its requester's own subscriptions and invoices and nobody else's
+(FR-BI5).
 
 **An account is erased table by table, last.** In each household the account is in, each module
 first deletes what the member kept privately, the notifications sent to them go, and `forget_actor`
@@ -125,7 +131,10 @@ id of what was erased, the day and the cause, and whether its objects are gone. 
 and the objects under `h/{household_id}/` or `u/{user_id}/` are removed after, by the tombstone, as
 the run that erased them ends: one pass removes every erasure's objects and counts them. The nightly
 job removes them again for three days, since an upload in flight when its household was erased put
-its bytes after the first pass, and the files sweep lists only households that exist.
+its bytes after the first pass, and the files sweep lists only households that exist. The prefix is
+the household's id, which a client chooses when it makes one, so an erased household's id is refused
+to a new one, as an id another household has is (`postHouseholds`, `422` naming `/id`): a household
+made under it would keep its files where the job goes on removing them.
 
 **The deletions are columns and rows a job finds.** A household's is four columns of its own row,
 written through the spine as its settings are, so that its members' replicas learn of it and its log
@@ -186,7 +195,8 @@ that moment would be one it had not seen.
 - `billing.Processor` gains `DeleteCustomer`, and billing `Close`, `Forget` and `Export`: what
   [ADR 0020](0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md) left to this item;
   and `Awaited`, which the erasure of a lapsed household waits on, with `Refresh`, which records
-  what the processor says of a subscription that waits when `Close` refused to end it. What the
+  what the processor says of a subscription the rows said was not paid for, one that waits or the
+  household's own, when `Close` refused to end it. What the
   processor says later of a subscription whose household is gone is about nothing, as billing
   already takes it (`errGone`).
 - Item 21 reads `diagnostic_bundles` (`getPlatformDiagnosticsByBundleId`), and may record erasures in

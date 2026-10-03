@@ -232,7 +232,7 @@ type createRequest struct {
 	settingsFields
 }
 
-// errIDTaken is the create's answer for an id another household has.
+// errIDTaken is the create's answer for an id another household has, or had before it was erased.
 var errIDTaken = invalid("/id", problem.FieldInvalid)
 
 // createHousehold creates a household (FR-HH1): any user, verified or not, may, and becomes its
@@ -336,6 +336,12 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 
 // insertHousehold writes the household req names, with its creator as its payer, and returns it. An
 // id another household has is refused; a code another household has is drawn again.
+//
+// So is the id of a household that was erased (FR-PR6, D-140): what erasure leaves of one is its id
+// (erasures), by which the nightly job removes the objects under its prefix, h/{id}/, again for the
+// nights after, and a household made under that id would keep its files under the same prefix and
+// lose them to it. The tombstone is read once the row is written: an erasure commits it in the
+// transaction that frees the id, so whatever let the insert through has left it to be read.
 func insertHousehold(ctx context.Context, tx pgx.Tx, req createRequest, payer uuid.UUID, units string, firstDay int) (settings, error) {
 	for range codeTries {
 		h, err := scanSettings(tx.QueryRow(ctx, `
@@ -345,8 +351,18 @@ func insertHousehold(ctx context.Context, tx pgx.Tx, req createRequest, payer uu
 			ON CONFLICT DO NOTHING
 			RETURNING `+settingsColumns,
 			req.ID, *req.Name, *req.Country, *req.Timezone, *req.BaseCurrency, *req.Locale, units, firstDay, newJoinCode(), payer))
+		if err == nil {
+			var erased bool
+			if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM erasures WHERE kind = 'household' AND id = $1)", req.ID).Scan(&erased); err != nil {
+				return settings{}, err
+			}
+			if erased {
+				return settings{}, errIDTaken
+			}
+			return h, nil
+		}
 		if !errors.Is(err, pgx.ErrNoRows) {
-			return h, err
+			return settings{}, err
 		}
 		var taken bool
 		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM households WHERE id = $1)", req.ID).Scan(&taken); err != nil {

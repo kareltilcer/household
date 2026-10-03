@@ -44,7 +44,7 @@ type Erased struct {
 //
 //   - the households whose deletion an owner scheduled 30 days ago, and the lapsed ones whose
 //     retention ran out with their three warnings sent, but for one being paid for again, its
-//     payment on its way at the processor (due);
+//     payment on its way at the processor or recorded and its row not yet settled from it (due);
 //   - the accounts whose deletion was scheduled 30 days ago, each with the households that go with
 //     it, and the child profiles of every household erased, which are nothing outside it;
 //   - the private data of the members who left a household 30 days ago;
@@ -87,7 +87,7 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 			done.Households++
 		}
 		if ctx.Err() != nil {
-			return done, ctx.Err()
+			return done, errors.Join(failed, ctx.Err())
 		}
 	}
 
@@ -119,7 +119,7 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 				done.Accounts++
 			}
 			if ctx.Err() != nil {
-				return done, ctx.Err()
+				return done, errors.Join(failed, ctx.Err())
 			}
 		}
 	}
@@ -145,7 +145,7 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 			done.Departures++
 		}
 		if ctx.Err() != nil {
-			return done, ctx.Err()
+			return done, errors.Join(failed, ctx.Err())
 		}
 	}
 	// The purge jobs a private root's files left run now, not at the workers' next poll.
@@ -165,16 +165,18 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 // deletion scheduled and come due, with the account that deletion follows when it follows one, or its
 // retention run out with its three warnings sent (D-119).
 //
-// A lapsed household whose payer is paying for it again, the processor having the payment on its
-// way, is not due while it is (billing.Awaited): resuming restores a household at any point of its
-// retention (PRD 04 §3, D-32), a bank debit takes days to say how it went (D-131), and the household
-// is lapsed still until it has. Erased meanwhile, it would be gone for a payer who paid in time. The
-// processor's word ends the wait either way: the household is active, or the subscription is over
-// and the household due again. A deletion its owner scheduled waits for no payment.
+// A lapsed household whose payer is paying for it again is not due while billing's record says so
+// (billing.Awaited): resuming restores a household at any point of its retention (PRD 04 §3, D-32).
+// The processor may have the payment on its way, a bank debit taking days to say how it went
+// (D-131), with the household lapsed still until it has; or the payment is recorded and the
+// household's own row not settled from it yet, which is a transaction of its own. Erased meanwhile,
+// it would be gone for a payer who paid in time. The processor's word ends the wait either way: the
+// household is active, or the subscription is over and the household due again. A deletion its owner
+// scheduled waits for no payment.
 //
 // It reads the rows, which say what the processor's events said so far. A payment those have no word
-// of yet is the processor's own to say, asked as the subscription that waits would be ended: it is
-// then left, and the household with it (billing.ErrBehind, eraseHousehold).
+// of yet is the processor's own to say, asked before a subscription the rows say is not paid for is
+// ended: it is then left, and the household with it (billing.ErrBehind, eraseHousehold).
 func due(ctx context.Context, tx pgx.Tx, household uuid.UUID, now time.Time) (string, *uuid.UUID, error) {
 	var (
 		scheduled, retained *time.Time
@@ -297,9 +299,9 @@ func eraseMember(ctx context.Context, tx pgx.Tx, reg *module.Registry, household
 // searches by, so that the run that erased their household erases them too; and the archives of its
 // exports are removed with it. It reports whether it erased it.
 //
-// A household with a subscription that waits, which the processor says is paid for or being paid
-// where the rows do not, is not erased: the record is brought up to the processor's, and the failure
-// returned is billing.ErrBehind, for the job to run again.
+// A household with a subscription the processor says is paid for, or being paid, where the rows do
+// not, one that waits or its own, is not erased: the record is brought up to the processor's, and
+// the failure returned is billing.ErrBehind, for the job to run again.
 func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause string, now time.Time,
 	still func(context.Context, pgx.Tx) (bool, error),
 ) (bool, error) {
@@ -372,7 +374,10 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 		// have, and the failure reported, so that the job runs again and decides from the record as
 		// it then is: a lapsed household paid for is active and no longer due, one whose payment is on
 		// its way waits for it (due), and a deletion that waits for no payment ends a subscription the
-		// rows know charges.
+		// rows know charges. The household is named here: the job's own line names what it was
+		// erasing, which for a household that goes with an account is the account.
+		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "privacy: a household is not erased on a record older than a payment for it",
+			slog.String(logging.KeyHouseholdID, household.String()), slog.String("cause", cause))
 		return false, errors.Join(err, s.cfg.Billing.Refresh(ctx, household))
 	}
 	if err != nil || !erased {
@@ -614,7 +619,7 @@ func (s *Service) purge(ctx context.Context, now time.Time) (int, error) {
 			failed = errors.Join(failed, err)
 		}
 		if ctx.Err() != nil {
-			return removed, ctx.Err()
+			return removed, errors.Join(failed, ctx.Err())
 		}
 	}
 	return removed, failed

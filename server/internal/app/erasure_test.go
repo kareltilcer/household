@@ -865,6 +865,18 @@ func TestAHouseholdsDeletionErasesEveryRowOfIt(t *testing.T) {
 	if p.erase(); len(p.objects("h/"+h.ID.String()+"/")) != 0 {
 		t.Error("bytes put after the erasure were kept")
 	}
+
+	// Its id is no household's again: one made under it would keep its files under the prefix the job
+	// goes on emptying, and lose them the night after.
+	errs := fieldErrorsOf(t, jana.post("/households", jsonBody(t, map[string]any{
+		"id": h.ID, "name": "Tilcerovi", "country": "CZ", "timezone": "Europe/Prague", "base_currency": "CZK", "locale": "cs",
+	})))
+	if len(errs) != 1 || errs[0].Field != "/id" {
+		t.Fatalf("a household made under the erased one's id answered %+v", errs)
+	}
+	if p.count("SELECT count(*) FROM households WHERE id = $1", h.ID) != 0 {
+		t.Error("a household was made under an erased one's id")
+	}
 }
 
 // A household's deletion is scheduled five times a day (PRD 02 §9, D-138): each scheduling emails

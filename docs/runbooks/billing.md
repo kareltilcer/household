@@ -137,11 +137,17 @@ customers there with their rows.
    is being paid for again: `billing_subscriptions` has a row of its with `standing = 'pending'` and a
    `status` that charges, a bank debit on its way (above). It is `active` once `invoice.paid`
    arrives, and erased the night after the debit failed. One that stays so for weeks is one whose
-   `invoice.paid` or `invoice.voided` never arrived: resend it.
+   `invoice.paid` or `invoice.voided` never arrived: resend it. Or it is paid for already: a row
+   with `standing = 'current'` and the `status` `active` or `trialing`, in a household that still
+   reads lapsed, is a payment recorded whose event failed before the household's own row was
+   settled from it (`billing: a webhook failed`). Stripe delivers that event again, which settles
+   it; if it has given up, resend any event of the subscription.
 6. `privacy: an erasure failed` with `billing: the processor has a payment the household's record
    has not` means Stripe says a subscription is paid for, or being paid, that the server had
-   recorded as still waiting to be confirmed: its events are late or were never delivered. Nothing
-   was ended or erased. The job has recorded what Stripe says by the time it logs this, and tries
+   recorded as still waiting to be confirmed, or as its household's own and past due: its events
+   are late or were never delivered. Nothing was ended or erased. The line before it,
+   `privacy: a household is not erased on a record older than a payment for it`, names the
+   household. The job has recorded what Stripe says by the time it logs this, and tries
    again fifteen minutes later: a lapsed household that was paid for is `active` by then and no
    longer due, and one whose owner scheduled its deletion is erased, its subscription ended. Seen
    more than once a night, look at the webhook endpoint's deliveries in Stripe's dashboard: events

@@ -94,7 +94,10 @@ emailed to every owner a month, a week and a day before it (**D-119**). A househ
 again when that day comes, its payment still on its way at the processor as a bank debit's is for
 days (D-131), is not deleted while it is: the payment gone through, it is `active`, and failed, it
 is deleted that night (**D-140**). Nor is one whose payment the processor already has and the server
-has no word of yet: the processor is asked before a subscription that waits is ended.
+has no word of yet: the processor is asked before a subscription the server's record says is not
+paid for is ended, one that waits to be confirmed or the household's own that could not be
+collected. Nor is one whose payment the server has recorded and whose own state has not caught up
+with that record yet.
 
 **FR-BI1 — `read_only` is enforced in one place.** The tenant middleware resolves the
 entitlement state and, in a non-writing state, refuses every unsafe method with `402 Payment
