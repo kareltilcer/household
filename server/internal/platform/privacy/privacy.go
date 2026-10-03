@@ -196,14 +196,14 @@ type source struct {
 	erase  func(ctx context.Context, tx pgx.Tx, e module.Erasure) error
 }
 
-// sources are the modules that export and erase, the platform's own first: every one implements
-// both (D-6, architecture test 3), and one that somehow does not is asked for nothing.
-func (s *Service) sources() []source {
+// sources are the modules of reg that export and erase, the platform's own first: every one
+// implements both (D-6, architecture test 3), and one that somehow does not is asked for nothing.
+func sources(reg *module.Registry) []source {
 	var out []source
-	for _, p := range s.cfg.Registry.Platform() {
+	for _, p := range reg.Platform() {
 		out = append(out, source{name: p.Name, export: p.Export, erase: p.Erase})
 	}
-	for _, m := range s.cfg.Registry.All() {
+	for _, m := range reg.All() {
 		src := source{name: m.Name()}
 		if e, ok := m.(module.ExportSource); ok {
 			src.export = e.Export

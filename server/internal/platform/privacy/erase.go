@@ -54,7 +54,8 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 	now := s.cfg.Now()
 	note := func(what string, id uuid.UUID, err error) {
 		if err != nil {
-			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "privacy: erase "+what, slog.String("id", id.String()), slog.Any("error", err))
+			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "privacy: an erasure failed", slog.String("of", what), slog.String("id", id.String()),
+				slog.Any("error", err))
 			failed = errors.Join(failed, err)
 		}
 	}
@@ -214,6 +215,38 @@ func (s *Service) eraseDue(ctx context.Context, household uuid.UUID, now time.Ti
 	})
 }
 
+// EraseRows deletes every row of household, in tx, a transaction of its own that may write: each
+// module of reg is asked to erase what it keeps (module.EraseSource), and then the household's own
+// row goes, which every tenant table hangs from, directly or through a table that does, so that the
+// cascade takes the rest. A tenant table the cascade did not reach would keep a deleted household's
+// rows for good, where no member could ever read them again: a test holds every one to it, over
+// the isolation fixture, which has a row in each (internal/arch).
+func EraseRows(ctx context.Context, tx pgx.Tx, reg *module.Registry, household uuid.UUID) error {
+	for _, src := range sources(reg) {
+		if src.erase == nil {
+			continue
+		}
+		if err := src.erase(ctx, tx, module.Erasure{Household: household}); err != nil {
+			return fmt.Errorf("privacy: erase %s: %w", src.name, err)
+		}
+	}
+	_, err := tx.Exec(ctx, "DELETE FROM households WHERE id = $1", household)
+	return err
+}
+
+// eraseMember asks each module of reg to delete what member kept privately in household, in tx.
+func eraseMember(ctx context.Context, tx pgx.Tx, reg *module.Registry, household, member uuid.UUID) error {
+	for _, src := range sources(reg) {
+		if src.erase == nil {
+			continue
+		}
+		if err := src.erase(ctx, tx, module.Erasure{Household: household, Member: member}); err != nil {
+			return fmt.Errorf("privacy: erase %s: %w", src.name, err)
+		}
+	}
+	return nil
+}
+
 // eraseHousehold erases household for cause (FR-PR6): in one transaction of its own, every module's
 // Erase, then the household's row, which every tenant table hangs from, so that its settings,
 // members, grants, invitations, modules' rows, files' rows, notifications, audit log and the rest go
@@ -270,15 +303,7 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 		if archives, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
 			return err
 		}
-		for _, src := range s.sources() {
-			if src.erase == nil {
-				continue
-			}
-			if err := src.erase(scoped, tx, module.Erasure{Household: household}); err != nil {
-				return fmt.Errorf("privacy: erase %s: %w", src.name, err)
-			}
-		}
-		if _, err := tx.Exec(ctx, "DELETE FROM households WHERE id = $1", household); err != nil {
+		if err := EraseRows(scoped, tx, s.cfg.Registry, household); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `
@@ -395,13 +420,8 @@ func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Tim
 func (s *Service) forget(ctx context.Context, household, user uuid.UUID) error {
 	scoped := s.system(ctx, household)
 	err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error {
-		for _, src := range s.sources() {
-			if src.erase == nil {
-				continue
-			}
-			if err := src.erase(scoped, tx, module.Erasure{Household: household, Member: user}); err != nil {
-				return fmt.Errorf("privacy: erase %s: %w", src.name, err)
-			}
+		if err := eraseMember(scoped, tx, s.cfg.Registry, household, user); err != nil {
+			return err
 		}
 		if err := notify.EraseMember(ctx, tx, household, user); err != nil {
 			return err
@@ -441,13 +461,8 @@ func (s *Service) eraseDeparture(ctx context.Context, household, user uuid.UUID,
 			_, err := tx.Exec(ctx, "DELETE FROM departures WHERE household_id = $1 AND user_id = $2", household, user)
 			return err
 		}
-		for _, src := range s.sources() {
-			if src.erase == nil {
-				continue
-			}
-			if err := src.erase(scoped, tx, module.Erasure{Household: household, Member: user}); err != nil {
-				return fmt.Errorf("privacy: erase %s: %w", src.name, err)
-			}
+		if err := eraseMember(scoped, tx, s.cfg.Registry, household, user); err != nil {
+			return err
 		}
 		_, err = tx.Exec(ctx, "UPDATE departures SET erased_at = $3 WHERE household_id = $1 AND user_id = $2", household, user, now)
 		erased = err == nil

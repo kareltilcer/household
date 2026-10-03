@@ -279,8 +279,10 @@ func TestListAndDeleteKeepToAPrefix(t *testing.T) {
 func TestUploadWritesABodyOfAnyLengthInParts(t *testing.T) {
 	s := testsupport.ObjectStore(t)
 	long := make([]byte, objectstore.PartSize+1024)
+	var b byte
 	for i := range long {
-		long[i] = byte(i * 31)
+		b += 31
+		long[i] = b
 	}
 	for name, body := range map[string][]byte{"short": []byte("an archive"), "long": long, "empty": {}} {
 		key := "u/a/exports/b/" + name

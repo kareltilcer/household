@@ -138,7 +138,10 @@ token's lifetime is how long a revoked device can still receive new rows: **five
 
 **FR-ID8 — Account deletion.** Self-service, from the app. See
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §4 for what happens to households
-the user owns.
+the user owns. It is asked for with the account's password, or, by an account that signs in only
+with a provider, with its own address typed out; a child profile is removed by an owner and deletes
+nothing itself (D-104). From then on the account signs nobody in, each attempt failing as a wrong
+password does (FR-ID3), and the link its email carries cancels the deletion (D-130).
 
 ## 3. Households and membership
 
@@ -187,7 +190,7 @@ leave without doing something first, and both refusals name the action that unbl
 
 | Who | Refusal | What unblocks it |
 |---|---|---|
-| The **last owner** | `409`, `last_owner` | Promote another member to `owner`, or delete the household |
+| The **last owner**, an owner whose account is scheduled for deletion counting as none (D-131) | `409`, `last_owner` | Promote another member to `owner`, or delete the household |
 | The **billing payer** | `409`, `billing_payer` | Hand billing to another owner (FR-HH6), or cancel the subscription |
 
 The payer rule is the same one account deletion applies
@@ -428,7 +431,9 @@ outside it; both credentials are the sync service's own, and neither platform ro
 member hits a problem and taps *"send diagnostics"*; the client assembles a bundle scoped to the
 screen they were on, shows them **exactly what it contains, rendered, before it is sent**, lets
 them redact fields, and attaches it to their ticket. It expires in 30 days. The member is the
-one who decided to share, and they saw what they shared. **D-20.**
+one who decided to share, and they saw what they shared. **D-20.** The server keeps the bundle as
+it was sent and reads none of it, 256 KiB at most, about a household its sender belongs to or
+about none (D-136).
 
 **FR-PS2 — Every staff action is doubly logged.** Once in the platform audit log (append-only,
 separate schema, retained 7 years) and once, where it touches a household, in that household's
@@ -448,6 +453,7 @@ to the household as *"Household support extended your trial"*.
 | Verification email resend, per account | 1 / min and 5 / hour |
 | Verification email resend, per IP | 20 / hour |
 | Invitation send, per household | 20 / day |
+| Export requests, per user, their own and each household's apart | 5 / day; while one waits or runs, asking again answers it (D-133) |
 | Second-step codes, per account | 5 wrong / 5 min, the first code that turns it on included; the tenth wrong since the last right one locks the authenticator (FR-ID5) |
 | Sign-in begun with Google or Apple, per IP | 60 / hour |
 | Child PIN attempts | 10 wrong since the last right one, then owner unlock; a child's failed sign-ins count against the network as a password's do |

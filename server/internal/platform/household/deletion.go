@@ -470,6 +470,7 @@ func (s *Service) Depart(ctx context.Context, catalog *module.Registry, househol
 	if err != nil || fate.Erase {
 		return fate, err
 	}
+	defer s.Notify.Nudge(ctx, household)
 	_, err = mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
 		payer, err := lockHousehold(ctx, tx, household)
 		if err != nil {

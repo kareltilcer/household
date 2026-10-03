@@ -404,7 +404,7 @@ func (s *Service) householdsOf(ctx context.Context, user uuid.UUID) ([]taken, er
 func (s *Service) household(ctx context.Context, a *archive, prefix string, id, user uuid.UUID, scope module.ExportScope, locale i18n.Locale,
 ) (ManifestHousehold, error) {
 	out := ManifestHousehold{ID: id, Path: strings.TrimSuffix(prefix, "/"), Scope: scope, Modules: []string{}}
-	sources := s.sources()
+	sources := sources(s.cfg.Registry)
 	platform := map[string]bool{}
 	for _, p := range s.cfg.Registry.Platform() {
 		platform[p.Name] = true

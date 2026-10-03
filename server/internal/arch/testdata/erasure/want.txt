@@ -1,0 +1,2 @@
+# What the erasure test must report with violations.sql loaded.
+public.erasure_orphans keeps 1 of household A's rows once the household is erased; its rows must go with their household's, by a foreign key that cascades from it, or be erased by their module

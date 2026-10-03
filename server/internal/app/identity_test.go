@@ -31,6 +31,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/password"
+	"github.com/kareltilcer/household/server/internal/platform/privacy"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/session"
@@ -72,8 +73,9 @@ type site struct {
 	// pushes are the pushes the site sent, and notifier the transport that sent them and its email.
 	pushes   *apptest.Pushes
 	notifier *notify.Service
-	// households is the household surface the site serves.
+	// households is the household surface the site serves, and privacy its export and erasure.
 	households *household.Service
+	privacy    *privacy.Service
 	clock      *clock
 	// domain, peer and other are this test's own: its addresses end in the first, its browsers come
 	// from the second, and the third is another network, for a limit one network has used up.
@@ -104,19 +106,23 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 		Pool: pool, Meter: d.Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 16, Accounts: accounts,
 		Households: households,
 		Notify:     notifier,
-		Privacy:    apptest.Privacy(t, pool, log, accounts, households, notifier, nil, o),
 		Sync:       apptest.Sync(t, log, o),
 		Storage:    &storage.Picture{Log: log},
 	}
 	for _, option := range options {
 		option(&deps)
 	}
+	// Over the modules the options gave the router, which a test's own export and erasure go through.
+	if deps.Privacy == nil {
+		deps.Privacy = apptest.Privacy(t, pool, log, accounts, households, notifier, deps.Modules, o)
+	}
 	r, err := app.NewRouter(deps)
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := sites.Add(1)
-	return &site{t: t, router: r, admin: d.Pool(t, ""), outbox: outbox, pushes: pushes, notifier: notifier, households: deps.Households, clock: clk,
+	return &site{t: t, router: r, admin: d.Pool(t, ""), outbox: outbox, pushes: pushes, notifier: notifier, households: deps.Households,
+		privacy: deps.Privacy, clock: clk,
 		domain: fmt.Sprintf("site%d.test", n), peer: fmt.Sprintf("198.51.%d.%d:4000", n/256, n%256),
 		other: fmt.Sprintf("198.18.%d.%d:5000", n/256, n%256)}
 }

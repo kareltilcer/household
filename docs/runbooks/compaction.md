@@ -16,7 +16,7 @@ when `powersync-compact` logs that the compaction failed.
 |---|---|
 | The command | `node /app/service/lib/entry.js compact` in the PowerSync image, with the service's own configuration (`POWERSYNC_CONFIG_PATH`). It reads only bucket storage and writes only there |
 | The schedule | `deploy/powersync/compact.sh`, at `HOUSEHOLD_COMPACT_AT` (04:00 UTC by default), every night |
-| Why then | After the API's nightly jobs: the expiry sweep at 03:00 UTC and the erasure job item 20 schedules before compaction, so that a row erased leaves bucket storage the night it leaves the database |
+| Why then | After the API's nightly jobs: the erasure job at 02:30 UTC, whose last retry starts at 03:15, and the expiry sweep at 03:00 UTC, so that a row erased leaves bucket storage the night it leaves the database. A `HOUSEHOLD_COMPACT_AT` moved earlier than 03:30 UTC runs before an erasure that was retried, whose rows then wait in bucket storage for the next night |
 | Development | The `powersync-compact` service in `docker-compose.yml`, under the `sync` profile (`pnpm run up:sync` starts PowerSync; `docker compose --profile sync up -d powersync-compact` its compaction) |
 | Staging and production | Items 30 and 88 run the same script beside their PowerSync, with the same image and configuration |
 

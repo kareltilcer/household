@@ -78,6 +78,19 @@ containing:
 Every module implements `ExportSource` or it does not ship
 ([01-architecture.md](01-architecture.md) §4).
 
+**An export is its requester's (D-133).** `manifest.json` names every other entry with its length
+and its SHA-256, the archive's own schema version and the API's, so that whoever holds the archive
+can check it is whole. A household's export holds every shared row, its requester's own private
+items and a child profile's ([02](02-identity-and-access.md) FR-CH3), and never another adult's,
+which is why nobody else lists it or is handed its link, an owner included. A member's own export
+holds `account.json`, what the account keeps outside any household, and under
+`households/{household_id}/` each household's part: what they made and what they keep privately,
+from the modules they can see, and the events they caused. A household they left gives what they
+kept privately there while §5's window lasts, and a `suspended` household gives nothing
+([04](04-billing-and-entitlements.md) §3). A user asks for five exports of a kind in a day; while
+one waits or runs, asking again answers it; one that fails three times has failed, with nothing
+partial kept; and its row is kept 30 days after it ended, for the list to say what became of it.
+
 ## 4. Account deletion
 
 **FR-PR3 — Deleting an account is available in-app on iOS, Android and web**, as both stores
@@ -92,6 +105,13 @@ The flow resolves each of the user's households first, and states plainly what w
 | Non-sole owner, or a member | The membership ends. Household content the user created **stays** — it is the household's record, not the individual's — with authorship shown as a former member. Their **private root** is deleted |
 | Billing payer | Must transfer billing or cancel first |
 
+**D-131** settles what the table leaves open. An owner whose own account is scheduled for deletion
+counts as no owner, so that nobody leaves a household to an owner who is leaving it too. The payer
+blocks while the household goes on without them, and while one that goes with the account still
+charges. A household chosen for deletion is scheduled then, with the account's, and its members are
+told; cancelling the account's deletion cancels it, and nothing else does. The request is refused
+with every blocking household at once, never one at a time.
+
 **FR-PR4 — Deletion is a 30-day soft window then irreversible.** The account is disabled
 immediately, sessions and tokens are revoked (under D-93 a sync token already issued runs until it
 expires, as [02](02-identity-and-access.md) FR-ID7 says), and the user is emailed a cancellation
@@ -100,6 +120,16 @@ object-store prefix deletion, and replacement of the identity row with a tombsto
 the id and the deletion timestamp. **Authorship references become an opaque id with a translated
 label** ("Former member") — dangling foreign keys and rewritten history are both worse than a
 tombstone.
+
+The account signs nobody in during the 30 days, whatever proved who was asking, and each attempt
+fails as a wrong password does ([02](02-identity-and-access.md) FR-ID3). **The link cancels it,
+signed out (D-130)**: its token is the email's and the answer's to the request that scheduled the
+deletion, and nothing else brings the account back. At execution each household is resolved again
+as it then stands (D-131): where the account is by then the only owner, of a household it did not
+choose to delete, the adult who has been a member longest becomes its owner, and a household left
+with nobody who could own it goes with the account. **What the household recorded of the person in
+its own events stays (D-135)**: who did a thing loses their name, and *Removed Petr* keeps Petr's,
+as a note that names him does.
 
 **FR-PR5 — Backups are excluded from the 30-day guarantee and the policy says so.** Encrypted
 backups are retained 35 days and are not selectively editable. Deleted data ages out of backups
@@ -111,10 +141,23 @@ within that window and backups are never restored selectively into production.
 affects every member, and notifies all members immediately. Same 30-day window, same irreversible
 execution.
 
+**The household works as it did for the 30 days (D-132)**: the window is its members' time to take
+what is theirs, each by their own export. Every member is emailed when it is scheduled and when it
+is cancelled, whatever they muted, and the members other than the one who did it are sent a push;
+the household's row says when it goes, and any owner cancels. Its erasure deletes every row of it,
+by deleting its own, which every tenant table hangs from, and every object under its prefix; its
+child profiles, which are nothing outside it, are erased with it (D-134).
+
 **FR-PR7 — When a member leaves or is removed**, their **private root** in Notes and Documents is
 deleted after a 30-day window in which they can export it. An owner may hard-delete a departed
 member's private items sooner to reclaim storage — the one asymmetry `home` v9 established,
 carried over — and doing so is logged in the household's own activity log where everyone sees it.
+
+The window is the platform's: it starts in the transaction that ends the membership, and the nightly
+job asks each module to delete what the member kept privately once it has passed. A member who is
+back in the household by then keeps what they had. A child profile removed from its household is an
+account nobody can sign in to: it is erased when the same 30 days have passed (D-134). The owner's
+hard-delete lands with the first module that has a private root (plan item 43).
 
 ## 6. The no-content-access guarantee
 
@@ -197,6 +240,10 @@ Beyond [02](02-identity-and-access.md) §6:
 | Crash reports with stack traces | Any user-entered text in a crash report, which is scrubbed before send |
 | Performance timings | Precise location, advertising id, device fingerprint |
 | Aggregate counts per household | Anything at all from a child profile |
+
+Consent is the account's, kept beside it, off until its user turns it on, and given by saying so:
+setting the consents replaces both, so one a request leaves out is withdrawn (D-136). A child profile
+is asked nothing and consents to nothing (§7).
 
 Consent is asked once, plainly, with a genuine decline that is as easy as accept, and it is
 withdrawable in settings. **The product works identically either way** — no feature is degraded

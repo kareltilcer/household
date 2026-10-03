@@ -193,6 +193,17 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   one instance leads; a job registers in `app.newScheduler` with its cadence, and a retention is a row
   of `internal/platform/expiry` and of PRD 03 §5's table
   ([ADR 0016](docs/adr/0016-scheduler-and-notification-transports.md)).
+- **Export and erasure** are the platform's (`internal/platform/privacy`), and every module's part
+  of them is mandatory (D-6, architecture test 3): `module.ExportSource` writes its part of an
+  archive for the scope its requester takes, a household's, a member's own or a former member's
+  private items, and `module.EraseSource` deletes one member's private data, both in a transaction
+  the platform hands it. A household is erased by deleting its own row, which every tenant table
+  hangs from: a new tenant table references `households (id) ON DELETE CASCADE`, directly or through
+  a table that does, and the erasure test over the isolation fixture fails one that does not.
+  Erasure is no entity's history and records no audit event; it goes through `tenant.InWriteTx` and
+  `tenant.AccountTx`, and leaves a tombstone, a `users` row emptied or a row of `erasures`
+  ([ADR 0020](docs/adr/0020-export-erasure-and-the-tombstones.md)). The nightly erasure job runs at
+  02:30 UTC, before PowerSync's compaction.
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`

@@ -1,0 +1,141 @@
+# 0020 — An export is its requester's archive, built by a worker and streamed to the store; erasure deletes a household by its row, an account table by table, and leaves a tombstone
+
+- **Status:** Accepted
+- **Date:** 2026-10-03
+- **Plan item:** 20
+- **Decides for:** [PRD 05](../prd/05-privacy-and-compliance.md) §3–5, §9; [02](../prd/02-identity-and-access.md)
+  FR-ID8, FR-PS1; [01](../prd/01-architecture.md) §2.4, §4; [03](../prd/03-platform-strands.md) §5; D-6, D-35,
+  D-93, D-130–D-136; [ADR 0005](0005-tenancy-registry-and-row-level-security.md),
+  [ADR 0006](0006-sync-ready-schema-and-the-mutation-spine.md) and
+  [ADR 0015](0015-files-object-storage-the-meter-and-pictures.md)'s consequences for item 20
+
+## Context
+
+Every module has declared `ExportSource` and `EraseSource` since item 3 (D-6), and none did anything:
+the interfaces took a household and a writer, and no caller existed. Item 20 is the caller, and these
+questions came with it:
+
+1. **What a module is handed.** A module may open no write transaction and make no scope of its own
+   (architecture test 4), so it can neither read a household for an export nor delete in one unless
+   the platform hands it the transaction. And an export is not one document: FR-PR2 wants structured
+   JSON, the original files in the module's own folders, and readable derivatives.
+2. **Whose an export is.** FR-HA15 makes a household's export an owner's, and D-19 keeps an adult's
+   private items from every other member, owners included.
+3. **How large an archive is.** A household at its storage ceiling keeps 205 GB (PRD 04 §4); the
+   store's `PutOnce` takes a body whose length is known.
+4. **How a household's rows are found to delete.** The request role may neither update nor delete
+   the audit log (FR-AU5), and no module's list of its own tables is checked by anything.
+5. **What erasure writes through.** Every write is a mutation the spine records, and the spine's
+   record is an audit event in the household that is being deleted.
+6. **The order of the rows and the objects**, which share no transaction.
+7. **How a disabled account comes back**, when FR-PR4 revokes everything that would authenticate the
+   contract's `DELETE /me/deletion`.
+
+## Decision
+
+**A module exports and erases in a transaction the platform opens.** `ExportSource.Export(ctx, tx, e,
+a)` is called in a read-only transaction of the household, with no caller, and is told by `e` whose
+export it is and how much of the household it takes: `household`, an owner's, everything its requester
+may read; `personal`, a member's, what they made and what they keep privately; `departed`, a former
+member's private items alone. It writes through `module.Archive`: its JSON once, any derivative by
+name, and files by the entity they belong to, which the platform copies from the store after the
+transaction has ended, so that no transaction is held for the hour a household's files may take.
+`EraseSource.Erase(ctx, tx, e)` is called in a transaction that may write, the platform's own, for one
+member's private data, or for a household, where a module deletes only what the cascade from the
+household's row does not reach. The platform's own module, admin, names its two functions on
+`module.PlatformModule`, and architecture test 3 holds it to them as it holds a module.
+
+**An export is a row of its requester's, global, and a job (D-133).** `exports` is keyed by its user
+and names a household or none; it is listed and linked to that user alone. A worker in every instance
+claims the export that waited longest by moving it past a six-hour lease, builds it, and settles it
+under the claim it took, so that a try whose lease another took writes nothing. The archive is a ZIP
+written to a pipe and sent to the store as it is built, in 32 MiB parts (`objectstore.Store.Upload`),
+at a key under the requester's own prefix that names the try, `u/{user_id}/exports/{id}/{claim}`: no
+archive is ever on a disk, and one part of it is in memory. `manifest.json` is its last entry and names
+every other with its length and its SHA-256. The platform writes the activity log, rendered in the
+requester's language and redacted by the one rule every reader of the log applies
+(`audit.Redacted`). An archive's link is pre-signed per read of the job, as every link is (D-9); the
+email that says it is ready links to the list.
+
+**A household is erased by deleting its row (D-134).** `privacy.EraseRows` asks each module, then
+deletes the household's row, as the request role in the household's context: every tenant table
+references `households (id) ON DELETE CASCADE`, directly or through a table that does, and referential
+actions run past row-level security and the request role's privileges, so the audit log, which that
+role may not delete from, goes too. `internal/arch`'s erasure test runs it over the isolation fixture,
+which holds a row of household A in every tenant table, and fails any table that still holds one, or
+that lost one of household B's.
+
+**An account is erased table by table, last.** For each household the account is in, the household
+surface says what becomes of it (`household.Service.Depart`, D-131): it goes with the account and is
+erased as above, or it goes on, the membership ended by a mutation of the system's through the spine,
+with the owner who succeeds, where one must, made by a mutation before it. In a household that goes
+on, each module then deletes what the member kept privately, the notifications sent to them go, and
+`forget_actor` takes their name off the events they caused, a `SECURITY DEFINER` function that makes
+that one change of a log the request role otherwise only appends to (D-135). The account's own tables
+go in one transaction at the end, which empties the `users` row and sets `deleted_at`: a failure
+before it leaves the deletion scheduled, and the next night goes over the households again, each step
+a no-op where it was done.
+
+**Erasure records no audit event, and leaves a tombstone.** It writes through `tenant.InWriteTx` and
+`tenant.AccountTx`, the platform's own paths, as the expiry sweep's deletions do. `erasures` keeps the
+id of what was erased, the day and the cause, and whether its objects are gone. The rows commit first
+and the objects under `h/{household_id}/` or `u/{user_id}/` are removed after; the nightly job removes
+them again for three days, since an upload in flight when its household was erased put its bytes after
+the first pass, and the files sweep lists only households that exist.
+
+**The deletions are columns and rows a job finds.** A household's is four columns of its own row,
+written through the spine as its settings are, so that its members' replicas learn of it and its log
+records who scheduled it; the meter role reads `deletion_scheduled_at` to find the households due, as
+it reads the entitlement's clocks. An account's is a row of `account_deletions`, whose existence
+disables the account: identity's admission reads it under a lock on the user's row, which scheduling
+takes first, so that no sign-in commits beside it. `departures` records each member who left, with the
+day their private data goes, and stays while the household does, as the way an account's erasure finds
+the households it was once in.
+
+**The job runs nightly at 02:30 UTC**, between the sweeps at 02:00 and the expiry sweep at 03:00,
+ninety minutes before PowerSync's compaction, which then drops the erased rows from bucket storage
+(D-93).
+
+**The account comes back by its link (D-130).** `POST /auth/deletion/cancel` is public and takes the
+token the email carried; `DELETE /me/deletion` is removed from the contract.
+
+## Alternatives rejected
+
+- **A module's own transaction for export and erase**, the interfaces as item 3 left them. A module
+  would need `tenant.Assume` and `tenant.InWriteTx`, which test 4 keeps from it for the reason it
+  exists: a scope a module made itself reads and writes whichever household it names.
+- **One list of deletes per module for a household's erasure.** A table left out of a list is rows of a
+  household that no longer exists, readable by nobody and deletable by nothing. The cascade is the
+  schema's own statement of what belongs to a household, and it was already there.
+- **Erasure through the mutation spine.** The spine commits only what it records, and what it records
+  is an event in the log being deleted. A final event in a platform log is item 21's, whose schema is
+  not built; the tombstone says as much as that event would.
+- **Spooling an archive to a file before storing it**, as an upload is spooled. An upload is capped at
+  100 MB; an archive is as large as the household.
+- **Exports as tenant rows under the household's prefix.** A member's own export has no household, and
+  the files sweep removes whatever under a household's prefix no `files` row records.
+- **A column grant on `audit_events.actor_label`** in place of `forget_actor`. It would let any
+  statement of the request role rewrite any actor's label to anything; the function clears one actor's,
+  in the household of the transaction's context.
+- **Deleting the objects before the rows.** A failure between the two would leave a household whose
+  files' rows name bytes that are gone, for its members to meet until the next night.
+
+## Consequences
+
+- A module's server PR implements both interfaces for real: `Export` for the three scopes, and
+  `Erase` for a member's private data. A module with no private root erases nothing of a member's.
+- A new tenant table references its household with `ON DELETE CASCADE`, or its module erases it; the
+  erasure test fails the PR otherwise. The isolation fixture's row for the table is what proves it.
+- Item 19 cancels a household's subscription when its deletion executes, and moves a subscription's
+  state so that an account's deletion sees whether it still charges (`household.Standing.Paying`).
+- Item 21 reads `diagnostic_bundles` (`getPlatformDiagnosticsByBundleId`), and may record erasures in
+  the platform audit log.
+- Items 25 and 29 build A-20 over `postMeDeletion`, and item 25 the page the email's link opens,
+  `account/deletion/cancel`; item 27 builds A-34, A-35 and C-56 over the exports, the consents and the
+  household's deletion, and reads `deletion_scheduled_at` from the household's replicated row.
+- Item 43 adds the owner's hard-delete of a departed member's private items before their window ends
+  (FR-PR7), with the first private root it applies to.
+- A multipart upload a process died in the middle of leaves parts the store keeps until its own
+  lifecycle rule aborts them; items 30 and 88 set that rule on the bucket.
+- The erasure's deletes replicate to PowerSync row by row; a large household's erasure is a large
+  transaction in the replication slot, which item 90 measures.

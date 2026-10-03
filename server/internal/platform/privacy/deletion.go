@@ -25,11 +25,11 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
-// The email of a scheduled deletion, and the web client's route its link opens, which cancels it.
-const (
-	emailAccountDeletion mail.Template = "email.account_deletion"
-	routeCancelDeletion                = "account/deletion/cancel"
-)
+// emailAccountDeletion is the email of a scheduled deletion, and routeCancelDeletion the web client's
+// route its link opens, which cancels it.
+const emailAccountDeletion mail.Template = "email.account_deletion"
+
+const routeCancelDeletion = "account/deletion/cancel"
 
 // Why an account's deletion was scheduled.
 const (

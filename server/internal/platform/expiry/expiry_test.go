@@ -86,7 +86,8 @@ func hash(id uuid.UUID) []byte {
 
 // The expiry sweep deletes what its retentions say and nothing a retention still keeps: ended
 // sessions, Idempotency-Keys a week old, used refresh tokens a month old, device sign-ins revoked a
-// month ago with their tokens, expired trusts, and throttles that count nothing any more.
+// month ago with their tokens, expired trusts, diagnostic bundles a month old, and throttles that
+// count nothing any more; and it asks for the export archives past their week to be removed.
 func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 	w := newWorld(t)
 	u := w.user()
@@ -125,6 +126,11 @@ func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 	w.exec(`INSERT INTO mfa_trusts (id, user_id, token_hash, created_at, expires_at) VALUES
 	          ($1, $3, $4, now() - interval '31 days', now() - interval '1 day'), ($2, $3, $5, now() - interval '1 day', now() + interval '29 days')`,
 		expiredTrust, liveTrust, u, hash(expiredTrust), hash(liveTrust))
+	// A diagnostic bundle is kept 30 days from when its member sent it (FR-PS1).
+	oldBundle, youngBundle := idgen.New(), idgen.New()
+	w.exec(`INSERT INTO diagnostic_bundles (id, user_id, screen, payload, created_at, expires_at) VALUES
+	          ($1, $3, 'sync-health', '{}', now() - interval '31 days', now() - interval '1 day'),
+	          ($2, $3, 'sync-health', '{}', now() - interval '29 days', now() + interval '1 day')`, oldBundle, youngBundle, u)
 	// A throttle's row is kept a day after its window and its block end (D-113).
 	throttles := map[string]string{
 		"counting":  "now() + interval '1 minute', NULL",
@@ -162,6 +168,13 @@ func TestTheNightlySweepKeepsWhatIsStillWithinItsRetention(t *testing.T) {
 	}
 	if got := w.left("SELECT EXISTS (SELECT FROM mfa_trusts WHERE id = $1)", expiredTrust, liveTrust); got[expiredTrust] || !got[liveTrust] {
 		t.Errorf("trusts: %v", got)
+	}
+	if got := w.left("SELECT EXISTS (SELECT FROM diagnostic_bundles WHERE id = $1)", oldBundle, youngBundle); got[oldBundle] || !got[youngBundle] {
+		t.Errorf("diagnostic bundles: %v", got)
+	}
+	// The exports' archives are objects, which the sweep hands to whoever keeps them.
+	if w.expired != 1 {
+		t.Errorf("the exports were expired %d times", w.expired)
 	}
 	for name, want := range map[string]bool{"counting": true, "blocked": true, "unblocked": true, "quiet": true, "done": false, "forgotten": false} {
 		var found bool
