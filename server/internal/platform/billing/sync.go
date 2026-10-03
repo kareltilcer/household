@@ -427,8 +427,30 @@ func (s *Service) invoiceChanged(ctx context.Context, event Event) error {
 // alone, which the household's state shows its owners from then on; the retries after it, at one,
 // three, five and seven days, are each emailed. An invoice for nothing, which a subscription that
 // begins by waiting out another's period is issued, is not kept.
+//
+// An invoice of a subscription no row records, one whose request ended between the processor's
+// answer and its record and whose own event has not been handled yet, is not dropped for arriving
+// first: its subscription is taken up as its own event would have it (sync), and the invoice is
+// recorded once it is the household's.
 func (s *Service) syncInvoice(ctx context.Context, household uuid.UUID, id string) error {
-	told := false
+	unrecorded, err := s.recordInvoice(ctx, household, id)
+	if err != nil || unrecorded == "" {
+		return err
+	}
+	if err := s.sync(ctx, household, unrecorded); err != nil {
+		return err
+	}
+	_, err = s.recordInvoice(ctx, household, id)
+	return err
+}
+
+// recordInvoice is syncInvoice's one reading of the invoice id, recorded under the household's lock.
+// It returns the invoice's subscription when no row records it, and so nothing was recorded.
+func (s *Service) recordInvoice(ctx context.Context, household uuid.UUID, id string) (string, error) {
+	var (
+		told       bool
+		unrecorded string
+	)
 	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
 		if err := lock(ctx, tx, household); err != nil {
 			return err
@@ -448,6 +470,7 @@ func (s *Service) syncInvoice(ctx context.Context, household uuid.UUID, id strin
 			WHERE household_id = $1 AND (stripe_subscription_id = $2 OR ($2 = '' AND stripe_customer_id = $3))
 			ORDER BY (stripe_subscription_id = $2) DESC, created_at DESC LIMIT 1`, household, inv.Subscription, inv.Customer).Scan(&payer)
 		if errors.Is(err, pgx.ErrNoRows) {
+			unrecorded = inv.Subscription
 			return nil
 		}
 		if err != nil {
@@ -504,12 +527,15 @@ func (s *Service) syncInvoice(ctx context.Context, household uuid.UUID, id strin
 		return s.Notify.Queue(ctx, tx, ns...)
 	})
 	if errors.Is(err, errGone) {
-		return nil
+		return "", nil
 	}
-	if err == nil && told {
+	if err != nil {
+		return "", err
+	}
+	if told {
 		s.Notify.Nudge(ctx, household)
 	}
-	return err
+	return unrecorded, nil
 }
 
 // linesOf is lines as the row keeps them: an array, never null.
@@ -588,7 +614,12 @@ func (s *Service) methodConfirmed(ctx context.Context, intent SetupIntent) error
 // The household is paid up by a subscription that is active, and by one that itself waits out a
 // period another paid for, a take-over's whose period has not begun: its trial ends where that
 // period does, and so does the trial of the one that takes over from it, so that billing handed on
-// twice within one paid period charges nobody for days already paid for (D-131).
+// twice within one paid period charges nobody for days already paid for (D-131). So is it by one
+// that is past due over an invoice that bills no base fee, a yearly plan's month of storage: the
+// period itself is paid for, the new subscription waits for its end as for any other's, and the old
+// one is ended at once with that invoice voided (retire), so that what it could not collect is tried
+// against nobody. Only a period the processor could not collect, a renewal's, has the new one
+// charged at once.
 //
 // What the household is paid up for is the processor's to say, as it stands under the lock, and is
 // recorded as sync records it: the row is what the last event to arrive said, and a renewal or a
@@ -673,8 +704,19 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 			Monthly: cur.interval == Year, PaymentMethod: intent.PaymentMethod, AutomaticTax: s.AutomaticTax,
 			IdempotencyID: "takeover:" + intent.ID,
 		}
-		// Paid up: the new one waits for the period's end. Past due, or about to renew, it starts now.
-		if cur.paidUp() && cur.periodEnd != nil && cur.periodEnd.After(now.Add(time.Hour)) {
+		// Paid up: the new one waits for the period's end. Its period uncollected, or about to renew, it
+		// starts now. Past due says only that the processor could not collect the subscription's latest
+		// invoice: one that bills no base fee, a yearly plan's month of storage (D-128), leaves the
+		// period itself paid for, and a new payer charged at once would pay for its days again.
+		paid := cur.paidUp()
+		if cur.status == StatusPastDue && held.LatestInvoice != "" {
+			owed, err := s.Processor.Invoice(ctx, held.LatestInvoice)
+			if err != nil {
+				return err
+			}
+			paid = !owed.BillsBase()
+		}
+		if paid && cur.periodEnd != nil && cur.periodEnd.After(now.Add(time.Hour)) {
 			n.TrialEnd = *cur.periodEnd
 		}
 		sub, _, err := s.Processor.Subscribe(ctx, n)

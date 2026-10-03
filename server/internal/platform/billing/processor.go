@@ -242,6 +242,18 @@ type Invoice struct {
 	NextAttempt time.Time
 }
 
+// BillsBase reports whether the invoice bills a period's base fee, as a subscription's first invoice
+// and each renewal's do. One that bills only what rides beside it, a month's storage or an
+// adjustment, leaves the period it was issued in paid for whether or not it is collected.
+func (i Invoice) BillsBase() bool {
+	for _, l := range i.Lines {
+		if l.Kind == LineBase {
+			return true
+		}
+	}
+	return false
+}
+
 // Event is what a webhook says happened: its type, the object it is about, and the household that
 // object's metadata names, the zero UUID when it names none.
 type Event struct {

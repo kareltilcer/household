@@ -2037,9 +2037,9 @@ paths:
         processor, and **billing moves once the processor says it was confirmed**: until then the
         payer goes on paying, and a card that is not accepted changes nothing. Their own
         subscription then starts when the period the household is already paid up for ends, so
-        that nothing lapses in between and nobody pays for it twice; where a payment is being
-        retried, it starts at once. Where the household has no subscription there is no card to
-        supply yet: `confirmation` is null, and they are the payer at once.
+        that nothing lapses in between and nobody pays for it twice; where the period's own payment
+        is being retried, it starts at once. Where the household has no subscription there is no
+        card to supply yet: `confirmation` is null, and they are the payer at once.
 
         Only an owner whose address is verified takes billing over. With no offer open to the caller
         it answers `404`. No `Idempotency-Key` is kept, since the answer may carry a secret.

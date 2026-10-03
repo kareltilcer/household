@@ -45,7 +45,9 @@ it still waits, asked as it is ended (`Processor.Abandon`): having nothing left 
 what a payment that has just gone through looks like, and a payment is never undone by a reading
 older than it. For the same reason a subscription Stripe holds for a household that no row records,
 its request having ended between Stripe's answer and its record, is the household's once it charges,
-whatever waits there, and is ended as a second one waiting only while it waits itself.
+whatever waits there, and is ended as a second one waiting only while it waits itself. An invoice of
+such a subscription whose event is handled before the subscription's own has it taken up first, and
+is then recorded, rather than dropped for arriving first.
 
 **A webhook says what to look at; the handler reads it from Stripe** (D-132). `POST
 /webhooks/stripe` verifies the signature and takes from the event only its type, its object's id and
@@ -88,7 +90,11 @@ last event to arrive said, and a renewal or a collection whose event is still on
 otherwise charge the new payer at once for a period the old one has just paid for. Paid up is a
 subscription that is active, and one that is itself on such a trial: billing handed on twice inside
 one paid period gives the third payer's subscription the same end to wait for, and the second's is
-cancelled before it ever charges. Recording it puts it in the old
+cancelled before it ever charges. So is one that is past due over an invoice that bills no base fee:
+a yearly plan's month of storage, invoiced between its renewals, puts the subscription past due when
+it cannot be collected, while the year itself is paid for, and a new payer charged at once would pay
+for its days again; what could not be collected is read from Stripe then too, and only a period
+Stripe could not collect, a renewal's, is charged at once. Recording it puts it in the old
 one's place; the old one is cancelled at Stripe at its period's end, or at once with its open invoice
 voided; and settling moves `billing_payer_id`, as an `admin.household.payer` event, drops the offer
 and emails the former payer. A card Stripe declines at that charge leaves their subscription waiting

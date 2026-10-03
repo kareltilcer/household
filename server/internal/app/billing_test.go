@@ -113,7 +113,8 @@ func (b *browser) subscription(h uuid.UUID) subscriptionDoc {
 	return doc
 }
 
-// state is household h's entitlement state as b's household read says it, with its storage.
+// entitlement is household h's entitlement as b's household read says it: its state, and its storage,
+// the blocks in effect and what they bring its allowance to.
 func (b *browser) entitlement(h uuid.UUID) (state string, blocks int, included int64) {
 	b.s.t.Helper()
 	rec := b.get(householdPath(h, ""))
@@ -182,7 +183,7 @@ func (s *site) subjects(address string) []string {
 	return out
 }
 
-// has reports whether any of subjects contains part.
+// has is how many of subjects contain part.
 func has(subjects []string, part string) int {
 	n := 0
 	for _, s := range subjects {
@@ -571,6 +572,73 @@ func TestCancellingAndResuming(t *testing.T) {
 	s.paid(stripe, jana, h.ID, "month")
 	if n := s.count("SELECT count(*) FROM households WHERE id = $1 AND lapsed_at IS NULL AND retained_until IS NULL", h.ID); n != 1 {
 		t.Fatal("the countdown was not cleared")
+	}
+}
+
+// The payer moves the subscription between paying yearly and monthly (PRD 04 §6): Stripe is asked for
+// the plan's other price, prorating, a monthly plan's storage rides its renewal and a yearly plan's is
+// invoiced each month (D-128), and the interval it has already asks Stripe nothing. Another owner may
+// not, and a household with no subscription has none to change.
+func TestChangingTheInterval(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	eva, _ := s.joined(jana, h.ID, "Eva", s.a("eva@example"), "owner", nil)
+	change := func(b *browser, interval string) *httptest.ResponseRecorder {
+		return b.patch(billingPath(h.ID, "/subscription"), `{"interval":"`+interval+`"}`, nil)
+	}
+	expect(t, change(jana, "month"), http.StatusConflict, problem.CodeNotSubscribed)
+	subscription, _ := s.paid(stripe, jana, h.ID, "year")
+	expect(t, change(eva, "month"), http.StatusForbidden, problem.CodeForbidden)
+	expect(t, change(jana, "week"), http.StatusUnprocessableEntity, problem.CodeValidationFailed)
+
+	// The interval it has: answered as it stands, and Stripe is asked nothing.
+	stripe.Requests()
+	var sub subscriptionDoc
+	rec := change(jana, "year")
+	expect(t, rec, http.StatusOK, "")
+	decode(t, rec, &sub)
+	if sub.Interval == nil || *sub.Interval != "year" || len(stripe.Requests()) != 0 {
+		t.Fatalf("asked for the interval it has: %+v", sub)
+	}
+
+	// To monthly: the plan's monthly price, prorated, and storage with the renewal.
+	rec = change(jana, "month")
+	expect(t, rec, http.StatusOK, "")
+	decode(t, rec, &sub)
+	if sub.State != "active" || sub.Interval == nil || *sub.Interval != "month" || sub.BasePrice == nil ||
+		*sub.BasePrice != (moneyDoc{AmountMinor: 599, Currency: "EUR"}) {
+		t.Fatalf("changed to monthly: %+v", sub)
+	}
+	asked := false
+	for _, r := range stripe.Requests() {
+		if r.Method != http.MethodPost || r.Path != "/v1/subscriptions/"+subscription || r.Form.Get("items[0][price]") == "" {
+			continue
+		}
+		asked = true
+		if r.Form.Get("items[0][price]") != billingtest.Prices()[billing.Fallback].Month.ID || r.Form.Get("proration_behavior") != "create_prorations" {
+			t.Fatalf("what Stripe was asked: %v", r.Form)
+		}
+	}
+	if !asked {
+		t.Fatal("Stripe was not asked for the monthly price")
+	}
+	if _, _, pending := stripe.Subscription(subscription); pending != "" {
+		t.Fatalf("the monthly plan's storage is invoiced each %q, want with its renewal", pending)
+	}
+
+	// And back to yearly, whose storage is invoiced each month.
+	rec = change(jana, "year")
+	expect(t, rec, http.StatusOK, "")
+	decode(t, rec, &sub)
+	if sub.Interval == nil || *sub.Interval != "year" || sub.BasePrice == nil || *sub.BasePrice != (moneyDoc{AmountMinor: 5988, Currency: "EUR"}) {
+		t.Fatalf("changed back to yearly: %+v", sub)
+	}
+	if _, _, pending := stripe.Subscription(subscription); pending != "month" {
+		t.Fatalf("the yearly plan's storage is invoiced each %q, want each month", pending)
+	}
+	if n := len(stripe.Subscriptions()); n != 1 {
+		t.Fatalf("%d subscriptions at Stripe, want the one whose price changed", n)
 	}
 }
 
@@ -1073,6 +1141,63 @@ func TestATakeOversWaitingSubscriptionPaidSinceIsKept(t *testing.T) {
 	}
 }
 
+// A yearly plan that is past due over a month's storage alone is paid for until its year ends
+// (D-128, D-131): the owner who takes billing over then waits for that end, as with any period
+// already paid for, rather than being charged a year at once for days the former payer has paid for,
+// and the subscription that could not collect its storage is ended with that invoice voided.
+func TestTakingOverAYearlyPlanPastDueOverItsStorage(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	eva, evaID := s.joined(jana, h.ID, "Eva", s.a("eva@example"), "owner", nil)
+	old, _ := s.paid(stripe, jana, h.ID, "year")
+
+	// Last month averaged 18 GB: two blocks, invoiced alone before the year's renewal, which fail.
+	this, _ := storage.Month(s.clock.now())
+	last := this.AddDate(0, -1, 0)
+	if _, err := s.admin.Exec(t.Context(), "UPDATE billing_subscriptions SET started_at = $2 WHERE household_id = $1", h.ID, last); err != nil {
+		t.Fatal(err)
+	}
+	s.usage(h.ID, last, 0, repeat(18*storage.GB, int(this.Sub(last)/(24*time.Hour)))...)
+	if billed, err := s.billing.BillStorage(t.Context()); err != nil || billed != 1 {
+		t.Fatalf("the month's storage: %d lines billed (%v)", billed, err)
+	}
+	invoice := stripe.FailItems(old)
+	s.told(stripe, "customer.subscription.updated", old)
+	paidUntil := jana.subscription(h.ID).CurrentPeriodEnd
+	if state, _, _ := jana.entitlement(h.ID); state != "past_due" || paidUntil == nil {
+		t.Fatalf("after the storage could not be collected the household is %s, paid until %v", state, paidUntil)
+	}
+
+	offers(t, jana, h.ID, evaID)
+	answer := accepts(t, eva, h.ID)
+	if answer.Confirmation == nil {
+		t.Fatal("no card to confirm")
+	}
+	stripe.Requests()
+	s.told(stripe, "setup_intent.succeeded", stripe.ConfirmSetup(answer.Confirmation.ClientSecret))
+	trial := "none made"
+	for _, r := range stripe.Requests() {
+		if r.Method == http.MethodPost && r.Path == "/v1/subscriptions" {
+			trial = r.Form.Get("trial_end")
+		}
+	}
+	if trial != strconv.FormatInt(paidUntil.Unix(), 10) {
+		t.Fatalf("the new subscription's first charge falls due at %q, want the end of the year already paid for, %d", trial, paidUntil.Unix())
+	}
+	ids := stripe.Subscriptions()
+	if status, _, pending := stripe.Subscription(ids[len(ids)-1]); len(ids) != 2 || status != "trialing" || pending != "month" {
+		t.Fatalf("subscriptions at Stripe: %v, the new one %s with its storage invoiced each %q", ids, status, pending)
+	}
+	if status, _, _ := stripe.Subscription(old); status != "canceled" || stripe.InvoiceStatus(invoice) != "void" {
+		t.Fatalf("the subscription that could not collect its storage: %s, its invoice %s", status, stripe.InvoiceStatus(invoice))
+	}
+	if sub := eva.subscription(h.ID); sub.State != "active" || sub.Payer.UserID != evaID || sub.Transfer != nil ||
+		sub.CurrentPeriodEnd == nil || !sub.CurrentPeriodEnd.Equal(*paidUntil) {
+		t.Fatalf("after the take-over: %+v", sub)
+	}
+}
+
 // An offer's email that waits for the mail server goes with the offer: once billing has moved,
 // nothing offers it again when the mail server takes mail again.
 func TestAnOffersWaitingEmailGoesOnceBillingMoves(t *testing.T) {
@@ -1220,6 +1345,53 @@ func TestAnUnrecordedSubscriptionThatChargesIsTakenUp(t *testing.T) {
 		t.Fatalf("the one that waited is %s, want left to expire", status)
 	}
 	expect(t, jana.post(billingPath(h.ID, "/subscription"), `{"interval":"year"}`), http.StatusConflict, problem.CodeAlreadySubscribed)
+}
+
+// An invoice whose event is handled before that of its subscription, one no row records yet, is not
+// dropped for arriving first: the subscription is taken up as its own event would have it, and the
+// invoice is kept and emailed to its payer, once, whatever arrives after.
+func TestAnInvoiceHandledBeforeItsUnrecordedSubscriptionIsKept(t *testing.T) {
+	s, stripe := billingSite(t)
+	address := s.a("jana@example")
+	jana := s.person("Jana", address)
+	h := jana.create("Tilcerovi")
+	janaID := jana.me().ID
+
+	p := stripe.Processor()
+	customer, err := p.CreateCustomer(t.Context(), billing.NewCustomer{User: janaID, Email: address, Name: "Jana"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	charged, _, err := p.Subscribe(t.Context(), billing.NewSubscription{
+		Customer: customer, Price: billingtest.Prices()[billing.Fallback].Month.ID, Household: h.ID, Payer: janaID, PaymentMethod: "pm_confirmed",
+	})
+	if err != nil || charged.Status != billing.StatusActive || charged.LatestInvoice == "" {
+		t.Fatalf("a subscription charged at Stripe alone: %+v, %v", charged, err)
+	}
+	kept := func(what string) {
+		t.Helper()
+		var page struct {
+			Items []invoiceDoc `json:"items"`
+		}
+		rec := jana.get(billingPath(h.ID, "/invoices"))
+		expect(t, rec, http.StatusOK, "")
+		decode(t, rec, &page)
+		if len(page.Items) != 1 || page.Items[0].Status != "paid" || page.Items[0].Total != (moneyDoc{AmountMinor: 599, Currency: "EUR"}) {
+			t.Fatalf("%s: the payer's invoices are %+v, want the one that was paid", what, page.Items)
+		}
+		if n := has(s.subjects(address), "invoice"); n != 1 {
+			t.Fatalf("%s: %d invoice emails, want 1", what, n)
+		}
+	}
+
+	s.told(stripe, "invoice.paid", charged.LatestInvoice)
+	if sub := jana.subscription(h.ID); sub.State != "active" || sub.Interval == nil || *sub.Interval != "month" || sub.Payer.UserID != janaID {
+		t.Fatalf("once its invoice was handled: %+v", sub)
+	}
+	kept("the invoice first")
+	s.told(stripe, "customer.subscription.created", charged.ID)
+	s.told(stripe, "invoice.paid", charged.LatestInvoice)
+	kept("its subscription's event after it")
 }
 
 // A payer whose account has no name, as one a provider made may have none, is made a customer without

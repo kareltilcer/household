@@ -699,7 +699,17 @@ func (s *Stripe) EndPeriod(id string) string {
 	amount := it["price"].(object)["unit_amount"].(int64) //nolint:forcetypeassert // setPrice's.
 	inv := s.invoice(sub, amount, "open")
 	inv["billing_reason"] = "subscription_cycle"
-	total := amount
+	total := amount + s.take(inv, id)
+	inv["total"], inv["amount_due"] = total, total
+	sub["status"], sub["trial_end"] = "active", nil
+	s.paid(inv)
+	return inv["id"].(string) //nolint:forcetypeassert // An id.
+}
+
+// take puts the invoice items waiting on the subscription id on inv, as lines of their own, and
+// returns what they come to.
+func (s *Stripe) take(inv object, id string) int64 {
+	var total int64
 	for _, pending := range s.items {
 		if pending["subscription"] != id || pending["invoice"] != nil {
 			continue
@@ -715,9 +725,26 @@ func (s *Stripe) EndPeriod(id string) string {
 		s.lines[inv["id"].(string)] = append(s.lines[inv["id"].(string)], line) //nolint:forcetypeassert // An id.
 		total += pending["amount"].(int64)                                      //nolint:forcetypeassert // createItem's.
 	}
-	inv["total"], inv["amount_due"] = total, total
-	sub["status"], sub["trial_end"] = "active", nil
-	s.paid(inv)
+	return total
+}
+
+// FailItems is Stripe failing to collect the invoice of the items waiting on the subscription id
+// alone, as a yearly plan's month of storage is invoiced between its renewals
+// (pending_invoice_item_interval): the invoice is open, with those items as its lines and no base
+// fee, and the subscription past due, its period as it was. It returns the invoice's id.
+func (s *Stripe) FailItems(id string) string {
+	s.t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sub := s.subscription(id)
+	inv := s.invoice(sub, 0, "open")
+	total := s.take(inv, id)
+	if total == 0 {
+		s.t.Fatalf("billingtest: no invoice item waits on subscription %s", id)
+	}
+	inv["billing_reason"], inv["total"], inv["amount_due"] = "automatic_pending_invoice_item_invoice", total, total
+	inv["attempt_count"], inv["next_payment_attempt"] = 1, s.now().Add(24*time.Hour).Unix()
+	sub["status"] = "past_due"
 	return inv["id"].(string) //nolint:forcetypeassert // An id.
 }
 
