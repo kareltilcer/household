@@ -51,6 +51,16 @@ describe('a queued write', () => {
         metadata,
       }).fields,
     ).toEqual({ tags: ['dairy', 'cold'], meta: { aisle: 3 } })
+    // A JSON value's bare string, written as itself rather than as its JSON text, is sent as itself.
+    expect(
+      toMutation(testRegistry, {
+        op: UpdateType.PATCH,
+        table: 'items',
+        id: 'i-1',
+        opData: { meta: toStored('json', 'aisle three') },
+        metadata,
+      }).fields,
+    ).toEqual({ meta: 'aisle three' })
     expect(toStored('text[]', ['dairy'])).toBe('["dairy"]')
     expect(toStored('boolean', false)).toBe(0)
   })

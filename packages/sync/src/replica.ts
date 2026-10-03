@@ -206,6 +206,17 @@ export class Replica {
     return this.connectedNow
   }
 
+  /**
+   * Whether PowerSync has caught up, as a report needs it to have: connected, a checkpoint applied and
+   * none downloading. A replica that cannot reach PowerSync, or is still downloading itself, holds less
+   * than the server through no fault, and two reports of it a minute apart would be found divergent and
+   * told to clear it (D-125). The replica's own reports wait for it; report() does not look.
+   */
+  get caughtUp(): boolean {
+    const status = this.db.currentStatus
+    return status.connected && !status.downloading && status.hasSynced === true
+  }
+
   /** Connects to PowerSync, subscribed to the household's streams: the replica comes online. */
   async connect(): Promise<void> {
     if (this.discarded) throw new Revoked('the replica was discarded: its device was signed out')
@@ -242,11 +253,7 @@ export class Replica {
     const every = this.o.reportEveryMs ?? 15 * 60_000
     if (every > 0 && this.reporting === null) {
       this.reporting = setInterval(() => {
-        // At rest on PowerSync's side as well: connected, a checkpoint applied and none downloading. A
-        // replica that cannot reach PowerSync, or is still downloading itself, holds less than the server
-        // through no fault, and two reports of it would be found divergent and told to clear it (D-125).
-        const status = this.db.currentStatus
-        if (!status.connected || status.downloading || status.hasSynced !== true) return
+        if (!this.caughtUp) return
         void this.report().catch(() => undefined)
       }, every)
     }
@@ -550,10 +557,35 @@ export class Replica {
     await this.journal.settled(mutationId)
   }
 
-  /** Discards a mutation the member gives up: what it asked of them, and its hold if it was held. */
+  /**
+   * Discards a mutation the member gives up: what it asked of them, and its hold if it was held. A
+   * refused create's file waiting for its row goes with it, the row being one the server never held:
+   * a file is uploaded only once the replica holds its row at a version, which no write would now bring.
+   */
   async discard(mutationId: string): Promise<void> {
     await this.journal.release([mutationId])
     await this.journal.settled(mutationId)
+    if (this.attachmentQueue === null) return
+    const last = await this.db.getOptional<{
+      entity_type: string
+      entity_id: string
+      op: string
+      outcome: string
+    }>(
+      `SELECT entity_type, entity_id, op, outcome FROM ${localTables.outcomes}
+       WHERE mutation_id = ? ORDER BY position DESC LIMIT 1`,
+      [mutationId],
+    )
+    if (last === null || last.op !== 'create' || last.outcome !== 'rejected') return
+    const table = this.registry.entities[last.entity_type]?.table
+    const row =
+      table === undefined
+        ? null
+        : await this.db.getOptional<{ version: number | null }>(
+            `SELECT version FROM ${table} WHERE id = ?`,
+            [last.entity_id],
+          )
+    if (typeof row?.version !== 'number') await this.attachmentQueue.remove(last.entity_id)
   }
 
   /**
@@ -714,7 +746,8 @@ export class Replica {
    * row it holds one the server answered. It returns the server's verdict, or null when the replica is
    * not at rest or the server did not answer one (a household that does not write is refused 402,
    * its replicas keeping on). Told to download itself again, the replica does so once its queue has
-   * drained, nothing queued discarded.
+   * drained, nothing queued discarded. It does not look at PowerSync: its caller reports only once
+   * PowerSync has caught up (caughtUp), as the replica's own reports do.
    */
   async report(): Promise<ReplicaDigestVerdict | null> {
     if ((await this.queued()) > 0) return null

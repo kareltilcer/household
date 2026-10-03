@@ -67,7 +67,8 @@ export type QueuedWrite = Pick<CrudEntry, 'op' | 'table' | 'id' | 'opData' | 'me
 
 /**
  * A value of kind as a replica stores it: a boolean as 0 or 1, an array and a JSON value as their
- * JSON text, the rest as they are.
+ * JSON text, the rest as they are. A string given for an array or a JSON value is taken as its JSON
+ * text already, as a replica's own row holds it.
  */
 export function toStored(kind: Kind | undefined, value: unknown): unknown {
   if (value === null || value === undefined) return null
@@ -83,7 +84,11 @@ export function toStored(kind: Kind | undefined, value: unknown): unknown {
   }
 }
 
-/** A value of kind as a mutation sends it: the inverse of toStored. */
+/**
+ * A value of kind as a mutation sends it: the inverse of toStored. A stored string that is no JSON
+ * text, a JSON value's bare string written as itself, is sent as the string it is: a throw here would
+ * leave the write no mutation, ended unsent.
+ */
 export function toSent(kind: Kind | undefined, value: unknown): unknown {
   if (value === null || value === undefined) return null
   switch (kind) {
@@ -92,9 +97,18 @@ export function toSent(kind: Kind | undefined, value: unknown): unknown {
     case 'json':
     case 'uuid[]':
     case 'text[]':
-      return typeof value === 'string' ? (JSON.parse(value) as unknown) : value
+      return typeof value === 'string' ? fromJSON(value) : value
     default:
       return value
+  }
+}
+
+/** text's JSON value, or text itself when it is no JSON text. */
+function fromJSON(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return text
   }
 }
 

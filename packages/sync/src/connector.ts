@@ -36,6 +36,7 @@
 // earlier write is no change it had not seen. The push holds the mutations of one batch so itself.
 
 import {
+  ends,
   toMutation,
   isEntitlement,
   overridden,
@@ -333,10 +334,17 @@ export class Connector {
         madeAgainst: null,
         table: '',
       }))
-      // Released once answered, before the answers are settled: an answer that holds a mutation again
-      // holds it anew.
-      const release = (): Promise<void> =>
-        this.o.journal.release(held.map((h) => h.mutation.mutation_id))
+      // Released once the answers are settled, and only those an answer ended: settling holds anew one
+      // answered deferred again or whose entitlement still refuses it, which therefore never leaves the
+      // table. Released first, it would be held nowhere but in memory until settled, and a write that
+      // failed there (a full disk) or an app killed there would lose it.
+      const release = (answers: ReadonlyMap<string, SyncMutationResult>): Promise<void> =>
+        this.o.journal.release(
+          held.flatMap((h) => {
+            const r = answers.get(h.mutation.mutation_id)
+            return r !== undefined && ends(r) ? [h.mutation.mutation_id] : []
+          }),
+        )
       if (!(await this.send(reason, queued, release))) continue
       this.maxBatch = this.o.maxBatch
       // Every one held again (deferred at the head of its batch, or its entitlement still refused)
@@ -347,14 +355,14 @@ export class Connector {
   }
 
   /**
-   * Sends queued until every one is answered, then runs answered and settles the answers, and returns
-   * true; or returns false when the batch must be sent again smaller (a 413). It throws when the batch
-   * must be retried as it is.
+   * Sends queued until every one is answered, then settles the answers and runs done with them, and
+   * returns true; or returns false when the batch must be sent again smaller (a 413). It throws when the
+   * batch must be retried as it is.
    */
   private async send(
     source: Attempt['source'],
     queued: readonly Queued[],
-    answered: () => Promise<void>,
+    done: (answers: ReadonlyMap<string, SyncMutationResult>) => Promise<void>,
   ): Promise<boolean> {
     const all = queued.map((q) => q.mutation)
     const ids = all.map((m) => m.mutation_id)
@@ -377,8 +385,8 @@ export class Connector {
     for (;;) {
       const mutations = all.filter((m) => !flight.settled.has(m.mutation_id))
       if (mutations.length === 0) {
-        await answered()
         await this.settle(source, queued, flight)
+        await done(flight.settled)
         this.inflight.delete(source)
         return true
       }

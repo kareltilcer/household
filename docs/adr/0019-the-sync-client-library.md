@@ -125,11 +125,13 @@ then its tables, its own among them, and tells the app.
 Node's file system, the browser's IndexedDB, the app's on React Native), a row in the replica's own table,
 uploaded through the module's route once the replica holds the row at a version, after each checkpoint;
 a refusal of the file itself is kept with its code, the bytes dropped, and the server marks the row; a
-refusal for the household's state (`entitlement_*`) is not one, and the file waits.
+refusal for the household's state (`entitlement_*`) is not one, and the file waits. A refused create
+the member discards takes its waiting file with it, its row being one the server will never hold.
 
 **Three builds over one core**: `@household/sync/node`, `@household/sync/web` (wa-sqlite over IndexedDB,
-one tab one replica by default) and `@household/sync/native` (op-sqlite) each open a replica on their
-SDK, and are typechecked against their own platform's types. React Native's showed two gaps: its
+each tab connecting on its own by default, every tab on the household's one database) and
+`@household/sync/native` (op-sqlite) each open a replica on their SDK, and are typechecked against
+their own platform's types. React Native's showed two gaps: its
 Response has no body stream, and its FormData takes no Blob made from bytes, so the multipart upload is
 the Node and web builds', and React Native's app sends its file by its URI.
 
@@ -162,10 +164,22 @@ download losing nothing queued; the web build passes the same in Playwright's Ch
   mobile app installs a `crypto.getRandomValues` polyfill before it (as `@household/api` already asks),
   supplies an attachment storage and transport, and gives the replica a credential that throws
   `Revoked` when its refresh is refused. They render RowState, the inbox and `NeedsConnection` with the
-  design's words, and the withdrawn sentence by its reason.
+  design's words, and the withdrawn sentence by its reason. A replica reports itself on its own only
+  while PowerSync has caught up (`caughtUp`), and an app that calls `report()` itself, a sync-health
+  screen's "check now", waits for the same.
+- **Item 27** keeps one tab's replica of a household open at a time (a Web Lock on its database, say):
+  every tab opens the household's one database, and each tab's replica runs a connector of its own, so
+  two tabs uploading at once send the same queued writes twice under keys of their own, and one tab's
+  download or discard clears the database under the other. PowerSync's shared worker (`multiTab`)
+  shares the connection, not the connector.
 - **Each module** writes the columns its server sets as `local` and carries a state_set's key; an
-  entity it adds reaches a client only through `pnpm run gen`, which needs PostgreSQL.
-- **Item 20's diagnostic bundle** reads the replica's health and its last verdict from the library.
+  entity it adds reaches a client only through `pnpm run gen`, which needs PostgreSQL. A stream added
+  to an entity an app in the field already syncs, a redacted projection above all, is one that app
+  never subscribes to: it reports fewer of the entity's rows than the server counts, every second report
+  is divergence, and it downloads itself again for as long as it is not updated. Such a change ships
+  as an entity type of its own, or with the report first naming the streams a replica holds.
+- **Item 20's diagnostic bundle** reads the replica's health from the library and a verdict by sending
+  a report (`report()`): the library keeps no verdict of its own.
 - **Item 89** alerts on `sync.Metrics`' divergence and queue as replicas report them.
 - **What would make this worth revisiting**: a PowerSync release that signals checksum failures or a
   row's removal by cause; one that changes `ps_crud`'s layout, which the merge writes; or a client whose

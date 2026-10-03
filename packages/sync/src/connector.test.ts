@@ -471,6 +471,38 @@ describe('the connector', () => {
     ])
   })
 
+  it('keeps a replayed mutation held until its answer is settled, losing none to a write that fails', async () => {
+    const q = new Queue()
+    q.write('Rice', UpdateType.PATCH)
+    q.write('Basmati', UpdateType.PATCH)
+    const journal = new Memory()
+    const { fetch, sent } = server(
+      results([
+        ['rejected', 'validation_failed'],
+        ['deferred', 'dependency_failed'],
+      ]),
+      results([['deferred', 'dependency_failed']]),
+      results(['applied']),
+    )
+    const { c } = connector(fetch, journal)
+    // The replay is answered deferred again, and holding it anew fails, as on a full disk.
+    const hold = journal.hold.bind(journal)
+    let holds = 0
+    journal.hold = (reason, mutation) =>
+      ++holds === 2 ? Promise.reject(new Error('disk full')) : hold(reason, mutation)
+    await expect(c.upload(q)).rejects.toThrow('disk full')
+    expect(journal.holding.map((h) => [h.reason, h.mutation.mutation_id])).toEqual([
+      ['deferred', 'm-2'],
+    ])
+    // Still held: the next upload settles the answer it kept, and the one after replays it, released
+    // once its answer ends it.
+    await c.upload(q)
+    expect(journal.holding.map((h) => h.mutation.mutation_id)).toEqual(['m-2'])
+    await c.upload(q)
+    expect(sent.map((s) => s.ids)).toEqual([['m-1', 'm-2'], ['m-2'], ['m-2']])
+    expect(journal.holding).toEqual([])
+  })
+
   it('holds an entitlement rejection until the household may write again', async () => {
     const q = new Queue()
     q.write('Honey')

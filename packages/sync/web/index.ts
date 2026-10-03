@@ -14,8 +14,12 @@ export interface WebReplicaOptions extends Omit<ReplicaOptions, 'db' | 'checksum
   /** The database the replica is kept in, one for each household (D-4). */
   readonly dbFilename: string
   /**
-   * Whether tabs share one replica and one connection, through a shared worker; off by default, which
-   * gives each tab its own.
+   * Whether tabs share one connection to PowerSync, through a shared worker; off by default. Either
+   * way every tab that opens a household's replica opens its one database (dbFilename), and each
+   * tab's Replica runs its own connector, whose lock and batch in flight are its own: two tabs
+   * uploading at once send the same queued writes twice, under keys of their own, and one tab's
+   * download or discard clears the database under the other. The app keeps one tab's replica of a
+   * household open at a time (ADR 0019).
    */
   readonly multiTab?: boolean
 }

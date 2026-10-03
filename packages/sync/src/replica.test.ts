@@ -322,6 +322,44 @@ describe('a replica', () => {
     stop()
   })
 
+  it("drops a refused create's waiting file once the member discards it, and keeps one whose row the server holds", async () => {
+    const { fetch } = routes({
+      '/sync/mutations': (_url, init) => {
+        const { mutations } = JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }
+        return json(200, {
+          results: mutations.map((m) => ({
+            mutation_id: m.mutation_id,
+            outcome: 'rejected',
+            code: 'validation_failed',
+          })),
+        })
+      },
+      // The files pipeline is down: a file whose row the server holds waits.
+      '/content': () => new Response('', { status: 503 }),
+    })
+    const storage = mkdtempSync(join(tmpdir(), 'household-sync-files-'))
+    dirs.push(storage)
+    const { replica } = await open({ fetch, storage })
+    const file = {
+      data: new Uint8Array([1, 2, 3]).buffer,
+      contentType: 'image/png',
+      fileName: 'a.png',
+    }
+    const receipt = await replica.create('items', { title: 'Receipt' })
+    await replica.attach('items', receipt, file)
+    const milk = newId()
+    await arrive(replica, 'items', milk, { household_id: household, title: 'Milk', version: 1 })
+    await replica.update('items', milk, { title: 'Oat milk' })
+    await replica.attach('items', milk, file)
+    await replica.flush()
+    // The next checkpoint takes away the row the server never had.
+    await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [receipt])
+    const [waiting] = await replica.attachments().list()
+    for (const o of await replica.inbox()) await replica.discard(o.mutation_id)
+    expect((await replica.attachments().list()).map((a) => a.id)).toEqual([milk])
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(false)
+  })
+
   it('offers its conflicts and rejections until they are retried or discarded (DD-4)', async () => {
     let outcome: Record<string, unknown> = { outcome: 'rejected', code: 'validation_failed' }
     const bodies: SyncMutation[][] = []
