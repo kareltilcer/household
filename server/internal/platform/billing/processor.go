@@ -179,11 +179,44 @@ type Subscription struct {
 	CancellationReason     string
 	PaymentMethod          *PaymentMethod
 	LatestInvoice          string
+	// InvoiceStatus is the status of its latest invoice, "" in an answer that did not carry the
+	// invoice: Subscription's and Subscribe's do.
+	InvoiceStatus string
 }
 
-// Live reports whether the subscription is one a household is paid up by: active, past due while the
-// processor still tries, or waiting out a period another has paid for with a payment method to
-// charge at its end.
+// The processor's states of an invoice that billing reads of a subscription's latest.
+const (
+	InvoicePaid          = "paid"
+	InvoiceVoid          = "void"
+	InvoiceUncollectible = "uncollectible"
+)
+
+// Paid reports whether the subscription is one a household is paid up by: active with its latest
+// invoice paid, or waiting out a period another has paid for with a payment method to charge at its
+// end. The processor's own word for the subscription is not enough: one paid for by a bank debit is
+// active from the moment the debit is asked for, days before it clears, and stays active when the
+// debit fails, its invoice voided. Only the invoice says a payment went through (D-129).
+func (s Subscription) Paid() bool {
+	switch s.Status {
+	case StatusActive:
+		return s.InvoiceStatus == InvoicePaid
+	case StatusTrialing:
+		return s.PaymentMethod != nil
+	}
+	return false
+}
+
+// Failed reports whether the subscription is active on a first payment that did not go through: the
+// processor voids a failed debit's invoice, or writes it off, and leaves the subscription as it is,
+// charging nothing until its next period.
+func (s Subscription) Failed() bool {
+	return s.Status == StatusActive && (s.InvoiceStatus == InvoiceVoid || s.InvoiceStatus == InvoiceUncollectible)
+}
+
+// Live reports whether the subscription charges, or is being charged, at the processor: active,
+// past due while the processor still tries, or waiting out a period another has paid for with a
+// payment method to charge at its end. One that is live is never ended as one that merely waits,
+// since a payment may be on its way; whether it has arrived is Paid's to say.
 func (s Subscription) Live() bool {
 	switch s.Status {
 	case StatusActive, StatusPastDue:

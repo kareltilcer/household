@@ -172,7 +172,7 @@ func (s *Stripe) Subscribe(ctx context.Context, n NewSubscription) (Subscription
 }
 
 func (s *Stripe) Subscription(ctx context.Context, id string) (Subscription, error) {
-	sub, err := s.retrieve(ctx, id, "default_payment_method")
+	sub, err := s.retrieve(ctx, id, "default_payment_method", "latest_invoice")
 	if err != nil {
 		return Subscription{}, err
 	}
@@ -536,7 +536,8 @@ func subscriptionOf(sub *stripe.Subscription) Subscription {
 		out.CancellationReason = string(d.Reason)
 	}
 	if sub.LatestInvoice != nil {
-		out.LatestInvoice = sub.LatestInvoice.ID
+		// An invoice the answer did not expand is known by its id alone, and has no status here.
+		out.LatestInvoice, out.InvoiceStatus = sub.LatestInvoice.ID, string(sub.LatestInvoice.Status)
 	}
 	out.PaymentMethod = paymentMethodOf(sub.DefaultPaymentMethod)
 	return out

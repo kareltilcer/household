@@ -334,6 +334,11 @@ func (s *Stripe) createSubscription(r *http.Request, form url.Values) (any, *api
 		case s.decline:
 			sub["default_payment_method"] = s.method(method)
 			s.invoice(sub, amount, "open")["attempt_count"] = 1
+		case s.method(method)["type"] == "sepa_debit":
+			// A bank debit takes days: the subscription is active at once, its invoice open until the debit
+			// clears (ClearDebit) or fails (FailDebit).
+			sub["status"], sub["default_payment_method"] = "active", s.method(method)
+			s.invoice(sub, amount, "open")["attempt_count"] = 1
 		default:
 			sub["status"], sub["default_payment_method"] = "active", s.method(method)
 			s.invoice(sub, amount, "paid")["attempt_count"] = 1
@@ -343,7 +348,7 @@ func (s *Stripe) createSubscription(r *http.Request, form url.Values) (any, *api
 	if failed != nil {
 		return nil, failed
 	}
-	return s.render(s.subscriptions[id]), nil
+	return s.render(s.subscriptions[id], form), nil
 }
 
 // method is the payment method id, which the stand-in keeps: a card, or a SEPA Direct Debit while
@@ -363,16 +368,30 @@ func (s *Stripe) method(id string) object {
 	return m
 }
 
-// render is sub as Stripe answers it with its latest invoice expanded.
-func (s *Stripe) render(sub object) object {
+// render is sub as Stripe answers the request whose form is form: with its latest invoice and its
+// payment method as objects where the request asks for them expanded, and as their ids otherwise.
+func (s *Stripe) render(sub object, form url.Values) object {
 	out := object{}
 	for k, v := range sub {
 		out[k] = v
 	}
-	if id, ok := sub["latest_invoice"].(string); ok {
+	if id, ok := sub["latest_invoice"].(string); ok && (expands(form, "latest_invoice") || expands(form, "latest_invoice.confirmation_secret")) {
 		out["latest_invoice"] = s.invoices[id]
 	}
+	if method, ok := sub["default_payment_method"].(object); ok && !expands(form, "default_payment_method") {
+		out["default_payment_method"] = method["id"]
+	}
 	return out
+}
+
+// expands reports whether form asks for field expanded.
+func expands(form url.Values, field string) bool {
+	for key, values := range form {
+		if strings.HasPrefix(key, "expand[") && slices.Contains(values, field) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Stripe) getSubscription(r *http.Request, _ url.Values) (any, *apiError) {
@@ -389,7 +408,7 @@ func (s *Stripe) getSubscription(r *http.Request, _ url.Values) (any, *apiError)
 			s.confirm(sub)
 		}
 	}
-	return s.render(sub), nil
+	return s.render(sub, r.Form), nil
 }
 
 func (s *Stripe) updateSubscription(r *http.Request, form url.Values) (any, *apiError) {
@@ -421,7 +440,7 @@ func (s *Stripe) updateSubscription(r *http.Request, form url.Values) (any, *api
 	} else if v, ok := form["pending_invoice_item_interval"]; ok && v[0] == "" {
 		sub["pending_invoice_item_interval"] = nil
 	}
-	return s.render(sub), nil
+	return s.render(sub, form), nil
 }
 
 func (s *Stripe) cancelSubscription(r *http.Request, _ url.Values) (any, *apiError) {
@@ -431,7 +450,7 @@ func (s *Stripe) cancelSubscription(r *http.Request, _ url.Values) (any, *apiErr
 	}
 	sub["status"] = "canceled"
 	sub["cancellation_details"] = object{"reason": "cancellation_requested"}
-	return s.render(sub), nil
+	return s.render(sub, r.Form), nil
 }
 
 func (s *Stripe) createSetup(_ *http.Request, form url.Values) (any, *apiError) {
@@ -599,6 +618,52 @@ func (s *Stripe) waiting(secret string) (subscription, invoice string) {
 func (s *Stripe) confirm(sub object) {
 	sub["default_payment_method"] = s.method(s.id("pm"))
 	s.paid(s.invoices[sub["latest_invoice"].(string)]) //nolint:forcetypeassert // An id.
+}
+
+// ConfirmDebit is the customer confirming the first payment of the subscription whose secret they
+// were handed with a SEPA Direct Debit, which takes days to clear: the subscription is active at
+// once, as Stripe makes one paid for by a payment method that says late how it went, and its invoice
+// is open still, the payment on its way, until ClearDebit or FailDebit. It returns the subscription's
+// id and its invoice's.
+func (s *Stripe) ConfirmDebit(secret string) (subscription, invoice string) {
+	s.t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	subscription, invoice = s.waiting(secret)
+	card := s.iban
+	if s.iban == "" {
+		s.iban = "3000"
+	}
+	sub := s.subscriptions[subscription]
+	sub["status"], sub["default_payment_method"] = "active", s.method(s.id("pm"))
+	s.iban = card
+	s.invoices[invoice]["attempt_count"] = 1
+	return subscription, invoice
+}
+
+// ClearDebit is the bank debit the invoice id waits on going through: it is paid.
+func (s *Stripe) ClearDebit(id string) {
+	s.t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, ok := s.invoices[id]
+	if !ok || inv["status"] != "open" {
+		s.t.Fatalf("billingtest: no debit is on its way for invoice %s", id)
+	}
+	s.paid(inv)
+}
+
+// FailDebit is the bank debit the invoice id waits on failing: Stripe voids the invoice, and leaves
+// its subscription active, charging nothing until its next period.
+func (s *Stripe) FailDebit(id string) {
+	s.t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, ok := s.invoices[id]
+	if !ok || inv["status"] != "open" {
+		s.t.Fatalf("billingtest: no debit is on its way for invoice %s", id)
+	}
+	inv["status"], inv["next_payment_attempt"] = "void", nil
 }
 
 // ConfirmSetup is the customer confirming the payment method whose setup's secret they were handed:

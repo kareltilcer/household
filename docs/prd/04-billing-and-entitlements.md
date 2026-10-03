@@ -244,7 +244,9 @@ days twice (**D-131**).
 **Subscribing** is the payer's, once their address is verified
 ([02](02-identity-and-access.md) §3), in the processor's own payment form on the web: the household
 is `active` once the processor says the payment went through, and the paid period starts then, on
-trial too (**D-129**). The household's state then follows the processor's word, read from the
+trial too (**D-129**). A SEPA Direct Debit takes days to go through: until it has, the household is
+as it was and the billing screen says a payment is on its way; one that fails starts nothing, and
+the payer is emailed so. The household's state then follows the processor's word, read from the
 processor each time it sends any (**D-132**).
 
 ## 7. App-store considerations

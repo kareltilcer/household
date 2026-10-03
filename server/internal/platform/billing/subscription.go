@@ -23,6 +23,7 @@ type subscriptionDoc struct {
 	Interval          *string               `json:"interval"`
 	CurrentPeriodEnd  *time.Time            `json:"current_period_end"`
 	CancelAtPeriodEnd bool                  `json:"cancel_at_period_end"`
+	PaymentPending    bool                  `json:"payment_pending"`
 	TrialEndsAt       *time.Time            `json:"trial_ends_at"`
 	GraceEndsAt       *time.Time            `json:"grace_ends_at"`
 	DataRetainedUntil *time.Time            `json:"data_retained_until"`
@@ -106,6 +107,11 @@ func (s *Service) document(ctx context.Context, tx pgx.Tx, household, user uuid.
 		if f.pays(user) && cur.payer == user && cur.brand != nil {
 			doc.PaymentMethod = &methodDoc{Brand: *cur.brand, Last4: cur.last4, ExpMonth: cur.expMonth, ExpYear: cur.expYear}
 		}
+	}
+	// A payment on its way: a subscription that waits and already charges at the processor, as one
+	// paid for by a bank debit does for the days the debit takes to clear.
+	if waiting, ok := standing(subs, standingPending); ok && waiting.live() {
+		doc.PaymentPending = true
 	}
 	doc.Plans = []planDoc{
 		{Interval: Year, Price: money.Money{AmountMinor: plan.Year.AmountMinor, Currency: plan.Currency}},
@@ -196,7 +202,10 @@ func payer(ctx context.Context, tx pgx.Tx) (*tenant.Scope, facts, error) {
 // household's by then, and is never cancelled: it is recorded first, and the request answered 409.
 // So is one paid after that, as late as the moment it would be ended: the processor is asked to end
 // only one that still waits (Processor.Abandon), since having nothing left to confirm is what a
-// payment that has just gone through looks like too. Only a payer whose address is verified
+// payment that has just gone through looks like too. One whose payment is on its way, a bank debit
+// that takes days to clear, answers 409 too until the processor says how it went: the household is
+// as it was meanwhile, its subscription read with payment_pending, and a debit that fails ends the
+// subscription, after which the payer may subscribe again. Only a payer whose address is verified
 // subscribes (PRD 02 §3).
 func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -287,7 +296,8 @@ func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 			}
 			switch {
 			case said.Live():
-				// Paid this moment: its event is on its way, and makes it the household's.
+				// Paid this moment, or being paid by a bank debit that has not cleared: its event is on its
+				// way, and makes it the household's, or ends it should the debit fail.
 				return errSubscribed
 			case said.Status == StatusIncomplete && waiting.payer == user && waiting.interval == req.Interval &&
 				waiting.currency == plan.Currency:

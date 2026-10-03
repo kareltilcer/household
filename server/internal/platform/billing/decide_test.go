@@ -102,8 +102,10 @@ func same(a, b entitlement.Status) bool {
 }
 
 // What the processor says of a subscription moves its standing: one waiting is the household's once
-// it charges, with a payment method when it waits out another's period, and over once it expired;
-// the household's is over once it is cancelled or given up; and one that is over stays over.
+// its invoice is paid, or, when it waits out another's period, once it has a payment method, and over
+// once it expired; the household's is over once it is cancelled or given up; and one that is over
+// stays over. One the processor has active while its payment, a bank debit, is still on its way waits
+// on, as does one whose debit failed, which is then ended (D-129).
 func TestWhatTheProcessorSaysMovesASubscriptionsStanding(t *testing.T) {
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	card := &PaymentMethod{ID: "pm_1", Brand: "visa", Last4: "4242", ExpMonth: 12, ExpYear: 2030}
@@ -112,7 +114,10 @@ func TestWhatTheProcessorSaysMovesASubscriptionsStanding(t *testing.T) {
 		said     Subscription
 		want     string
 	}{
-		"waiting, paid":                          {standingPending, Subscription{Status: StatusActive, PaymentMethod: card}, standingCurrent},
+		"waiting, paid":                          {standingPending, Subscription{Status: StatusActive, PaymentMethod: card, InvoiceStatus: InvoicePaid}, standingCurrent},
+		"waiting, a debit on its way":            {standingPending, Subscription{Status: StatusActive, PaymentMethod: card, InvoiceStatus: "open"}, standingPending},
+		"waiting, a debit that failed":           {standingPending, Subscription{Status: StatusActive, PaymentMethod: card, InvoiceStatus: InvoiceVoid}, standingPending},
+		"waiting, its invoice not read":          {standingPending, Subscription{Status: StatusActive, PaymentMethod: card}, standingPending},
 		"waiting, still unpaid":                  {standingPending, Subscription{Status: StatusIncomplete}, standingPending},
 		"waiting, never paid":                    {standingPending, Subscription{Status: StatusIncompleteExpired}, standingEnded},
 		"waiting out a period, card confirmed":   {standingPending, Subscription{Status: StatusTrialing, PaymentMethod: card}, standingCurrent},
@@ -131,6 +136,22 @@ func TestWhatTheProcessorSaysMovesASubscriptionsStanding(t *testing.T) {
 		}
 		if (tc.said.PaymentMethod != nil) != (got.brand != nil && got.last4 != nil && got.expMonth != nil) {
 			t.Errorf("%s: the payment method's summary: %v", name, got.brand)
+		}
+	}
+
+	// A first payment has failed only where the subscription is active over an invoice that is void or
+	// written off: one still open is on its way, and one past due is the processor's to retry.
+	for said, want := range map[Subscription]bool{
+		{Status: StatusActive, InvoiceStatus: InvoiceVoid}:          true,
+		{Status: StatusActive, InvoiceStatus: InvoiceUncollectible}: true,
+		{Status: StatusActive, InvoiceStatus: "open"}:               false,
+		{Status: StatusActive, InvoiceStatus: InvoicePaid}:          false,
+		{Status: StatusActive}:                                      false,
+		{Status: StatusPastDue, InvoiceStatus: InvoiceVoid}:         false,
+		{Status: StatusIncomplete, InvoiceStatus: InvoiceVoid}:      false,
+	} {
+		if got := said.Failed(); got != want {
+			t.Errorf("%s over an invoice %q: failed %v, want %v", said.Status, said.InvoiceStatus, got, want)
 		}
 	}
 }

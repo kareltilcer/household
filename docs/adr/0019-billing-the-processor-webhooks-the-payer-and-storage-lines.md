@@ -44,10 +44,23 @@ that waits is ended, for another interval or for a take-over's later card, only 
 it still waits, asked as it is ended (`Processor.Abandon`): having nothing left to confirm is also
 what a payment that has just gone through looks like, and a payment is never undone by a reading
 older than it. For the same reason a subscription Stripe holds for a household that no row records,
-its request having ended between Stripe's answer and its record, is the household's once it charges,
+its request having ended between Stripe's answer and its record, is the household's once it is paid for,
 whatever waits there, and is ended as a second one waiting only while it waits itself. An invoice of
 such a subscription whose event is handled before the subscription's own has it taken up first, and
 is then recorded, rather than dropped for arriving first.
+
+**Paid is the invoice's word, not the subscription's** (D-129). For a payment method that says late
+how it went, a SEPA Direct Debit, Stripe makes the subscription `active` as the debit is asked for,
+days before it clears, and leaves it `active` when the debit fails, voiding the invoice. A
+subscription that waits is therefore the household's once it is `active` **and its latest invoice is
+`paid`** (`Subscription.Paid`), or `trialing` with a payment method; `Processor.Subscription` reads
+the invoice with it. Until then its row waits, the household is as it was, the contract's
+`Subscription.payment_pending` says a payment is on its way, and subscribing again is refused. When
+a debit clears Stripe changes nothing of the subscription and sends no event of its own, so an
+invoice's event has its subscription read again while its row waits. One `active` over an invoice
+that is `void` or `uncollectible` has failed (`Subscription.Failed`): it is cancelled at Stripe,
+where it would otherwise charge its next period for a household it was never the subscription of,
+and its payer is emailed, once, that it was not started.
 
 **A webhook says what to look at; the handler reads it from Stripe** (D-132). `POST
 /webhooks/stripe` verifies the signature and takes from the event only its type, its object's id and

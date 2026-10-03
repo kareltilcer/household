@@ -59,6 +59,7 @@ type subscriptionDoc struct {
 	Interval          *string    `json:"interval"`
 	CurrentPeriodEnd  *time.Time `json:"current_period_end"`
 	CancelAtPeriodEnd bool       `json:"cancel_at_period_end"`
+	PaymentPending    bool       `json:"payment_pending"`
 	GraceEndsAt       *time.Time `json:"grace_ends_at"`
 	DataRetainedUntil *time.Time `json:"data_retained_until"`
 	Payer             *partyDoc  `json:"payer"`
@@ -523,6 +524,144 @@ func TestAPayerPaysFromAnAccountWhoseIBANEndsInLetters(t *testing.T) {
 	if method := jana.subscription(h.ID).PaymentMethod; method == nil || method.Brand != "sepa_debit" || method.Last4 == nil || *method.Last4 != "3000" {
 		t.Fatalf("an account whose IBAN ends in digits: %+v", method)
 	}
+}
+
+// A bank debit takes days to clear, and Stripe has the subscription active from the moment the debit
+// is asked for (D-129): the household changes only once the invoice is paid. Until then it is as it
+// was, its subscription read with a payment pending, and the payer is not handed a second
+// subscription to pay. A debit that fails, which Stripe answers by voiding the invoice and leaving
+// the subscription active, ends the subscription: it is cancelled at Stripe, so that it charges no
+// later period, the payer is told once, by email, and may subscribe again.
+func TestAFirstPaymentByBankDebitCountsOnceItClears(t *testing.T) {
+	t.Run("the debit clears", func(t *testing.T) {
+		s, stripe := billingSite(t)
+		jana := s.person("Jana", s.a("jana@example"))
+		h := jana.create("Tilcerovi")
+
+		subscription, invoice := stripe.ConfirmDebit(jana.startPaying(h.ID, "year").ClientSecret)
+		for range 2 {
+			s.told(stripe, "customer.subscription.updated", subscription)
+			s.told(stripe, "invoice.finalized", invoice)
+		}
+		sub := jana.subscription(h.ID)
+		if sub.State != "trialing" || !sub.PaymentPending || sub.Interval != nil || sub.PaymentMethod != nil {
+			t.Fatalf("while the debit is on its way: %+v", sub)
+		}
+		expect(t, jana.post(billingPath(h.ID, "/subscription"), `{"interval":"month"}`), http.StatusConflict, problem.CodeAlreadySubscribed)
+		if ids := stripe.Subscriptions(); len(ids) != 1 {
+			t.Fatalf("subscriptions at Stripe: %v, want the one being paid", ids)
+		}
+		if status, _, _ := stripe.Subscription(subscription); status != "active" {
+			t.Fatalf("the subscription being paid is %s", status)
+		}
+		if n := has(s.subjects(s.a("jana@example")), "invoice"); n != 0 {
+			t.Fatalf("%d invoice emails before the debit cleared", n)
+		}
+
+		// Stripe says nothing of the subscription when the debit clears: its invoice's event is all.
+		stripe.ClearDebit(invoice)
+		for range 2 {
+			s.told(stripe, "invoice.paid", invoice)
+		}
+		sub = jana.subscription(h.ID)
+		if sub.State != "active" || sub.PaymentPending || sub.Interval == nil || *sub.Interval != "year" ||
+			sub.PaymentMethod == nil || sub.PaymentMethod.Brand != "sepa_debit" {
+			t.Fatalf("once the debit cleared: %+v", sub)
+		}
+		if n := has(s.subjects(s.a("jana@example")), "invoice"); n != 1 {
+			t.Fatalf("%d invoice emails, want 1", n)
+		}
+		if n := s.count("SELECT count(*) FROM audit_events WHERE household_id = $1 AND module = 'admin' AND action = 'household.entitlement'", h.ID); n != 1 {
+			t.Fatalf("%d entitlement events, want 1", n)
+		}
+	})
+
+	t.Run("the debit fails", func(t *testing.T) {
+		s, stripe := billingSite(t)
+		jana := s.person("Jana", s.a("jana@example"))
+		h := jana.create("Tilcerovi")
+
+		subscription, invoice := stripe.ConfirmDebit(jana.startPaying(h.ID, "year").ClientSecret)
+		s.told(stripe, "customer.subscription.updated", subscription)
+		stripe.FailDebit(invoice)
+		for range 2 {
+			s.told(stripe, "invoice.voided", invoice)
+			s.told(stripe, "customer.subscription.deleted", subscription)
+		}
+		if status, _, _ := stripe.Subscription(subscription); status != "canceled" {
+			t.Fatalf("the subscription whose debit failed is %s, want cancelled", status)
+		}
+		sub := jana.subscription(h.ID)
+		if sub.State != "trialing" || sub.PaymentPending || sub.Interval != nil {
+			t.Fatalf("once the debit failed: %+v", sub)
+		}
+		if n := s.count("SELECT count(*) FROM billing_subscriptions WHERE household_id = $1 AND standing = 'ended' AND started_at IS NULL", h.ID); n != 1 {
+			t.Fatalf("%d subscriptions over without having been the household's, want 1", n)
+		}
+		if n := s.count("SELECT count(*) FROM audit_events WHERE household_id = $1 AND module = 'admin' AND action = 'household.entitlement'", h.ID); n != 0 {
+			t.Fatalf("%d entitlement events, want none", n)
+		}
+		subjects := s.subjects(s.a("jana@example"))
+		if has(subjects, "did not go through") != 1 || has(subjects, "invoice") != 0 {
+			t.Fatalf("the payer's mail: %q", subjects)
+		}
+
+		// The payer subscribes again, with a card this time.
+		s.paid(stripe, jana, h.ID, "month")
+		if ids := stripe.Subscriptions(); len(ids) != 2 {
+			t.Fatalf("subscriptions at Stripe: %v", ids)
+		}
+	})
+}
+
+// Billing taken over with a bank debit, where the household's period could not be collected and the
+// new subscription is charged at once, moves once the debit clears: until then the household is past
+// due on its former payer's subscription, and billing is theirs still.
+func TestATakeOverPaidByBankDebitMovesOnceItClears(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	eva, evaID := s.joined(jana, h.ID, "Eva", s.a("eva@example"), "owner", nil)
+	janaID := jana.me().ID
+	old, _ := s.paid(stripe, jana, h.ID, "month")
+	s.told(stripe, "invoice.payment_failed", stripe.FailPayment(old, true))
+	s.told(stripe, "customer.subscription.updated", old)
+
+	offers(t, jana, h.ID, evaID)
+	stripe.DebitFrom("3000")
+	s.told(stripe, "setup_intent.succeeded", stripe.ConfirmSetup(accepts(t, eva, h.ID).Confirmation.ClientSecret))
+	ids := stripe.Subscriptions()
+	if len(ids) != 2 {
+		t.Fatalf("subscriptions at Stripe: %v", ids)
+	}
+	made := ids[1]
+	if sub := eva.subscription(h.ID); sub.State != "past_due" || !sub.PaymentPending || sub.Payer.UserID != janaID || sub.Transfer == nil {
+		t.Fatalf("while the new payer's debit is on its way: %+v", sub)
+	}
+	if status, _, _ := stripe.Subscription(old); status != "past_due" {
+		t.Fatalf("the former payer's subscription is %s before the new one is paid for", status)
+	}
+
+	invoice := s.latestInvoice(stripe, made)
+	stripe.ClearDebit(invoice)
+	s.told(stripe, "invoice.paid", invoice)
+	if sub := eva.subscription(h.ID); sub.State != "active" || sub.PaymentPending || sub.Payer.UserID != evaID || sub.Transfer != nil ||
+		sub.PaymentMethod == nil || sub.PaymentMethod.Brand != "sepa_debit" {
+		t.Fatalf("once the debit cleared: %+v", sub)
+	}
+	if status, _, _ := stripe.Subscription(old); status != "canceled" {
+		t.Fatalf("the former payer's subscription is %s, want ended", status)
+	}
+}
+
+// latestInvoice is the id of the invoice Stripe issued last for the subscription id.
+func (s *site) latestInvoice(stripe *billingtest.Stripe, id string) string {
+	s.t.Helper()
+	said, err := stripe.Processor().Subscription(s.t.Context(), id)
+	if err != nil || said.LatestInvoice == "" {
+		s.t.Fatalf("the subscription %s at Stripe: %+v, %v", id, said, err)
+	}
+	return said.LatestInvoice
 }
 
 // The payer cancels at the period's end and may take it back until then; once the period ends the

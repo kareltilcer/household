@@ -92,6 +92,12 @@ step in the mode the environment uses.
    made by the server. A subscription made by hand in the dashboard is none of any household's.
 4. A household whose payer starts subscribing again while one waits unpaid is also read from Stripe
    first, which records a payment whose event never arrived.
+5. **A SEPA Direct Debit is not paid yet.** Stripe shows the subscription `active` from the moment
+   the debit is asked for, and its invoice `open` for the days the debit takes. The household stays
+   as it was until `invoice.paid` arrives, its billing screen saying a payment is on its way, and
+   that is as intended. A debit that fails has its invoice voided: the server then cancels the
+   subscription at Stripe and emails the payer that it was not started. A household stuck with a
+   payment pending is one whose `invoice.paid` or `invoice.voided` never arrived: resend it.
 
 The same holds the other way round. A subscription that ended at Stripe, cancelled at its period's
 end or given up on, while the household still reads `active` is one whose events never arrived in the

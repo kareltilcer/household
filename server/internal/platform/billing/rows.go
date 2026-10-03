@@ -104,8 +104,9 @@ func (s subscription) paidUp() bool {
 }
 
 // said is s as the processor says p stands, at now: its fields as p has them, and its standing moved
-// on where p moved it. One waiting becomes the household's once it is live, and is over once it
-// expired unpaid; the household's is over once the processor cancelled it or gave up collecting it.
+// on where p moved it. One waiting becomes the household's once it is paid for (Subscription.Paid),
+// and is over once it expired unpaid; the household's is over once the processor cancelled it or gave
+// up collecting it.
 //
 // Why it was cancelled is as the processor says it now, none included: a cancellation at the period's
 // end has its reason from the day it is asked for, and one its payer took back has none again. A
@@ -136,7 +137,7 @@ func (s subscription) said(p Subscription, now time.Time) subscription {
 		next.reason = &p.CancellationReason
 	}
 	switch {
-	case s.standing == standingPending && p.Live():
+	case s.standing == standingPending && p.Paid():
 		next.standing, next.startedAt = standingCurrent, &now
 	case s.standing != standingEnded && p.Over():
 		next.standing, next.endedAt = standingEnded, &now

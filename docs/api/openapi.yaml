@@ -1884,13 +1884,18 @@ paths:
         Nothing about the household changes until the processor says the payment went through, when
         its state becomes `active`; a subscription never paid expires on its own.
 
+        A payment by bank debit takes days to go through. Until the processor says how it went the
+        household is as it was, and its subscription reads `payment_pending`; a debit that fails
+        ends the subscription, which its payer is emailed, and they may subscribe again.
+
         Asked again while one waits unpaid at the same interval, it answers that one's secret again;
         at the other interval, the one waiting is cancelled for a new one. No `Idempotency-Key` is
         kept: the answer is a secret, and is never kept to be answered with again.
 
         Only the payer subscribes, and only once their address is verified (PRD 02 §3). A household
-        with a subscription already is refused `409`, `already_subscribed`: its interval is changed
-        with `PATCH`, and a cancellation taken back with `…/billing/resume`.
+        with a subscription already is refused `409`, `already_subscribed`, as is one whose payment
+        for one is on its way: a subscription's interval is changed with `PATCH`, and a cancellation
+        taken back with `…/billing/resume`.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/BillingInterval' } } }
@@ -1899,7 +1904,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { description: 'The caller is an owner who is not the payer (`forbidden`), or their address is not verified (`account_unverified`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: 'The household has a subscription already (`already_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'The household has a subscription already, or a payment for one on its way (`already_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/BillingUnavailable' }
@@ -9703,17 +9708,19 @@ components:
 
     Subscription:
       type: object
-      required: [household_id, state, interval, current_period_end, cancel_at_period_end, trial_ends_at, grace_ends_at, data_retained_until, payer, payment_method, base_price, plans, included_storage_bytes, storage_block_bytes, price_per_storage_block, max_storage_blocks, transfer]
+      required: [household_id, state, interval, current_period_end, cancel_at_period_end, payment_pending, trial_ends_at, grace_ends_at, data_retained_until, payer, payment_method, base_price, plans, included_storage_bytes, storage_block_bytes, price_per_storage_block, max_storage_blocks, transfer]
       description: |
         The household's subscription as an owner reads it: its state, what it pays, and who pays
         (FR-BI5). `interval`, `current_period_end` and `base_price` are null while it has no
-        subscription, when `plans` say what one would cost.
+        subscription, when `plans` say what one would cost. They are those of the subscription the
+        household has: one whose first payment is still on its way shows only as `payment_pending`.
       properties:
         household_id: { $ref: '#/components/schemas/Uuid' }
         state: { $ref: '#/components/schemas/EntitlementState' }
         interval: { type: [string, 'null'], enum: [month, year, null] }
         current_period_end: { type: [string, 'null'], format: date-time, description: 'When the period paid for ends: the next charge, or, with `cancel_at_period_end`, when the subscription ends.' }
         cancel_at_period_end: { type: boolean }
+        payment_pending: { type: boolean, description: 'A subscription''s first payment is on its way and the processor has not yet said how it went, as a bank debit''s is for the days it takes to clear. The household''s state does not change until it has, and another subscription is refused meanwhile.' }
         trial_ends_at: { type: [string, 'null'], format: date-time }
         grace_ends_at: { type: [string, 'null'], format: date-time }
         data_retained_until: { type: [string, 'null'], format: date-time, description: 'When a lapsed household''s data is deleted: it is retained 12 months, then its owners are warned three times over 30 days, a month, a week and a day before (D-119). Export works in every state.' }

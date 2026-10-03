@@ -39,7 +39,10 @@ const (
 	emailInvoice       = "email.invoice"
 	emailPaymentFailed = "email.payment_failed"
 	emailBillingOffer  = "email.billing_offer"
-	emailBillingMoved  = "email.billing_moved"
+	// emailNotCollected tells a payer that the first payment of a subscription, a bank debit that
+	// takes days to clear, did not go through, and that the subscription was therefore not started.
+	emailNotCollected = "email.payment_not_collected"
+	emailBillingMoved = "email.billing_moved"
 	// messageDeclined is the push that tells the payer their offer of billing was declined.
 	messageDeclined = "notification.billing_declined"
 )
@@ -125,15 +128,27 @@ var errUnknown = errors.New("billing: a subscription that is not the household's
 // A subscription the processor holds for the household that no row records is one whose request
 // ended between the processor's answer and its own record. It is taken up, so that it is not left
 // charging its payer for a household that does not know of it: as the household's at once when it
-// charges, whatever waits, and as the one waiting when it waits itself and the household has none
+// is paid for, whatever waits, and as the one waiting when it waits itself and the household has none
 // waiting. Where one waits already, a second that waits too is ended, while it still waits
 // (Processor.Abandon): one that charges is never ended for being unrecorded, which would undo a
 // payment.
+//
+// A subscription is the household's once its payment went through, which its invoice says and its
+// own status does not (Subscription.Paid, D-129): one paid for by a bank debit is active at the
+// processor for the days the debit takes, and waits here until its invoice is paid. A debit that
+// fails leaves it active there with its invoice voided, charging nothing until its next period: it is
+// ended, and its payer told (unpaid).
 func (s *Service) sync(ctx context.Context, household uuid.UUID, id string) error {
+	return s.syncOnce(ctx, household, id, true)
+}
+
+// syncOnce is sync; again says whether a second subscription found to charge after all is read once
+// more, which it is once and no further.
+func (s *Service) syncOnce(ctx context.Context, household uuid.UUID, id string, again bool) error {
 	now := s.Now()
 	var (
-		replaced []subscription
-		second   bool
+		replaced       []subscription
+		second, failed bool
 	)
 	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
 		if err := lock(ctx, tx, household); err != nil {
@@ -166,6 +181,7 @@ func (s *Service) sync(ctx context.Context, household uuid.UUID, id string) erro
 			row = newRow(said, said.Payer, said.Interval)
 		}
 		next := row.said(said, now)
+		failed = next.standing == standingPending && said.Failed()
 		if !found && next.standing == standingPending {
 			if _, waiting := standing(subs, standingPending); waiting {
 				second = true
@@ -181,7 +197,7 @@ func (s *Service) sync(ctx context.Context, household uuid.UUID, id string) erro
 			}
 		}
 		if !found {
-			// As what it is to the household by now: one that charges is its own once the one before it
+			// As what it is to the household by now: one paid for is its own once the one before it
 			// is over, above, and is never a second one waiting.
 			if err := next.insert(ctx, tx, household); err != nil {
 				return err
@@ -210,13 +226,21 @@ func (s *Service) sync(ctx context.Context, household uuid.UUID, id string) erro
 		return nil
 	case err != nil:
 		return err
+	case second && failed:
+		// Never recorded, and its first payment did not go through: ended, as one recorded is (unpaid), so
+		// that it charges no later period for a household it was never the subscription of.
+		return s.Processor.Cancel(ctx, id)
 	case second:
-		// Ended while it still waits. One paid since it was read above charges, and is taken up after all.
+		// Ended while it still waits. One that charges after all is read once more: paid for since it was
+		// read above, it is taken up as the household's; with its payment still on its way, it is left
+		// for the event its invoice sends.
 		gone, err := s.Processor.Abandon(ctx, id)
-		if err != nil || gone {
+		if err != nil || gone || !again {
 			return err
 		}
-		return s.sync(ctx, household, id)
+		return s.syncOnce(ctx, household, id, false)
+	case failed:
+		return s.unpaid(ctx, household, id)
 	}
 	for _, old := range replaced {
 		if err := s.retire(ctx, household, old); err != nil {
@@ -224,6 +248,56 @@ func (s *Service) sync(ctx context.Context, household uuid.UUID, id string) erro
 		}
 	}
 	return s.settle(ctx, household)
+}
+
+// unpaid ends household's subscription id, which waits on a first payment that did not go through:
+// it is cancelled at the processor, where it would otherwise stay active and charge its next period
+// for a household it was never the subscription of, what the processor then says is recorded, and
+// its payer is emailed, once, that the subscription was not started (D-129). The household is as it
+// was, and its payer may subscribe again.
+func (s *Service) unpaid(ctx context.Context, household uuid.UUID, id string) error {
+	if err := s.Processor.Cancel(ctx, id); err != nil {
+		return err
+	}
+	now := s.Now()
+	told := false
+	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
+		if err := lock(ctx, tx, household); err != nil {
+			return err
+		}
+		said, err := s.Processor.Subscription(ctx, id)
+		if err != nil {
+			return err
+		}
+		subs, err := readSubscriptions(ctx, tx, household)
+		if err != nil {
+			return err
+		}
+		for _, sub := range subs {
+			if sub.id != id {
+				continue
+			}
+			next := sub.said(said, now)
+			if err := next.update(ctx, tx, household); err != nil {
+				return err
+			}
+			if sub.standing != standingPending || next.standing != standingEnded {
+				return nil
+			}
+			told = true
+			return s.Notify.Queue(ctx, tx, notify.Notification{
+				To: sub.payer, Category: notify.Direct, Message: emailNotCollected, Email: true, Route: billingRoute(household),
+			})
+		}
+		return nil
+	})
+	if errors.Is(err, errGone) {
+		return nil
+	}
+	if err == nil && told {
+		s.Notify.Nudge(ctx, household)
+	}
+	return err
 }
 
 // retire cancels old at the processor, a subscription another took the place of, and records what
@@ -432,26 +506,36 @@ func (s *Service) invoiceChanged(ctx context.Context, event Event) error {
 // answer and its record and whose own event has not been handled yet, is not dropped for arriving
 // first: its subscription is taken up as its own event would have it (sync), and the invoice is
 // recorded once it is the household's.
+//
+// An invoice of a subscription that still waits is what says whether it was paid for: the
+// subscription is read again as the invoice is recorded (sync), and becomes the household's once the
+// invoice is paid, or is ended once its payment failed. The processor sends no event of the
+// subscription's own when a bank debit clears, since nothing of the subscription changes then.
 func (s *Service) syncInvoice(ctx context.Context, household uuid.UUID, id string) error {
-	unrecorded, err := s.recordInvoice(ctx, household, id)
-	if err != nil || unrecorded == "" {
+	unrecorded, waiting, err := s.recordInvoice(ctx, household, id)
+	if err != nil {
 		return err
 	}
-	if err := s.sync(ctx, household, unrecorded); err != nil {
-		return err
+	if unrecorded != "" {
+		if err := s.sync(ctx, household, unrecorded); err != nil {
+			return err
+		}
+		if _, waiting, err = s.recordInvoice(ctx, household, id); err != nil {
+			return err
+		}
 	}
-	_, err = s.recordInvoice(ctx, household, id)
-	return err
+	if waiting != "" {
+		return s.sync(ctx, household, waiting)
+	}
+	return nil
 }
 
 // recordInvoice is syncInvoice's one reading of the invoice id, recorded under the household's lock.
-// It returns the invoice's subscription when no row records it, and so nothing was recorded.
-func (s *Service) recordInvoice(ctx context.Context, household uuid.UUID, id string) (string, error) {
-	var (
-		told       bool
-		unrecorded string
-	)
-	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
+// It returns the invoice's subscription as unrecorded when no row records it, and so nothing was
+// recorded, and as waiting when the row that records it still waits to become the household's.
+func (s *Service) recordInvoice(ctx context.Context, household uuid.UUID, id string) (unrecorded, waiting string, err error) {
+	told := false
+	err = tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
 		if err := lock(ctx, tx, household); err != nil {
 			return err
 		}
@@ -464,17 +548,24 @@ func (s *Service) recordInvoice(ctx context.Context, household uuid.UUID, id str
 		}
 		// An invoice is its subscription's payer's, or, for one the processor ties to no subscription,
 		// the payer's whose customer it bills.
-		var payer uuid.UUID
+		var (
+			payer        uuid.UUID
+			stands, kept string
+		)
 		err = tx.QueryRow(ctx, `
-			SELECT payer_id FROM billing_subscriptions
+			SELECT payer_id, standing, stripe_subscription_id FROM billing_subscriptions
 			WHERE household_id = $1 AND (stripe_subscription_id = $2 OR ($2 = '' AND stripe_customer_id = $3))
-			ORDER BY (stripe_subscription_id = $2) DESC, created_at DESC LIMIT 1`, household, inv.Subscription, inv.Customer).Scan(&payer)
+			ORDER BY (stripe_subscription_id = $2) DESC, created_at DESC LIMIT 1`, household, inv.Subscription, inv.Customer).
+			Scan(&payer, &stands, &kept)
 		if errors.Is(err, pgx.ErrNoRows) {
 			unrecorded = inv.Subscription
 			return nil
 		}
 		if err != nil {
 			return err
+		}
+		if stands == standingPending && kept == inv.Subscription {
+			waiting = kept
 		}
 		var (
 			was      string
@@ -527,15 +618,15 @@ func (s *Service) recordInvoice(ctx context.Context, household uuid.UUID, id str
 		return s.Notify.Queue(ctx, tx, ns...)
 	})
 	if errors.Is(err, errGone) {
-		return "", nil
+		return "", "", nil
 	}
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if told {
 		s.Notify.Nudge(ctx, household)
 	}
-	return unrecorded, nil
+	return unrecorded, waiting, nil
 }
 
 // linesOf is lines as the row keeps them: an array, never null.
@@ -632,8 +723,9 @@ func (s *Service) methodConfirmed(ctx context.Context, intent SetupIntent) error
 // pay among them: a subscription is made with its payment method and never has one changed while it
 // waits unpaid, which the processor does not promise to take. It is ended only while the processor
 // says it still waits (Processor.Abandon). One that charges is a confirmation's own, made by an
-// earlier delivery that did not get as far as recording it: it is recorded and settled, which moves
-// billing to whoever pays it, and none is made. And where the household's subscription is theirs
+// earlier delivery that did not get as far as recording it, or one whose payment, a bank debit, is
+// still on its way: it is recorded and settled, which moves billing to whoever pays it once it is
+// paid for, and none is made. And where the household's subscription is theirs
 // already, an earlier delivery made it and did not get as far as settling: it is recorded and
 // settled again, and none is made.
 func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
