@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
@@ -21,8 +23,14 @@ import (
 // drives: who may ask for it, what disabling the account ends, the link that cancels it, and what
 // erasing it deletes of the tables that are the account's.
 
-// purposeCancelDeletion is the purpose of the link a scheduled deletion's email carries.
-const purposeCancelDeletion = "cancel_deletion"
+// purposeCancelDeletion is the purpose of the link a scheduled deletion's email carries,
+// emailAccountDeletion that email, and routeCancelDeletion the web client's route its link opens,
+// which cancels the deletion.
+const (
+	purposeCancelDeletion               = "cancel_deletion"
+	emailAccountDeletion  mail.Template = "email.account_deletion"
+	routeCancelDeletion                 = "account/deletion/cancel"
+)
 
 // disabled reports whether user's account is scheduled for deletion, and so signs nobody in
 // (FR-PR4): read in tx, the transaction that would admit them, once it holds the user's row against
@@ -191,6 +199,50 @@ func (s *Service) EndCancelLink(ctx context.Context, tx pgx.Tx, user uuid.UUID, 
 		  AND EXISTS (SELECT FROM account_deletions d WHERE d.user_id = $1 AND d.executes_at <= $4)`,
 		user, s.Sessions.Now(), purposeCancelDeletion, due)
 	return err
+}
+
+// renewCancelLink gives the link that cancels user's scheduled deletion a new token, in tx, and
+// returns it with how many days the link still has: what the account's address is sent when someone
+// asks for a way back in to it (sendLink, D-130), since the email that carried the link is sent once,
+// and whoever lost it, or never got it, has nothing else to ask for. It returns "" for an account
+// with no deletion its user asked for, and for one no link of which still cancels anything: used,
+// past its time, or ended as the deletion's execution began (EndCancelLink).
+//
+// The link keeps its row and changes its token. A second row beside it would be one that an
+// execution beginning at that moment, which ends the links it finds, had not seen: a cancellation by
+// it would be answered as done, and the account erased all the same. As it is, the two take the one
+// row in turn, and a link ended first is renewed by nothing. The token sent before cancels nothing
+// from then on, the one the request's own answer carried among them.
+func (s *Service) renewCancelLink(ctx context.Context, tx pgx.Tx, user uuid.UUID) (string, int, error) {
+	var (
+		now     = s.Sessions.Now()
+		token   = session.NewToken()
+		expires time.Time
+	)
+	err := tx.QueryRow(ctx, `
+		UPDATE email_tokens SET token_hash = $2
+		WHERE id = (
+		  SELECT t.id FROM email_tokens t
+		  WHERE t.user_id = $1 AND t.purpose::text = $3 AND t.used_at IS NULL AND t.expires_at > $4
+		    AND EXISTS (SELECT FROM account_deletions d WHERE d.user_id = t.user_id AND d.cause = 'requested')
+		  ORDER BY t.created_at DESC, t.id DESC LIMIT 1
+		  FOR UPDATE OF t)
+		RETURNING expires_at`, user, session.Hash(token), purposeCancelDeletion, now).Scan(&expires)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", 0, nil
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	// The days the email names, a part of one counted whole: the link lasts as long as the window.
+	return token, max(int(math.Ceil(expires.Sub(now).Hours()/24)), 1), nil
+}
+
+// SendCancelLink sends address the email of its account's scheduled deletion after the response, in
+// the language of locale: the link that cancels it, carrying token, and days, how long is left
+// before the account is erased.
+func (s *Service) SendCancelLink(ctx context.Context, address, locale, token string, days int) {
+	s.email(ctx, address, locale, emailAccountDeletion, s.link(routeCancelDeletion, token), i18n.Args{"days": days})
 }
 
 // SendLink sends template to address after the response, in the language of locale, with the link

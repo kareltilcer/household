@@ -267,11 +267,11 @@ func eraseMember(ctx context.Context, tx pgx.Tx, reg *module.Registry, household
 // eraseHousehold erases household for cause (FR-PR6): in one transaction of its own, every module's
 // Erase, then the household's row, which every tenant table hangs from, so that its settings,
 // members, grants, invitations, modules' rows, files' rows, notifications, audit log and the rest go
-// with it; and, once that has committed, its objects. still, when not nil, is asked under the row's
-// lock whether the household is still to be erased. Its child profiles, which are nothing outside
-// it, are scheduled for erasure at now, the time the job's run searches by, so that the run that
-// erased their household erases them too; and the archives of its exports are removed with it. It
-// reports whether it erased it.
+// with it, and the tombstone its objects are removed by once that has committed (purge). still, when
+// not nil, is asked under the row's lock whether the household is still to be erased. Its child
+// profiles, which are nothing outside it, are scheduled for erasure at now, the time the job's run
+// searches by, so that the run that erased their household erases them too; and the archives of its
+// exports are removed with it. It reports whether it erased it.
 func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause string, now time.Time,
 	still func(context.Context, pgx.Tx) (bool, error),
 ) (bool, error) {
@@ -333,12 +333,10 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 	}
 	s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "privacy: erased a household", slog.String(logging.KeyHouseholdID, household.String()),
 		slog.String("cause", cause))
-	// The objects now, and again on the nights after (purge): a failure here is found there.
-	if err := s.cfg.Files.Store().Delete(ctx, archives...); err != nil {
-		return true, err
-	}
-	_, err = s.purgeOne(ctx, kindHousehold, household)
-	return true, err
+	// The archives now, which are under their requesters' prefixes and which no row names any more: one
+	// that stays is the expiry sweep's to find (sweep). The objects under the household's own prefix are
+	// the tombstone's, removed as the run ends and again on the nights after (purge).
+	return true, s.cfg.Files.Store().Delete(ctx, archives...)
 }
 
 // eraseAccount executes user's scheduled deletion (FR-PR3, FR-PR4), read again as it is: cancelled
@@ -461,8 +459,7 @@ func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Tim
 	}
 	s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "privacy: erased an account", slog.String("user_id", user.String()),
 		slog.String("cause", cause))
-	_, err = s.purgeOne(ctx, kindAccount, user)
-	return households, true, err
+	return households, true, nil
 }
 
 // forget deletes what household keeps of user beside their membership, which the household surface
@@ -523,9 +520,10 @@ func (s *Service) eraseDeparture(ctx context.Context, household, user uuid.UUID,
 	return erased, err
 }
 
-// purge removes the objects of every erasure whose objects are not known to be gone, and of every
-// one made in the last days, again: an upload in flight when its household was erased put its bytes
-// after the first pass, and no row is left to name them. It returns how many objects it removed.
+// purge removes the objects of every erasure whose objects are not known to be gone, this run's
+// among them, and of every one made in the last days, again: an upload in flight when its household
+// was erased put its bytes after the first pass, and no row is left to name them. It is the one place
+// an erasure's objects are removed, so what it returns is how many objects the run removed.
 func (s *Service) purge(ctx context.Context, now time.Time) (int, error) {
 	type erasure struct {
 		kind string

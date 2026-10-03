@@ -82,7 +82,8 @@ Every module implements `ExportSource` or it does not ship
 and its SHA-256, the archive's own schema version and the API's, so that whoever holds the archive
 can check it is whole. A household's export holds every shared row, its requester's own private
 items and a child profile's ([02](02-identity-and-access.md) FR-CH3), and never another adult's,
-which is why nobody else lists it or is handed its link, an owner included. A member's own export
+which is why nobody else lists it or is handed its link, an owner included, and why its requester
+is handed it only while they are still an owner of the household. A member's own export
 holds `account.json`, what the account keeps outside any household, and under
 `households/{household_id}/` each household's part: what they made and what they keep privately,
 from the modules they can see, and the events they caused. A household they left gives what they
@@ -126,7 +127,9 @@ tombstone.
 The account signs nobody in during the 30 days, whatever proved who was asking, and each attempt
 fails as a wrong password does ([02](02-identity-and-access.md) FR-ID3). **The link cancels it,
 signed out (D-130)**: its token is the email's and the answer's to the request that scheduled the
-deletion, and nothing else brings the account back. At execution each household is resolved again
+deletion, and nothing else brings the account back. The email is sent once, so a password reset
+asked for at the account's address sends the link again, with a new token in place of the one
+before: a new password would sign nobody in. At execution each household is resolved again
 as it then stands (D-131): where the account is by then the only owner, of a household it did not
 choose to delete, the adult who has been a member longest becomes its owner, and a household left
 with nobody who could own it, child profiles alone, goes with the account. An adult whose own

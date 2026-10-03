@@ -451,7 +451,7 @@ paths:
       operationId: postAuthPasswordReset
       tags: [auth]
       summary: Request a password reset
-      description: 'Always answers `202`, whether or not the address exists; a link valid for one hour is emailed only where it does. An address may ask three times an hour, and a client''s network twenty times an hour.'
+      description: 'Always answers `202`, whether or not the address exists; a link valid for one hour is emailed only where it does. An account scheduled for deletion (`postMeDeletion`) signs nobody in whatever its password, so it is emailed the link that cancels the deletion instead (`postAuthDeletionCancel`), again, with a new token in place of the one sent before; once nothing cancels the deletion any more it is emailed nothing. An address may ask three times an hour, and a client''s network twenty times an hour.'
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -496,6 +496,10 @@ paths:
         it signed in with, nothing it held was touched, and the households that were to be deleted
         with it are no longer, their members told. Its sessions and devices were signed out when the
         deletion was scheduled and stay so.
+
+        The email is sent once. Asking for a password reset at the account's address
+        (`postAuthPasswordReset`) sends the link again, with a new token: the one sent before is
+        then answered `404`, as a token nobody issued is.
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -969,8 +973,9 @@ paths:
         request's among them, and no sign-in admits it, each failing as a wrong password does
         (`401 invalid_credentials`). Its address is emailed a link that cancels the deletion
         (`postAuthDeletionCancel`), and the `202` carries the link's token as `cancel_token`, the one
-        thing the client that asked still holds. After 30 days the deletion is executed and is
-        irreversible.
+        thing the client that asked still holds. The email is sent once: asking for a password reset
+        at the address (`postAuthPasswordReset`) sends the link again, with a new token that replaces
+        this one. After 30 days the deletion is executed and is irreversible.
 
         A `POST` to a sub-resource rather than a `DELETE /me` with a body: RFC 9110 gives a
         `DELETE` payload no defined semantics and intermediaries and generated clients drop it,
@@ -1894,7 +1899,7 @@ paths:
       operationId: getExports
       tags: [households]
       summary: List household export jobs
-      description: 'The caller''s own exports of this household, the newest first, fifty at most. An export is its requester''s: what it holds is what they may read, their own private items among it and no other adult''s, so nobody else lists it or is handed its link, an owner included. A member who asked for none reads an empty list.'
+      description: 'The caller''s own exports of this household, the newest first, fifty at most. An export is its requester''s: what it holds is what they may read, their own private items among it and no other adult''s, so nobody else lists it or is handed its link, an owner included. Its requester is handed the link while they are still an owner: made a member since, they read the job with `download_url` null. A member who asked for none reads an empty list.'
       responses:
         '200': { description: Jobs, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/ExportJob' } } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1931,6 +1936,7 @@ paths:
       operationId: getExportsByExportId
       tags: [households]
       summary: Household export job status and download link
+      description: 'One of the caller''s own exports of this household; anyone else''s is not found. It carries `download_url` while it is `ready` and the caller is still an owner of the household.'
       responses:
         '200': { description: The job, content: { application/json: { schema: { $ref: '#/components/schemas/ExportJob' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -9433,7 +9439,7 @@ components:
         requested_at: { type: string, format: date-time }
         ready_at: { type: [string, 'null'], format: date-time }
         expires_at: { type: [string, 'null'], format: date-time }
-        download_url: { type: [string, 'null'], format: uri, description: 'A link to the archive, pre-signed for minutes (D-9) and renewed by each read of the job; null unless the export is `ready`.' }
+        download_url: { type: [string, 'null'], format: uri, description: 'A link to the archive, pre-signed for minutes (D-9) and renewed by each read of the job; null unless the export is `ready`, and for a household''s unless its requester is still an owner of the household.' }
         size_bytes: { type: [integer, 'null'], format: int64 }
         contents:
           type: array
@@ -9447,7 +9453,7 @@ components:
         scope: { type: string, enum: [user, household] }
         requested_at: { type: string, format: date-time }
         executes_at: { type: string, format: date-time, description: 30 days out. Reversible until then. }
-        cancel_token: { type: [string, 'null'], description: 'For an account''s deletion, the token that cancels it (`postAuthDeletionCancel`), which the email''s link carries too: the account is signed out by the answer, and cancels with nothing else. Null for a household''s, which an owner cancels through the household, and for an account''s that was scheduled already.' }
+        cancel_token: { type: [string, 'null'], description: 'For an account''s deletion, the token that cancels it (`postAuthDeletionCancel`), which the email''s link carries too: the account is signed out by the answer, and cancels with nothing else. A link sent again (`postAuthPasswordReset`) carries a new token, which replaces this one. Null for a household''s, which an owner cancels through the household, and for an account''s that was scheduled already.' }
 
     DiagnosticBundle:
       type: object

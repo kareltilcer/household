@@ -52,7 +52,7 @@ func TestRoutesMatchTheContract(t *testing.T) {
 		Pool: pool, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Modules: mods, MaxBodyBytes: 1, Accounts: accounts,
 		Households: households,
 		Notify:     notifier,
-		Privacy:    apptest.Privacy(t, pool, log, accounts, households, notifier, mods, apptest.Options{}),
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, mods, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 	})

@@ -15,21 +15,13 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
-	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
-	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/session"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
-
-// emailAccountDeletion is the email of a scheduled deletion, and routeCancelDeletion the web client's
-// route its link opens, which cancels it.
-const emailAccountDeletion mail.Template = "email.account_deletion"
-
-const routeCancelDeletion = "account/deletion/cancel"
 
 // Why an account's deletion was scheduled.
 const (
@@ -107,7 +99,9 @@ func resolve(standings []household.Standing, chosen []uuid.UUID) ([]uuid.UUID, e
 // schedulings a day and refusing the request 429 past them (household.Service.ScheduleWithAccount),
 // and the account is disabled: every session and device's sign-in ends, this request's own among
 // them, nothing signs it in again, and its address is sent the link that cancels it. The answer
-// carries that link's token too, the one thing the client that asked still holds.
+// carries that link's token too, the one thing the client that asked still holds. The email is sent
+// once and may not arrive: asking for a password reset at the address sends the link again, with a
+// new token in place of this one (identity.Service.renewCancelLink, D-130).
 //
 // It keeps no Idempotency-Key, whose fingerprint would be a fast hash of the password (D-97).
 func (s *Service) requestDeletion(w http.ResponseWriter, r *http.Request) {
@@ -206,8 +200,7 @@ func (s *Service) requestDeletion(w http.ResponseWriter, r *http.Request) {
 	}
 	if fresh {
 		d.CancelToken = &token
-		s.cfg.Accounts.SendLink(ctx, owner.Address, owner.Locale, emailAccountDeletion, routeCancelDeletion, token,
-			i18n.Args{"days": int(household.DeletionWindow / (24 * time.Hour))})
+		s.cfg.Accounts.SendCancelLink(ctx, owner.Address, owner.Locale, token, int(household.DeletionWindow/(24*time.Hour)))
 	}
 	d.RequestedAt, d.ExecutesAt = d.RequestedAt.UTC(), d.ExecutesAt.UTC()
 	if _, ok := session.Current(ctx); ok {

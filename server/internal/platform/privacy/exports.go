@@ -98,6 +98,11 @@ func archiveName(j job) string {
 // body is j as its requester reads it at now: an archive past its seven days reads as expired
 // whether or not the sweep has reached it, and only one that is ready and in time carries a link,
 // pre-signed for minutes as every link is (D-9), which each read of the job renews.
+//
+// A household's archive holds what an owner reads, every module's shared rows, and is its requester's
+// to take only while they are one: the worker builds none for a requester who no longer is (errGone),
+// and one made a member since it was built reads the job without its link, as ctx's scope says they
+// stand in the household now.
 func (s *Service) body(ctx context.Context, j job, now time.Time) (exportJSON, error) {
 	out := exportJSON{
 		ID: j.id, Scope: scopeUser, HouseholdID: j.household, Status: j.status, RequestedAt: j.requested.UTC(),
@@ -115,6 +120,11 @@ func (s *Service) body(ctx context.Context, j job, now time.Time) (exportJSON, e
 	if j.expires != nil && !now.Before(*j.expires) {
 		out.Status = statusExpired
 		return out, nil
+	}
+	if j.household != nil {
+		if scope := tenant.From(ctx); scope == nil || scope.Role() != access.Owner {
+			return out, nil
+		}
 	}
 	url, _, err := s.cfg.Files.Store().Presign(ctx, *j.object, objectstore.Presentation{
 		ContentType: "application/zip", Disposition: objectstore.Attachment, Filename: archiveName(j),
@@ -182,7 +192,8 @@ func (s *Service) listExports(w http.ResponseWriter, r *http.Request) {
 }
 
 // getExport is getMeExportsByExportId and getExportsByExportId: one of the caller's exports, with
-// its link while it is ready. Anyone else's is not found.
+// its link while it is ready, and, for a household's, while the caller is still an owner (body).
+// Anyone else's is not found.
 func (s *Service) getExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, household := scopeOf(r)

@@ -124,7 +124,8 @@ trust in it. **D-100.**
 Single-use token, **1 hour**, invalidates every session and every refresh-token family on use,
 and every trust of FR-ID5, and sends a confirmation email to the old address. The link proves the
 address: an unverified one is verified, and the Google or Apple identities linked to the account
-before it was are unlinked (D-102).
+before it was are unlinked (D-102). An account scheduled for deletion (FR-ID8) is sent the link
+that cancels the deletion in place of a reset link, since no password signs it in (D-130).
 
 **FR-ID7 — Session and device management.** `GET /api/v1/me/sessions` lists active sessions and
 `GET /api/v1/me/devices` the devices signed in, with last-seen, approximate location from IP and
@@ -141,7 +142,8 @@ token's lifetime is how long a revoked device can still receive new rows: **five
 the user owns. It is asked for with the account's password, or, by an account that signs in only
 with a provider, with its own address typed out; a child profile is removed by an owner and deletes
 nothing itself (D-104). From then on the account signs nobody in, each attempt failing as a wrong
-password does (FR-ID3), and the link its email carries cancels the deletion (D-130).
+password does (FR-ID3), and the link its email carries cancels the deletion; a password reset asked
+for meanwhile sends that link again (D-130).
 
 ## 3. Households and membership
 

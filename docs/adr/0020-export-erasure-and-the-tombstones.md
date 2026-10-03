@@ -58,7 +58,9 @@ every other with its length and its SHA-256. The platform writes the activity lo
 requester's language and redacted by the one rule every reader of the log applies
 (`audit.Redacted`), a name or a summary that begins as a formula does written behind an apostrophe,
 so that the spreadsheet that opens the log shows it and runs nothing. An archive's link is pre-signed
-per read of the job, as every link is (D-9); the email that says it is ready links to the list.
+per read of the job, as every link is (D-9), and a household's only for a requester who is still an
+owner when they read it, as the worker builds one only for a requester who still is; the email that
+says it is ready links to the list.
 
 **A household is erased by deleting its row (D-134).** `privacy.EraseRows` asks each module, then
 deletes the household's row, as the request role in the household's context: every tenant table
@@ -92,9 +94,10 @@ good.
 **Erasure records no audit event, and leaves a tombstone.** It writes through `tenant.InWriteTx` and
 `tenant.AccountTx`, the platform's own paths, as the expiry sweep's deletions do. `erasures` keeps the
 id of what was erased, the day and the cause, and whether its objects are gone. The rows commit first
-and the objects under `h/{household_id}/` or `u/{user_id}/` are removed after; the nightly job removes
-them again for three days, since an upload in flight when its household was erased put its bytes after
-the first pass, and the files sweep lists only households that exist.
+and the objects under `h/{household_id}/` or `u/{user_id}/` are removed after, by the tombstone, as
+the run that erased them ends: one pass removes every erasure's objects and counts them. The nightly
+job removes them again for three days, since an upload in flight when its household was erased put
+its bytes after the first pass, and the files sweep lists only households that exist.
 
 **The deletions are columns and rows a job finds.** A household's is four columns of its own row,
 written through the spine as its settings are, so that its members' replicas learn of it and its log
@@ -118,7 +121,12 @@ ninety minutes before PowerSync's compaction, which then drops the erased rows f
 (D-93).
 
 **The account comes back by its link (D-130).** `POST /auth/deletion/cancel` is public and takes the
-token the email carried; `DELETE /me/deletion` is removed from the contract.
+token the email carried; `DELETE /me/deletion` is removed from the contract. The email is sent once,
+after the response, and is not always delivered, so a password reset asked for at the account's
+address sends the link again in place of a reset link, which would set a password that signs nobody
+in. The link sent again is the same row of `email_tokens` with a new token, not a second row: the
+job that begins a deletion's execution ends the links it finds, and a row inserted beside them at
+that moment would be one it had not seen.
 
 ## Alternatives rejected
 

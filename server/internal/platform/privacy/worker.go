@@ -499,33 +499,23 @@ func (s *Service) household(ctx context.Context, a *archive, prefix string, id, 
 			return err
 		}
 		e := module.Export{Household: id, Requester: user, Role: access.Role(role), Scope: scope}
-		var asked []string
-		switch scope {
-		case module.ExportHousehold:
-			if e.Role != access.Owner {
-				return errGone
-			}
-			for _, src := range sources {
-				asked = append(asked, src.name)
-			}
-		case module.ExportPersonal:
-			if role == "" {
-				// They left between the list and now: what they kept privately is still theirs to take.
-				e.Scope, out.Scope = module.ExportDeparted, module.ExportDeparted
-				for _, src := range sources {
-					asked = append(asked, src.name)
-				}
-				break
-			}
+		// Every module is asked, but for a member's own export, which takes the ones they can see.
+		asked := make([]string, 0, len(sources))
+		for _, src := range sources {
+			asked = append(asked, src.name)
+		}
+		switch {
+		case scope == module.ExportHousehold && e.Role != access.Owner:
+			return errGone
+		case scope == module.ExportPersonal && role == "":
+			// They left between the list and now: what they kept privately is still theirs to take.
+			e.Scope, out.Scope = module.ExportDeparted, module.ExportDeparted
+		case scope == module.ExportPersonal:
 			levels, err := tenant.Levels(ctx, tx, id, user, e.Role)
 			if err != nil {
 				return err
 			}
 			asked = visible(sources, platform, levels)
-		case module.ExportDeparted:
-			for _, src := range sources {
-				asked = append(asked, src.name)
-			}
 		}
 		for _, src := range sources {
 			if src.export == nil || !slices.Contains(asked, src.name) {

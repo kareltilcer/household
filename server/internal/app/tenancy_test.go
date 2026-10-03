@@ -82,7 +82,7 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 		Pool: pool, Meter: d.Pool(t, db.RoleMeter), Modules: registry, MaxBodyBytes: 1 << 10, Accounts: accounts,
 		Households: households,
 		Notify:     notifier,
-		Privacy:    apptest.Privacy(t, pool, log, accounts, households, notifier, registry, apptest.Options{}),
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, registry, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 	}

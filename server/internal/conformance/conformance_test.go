@@ -104,7 +104,7 @@ func newWorldOf(t *testing.T, o apptest.Options, m module.Module) *world {
 		MaxBodyBytes: 1 << 20, Accounts: accounts,
 		Households: households,
 		Notify:     notifier,
-		Privacy:    apptest.Privacy(t, pool, log, accounts, households, notifier, registry, o),
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, registry, o),
 		Sync:       apptest.Sync(t, log, o),
 		Storage:    &storage.Picture{Log: log},
 	})

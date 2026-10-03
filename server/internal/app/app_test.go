@@ -70,7 +70,7 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 		Pool: pool, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 10, Accounts: accounts,
 		Households: households,
 		Notify:     notifier,
-		Privacy:    apptest.Privacy(t, pool, log, accounts, households, notifier, nil, apptest.Options{}),
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, nil, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 	})
@@ -387,7 +387,7 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 		Pool: pool, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 10, BodyTimeout: timeout, Accounts: accounts,
 		Households: households,
 		Notify:     notifier,
-		Privacy:    apptest.Privacy(t, pool, log, accounts, households, notifier, nil, apptest.Options{}),
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, nil, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 	})

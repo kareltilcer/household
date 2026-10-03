@@ -154,6 +154,68 @@ func TestAnAccountsDeletionIsResolvedScheduledAndCancelled(t *testing.T) {
 	expect(t, cancel(*d.CancelToken), http.StatusGone, problem.CodeTokenExpired)
 }
 
+// The link that cancels a deletion is the one way back in, and its email is sent once (D-130):
+// whoever lost it, or never got it, asks for a password reset, and the account's address is sent the
+// link again, with a new token in place of the one before. No reset link goes to an account no
+// password signs in; cancelled, the account is sent one as any other is; and once nothing cancels the
+// deletion any more, it is sent nothing.
+func TestAPasswordResetAskedOfAnAccountBeingDeletedSendsItsCancelLinkAgain(t *testing.T) {
+	p := newPrivacySite(t)
+	address := p.a("jana@tilcerovi.cz")
+	jana := p.person("Jana", address)
+	janaID := jana.me().ID
+	ask := func() {
+		t.Helper()
+		expect(t, p.browser().post("/auth/password-reset", jsonBody(t, map[string]string{"email": address})), http.StatusAccepted, "")
+	}
+	cancel := func(token string) *httptest.ResponseRecorder {
+		return p.browser().post("/auth/deletion/cancel", jsonBody(t, map[string]string{"token": token}))
+	}
+	resets := func() int {
+		return p.count("SELECT count(*) FROM email_tokens WHERE user_id = $1 AND purpose = 'reset_password'", janaID)
+	}
+
+	rec := jana.deleteAccount(passphrase)
+	expect(t, rec, http.StatusAccepted, "")
+	var d deletionDoc
+	decode(t, rec, &d)
+
+	// Ten days on, with a part of a day gone: twenty days are left, and the email says so.
+	p.clock.advance(10*24*time.Hour + time.Hour)
+	ask()
+	token, mail := p.token(address)
+	if token == *d.CancelToken || !strings.Contains(mail.Body, "/account/deletion/cancel#token=") || !strings.Contains(mail.Subject, "20 days") {
+		t.Fatalf("asked for a reset, the account was sent %q: %s", mail.Subject, mail.Body)
+	}
+	if n := resets(); n != 0 {
+		t.Errorf("%d reset links were issued for an account no password signs in", n)
+	}
+	// The link sent before cancels nothing any more, and the new one does.
+	expect(t, cancel(*d.CancelToken), http.StatusNotFound, problem.CodeNotFound)
+	if n := p.count("SELECT count(*) FROM account_deletions WHERE user_id = $1", janaID); n != 1 {
+		t.Fatal("the link sent before still cancelled the deletion")
+	}
+	expect(t, cancel(token), http.StatusNoContent, "")
+	p.browser().login(address, passphrase)
+
+	// Cancelled, the account is sent a reset link as any other is.
+	ask()
+	if _, mail := p.token(address); !strings.Contains(mail.Body, "/reset/set#token=") || resets() != 1 {
+		t.Fatalf("cancelled and asked for a reset, the account was sent %q: %s", mail.Subject, mail.Body)
+	}
+
+	// A deletion whose link has run out is cancelled by nothing, and nothing is sent for it.
+	back := p.browser()
+	back.login(address, passphrase)
+	expect(t, back.deleteAccount(passphrase), http.StatusAccepted, "")
+	p.clock.advance(30*24*time.Hour + time.Minute)
+	sent := len(p.outbox.To(address))
+	ask()
+	if got := len(p.outbox.To(address)); got != sent || resets() != 1 {
+		t.Fatalf("past its link's time the account was sent %d more messages, and holds %d reset links", got-sent, resets())
+	}
+}
+
 // An erased account leaves a tombstone and a former member (FR-PR4): its own tables are emptied,
 // its objects removed, the household it was alone in goes with it, and in the household that goes on
 // its membership ends, what it kept privately is deleted, what it made stays, and the events it
@@ -767,10 +829,14 @@ func TestAHouseholdsDeletionErasesEveryRowOfIt(t *testing.T) {
 	// the child profile's erasure, is due in the run that scheduled it.
 	p.clock.advance(24*time.Hour + time.Minute)
 	p.clock.run(time.Millisecond)
-	p.erase()
+	done := p.erase()
 	p.clock.run(0)
 	if rows := p.rowsOf(h.ID); len(rows) != 0 {
 		t.Fatalf("erased, the household keeps %v", rows)
+	}
+	// The run counts the objects it removed: the household's two files, at the least.
+	if done.Objects < 2 {
+		t.Errorf("the run says it removed %d objects, with the household's two files among them", done.Objects)
 	}
 	if keys := p.objects("h/" + h.ID.String() + "/"); len(keys) != 0 {
 		t.Errorf("the store keeps %v of the household", keys)

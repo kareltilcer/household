@@ -137,9 +137,10 @@ SELECT kind, id, cause, erased_at FROM erasures WHERE purged_at IS NULL;
   expiry sweep once it is a day old (`expiry.sweep`, 03:00 UTC), as is a `ready` export's seven days
   after it was ready.
 - An erasure with `purged_at` null: the rows are gone and the store refused the listing or a delete,
-  which the job logs with the error, as `privacy: an erasure failed` the night it erased and as
-  `privacy: remove an erasure's objects` on the nights after. It tries each again every night until
-  it succeeds; nothing else names those objects, so do not delete the row.
+  which the job logs with the error as `privacy: remove an erasure's objects`, the night it erased
+  and every night after. It tries each again every night until it succeeds; nothing else names those
+  objects, so do not delete the row. The line the job ends on, `privacy: erased what was due`, counts
+  the objects the run removed.
 
 ## Storage figures look wrong
 

@@ -503,6 +503,39 @@ func TestAnOwnersExportOfTheHouseholdMatchesItsManifest(t *testing.T) {
 	expect(t, jana.get(path+"/"+queued.ID.String()), http.StatusNotFound, problem.CodeNotFound)
 }
 
+// A household's archive holds what an owner reads, and is its requester's to take only while they
+// are one (D-133): made a member since it was built, they still read the job, without its link, and
+// an owner again, with it.
+func TestAHouseholdsArchiveIsItsRequestersWhileTheyAreAnOwner(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	petr, petrID := p.joined(jana, h.ID, "Petr", p.a("petr@tilcerovi.cz"), "owner", nil)
+	path := householdPath(h.ID, "/exports")
+	e := exportOf(t, petr.post(path, ""), http.StatusAccepted)
+	p.work()
+	if got := exportOf(t, petr.get(path+"/"+e.ID.String()), http.StatusOK); got.Status != "ready" || got.DownloadURL == nil {
+		t.Fatalf("an owner's export reads %+v", got)
+	}
+
+	expect(t, jana.patch(householdPath(h.ID, "/members/"+petrID.String()), `{"role":"member"}`, nil), http.StatusOK, "")
+	if got := exportOf(t, petr.get(path+"/"+e.ID.String()), http.StatusOK); got.Status != "ready" || got.DownloadURL != nil {
+		t.Fatalf("made a member, its requester reads %+v", got)
+	}
+	var listed struct {
+		Items []exportDoc `json:"items"`
+	}
+	decode(t, petr.get(path), &listed)
+	if len(listed.Items) != 1 || listed.Items[0].ID != e.ID || listed.Items[0].DownloadURL != nil {
+		t.Fatalf("made a member, its requester lists %+v", listed.Items)
+	}
+
+	expect(t, jana.post(householdPath(h.ID, "/ownership/transfer"), jsonBody(t, map[string]any{"user_id": petrID})), http.StatusOK, "")
+	if got := exportOf(t, petr.get(path+"/"+e.ID.String()), http.StatusOK); got.DownloadURL == nil {
+		t.Fatalf("an owner again, its requester reads %+v", got)
+	}
+}
+
 // A user asks for five exports of a kind in a day, and the sixth waits for the first to be a day old.
 func TestExportsAreHeldToFiveADay(t *testing.T) {
 	p := newPrivacySite(t)

@@ -39,7 +39,6 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/module"
-	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
@@ -85,8 +84,6 @@ type Config struct {
 	Households *household.Service
 	// Files is the files pipeline, whose store keeps the archives and whose objects erasure removes.
 	Files *files.Service
-	// Notify is the notification transport, which a household's members are told through.
-	Notify *notify.Service
 	// Catalogs render an export's activity log in its requester's language.
 	Catalogs *i18n.Catalogs
 	// APIVersion is the contract's version, which an archive's manifest names: its JSON matches the
@@ -109,7 +106,7 @@ type Service struct {
 // New returns the service.
 func New(cfg Config) (*Service, error) {
 	if cfg.Pool == nil || cfg.Meter == nil || cfg.Log == nil || cfg.Registry == nil || cfg.Accounts == nil ||
-		cfg.Households == nil || cfg.Files == nil || cfg.Notify == nil || cfg.Catalogs == nil {
+		cfg.Households == nil || cfg.Files == nil || cfg.Catalogs == nil {
 		return nil, errors.New("privacy: the service is missing a dependency")
 	}
 	if cfg.Now == nil {

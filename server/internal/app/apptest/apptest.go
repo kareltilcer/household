@@ -322,11 +322,11 @@ func Households(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.
 }
 
 // Privacy returns the export and erasure service for a router over pool, logging to log, on the clock
-// of o: over accounts' identity service, households and notifier, with the modules of registry and
-// the platform's own, and the files pipeline of o, or one over a bucket nobody made, whose store
-// refuses every archive.
+// of o: over accounts' identity service and households, with the modules of registry and the
+// platform's own, and the files pipeline of o, or one over a bucket nobody made, whose store refuses
+// every archive.
 func Privacy(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.Accounts, households *household.Service,
-	notifier *notify.Service, registry *module.Registry, o Options,
+	registry *module.Registry, o Options,
 ) *privacy.Service {
 	t.Helper()
 	beginner, ok := pool.(tenant.Beginner)
@@ -347,7 +347,7 @@ func Privacy(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.Acc
 	}
 	s, err := privacy.New(privacy.Config{
 		Pool: beginner, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Log: log, Registry: catalog,
-		Accounts: accounts.Identity, Households: households, Files: fs, Notify: notifier, Catalogs: catalogs,
+		Accounts: accounts.Identity, Households: households, Files: fs, Catalogs: catalogs,
 		APIVersion: "test", Now: o.Now,
 	})
 	if err != nil {
