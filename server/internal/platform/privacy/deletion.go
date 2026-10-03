@@ -103,10 +103,11 @@ func resolve(standings []household.Standing, chosen []uuid.UUID) ([]uuid.UUID, e
 // its own address typed out, since a stolen session alone must not delete an account; a child
 // profile, which an owner removes, is refused 403. Every household the account is in is resolved
 // first, and whatever blocks it is answered at once, 409 (resolve). Then the households chosen to go
-// with it are scheduled for deletion, their members told, and the account is disabled: every session
-// and device's sign-in ends, this request's own among them, nothing signs it in again, and its
-// address is sent the link that cancels it. The answer carries that link's token too, the one thing
-// the client that asked still holds.
+// with it are scheduled for deletion, their members told, each counting among its household's five
+// schedulings a day and refusing the request 429 past them (household.Service.ScheduleWithAccount),
+// and the account is disabled: every session and device's sign-in ends, this request's own among
+// them, nothing signs it in again, and its address is sent the link that cancels it. The answer
+// carries that link's token too, the one thing the client that asked still holds.
 //
 // It keeps no Idempotency-Key, whose fingerprint would be a fast hash of the password (D-97).
 func (s *Service) requestDeletion(w http.ResponseWriter, r *http.Request) {
@@ -246,8 +247,12 @@ func (s *Service) cancelDeletion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The households that were to go with it, each cancelled on its own: one that fails is logged,
-	// and its owner, signed in again, cancels it from the household.
-	standings, err := s.cfg.Households.Standings(ctx, user)
+	// and its owner, signed in again, cancels it from the household. Past the request's own context,
+	// as a scheduling's undo is: the account's cancellation has committed, and a client that hung up
+	// then would otherwise leave them scheduled, their members still told they are to be deleted,
+	// until the nightly job cancels each on the day it falls due.
+	following := context.WithoutCancel(ctx)
+	standings, err := s.cfg.Households.Standings(following, user)
 	if err != nil {
 		s.cfg.Log.LogAttrs(ctx, slog.LevelError, "privacy: a cancelled deletion's households", slog.Any("error", err))
 	}
@@ -255,7 +260,7 @@ func (s *Service) cancelDeletion(w http.ResponseWriter, r *http.Request) {
 		if !st.WithAccount {
 			continue
 		}
-		if err := s.cfg.Households.CancelWithAccount(ctx, s.cfg.Registry, st.Household, user); err != nil {
+		if err := s.cfg.Households.CancelWithAccount(following, s.cfg.Registry, st.Household, user); err != nil {
 			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "privacy: cancel a household's deletion", slog.String(logging.KeyHouseholdID, st.Household.String()),
 				slog.Any("error", err))
 		}

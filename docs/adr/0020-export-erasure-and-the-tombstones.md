@@ -99,7 +99,10 @@ the first pass, and the files sweep lists only households that exist.
 **The deletions are columns and rows a job finds.** A household's is four columns of its own row,
 written through the spine as its settings are, so that its members' replicas learn of it and its log
 records who scheduled it; the meter role reads `deletion_scheduled_at` to find the households due, as
-it reads the entitlement's clocks. An account's is a row of `account_deletions`, whose existence
+it reads the entitlement's clocks. Scheduling one counts among the household's five a day (D-132) in
+the mutation's own transaction (`ratelimit.Throttles.TakeIn`), so that a request that schedules
+nothing, refused or answered with the deletion already pending, counts for nothing and leaves no
+refund to make. An account's is a row of `account_deletions`, whose existence
 disables the account: identity's admission reads it under a lock on the user's row, which scheduling
 takes first, so that no sign-in commits beside it. Admission never waits for that row: one a
 scheduling holds reads as the account disabled, since a sign-in that waited for it while holding the

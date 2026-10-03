@@ -373,6 +373,48 @@ func TestRemoveAllKeepsToItsPrefix(t *testing.T) {
 	}
 }
 
+// RemoveAll says how many objects it removed, not how many it listed: a store that refuses a removal
+// partway leaves the rest, and the erasure that asked counts only what went.
+func TestRemoveAllCountsWhatItRemoved(t *testing.T) {
+	keys := []string{"h/a/documents/1/original", "h/a/documents/2/original", "h/a/documents/3/original"}
+	var deletes atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		switch {
+		case r.Method == http.MethodGet:
+			listing := `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">` +
+				`<Name>refusing</Name><Prefix>h/a/</Prefix><KeyCount>3</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated>`
+			for _, k := range keys {
+				listing += `<Contents><Key>` + k + `</Key><LastModified>2026-10-01T00:00:00.000Z</LastModified><Size>1</Size></Contents>`
+			}
+			_, _ = io.WriteString(w, listing+`</ListBucketResult>`)
+		case r.Method == http.MethodDelete && deletes.Add(1) == 1:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?><Error><Code>InternalError</Code><Message>We encountered an internal error.</Message></Error>`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	endpoint, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := objectstore.New(objectstore.Config{
+		Location: objectstore.Location{Endpoint: endpoint, Bucket: "refusing", AccessKey: "tester", Secret: "refusing"},
+		Attempts: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.RemoveAll(t.Context(), "h/a/"); err == nil || n != 1 {
+		t.Fatalf("remove all = %d, %v; want the one object removed before the store refused, and the refusal", n, err)
+	}
+	if n := deletes.Load(); n != 2 {
+		t.Fatalf("the store was asked for %d removals, want it to stop at the one refused", n)
+	}
+}
+
 func TestAKeyOutsideTheFormIsRefused(t *testing.T) {
 	s := testsupport.ObjectStore(t)
 	for _, k := range []string{"", "/h/a", "h/../b", "h/a/", "H/a", "h//a", "h/a b"} {

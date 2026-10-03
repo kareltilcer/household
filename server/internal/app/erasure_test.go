@@ -256,6 +256,31 @@ func TestAnErasedAccountLeavesATombstoneAndAFormerMember(t *testing.T) {
 	}
 }
 
+// The payer of a household that goes with the account blocks its deletion only while the household's
+// subscription still charges (FR-PR3, D-131): paid and current, or with a failed payment being tried
+// again. In grace nothing is charged any more, dunning exhausted or a trial ended unpaid (PRD 04 §3),
+// and there is nothing to cancel first: whoever let a trial run out deletes their account that day.
+func TestAHouseholdThatChargesNothingKeepsNobodyFromDeletingTheirAccount(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+
+	// Billing's states are item 19's to move; here they move as the administrator moves them.
+	p.exec("UPDATE households SET billing_state = 'past_due', dunning_ends_at = $2 WHERE id = $1", h.ID, p.clock.now().Add(7*24*time.Hour))
+	rec := jana.deleteAccount(passphrase)
+	expect(t, rec, http.StatusConflict, problem.CodeAccountDeletionBlocked)
+	var blocked struct {
+		Payer []uuid.UUID `json:"billing_payer_for"`
+	}
+	decode(t, rec, &blocked)
+	if len(blocked.Payer) != 1 || blocked.Payer[0] != h.ID {
+		t.Fatalf("with a payment still being tried, blocked by %+v", blocked)
+	}
+
+	p.exec("UPDATE households SET billing_state = 'grace', grace_ends_at = $2 WHERE id = $1", h.ID, p.clock.now().Add(14*24*time.Hour))
+	expect(t, jana.deleteAccount(passphrase), http.StatusAccepted, "")
+}
+
 // Nobody leaves a household to an owner who is leaving it too: an owner whose account is scheduled
 // for deletion counts as none (FR-HH4, FR-PR3). Where one is the last all the same when their account
 // is erased, the adult who has been a member longest is made an owner, and billing passes to them,
@@ -779,6 +804,55 @@ func TestAHouseholdsDeletionErasesEveryRowOfIt(t *testing.T) {
 	if p.erase(); len(p.objects("h/"+h.ID.String()+"/")) != 0 {
 		t.Error("bytes put after the erasure were kept")
 	}
+}
+
+// A household's deletion is scheduled five times a day (PRD 02 §9, D-132): each scheduling emails
+// every member, as the cancellation after it does, and no member mutes either, so an owner who
+// scheduled and cancelled in a loop would otherwise send them as fast as the API answers. A request
+// that schedules nothing, one refused or one that finds a deletion pending, counts for nothing, and
+// the household named with its owner's account counts as the owner's own request does.
+func TestAHouseholdsDeletionIsScheduledFiveTimesADay(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	janaID := jana.me().ID
+	h := jana.create("Tilcerovi")
+	address := p.a("petr@tilcerovi.cz")
+	p.joined(jana, h.ID, "Petr", address, "member", nil)
+	path := householdPath(h.ID, "/deletion")
+	schedule := func(name string) *httptest.ResponseRecorder {
+		return jana.post(path, jsonBody(t, map[string]string{"confirm_name": name}))
+	}
+
+	before := len(p.outbox.To(address))
+	for range 5 {
+		expect(t, schedule("Tilcerovi"), http.StatusAccepted, "")
+		// Asked again while it is pending, and asked under another name: nobody is told anything.
+		expect(t, schedule("Tilcerovi"), http.StatusAccepted, "")
+		expect(t, schedule("Chata"), http.StatusUnprocessableEntity, problem.CodeValidationFailed)
+		expect(t, jana.delete(path), http.StatusNoContent, "")
+	}
+	told := len(p.outbox.To(address))
+	if told-before != 10 {
+		t.Fatalf("five schedulings and their cancellations sent Petr %d emails, want 10", told-before)
+	}
+
+	rec := schedule("Tilcerovi")
+	expect(t, rec, http.StatusTooManyRequests, problem.CodeRateLimited)
+	if rec.Header().Get("Retry-After") == "" {
+		t.Error("the refusal names no time to try again")
+	}
+	// Naming it with her account is the same scheduling, and is refused with it: nothing is scheduled,
+	// hers included.
+	expect(t, jana.deleteAccount(passphrase, h.ID), http.StatusTooManyRequests, problem.CodeRateLimited)
+	if n := p.count("SELECT count(*) FROM account_deletions WHERE user_id = $1", janaID); n != 0 {
+		t.Fatal("her account's deletion was scheduled without the household she named")
+	}
+	if at := jana.scheduledFor(h.ID); at != nil || len(p.outbox.To(address)) != told {
+		t.Fatalf("past the day's five, the household is scheduled for %v and Petr has %d emails", at, len(p.outbox.To(address)))
+	}
+
+	p.clock.advance(24*time.Hour + time.Minute)
+	expect(t, schedule("Tilcerovi"), http.StatusAccepted, "")
 }
 
 // A lapsed household's data is deleted when its retention has run out and its owners were warned

@@ -108,7 +108,9 @@ The flow resolves each of the user's households first, and states plainly what w
 **D-131** settles what the table leaves open. An owner whose own account is scheduled for deletion
 counts as no owner, so that nobody leaves a household to an owner who is leaving it too. The payer
 blocks while the household goes on without them, and while one that goes with the account still
-charges. A household chosen for deletion is scheduled then, with the account's, and its members are
+charges: `active`, or `past_due`. In `grace` nothing is charged any more
+([04](04-billing-and-entitlements.md) §3), so whoever let a trial run out has nothing to cancel
+first. A household chosen for deletion is scheduled then, with the account's, and its members are
 told; cancelling the account's deletion cancels it, as an owner the household has by then does, and
 nothing else. The request is refused with every blocking household at once, never one at a time.
 
@@ -148,7 +150,9 @@ execution.
 **The household works as it did for the 30 days (D-132)**: the window is its members' time to take
 what is theirs, each by their own export. Every member is emailed when it is scheduled and when it
 is cancelled, whatever they muted, and the members other than the one who did it are sent a push;
-the household's row says when it goes, and any owner cancels. Its erasure deletes every row of it,
+the household's row says when it goes, and any owner cancels. Since no member can stop those emails,
+a household's deletion is scheduled five times a day and no more
+([02](02-identity-and-access.md) §9). Its erasure deletes every row of it,
 by deleting its own, which every tenant table hangs from, and every object under its prefix; its
 child profiles, which are nothing outside it, are erased with it (D-134).
 

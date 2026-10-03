@@ -454,6 +454,7 @@ to the household as *"Household support extended your trial"*.
 | Verification email resend, per account | 1 / min and 5 / hour |
 | Verification email resend, per IP | 20 / hour |
 | Invitation send, per household | 20 / day |
+| A household's deletion scheduled, per household | 5 / day, by an owner or with an owner's account; one asked for while one is pending is answered with it and counts for nothing (D-132) |
 | Export requests, per user, their own and each household's apart | 5 / day; while one waits or runs, asking again answers it (D-133) |
 | Diagnostic bundles, per account | 20 / day; one sent again with its `id` is answered as it was and counts once (D-136) |
 | Second-step codes, per account | 5 wrong / 5 min, the first code that turns it on included; the tenth wrong since the last right one locks the authenticator (FR-ID5) |

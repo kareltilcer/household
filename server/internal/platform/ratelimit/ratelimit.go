@@ -86,6 +86,10 @@ var (
 	// A household sends twenty invitations a day, counted by the household, a resend among them:
 	// each is an email to an address its owners chose.
 	InvitationHousehold = Limit{Name: "invitation.household", Max: 20, Window: 24 * time.Hour}
+	// A household's deletion is scheduled five times a day, counted by the household, by an owner or
+	// with an owner's account (D-132): each scheduling emails every member, as the cancellation that
+	// follows it does, and no member mutes either.
+	DeletionHousehold = Limit{Name: "deletion.household", Max: 5, Window: 24 * time.Hour}
 	// A client's network looks up thirty household codes an hour that open no household (D-104): a
 	// code identifies a household and authenticates nobody, and one found shows its child profiles'
 	// names, so guessing them is what is counted.
@@ -177,16 +181,27 @@ func (l Limit) fail(s state, now time.Time) state {
 // Take counts an attempt by each subject under its limit, and refuses it, counting nothing and
 // returning the longest wait, when any subject has made its limit's Max in the current window.
 func (t *Throttles) Take(ctx context.Context, counts ...Count) (time.Duration, error) {
-	return t.update(ctx, counts, func(l Limit, s state, now time.Time) (state, time.Duration) {
-		if !now.Before(s.windowEnds) {
-			s = state{windowEnds: now.Add(l.Window)}
-		}
-		if s.count >= l.Max {
-			return s, max(s.windowEnds.Sub(now), time.Second)
-		}
-		s.count++
-		return s, 0
-	})
+	return t.update(ctx, counts, take)
+}
+
+// TakeIn is Take in tx, the transaction of what the attempt does: the count commits with what it
+// counts and is undone with it, so that an attempt that did nothing in the end is counted for nothing
+// and leaves no refund to make. The caller rolls tx back when it is refused.
+func (t *Throttles) TakeIn(ctx context.Context, tx pgx.Tx, counts ...Count) (time.Duration, error) {
+	return t.updateIn(ctx, tx, counts, take)
+}
+
+// take is Take's step: one more in the window, started afresh once it has ended, and a wait until it
+// ends once it holds the limit's Max.
+func take(l Limit, s state, now time.Time) (state, time.Duration) {
+	if !now.Before(s.windowEnds) {
+		s = state{windowEnds: now.Add(l.Window)}
+	}
+	if s.count >= l.Max {
+		return s, max(s.windowEnds.Sub(now), time.Second)
+	}
+	s.count++
+	return s, 0
 }
 
 // Count is a subject as a limit counts it.
@@ -236,6 +251,18 @@ func (t *Throttles) Clear(ctx context.Context, l Limit, subject string) error {
 // an attempt running beside it brought about leaves the empty rows made for subjects not seen
 // before.
 func (t *Throttles) update(ctx context.Context, counts []Count, step func(Limit, state, time.Time) (state, time.Duration)) (time.Duration, error) {
+	var wait time.Duration
+	err := pgx.BeginTxFunc(ctx, t.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		var err error
+		wait, err = t.updateIn(ctx, tx, counts, step)
+		return err
+	})
+	return wait, err
+}
+
+// updateIn is update in tx, which the caller commits or rolls back.
+func (t *Throttles) updateIn(ctx context.Context, tx pgx.Tx, counts []Count, step func(Limit, state, time.Time) (state, time.Duration),
+) (time.Duration, error) {
 	type row struct {
 		limit Limit
 		key   []byte
@@ -252,64 +279,60 @@ func (t *Throttles) update(ctx context.Context, counts []Count, step func(Limit,
 	// same rows never wait on each other in a cycle.
 	slices.SortFunc(rows, func(a, b row) int { return bytes.Compare(a.key, b.key) })
 	var wait time.Duration
-	err := pgx.BeginTxFunc(ctx, t.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		wait = 0
-		now := t.now()
-		// The rows as they stand, unlocked. A subject with none has an ended window, which no limit
-		// refuses; the rows read again under their locks, below, decide an attempt they admit.
-		standing, err := read(ctx, tx, keys)
-		if err != nil {
-			return err
-		}
-		for _, r := range rows {
-			if s, ok := standing[string(r.key)]; ok {
-				_, refused := step(r.limit, s, now)
-				wait = max(wait, refused)
-			}
-		}
-		if wait > 0 {
-			return nil
-		}
-		for i := range rows {
-			r := &rows[i]
-			// The row made, or the one there locked, in one statement: a subject with no row has an
-			// ended window, which the step starts afresh. Made and then read apart, a row a Clear
-			// deleted in between would be gone by the read, and the attempt would fail.
-			var (
-				s       state
-				blocked *time.Time
-			)
-			if err := tx.QueryRow(ctx, `
-				INSERT INTO auth_throttles (key, count, window_ends_at) VALUES ($1, 0, $2)
-				ON CONFLICT (key) DO UPDATE SET count = auth_throttles.count
-				RETURNING count, window_ends_at, blocked_until`,
-				r.key, now).Scan(&s.count, &s.windowEnds, &blocked); err != nil {
-				return err
-			}
-			if blocked != nil {
-				s.blockedUntil = *blocked
-			}
-			var refused time.Duration
-			r.next, refused = step(r.limit, s, now)
+	now := t.now()
+	// The rows as they stand, unlocked. A subject with none has an ended window, which no limit
+	// refuses; the rows read again under their locks, below, decide an attempt they admit.
+	standing, err := read(ctx, tx, keys)
+	if err != nil {
+		return 0, err
+	}
+	for _, r := range rows {
+		if s, ok := standing[string(r.key)]; ok {
+			_, refused := step(r.limit, s, now)
 			wait = max(wait, refused)
 		}
-		if wait > 0 {
-			return nil
+	}
+	if wait > 0 {
+		return wait, nil
+	}
+	for i := range rows {
+		r := &rows[i]
+		// The row made, or the one there locked, in one statement: a subject with no row has an
+		// ended window, which the step starts afresh. Made and then read apart, a row a Clear
+		// deleted in between would be gone by the read, and the attempt would fail.
+		var (
+			s       state
+			blocked *time.Time
+		)
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO auth_throttles (key, count, window_ends_at) VALUES ($1, 0, $2)
+			ON CONFLICT (key) DO UPDATE SET count = auth_throttles.count
+			RETURNING count, window_ends_at, blocked_until`,
+			r.key, now).Scan(&s.count, &s.windowEnds, &blocked); err != nil {
+			return 0, err
 		}
-		for _, r := range rows {
-			var blockedUntil *time.Time
-			if !r.next.blockedUntil.IsZero() {
-				blockedUntil = &r.next.blockedUntil
-			}
-			if _, err := tx.Exec(ctx,
-				"UPDATE auth_throttles SET count = $2, window_ends_at = $3, blocked_until = $4 WHERE key = $1",
-				r.key, r.next.count, r.next.windowEnds, blockedUntil); err != nil {
-				return err
-			}
+		if blocked != nil {
+			s.blockedUntil = *blocked
 		}
-		return nil
-	})
-	return wait, err
+		var refused time.Duration
+		r.next, refused = step(r.limit, s, now)
+		wait = max(wait, refused)
+	}
+	if wait > 0 {
+		return wait, nil
+	}
+	for _, r := range rows {
+		var blockedUntil *time.Time
+		if !r.next.blockedUntil.IsZero() {
+			blockedUntil = &r.next.blockedUntil
+		}
+		if _, err := tx.Exec(ctx,
+			"UPDATE auth_throttles SET count = $2, window_ends_at = $3, blocked_until = $4 WHERE key = $1",
+			r.key, r.next.count, r.next.windowEnds, blockedUntil); err != nil {
+			return 0, err
+		}
+	}
+	return 0, nil
 }
 
 // read returns the rows of keys that exist, by key, as they stand, without locking them.

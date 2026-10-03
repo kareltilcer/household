@@ -354,8 +354,8 @@ var prefix = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*(?:/[a-z0-9][a-z0-9_-]*)+/$
 
 // RemoveAll removes every object whose key starts with under, which names at least two segments and
 // ends in a slash, h/{household_id}/ or u/{user_id}/: an erasure's (FR-PR4, FR-PR6). It lists them
-// all before it removes any, and returns how many it removed; run again, it removes what was written
-// since.
+// all before it removes any, and returns how many it removed, which is fewer than it listed when a
+// removal fails; run again, it removes what is left, and what was written since.
 func (s *Store) RemoveAll(ctx context.Context, under string) (int, error) {
 	if !prefix.MatchString(under) {
 		return 0, ErrInvalidKey
@@ -367,7 +367,12 @@ func (s *Store) RemoveAll(ctx context.Context, under string) (int, error) {
 	}); err != nil {
 		return 0, err
 	}
-	return len(keys), s.Delete(ctx, keys...)
+	for removed, k := range keys {
+		if err := s.Delete(ctx, k); err != nil {
+			return removed, err
+		}
+	}
+	return len(keys), nil
 }
 
 // Info is what the store holds about an object.

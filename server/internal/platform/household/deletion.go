@@ -20,6 +20,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
+	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
@@ -105,6 +106,13 @@ func (s *Service) tell(ctx context.Context, tx pgx.Tx, household, actor uuid.UUI
 // household's lock, and returns its record with the deletion as it stands. account, when set, is the
 // account whose own deletion it follows (FR-PR3). A household with one pending already is left as it
 // is, and the record is empty: the deletion that was asked for first is the one that executes.
+//
+// A household's deletion is scheduled five times a day, and one past them is refused 429 (PRD 02 §9,
+// D-132): every scheduling emails every member, and so does the cancellation that follows it, in the
+// fixed set no member mutes, so an owner who scheduled and cancelled in a loop would otherwise send
+// them as fast as the API answers. It is counted in tx, with what it counts: a request that
+// schedules nothing, one refused, one that failed or one that found a deletion pending, counts for
+// nothing.
 func (s *Service) schedule(ctx context.Context, tx pgx.Tx, household, actor, account uuid.UUID, now time.Time) (mutation.Record, Deletion, error) {
 	p, err := readPending(ctx, tx, household)
 	if err != nil {
@@ -112,6 +120,13 @@ func (s *Service) schedule(ctx context.Context, tx pgx.Tx, household, actor, acc
 	}
 	if p.id != nil {
 		return mutation.Record{}, p.body(), nil
+	}
+	wait, err := s.Throttles.TakeIn(ctx, tx, ratelimit.Count{Limit: ratelimit.DeletionHousehold, Subject: household.String()})
+	switch {
+	case err != nil:
+		return mutation.Record{}, Deletion{}, err
+	case wait > 0:
+		return mutation.Record{}, Deletion{}, ratelimit.Refusal(wait)
 	}
 	var with *uuid.UUID
 	if account != uuid.Nil {
@@ -175,7 +190,8 @@ func sameName(typed, name string) bool {
 // schedules its deletion for 30 days on. Every member is told at once. Until then the household
 // works as it did, so that its members can take what is theirs, and any owner can cancel; the gate
 // lets it through in every state but suspended (FR-BI1). A household whose deletion is scheduled
-// already is answered with that deletion.
+// already is answered with that deletion, and one scheduled five times that day is refused 429
+// (schedule).
 func (s *Service) scheduleDeletion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)
@@ -259,7 +275,8 @@ type Standing struct {
 	// SoleOwner is whether the user is its only owner who will still be there (otherOwners).
 	SoleOwner bool
 	// Payer is whether the user is its payer of record, and Paying whether its subscription is one
-	// that still charges: active, past due or in grace.
+	// that still charges: active, or past due, a failed payment being tried again. In grace nothing
+	// is charged any more, dunning exhausted or a trial ended without payment (PRD 04 §3).
 	Payer, Paying bool
 	// WithAccount is whether its deletion is scheduled to follow the user's account's.
 	WithAccount bool
@@ -310,7 +327,7 @@ func standing(ctx context.Context, tx pgx.Tx, user uuid.UUID, st *Standing) erro
 		return err
 	}
 	st.Payer = payer != nil && *payer == user
-	st.Paying = billing == "active" || billing == "past_due" || billing == "grace"
+	st.Paying = billing == "active" || billing == "past_due"
 	st.WithAccount = account != nil && *account == user
 	if st.Role == access.Owner {
 		others, err := otherOwners(ctx, tx, st.Household, user)
@@ -330,7 +347,8 @@ var ErrNotSoleOwner = errors.New("household: not the household's only owner")
 // (FR-PR3): the household they are the only owner of and chose to delete with it, whose every
 // member is told now. It is user's own mutation, as ctx's request says it arrived, checked under the
 // household's lock: one who is not its only owner by then is answered ErrNotSoleOwner. ctx carries
-// the module registry (mutation.Catalog).
+// the module registry (mutation.Catalog). It counts among the household's five schedulings a day, as
+// an owner's own request does, and is answered their 429 past them (schedule).
 func (s *Service) ScheduleWithAccount(ctx context.Context, household, user uuid.UUID) error {
 	scoped := tenant.Assume(ctx, s.Pool, household, user, access.Owner)
 	res, err := mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {

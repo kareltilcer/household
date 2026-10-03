@@ -59,6 +59,10 @@ func (s *Service) loadMe(ctx context.Context, tx pgx.Tx, user uuid.UUID) (meJSON
 	if err != nil {
 		return me, err
 	}
+	if me.DeletionScheduledAt != nil {
+		at := me.DeletionScheduledAt.UTC()
+		me.DeletionScheduledAt = &at
+	}
 	me.IsChild = slices.Contains(me.Credentials, "child_pin")
 	if me.MFAEnabled {
 		me.MFARecoveryCodesLeft = &left

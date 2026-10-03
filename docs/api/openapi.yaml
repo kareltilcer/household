@@ -951,11 +951,13 @@ paths:
         Resolves every household the user belongs to first (PRD 05 §4). Blocked when the user is the
         only owner of a household with other members and has not named it in
         `delete_sole_owned_households`, when they are the payer of a household that goes on without
-        them, or of one whose subscription still charges, and the problem document names every one
-        at once. An owner whose own account is scheduled for deletion counts as no owner. A household
-        the user is the only member of goes with the account, unasked; one named is scheduled for
-        deletion with it, and its members are told now; in every other the membership ends when the
-        account does, what the user made staying with the household under a former member's name.
+        them, or of one whose subscription still charges (`active` or `past_due`, not `grace`), and
+        the problem document names every one at once. An owner whose own account is scheduled for
+        deletion counts as no owner. A household the user is the only member of goes with the
+        account, unasked; one named is scheduled for deletion with it, and its members are told now;
+        in every other the membership ends when the account does, what the user made staying with the
+        household under a former member's name. A named household whose deletion was scheduled five
+        times that day already refuses the request `429`, as `postDeletion` does.
 
         `password_or_confirmation` is the account's password, checked and counted as a sign-in's is,
         or, for an account that signs in only with a provider and has none, its own email address
@@ -1422,6 +1424,11 @@ paths:
         owner cancels it. A household whose deletion is scheduled already is answered with that
         deletion. Its `cancel_token` is null: a household's deletion is cancelled through the
         household.
+
+        A household's deletion is scheduled five times in a day, by an owner or with an owner's
+        account (`postMeDeletion`), and past that the request is refused `429`: scheduling one and
+        cancelling it each email every member, whatever they muted (D-132). A request that schedules
+        nothing counts for nothing.
 
         A `POST` to a sub-resource rather than a `DELETE /households/{household_id}` with a body:
         RFC 9110 gives a `DELETE` payload no defined semantics and intermediaries and generated
