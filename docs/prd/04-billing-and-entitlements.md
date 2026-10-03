@@ -228,7 +228,7 @@ back below the ceiling (**D-116**).
 | **Methods** | Card, SEPA Direct Debit, Apple Pay, Google Pay. Bank transfer for annual plans on request |
 | **In-app purchase** | **Not used.** Household is a "multiplatform service" and the subscription is sold on the web. The apps do not offer, and must not link to, an alternative purchase flow inside the binary where store rules forbid it. See §7 |
 | **Invoices** | Issued per billing period with the base fee and metered overage as separate lines; downloadable from the app; emailed to the payer, who alone reads them (**D-133**) |
-| **Dunning** | Retry at 1, 3, 5 and 7 days; email to the payer at each retry that fails; in-app banner to owners from the first failure, which is not emailed (**D-132**) |
+| **Dunning** | Retried for seven days after the first failure, at 1, 3, 5 and 7 days as nearly as the processor's settings allow: the schedule is the processor's, which takes either four retries on days of its own choosing within the week or three at days 1, 4 and 7. Email to the payer at each retry that fails; in-app banner to owners from the first failure, which is not emailed (**D-132**) |
 | **Proration** | Plan changes and cancellations prorate. Metered overage is never prorated — it is measured over actual days |
 
 **FR-BI5 — The payer is a member, not an abstraction.** Billing screens are visible only to the

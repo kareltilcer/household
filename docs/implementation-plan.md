@@ -741,7 +741,7 @@ Phase 0 · after 16, 14 · size L
   - **Webhooks**: signature-verified and idempotent, each reading from Stripe what it names rather than acting on what it carries ([D-132](prd/09-decisions.md), [ADR 0019](adr/0019-billing-the-processor-webhooks-the-payer-and-storage-lines.md)). They drive the state machine: the columns item 16 keeps on the household's row ([ADR 0017](adr/0017-entitlements-on-the-households-row-the-gate-and-fair-use.md)), entering `past_due` with its `dunning_ends_at`, `canceled` with its `lapsed_at` and `retained_until` (`entitlement.RetainedUntil`), and `active` with every clock cleared, each through the mutation spine as item 16's hourly moves are; that job stays the backstop.
   - **Stored data**: a payment-method summary only.
   - **Invoices**: list, download and email, each its payer's ([D-133](prd/09-decisions.md)).
-  - **Dunning**: emails at 1, 3, 5 and 7 days, as each of Stripe's retries fails, plus owner banners from the first failure; the retry schedule is the Stripe account's ([runbook](runbooks/billing.md)).
+  - **Dunning**: an email as each of Stripe's retries fails, over the seven days after the first failure, plus owner banners from the first failure. The retry schedule is the Stripe account's, which cannot be set to days 1, 3, 5 and 7 exactly: the [runbook](runbooks/billing.md) gives the two settings nearest them, and the choice between them is yours.
   - **Payer**:
     - Must be verified.
     - Take-over handshake (FR-BI6): offer, accept, and the move once the new payer's card is confirmed, their subscription starting when the paid period ends ([D-131](prd/09-decisions.md)).
