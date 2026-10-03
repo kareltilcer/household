@@ -34,6 +34,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/billing"
 	"github.com/kareltilcer/household/server/internal/platform/files"
 	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/i18n"
@@ -84,6 +85,10 @@ type Config struct {
 	Households *household.Service
 	// Files is the files pipeline, whose store keeps the archives and whose objects erasure removes.
 	Files *files.Service
+	// Billing is billing (item 19): a household erased has its subscription ended at the payment
+	// processor first, an erased account's customers there go with it, and what billing keeps of a
+	// payer is in their exports.
+	Billing *billing.Service
 	// Catalogs render an export's activity log in its requester's language.
 	Catalogs *i18n.Catalogs
 	// APIVersion is the contract's version, which an archive's manifest names: its JSON matches the
@@ -106,7 +111,7 @@ type Service struct {
 // New returns the service.
 func New(cfg Config) (*Service, error) {
 	if cfg.Pool == nil || cfg.Meter == nil || cfg.Log == nil || cfg.Registry == nil || cfg.Accounts == nil ||
-		cfg.Households == nil || cfg.Files == nil || cfg.Catalogs == nil {
+		cfg.Households == nil || cfg.Files == nil || cfg.Billing == nil || cfg.Catalogs == nil {
 		return nil, errors.New("privacy: the service is missing a dependency")
 	}
 	if cfg.Now == nil {

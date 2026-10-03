@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/billing"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/module"
@@ -321,6 +322,15 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 		if archives, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
 			return err
 		}
+		// A household deleted is no longer charged: its subscriptions are ended at the payment
+		// processor here, once the row's lock is held and nothing cancels the erasure any more, and
+		// before the rows that name them go (billing.Service.Close). The processor is asked inside the
+		// transaction, which is held meanwhile: a failure there leaves the household as it was, for the
+		// next night, where a subscription ended and then not erased would be the lesser harm, a
+		// household due for deletion that lapses a night early.
+		if err := s.cfg.Billing.Close(ctx, tx, household); err != nil {
+			return err
+		}
 		if err := EraseRows(scoped, tx, s.cfg.Registry, household); err != nil {
 			return err
 		}
@@ -440,7 +450,15 @@ func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Tim
 			return households, false, err
 		}
 	}
+	// The account's customers at the payment processor go before the rows that name them: asked
+	// again the next night, should what follows fail, a customer deleted already is gone already.
+	if err := s.cfg.Billing.Forget(ctx, user); err != nil {
+		return households, false, err
+	}
 	err = tenant.AccountTx(ctx, s.cfg.Pool, user, func(tx pgx.Tx) error {
+		if err := billing.ForgetRows(ctx, tx, user); err != nil {
+			return err
+		}
 		for _, table := range []string{"exports", "diagnostic_bundles", "consents", "account_deletions"} {
 			if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE user_id = $1", user); err != nil {
 				return err

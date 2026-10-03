@@ -955,7 +955,9 @@ paths:
         Resolves every household the user belongs to first (PRD 05 §4). Blocked when the user is the
         only owner of a household with other members and has not named it in
         `delete_sole_owned_households`, when they are the payer of a household that goes on without
-        them, or of one whose subscription still charges (`active` or `past_due`, not `grace`), and
+        them, or of one with a subscription that will charge again (its own, and not cancelled at
+        its period's end with `postBillingCancel`; a household in its trial, in `grace` or lapsed has
+        none), and
         the problem document names every one at once. An owner whose own account is scheduled for
         deletion counts as no owner. A household the user is the only member of goes with the
         account, unasked; one named is scheduled for deletion with it, and its members are told now;

@@ -87,6 +87,13 @@ type privacySite struct {
 
 func newPrivacySite(t *testing.T) *privacySite {
 	t.Helper()
+	return privacySiteWith(t, apptest.Options{})
+}
+
+// privacySiteWith is newPrivacySite over o, which says what else the site has: a payment processor,
+// for one.
+func privacySiteWith(t *testing.T, o apptest.Options) *privacySite {
+	t.Helper()
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
 	fs := apptest.Files(t, pool, logging.New(io.Discard, slog.LevelDebug), apptest.Options{})
 	refuse, panics := &atomic.Bool{}, &atomic.Bool{}
@@ -106,7 +113,8 @@ func newPrivacySite(t *testing.T) *privacySite {
 	named := func(ctx context.Context, tx pgx.Tx, h, user uuid.UUID) error {
 		return privacy.Named(now)(ctx, tx, h, user)
 	}
-	s := newSite(t, apptest.Options{Files: fs, Hooks: household.Hooks{Lost: lost, Named: named}}, func(d *app.Deps) { d.Modules = registry })
+	o.Files, o.Hooks = fs, household.Hooks{Lost: lost, Named: named}
+	s := newSite(t, o, func(d *app.Deps) { d.Modules = registry })
 	now = s.clock.now
 	return &privacySite{site: s, files: fs, store: fs.Store(), refuse: refuse, panics: panics}
 }

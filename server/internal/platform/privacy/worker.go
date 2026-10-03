@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/access"
+	"github.com/kareltilcer/household/server/internal/platform/billing"
 	"github.com/kareltilcer/household/server/internal/platform/entitlement"
 	"github.com/kareltilcer/household/server/internal/platform/files"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
@@ -272,6 +273,9 @@ func (s *Service) ready(ctx context.Context, j job) {
 		i18n.Args{"kind": kind, "household": name, "days": int(ArchiveKept / (24 * time.Hour))})
 }
 
+// billingName names billing's part of an export, billing.json.
+const billingName = "billing"
+
 // errGone ends an export that can no longer be built: its requester is no longer an owner of the
 // household it was of, or the household is gone or suspended.
 var errGone = errors.New("privacy: the export's requester may no longer take it")
@@ -462,8 +466,10 @@ func (s *Service) householdsOf(ctx context.Context, user uuid.UUID) ([]taken, er
 func (s *Service) household(ctx context.Context, a *archive, prefix string, id, user uuid.UUID, scope module.ExportScope, locale i18n.Locale,
 ) (ManifestHousehold, error) {
 	out := ManifestHousehold{ID: id, Path: strings.TrimSuffix(prefix, "/"), Scope: scope, Modules: []string{}}
-	sources := sources(s.cfg.Registry)
-	platform := map[string]bool{}
+	// Billing is no module, and what it keeps of a payer is theirs all the same: billing.json, which
+	// holds the requester's own subscriptions and invoices and nobody else's, whatever the scope.
+	sources := append(sources(s.cfg.Registry), source{name: billingName, export: billing.Export})
+	platform := map[string]bool{billingName: true}
 	for _, p := range s.cfg.Registry.Platform() {
 		platform[p.Name] = true
 	}
@@ -521,10 +527,15 @@ func (s *Service) household(ctx context.Context, a *archive, prefix string, id, 
 			if src.export == nil || !slices.Contains(asked, src.name) {
 				continue
 			}
-			if err := src.export(ctx, tx, e, &part{a: a, prefix: prefix, module: src.name, files: &named}); err != nil {
+			written := &part{a: a, prefix: prefix, module: src.name, files: &named}
+			if err := src.export(ctx, tx, e, written); err != nil {
 				return fmt.Errorf("privacy: export %s: %w", src.name, err)
 			}
-			out.Modules = append(out.Modules, src.name)
+			// Billing is named only where it holds something of the requester's: it is no module of the
+			// household's, and most members never paid.
+			if src.name != billingName || written.wrote {
+				out.Modules = append(out.Modules, src.name)
+			}
 		}
 		if e.Scope == module.ExportDeparted {
 			return nil

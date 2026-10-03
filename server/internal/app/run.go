@@ -115,7 +115,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	}
 	eraser, err := privacy.New(privacy.Config{
 		Pool: pool, Meter: meter, Log: log, Registry: catalog, Accounts: accounts.Identity, Households: households,
-		Files: pipeline, Catalogs: catalogs, APIVersion: c.Version(),
+		Files: pipeline, Billing: bills, Catalogs: catalogs, APIVersion: c.Version(),
 	})
 	if err != nil {
 		return err

@@ -132,7 +132,7 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 	}
 	// Over the modules the options gave the router, which a test's own export and erasure go through.
 	if deps.Privacy == nil {
-		deps.Privacy = apptest.Privacy(t, pool, log, accounts, households, deps.Modules, o)
+		deps.Privacy = apptest.Privacy(t, pool, log, accounts, households, deps.Billing, deps.Modules, o)
 	}
 	r, err := app.NewRouter(deps)
 	if err != nil {

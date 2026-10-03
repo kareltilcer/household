@@ -116,6 +116,23 @@ failed payment only. Resend its `customer.subscription.deleted`, or any event of
 3. A row with blocks and an invoice item is billed: the item is on the subscription's next invoice,
    or, for a yearly subscription, on the month's own.
 
+## A household or an account is erased
+
+The nightly erasure (02:30 UTC, [ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md)) ends a
+deleted household's subscriptions at Stripe before its rows go, and deletes an erased account's
+customers there with their rows.
+
+1. `privacy: an erasure failed` in the API's log, with Stripe's error beside it, means Stripe could
+   not be asked: nothing of that household or account was erased, and the job tries again fifteen
+   minutes later and the next night. A household keeps being due until it is erased.
+2. A subscription ended this way is cancelled at once, with no final invoice and nothing prorated.
+   Stripe then sends `customer.subscription.deleted` for a household the server no longer has, which
+   it answers `204` and makes nothing of.
+3. Stripe keeps the invoices of a deleted customer. They are the statutory record (PRD 05 §1), and
+   the server keeps none of them once the household is gone.
+4. A deleted household that is still charged was erased while Stripe held a subscription the server
+   had no row for. Cancel it in Stripe's dashboard, by the household's id in its metadata.
+
 ## A key leaks or is rotated
 
 Roll the key in Stripe, set the new one, and deploy: Stripe keeps the old key alive for the time you

@@ -70,6 +70,20 @@ role may not delete from, goes too. `internal/arch`'s erasure test runs it over 
 which holds a row of household A in every tenant table, and fails any table that still holds one, or
 that lost one of household B's.
 
+**A household erased is no longer charged, and an erased account's customers go with it.** Item 19
+merged while this item was built, and left it both
+([ADR 0020](0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md)). `billing.Service.Close`
+ends every subscription of the household's that is not over at the processor, inside the
+transaction that erases it, once the row's lock is held and its being due is confirmed, and before
+the rows that name the subscriptions go: a processor that cannot be asked leaves the household as it
+was, for the next night, and one asked that then fails to commit has lapsed a household that was due
+to go. `billing.Service.Forget` deletes the account's customers at the processor before the
+transaction that leaves the tombstone deletes their rows; the processor ends whatever subscription a
+customer still has with it, and keeps the invoices it issued as its own record (PRD 05 §1). Whether a
+payer must cancel first is read from billing's rows (`household.Standing.Paying`): a subscription of
+the household's own that is live and not cancelled at its period's end. An export carries
+`billing.json`, its requester's own subscriptions and invoices and nobody else's (FR-BI5).
+
 **An account is erased table by table, last.** In each household the account is in, each module
 first deletes what the member kept privately, the notifications sent to them go, and `forget_actor`
 takes their name off the events they caused, a `SECURITY DEFINER` function that makes that one change
@@ -155,8 +169,10 @@ that moment would be one it had not seen.
   `Erase` for a member's private data. A module with no private root erases nothing of a member's.
 - A new tenant table references its household with `ON DELETE CASCADE`, or its module erases it; the
   erasure test fails the PR otherwise. The isolation fixture's row for the table is what proves it.
-- Item 19 cancels a household's subscription when its deletion executes, and moves a subscription's
-  state so that an account's deletion sees whether it still charges (`household.Standing.Paying`).
+- `billing.Processor` gains `DeleteCustomer`, and billing `Close`, `Forget` and `Export`: what
+  [ADR 0020](0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md) left to this item.
+  What the processor says later of a subscription whose household is gone is about nothing, as
+  billing already takes it (`errGone`).
 - Item 21 reads `diagnostic_bundles` (`getPlatformDiagnosticsByBundleId`), and may record erasures in
   the platform audit log.
 - Items 25 and 29 build A-20 over `postMeDeletion`, and item 25 the page the email's link opens,

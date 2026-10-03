@@ -108,10 +108,15 @@ The flow resolves each of the user's households first, and states plainly what w
 
 **D-137** settles what the table leaves open. An owner whose own account is scheduled for deletion
 counts as no owner, so that nobody leaves a household to an owner who is leaving it too. The payer
-blocks while the household goes on without them, and while one that goes with the account still
-charges: `active`, or `past_due`. In `grace` nothing is charged any more
-([04](04-billing-and-entitlements.md) §3), so whoever let a trial run out has nothing to cancel
-first. A household chosen for deletion is scheduled then, with the account's, and its members are
+blocks while the household goes on without them, and while one that goes with the account has a
+subscription that will charge again: its own, live at the payment processor, and not cancelled at
+its period's end. One its payer has cancelled charges nothing more however long the period it paid
+for still runs, and a household with no subscription, in its trial, in `grace` or lapsed, charges
+nothing at all ([04](04-billing-and-entitlements.md) §3), so whoever let a trial run out has nothing
+to cancel first. A household erased is no longer charged: its subscriptions are ended at the
+processor as it goes, and an erased account's customers there are deleted with it
+([ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md)); the invoices the processor issued are
+its own record, kept as the statute asks (§1). A household chosen for deletion is scheduled then, with the account's, and its members are
 told; cancelling the account's deletion cancels it, as an owner the household has by then does, and
 nothing else. The request is refused with every blocking household at once, never one at a time.
 

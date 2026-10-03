@@ -133,6 +133,13 @@ func (s *Stripe) CreateCustomer(ctx context.Context, c NewCustomer) (string, err
 	return customer.ID, nil
 }
 
+func (s *Stripe) DeleteCustomer(ctx context.Context, id string) error {
+	if _, err := s.client.V1Customers.Delete(ctx, id, &stripe.CustomerDeleteParams{}); err != nil && !missing(err) {
+		return fault(err)
+	}
+	return nil
+}
+
 func (s *Stripe) Subscribe(ctx context.Context, n NewSubscription) (Subscription, *Confirmation, error) {
 	params := &stripe.SubscriptionCreateParams{
 		Customer: stripe.String(n.Customer),

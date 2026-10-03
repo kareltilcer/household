@@ -77,15 +77,16 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
 	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
 	households := apptest.Households(t, pool, log, accounts, notifier, apptest.Options{})
+	bills := apptest.Billing(t, pool, log, notifier, apptest.Options{})
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Meter: d.Pool(t, db.RoleMeter), Modules: registry, MaxBodyBytes: 1 << 10, Accounts: accounts,
 		Households: households,
 		Notify:     notifier,
-		Privacy:    apptest.Privacy(t, pool, log, accounts, households, registry, apptest.Options{}),
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, bills, registry, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
-		Billing:    apptest.Billing(t, pool, log, notifier, apptest.Options{}),
+		Billing:    bills,
 	}
 	for _, o := range options {
 		o(&deps)

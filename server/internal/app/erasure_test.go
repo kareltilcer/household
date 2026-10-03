@@ -318,27 +318,16 @@ func TestAnErasedAccountLeavesATombstoneAndAFormerMember(t *testing.T) {
 	}
 }
 
-// The payer of a household that goes with the account blocks its deletion only while the household's
-// subscription still charges (FR-PR3, D-137): paid and current, or with a failed payment being tried
-// again. In grace nothing is charged any more, dunning exhausted or a trial ended unpaid (PRD 04 §3),
-// and there is nothing to cancel first: whoever let a trial run out deletes their account that day.
+// The payer of a household that goes with the account blocks its deletion only while the household
+// has a subscription that will charge again (FR-PR3, D-137). In grace nothing is charged any more,
+// dunning exhausted or a trial ended unpaid (PRD 04 §3), and there is nothing to cancel first: whoever
+// let a trial run out deletes their account that day.
 func TestAHouseholdThatChargesNothingKeepsNobodyFromDeletingTheirAccount(t *testing.T) {
 	p := newPrivacySite(t)
 	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
 	h := jana.create("Tilcerovi")
 
-	// Billing's states are item 19's to move; here they move as the administrator moves them.
-	p.exec("UPDATE households SET billing_state = 'past_due', dunning_ends_at = $2 WHERE id = $1", h.ID, p.clock.now().Add(7*24*time.Hour))
-	rec := jana.deleteAccount(passphrase)
-	expect(t, rec, http.StatusConflict, problem.CodeAccountDeletionBlocked)
-	var blocked struct {
-		Payer []uuid.UUID `json:"billing_payer_for"`
-	}
-	decode(t, rec, &blocked)
-	if len(blocked.Payer) != 1 || blocked.Payer[0] != h.ID {
-		t.Fatalf("with a payment still being tried, blocked by %+v", blocked)
-	}
-
+	// A trial that ran out unpaid, as the hourly job leaves it.
 	p.exec("UPDATE households SET billing_state = 'grace', grace_ends_at = $2 WHERE id = $1", h.ID, p.clock.now().Add(14*24*time.Hour))
 	expect(t, jana.deleteAccount(passphrase), http.StatusAccepted, "")
 }

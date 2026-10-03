@@ -65,15 +65,16 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
 	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
 	households := apptest.Households(t, pool, log, accounts, notifier, apptest.Options{})
+	bills := apptest.Billing(t, pool, log, notifier, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second, checks...),
 		Pool: pool, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 10, Accounts: accounts,
 		Households: households,
 		Notify:     notifier,
-		Privacy:    apptest.Privacy(t, pool, log, accounts, households, nil, apptest.Options{}),
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, bills, nil, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
-		Billing:    apptest.Billing(t, pool, log, notifier, apptest.Options{}),
+		Billing:    bills,
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
@@ -383,15 +384,16 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 	accounts, outbox := apptest.Accounts(t, pool, log, apptest.Options{})
 	notifier := apptest.Notify(t, pool, log, outbox, &apptest.Pushes{}, apptest.Options{})
 	households := apptest.Households(t, pool, log, accounts, notifier, apptest.Options{})
+	bills := apptest.Billing(t, pool, log, notifier, apptest.Options{})
 	r, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 10, BodyTimeout: timeout, Accounts: accounts,
 		Households: households,
 		Notify:     notifier,
-		Privacy:    apptest.Privacy(t, pool, log, accounts, households, nil, apptest.Options{}),
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, bills, nil, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
-		Billing:    apptest.Billing(t, pool, log, notifier, apptest.Options{}),
+		Billing:    bills,
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
