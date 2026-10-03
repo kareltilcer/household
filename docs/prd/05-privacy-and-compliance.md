@@ -114,12 +114,15 @@ its period's end, or one whose first payment is still on its way there, a bank d
 the household's own and renews once that goes through (D-131): its payer waits for the processor to
 say how the payment went, and cancels what it then pays for. An owner taking billing over whose own
 payment for it is still on its way, a bank debit's (D-133), blocks as its payer does: billing is
-theirs once it clears. One its payer has cancelled charges nothing more however long the period it
-paid for still runs, and a household with no subscription, in its trial, in `grace` or lapsed,
-charges nothing at all ([04](04-billing-and-entitlements.md) §3), so whoever let a trial run out
-has nothing to cancel first. A household erased is no longer charged: its subscriptions are ended
-at the processor as it goes, at once and with nothing refunded for the days not used (D-140), and
-an erased account's customers there are deleted with it
+theirs once it clears. One who accepted the offer and has confirmed no card yet is not blocked, and
+takes nothing over once they have asked: billing is not offered to an owner whose account is
+scheduled for deletion, and a card of theirs confirmed afterwards moves nothing
+([04](04-billing-and-entitlements.md) FR-BI6). One its payer has cancelled charges nothing more
+however long the period it paid for still runs, and a household with no subscription, in its
+trial, in `grace` or lapsed, charges nothing at all ([04](04-billing-and-entitlements.md) §3), so
+whoever let a trial run out has nothing to cancel first. A household erased is no longer charged:
+its subscriptions are ended at the processor as it goes, at once and with nothing refunded for the
+days not used (D-140), and an erased account's customers there are deleted with it
 ([ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md)); the invoices the processor issued
 are its own record, kept as the statute asks (§1). A household chosen for deletion is scheduled
 then, with the account's, and its members are told; cancelling the account's deletion cancels it,

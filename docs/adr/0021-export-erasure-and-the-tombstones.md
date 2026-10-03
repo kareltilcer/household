@@ -93,7 +93,11 @@ payer must cancel first is read from billing's rows (`household.Standing.Paying`
 the household's own that is live and not cancelled at its period's end, or one that waits on a first
 payment the processor has on its way, which renews once that goes through. Whoever pays one that
 waits so counts as the household's payer there (`household.Standing.Payer`), as an owner taking
-billing over with a bank debit is before it clears. The same wait keeps a
+billing over with a bank debit is before it clears. An owner who accepted the offer and has
+confirmed no card is in no row, and is not blocked: billing's own reading of who is an owner
+(`isOwner`) leaves out one whose account is scheduled for deletion, as the household surface's does
+(D-137), so no offer names them and the card they confirm afterwards makes no subscription and
+moves no payer, however late the processor's word of it arrives. The same wait keeps a
 lapsed household from being erased by its clock (`billing.Awaited`, D-140): resuming restores a
 household at any point of its retention, a bank debit takes days to clear, and the job reads the
 household as not due, at its search and again under the row's lock, until the processor has said
@@ -199,6 +203,12 @@ that moment would be one it had not seen.
   household's own, when `Close` refused to end it. What the
   processor says later of a subscription whose household is gone is about nothing, as billing
   already takes it (`errGone`).
+- The erasure of a lapsed household knows its own subscription to be paid for by the status the
+  processor gives it, which is `active` only once a payment has succeeded: a bank debit begun for
+  an invoice it could not collect leaves it past due while the debit clears. Stripe is therefore
+  set to cancel a subscription, or mark it unpaid, once its retries end, never to leave it past due
+  ([the billing runbook](../runbooks/billing.md)): a lapsed household then has no subscription of
+  its own left to pay into, its payer subscribes again, and that payment is waited for.
 - Item 21 reads `diagnostic_bundles` (`getPlatformDiagnosticsByBundleId`), and may record erasures in
   the platform audit log.
 - Items 25 and 29 build A-20 over `postMeDeletion`, and item 25 the page the email's link opens,

@@ -60,10 +60,12 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 		failed error
 	)
 	now := s.cfg.Now()
-	note := func(what string, id uuid.UUID, err error) {
+	// note logs an erasure that failed by what it was of and its id, with whatever more names it, and
+	// keeps the failure for the run's answer.
+	note := func(what string, id uuid.UUID, err error, more ...slog.Attr) {
 		if err != nil {
-			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "privacy: an erasure failed", slog.String("of", what), slog.String("id", id.String()),
-				slog.Any("error", err))
+			attrs := append([]slog.Attr{slog.String("of", what), slog.String("id", id.String())}, more...)
+			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "privacy: an erasure failed", append(attrs, slog.Any("error", err))...)
 			failed = errors.Join(failed, err)
 		}
 	}
@@ -140,7 +142,8 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 	}
 	for _, d := range departures {
 		erased, err := s.eraseDeparture(ctx, d.household, d.user, now)
-		note("a departed member's private data", d.household, err)
+		// The household alone does not say whose: several of its members may have left.
+		note("a departed member's private data", d.household, err, slog.String("user_id", d.user.String()))
 		if erased {
 			done.Departures++
 		}

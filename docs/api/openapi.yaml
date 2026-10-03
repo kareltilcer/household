@@ -960,13 +960,14 @@ paths:
         `payment_pending`, which renews once that goes through; a household in its trial, in `grace`
         or lapsed has none), and the problem document names every one at once. An owner taking
         billing over (`postBillingTransferAccept`) whose own payment for it is still on its way
-        counts as the household's payer: billing is theirs once it goes through. An owner whose own
-        account is scheduled for deletion counts as no owner. A household the user is the only member
-        of goes with the account, unasked; one named is scheduled for deletion with it, and its
-        members are told now; in every other the membership ends when the account does, what the user
-        made staying with the household under a former member's name. A named household whose
-        deletion was scheduled five times that day already refuses the request `429`, as
-        `postDeletion` does.
+        counts as the household's payer: billing is theirs once it goes through. One who accepted
+        and has confirmed no card yet is not blocked, and a card they confirm afterwards moves
+        nothing. An owner whose own account is scheduled for deletion counts as no owner. A household
+        the user is the only member of goes with the account, unasked; one named is scheduled for
+        deletion with it, and its members are told now; in every other the membership ends when the
+        account does, what the user made staying with the household under a former member's name. A
+        named household whose deletion was scheduled five times that day already refuses the request
+        `429`, as `postDeletion` does.
 
         `password_or_confirmation` is the account's password, checked and counted as a sign-in's is,
         or, for an account that signs in only with a provider and has none, its own email address
@@ -2102,7 +2103,8 @@ paths:
         The payer offers billing to another of the household's owners, who is emailed (FR-BI6,
         FR-HH6). A two-step handshake: nothing about the subscription changes, and the payer goes on
         paying, until the other owner accepts. An offer replaces the one before it and lapses in 14
-        days. Billing moves only between owners: anyone else named is refused `422`.
+        days. Billing moves only between owners: anyone else named is refused `422`, an owner whose
+        account is scheduled for deletion (`postMeDeletion`) among them, who counts as none.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -2148,6 +2150,10 @@ paths:
         subscription reads `payment_pending`, and a debit that fails moves nothing, which the caller
         is emailed. Where the household has no subscription there is no card to supply yet:
         `confirmation` is null, and they are the payer at once.
+
+        A card confirmed once the caller's own account is scheduled for deletion (`postMeDeletion`)
+        moves nothing, and the payer goes on paying: that account signs nobody in, and counts as no
+        owner.
 
         Only an owner whose address is verified takes billing over. With no offer open to the caller
         it answers `404`. No `Idempotency-Key` is kept, since the answer may carry a secret.

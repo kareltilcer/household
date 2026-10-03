@@ -61,9 +61,16 @@ step in the mode the environment uses.
    whichever days they fall on, and its own clock ends a day after the seventh. Set retries here and
    **not through an automation**: with one, Stripe sets an invoice's next attempt only after it has
    sent `invoice.payment_failed`, and each retry's email would say it was the last. When all retries
-   fail: **cancel the subscription**. Marking it `unpaid` instead ends in grace the same way; leaving
-   it `past_due` still ends in grace, a day late, by the hourly job. The invoice may be left open or
-   marked uncollectible: the last retry is emailed either way.
+   fail: **cancel the subscription**. Marking it `unpaid` instead ends in grace the same way. **Never
+   leave it `past_due`.** The household would still end in grace, a day late, by the hourly job, but
+   Stripe goes on issuing an invoice each period for a subscription it has not given up on, and the
+   server knows such a subscription to be paid for by its status alone, which Stripe makes `active`
+   only once a payment has succeeded. A payer who paid what was owed by bank debit in the last days
+   of a lapsed household's retention would be past due still while the debit cleared, and the
+   nightly erasure would end that subscription and erase the household, which PRD 04 §3 promises it
+   does not. With the subscription cancelled or unpaid, the payer of a lapsed household subscribes
+   again, and a debit on its way is waited for. The invoice may be left open or marked
+   uncollectible: the last retry is emailed either way.
    Turn Stripe's own customer emails for failed payments and invoices **off**: the server sends its
    own, in the payer's language.
 5. **The webhook endpoint**: `https://<api>/api/v1/webhooks/stripe`, at the API version stripe-go is

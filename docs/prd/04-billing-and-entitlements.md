@@ -246,7 +246,10 @@ Members and children never see billing at all.
 accepts and supplies a payment method. The subscription does not lapse in between. The payer is
 the owner who offers, and billing moves once the other owner's card is confirmed: their own
 subscription then starts when the period already paid for ends, so that nobody pays for the same
-days twice (**D-133**).
+days twice (**D-133**). An owner whose account is scheduled for deletion counts as none here too:
+billing is not offered to them, and a card they confirm once they have asked for the deletion moves
+nothing, since billing would land on an account that signs nobody in and end with it
+([05](05-privacy-and-compliance.md) §4, **D-137**).
 
 **Subscribing** is the payer's, once their address is verified
 ([02](02-identity-and-access.md) §3), in the processor's own payment form on the web: the household

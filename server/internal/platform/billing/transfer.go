@@ -40,7 +40,8 @@ type offerRequest struct {
 // offer is postBillingTransfer: the payer offers billing to another of the household's owners
 // (FR-BI6, FR-HH6), who is emailed. Nothing about the subscription changes, and the payer goes on
 // paying, until the other owner accepts; an offer replaces the one before it, and lapses in 14 days.
-// Billing moves only between owners, so anyone else named is refused 422.
+// Billing moves only between owners, so anyone else named is refused 422, an owner whose account is
+// scheduled for deletion among them, who counts as none (isOwner, D-137).
 func (s *Service) offer(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req offerRequest
