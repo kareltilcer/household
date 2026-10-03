@@ -50,11 +50,14 @@ const (
 	actionChildAvatar   = "child.avatar"
 	actionGraduate      = "member.graduate"
 	// The household's entitlement (PRD 04 §3): an owner's restriction and its lifting (FR-BI7), the
-	// clock's moves of its subscription, and a lapsed household's warnings (D-119).
+	// clock's moves of its subscription and the payment processor's (item 19), and a lapsed
+	// household's warnings (D-119).
 	actionRestrict         = "household.restrict"
 	actionUnrestrict       = "household.unrestrict"
 	actionEntitlement      = "household.entitlement"
 	actionRetentionWarning = "household.retention_warning"
+	// Billing moved from one owner to another (FR-BI6, item 19).
+	actionPayer = "household.payer"
 	// The household's deletion, scheduled and cancelled (FR-PR6), and what an erased account leaves
 	// of its member in a household that goes on (FR-PR3): the membership's end, and the owner the
 	// platform makes in place of one who was the last.
@@ -73,7 +76,7 @@ func Admin() module.PlatformModule {
 		actionInviteCreate, actionInviteResend, actionInviteRevoke, actionInviteDecline, actionInvitePurge,
 		actionModuleEnable, actionModuleDisable,
 		actionChildCreate, actionChildPIN, actionChildLock, actionChildUnlock, actionChildAvatar, actionGraduate,
-		actionRestrict, actionUnrestrict, actionEntitlement, actionRetentionWarning,
+		actionRestrict, actionUnrestrict, actionEntitlement, actionRetentionWarning, actionPayer,
 		actionDeleteSchedule, actionDeleteCancel, actionMemberErase, actionMemberSucceed,
 	}
 	p := module.PlatformModule{Name: Name, Export: export, Erase: erase}

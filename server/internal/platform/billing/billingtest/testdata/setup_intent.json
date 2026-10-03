@@ -1,0 +1,11 @@
+{
+  "id": "seti_test",
+  "object": "setup_intent",
+  "livemode": false,
+  "status": "requires_payment_method",
+  "client_secret": "seti_test_secret_test",
+  "customer": "cus_test",
+  "payment_method": null,
+  "usage": "off_session",
+  "metadata": {}
+}

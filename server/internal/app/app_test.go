@@ -73,6 +73,7 @@ func router(t *testing.T, checks ...health.Check) (*chi.Mux, *syncBuffer) {
 		Privacy:    apptest.Privacy(t, pool, log, accounts, households, nil, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
+		Billing:    apptest.Billing(t, pool, log, notifier, apptest.Options{}),
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
@@ -390,6 +391,7 @@ func TestABodyThatNeverArrivesDoesNotHoldTheConnection(t *testing.T) {
 		Privacy:    apptest.Privacy(t, pool, log, accounts, households, nil, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
+		Billing:    apptest.Billing(t, pool, log, notifier, apptest.Options{}),
 	})
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

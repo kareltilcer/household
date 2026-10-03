@@ -72,6 +72,19 @@ type Summary struct {
 	DataRetainedUntil *time.Time          `json:"data_retained_until"`
 	Restriction       *RestrictionSummary `json:"restriction"`
 	SuspendedAt       *time.Time          `json:"suspended_at"`
+	// StorageUsedBytes is what the household stores, StorageBlocks the 10 GB blocks its month's daily
+	// average has put in effect, and StorageIncludedBytes the base allowance and those blocks (PRD 04
+	// §4, item 19): what WithStorage is told, since the household's row records none of it.
+	StorageUsedBytes     int64 `json:"storage_used_bytes"`
+	StorageIncludedBytes int64 `json:"storage_included_bytes"`
+	StorageBlocks        int   `json:"storage_blocks"`
+}
+
+// WithStorage is s saying what the household stores against its allowance: used bytes, of included,
+// the base and the blocks in effect.
+func (s Summary) WithStorage(used, included int64, blocks int) Summary {
+	s.StorageUsedBytes, s.StorageIncludedBytes, s.StorageBlocks = used, included, blocks
+	return s
 }
 
 // RestrictionSummary is who restricted the household, when and why.

@@ -5,16 +5,6 @@
 # implements an operation removes its line, and at general availability it is empty.
 #
 # Seeded by item 2 with all 486 operations, less getHealthz and getReadyz, which it serves.
-getBillingSubscription
-postBillingCheckoutSession
-postBillingPortalSession
-postBillingCancel
-postBillingResume
-postBillingTransfer
-postBillingTransferAccept
-getBillingInvoices
-getBillingInvoicesByInvoiceId
-getBillingUsage
 getSearch
 getActivity
 getActivityByEventId

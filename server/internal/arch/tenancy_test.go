@@ -120,6 +120,9 @@ var exemptions = map[string]exemption{
 	"public.push_subscriptions":    {why: "FR-NT1: a browser's Web Push subscription, its user's while their web session lives"},
 	"public.push_receipts":         {why: "FR-NT6: Expo's tickets for a user's device, awaiting their receipts"},
 	"public.notification_defaults": {why: "FR-NT2: a user's account-wide notification preferences"},
+	// Item 19's: a payer's customer at the payment processor is their account's, whichever households
+	// they pay for.
+	"public.billing_customers": {why: "PRD 04 §6: a payer's customer at the payment processor, their account's and no household's"},
 	// Item 20's: what an account asked for and consented to, and what erasure leaves, none of which is
 	// a household's. An export and a diagnostic bundle may name a household, which they go with.
 	"public.account_deletions":  {why: "FR-PR4: an account's scheduled deletion, which disables it"},

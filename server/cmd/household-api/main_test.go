@@ -60,6 +60,13 @@ func env(t *testing.T) config.Getenv {
 		config.ObjectStoreURLVar: "https://tester:" + "not-published" + "@objects.household.test/household",
 		config.ConverterURLVar:   "http://127.0.0.1:1",
 		config.UploadDirVar:      t.TempDir(),
+		// Billing's payment processor, in test mode as staging's is, which serving asks nothing of
+		// until an owner subscribes, and a price for each of the plan's three.
+		config.StripeSecretKeyVar:      "sk_" + "test_key",
+		config.StripePublishableKeyVar: "pk_" + "test_key",
+		config.StripeWebhookSecretVar:  "whsec_" + "key",
+		config.BillingPricesVar: `{"EUR": {"year": {"amount_minor": 5988, "price": "price_year"},
+			"month": {"amount_minor": 599, "price": "price_month"}, "block": {"amount_minor": 100, "price": "price_block"}}}`,
 	}
 	return func(key string) (string, bool) {
 		v, ok := vars[key]

@@ -136,8 +136,9 @@ and the billing payer), `memberships` (carrying a child profile's birth year and
 dashboard is locked; its PIN is the account's `child_pin` credential, which counts the wrong ones),
 `module_grants`, `module_enablement`, `invitations`,
 `notification_rules`,
-`notification_schedules`, `notification_deliveries`, `export_jobs`, `deletion_requests`. Billing
-tables live in the billing schema.
+`notification_schedules`, `notification_deliveries`, `export_jobs`, `deletion_requests`. Billing's
+tables are the platform's, tenant tables like these
+([ADR 0020](../../adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md)).
 
 Audience membership rows — chat conversation members and `member_shared` calendar members — carry
 `floor_seq` beside their own module's membership fields, because the sync pull predicate evaluates

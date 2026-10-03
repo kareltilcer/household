@@ -33,6 +33,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/kareltilcer/household/server/internal/platform/billing"
 	"github.com/kareltilcer/household/server/internal/platform/clientip"
 	"github.com/kareltilcer/household/server/internal/platform/clientversion"
 	"github.com/kareltilcer/household/server/internal/platform/db"
@@ -116,6 +117,12 @@ const (
 	PushHostsVar       = "HOUSEHOLD_PUSH_HOSTS"
 	ExpoPushURLVar     = "HOUSEHOLD_EXPO_PUSH_URL"
 	ExpoAccessTokenVar = "HOUSEHOLD_EXPO_ACCESS_TOKEN"
+
+	StripeSecretKeyVar      = "HOUSEHOLD_STRIPE_SECRET_KEY"
+	StripePublishableKeyVar = "HOUSEHOLD_STRIPE_PUBLISHABLE_KEY"
+	StripeWebhookSecretVar  = "HOUSEHOLD_STRIPE_WEBHOOK_SECRET"
+	StripeAutomaticTaxVar   = "HOUSEHOLD_STRIPE_AUTOMATIC_TAX"
+	BillingPricesVar        = "HOUSEHOLD_BILLING_PRICES"
 )
 
 // NoProxies is TrustedProxiesVar's value for a server its clients reach directly, with no proxy
@@ -244,6 +251,16 @@ type Config struct {
 	// ExpoPushURL is Expo's push service, and ExpoAccessToken the access token its requests carry, ""
 	// for none, when the project does not require one.
 	ExpoPushURL, ExpoAccessToken string
+
+	// StripeSecretKey is the API key billing asks Stripe with (item 19), StripePublishableKey the key
+	// a client's payment form is made with, and StripeWebhookSecret what Stripe signs its webhooks
+	// with: all three, or in development none, when billing answers 503 where it would ask Stripe.
+	StripeSecretKey, StripePublishableKey, StripeWebhookSecret string
+	// StripeAutomaticTax has Stripe compute the tax on each invoice (PRD 04 §1).
+	StripeAutomaticTax bool
+	// BillingPrices are the plans by currency (PRD 04 §1): PRD's EUR and GBP figures when none are
+	// configured, which name no Stripe price and so take no payment.
+	BillingPrices billing.Prices
 }
 
 // Getenv looks a variable up, reporting whether it is set.
@@ -311,6 +328,7 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 		l.serving(c, dev)
 		l.files(c, dev)
 		l.notifications(c, dev)
+		l.billing(c)
 	case Migrate:
 		c.MigrateDatabaseURL = url(MigrateDatabaseURLVar, devMigrateDatabaseURL, db.RoleMigrate)
 	case Bootstrap:
@@ -539,6 +557,70 @@ func (l *loader) notifications(c *Config, dev bool) {
 	}
 	c.ExpoPushURL = expo
 	c.ExpoAccessToken = l.str(ExpoAccessTokenVar, "")
+}
+
+// billing reads what billing needs (item 19): Stripe's keys, secrets an error never quotes, and the
+// plans. Outside development all three keys are required; in development none leaves billing
+// unconfigured. A live key takes real payments, and so is production's alone, as a test key is never
+// production's: staging holds synthetic data (PL-8) and pays in Stripe's test mode. With a key, every
+// price of every plan names the Stripe price that charges it.
+func (l *loader) billing(c *Config) {
+	dev := c.Env == Development
+	keys := []struct {
+		name, prefixes string
+		to             *string
+	}{
+		{StripeSecretKeyVar, "sk_ rk_", &c.StripeSecretKey},
+		{StripePublishableKeyVar, "pk_", &c.StripePublishableKey},
+		{StripeWebhookSecretVar, "whsec_", &c.StripeWebhookSecret},
+	}
+	set := 0
+	for _, k := range keys {
+		value := l.required(k.name, "", dev)
+		if value == "" {
+			continue
+		}
+		set++
+		kind, ok := "", false
+		for _, prefix := range strings.Fields(k.prefixes) {
+			if rest, found := strings.CutPrefix(value, prefix); found {
+				kind, ok = rest, true
+			}
+		}
+		live, test := strings.HasPrefix(kind, "live_"), strings.HasPrefix(kind, "test_")
+		switch {
+		case !ok:
+			l.fail("%s is not one of Stripe's keys of its kind, which begin %s", k.name, strings.Join(strings.Fields(k.prefixes), " or "))
+		case live && c.Env != Production:
+			l.fail("%s is a live key, which takes real payments and only production may use", k.name)
+		case test && c.Env == Production:
+			l.fail("%s is a test key, which production may not use", k.name)
+		default:
+			*k.to = value
+		}
+	}
+	if set != 0 && set != len(keys) {
+		l.fail("%s, %s and %s are set together or not at all", StripeSecretKeyVar, StripePublishableKeyVar, StripeWebhookSecretVar)
+	}
+	switch tax := l.str(StripeAutomaticTaxVar, "false"); tax {
+	case "true":
+		c.StripeAutomaticTax = true
+	case "false":
+	default:
+		l.fail("%s is %q; want true or false", StripeAutomaticTaxVar, tax)
+	}
+	c.BillingPrices = billing.DefaultPrices()
+	if raw := l.str(BillingPricesVar, ""); raw != "" {
+		prices, err := billing.ParsePrices(raw)
+		if err != nil {
+			l.fail("%s: %v", BillingPricesVar, err)
+			return
+		}
+		c.BillingPrices = prices
+	}
+	if unpriced := c.BillingPrices.Unpriced(); set > 0 && len(unpriced) > 0 {
+		l.fail("%s names no Stripe price for: %s", BillingPricesVar, strings.Join(unpriced, ", "))
+	}
 }
 
 // quotedURL is raw as an error about it quotes it: its password replaced, since a setting that refuses

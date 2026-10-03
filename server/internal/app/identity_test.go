@@ -23,6 +23,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/app"
 	"github.com/kareltilcer/household/server/internal/app/apptest"
+	"github.com/kareltilcer/household/server/internal/platform/billing"
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
@@ -86,11 +87,12 @@ type site struct {
 	// pushes are the pushes the site sent, and notifier the transport that sent them and its email.
 	pushes   *apptest.Pushes
 	notifier *notify.Service
-	// households is the household surface the site serves, privacy its export and erasure, and
-	// identity its accounts.
+	// households is the household surface the site serves, privacy its export and erasure, identity
+	// its accounts, and billing its billing.
 	households *household.Service
 	privacy    *privacy.Service
 	identity   *identity.Service
+	billing    *billing.Service
 	clock      *clock
 	// domain, peer and other are this test's own: its addresses end in the first, its browsers come
 	// from the second, and the third is another network, for a limit one network has used up.
@@ -123,6 +125,7 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, o),
 		Storage:    &storage.Picture{Log: log},
+		Billing:    apptest.Billing(t, pool, log, notifier, o),
 	}
 	for _, option := range options {
 		option(&deps)
@@ -137,7 +140,7 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 	}
 	n := sites.Add(1)
 	return &site{t: t, router: r, admin: d.Pool(t, ""), outbox: outbox, pushes: pushes, notifier: notifier, households: deps.Households,
-		privacy: deps.Privacy, identity: accounts.Identity, clock: clk,
+		privacy: deps.Privacy, identity: accounts.Identity, billing: deps.Billing, clock: clk,
 		domain: fmt.Sprintf("site%d.test", n), peer: fmt.Sprintf("198.51.%d.%d:4000", n/256, n%256),
 		other: fmt.Sprintf("198.18.%d.%d:5000", n/256, n%256)}
 }

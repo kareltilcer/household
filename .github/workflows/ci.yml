@@ -197,6 +197,38 @@ jobs:
         if: failure()
         run: docker logs converter
 
+  stripe:
+    name: Stripe — what the processor sends, against Stripe's own mock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      # The image docker-compose.yml runs under its stripe profile; tooling/src/workspace.test.ts
+      # fails when the two disagree. It validates every request against Stripe's OpenAPI description.
+      stripe-mock:
+        image: stripe/stripe-mock:v0.206.0
+        ports:
+          - 12111:12111
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      # Any answer will do: the mock refuses a request with no key, which says it is listening.
+      - name: Wait for the mock
+        run: |
+          for _ in $(seq 30); do
+            curl --silent --output /dev/null http://127.0.0.1:12111/v1/prices && break
+            sleep 1
+          done
+      - name: Ask the mock everything the processor asks Stripe
+        working-directory: server
+        env:
+          HOUSEHOLD_TEST_STRIPE_URL: http://127.0.0.1:12111
+        run: go test -count=1 -run TestStripeTakesWhatTheProcessorSends -v ./internal/platform/billing/
+
   openapi:
     name: OpenAPI — openapi-spec-validator and Redocly
     runs-on: ubuntu-latest

@@ -37,6 +37,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/reqctx"
+	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
@@ -62,6 +63,9 @@ type Config struct {
 	// the account's: the device sign-in a PIN admits, the password a graduation sets, and the
 	// hashing, the devices and the client's network they need (item 11).
 	Accounts *identity.Service
+	// Allowance is what a household may store, which its entitlement says its storage against (item
+	// 19): storage.Default when zero.
+	Allowance storage.Allowance
 }
 
 // Service serves the routes.
@@ -77,6 +81,9 @@ func New(cfg Config) (*Service, error) {
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
+	}
+	if cfg.Allowance == (storage.Allowance{}) {
+		cfg.Allowance = storage.Default
 	}
 	return &Service{Config: cfg}, nil
 }
