@@ -7,7 +7,7 @@ import type {
   PowerSyncCredentials,
   SyncStreamSubscription,
 } from '@powersync/common'
-import { newId as uuidv7 } from '@household/api'
+import { v7 as uuidv7 } from 'uuid'
 import { Attachments, drain, type AttachmentFile, type AttachmentOptions } from './attachments.ts'
 import type { ChecksumWatch } from './checksums.ts'
 import {
@@ -81,7 +81,12 @@ export interface ReplicaOptions {
   /** The credential the API is called with, a device's access token or a session's. */
   readonly credential: Credential
   readonly fetch?: typeof globalThis.fetch
-  /** A new id: a mutation's, a key's, a replica's; a UUIDv7 by default. */
+  /**
+   * A new id: a mutation's, a key's, a replica's. A UUIDv7 by default, minted as `@household/api`'s
+   * `newId` mints one, with `crypto.getRandomValues`, which the mobile app polyfills on Hermes before
+   * it opens a replica; the library imports no code of `@household/api`'s, only its types, so that
+   * it runs where the generated client has not been written.
+   */
   readonly newId?: () => string
   /** The device's clock, which a mutation's client_time is read from. */
   readonly now?: () => Date
@@ -169,7 +174,7 @@ export class Replica {
     this.registry = options.registry ?? servedRegistry
     this.household = options.household
     this.fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init))
-    this.newId = options.newId ?? uuidv7
+    this.newId = options.newId ?? (() => uuidv7())
     this.now = options.now ?? (() => new Date())
     this.journal = new LocalJournal(
       this.db,
