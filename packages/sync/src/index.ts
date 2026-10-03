@@ -9,6 +9,7 @@
 export {
   Attachments,
   drain,
+  stateRetryMs,
   type AttachmentFile,
   type AttachmentOptions,
   type PendingAttachment,

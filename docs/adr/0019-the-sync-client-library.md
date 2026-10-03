@@ -72,7 +72,13 @@ names a row created between the two, which, sent in the earlier's place, would r
 made against and the version returned (`rebase`, a local table); a later mutation of the row made
 against the first version is sent against the second. The table is pruned once the replica holds the
 row at that version or later, or no longer holds it with its queue empty, and is cleared by a
-re-download. A held mutation replays as it was recorded.
+re-download. A held mutation replays as it was recorded: what a mutation's id names is everything it
+carries, its base version among it (FR-SY5), and a replay sent against another version would be
+another mutation under the same id, which a late delivery of its first batch would have refused. So a
+mutation the push deferred behind an earlier one of its batch to the same row, which that batch
+applied, replays alone against the version both were made against, and is answered `merged` or
+`conflict` over the replica's own earlier write, for the member to see: three mutations of one row
+that did not merge (D-129), the middle one refused, is what it takes.
 
 **A 429 sets the time the push may next be sent to**, its `Retry-After`, in seconds or as a date, kept
 in the replica's own table: every upload before then throws at once, without sending, PowerSync trying
@@ -101,9 +107,15 @@ while such a flush is under way is answered by another look once it ends.
 **Per-row state is computed, and withdrawal is a row that leaves.** A row is `conflict`, `rejected` or
 `merged` while an answer to a write of it asks for attention; else `syncing` while a write of it is at or
 below the sent mark, `pending` while one is above it or held to replay; else `synced`, `deleted` when it
-is a tombstone (item 13 keeps them); else absent. A watcher of a row that held it and finds it gone,
-neither deleted by its member nor refused, reports it `withdrawn`, by `module` when the replica's
-`module_enablement` row says its module is off, by `access` otherwise. The inbox lists each mutation's
+is a tombstone (item 13 keeps them); else absent. A watcher is told of each move, the one from pending
+to syncing among them, which nothing marks but the replica's own sent mark; once stopped it is told
+nothing more, and what its read of a database being closed fails with stays its own. A watcher of a row
+that held it and finds it gone reports it `withdrawn`, by `module` when the replica's
+`module_enablement` row says its module is off, by `access` otherwise, unless the replica knows another
+cause, and then it is absent: its member deleted it; the server refused its create, or a write of it
+waits held to replay, the row a held create wrote being away from the checkpoint that takes it until
+the one after its replay; or the replica emptied itself, to download itself again, until PowerSync has
+caught up, or because its device was signed out. The inbox lists each mutation's
 last answer that asks for attention; retry writes the member's change again, every field carried, as a
 new mutation against the row as the replica holds it, and gives up the old one's hold, which would
 otherwise replay the change a second time; discard gives up the hold and the attention. A refused
@@ -125,7 +137,8 @@ and every row it holds has a version the server gave, and reports itself on its 
 is connected and nothing is downloading; it reads its tables in one transaction, which no checkpoint
 lands inside, and its id is minted once, in the transaction that finds none, and kept. The server
 compares only the entity types a report names, answers an entity type it does not sync as disagreeing
-and never as divergence, and keeps each replica's last report (`sync_replicas`, D-128). A replica told
+and never as divergence, and keeps each replica's last report (`sync_replicas`, D-128), which leaves
+with its member's membership, as the answers the push keeps for them do. A replica told
 `resnapshot_required` waits for its queue to drain, clears its synced rows with its own tables kept
 (PowerSync's clear, as `disconnectAndClear({ clearLocal: false })` runs it, in the transaction that finds
 the queue empty), forgets its rebase and sent mark, and connects again unless it is being closed, a
@@ -143,8 +156,11 @@ uploaded through the module's route once the replica holds the row at a version,
 a run that was asked for again while it was under way followed by another, since it listed the files
 before a file added meanwhile; a refusal of the file itself is kept with its code, the bytes dropped,
 and the server marks the row; a refusal for the household's state (`entitlement_*`) is not one, and the
-file waits. A refused create the member discards takes its waiting file with it, its row being one the
-server will never hold.
+file waits. After such a refusal the queue sends no file for fifteen minutes, or until the app's
+`resume()`, and after a `429` none until its `Retry-After`, a day at most: a household in grace writes
+and does not upload for days, a run starts at every checkpoint and every upload, and each try sends the
+whole file. The wait is kept in memory, so a replica opened again tries once more. A refused create the
+member discards takes its waiting file with it, its row being one the server will never hold.
 
 **Three builds over one core**: `@household/sync/node`, `@household/sync/web` (wa-sqlite over IndexedDB,
 each tab connecting on its own by default, every tab on the household's one database) and
@@ -183,7 +199,8 @@ download losing nothing queued; the web build passes the same in Playwright's Ch
   supplies an attachment storage and transport, and gives the replica a credential that throws
   `Revoked` when its refresh is refused. They render RowState, the inbox and `NeedsConnection` with the
   design's words, and the withdrawn sentence by its reason, and call `resume()` once the household's
-  row says it writes again; the replays themselves are the replica's. A replica reports itself on its
+  row says it writes, or uploads, again; the replays themselves are the replica's, as is sending the
+  files its state refused. A replica reports itself on its
   own only while PowerSync has caught up (`caughtUp`), and an app that calls `report()` itself, a
   sync-health screen's "check now", waits for the same.
 - **Item 27** keeps one tab's replica of a household open at a time (a Web Lock on its database, say):

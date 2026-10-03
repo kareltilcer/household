@@ -3,12 +3,21 @@
 // and is uploaded through its module's route once the server holds the row. An upload the server
 // refuses for what the file is (its size, its type, the household's storage) is not retried: the server
 // marks the row failed with the reason, and the queue keeps the refusal's code for the member. One the
-// network or the server failed is tried again, as is one the household's state refused (FR-BI2).
+// network or the server failed is tried again at the next run, as is one the household's state refused
+// (FR-BI2) or the server's limit did (a 429), once the time each asks to be waited has passed: a run
+// starts at every checkpoint, and every try sends the whole file.
 
 import type { CommonPowerSyncDatabase, LocalStorageAdapter } from '@powersync/common'
-import type { Credential } from './connector.ts'
+import { maxRetryAfterMs, retryAfterMs, type Credential } from './connector.ts'
 import { isEntitlement } from './mutation.ts'
 import { localTables } from './schema.ts'
+
+/**
+ * How long the queue waits, once the household's state has refused a file, before it sends one again:
+ * a household in grace writes and does not upload (PRD 04 §3), for days, and its rows keep syncing
+ * meanwhile. The app that sees the household's state change ends the wait at once (resume).
+ */
+export const stateRetryMs = 15 * 60_000
 
 /** A file waiting to be uploaded, or refused. */
 export interface PendingAttachment {
@@ -85,6 +94,12 @@ export class Attachments {
   private running: Promise<void> | null = null
   /** How many times upload() was called: a run that ends with more calls than it listed for is followed by another. */
   private calls = 0
+  /**
+   * When a run may next send a file, in milliseconds since the epoch: stateRetryMs after the
+   * household's state refused one, a 429's Retry-After after the server's limit did; 0 for now. It is
+   * kept in memory: a replica opened again tries once more.
+   */
+  private notBefore = 0
 
   constructor(
     db: CommonPowerSyncDatabase,
@@ -148,7 +163,8 @@ export class Attachments {
 
   /**
    * Uploads the files whose rows the server holds, oldest first, until one fails on the network or the
-   * server: the rest wait for the next run. A run already under way is joined, not doubled, and is
+   * server: the rest wait for the next run. A run inside the time a refusal asked to be waited (the
+   * household's state, a 429) sends none. A run already under way is joined, not doubled, and is
    * followed by another: it listed the files before this call, and one added since, or one whose row
    * a checkpoint has brought since, would otherwise wait for a call that may be long in coming.
    */
@@ -166,7 +182,18 @@ export class Attachments {
     return this.running
   }
 
+  /**
+   * Ends the wait a refusal set: the next run sends again. The replica calls it when its app says the
+   * household's state has changed (Replica.resume).
+   */
+  resume(): void {
+    this.notBefore = 0
+  }
+
   private async run(): Promise<void> {
+    // No longer than the longest a refusal asks: a wait further off is a clock that has moved since.
+    const wait = this.notBefore - this.now().getTime()
+    if (wait > 0 && wait <= maxRetryAfterMs) return
     const transport = this.options.transport
     for (const a of await this.list()) {
       if (a.status !== 'pending') continue
@@ -201,14 +228,22 @@ export class Attachments {
         return
       }
       if (!refusesTheFile(response.status)) {
+        // The server's limit names how long to wait, a day at most as the push's does.
+        if (response.status === 429) {
+          const now = this.now().getTime()
+          this.notBefore =
+            now + Math.min(maxRetryAfterMs, retryAfterMs(response.headers.get('retry-after'), now))
+        }
         await drain(response)
         await this.attempted(a.id)
         return
       }
       const code = await problemCode(response)
       // Refused for the household's state, which does not upload now (grace, a restriction) and may
-      // again (PRD 04 §3): no refusal of the file, which waits, and its row with it.
+      // again (PRD 04 §3): no refusal of the file, which waits, and its row with it. No file is sent
+      // for a while: the state that refused this one refuses the next.
       if (isEntitlement(code)) {
+        this.notBefore = this.now().getTime() + stateRetryMs
         await this.attempted(a.id)
         return
       }

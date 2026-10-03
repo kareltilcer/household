@@ -136,6 +136,11 @@ export class Replica {
   /** Stops listening for the checkpoints after which waiting files are uploaded. */
   private unlisten: (() => void) | null = null
   private resnapshotting: Promise<void> | null = null
+  /**
+   * Set when the replica cleared itself to download itself again, until PowerSync has caught up: a
+   * row gone meanwhile left with every other, which is no withdrawal (watchRowState).
+   */
+  private refilling = false
   private discarded = false
   /** Set once close() is called: no download starts after it. */
   private closing = false
@@ -251,6 +256,8 @@ export class Replica {
       this.unlisten = this.db.registerListener({
         statusChanged: (status) => {
           if (!status.connected || status.downloading) return
+          // The download the replica asked of itself has landed: a row missing now was withdrawn.
+          if (status.hasSynced === true) this.refilling = false
           if (this.attachmentQueue !== null) this.uploadFiles(this.attachmentQueue)
           this.replaySoon()
         },
@@ -370,11 +377,15 @@ export class Replica {
 
   /**
    * Lets the mutations the household's entitlement refused replay (FR-BI2), now when the replica is
-   * connected with nothing queued, and at its next upload otherwise.
+   * connected with nothing queued, and at its next upload otherwise; and the files its state refused
+   * be sent again without waiting out their time (Attachments.resume).
    */
   resume(): void {
     this.connector.resume()
     this.replaySoon()
+    if (this.attachmentQueue === null) return
+    this.attachmentQueue.resume()
+    if (this.connectedNow) this.uploadFiles(this.attachmentQueue)
   }
 
   /**
@@ -756,20 +767,27 @@ export class Replica {
 
   /**
    * Calls onChange with where table's row id stands, now and each time it moves. A row the replica held
-   * that leaves it, neither deleted by the member nor refused, was withdrawn (FR-SY7): the reason says
+   * that leaves it was withdrawn (FR-SY7), unless it left for a cause the replica knows: its member
+   * deleted it, the server refused its create or a write of it waits held to replay, or the replica
+   * emptied itself, to download itself again or because its device was signed out. The reason says
    * whether its module was turned off for the household or the member's access changed (design
-   * 03-patterns, When access is withdrawn). It returns the means to stop.
+   * 03-patterns, When access is withdrawn). It returns the means to stop, after which onChange is not
+   * called.
    */
   watchRowState(table: string, id: string, onChange: (state: RowState) => void): () => void {
     const module = entityOf(this.registry, table).module
     let seen = false
     let deleting = false
-    // A create the server refused: the row it wrote leaves the replica, which is no withdrawal.
-    let refused = false
+    // A write of the row the server has not taken, a create it refused or one held to replay: the row
+    // a create wrote leaves the replica at the next checkpoint, and is not there again until the one
+    // after its replay, which is no withdrawal.
+    let untaken = false
+    let stopped = false
     let last = ''
     const emit = async (): Promise<void> => {
       let state = await this.rowState(table, id)
-      if (state.kind === 'absent' && seen && !deleting && !refused) {
+      const emptied = this.refilling || this.discarded
+      if (state.kind === 'absent' && seen && !deleting && !untaken && !emptied) {
         const enablement = await this.db.getOptional<{ enabled: number | null }>(
           'SELECT enabled FROM module_enablement WHERE module = ?',
           [module],
@@ -779,31 +797,63 @@ export class Replica {
       if (state.kind === 'synced' || state.kind === 'pending' || state.kind === 'syncing') {
         seen = true
         deleting = state.kind !== 'synced' && state.op === 'delete'
-        if (state.kind !== 'synced') refused = false
       }
       if (state.kind === 'synced' && state.deleted) deleting = true
-      if ((state.kind === 'rejected' || state.kind === 'conflict') && state.outcome.op === 'create')
-        refused = true
+      if (state.kind === 'pending' && state.held !== null) untaken = true
+      else if (state.kind === 'pending' || state.kind === 'syncing') {
+        // Queued: the member wrote it again.
+        untaken = false
+      } else if (state.kind === 'synced' && untaken) {
+        // At a version, the row is the server's: its leaving after that is a withdrawal.
+        const row = await this.db.getOptional<{ version: number | null }>(
+          `SELECT version FROM ${table} WHERE id = ?`,
+          [id],
+        )
+        if (typeof row?.version === 'number') untaken = false
+      } else if (
+        (state.kind === 'rejected' || state.kind === 'conflict') &&
+        state.outcome.op === 'create'
+      ) {
+        untaken = true
+      }
       const text = JSON.stringify(state)
-      if (text === last) return
+      if (stopped || text === last) return
       last = text
       onChange(state)
     }
     // PowerSync tells a watcher only of the tables it names: the row's own, what the server answered,
-    // the holds, the upload queue, and the modules' enablement, which says why a row left. It runs one
-    // emit at a time, the first at once, so that none reports after one that started later.
-    return this.db.onChange(
+    // the holds, the upload queue, the replica's own facts, whose sent mark tells a write in flight
+    // from one that waits, and the modules' enablement, which says why a row left. It runs one emit at
+    // a time, the first at once, so that none reports after one that started later.
+    const stop = this.db.onChange(
       {
         onChange: async () => {
-          await emit()
+          try {
+            await emit()
+          } catch (error) {
+            // What fails once the watcher is stopped or the replica is being closed, a read of a
+            // closed database among it, is nobody's to hear.
+            if (!stopped && !this.closing) throw error
+          }
         },
       },
       {
-        tables: [table, localTables.outcomes, localTables.held, 'ps_crud', 'module_enablement'],
+        tables: [
+          table,
+          localTables.outcomes,
+          localTables.held,
+          localTables.meta,
+          'ps_crud',
+          'module_enablement',
+        ],
         throttleMs: 30,
         triggerImmediate: true,
       },
     )
+    return () => {
+      stopped = true
+      stop()
+    }
   }
 
   /** Keeps file's bytes for table's row id, to be uploaded once the server holds the row (D-25). */
@@ -922,6 +972,8 @@ export class Replica {
       const cleared = await this.db.writeTransaction(async (tx) => {
         const queue = await tx.get<{ writes: number }>('SELECT count(*) AS writes FROM ps_crud')
         if (queue.writes > 0) return false
+        // Before the rows leave: a watcher that finds its row gone finds why (watchRowState).
+        this.refilling = true
         await tx.execute('SELECT powersync_clear(0)')
         return true
       })

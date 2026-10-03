@@ -161,7 +161,9 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   transaction when the mutation took one and in a transaction of its own when it took none
   ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)),
   and its count of the mutations a household pushed in a day (`sync_usage`,
-  [ADR 0018](docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)).
+  [ADR 0018](docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)); and each
+  replica's last report of itself (`sync_replicas`), which leaves with its member's membership
+  ([ADR 0019](docs/adr/0019-the-sync-client-library.md)).
   The household surface (`internal/platform/household`) is `admin`, a module the platform
   serves itself: it writes through `mutation.Apply` with the actions and entities
   `module.PlatformModule` declares, and holds a household its caller is not yet in, creating

@@ -7,9 +7,11 @@
 -- asked to download itself again (POST …/sync/reset), is told so at its next report.
 --
 -- It is the platform's own record of what replicas said, no entity's history, written through
--- tenant.InWriteTx. A replica is its member's: its id is the client's, and no other member's report
--- may name it. The expiry sweep deletes a replica that has not reported for 90 days (PRD 03 §5,
--- D-128): an app uninstalled, or a browser cleared, never reports again.
+-- tenant.InWriteTx. A replica is its member's: its id is the client's, no other member's report may
+-- name it, and it leaves with their membership, as the answers kept for them do (sync_mutations): the
+-- tenant key reaches households through the membership. The expiry sweep deletes a replica that has
+-- not reported for 90 days (PRD 03 §5, D-128): an app uninstalled, or a browser cleared, never
+-- reports again.
 --
 -- resnapshot is where the replica stands in downloading itself again: none; marked, to be told at
 -- its next report; or told, until the report after, which it sends once it has downloaded itself.
@@ -17,7 +19,7 @@
 -- +goose Up
 
 CREATE TABLE sync_replicas (
-  household_id uuid NOT NULL REFERENCES households (id) ON DELETE CASCADE,
+  household_id uuid NOT NULL,
   id uuid NOT NULL,
   user_id uuid NOT NULL,
   -- The device it reported from, or null for a web session's; and the device's label, or the
@@ -34,9 +36,11 @@ CREATE TABLE sync_replicas (
   mismatched text[] NOT NULL DEFAULT '{}',
   mismatches jsonb NOT NULL DEFAULT '{}',
   resnapshot text NOT NULL DEFAULT 'none' CHECK (resnapshot IN ('none', 'marked', 'told')),
-  PRIMARY KEY (household_id, id)
+  PRIMARY KEY (household_id, id),
+  FOREIGN KEY (household_id, user_id) REFERENCES memberships (household_id, user_id) ON DELETE CASCADE
 );
 
+-- A member's replicas, which the sync-health screen lists and their membership's deletion finds.
 CREATE INDEX sync_replicas_user ON sync_replicas (household_id, user_id);
 
 SELECT enable_tenant_isolation('sync_replicas');

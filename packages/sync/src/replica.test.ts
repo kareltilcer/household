@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { stateRetryMs } from './attachments.ts'
 import { Revoked, type Credential } from './connector.ts'
 import { localTables, metaKeys } from './schema.ts'
 import { NodeFileSystemAdapter, multipart, openReplica } from './node.ts'
@@ -15,7 +16,8 @@ const household = '01920000-0000-7000-8000-00000000000a'
 /**
  * Waits until holds is true, looking every 20 ms for at most five seconds: a row's watcher emits on a
  * schedule of its own, throttled, and later under a loaded run. It returns either way, so that the
- * assertion after it reports the state the watcher reached.
+ * assertion after it reports the state the watcher reached, which the tests' own timeout leaves it the
+ * time to (waits).
  */
 async function eventually(
   holds: () => boolean | Promise<boolean>,
@@ -82,6 +84,7 @@ async function open(
     readonly credential?: Credential
     readonly onRevoked?: () => void
     readonly storage?: string
+    readonly now?: () => Date
   } = {},
 ): Promise<{ replica: Replica; dir: string }> {
   const dir = options.dir ?? mkdtempSync(join(tmpdir(), 'household-sync-'))
@@ -96,6 +99,7 @@ async function open(
     fetch: options.fetch ?? routes({}).fetch,
     newId,
     reportEveryMs: 0,
+    ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.onRevoked === undefined ? {} : { onRevoked: options.onRevoked }),
     ...(options.storage === undefined
       ? {}
@@ -142,7 +146,14 @@ function applying(version = 1): Route {
   }
 }
 
-describe('a replica', () => {
+/**
+ * The time a test has: several waits of five seconds each (eventually). Under Vitest's own five
+ * seconds, one wait that ran out would end the test before its assertion said what was reached, and
+ * a loaded run would give a test's waits those five seconds between them.
+ */
+const waits = { timeout: 30_000 }
+
+describe('a replica', waits, () => {
   it('refuses a write to an entity that is not written offline: it needs a connection (D-84)', async () => {
     const { replica } = await open()
     expect(replica.writable('settings')).toBe(false)
@@ -339,10 +350,146 @@ describe('a replica', () => {
       const [refused] = await replica.inbox()
       await replica.discard(refused?.mutation_id ?? '')
       await eventually(() => states.at(-1)?.kind === 'absent')
-      expect(states.map((s) => s.kind)).toEqual(['pending', 'rejected', 'absent'])
+      // Syncing between the first two, when the watcher looked while the batch was in flight.
+      expect(states.map((s) => s.kind).filter((kind) => kind !== 'syncing')).toEqual([
+        'pending',
+        'rejected',
+        'absent',
+      ])
     } finally {
       stop()
     }
+  })
+
+  it('tells a watcher of a write in flight: syncing from its batch being marked sent until its answer', async () => {
+    let answer = (): void => undefined
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const { fetch } = routes({
+      '/sync/mutations': async (url, init) => {
+        await answered
+        return applying(1)(url, init)
+      },
+    })
+    const { replica } = await open({ fetch })
+    const milk = await replica.create('items', { title: 'Milk' })
+    const states: RowState[] = []
+    const stop = replica.watchRowState('items', milk, (s) => states.push(s))
+    try {
+      await eventually(() => states.length > 0)
+      const flushed = replica.flush()
+      // The push has not answered: nothing has moved but the mark the connector sends a batch under.
+      await eventually(() => states.at(-1)?.kind === 'syncing')
+      expect(states).toEqual([
+        { kind: 'pending', op: 'create', held: null },
+        { kind: 'syncing', op: 'create' },
+      ])
+      answer()
+      await flushed
+      await eventually(() => states.at(-1)?.kind === 'synced')
+      expect(states.map((s) => s.kind)).toEqual(['pending', 'syncing', 'synced'])
+    } finally {
+      stop()
+    }
+  })
+
+  it('tells a held create that replays, whose row its checkpoint has yet to bring, from a withdrawn row', async () => {
+    let outcome: Record<string, unknown> = { outcome: 'rejected', code: 'entitlement_read_only' }
+    const { fetch } = routes({
+      '/sync/mutations': (_url, init) => {
+        const { mutations } = JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }
+        return json(200, {
+          results: mutations.map((m) => ({ mutation_id: m.mutation_id, ...outcome })),
+        })
+      },
+    })
+    const { replica } = await open({ fetch })
+    const milk = await replica.create('items', { title: 'Milk' })
+    await replica.flush()
+    // The member has seen the refusal: the create waits for the household to write again.
+    const [refused] = await replica.inbox()
+    await replica.resolve(refused?.mutation_id ?? '')
+    const states: RowState[] = []
+    const stop = replica.watchRowState('items', milk, (s) => states.push(s))
+    try {
+      await eventually(() => states.length > 0)
+      // The next checkpoint takes away the row the server does not hold yet.
+      await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [milk])
+      outcome = { outcome: 'applied', version: 1 }
+      replica.connector.resume()
+      await replica.flush()
+      // Applied, and not in the replica until its checkpoint lands: no access was withdrawn.
+      await eventually(() => states.at(-1)?.kind === 'absent')
+      await arrive(replica, 'items', milk, { household_id: household, title: 'Milk', version: 1 })
+      await eventually(() => states.at(-1)?.kind === 'synced')
+      // The server's row, once the replica has held it, is withdrawn when it leaves.
+      await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [milk])
+      await eventually(() => states.at(-1)?.kind === 'withdrawn')
+      expect(states).toEqual([
+        { kind: 'pending', op: 'create', held: 'entitlement' },
+        { kind: 'absent' },
+        { kind: 'synced', deleted: false },
+        { kind: 'withdrawn', reason: 'access' },
+      ])
+    } finally {
+      stop()
+    }
+  })
+
+  it('calls a stopped watcher no more, and keeps to itself what one reads of a database being closed', async () => {
+    const { replica } = await open()
+    const milk = await replica.create('items', { title: 'Milk' })
+    const rowState = replica.rowState.bind(replica)
+    let reading = (): void => undefined
+    let release = (): void => undefined
+    let held = Promise.resolve()
+    const reads: Promise<unknown>[] = []
+    // Each read of the row's state waits to be let through, as a slow device's would.
+    const hold = (): Promise<void> => {
+      held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      return new Promise<void>((resolve) => {
+        reading = resolve
+      })
+    }
+    const spy = vi.spyOn(replica, 'rowState').mockImplementation((table, id) => {
+      const read = (async () => {
+        reading()
+        await held
+        return rowState(table, id)
+      })()
+      reads.push(read.catch(() => undefined))
+      return read
+    })
+    const states: RowState[] = []
+    /** Once every read let through has ended, and what waited on it has run. */
+    const settled = async (): Promise<void> => {
+      await Promise.all(reads)
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+
+    // Stopped while its first read is under way: what the read finds is told to nobody.
+    let underWay = hold()
+    const stop = replica.watchRowState('items', milk, (s) => states.push(s))
+    await underWay
+    stop()
+    release()
+    await settled()
+    expect(states).toEqual([])
+
+    // Closed while a watcher's read is under way: the read fails on the closed database, and the
+    // failure stays the watcher's own, where Vitest would fail the run on a rejection left unhandled.
+    underWay = hold()
+    const forgotten = replica.watchRowState('items', milk, (s) => states.push(s))
+    await underWay
+    await replica.close()
+    release()
+    await settled()
+    expect(states).toEqual([])
+    forgotten()
+    spy.mockRestore()
   })
 
   it("drops a refused create's waiting file once the member discards it, and keeps one whose row the server holds", async () => {
@@ -552,13 +699,23 @@ describe('a replica', () => {
     expect(sent.entries.find((e) => e.entity_type === 'test.item')?.count).toBe(2)
     expect(sent.entries.find((e) => e.entity_type === 'test.note')?.count).toBe(1)
 
-    verdict = { matched: false, resnapshot_required: true, entries: [] }
-    await replica.report()
-    // It downloads itself again after the report, once nothing is queued.
-    await eventually(async () => (await replica.journal.meta(metaKeys.resnapshot)) === null)
-    expect(await replica.db.getAll('SELECT id FROM items')).toEqual([])
-    expect(await replica.held()).toHaveLength(1)
-    expect(await replica.journal.meta(metaKeys.resnapshot)).toBeNull()
+    const states: RowState[] = []
+    const stop = replica.watchRowState('items', bread, (s) => states.push(s))
+    try {
+      await eventually(() => states.length > 0)
+      verdict = { matched: false, resnapshot_required: true, entries: [] }
+      await replica.report()
+      // It downloads itself again after the report, once nothing is queued.
+      await eventually(async () => (await replica.journal.meta(metaKeys.resnapshot)) === null)
+      expect(await replica.db.getAll('SELECT id FROM items')).toEqual([])
+      expect(await replica.held()).toHaveLength(1)
+      expect(await replica.journal.meta(metaKeys.resnapshot)).toBeNull()
+      // A row it held left with every other, to come back with the download: nobody's access changed.
+      await eventually(() => states.at(-1)?.kind === 'absent')
+      expect(states).toEqual([{ kind: 'synced', deleted: false }, { kind: 'absent' }])
+    } finally {
+      stop()
+    }
   })
 
   it('keeps a write made while it disconnects to download itself again, and waits for it (D-125)', async () => {
@@ -696,13 +853,59 @@ describe('a replica', () => {
     const [waiting] = await replica.attachments().list()
     expect(waiting).toMatchObject({ id: scan, status: 'pending', attempts: 1, code: null })
     expect(existsSync(waiting?.local_uri ?? '')).toBe(true)
+    // Nor is it sent again at every run, each of which would send the whole file to be refused.
+    const sent = calls.filter((c) => c.url.endsWith('/content')).length
+    await replica.attachments().upload()
+    expect(calls.filter((c) => c.url.endsWith('/content'))).toHaveLength(sent)
 
+    // The app says the household's state has changed: the file is sent again, and refused for itself.
     status = 415
     refusal = 'unsupported_media_type'
+    replica.resume()
     await replica.attachments().upload()
     expect(await replica.attachments().list()).toMatchObject([
       { id: scan, status: 'failed', code: 'unsupported_media_type' },
     ])
+  })
+
+  it("waits out the time a file's refusal asks before sending it again: the state's, and a 429's Retry-After", async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    let now = Date.parse('2026-10-02T10:00:00Z')
+    let answer = (): Response =>
+      new Response(JSON.stringify({ code: 'rate_limited' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json', 'retry-after': '30' },
+      })
+    const { fetch, calls } = routes({ '/content': () => answer() })
+    const { replica } = await open({ fetch, storage, now: () => new Date(now) })
+    const sends = (): number => calls.filter((c) => c.url.endsWith('/content')).length
+    const scan = newId()
+    await arrive(replica, 'items', scan, { household_id: household, title: 'Scan', version: 1 })
+    await replica.attach('items', scan, {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'scan.pdf',
+    })
+    await replica.attachments().upload()
+    expect(sends()).toBe(1)
+    // Within the thirty seconds the limit asked for, no run sends anything.
+    now += 29_000
+    await replica.attachments().upload()
+    expect(sends()).toBe(1)
+    // Past them it is sent again, and refused for the household's state, which is waited out longer.
+    answer = () => json(402, { code: 'entitlement_restricted' })
+    now += 1_000
+    await replica.attachments().upload()
+    expect(sends()).toBe(2)
+    answer = () => json(201, {})
+    now += stateRetryMs - 1
+    await replica.attachments().upload()
+    expect(sends()).toBe(2)
+    now += 1
+    await replica.attachments().upload()
+    expect(sends()).toBe(3)
+    expect(await replica.attachments().list()).toEqual([])
   })
 
   it('uploads a file added while a run is under way in the run that follows it', async () => {

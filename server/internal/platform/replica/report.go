@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
@@ -265,6 +266,10 @@ func (s *Reports) digest(w http.ResponseWriter, r *http.Request) {
 		}
 		return idempotency.Commit(ctx, tx)
 	})
+	if memberGone(err) {
+		// Answered as the tenant middleware answers their next request.
+		err = problem.NotFound()
+	}
 	if err != nil {
 		s.fail(ctx, w, err)
 		return
@@ -278,6 +283,15 @@ func (s *Reports) digest(w http.ResponseWriter, r *http.Request) {
 		s.metrics.Diverged(ctx, "", "checksum")
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// memberGone reports whether err is a report refused a place in sync_replicas for want of its
+// member's membership: the caller was removed from the household, or left it, while their report was
+// answered, and their replicas' reports went with the membership (ON DELETE CASCADE), which the tenant
+// middleware had let the request in by.
+func memberGone(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.TableName == "sync_replicas"
 }
 
 // reporter returns the device the request was signed in from, or none for a web session, and the

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -318,6 +319,43 @@ func TestAReplicaWithoutTheGrantHoldsNothingOfTheModule(t *testing.T) {
 	v := w.verdict(w.report(household, token, idgen.New(), entryOf(conformance.Item, nil)))
 	if !v.Matched || v.Entries[0].ServerCount != 0 {
 		t.Errorf("a replica without the grant: %+v", v)
+	}
+}
+
+// A replica's reports are its member's and leave with their membership, as the answers kept for them
+// do: a member removed from the household, or one who left it, leaves none behind, and another
+// member's stay. One removed while their report is answered is answered as the tenant middleware
+// answers their next request, 404 not_found, and never as a failure of the server's.
+func TestAReplicasReportsLeaveWithItsMembersMembership(t *testing.T) {
+	w := newWorld(t, apptest.Options{})
+	household, member := w.household("contribute")
+	other := w.member(household, "contribute")
+	token, theirs := w.signIn(member, 0), w.signIn(other, 0)
+	w.verdict(w.report(household, token, idgen.New(), entryOf(conformance.Item, nil)))
+	w.verdict(w.report(household, theirs, idgen.New(), entryOf(conformance.Item, nil)))
+	w.exec("DELETE FROM memberships WHERE household_id = $1 AND user_id = $2", household, member)
+	if n := w.count("SELECT count(*) FROM sync_replicas WHERE household_id = $1 AND user_id = $2", household, member); n != 0 {
+		t.Errorf("%d reports of a removed member's replicas kept, want none", n)
+	}
+	if n := w.count("SELECT count(*) FROM sync_replicas WHERE household_id = $1", household); n != 1 {
+		t.Errorf("%d reports kept in the household, want the other member's one", n)
+	}
+
+	// As an owner's removal does, between the tenant middleware's look-up and the report's being kept.
+	w.exec(`CREATE FUNCTION remove_reporter() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+	        BEGIN
+	          DELETE FROM memberships WHERE household_id = NEW.household_id AND user_id = NEW.user_id;
+	          RETURN NEW;
+	        END $$`)
+	t.Cleanup(func() { w.exec("DROP FUNCTION remove_reporter() CASCADE") })
+	w.exec(`CREATE TRIGGER remove_reporter BEFORE INSERT ON sync_replicas FOR EACH ROW
+	        WHEN (NEW.household_id = '` + household.String() + `') EXECUTE FUNCTION remove_reporter()`)
+	rec := w.report(household, theirs, idgen.New(), entryOf(conformance.Item, nil))
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"not_found"`) {
+		t.Fatalf("a member removed while their report is answered: %d %s", rec.Code, rec.Body)
+	}
+	if n := w.failures.Load(); n != 0 {
+		t.Errorf("%d failures logged, want none", n)
 	}
 }
 

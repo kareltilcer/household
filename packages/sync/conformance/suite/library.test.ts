@@ -7,7 +7,7 @@
 // losing nothing queued.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { metaKeys } from '../../src/index.ts'
+import { metaKeys, type RowState } from '../../src/index.ts'
 import { Admin } from '../harness/admin.ts'
 import { adminDatabaseUrl, apiUrl } from '../harness/env.ts'
 import { engine } from '../harness/target.ts'
@@ -105,45 +105,63 @@ describe('@household/sync against the engine', () => {
       const f = await family(w)
       const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
       await online(w, petr)
-      expect(await petr.replica.report()).toMatchObject({ resnapshot_required: false })
-      const replica = await petr.replica.id()
-      const reset = await fetch(`${apiUrl}/api/v1/households/${f.home.id}/sync/reset`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${await petr.credentialNow()}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ replica_id: replica }),
-      })
-      expect(reset.status).toBe(204)
-      // Offline, a write is queued; the replica is told at its next report, and waits for it.
-      await offline(petr)
-      const jam = await petr.create('conformance_items', { title: 'Jam' })
-      await petr.online()
-      expect(
-        await until(async () => (await petr.pending()) === 0, 20_000),
-        'the queue drains',
-      ).not.toBeNull()
-      expect(await w.settle()).toBe(true)
-      expect(await petr.replica.report()).toMatchObject({ resnapshot_required: true })
-      // It clears itself and connects again: waited for by the mark it clears once it has, since a
-      // replica downloading itself is offline to the run, which settle() would not wait for, and one
-      // about to is still whole, which settle() would find settled.
-      expect(
-        await until(
-          async () =>
-            petr.isOnline && (await petr.replica.journal.meta(metaKeys.resnapshot)) === null,
-          20_000,
-        ),
-        'the replica clears itself and connects again',
-      ).not.toBeNull()
-      // And fills again from PowerSync: Jam among the rows, sent before it cleared.
-      expect(await w.settle({ clients: [petr] })).toBe(true)
-      expect(await petr.row('conformance_items', jam)).toMatchObject({ title: 'Jam' })
-      expect(await petr.replica.report()).toMatchObject({
-        matched: true,
-        resnapshot_required: false,
-      })
+      // A row its member is looking at while the replica downloads itself again.
+      const states: RowState[] = []
+      const stop = petr.replica.watchRowState('conformance_items', f.milk, (s) => states.push(s))
+      const stands = (kind: RowState['kind']): Promise<number | null> =>
+        until(() => Promise.resolve(states.at(-1)?.kind === kind), 20_000)
+      try {
+        expect(await petr.replica.report()).toMatchObject({ resnapshot_required: false })
+        const replica = await petr.replica.id()
+        const reset = await fetch(`${apiUrl}/api/v1/households/${f.home.id}/sync/reset`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${await petr.credentialNow()}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ replica_id: replica }),
+        })
+        expect(reset.status).toBe(204)
+        // Offline, a write is queued; the replica is told at its next report, and waits for it.
+        await offline(petr)
+        const jam = await petr.create('conformance_items', { title: 'Jam' })
+        await petr.online()
+        expect(
+          await until(async () => (await petr.pending()) === 0, 20_000),
+          'the queue drains',
+        ).not.toBeNull()
+        expect(await w.settle()).toBe(true)
+        expect(await petr.replica.report()).toMatchObject({ resnapshot_required: true })
+        // It clears itself and connects again: waited for by the mark it clears once it has, since a
+        // replica downloading itself is offline to the run, which settle() would not wait for, and one
+        // about to is still whole, which settle() would find settled.
+        expect(
+          await until(
+            async () =>
+              petr.isOnline && (await petr.replica.journal.meta(metaKeys.resnapshot)) === null,
+            20_000,
+          ),
+          'the replica clears itself and connects again',
+        ).not.toBeNull()
+        // And fills again from PowerSync: Jam among the rows, sent before it cleared.
+        expect(await w.settle({ clients: [petr] })).toBe(true)
+        expect(await petr.row('conformance_items', jam)).toMatchObject({ title: 'Jam' })
+        expect(await petr.replica.report()).toMatchObject({
+          matched: true,
+          resnapshot_required: false,
+        })
+        // The row its member watched left with every other and came back with the download: it was
+        // never told as withdrawn, which a row leaving a replica otherwise is.
+        expect(await stands('synced'), 'the watched row comes back').not.toBeNull()
+        expect(states.map((s) => s.kind)).not.toContain('withdrawn')
+        // Withdrawn once the download has landed, it is told so: the download no longer explains it.
+        await w.admin.setGrant(f.home, f.petr, 'none')
+        expect(await stands('withdrawn'), 'the watched row is withdrawn').not.toBeNull()
+        expect(states.at(-1)).toEqual({ kind: 'withdrawn', reason: 'access' })
+        expect(await w.settle({ clients: [petr] })).toBe(true)
+      } finally {
+        stop()
+      }
     })
   })
 })

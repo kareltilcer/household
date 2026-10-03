@@ -522,7 +522,7 @@ schedulers to forget one of.
 |---|---|---|
 | Mutation idempotency records | 7 days | FR-SY5 |
 | The count of a household's pushed mutations on a day | 7 days past the day | **D-127** |
-| A replica's last report of itself (`POST …/sync/digest`) | 90 days after it last reported | **D-128** |
+| A replica's last report of itself (`POST …/sync/digest`) | 90 days after it last reported, and no longer than its member's membership | **D-128** |
 | `Idempotency-Key` records of REST requests | 7 days | [01-architecture.md](01-architecture.md) §6 |
 | Preserved note-body losers | 30 days | [modules/07-notes.md](modules/07-notes.md) FR-NO10 |
 | Generated export archives | 7 days after generation | [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §3 |
