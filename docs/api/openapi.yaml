@@ -8831,7 +8831,10 @@ components:
         replica's credentials; a `suspended` household answers every one of its routes `404`
         instead, these too (D-115). `remedy` is what fixes it, for the caller: an owner is told to
         `subscribe`, to `update_payment_method` after a failed payment, or to `lift_restriction`;
-        anyone else to `contact_owner`, since only an owner can (FR-BI5).
+        anyone else to `contact_owner`, since only an owner can (FR-BI5). After a failed payment the
+        method is replaced on the subscription while it has one (`postBillingPaymentMethod`), and by
+        subscribing again once the processor has ended it (`getBillingSubscription`'s `interval` is
+        then null).
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/EntitlementProblem' } } }
     StorageUnavailable:
       description: |

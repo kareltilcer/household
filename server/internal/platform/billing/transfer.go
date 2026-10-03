@@ -248,6 +248,11 @@ func (s *Service) acceptAlone(r *http.Request, household, user uuid.UUID) error 
 			gone = true
 			return b, nil
 		}
+		// An owner still, under the lock: billing moves only between owners (D-103).
+		if owner, err := isOwner(ctx, tx, household, user); err != nil || !owner {
+			gone = true
+			return b, err
+		}
 		b.Payer = &user
 		return b, nil
 	})
