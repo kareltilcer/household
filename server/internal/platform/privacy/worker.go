@@ -63,7 +63,7 @@ func (s *Service) Run(ctx context.Context) {
 func (s *Service) Work(ctx context.Context) int {
 	done := 0
 	for ctx.Err() == nil {
-		j, claim, attempts, ok, err := s.claim(ctx)
+		j, claim, ok, err := s.claim(ctx)
 		if err != nil {
 			s.cfg.Log.LogAttrs(ctx, slog.LevelError, "privacy: claim an export", slog.Any("error", err))
 			return done
@@ -71,21 +71,20 @@ func (s *Service) Work(ctx context.Context) int {
 		if !ok {
 			return done
 		}
-		if s.run(ctx, j, claim, attempts) {
+		if s.run(ctx, j, claim) {
 			done++
 		}
 	}
 	return done
 }
 
-// claim takes the export that has waited longest, moving it past the lease, and returns it with the
-// claim that names this try of it and how many tries that makes.
-func (s *Service) claim(ctx context.Context) (job, uuid.UUID, int, bool, error) {
+// claim takes the export that has waited longest, moving it past the lease, and returns it, with
+// this try counted among its attempts, and the claim that names the try.
+func (s *Service) claim(ctx context.Context) (job, uuid.UUID, bool, error) {
 	var (
-		j        job
-		attempts int
-		claim    = idgen.New()
-		now      = s.cfg.Now()
+		j     job
+		claim = idgen.New()
+		now   = s.cfg.Now()
 	)
 	err := tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
@@ -93,21 +92,17 @@ func (s *Service) claim(ctx context.Context) (job, uuid.UUID, int, bool, error) 
 			WHERE id = (
 			  SELECT id FROM exports WHERE status IN ('queued', 'running') AND run_at <= $3
 			  ORDER BY run_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
-			RETURNING attempts, `+jobColumns, claim, now.Add(s.cfg.Lease), now)
+			RETURNING `+jobColumns, claim, now.Add(s.cfg.Lease), now)
 		if err != nil {
 			return err
 		}
-		_, err = pgx.CollectExactlyOneRow(rows, func(row pgx.CollectableRow) (struct{}, error) {
-			var contents []byte
-			return struct{}{}, row.Scan(&attempts, &j.id, &j.user, &j.household, &j.status, &j.requested, &j.ready, &j.expires, &j.size,
-				&j.object, &contents)
-		})
+		j, err = pgx.CollectExactlyOneRow(rows, scanJob)
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return j, claim, 0, false, nil
+		return j, claim, false, nil
 	}
-	return j, claim, attempts, err == nil, err
+	return j, claim, err == nil, err
 }
 
 // objectKey is where the archive of user's export id, as the try claim built it, is kept: under the
@@ -120,9 +115,9 @@ func objectKey(user, id, claim uuid.UUID) string {
 // run builds j under claim and settles it: ready with its archive, or back in the queue after a
 // failure, or failed for good after maxAttempts of them, nothing partial kept. It reports whether j
 // ended.
-func (s *Service) run(ctx context.Context, j job, claim uuid.UUID, attempts int) bool {
+func (s *Service) run(ctx context.Context, j job, claim uuid.UUID) bool {
 	log := []slog.Attr{slog.String("export_id", j.id.String()), slog.String("user_id", j.user.String())}
-	if attempts > maxAttempts {
+	if j.attempts > maxAttempts {
 		// A try that never settled, its worker dead each time, counted too.
 		s.settle(ctx, j, claim, statusFailed, "", 0, nil, log)
 		return true
@@ -140,8 +135,8 @@ func (s *Service) run(ctx context.Context, j job, claim uuid.UUID, attempts int)
 			s.settle(ctx, j, claim, statusReleased, "", 0, nil, log)
 			return false
 		}
-		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "privacy: an export failed", append(log, slog.Int("attempt", attempts), slog.Any("error", err))...)
-		if attempts >= maxAttempts || errors.Is(err, errGone) {
+		s.cfg.Log.LogAttrs(ctx, slog.LevelWarn, "privacy: an export failed", append(log, slog.Int("attempt", j.attempts), slog.Any("error", err))...)
+		if j.attempts >= maxAttempts || errors.Is(err, errGone) {
 			s.settle(ctx, j, claim, statusFailed, "", 0, nil, log)
 			return true
 		}

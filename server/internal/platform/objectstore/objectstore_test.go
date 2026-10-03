@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -318,23 +319,30 @@ func (s shortReader) Read(p []byte) (int, error) {
 	return s.r.Read(p)
 }
 
-// An upload whose body fails keeps nothing at its key.
+// An upload whose body fails keeps nothing at its key, whatever the body failed with: a connection
+// that dropped under whoever was writing it fails with an unexpected end, which is no end of the body.
 func TestAFailedUploadLeavesNoObject(t *testing.T) {
 	s := testsupport.ObjectStore(t)
-	broken := io.MultiReader(strings.NewReader("half an archive"), failingReader{})
-	if _, err := s.Upload(t.Context(), "u/a/exports/b/broken", broken, "application/zip"); err == nil {
-		t.Fatal("an upload whose body failed succeeded")
-	}
-	if _, err := s.Head(t.Context(), "u/a/exports/b/broken"); !errors.Is(err, objectstore.ErrNotFound) {
-		t.Fatalf("head = %v, want ErrNotFound", err)
+	for name, failure := range map[string]error{
+		"broken": errors.New("the archive could not be built"),
+		"cut":    io.ErrUnexpectedEOF,
+		"ended":  fmt.Errorf("the archive's source: %w", io.EOF),
+	} {
+		key := "u/a/exports/b/" + name
+		broken := io.MultiReader(strings.NewReader("half an archive"), failingReader{failure})
+		if _, err := s.Upload(t.Context(), key, broken, "application/zip"); !errors.Is(err, failure) {
+			t.Fatalf("an upload whose body failed with %v = %v, want it failed with that", failure, err)
+		}
+		if _, err := s.Head(t.Context(), key); !errors.Is(err, objectstore.ErrNotFound) {
+			t.Fatalf("head of %s = %v, want ErrNotFound", name, err)
+		}
 	}
 }
 
-type failingReader struct{}
+// failingReader fails every read with err.
+type failingReader struct{ err error }
 
-func (failingReader) Read([]byte) (int, error) {
-	return 0, errors.New("the archive could not be built")
-}
+func (f failingReader) Read([]byte) (int, error) { return 0, f.err }
 
 // RemoveAll removes everything under a household's or an account's prefix and nothing beside it, and
 // refuses a prefix that could name more.

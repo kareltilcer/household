@@ -44,8 +44,9 @@ const (
 	causeOwnerless, causeWithAccount               = "ownerless", "account"
 )
 
-// Deletion is the contract's DeletionRequest for a household's: its id, when it was asked for and
-// when it executes. A household's carries no token: an owner cancels it through the household.
+// Deletion is the contract's DeletionRequest, a household's or an account's: its id, when it was
+// asked for and when it executes. A household's carries no token, since an owner cancels it through
+// the household; an account's carries the one its email's link does (privacy.Service).
 type Deletion struct {
 	ID          uuid.UUID `json:"id"`
 	Scope       string    `json:"scope"`
@@ -395,10 +396,17 @@ type Fate struct {
 // Depart takes an erased account out of household (FR-PR3, FR-PR4), as the system, checked against
 // catalog, and answers what becomes of the household. A household with other members that goes on
 // loses the membership, recorded without the name the account no longer has, with the invitations
-// the user sent; where they were its only owner, the adult who has been a member longest is made an
-// owner first, so that no household is left with nobody to run it (D-131), and where they were its
-// payer, billing passes to an owner who stays. A household they were the only member of, one whose
-// deletion follows their account's, and one left with no adult but them, is the caller's to erase.
+// the user sent; where they were its only owner who is staying, the adult who has been a member
+// longest is made an owner first, so that no household is left with nobody to run it (D-131), and
+// where they were its payer, billing passes to an owner who stays. A household they were the only
+// member of, one whose deletion follows their account's, and one left with no adult but them, is the
+// caller's to erase.
+//
+// An adult whose own account is scheduled for deletion may still come back, so a household with one
+// in it is not one nobody could own: another owner in that state stays its owner, and with no owner
+// and nobody staying, the member in that state who joined first is made one. The household is theirs
+// if they cancel, and is resolved again, here, when their account is erased in its turn.
+//
 // What the household's own row says of them by name, a restriction they set, loses the name. A user
 // who is no member is taken out of nothing, and the household goes on.
 func (s *Service) Depart(ctx context.Context, catalog *module.Registry, household, user uuid.UUID) (Fate, error) {
@@ -429,19 +437,39 @@ func (s *Service) Depart(ctx context.Context, catalog *module.Registry, househol
 		case !st.SoleOwner:
 			return mutation.Record{}, nil
 		}
-		// The adult who joined first and is staying.
-		var successor uuid.UUID
+		// The adult who joined first: one who is staying, before one whose own account is scheduled
+		// for deletion and who may still come back.
+		var (
+			successor uuid.UUID
+			leaving   bool
+		)
 		err = tx.QueryRow(ctx, `
-			SELECT m.user_id FROM memberships m
+			SELECT m.user_id, EXISTS (SELECT FROM account_deletions d WHERE d.user_id = m.user_id) AS leaving
+			FROM memberships m
 			WHERE m.household_id = $1 AND m.role = 'member' AND m.user_id <> $2
-			  AND NOT EXISTS (SELECT FROM account_deletions d WHERE d.user_id = m.user_id)
-			ORDER BY m.created_at, m.id LIMIT 1`, household, user).Scan(&successor)
-		if errors.Is(err, pgx.ErrNoRows) {
-			fate = Fate{Erase: true, Cause: causeOwnerless}
-			return mutation.Record{}, nil
-		}
-		if err != nil {
+			ORDER BY leaving, m.created_at, m.id LIMIT 1`, household, user).Scan(&successor, &leaving)
+		none := errors.Is(err, pgx.ErrNoRows)
+		if err != nil && !none {
 			return mutation.Record{}, err
+		}
+		if none || leaving {
+			// Nobody who is staying could own it. An owner whose own account is scheduled for deletion
+			// counted for nothing above, and is its owner still: the household is theirs if they
+			// cancel, and is resolved again when their account is erased. It is ownerless, and goes
+			// now, only with no adult left in it at all.
+			var owned bool
+			if err := tx.QueryRow(ctx, `
+				SELECT EXISTS (SELECT FROM memberships WHERE household_id = $1 AND role = 'owner' AND user_id <> $2)`,
+				household, user).Scan(&owned); err != nil {
+				return mutation.Record{}, err
+			}
+			switch {
+			case owned:
+				return mutation.Record{}, nil
+			case none:
+				fate = Fate{Erase: true, Cause: causeOwnerless}
+				return mutation.Record{}, nil
+			}
 		}
 		old, err := readMembership(ctx, tx, household, successor, true)
 		if err != nil {

@@ -297,6 +297,138 @@ func TestTheLastOwnerErasedIsSucceeded(t *testing.T) {
 	}
 }
 
+// A household is not erased while an adult who could run it may still come back (D-131). An owner
+// whose own account is scheduled for deletion counts as none for whoever would leave the household to
+// them, and is its owner still when the other owner's account is erased first: the household goes on
+// until their own 30 days are over, and is theirs if they cancel.
+func TestAHouseholdOutlivesAnOwnerWhileAnotherMayStillComeBack(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	address := p.a("petr@tilcerovi.cz")
+	petr, petrID := p.joined(jana, h.ID, "Petr", address, "member", nil)
+	expect(t, jana.post(householdPath(h.ID, "/ownership/transfer"), jsonBody(t, map[string]any{"user_id": petrID})), http.StatusOK, "")
+	// Billing is item 19's to move; here it moves as the administrator moves it.
+	p.exec("UPDATE households SET billing_payer_id = $2 WHERE id = $1", h.ID, petrID)
+
+	// Jana goes first, with another owner there. Twenty days on Petr goes too: he is by then the only
+	// owner who will still be there, so the household is his to delete with his account, in 30 days.
+	expect(t, jana.deleteAccount(passphrase), http.StatusAccepted, "")
+	p.clock.advance(20 * 24 * time.Hour)
+	expect(t, petr.deleteAccount(passphrase), http.StatusConflict, problem.CodeAccountDeletionBlocked)
+	rec := petr.deleteAccount(passphrase, h.ID)
+	expect(t, rec, http.StatusAccepted, "")
+	var d deletionDoc
+	decode(t, rec, &d)
+
+	// Jana's 30 days end ten days into his. Her account is erased and her membership with it; the
+	// household, which is not due for twenty days and whose owner he still is, stays.
+	p.clock.advance(10*24*time.Hour + time.Minute)
+	p.erase()
+	if n := p.count("SELECT count(*) FROM households WHERE id = $1 AND deletion_scheduled_at = $2", h.ID, d.ExecutesAt); n != 1 {
+		t.Fatal("the household went with the first owner's account, while the other may still come back to it")
+	}
+	if n := p.count("SELECT count(*) FROM memberships WHERE household_id = $1", h.ID); n != 1 {
+		t.Fatalf("the household has %d members, want Petr alone", n)
+	}
+
+	// He comes back within his own 30 days, to the household he had, which is no longer to be deleted.
+	expect(t, p.browser().post("/auth/deletion/cancel", jsonBody(t, map[string]string{"token": *d.CancelToken})), http.StatusNoContent, "")
+	back := p.browser()
+	back.login(address, passphrase)
+	if at := back.scheduledFor(h.ID); at != nil {
+		t.Fatalf("cancelled, the household is still scheduled for %v", at)
+	}
+	if members := back.members(h.ID); len(members) != 1 || members["Petr"].Role != "owner" {
+		t.Fatalf("the household's members are %+v", members)
+	}
+}
+
+// Where the only adult left in a household is one whose own account is scheduled for deletion, they
+// are made its owner all the same (D-131): the household is theirs if they come back, and goes with
+// their account if they do not. It goes with the last owner's account only when child profiles alone
+// are left in it.
+func TestTheLastOwnerErasedIsSucceededByAnAdultWhoMayStillComeBack(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	address := p.a("petr@tilcerovi.cz")
+	petr, petrID := p.joined(jana, h.ID, "Petr", address, "member", nil)
+	jana.child(h.ID, "Tomáš", "4821", nil)
+	expect(t, jana.post(householdPath(h.ID, "/ownership/transfer"), jsonBody(t, map[string]any{"user_id": petrID})), http.StatusOK, "")
+	p.exec("UPDATE households SET billing_payer_id = $2 WHERE id = $1", h.ID, petrID)
+	expect(t, jana.deleteAccount(passphrase), http.StatusAccepted, "")
+	// She is the last owner all the same when the day comes, and the one adult beside her is leaving too.
+	p.exec("UPDATE memberships SET role = 'member' WHERE household_id = $1 AND user_id = $2", h.ID, petrID)
+	p.exec("UPDATE households SET billing_payer_id = (SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'owner') WHERE id = $1", h.ID)
+	p.clock.advance(10 * 24 * time.Hour)
+	rec := petr.deleteAccount(passphrase)
+	expect(t, rec, http.StatusAccepted, "")
+	var d deletionDoc
+	decode(t, rec, &d)
+
+	p.clock.advance(20*24*time.Hour + time.Minute)
+	p.erase()
+	if n := p.count("SELECT count(*) FROM memberships WHERE household_id = $1 AND user_id = $2 AND role = 'owner'", h.ID, petrID); n != 1 {
+		t.Fatal("the household was not left to the adult who may still come back to it")
+	}
+	if n := p.count("SELECT count(*) FROM households WHERE id = $1 AND billing_payer_id = $2", h.ID, petrID); n != 1 {
+		t.Error("billing did not pass to him")
+	}
+
+	// He does not come back: the household, with nobody but its child profile left, goes with his account.
+	p.clock.advance(10 * 24 * time.Hour)
+	p.erase()
+	if rows := p.rowsOf(h.ID); len(rows) != 0 {
+		t.Fatalf("with child profiles alone left in it, the household keeps %v", rows)
+	}
+	expect(t, p.browser().post("/auth/deletion/cancel", jsonBody(t, map[string]string{"token": *d.CancelToken})), http.StatusNotFound, problem.CodeNotFound)
+}
+
+// An erasure that fails partway is finished the next night, with nothing of it left undone (FR-PR4):
+// while a module's part of a household fails, the account stays scheduled and its membership stays,
+// which is how the job finds the household again.
+func TestAnErasureThatFailedPartwayIsFinishedTheNextNight(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	janaID := jana.me().ID
+	h := jana.create("Tilcerovi")
+	petr, petrID := p.joined(jana, h.ID, "Petr", p.a("petr@tilcerovi.cz"), "member", nil)
+	p.probe(h.ID, map[uuid.UUID]string{janaID: "manage", petrID: "contribute"})
+	own := p.item(h.ID, petrID, true, "petr.txt", "Petr's own")
+	expect(t, petr.deleteAccount(passphrase), http.StatusAccepted, "")
+	p.clock.advance(15 * 24 * time.Hour)
+	jana.me()
+	p.clock.advance(15*24*time.Hour + time.Minute)
+
+	p.refuse.Store(true)
+	if _, err := p.privacy.Erase(t.Context()); err == nil {
+		t.Fatal("the job reported nothing of a module that refused")
+	}
+	if p.count("SELECT count(*) FROM users WHERE id = $1 AND deleted_at IS NULL", petrID) != 1 {
+		t.Fatal("the account was erased with a household's part of it undone")
+	}
+	if n := p.count("SELECT count(*) FROM memberships WHERE household_id = $1 AND user_id = $2", h.ID, petrID); n != 1 {
+		t.Fatal("his membership ended before what the household keeps of him was deleted: nothing finds the household again")
+	}
+
+	p.refuse.Store(false)
+	p.erase()
+	p.files.Drain(t.Context(), h.ID)
+	if p.count("SELECT count(*) FROM users WHERE id = $1 AND deleted_at IS NOT NULL", petrID) != 1 {
+		t.Fatal("the next night did not erase the account")
+	}
+	if p.count("SELECT count(*) FROM probe_items WHERE id = $1", own) != 0 {
+		t.Error("what he kept privately outlived his account")
+	}
+	if n := p.count("SELECT count(*) FROM audit_events WHERE household_id = $1 AND actor_id = $2 AND actor_label IS NOT NULL", h.ID, petrID); n != 0 {
+		t.Errorf("%d of the events he caused still carry his name", n)
+	}
+	if members := jana.members(h.ID); len(members) != 1 {
+		t.Errorf("the household's members are %+v", members)
+	}
+}
+
 // A household's deletion is an owner's, who types its name (FR-PR6, FR-HA16): every member is told,
 // any owner cancels it within 30 days, and after them the nightly job erases every row of it and
 // every object, with its child profiles' accounts, and nothing of any other household.
@@ -372,8 +504,12 @@ func TestAHouseholdsDeletionErasesEveryRowOfIt(t *testing.T) {
 	}
 	kept := p.rowsOf(other.ID)
 
+	// The clock runs while the job does, as a real one does: what the job schedules as due at once,
+	// the child profile's erasure, is due in the run that scheduled it.
 	p.clock.advance(24*time.Hour + time.Minute)
+	p.clock.run(time.Millisecond)
 	p.erase()
+	p.clock.run(0)
 	if rows := p.rowsOf(h.ID); len(rows) != 0 {
 		t.Fatalf("erased, the household keeps %v", rows)
 	}

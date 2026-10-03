@@ -298,9 +298,8 @@ func (s *Store) Upload(ctx context.Context, k string, body io.Reader, contentTyp
 		buf   = make([]byte, PartSize)
 	)
 	for number := int32(1); ; number++ {
-		n, err := io.ReadFull(body, buf)
-		last := errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
-		if err != nil && !last {
+		n, last, err := fill(body, buf)
+		if err != nil {
 			return abort(err)
 		}
 		// A body that ends on a part's boundary leaves a last part with nothing in it, which is sent
@@ -327,6 +326,26 @@ func (s *Store) Upload(ctx context.Context, k string, body io.Reader, contentTyp
 		return abort(err)
 	}
 	return total, nil
+}
+
+// fill reads from r until buf is full or r has ended, and returns how much it read and whether r
+// ended. Only io.EOF itself ends a body: a reader that failed with an unexpected end, a connection
+// that dropped under whoever was writing it, has failed, which io.ReadFull would not tell from a body
+// that ended short of a part.
+func fill(r io.Reader, buf []byte) (int, bool, error) {
+	n := 0
+	for n < len(buf) {
+		m, err := r.Read(buf[n:])
+		n += m
+		// Compared, not unwrapped: an error that wraps io.EOF is a failure that names one.
+		if err == io.EOF {
+			return n, true, nil
+		}
+		if err != nil {
+			return n, false, err
+		}
+	}
+	return n, false, nil
 }
 
 // prefix is the form of a prefix RemoveAll takes: a key's segments, ending in a slash, so that it

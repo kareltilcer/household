@@ -7,11 +7,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,9 +44,21 @@ import (
 // quietProbe is the probe with no routes of its own, which the committed contract does not declare:
 // its rows are written here as the administrator writes them, and its export and erasure are the
 // probe's.
-type quietProbe struct{ probe.Module }
+type quietProbe struct {
+	probe.Module
+	// refuse, while set, fails the erasure of a member's private items: a night on which a module's
+	// part of an erasure does not go through.
+	refuse *atomic.Bool
+}
 
 func (quietProbe) RegisterRoutes(chi.Router) {}
+
+func (q quietProbe) Erase(ctx context.Context, tx pgx.Tx, e module.Erasure) error {
+	if e.Member != uuid.Nil && q.refuse.Load() {
+		return errors.New("probe: the erasure is refused")
+	}
+	return q.Module.Erase(ctx, tx, e)
+}
 
 // privacySite is a site that serves the probe's module, keeps files in a bucket of its own, and
 // runs the household surface's Lost hook as the server does.
@@ -52,13 +66,16 @@ type privacySite struct {
 	*site
 	files *files.Service
 	store *objectstore.Store
+	// refuse fails the probe's erasure of a member's private items while it is set.
+	refuse *atomic.Bool
 }
 
 func newPrivacySite(t *testing.T) *privacySite {
 	t.Helper()
 	pool := testsupport.Open(t).Pool(t, db.RoleApp)
 	fs := apptest.Files(t, pool, logging.New(io.Discard, slog.LevelDebug), apptest.Options{})
-	registry, err := module.NewRegistry(quietProbe{probe.Module{Files: fs}})
+	refuse := &atomic.Bool{}
+	registry, err := module.NewRegistry(quietProbe{Module: probe.Module{Files: fs}, refuse: refuse})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +90,7 @@ func newPrivacySite(t *testing.T) *privacySite {
 	}
 	s := newSite(t, apptest.Options{Files: fs, Hooks: household.Hooks{Lost: lost}}, func(d *app.Deps) { d.Modules = registry })
 	now = s.clock.now
-	return &privacySite{site: s, files: fs, store: fs.Store()}
+	return &privacySite{site: s, files: fs, store: fs.Store(), refuse: refuse}
 }
 
 func (p *privacySite) exec(sql string, args ...any) {

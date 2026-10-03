@@ -2,6 +2,7 @@ package privacy
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/csv"
@@ -215,7 +216,8 @@ func clean(p string) string {
 			if len(ext) > 16 {
 				ext = nil
 			}
-			seg = strings.TrimSpace(string(r[:segmentRunes-len(ext)])) + string(ext)
+			// Trimmed again where it was cut, which may be at a dot or a space.
+			seg = strings.TrimRight(strings.TrimSpace(string(r[:segmentRunes-len(ext)])), ". ") + string(ext)
 		}
 		if seg == "" {
 			seg = "_"
@@ -357,8 +359,11 @@ func (s *Service) activity(ctx context.Context, tx pgx.Tx, w io.Writer, househol
 		if audit.Redacted(audit.Visibility(visibility), owner, reader) {
 			entity, summary = "", render(audit.RedactedKey, nil)
 		} else {
+			// Numbers as they were recorded, not as floats (i18n.Args), as a notification's are read.
 			var a i18n.Args
-			if err := json.Unmarshal(args, &a); err != nil {
+			d := json.NewDecoder(bytes.NewReader(args))
+			d.UseNumber()
+			if err := d.Decode(&a); err != nil {
 				return err
 			}
 			summary = render(summaryKey, a)

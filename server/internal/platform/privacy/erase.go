@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -104,10 +105,10 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 				continue
 			}
 			seen[user] = true
-			n, err := s.eraseAccount(ctx, user, now)
+			n, erased, err := s.eraseAccount(ctx, user, now)
 			note("an account", user, err)
 			done.Households += n
-			if err == nil {
+			if erased {
 				done.Accounts++
 			}
 			if ctx.Err() != nil {
@@ -204,15 +205,26 @@ func (s *Service) eraseDue(ctx context.Context, household uuid.UUID, now time.Ti
 		}
 		cause = causeAccount
 	}
-	return s.eraseHousehold(ctx, household, cause, func(ctx context.Context, tx pgx.Tx) (bool, error) {
-		// Still due, under the lock: neither cancelled nor resumed since it was read.
+	return s.eraseHousehold(ctx, household, cause, now, func(ctx context.Context, tx pgx.Tx) (bool, error) {
+		// Still due, under the lock: neither cancelled nor resumed since it was read. A deletion
+		// cancelled leaves no day to compare, which is not due rather than unknown.
 		var due bool
 		err := tx.QueryRow(ctx, `
-			SELECT deletion_scheduled_at <= $2
-			  OR (billing_state IN ('read_only', 'canceled') AND retained_until <= $2 AND retention_warnings >= 3)
+			SELECT coalesce(deletion_scheduled_at <= $2, false)
+			  OR coalesce(billing_state IN ('read_only', 'canceled') AND retained_until <= $2 AND retention_warnings >= 3, false)
 			FROM households WHERE id = $1`, household, now).Scan(&due)
 		return due, err
 	})
+}
+
+// tombstone records, in tx, that the household or the account id was erased at at, for cause
+// (erasures): what erasure leaves of it, with its objects still to be removed (purge).
+func tombstone(ctx context.Context, tx pgx.Tx, kind string, id uuid.UUID, cause string, at time.Time) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO erasures (kind, id, cause, erased_at) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (kind, id) DO UPDATE SET erased_at = excluded.erased_at, purged_at = NULL`,
+		kind, id, cause, at)
+	return err
 }
 
 // EraseRows deletes every row of household, in tx, a transaction of its own that may write: each
@@ -252,9 +264,10 @@ func eraseMember(ctx context.Context, tx pgx.Tx, reg *module.Registry, household
 // members, grants, invitations, modules' rows, files' rows, notifications, audit log and the rest go
 // with it; and, once that has committed, its objects. still, when not nil, is asked under the row's
 // lock whether the household is still to be erased. Its child profiles, which are nothing outside
-// it, are scheduled for erasure now, and the archives of its exports are removed with it. It reports
-// whether it erased it.
-func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause string,
+// it, are scheduled for erasure at now, the time the job's run searches by, so that the run that
+// erased their household erases them too; and the archives of its exports are removed with it. It
+// reports whether it erased it.
+func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause string, now time.Time,
 	still func(context.Context, pgx.Tx) (bool, error),
 ) (bool, error) {
 	var (
@@ -277,9 +290,9 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 				return err
 			}
 		}
-		now := s.cfg.Now()
 		// A child profile is an account nobody can sign in to once its household is gone: its erasure
-		// is due now.
+		// is due now, by the run's own time. A clock read here would be later than the one the run
+		// finds the accounts due by, and the profile would wait a night for nothing.
 		rows, err := tx.Query(ctx, "SELECT user_id FROM memberships WHERE household_id = $1 AND role = 'child' ORDER BY user_id", household)
 		if err != nil {
 			return err
@@ -306,10 +319,7 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 		if err := EraseRows(scoped, tx, s.cfg.Registry, household); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `
-			INSERT INTO erasures (kind, id, cause, erased_at) VALUES ($1, $2, $3, $4)
-			ON CONFLICT (kind, id) DO UPDATE SET erased_at = excluded.erased_at, purged_at = NULL`,
-			kindHousehold, household, cause, now)
+		err = tombstone(ctx, tx, kindHousehold, household, cause, now)
 		erased = err == nil
 		return err
 	})
@@ -327,15 +337,22 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 }
 
 // eraseAccount executes user's scheduled deletion (FR-PR3, FR-PR4), read again as it is: cancelled
-// since the search, it does nothing. Household by household, in each one's own context, the
-// household surface says what becomes of it (household.Service.Depart): one that goes with the
-// account is erased; in one that goes on, what the user kept privately is deleted by its modules,
-// their membership is ended, what was sent to them is deleted, and the events they caused lose their
-// name. The households they had left before are found by their departures, and treated the same. The
-// account's own tables go last, in one transaction, which leaves the tombstone: a failure before it
-// leaves the account scheduled, and the next night goes over the households again, each step doing
-// nothing where it was done. It returns how many households it erased.
-func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Time) (int, error) {
+// since the search, it does nothing. Household by household, in each one's own context, what the
+// household keeps of the user is deleted (forget), what they kept privately by its modules, what was
+// sent to them, and their name on the events they caused; and the household surface ends their
+// membership and says what becomes of the household (household.Service.Depart): one that goes with
+// the account is erased. The households they had left before are found by their departures, and
+// treated the same. The account's own tables go last, in one transaction, which leaves the tombstone.
+//
+// A failure before that leaves the account scheduled, and the next night goes over the households
+// again, each step doing nothing where it was done. It finds a household by the membership, or by
+// the departure, so whichever it is goes last there: a household the user is a member of is
+// forgotten before the membership ends, and one they had left loses the record of it only once the
+// rest is done. Ended first, a membership would leave nothing to find the household by, and what a
+// failed night left there of the user would stay for good.
+//
+// It returns how many households it erased, and whether it erased the account.
+func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Time) (int, bool, error) {
 	var cause string
 	err := tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, "SELECT cause FROM account_deletions WHERE user_id = $1 AND executes_at <= $2", user, now).Scan(&cause)
@@ -345,7 +362,7 @@ func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Tim
 		return err
 	})
 	if err != nil || cause == "" {
-		return 0, err
+		return 0, false, err
 	}
 	var member []uuid.UUID
 	if err := tenant.AccountTx(ctx, s.cfg.Pool, user, func(tx pgx.Tx) error {
@@ -356,34 +373,47 @@ func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Tim
 		member, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 		return err
 	}); err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	rows, err := s.cfg.Meter.Query(ctx, "SELECT household_id FROM departures WHERE user_id = $1 ORDER BY household_id", user)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	left, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	households := 0
-	for _, id := range append(member, left...) {
+	for _, id := range member {
+		if err := s.forget(ctx, id, user); err != nil {
+			return households, false, err
+		}
 		fate, err := s.cfg.Households.Depart(ctx, s.cfg.Registry, id, user)
 		if err != nil {
-			return households, err
+			return households, false, err
 		}
-		if fate.Erase {
-			erased, err := s.eraseHousehold(ctx, id, fate.Cause, nil)
-			if erased {
-				households++
-			}
-			if err != nil {
-				return households, err
-			}
+		if !fate.Erase {
 			continue
 		}
+		erased, err := s.eraseHousehold(ctx, id, fate.Cause, now, nil)
+		if erased {
+			households++
+		}
+		if err != nil {
+			return households, false, err
+		}
+	}
+	for _, id := range left {
+		// A member who came back inside their window is both, and was taken out above: the household
+		// may have gone with them.
+		if slices.Contains(member, id) {
+			continue
+		}
+		if _, err := s.cfg.Households.Depart(ctx, s.cfg.Registry, id, user); err != nil {
+			return households, false, err
+		}
 		if err := s.forget(ctx, id, user); err != nil {
-			return households, err
+			return households, false, err
 		}
 	}
 	err = tenant.AccountTx(ctx, s.cfg.Pool, user, func(tx pgx.Tx) error {
@@ -398,25 +428,21 @@ func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Tim
 		if err := s.cfg.Accounts.Erase(ctx, tx, user); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `
-			INSERT INTO erasures (kind, id, cause, erased_at) VALUES ($1, $2, $3, $4)
-			ON CONFLICT (kind, id) DO UPDATE SET erased_at = excluded.erased_at, purged_at = NULL`,
-			kindAccount, user, cause, s.cfg.Now())
-		return err
+		return tombstone(ctx, tx, kindAccount, user, cause, now)
 	})
 	if err != nil {
-		return households, err
+		return households, false, err
 	}
 	s.cfg.Log.LogAttrs(ctx, slog.LevelInfo, "privacy: erased an account", slog.String("user_id", user.String()),
 		slog.String("cause", cause))
 	_, err = s.purgeOne(ctx, kindAccount, user)
-	return households, err
+	return households, true, err
 }
 
-// forget deletes what household, which goes on, keeps of user beyond the membership the household
-// surface ended: what they kept privately there, each module's to delete; the notifications sent to
-// them; and their name on the events they caused, which read as a former member's from then on
-// (FR-PR4). The record that they once left it goes too: the tombstone needs none.
+// forget deletes what household keeps of user beside their membership, which the household surface
+// ends: what they kept privately there, each module's to delete; the notifications sent to them; and
+// their name on the events they caused, which read as a former member's from then on (FR-PR4). The
+// record that they once left it goes too: the tombstone needs none.
 func (s *Service) forget(ctx context.Context, household, user uuid.UUID) error {
 	scoped := s.system(ctx, household)
 	err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error {

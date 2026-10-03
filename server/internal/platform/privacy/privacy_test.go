@@ -31,6 +31,8 @@ func TestAnEntrysNameIsCleaned(t *testing.T) {
 		"tab\tand\nnewline":                 "tab_and_newline",
 		"":                                  "_",
 		"files/probe/" + long(200) + ".pdf": "files/probe/" + long(116) + ".pdf",
+		// Cut where a sentence ends, the name does not end in the dot the cut left.
+		long(119) + ". " + long(40): long(119),
 	} {
 		if got := clean(name); got != want {
 			t.Errorf("clean(%q) = %q, want %q", name, got, want)

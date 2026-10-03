@@ -54,16 +54,19 @@ type job struct {
 	size      *int64
 	object    *string
 	contents  []string
+	// attempts is how many times a worker has taken it.
+	attempts int
 }
 
-const jobColumns = "id, user_id, household_id, status, requested_at, ready_at, expires_at, size_bytes, object, contents"
+const jobColumns = "id, user_id, household_id, status, requested_at, ready_at, expires_at, size_bytes, object, contents, attempts"
 
 func scanJob(row pgx.CollectableRow) (job, error) {
 	var (
 		j        job
 		contents []byte
 	)
-	if err := row.Scan(&j.id, &j.user, &j.household, &j.status, &j.requested, &j.ready, &j.expires, &j.size, &j.object, &contents); err != nil {
+	if err := row.Scan(&j.id, &j.user, &j.household, &j.status, &j.requested, &j.ready, &j.expires, &j.size, &j.object, &contents,
+		&j.attempts); err != nil {
 		return j, err
 	}
 	return j, json.Unmarshal(contents, &j.contents)

@@ -65,16 +65,18 @@ role may not delete from, goes too. `internal/arch`'s erasure test runs it over 
 which holds a row of household A in every tenant table, and fails any table that still holds one, or
 that lost one of household B's.
 
-**An account is erased table by table, last.** For each household the account is in, the household
-surface says what becomes of it (`household.Service.Depart`, D-131): it goes with the account and is
-erased as above, or it goes on, the membership ended by a mutation of the system's through the spine,
-with the owner who succeeds, where one must, made by a mutation before it. In a household that goes
-on, each module then deletes what the member kept privately, the notifications sent to them go, and
-`forget_actor` takes their name off the events they caused, a `SECURITY DEFINER` function that makes
-that one change of a log the request role otherwise only appends to (D-135). The account's own tables
-go in one transaction at the end, which empties the `users` row and sets `deleted_at`: a failure
-before it leaves the deletion scheduled, and the next night goes over the households again, each step
-a no-op where it was done.
+**An account is erased table by table, last.** In each household the account is in, each module
+first deletes what the member kept privately, the notifications sent to them go, and `forget_actor`
+takes their name off the events they caused, a `SECURITY DEFINER` function that makes that one change
+of a log the request role otherwise only appends to (D-135). Then the household surface says what
+becomes of the household (`household.Service.Depart`, D-131): it goes with the account and is erased
+as above, or it goes on, the membership ended by a mutation of the system's through the spine, with
+the owner who succeeds, where one must, made by a mutation before it. The account's own tables go in
+one transaction at the end, which empties the `users` row and sets `deleted_at`: a failure before it
+leaves the deletion scheduled, and the next night goes over the households again, each step a no-op
+where it was done. It finds them by the account's memberships and its departures, so in each
+household whichever of the two it is goes last: a membership ended before what the household keeps
+of the member was deleted would leave a failed night's remainder there for good.
 
 **Erasure records no audit event, and leaves a tombstone.** It writes through `tenant.InWriteTx` and
 `tenant.AccountTx`, the platform's own paths, as the expiry sweep's deletions do. `erasures` keeps the

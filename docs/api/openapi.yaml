@@ -1125,7 +1125,7 @@ paths:
       operationId: getMeExports
       tags: [me]
       summary: List personal export jobs
-      description: 'The caller''s own exports of everything about them, the newest first, fifty at most. An export''s row is kept 30 days after it was ready or failed; its archive, seven.'
+      description: 'The caller''s own exports of everything about them, the newest first, fifty at most. An export''s archive is kept seven days after it was ready, and its row 30 days after it ended: after it failed, or after its archive expired.'
       responses:
         '200': { description: Jobs, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/ExportJob' } } } } } } }
         '429': { $ref: '#/components/responses/RateLimited' }

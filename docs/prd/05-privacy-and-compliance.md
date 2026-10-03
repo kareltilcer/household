@@ -109,8 +109,8 @@ The flow resolves each of the user's households first, and states plainly what w
 counts as no owner, so that nobody leaves a household to an owner who is leaving it too. The payer
 blocks while the household goes on without them, and while one that goes with the account still
 charges. A household chosen for deletion is scheduled then, with the account's, and its members are
-told; cancelling the account's deletion cancels it, and nothing else does. The request is refused
-with every blocking household at once, never one at a time.
+told; cancelling the account's deletion cancels it, as an owner the household has by then does, and
+nothing else. The request is refused with every blocking household at once, never one at a time.
 
 **FR-PR4 — Deletion is a 30-day soft window then irreversible.** The account is disabled
 immediately, sessions and tokens are revoked (under D-93 a sync token already issued runs until it
@@ -127,7 +127,11 @@ signed out (D-130)**: its token is the email's and the answer's to the request t
 deletion, and nothing else brings the account back. At execution each household is resolved again
 as it then stands (D-131): where the account is by then the only owner, of a household it did not
 choose to delete, the adult who has been a member longest becomes its owner, and a household left
-with nobody who could own it goes with the account. **What the household recorded of the person in
+with nobody who could own it, child profiles alone, goes with the account. An adult whose own
+account is scheduled for deletion may still come back, so a household is never erased from under
+one for want of an owner: an owner in that state stays its owner, a member in that state succeeds
+where nobody is staying, and the household is resolved again when their account is erased in its
+turn. **What the household recorded of the person in
 its own events stays (D-135)**: who did a thing loses their name, and *Removed Petr* keeps Petr's,
 as a note that names him does.
 

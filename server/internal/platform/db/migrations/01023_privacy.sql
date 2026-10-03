@@ -48,7 +48,7 @@ ALTER TYPE email_token_purpose ADD VALUE 'cancel_deletion';
 -- audit events, and every member's replica learns of it with the row. deletion_scheduled_at is when
 -- the nightly job erases it, 30 days after deletion_requested_at. deletion_account is the account
 -- whose own deletion it follows, when its only owner chose to delete it with their account: it is
--- cancelled with that deletion and by nothing else.
+-- cancelled with that deletion, or by an owner as any household's deletion is.
 ALTER TABLE households
   ADD COLUMN deletion_id uuid,
   ADD COLUMN deletion_requested_at timestamptz,

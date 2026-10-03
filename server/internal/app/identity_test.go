@@ -46,16 +46,28 @@ import (
 // breached is a password the tests' breached-password corpus holds.
 const breached = "password1234"
 
-// clock is a time a test moves by hand, for the sessions and the throttles.
+// clock is a time a test moves by hand, for the sessions and the throttles. While step is set it
+// runs as well: each reading is step later than the one before, as no two readings of a real clock
+// are the same.
 type clock struct {
-	mu sync.Mutex
-	t  time.Time
+	mu   sync.Mutex
+	t    time.Time
+	step time.Duration
 }
 
 func (c *clock) now() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.t
+	t := c.t
+	c.t = c.t.Add(c.step)
+	return t
+}
+
+// run makes every reading of the clock step later than the one before, and stops it at zero.
+func (c *clock) run(step time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.step = step
 }
 
 func (c *clock) advance(d time.Duration) {

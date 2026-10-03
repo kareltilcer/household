@@ -37,17 +37,6 @@ const (
 	causeChildRemoved = "child_removed"
 )
 
-// deletionJSON is the contract's DeletionRequest for an account's.
-type deletionJSON struct {
-	ID          uuid.UUID `json:"id"`
-	Scope       string    `json:"scope"`
-	RequestedAt time.Time `json:"requested_at"`
-	ExecutesAt  time.Time `json:"executes_at"`
-	// CancelToken cancels it (postAuthDeletionCancel): what the email's link carries, handed to the
-	// client that asked too, which is signed out by the answer and could not cancel otherwise.
-	CancelToken *string `json:"cancel_token"`
-}
-
 // blocked is the contract's AccountDeletionBlocked: every household that stands in the way, at once
 // (FR-PR3), so that nobody clears one blocker to meet the next.
 func blocked(sole []household.Standing, payer []uuid.UUID) *problem.Problem {
@@ -173,8 +162,11 @@ func (s *Service) requestDeletion(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// The contract's DeletionRequest, an account's: its CancelToken is what the email's link carries,
+	// handed to the client that asked too, which is signed out by the answer and could not cancel
+	// otherwise.
 	var (
-		d     deletionJSON
+		d     household.Deletion
 		token string
 		fresh bool
 	)
@@ -183,7 +175,7 @@ func (s *Service) requestDeletion(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		now := s.cfg.Now()
-		d = deletionJSON{ID: idgen.New(), Scope: scopeUser, RequestedAt: now.UTC(), ExecutesAt: now.Add(household.DeletionWindow).UTC()}
+		d = household.Deletion{ID: idgen.New(), Scope: scopeUser, RequestedAt: now.UTC(), ExecutesAt: now.Add(household.DeletionWindow).UTC()}
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO account_deletions (user_id, id, cause, requested_at, executes_at) VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (user_id) DO NOTHING`, user, d.ID, causeRequested, d.RequestedAt, d.ExecutesAt)
