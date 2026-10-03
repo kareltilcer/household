@@ -468,12 +468,12 @@ func (s *Service) household(ctx context.Context, a *archive, prefix string, id, 
 	out := ManifestHousehold{ID: id, Path: strings.TrimSuffix(prefix, "/"), Scope: scope, Modules: []string{}}
 	// Billing is no module, and what it keeps of a payer is theirs all the same: billing.json, which
 	// holds the requester's own subscriptions and invoices and nobody else's, whatever the scope.
-	sources := append(sources(s.cfg.Registry), source{name: billingName, export: billing.Export})
+	exporters := append(sources(s.cfg.Registry), source{name: billingName, export: billing.Export})
 	platform := map[string]bool{billingName: true}
 	for _, p := range s.cfg.Registry.Platform() {
 		platform[p.Name] = true
 	}
-	for _, src := range sources {
+	for _, src := range exporters {
 		a.reserve(prefix + src.name + ".json")
 	}
 	a.reserve(prefix + activityName)
@@ -506,8 +506,8 @@ func (s *Service) household(ctx context.Context, a *archive, prefix string, id, 
 		}
 		e := module.Export{Household: id, Requester: user, Role: access.Role(role), Scope: scope}
 		// Every module is asked, but for a member's own export, which takes the ones they can see.
-		asked := make([]string, 0, len(sources))
-		for _, src := range sources {
+		asked := make([]string, 0, len(exporters))
+		for _, src := range exporters {
 			asked = append(asked, src.name)
 		}
 		switch {
@@ -521,9 +521,9 @@ func (s *Service) household(ctx context.Context, a *archive, prefix string, id, 
 			if err != nil {
 				return err
 			}
-			asked = visible(sources, platform, levels)
+			asked = visible(exporters, platform, levels)
 		}
-		for _, src := range sources {
+		for _, src := range exporters {
 			if src.export == nil || !slices.Contains(asked, src.name) {
 				continue
 			}

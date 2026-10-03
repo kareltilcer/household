@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -179,6 +180,120 @@ func TestALapsedHouseholdIsKeptWhileItsPaymentIsOnItsWay(t *testing.T) {
 			t.Error("no tombstone of the lapsed household")
 		}
 	})
+}
+
+// A lapsed household whose payer has paid is kept though no event of the payment has arrived (PRD 04
+// §3, D-32, D-140): the card went through at the processor and the server has no word of it yet, its
+// webhook late or lost, so the household's rows say it is lapsed still, with a subscription that
+// waits to be confirmed. The erasure ends a subscription that waits only while the processor says it
+// still waits: one it says is paid for is left, the household with it, and the record is brought up
+// to what the processor says, after which the household is active and no longer due.
+func TestALapsedHouseholdPaidForIsKeptBeforeTheProcessorsWordArrives(t *testing.T) {
+	p, stripe := paidPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi").ID
+	p.exec(`UPDATE households SET billing_state = 'read_only', lapsed_at = $2, retained_until = $3, retention_warnings = 3 WHERE id = $1`,
+		h, p.clock.now().Add(-395*24*time.Hour), p.clock.now().Add(-time.Hour))
+	// She pays by card, and nothing tells the server: the row is as her request left it.
+	subscription, _ := stripe.ConfirmPayment(jana.startPaying(h, "year").ClientSecret)
+	if n := p.count("SELECT count(*) FROM billing_subscriptions WHERE household_id = $1 AND standing = 'pending' AND status = 'incomplete'", h); n != 1 {
+		t.Fatalf("%d subscriptions of hers wait to be confirmed, want 1", n)
+	}
+
+	if _, err := p.privacy.Erase(t.Context()); !errors.Is(err, billing.ErrBehind) {
+		t.Errorf("the job's failure is %v, want the payment its record has not", err)
+	}
+	if p.count("SELECT count(*) FROM households WHERE id = $1", h) != 1 {
+		t.Fatal("the household was erased with its subscription paid for")
+	}
+	if status, _, _ := stripe.Subscription(subscription); status != billing.StatusActive {
+		t.Fatalf("the subscription she paid for is %s at the processor", status)
+	}
+	// What the processor says is recorded as the job leaves it: active, with nothing left of its countdown.
+	if n := p.count("SELECT count(*) FROM households WHERE id = $1 AND billing_state = 'active' AND retained_until IS NULL", h); n != 1 {
+		t.Fatal("paid for again, the household is not active with its countdown cleared")
+	}
+	p.erase()
+	if p.count("SELECT count(*) FROM households WHERE id = $1", h) != 1 {
+		t.Fatal("the household was erased once its payment was recorded")
+	}
+}
+
+// A deletion its owner scheduled waits for no payment (FR-PR6), and ends none the record has no word
+// of either: where the processor says a subscription that waited is paid for, the erasure leaves the
+// household for its next run, records what the processor says, and then ends the subscription the
+// rows know charges, with the household.
+func TestAHouseholdDeletedWithAPaymentItsRecordHasNotIsErasedOnceItIsRecorded(t *testing.T) {
+	p, stripe := paidPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi").ID
+	expect(t, jana.post(householdPath(h, "/deletion"), `{"confirm_name":"Tilcerovi"}`), http.StatusAccepted, "")
+	p.clock.advance(15 * 24 * time.Hour)
+	jana.me()
+	p.clock.advance(15*24*time.Hour - time.Hour)
+	subscription, _ := stripe.ConfirmPayment(jana.startPaying(h, "month").ClientSecret)
+	p.clock.advance(time.Hour + time.Minute)
+
+	if _, err := p.privacy.Erase(t.Context()); !errors.Is(err, billing.ErrBehind) {
+		t.Errorf("the job's failure is %v, want the payment its record has not", err)
+	}
+	if p.count("SELECT count(*) FROM households WHERE id = $1", h) != 1 {
+		t.Fatal("the household was erased on a reading older than its payment")
+	}
+	if status, _, _ := stripe.Subscription(subscription); status != billing.StatusActive {
+		t.Fatalf("the subscription is %s at the processor before its payment is recorded", status)
+	}
+	p.erase()
+	if rows := p.rowsOf(h); len(rows) != 0 {
+		t.Fatalf("erased, the household keeps %v", rows)
+	}
+	if status, _, _ := stripe.Subscription(subscription); status != billing.StatusCanceled {
+		t.Errorf("the subscription of the erased household is %s at the processor", status)
+	}
+}
+
+// An owner taking billing over with a bank debit pays a subscription that will be the household's
+// once the debit clears (FR-BI6, D-133, D-131), though billing is not theirs yet: their account is
+// not deleted from under it either, disabled where nothing could hand billing on or cancel what then
+// charges (FR-PR3, D-137). The request is blocked as a payer's is, naming the household, while the
+// payment is on its way, and once it has cleared and billing is theirs.
+func TestAnOwnerTakingBillingOverWaitsForTheirPaymentBeforeDeletingTheirAccount(t *testing.T) {
+	p, stripe := paidPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	eva, evaID := p.joined(jana, h.ID, "Eva", p.a("eva@tilcerovi.cz"), "owner", nil)
+	old, _ := p.paid(stripe, jana, h.ID, "month")
+	p.told(stripe, "invoice.payment_failed", stripe.FailPayment(old, true))
+	p.told(stripe, "customer.subscription.updated", old)
+	offers(t, jana, h.ID, evaID)
+	stripe.DebitFrom("3000")
+	p.told(stripe, "setup_intent.succeeded", stripe.ConfirmSetup(accepts(t, eva, h.ID).Confirmation.ClientSecret))
+	if sub := eva.subscription(h.ID); !sub.PaymentPending || sub.Payer.UserID == evaID {
+		t.Fatalf("while her debit is on its way: %+v", sub)
+	}
+
+	blocked := func(when string) {
+		t.Helper()
+		rec := eva.deleteAccount(passphrase)
+		expect(t, rec, http.StatusConflict, problem.CodeAccountDeletionBlocked)
+		var doc struct {
+			Payer []uuid.UUID `json:"billing_payer_for"`
+		}
+		decode(t, rec, &doc)
+		if len(doc.Payer) != 1 || doc.Payer[0] != h.ID {
+			t.Fatalf("%s, blocked by %+v", when, doc)
+		}
+	}
+	blocked("with the payment that takes billing over on its way")
+
+	ids := stripe.Subscriptions()
+	invoice := p.latestInvoice(stripe, ids[len(ids)-1])
+	stripe.ClearDebit(invoice)
+	p.told(stripe, "invoice.paid", invoice)
+	if sub := eva.subscription(h.ID); sub.Payer.UserID != evaID {
+		t.Fatalf("once her debit cleared: %+v", sub)
+	}
+	blocked("as the household's payer")
 }
 
 // A payer whose first payment is still on its way has a subscription that will charge (FR-PR3, D-137,

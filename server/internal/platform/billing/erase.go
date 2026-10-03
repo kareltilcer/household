@@ -3,6 +3,7 @@ package billing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -17,6 +18,12 @@ import (
 // charged, one being paid for again is not deleted for having lapsed, an erased account's customers
 // go with it, and what billing keeps of a payer is theirs to take.
 
+// ErrBehind is Close's refusal to end a subscription that waits where the processor says it charges
+// and the household's rows do not: a payment made, or on its way, whose event has not been handled.
+// Nothing of the household's was ended. Whoever was erasing it leaves it, has the record brought up
+// to what the processor says (Refresh), and decides again from that.
+var ErrBehind = errors.New("billing: the processor has a payment the household's record has not")
+
 // Close ends, at the processor, every subscription of household's that is not over there: the one
 // it has, one that waits, and one another took the place of that still runs to its period's end. tx
 // is the transaction that erases the household, in its context, which holds its row: the
@@ -26,11 +33,19 @@ import (
 // (Processor.Cancel). Ending one twice is ending it once, so an erasure that failed after this runs
 // it again. A household with a subscription and no processor configured to end it at is refused
 // (ErrUnavailable), and is not erased.
+//
+// One that waits, and that the rows say charges nothing yet, is ended only while the processor says
+// so too (Processor.Abandon), and before any other is: whoever decided the household is to be erased
+// read those rows, and a payment that went through since, or whose event is late or lost, is never
+// undone by a reading older than it. Where the processor says it charges, nothing is ended and the
+// answer is ErrBehind: a lapsed household would otherwise be erased, and the subscription just paid
+// for it ended unrefunded, where paying restores it at any point of its retention (PRD 04 §3, D-32).
 func (s *Service) Close(ctx context.Context, tx pgx.Tx, household uuid.UUID) error {
 	subs, err := readSubscriptions(ctx, tx, household)
 	if err != nil {
 		return err
 	}
+	var open []subscription
 	for _, sub := range subs {
 		if sub.status == StatusCanceled || sub.status == StatusIncompleteExpired {
 			continue
@@ -38,11 +53,51 @@ func (s *Service) Close(ctx context.Context, tx pgx.Tx, household uuid.UUID) err
 		if s.Processor == nil {
 			return fmt.Errorf("%w: no processor to end a deleted household's subscription at", ErrUnavailable)
 		}
+		if sub.standing != standingPending || sub.live() {
+			open = append(open, sub)
+			continue
+		}
+		gone, err := s.Processor.Abandon(ctx, sub.id)
+		switch {
+		case err != nil:
+			return err
+		case !gone:
+			return ErrBehind
+		}
+	}
+	for _, sub := range open {
 		if err := s.Processor.Cancel(ctx, sub.id); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// Refresh records what the processor says of household's subscription that waits, and settles the
+// household's row from it, as the event that says it does (sync): what an erasure Close refused
+// (ErrBehind) asks for, so that the household is decided again from what the processor has, a
+// payment that made it active or one on its way that it waits for (Awaited), rather than left until
+// an event that may never come. A household with none waiting is left as it is.
+func (s *Service) Refresh(ctx context.Context, household uuid.UUID) error {
+	scoped := s.system(ctx, household)
+	var waiting string
+	err := tenant.InTx(scoped, func(tx pgx.Tx) error {
+		subs, err := readSubscriptions(ctx, tx, household)
+		if err != nil {
+			return err
+		}
+		if sub, ok := standing(subs, standingPending); ok {
+			waiting = sub.id
+		}
+		return nil
+	})
+	if err != nil || waiting == "" {
+		return err
+	}
+	if s.Processor == nil {
+		return fmt.Errorf("%w: no processor to read a waiting subscription from", ErrUnavailable)
+	}
+	return s.sync(scoped, household, waiting)
 }
 
 // Awaited reports whether household has a subscription that waits on a payment the processor has on
@@ -100,16 +155,17 @@ func ForgetRows(ctx context.Context, tx pgx.Tx, user uuid.UUID) error {
 // exportedSubscription and exportedInvoice are what an export carries of each: what the payer reads
 // of them in the app, without the processor's ids.
 type exportedSubscription struct {
-	Standing          string         `json:"standing"`
-	Status            string         `json:"status"`
-	Interval          string         `json:"interval"`
-	Currency          string         `json:"currency"`
-	CurrentPeriodFrom *time.Time     `json:"current_period_start"`
-	CurrentPeriodTo   *time.Time     `json:"current_period_end"`
-	CancelAtPeriodEnd bool           `json:"cancel_at_period_end"`
-	PaymentMethod     map[string]any `json:"payment_method"`
-	StartedAt         *time.Time     `json:"started_at"`
-	EndedAt           *time.Time     `json:"ended_at"`
+	Standing          string     `json:"standing"`
+	Status            string     `json:"status"`
+	Interval          string     `json:"interval"`
+	Currency          string     `json:"currency"`
+	CurrentPeriodFrom *time.Time `json:"current_period_start"`
+	CurrentPeriodTo   *time.Time `json:"current_period_end"`
+	CancelAtPeriodEnd bool       `json:"cancel_at_period_end"`
+	// PaymentMethod is its summary as the payer reads it in the app (methodDoc), null for none.
+	PaymentMethod *methodDoc `json:"payment_method"`
+	StartedAt     *time.Time `json:"started_at"`
+	EndedAt       *time.Time `json:"ended_at"`
 }
 
 type exportedInvoice struct {
@@ -150,7 +206,7 @@ func Export(ctx context.Context, tx pgx.Tx, e module.Export, a module.Archive) e
 			StartedAt: utc(sub.startedAt), EndedAt: utc(sub.endedAt),
 		}
 		if sub.brand != nil {
-			out.PaymentMethod = map[string]any{"brand": *sub.brand, "last4": sub.last4, "exp_month": sub.expMonth, "exp_year": sub.expYear}
+			out.PaymentMethod = &methodDoc{Brand: *sub.brand, Last4: sub.last4, ExpMonth: sub.expMonth, ExpYear: sub.expYear}
 		}
 		subscriptions = append(subscriptions, out)
 	}

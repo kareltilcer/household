@@ -112,16 +112,19 @@ blocks while the household goes on without them, and while one that goes with th
 subscription that will charge again: its own, live at the payment processor, and not cancelled at
 its period's end, or one whose first payment is still on its way there, a bank debit's, which is
 the household's own and renews once that goes through (D-131): its payer waits for the processor to
-say how the payment went, and cancels what it then pays for. One its payer has cancelled charges
-nothing more however long the period it paid for still runs, and a household with no subscription,
-in its trial, in `grace` or lapsed, charges nothing at all ([04](04-billing-and-entitlements.md)
-§3), so whoever let a trial run out has nothing to cancel first. A household erased is no longer
-charged: its subscriptions are ended at the processor as it goes, and an erased account's customers
-there are deleted with it ([ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md)); the
-invoices the processor issued are its own record, kept as the statute asks (§1). A household chosen
-for deletion is scheduled then, with the account's, and its members are told; cancelling the
-account's deletion cancels it, as an owner the household has by then does, and nothing else. The
-request is refused with every blocking household at once, never one at a time.
+say how the payment went, and cancels what it then pays for. An owner taking billing over whose own
+payment for it is still on its way, a bank debit's (D-133), blocks as its payer does: billing is
+theirs once it clears. One its payer has cancelled charges nothing more however long the period it
+paid for still runs, and a household with no subscription, in its trial, in `grace` or lapsed,
+charges nothing at all ([04](04-billing-and-entitlements.md) §3), so whoever let a trial run out
+has nothing to cancel first. A household erased is no longer charged: its subscriptions are ended
+at the processor as it goes, at once and with nothing refunded for the days not used (D-140), and
+an erased account's customers there are deleted with it
+([ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md)); the invoices the processor issued
+are its own record, kept as the statute asks (§1). A household chosen for deletion is scheduled
+then, with the account's, and its members are told; cancelling the account's deletion cancels it,
+as an owner the household has by then does, and nothing else. The request is refused with every
+blocking household at once, never one at a time.
 
 **FR-PR4 — Deletion is a 30-day soft window then irreversible.** The account is disabled
 immediately, sessions and tokens are revoked (under D-93 a sync token already issued runs until it

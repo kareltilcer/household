@@ -77,12 +77,21 @@ ends every subscription of the household's that is not over at the processor, in
 transaction that erases it, once the row's lock is held and its being due is confirmed, and before
 the rows that name the subscriptions go: a processor that cannot be asked leaves the household as it
 was, for the next night, and one asked that then fails to commit has lapsed a household that was due
-to go. `billing.Service.Forget` deletes the account's customers at the processor before the
+to go. They end at once, with no final invoice and nothing refunded for the days not used (D-140).
+One that waits and that the rows say charges nothing yet is ended only while the processor says so
+too (`Processor.Abandon`), before any other is: the rows are what the events said so far, and a
+payment the processor has taken whose event is late or lost must not be undone, and a lapsed
+household erased, by a reading older than it. Where the processor says such a subscription charges,
+nothing is ended, the erasure fails (`billing.ErrBehind`), what the processor says is recorded as
+its event would have (`billing.Service.Refresh`), and the job's next run decides from that.
+`billing.Service.Forget` deletes the account's customers at the processor before the
 transaction that leaves the tombstone deletes their rows; the processor ends whatever subscription a
 customer still has with it, and keeps the invoices it issued as its own record (PRD 05 §1). Whether a
 payer must cancel first is read from billing's rows (`household.Standing.Paying`): a subscription of
 the household's own that is live and not cancelled at its period's end, or one that waits on a first
-payment the processor has on its way, which renews once that goes through. The same wait keeps a
+payment the processor has on its way, which renews once that goes through. Whoever pays one that
+waits so counts as the household's payer there (`household.Standing.Payer`), as an owner taking
+billing over with a bank debit is before it clears. The same wait keeps a
 lapsed household from being erased by its clock (`billing.Awaited`, D-140): resuming restores a
 household at any point of its retention, a bank debit takes days to clear, and the job reads the
 household as not due, at its search and again under the row's lock, until the processor has said
@@ -176,8 +185,10 @@ that moment would be one it had not seen.
   erasure test fails the PR otherwise. The isolation fixture's row for the table is what proves it.
 - `billing.Processor` gains `DeleteCustomer`, and billing `Close`, `Forget` and `Export`: what
   [ADR 0020](0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md) left to this item;
-  and `Awaited`, which the erasure of a lapsed household waits on. What the processor says later of
-  a subscription whose household is gone is about nothing, as billing already takes it (`errGone`).
+  and `Awaited`, which the erasure of a lapsed household waits on, with `Refresh`, which records
+  what the processor says of a subscription that waits when `Close` refused to end it. What the
+  processor says later of a subscription whose household is gone is about nothing, as billing
+  already takes it (`errGone`).
 - Item 21 reads `diagnostic_bundles` (`getPlatformDiagnosticsByBundleId`), and may record erasures in
   the platform audit log.
 - Items 25 and 29 build A-20 over `postMeDeletion`, and item 25 the page the email's link opens,

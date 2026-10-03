@@ -138,6 +138,14 @@ customers there with their rows.
    `status` that charges, a bank debit on its way (above). It is `active` once `invoice.paid`
    arrives, and erased the night after the debit failed. One that stays so for weeks is one whose
    `invoice.paid` or `invoice.voided` never arrived: resend it.
+6. `privacy: an erasure failed` with `billing: the processor has a payment the household's record
+   has not` means Stripe says a subscription is paid for, or being paid, that the server had
+   recorded as still waiting to be confirmed: its events are late or were never delivered. Nothing
+   was ended or erased. The job has recorded what Stripe says by the time it logs this, and tries
+   again fifteen minutes later: a lapsed household that was paid for is `active` by then and no
+   longer due, and one whose owner scheduled its deletion is erased, its subscription ended. Seen
+   more than once a night, look at the webhook endpoint's deliveries in Stripe's dashboard: events
+   are not arriving.
 
 ## A key leaks or is rotated
 

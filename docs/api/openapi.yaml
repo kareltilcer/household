@@ -958,7 +958,9 @@ paths:
         them, or of one with a subscription that will charge again (its own, and not cancelled at
         its period's end with `postBillingCancel`, or one whose first payment is still on its way,
         `payment_pending`, which renews once that goes through; a household in its trial, in `grace`
-        or lapsed has none), and the problem document names every one at once. An owner whose own
+        or lapsed has none), and the problem document names every one at once. An owner taking
+        billing over (`postBillingTransferAccept`) whose own payment for it is still on its way
+        counts as the household's payer: billing is theirs once it goes through. An owner whose own
         account is scheduled for deletion counts as no owner. A household the user is the only member
         of goes with the account, unasked; one named is scheduled for deletion with it, and its
         members are told now; in every other the membership ends when the account does, what the user

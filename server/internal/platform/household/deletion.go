@@ -274,13 +274,15 @@ type Standing struct {
 	Members int
 	// SoleOwner is whether the user is its only owner who will still be there (otherOwners).
 	SoleOwner bool
-	// Payer is whether the user is its payer of record, and Paying whether the household has a
-	// subscription that will charge again (billing_subscriptions, item 19): its own, live at the
-	// processor, and not cancelled at its period's end, or one that waits on a first payment the
-	// processor has on its way, a bank debit's, which is the household's own, and renews, once that
-	// goes through (D-131). One its payer cancelled charges nothing more however long the period it
-	// paid for still runs, and a household with none, in its trial, in grace or lapsed, charges
-	// nothing at all (PRD 04 §3).
+	// Payer is whether the user is its payer of record, or is about to be: the payer of a
+	// subscription that waits on a payment the processor has on its way, as an owner who took billing
+	// over with a bank debit is until it clears, when billing is theirs (D-133). Paying is whether
+	// the household has a subscription that will charge again (billing_subscriptions, item 19): its
+	// own, live at the processor, and not cancelled at its period's end, or one that waits on a first
+	// payment the processor has on its way, a bank debit's, which is the household's own, and renews,
+	// once that goes through (D-131). One its payer cancelled charges nothing more however long the
+	// period it paid for still runs, and a household with none, in its trial, in grace or lapsed,
+	// charges nothing at all (PRD 04 §3).
 	Payer, Paying bool
 	// WithAccount is whether its deletion is scheduled to follow the user's account's.
 	WithAccount bool
@@ -320,17 +322,26 @@ func (s *Service) Standings(ctx context.Context, user uuid.UUID) ([]Standing, er
 // standing fills st, whose household and role are set, with where user stands there, in tx in the
 // household's context.
 func standing(ctx context.Context, tx pgx.Tx, user uuid.UUID, st *Standing) error {
-	var payer, account *uuid.UUID
+	var (
+		payer, account *uuid.UUID
+		// taking is whether user pays a subscription of the household's that waits and charges at the
+		// processor: theirs to pay, and the household's own with them its payer, once that goes through.
+		taking bool
+	)
 	if err := tx.QueryRow(ctx, `
 		SELECT h.name, h.billing_payer_id, h.deletion_account,
 		  EXISTS (SELECT FROM billing_subscriptions b
 		          WHERE b.household_id = h.id AND b.status IN ('active', 'past_due', 'trialing')
 		            AND (b.standing = 'pending' OR (b.standing = 'current' AND NOT b.cancel_at_period_end))),
+		  EXISTS (SELECT FROM billing_subscriptions b
+		          WHERE b.household_id = h.id AND b.payer_id = $2 AND b.standing = 'pending'
+		            AND b.status IN ('active', 'past_due', 'trialing')),
 		  (SELECT count(*) FROM memberships m WHERE m.household_id = h.id)
-		FROM households h WHERE h.id = $1`, st.Household).Scan(&st.Name, &payer, &account, &st.Paying, &st.Members); err != nil {
+		FROM households h WHERE h.id = $1`, st.Household, user).
+		Scan(&st.Name, &payer, &account, &st.Paying, &taking, &st.Members); err != nil {
 		return err
 	}
-	st.Payer = payer != nil && *payer == user
+	st.Payer = taking || (payer != nil && *payer == user)
 	st.WithAccount = account != nil && *account == user
 	if st.Role == access.Owner {
 		others, err := otherOwners(ctx, tx, st.Household, user)
@@ -535,7 +546,11 @@ func (s *Service) Depart(ctx context.Context, catalog *module.Registry, househol
 		if err != nil {
 			return mutation.Record{}, err
 		}
-		var changes []sync.Change
+		var (
+			changes []sync.Change
+			// passed is the event's diff of billing passing to another owner, when it does.
+			passed []audit.Change
+		)
 		// The name a restriction they set shows goes, whether or not they are still a member: the
 		// banner names a former member from then on.
 		tag, err := tx.Exec(ctx, `
@@ -569,6 +584,11 @@ func (s *Service) Depart(ctx context.Context, catalog *module.Registry, househol
 				return mutation.Record{}, err
 			}
 			changes = append(changes, settingsChange(h))
+			// Who pays from now on is in the event's diff, as it is when billing moves between owners
+			// (Bill): the log says where billing went, though no owner moved it.
+			if !sameID(payer, h.payer) {
+				passed = []audit.Change{{Field: "billing_payer_id", Old: idOf(payer), New: idOf(h.payer)}}
+			}
 		}
 		event := audit.Event{
 			Module: Name, Action: actionMemberErase, EntityType: entitySettings, EntityID: household, Level: audit.Notice,
@@ -590,6 +610,7 @@ func (s *Service) Depart(ctx context.Context, catalog *module.Registry, househol
 			event.Changes = []audit.Change{{Field: "role", Old: m.role, New: nil}}
 			changes = append(append(changes, m.gone()), withdrawn...)
 		}
+		event.Changes = append(event.Changes, passed...)
 		if len(changes) == 0 {
 			return mutation.Record{}, nil
 		}

@@ -171,6 +171,10 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 // is lapsed still until it has. Erased meanwhile, it would be gone for a payer who paid in time. The
 // processor's word ends the wait either way: the household is active, or the subscription is over
 // and the household due again. A deletion its owner scheduled waits for no payment.
+//
+// It reads the rows, which say what the processor's events said so far. A payment those have no word
+// of yet is the processor's own to say, asked as the subscription that waits would be ended: it is
+// then left, and the household with it (billing.ErrBehind, eraseHousehold).
 func due(ctx context.Context, tx pgx.Tx, household uuid.UUID, now time.Time) (string, *uuid.UUID, error) {
 	var (
 		scheduled, retained *time.Time
@@ -292,6 +296,10 @@ func eraseMember(ctx context.Context, tx pgx.Tx, reg *module.Registry, household
 // profiles, which are nothing outside it, are scheduled for erasure at now, the time the job's run
 // searches by, so that the run that erased their household erases them too; and the archives of its
 // exports are removed with it. It reports whether it erased it.
+//
+// A household with a subscription that waits, which the processor says is paid for or being paid
+// where the rows do not, is not erased: the record is brought up to the processor's, and the failure
+// returned is billing.ErrBehind, for the job to run again.
 func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause string, now time.Time,
 	still func(context.Context, pgx.Tx) (bool, error),
 ) (bool, error) {
@@ -357,6 +365,16 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 		erased = err == nil
 		return err
 	})
+	if errors.Is(err, billing.ErrBehind) {
+		// The processor has a payment for the household that its rows have no word of, the event
+		// that says so late or lost: it was read as due from rows older than the payment, and nothing
+		// of it was ended or erased. What the processor says is recorded now, as that event would
+		// have, and the failure reported, so that the job runs again and decides from the record as
+		// it then is: a lapsed household paid for is active and no longer due, one whose payment is on
+		// its way waits for it (due), and a deletion that waits for no payment ends a subscription the
+		// rows know charges.
+		return false, errors.Join(err, s.cfg.Billing.Refresh(ctx, household))
+	}
 	if err != nil || !erased {
 		return false, err
 	}

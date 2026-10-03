@@ -406,6 +406,12 @@ func TestBillingPassesToAnOwnerWhoStaysBeforeOneWhoIsLeaving(t *testing.T) {
 	if n := p.count("SELECT count(*) FROM households WHERE id = $1 AND billing_payer_id = $2", h.ID, evaID); n != 1 {
 		t.Error("billing passed to an owner whose own account is scheduled for deletion, with one who stays beside him")
 	}
+	// The log says where billing went, in the diff of the event that ended her membership.
+	if n := p.count(`SELECT count(*) FROM audit_changes c JOIN audit_events e ON e.household_id = c.household_id AND e.id = c.event_id
+		WHERE e.household_id = $1 AND e.action = 'member.erase' AND c.field = 'billing_payer_id' AND c.new_value = to_jsonb($2::text)`,
+		h.ID, evaID.String()); n != 1 {
+		t.Errorf("%d events record billing passing to her, want 1", n)
+	}
 }
 
 // A household is not erased while an adult who could run it may still come back (D-137). An owner
