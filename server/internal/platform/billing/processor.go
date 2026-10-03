@@ -57,6 +57,10 @@ type Processor interface {
 	StorageLine(ctx context.Context, l StorageLine) (string, error)
 	// Credit credits a customer's balance, which their next invoices draw on.
 	Credit(ctx context.Context, c NewCredit) error
+	// DeleteCustomer deletes a payer's customer, an erased account's (plan item 20): the processor
+	// ends whatever subscription it still has with it, and keeps the invoices it issued as its own
+	// record. One it no longer has is deleted already.
+	DeleteCustomer(ctx context.Context, customer string) error
 	// Event verifies a webhook's payload against its signature and reads what it is about.
 	Event(payload []byte, signature string) (Event, error)
 }

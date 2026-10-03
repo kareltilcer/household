@@ -13,6 +13,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/device"
+	"github.com/kareltilcer/household/server/internal/platform/i18n"
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
@@ -233,32 +234,48 @@ type emailLink struct {
 	route    string
 	// unverified sends it only to an account whose address is not verified yet.
 	unverified bool
+	// back marks a link a person asks for to get back in to their account. An account scheduled for
+	// deletion signs nobody in, whatever its password (FR-PR4), so a new password would leave its
+	// owner where they were: it is sent the link that cancels the deletion in its place, again
+	// (renewCancelLink, D-136).
+	back bool
 }
 
 // The links a resend and a reset request send.
 var (
 	verifyLink = emailLink{purpose: "verify_email", ttl: VerifyFor, template: emailVerify, route: routeVerify, unverified: true}
-	resetLink  = emailLink{purpose: "reset_password", ttl: ResetFor, template: emailReset, route: routeSetPassword}
+	resetLink  = emailLink{purpose: "reset_password", ttl: ResetFor, template: emailReset, route: routeSetPassword, back: true}
 )
 
 // sendLink looks email up after the response, and sends l to the account that has it, at the
 // address as the account keeps it and in its owner's language; an address with no account, or
-// with one l is not for, is sent nothing.
+// with one l is not for, is sent nothing. An account scheduled for deletion that asks for a way back
+// in is sent the link that cancels the deletion, and nothing once no link cancels it any more.
 func (s *Service) sendLink(ctx context.Context, email string, l emailLink) {
 	s.Later(ctx, func(ctx context.Context) {
-		var token, address, language string
+		var (
+			token, address, language string
+			// days is set for the link that cancels a deletion: how long it still has.
+			days int
+		)
 		err := tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
 			var (
-				id       uuid.UUID
-				verified bool
+				id            uuid.UUID
+				verified, off bool
 			)
 			err := tx.QueryRow(ctx, `
-				SELECT id, email, locale, email_verified_at IS NOT NULL FROM users WHERE lower(email) = lower($1)`,
-				email).Scan(&id, &address, &language, &verified)
+				SELECT u.id, u.email, u.locale, u.email_verified_at IS NOT NULL,
+				  EXISTS (SELECT FROM account_deletions d WHERE d.user_id = u.id)
+				FROM users u WHERE lower(u.email) = lower($1)`,
+				email).Scan(&id, &address, &language, &verified, &off)
 			if errors.Is(err, pgx.ErrNoRows) || (err == nil && verified && l.unverified) {
 				return nil
 			}
 			if err != nil {
+				return err
+			}
+			if l.back && off {
+				token, days, err = s.renewCancelLink(ctx, tx, id)
 				return err
 			}
 			token, err = issueToken(ctx, tx, id, l.purpose, address, l.ttl, s.Sessions.Now())
@@ -268,7 +285,11 @@ func (s *Service) sendLink(ctx context.Context, email string, l emailLink) {
 			s.Log.LogAttrs(ctx, slog.LevelError, "email not sent", slog.String("template", string(l.template)), slog.Any("error", err))
 			return
 		}
-		if token != "" {
+		switch {
+		case token == "":
+		case days > 0:
+			s.deliver(ctx, address, language, emailAccountDeletion, s.link(routeCancelDeletion, token), i18n.Args{"days": days})
+		default:
 			s.deliver(ctx, address, language, l.template, s.link(l.route, token))
 		}
 	})
@@ -310,12 +331,14 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		user   uuid.UUID
 		secret *string
 		set    *time.Time
+		off    bool
 	)
 	err = tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
-			SELECT u.id, c.secret, c.updated_at FROM users u
+			SELECT u.id, c.secret, c.updated_at, EXISTS (SELECT FROM account_deletions d WHERE d.user_id = u.id)
+			FROM users u
 			LEFT JOIN credentials c ON c.user_id = u.id AND c.type = 'password'
-			WHERE lower(u.email) = lower($1)`, req.Email).Scan(&user, &secret, &set)
+			WHERE lower(u.email) = lower($1)`, req.Email).Scan(&user, &secret, &set, &off)
 	})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		s.fail(w, r, err)
@@ -331,7 +354,9 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if !ok {
+	// An account scheduled for deletion fails as a wrong password does, once the password was checked
+	// at a password's cost, and the attempt stays counted (FR-PR4, FR-ID3).
+	if !ok || off {
 		s.fail(w, r, InvalidCredentials())
 		return
 	}
@@ -429,7 +454,9 @@ func (s *Service) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // requestReset is postAuthPasswordReset (FR-ID6): a link, valid for an hour, to an address that
-// has an account, and nothing to one that has none. Which it was is decided after the response.
+// has an account, and nothing to one that has none. Which it was is decided after the response. An
+// account scheduled for deletion is sent the link that cancels the deletion instead, as often as a
+// reset's would be sent (sendLink, D-136): the one thing that lets its owner in again.
 func (s *Service) requestReset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {

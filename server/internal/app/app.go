@@ -30,6 +30,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/mutation"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
+	"github.com/kareltilcer/household/server/internal/platform/privacy"
 	"github.com/kareltilcer/household/server/internal/platform/push"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/reference"
@@ -91,6 +92,9 @@ type Deps struct {
 	// Billing is the household's subscription at the payment processor (item 19): its routes under
 	// …/billing, and the processor's webhook.
 	Billing *billing.Service
+	// Privacy is the export and erasure service (item 20): the caller's exports and a household's,
+	// their consents, the diagnostic bundle they send, and their account's deletion.
+	Privacy *privacy.Service
 }
 
 // Sync is the sync surfaces (item 13, ADR 0014): the credentials a client's replica connects to
@@ -138,6 +142,20 @@ func Retract(catalog *module.Registry) func(context.Context, pgx.Tx, household.L
 	}
 }
 
+// Lost is the household surface's Lost hook as the API runs it (household.Hooks): Retract, which takes
+// a member removed or gone out of every audience, and then privacy.Departed, which starts the 30 days
+// what they kept privately is theirs to export for, and schedules a removed child profile's erasure
+// (FR-PR7). now is the clock of the second, time.Now when nil.
+func Lost(catalog *module.Registry, now func() time.Time) func(context.Context, pgx.Tx, household.Loss) error {
+	retract, departed := Retract(catalog), privacy.Departed(now)
+	return func(ctx context.Context, tx pgx.Tx, loss household.Loss) error {
+		if err := retract(ctx, tx, loss); err != nil {
+			return err
+		}
+		return departed(ctx, tx, loss)
+	}
+}
+
 // NewRouter returns the server's whole HTTP surface: the platform middleware, and under
 // contract.BasePath the contract's edge validation and every implemented route. It refuses
 // to build with a route the contract does not declare, so the server never serves one.
@@ -152,7 +170,10 @@ func Retract(catalog *module.Registry) func(context.Context, pgx.Tx, household.L
 // password (D-97). Beginning a sign-in with a provider is authenticated but needs no caller.
 //
 // The reference reads under /reference answer any authenticated caller, with no household, and the
-// caller's own push subscriptions and notification preferences (item 15) are the account's routes.
+// caller's own push subscriptions and notification preferences (item 15) are the account's routes, as
+// are their consents, their exports and the diagnostic bundle they send (item 20). Asking for the
+// account's deletion carries its password and keeps no key (D-97); cancelling one is reached signed
+// out, with the link its email carried, since the account signs nobody in.
 //
 // The household surface (item 10) is admin's, the module the platform serves itself, which the
 // module registry the router carries declares beside the modules: a signed-in user's households,
@@ -209,6 +230,9 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	}
 	if d.Billing == nil {
 		return nil, errors.New("app: the router needs billing")
+	}
+	if d.Privacy == nil {
+		return nil, errors.New("app: the router needs the export and erasure service")
 	}
 	// The picture labels the largest items by the modules the router serves, unless it was given
 	// others: without them it would name each by its file, whatever its module calls it.
@@ -271,6 +295,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	a.Identity.PublicRoutes(api)
 	api.With(catalog).Group(d.Households.PublicRoutes)
 	d.Billing.PublicRoutes(api)
+	d.Privacy.PublicRoutes(api)
 
 	api.Group(func(signedIn chi.Router) {
 		signedIn.Use(authenticate(a.Devices.Authenticate, a.Sessions.Authenticate), perUser)
@@ -280,11 +305,13 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		signedIn.Group(func(account chi.Router) {
 			account.Use(auth.Required)
 			a.Identity.PasswordRoutes(account)
+			account.With(catalog).Group(d.Privacy.PasswordRoutes)
 			account.Group(func(keyed chi.Router) {
 				keyed.Use(idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes))
 				a.Identity.AccountRoutes(keyed)
 				keyed.With(catalog).Group(d.Households.AccountRoutes)
 				keyed.Group(d.Notify.AccountRoutes)
+				keyed.Group(d.Privacy.AccountRoutes)
 			})
 		})
 		// Leaving keeps its key on the account, found before the membership it ended is looked for,
@@ -302,6 +329,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 			inHousehold.Group(d.Billing.SecretRoutes)
 			inHousehold.Group(d.Sync.Replica.HouseholdRoutes)
 			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(reports.Routes)
+			inHousehold.With(idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(d.Privacy.HouseholdRoutes)
 			inHousehold.Group(picture.Routes)
 			inHousehold.With(perDevice, idempotency.Middleware(d.Logger, d.MaxBodyBytes)).Group(pushes.Routes)
 			// A child profile's PIN keeps no key, as a password does not (D-97).

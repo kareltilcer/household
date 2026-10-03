@@ -98,8 +98,18 @@ type challengeJSON struct {
 // admit admits a to user's account in tx, as r asked: a challenge for the second step when the
 // account has one on, a has not answered it, and neither the browser nor the device is trusted;
 // otherwise a web session, which replaces the one the browser held, or the device's sign-in.
+//
+// An account scheduled for deletion is admitted by nothing, whatever proved who was asking, a
+// password, a provider, a second step or a PIN, and is answered as a wrong password is (FR-PR4,
+// FR-ID3): the link its email carries is the one way back.
 func (s *Service) admit(ctx context.Context, tx pgx.Tx, r *http.Request, user uuid.UUID, a attempt) (admission, error) {
 	var adm admission
+	switch off, err := disabled(ctx, tx, user); {
+	case err != nil:
+		return adm, err
+	case off:
+		return adm, InvalidCredentials()
+	}
 	if !a.answered {
 		on, locked, err := secondStep(ctx, tx, user)
 		if err != nil {

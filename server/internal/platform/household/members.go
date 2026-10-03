@@ -456,10 +456,15 @@ var (
 	errPayer     = problem.New(http.StatusConflict, problem.CodeBillingPayer)
 )
 
-// otherOwners counts household's owners other than user.
+// otherOwners counts household's owners other than user who will still be there: an owner whose
+// account is scheduled for deletion is disabled now and gone in 30 days (FR-PR4), and counts for
+// nothing, so that nobody leaves a household to an owner who is leaving it too.
 func otherOwners(ctx context.Context, tx pgx.Tx, household, user uuid.UUID) (int, error) {
 	var n int
-	err := tx.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE household_id = $1 AND role = 'owner' AND user_id <> $2",
+	err := tx.QueryRow(ctx, `
+		SELECT count(*) FROM memberships m
+		WHERE m.household_id = $1 AND m.role = 'owner' AND m.user_id <> $2
+		  AND NOT EXISTS (SELECT FROM account_deletions d WHERE d.user_id = m.user_id)`,
 		household, user).Scan(&n)
 	return n, err
 }
@@ -796,9 +801,9 @@ func leaveBlocked(reasons []problem.Code) *problem.Problem {
 
 // leave takes the caller out of the household (FR-HH4), which any member may do at any time, unless
 // they are its last owner, or its payer, which are refused together. What they made stays with the
-// household; their private root is item 20's (Hooks.Lost); the invitations they sent that are still
-// waiting are withdrawn (withdraw). A child profile does not leave, since it is nothing outside its
-// household, and is refused 403: an owner removes it (D-104).
+// household; their private root is kept 30 days more (Hooks.Lost, FR-PR7); the invitations they sent
+// that are still waiting are withdrawn (withdraw). A child profile does not leave, since it is
+// nothing outside its household, and is refused 403: an owner removes it (D-104).
 func (s *Service) leave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)

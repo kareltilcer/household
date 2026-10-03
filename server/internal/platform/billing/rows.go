@@ -244,10 +244,21 @@ func readOffer(ctx context.Context, tx pgx.Tx, household uuid.UUID, now time.Tim
 	return o, err == nil, err
 }
 
-// isOwner reports whether user is one of household's owners, read in tx in its context.
+// isOwner reports whether user is one of household's owners billing may be offered or moved to, read
+// in tx in its context: an owner who will still be there. One whose account is scheduled for
+// deletion counts as none, as nobody is left a household by an owner who is leaving it (D-137): the
+// account signs nobody in, so billing that moved to it could be neither handed on nor cancelled, and
+// its customer at the processor is deleted with it, with whatever subscription it then pays for. It
+// is the one reading every move of billing this package makes asks, an offer, a take-over on a
+// confirmed card and the payer a subscription's own record settles, so that none of them lands on
+// such an account, however late the processor's word of a card arrives. Only the household surface
+// hands billing to one, when it erases a payer and no owner who is staying is left
+// (household.Service.Depart).
 func isOwner(ctx context.Context, tx pgx.Tx, household, user uuid.UUID) (bool, error) {
 	var owner bool
-	err := tx.QueryRow(ctx, "SELECT role = 'owner' FROM memberships WHERE household_id = $1 AND user_id = $2", household, user).
+	err := tx.QueryRow(ctx, `
+		SELECT m.role = 'owner' AND NOT EXISTS (SELECT FROM account_deletions d WHERE d.user_id = m.user_id)
+		FROM memberships m WHERE m.household_id = $1 AND m.user_id = $2`, household, user).
 		Scan(&owner)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil

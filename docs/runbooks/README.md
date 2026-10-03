@@ -10,7 +10,7 @@ someone who is doing it for the first time, under pressure.
 | [Sign-in keys, identity providers and the oldest client served](sign-in-keys-and-providers.md) | Before an environment's first deploy, when a key is rotated or leaks, when a provider is added, and when a release retires an old client |
 | [PowerSync's replication slot](replication-slot.md) | When replication lags, when write-ahead log fills the disk, and after a restore or a failover |
 | [PowerSync's compaction](compaction.md) | When bucket storage keeps growing, when the nightly compaction failed, and after an erasure that must leave bucket storage the same night |
-| [Object storage and the converter](object-storage.md) | Before an environment's first deploy, when uploads fail with `502`, when previews stop appearing, and when storage figures look wrong |
+| [Object storage and the converter](object-storage.md) | Before an environment's first deploy, when uploads fail with `502`, when previews stop appearing, when an export fails or an erasure's objects stay, and when storage figures look wrong |
 | [Notifications: keys, push services and the scheduler](notifications.md) | Before an environment's first deploy, when a notification key is rotated or leaks, when a browser's push service is refused, when notifications do not arrive, and when a nightly job did not run |
 | [Billing: Stripe's account, keys, prices and webhook](billing.md) | Before an environment's first deploy, when a price changes or a currency is added, when a Stripe key is rotated or leaks, when a payment went through and the household is not `active`, and when a month's storage was not billed |
 

@@ -11,6 +11,7 @@
 package objectstore
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -262,6 +263,116 @@ func (s *Store) PutSame(ctx context.Context, k string, body io.ReadSeeker, size 
 		return ErrExists
 	}
 	return nil
+}
+
+// PartSize is the size of every part Upload sends but the last. S3 takes ten thousand parts at most,
+// so an upload may be 320 GB, past what a household at its storage ceiling keeps (PRD 04 §4), and
+// holds one part in memory at a time.
+const PartSize = 32 << 20
+
+// Upload writes everything body yields to k, in parts, and returns how many bytes that was: an
+// export's archive, which is sent as it is built and whose length nobody knows until its last byte.
+// Unlike PutOnce it takes no digest and holds k to nothing: the caller names a key nothing else
+// writes. An upload that fails is aborted, so that the store keeps none of its parts.
+func (s *Store) Upload(ctx context.Context, k string, body io.Reader, contentType string) (int64, error) {
+	if !ValidKey(k) {
+		return 0, ErrInvalidKey
+	}
+	created, err := s.client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(k), ContentType: aws.String(contentType),
+		CacheControl: aws.String(cacheControl),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("objectstore: upload %s: %w", k, err)
+	}
+	abort := func(cause error) (int64, error) {
+		// The request's context may be what ended the upload: the abort is sent past it.
+		_, _ = s.client.AbortMultipartUpload(context.WithoutCancel(ctx), &s3.AbortMultipartUploadInput{
+			Bucket: aws.String(s.bucket), Key: aws.String(k), UploadId: created.UploadId,
+		})
+		return 0, fmt.Errorf("objectstore: upload %s: %w", k, cause)
+	}
+	var (
+		parts []types.CompletedPart
+		total int64
+		buf   = make([]byte, PartSize)
+	)
+	for number := int32(1); ; number++ {
+		n, last, err := fill(body, buf)
+		if err != nil {
+			return abort(err)
+		}
+		// A body that ends on a part's boundary leaves a last part with nothing in it, which is sent
+		// only when it is the one part there is: an object must have one.
+		if n > 0 || number == 1 {
+			out, err := s.client.UploadPart(ctx, &s3.UploadPartInput{
+				Bucket: aws.String(s.bucket), Key: aws.String(k), UploadId: created.UploadId,
+				PartNumber: aws.Int32(number), Body: bytes.NewReader(buf[:n]), ContentLength: aws.Int64(int64(n)),
+			})
+			if err != nil {
+				return abort(err)
+			}
+			parts = append(parts, types.CompletedPart{ETag: out.ETag, PartNumber: aws.Int32(number)})
+			total += int64(n)
+		}
+		if last {
+			break
+		}
+	}
+	if _, err := s.client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(k), UploadId: created.UploadId,
+		MultipartUpload: &types.CompletedMultipartUpload{Parts: parts},
+	}); err != nil {
+		return abort(err)
+	}
+	return total, nil
+}
+
+// fill reads from r until buf is full or r has ended, and returns how much it read and whether r
+// ended. Only io.EOF itself ends a body: a reader that failed with an unexpected end, a connection
+// that dropped under whoever was writing it, has failed, which io.ReadFull would not tell from a body
+// that ended short of a part.
+func fill(r io.Reader, buf []byte) (int, bool, error) {
+	n := 0
+	for n < len(buf) {
+		m, err := r.Read(buf[n:])
+		n += m
+		// Compared, not unwrapped: an error that wraps io.EOF is a failure that names one.
+		if err == io.EOF {
+			return n, true, nil
+		}
+		if err != nil {
+			return n, false, err
+		}
+	}
+	return n, false, nil
+}
+
+// prefix is the form of a prefix RemoveAll takes: a key's segments, ending in a slash, so that it
+// names a household's or an account's objects and never the bucket's.
+var prefix = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*(?:/[a-z0-9][a-z0-9_-]*)+/$`)
+
+// RemoveAll removes every object whose key starts with under, which names at least two segments and
+// ends in a slash, h/{household_id}/ or u/{user_id}/: an erasure's (FR-PR4, FR-PR6). It lists them
+// all before it removes any, and returns how many it removed, which is fewer than it listed when a
+// removal fails; run again, it removes what is left, and what was written since.
+func (s *Store) RemoveAll(ctx context.Context, under string) (int, error) {
+	if !prefix.MatchString(under) {
+		return 0, ErrInvalidKey
+	}
+	var keys []string
+	if err := s.List(ctx, under, func(o Info) error {
+		keys = append(keys, o.Key)
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+	for removed, k := range keys {
+		if err := s.Delete(ctx, k); err != nil {
+			return removed, err
+		}
+	}
+	return len(keys), nil
 }
 
 // Info is what the store holds about an object.

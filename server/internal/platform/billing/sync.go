@@ -357,7 +357,8 @@ func (s *Service) settle(ctx context.Context, household uuid.UUID) error {
 		next := decide(b, subs, now)
 		if cur, ok := standing(subs, standingCurrent); ok {
 			// Billing moves to whoever pays the household's subscription, an owner still: one made a
-			// member since is left out, and the payer of record stays (D-103).
+			// member since is left out, as is one whose account is scheduled for deletion (isOwner), and
+			// the payer of record stays (D-103, D-137).
 			owner, err := isOwner(ctx, tx, household, cur.payer)
 			if err != nil {
 				return b, err
@@ -365,7 +366,7 @@ func (s *Service) settle(ctx context.Context, household uuid.UUID) error {
 			if owner {
 				next.Payer = &cur.payer
 			} else if b.Payer == nil || *b.Payer != cur.payer {
-				s.Log.LogAttrs(ctx, slog.LevelError, "billing: the subscription's payer is not an owner; the payer of record stays",
+				s.Log.LogAttrs(ctx, slog.LevelError, "billing: the subscription's payer is not an owner who is staying; the payer of record stays",
 					slog.String(logging.KeyHouseholdID, household.String()))
 			}
 		}
@@ -699,6 +700,12 @@ func (s *Service) methodConfirmed(ctx context.Context, intent SetupIntent) error
 // to take over, it makes theirs, charged with the card: from the end of the period the household is
 // paid up for, or at once when the processor could not collect it; sync then puts it in the old
 // one's place, and settle moves the payer. With none, the payer alone moves (acceptAlone).
+//
+// An owner who asked for their account's deletion since they accepted is an owner no longer, as
+// billing counts one (isOwner, D-137): the card they confirmed makes no subscription and moves
+// nothing, whenever its confirmation arrives, and the payer goes on paying. Their account is not
+// blocked for a card not yet confirmed, which nothing here records, so this is where a take-over
+// that would land on an account that signs nobody in is stopped.
 //
 // The household is paid up by a subscription that is active, and by one that itself waits out a
 // period another paid for, a take-over's whose period has not begun: its trial ends where that

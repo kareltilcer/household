@@ -68,6 +68,7 @@ export const tables = [
       restricted_by: 'uuid',
       restricted_by_label: 'text',
       restriction_reason: 'text',
+      deletion_scheduled_at: 'timestamp',
       version: 'integer',
       created_by: 'uuid',
       created_at: 'timestamp',

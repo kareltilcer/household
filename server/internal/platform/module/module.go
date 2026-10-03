@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
@@ -90,16 +91,71 @@ type ReminderSource interface{ ReminderKinds() []ReminderKind }
 // SearchSource declares what the module contributes to global search (item 36).
 type SearchSource interface{ SearchScopes() []SearchScope }
 
-// ExportSource serialises a household's data in the module (item 20). Every module
-// implements it (D-6), and architecture test 3 fails one that does not.
+// ExportSource writes what the module keeps of a household into an export's archive (FR-PR2, item
+// 20). Every module implements it (D-6), and architecture test 3 fails one that does not. tx is a
+// read-only transaction of the household, with no caller: the module reads its rows there and decides
+// by e which of them the requester takes.
 type ExportSource interface {
-	Export(ctx context.Context, householdID uuid.UUID, w io.Writer) error
+	Export(ctx context.Context, tx pgx.Tx, e Export, a Archive) error
 }
 
-// EraseSource deletes a household's data in the module (item 20). Every module implements it
-// (D-6), and architecture test 3 fails one that does not.
+// ExportScope is how much of a household an export takes.
+type ExportScope string
+
+const (
+	// ExportHousehold is an owner's export of the household (FR-HA15): everything the module keeps
+	// there that its requester may read, which is every shared row, their own private items and a
+	// child profile's (D-19), and never another adult's private items.
+	ExportHousehold ExportScope = "household"
+	// ExportPersonal is a member's export of what is theirs (PRD 05 §3): what they made, and their
+	// private items. The platform leaves out a module the member cannot see (PRD modules/00, absence
+	// 8).
+	ExportPersonal ExportScope = "personal"
+	// ExportDeparted is a former member's, in the window their private data is kept for (FR-PR7):
+	// their private items alone.
+	ExportDeparted ExportScope = "departed"
+)
+
+// Export is one household's part of an export, as a module is asked for it.
+type Export struct {
+	Household uuid.UUID
+	// Requester is whose export it is, and Role their role in the household, "" for one who left.
+	Requester uuid.UUID
+	Role      access.Role
+	Scope     ExportScope
+}
+
+// Archive is where a module writes its part of an export: the household's place in the ZIP (FR-PR2).
+// Every name is a slash-separated path the archive cleans, and gives a suffix when it is taken.
+type Archive interface {
+	// JSON writes v as the module's structured data, <module>.json, matching the API's schemas so
+	// that the contract documents it. Once per export.
+	JSON(v any) error
+	// Create starts a human-readable derivative where a standard exists, named as PRD 05 §3 names
+	// it: calendar.ics, finance-transactions.csv, notes/<title>.md. The writer is good until the next
+	// call on the archive.
+	Create(name string) (io.Writer, error)
+	// File adds the original of the module's entity, as the files pipeline keeps it, at
+	// files/<module>/<name>: the folder structure is the module's, mirroring its app's.
+	File(entity uuid.UUID, name string) error
+}
+
+// EraseSource deletes what the module keeps (item 20). Every module implements it (D-6), and
+// architecture test 3 fails one that does not. tx is a transaction of the household that may write,
+// the platform's own, which records no audit event: erasure is no entity's history (FR-AU5).
 type EraseSource interface {
-	Erase(ctx context.Context, householdID uuid.UUID) error
+	Erase(ctx context.Context, tx pgx.Tx, e Erasure) error
+}
+
+// Erasure is what a module is asked to delete.
+type Erasure struct {
+	Household uuid.UUID
+	// Member, when set, is the member whose private data in the household goes, their private root
+	// (FR-PR7, FR-PR3), with the files it keeps (files.Remove): what they made that the household
+	// shares stays. When it is uuid.Nil the whole household goes: its rows leave with the household's
+	// own row, which every tenant table hangs from, so a module deletes here only what that cascade
+	// does not reach.
+	Member uuid.UUID
 }
 
 // Widget is a dashboard widget a module contributes.

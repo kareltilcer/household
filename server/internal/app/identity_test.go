@@ -28,10 +28,12 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/household"
+	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/password"
+	"github.com/kareltilcer/household/server/internal/platform/privacy"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/session"
@@ -46,16 +48,28 @@ import (
 // breached is a password the tests' breached-password corpus holds.
 const breached = "password1234"
 
-// clock is a time a test moves by hand, for the sessions and the throttles.
+// clock is a time a test moves by hand, for the sessions and the throttles. While step is set it
+// runs as well: each reading is step later than the one before, as no two readings of a real clock
+// are the same.
 type clock struct {
-	mu sync.Mutex
-	t  time.Time
+	mu   sync.Mutex
+	t    time.Time
+	step time.Duration
 }
 
 func (c *clock) now() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.t
+	t := c.t
+	c.t = c.t.Add(c.step)
+	return t
+}
+
+// run makes every reading of the clock step later than the one before, and stops it at zero.
+func (c *clock) run(step time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.step = step
 }
 
 func (c *clock) advance(d time.Duration) {
@@ -73,8 +87,11 @@ type site struct {
 	// pushes are the pushes the site sent, and notifier the transport that sent them and its email.
 	pushes   *apptest.Pushes
 	notifier *notify.Service
-	// households is the household surface the site serves, and billing its billing.
+	// households is the household surface the site serves, privacy its export and erasure, identity
+	// its accounts, and billing its billing.
 	households *household.Service
+	privacy    *privacy.Service
+	identity   *identity.Service
 	billing    *billing.Service
 	clock      *clock
 	// domain, peer and other are this test's own: its addresses end in the first, its browsers come
@@ -100,10 +117,11 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 	accounts, outbox := apptest.Accounts(t, pool, log, o)
 	pushes := &apptest.Pushes{}
 	notifier := apptest.Notify(t, pool, log, outbox, pushes, o)
+	households := apptest.Households(t, pool, log, accounts, notifier, o)
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Meter: d.Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 16, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, accounts, notifier, o),
+		Households: households,
 		Notify:     notifier,
 		Sync:       apptest.Sync(t, log, o),
 		Storage:    &storage.Picture{Log: log},
@@ -112,13 +130,17 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 	for _, option := range options {
 		option(&deps)
 	}
+	// Over the modules the options gave the router, which a test's own export and erasure go through.
+	if deps.Privacy == nil {
+		deps.Privacy = apptest.Privacy(t, pool, log, accounts, households, deps.Billing, deps.Modules, o)
+	}
 	r, err := app.NewRouter(deps)
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := sites.Add(1)
 	return &site{t: t, router: r, admin: d.Pool(t, ""), outbox: outbox, pushes: pushes, notifier: notifier, households: deps.Households,
-		billing: deps.Billing, clock: clk,
+		privacy: deps.Privacy, identity: accounts.Identity, billing: deps.Billing, clock: clk,
 		domain: fmt.Sprintf("site%d.test", n), peer: fmt.Sprintf("198.51.%d.%d:4000", n/256, n%256),
 		other: fmt.Sprintf("198.18.%d.%d:5000", n/256, n%256)}
 }
