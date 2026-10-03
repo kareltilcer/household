@@ -310,12 +310,14 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		user   uuid.UUID
 		secret *string
 		set    *time.Time
+		off    bool
 	)
 	err = tenant.AccountTx(ctx, s.Pool, uuid.Nil, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
-			SELECT u.id, c.secret, c.updated_at FROM users u
+			SELECT u.id, c.secret, c.updated_at, EXISTS (SELECT FROM account_deletions d WHERE d.user_id = u.id)
+			FROM users u
 			LEFT JOIN credentials c ON c.user_id = u.id AND c.type = 'password'
-			WHERE lower(u.email) = lower($1)`, req.Email).Scan(&user, &secret, &set)
+			WHERE lower(u.email) = lower($1)`, req.Email).Scan(&user, &secret, &set, &off)
 	})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		s.fail(w, r, err)
@@ -331,7 +333,9 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if !ok {
+	// An account scheduled for deletion fails as a wrong password does, once the password was checked
+	// at a password's cost, and the attempt stays counted (FR-PR4, FR-ID3).
+	if !ok || off {
 		s.fail(w, r, InvalidCredentials())
 		return
 	}

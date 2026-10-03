@@ -43,16 +43,18 @@ type settings struct {
 	payer          *uuid.UUID
 	version        int64
 	createdAt      time.Time
+	// deletionAt is when the household is deleted, once an owner has asked for it (FR-PR6).
+	deletionAt *time.Time
 }
 
 // settingsColumns are the columns scanSettings reads, in its order.
 const settingsColumns = `id, name, country, timezone, base_currency, locale, units::text, first_day_of_week, join_code,
-	billing_payer_id, version, created_at`
+	billing_payer_id, version, created_at, deletion_scheduled_at`
 
 func scanSettings(row pgx.Row) (settings, error) {
 	var h settings
 	err := row.Scan(&h.id, &h.name, &h.country, &h.timezone, &h.currency, &h.locale, &h.units, &h.firstDayOfWeek,
-		&h.joinCode, &h.payer, &h.version, &h.createdAt)
+		&h.joinCode, &h.payer, &h.version, &h.createdAt, &h.deletionAt)
 	return h, err
 }
 
@@ -83,14 +85,21 @@ type householdBody struct {
 	MyRole         access.Role             `json:"my_role,omitempty"`
 	MyGrants       map[string]access.Level `json:"my_grants,omitempty"`
 	Entitlement    *entitlement.Summary    `json:"entitlement,omitempty"`
+	// DeletionScheduledAt is when the household is deleted, null while no deletion is pending.
+	DeletionScheduledAt *time.Time `json:"deletion_scheduled_at"`
 }
 
 // row is h as its sync row carries it, and as a member who is not the caller reads it.
 func (h settings) row() householdBody {
-	return householdBody{
+	b := householdBody{
 		ID: h.id, Name: h.name, Country: h.country, Timezone: h.timezone, BaseCurrency: h.currency, Locale: h.locale,
 		Units: h.units, FirstDayOfWeek: h.firstDayOfWeek, Version: h.version, CreatedAt: h.createdAt.UTC(),
 	}
+	if h.deletionAt != nil {
+		at := h.deletionAt.UTC()
+		b.DeletionScheduledAt = &at
+	}
+	return b
 }
 
 // body is h as a caller whose role is role, and whose level on each of modules level gives, reads

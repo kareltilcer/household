@@ -179,6 +179,32 @@ paths:
   /me/invitations/{token}/decline:
     parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
     post: { operationId: postMeInvitationsByTokenDecline, responses: { '204': { description: Declined }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/deletion/cancel:
+    post: { operationId: postAuthDeletionCancel, security: [], requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Cancelled }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/deletion:
+    post: { operationId: postMeDeletion, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Scheduled }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/consents:
+    get: { operationId: getMeConsents, responses: { '200': { description: Consents }, default: { $ref: '#/components/responses/Problem' } } }
+    put: { operationId: putMeConsents, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/exports:
+    get: { operationId: getMeExports, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+    post: { operationId: postMeExports, responses: { '202': { description: Queued }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/exports/{export_id}:
+    parameters: [{ name: export_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    get: { operationId: getMeExportsByExportId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+  /me/diagnostics:
+    post: { operationId: postMeDiagnostics, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '201': { description: Attached }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/deletion:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postDeletion, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Scheduled }, default: { $ref: '#/components/responses/Problem' } } }
+    delete: { operationId: deleteDeletion, responses: { '204': { description: Cancelled }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/exports:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getExports, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+    post: { operationId: postExports, responses: { '202': { description: Queued }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/exports/{export_id}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: export_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    get: { operationId: getExportsByExportId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
   /households/{household_id}/probe/items:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get:

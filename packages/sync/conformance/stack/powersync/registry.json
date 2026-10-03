@@ -495,6 +495,7 @@
         "created_at": "timestamp",
         "created_by": "uuid",
         "deleted_at": "timestamp",
+        "deletion_scheduled_at": "timestamp",
         "first_day_of_week": "integer",
         "grace_ends_at": "timestamp",
         "locale": "text",

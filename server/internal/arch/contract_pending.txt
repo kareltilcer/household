@@ -5,19 +5,6 @@
 # implements an operation removes its line, and at general availability it is empty.
 #
 # Seeded by item 2 with all 486 operations, less getHealthz and getReadyz, which it serves.
-postMeDeletion
-deleteMeDeletion
-getMeConsents
-putMeConsents
-getMeExports
-postMeExports
-getMeExportsByExportId
-postMeDiagnostics
-postDeletion
-deleteDeletion
-getExports
-postExports
-getExportsByExportId
 getBillingSubscription
 postBillingCheckoutSession
 postBillingPortalSession

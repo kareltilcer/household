@@ -98,11 +98,13 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 	accounts, outbox := apptest.Accounts(t, pool, log, o)
 	pushes := &apptest.Pushes{}
 	notifier := apptest.Notify(t, pool, log, outbox, pushes, o)
+	households := apptest.Households(t, pool, log, accounts, notifier, o)
 	deps := app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Meter: d.Pool(t, db.RoleMeter), MaxBodyBytes: 1 << 16, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, accounts, notifier, o),
+		Households: households,
 		Notify:     notifier,
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, notifier, nil, o),
 		Sync:       apptest.Sync(t, log, o),
 		Storage:    &storage.Picture{Log: log},
 	}

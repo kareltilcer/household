@@ -55,6 +55,13 @@ const (
 	actionUnrestrict       = "household.unrestrict"
 	actionEntitlement      = "household.entitlement"
 	actionRetentionWarning = "household.retention_warning"
+	// The household's deletion, scheduled and cancelled (FR-PR6), and what an erased account leaves
+	// of its member in a household that goes on (FR-PR3): the membership's end, and the owner the
+	// platform makes in place of one who was the last.
+	actionDeleteSchedule = "household.delete_schedule"
+	actionDeleteCancel   = "household.delete_cancel"
+	actionMemberErase    = "member.erase"
+	actionMemberSucceed  = "member.succeed"
 )
 
 // Admin is what admin declares to the module registry: the audit actions its mutations record and
@@ -67,8 +74,9 @@ func Admin() module.PlatformModule {
 		actionModuleEnable, actionModuleDisable,
 		actionChildCreate, actionChildPIN, actionChildLock, actionChildUnlock, actionChildAvatar, actionGraduate,
 		actionRestrict, actionUnrestrict, actionEntitlement, actionRetentionWarning,
+		actionDeleteSchedule, actionDeleteCancel, actionMemberErase, actionMemberSucceed,
 	}
-	p := module.PlatformModule{Name: Name}
+	p := module.PlatformModule{Name: Name, Export: export, Erase: erase}
 	for _, a := range actions {
 		p.Actions = append(p.Actions, module.AuditAction{Key: Name + "." + a, SummaryKey: Name + "." + a})
 	}
@@ -80,12 +88,12 @@ func Admin() module.PlatformModule {
 	// shows it to every member, the state of its subscription, its clocks and its restriction (PRD 04
 	// §3), so that a client knows offline what its household may do, and learns of a change of it as
 	// of any change of the row (D-124); not the clocks only the hourly transitions read, nor the count
-	// of warnings sent.
+	// of warnings sent. It carries the day it is deleted, once an owner has scheduled that (FR-PR6).
 	p.Entities = []sync.Entity{
 		{Name: entitySettings, Table: "households", Policy: sync.StrictVersion, Access: sync.Members,
 			Columns: append([]string{"id", "name", "country", "timezone", "base_currency", "locale", "units",
 				"first_day_of_week", "billing_payer_id", "billing_state", "trial_ends_at", "grace_ends_at", "retained_until",
-				"restricted_at", "restricted_by", "restricted_by_label", "restriction_reason"}, baseColumns...),
+				"restricted_at", "restricted_by", "restricted_by_label", "restriction_reason", "deletion_scheduled_at"}, baseColumns...),
 			Creates: []string{"postHouseholds"}},
 		{Name: entityMembership, Table: "memberships", Policy: sync.StrictVersion, Access: sync.Members,
 			Columns: append([]string{"id", "household_id", "user_id", "role", "grants", "dashboard_locked", "pin_locked"}, baseColumns...),
@@ -162,6 +170,9 @@ const (
 	CauseRemoved Cause = "removed"
 	// CauseLeft is a member who left.
 	CauseLeft Cause = "left"
+	// CauseErased is a member whose account was erased (FR-PR4): what they kept privately in the
+	// household has gone with the account already, and no window is kept for it.
+	CauseErased Cause = "erased"
 )
 
 // Loss is access members lost to one change: the modules each could see before and cannot now, or
@@ -187,8 +198,8 @@ type Hooks struct {
 	// Lost runs in the transaction of every change that takes access from members, the grant
 	// lowered to none, the module disabled, the member removed or gone: the streams retract from
 	// their replicas what the change took (FR-SY7), and the hook takes a member removed or gone out
-	// of every audience's readers (app.Retract, item 17); item 20 starts a leaving member's private
-	// root's window (FR-PR7). An error rolls the change back.
+	// of every audience's readers (app.Retract, item 17), and the window a leaving member's private
+	// root is kept for starts (privacy.Departed, FR-PR7). An error rolls the change back.
 	Lost func(ctx context.Context, tx pgx.Tx, loss Loss) error
 	// Changed runs after a change of a member's role or grants, or their removal, commits: item 15
 	// tells them (D-78, FR-HA5).

@@ -105,6 +105,10 @@ func (c *Contract) Lookup(method, path string) (*Operation, bool) {
 	return o, ok
 }
 
+// Version is the contract's own version, its info.version: what an export's manifest names as the
+// schemas its JSON matches (FR-PR2).
+func (c *Contract) Version() string { return c.doc.Info.Version }
+
 // Operations returns every operation, ordered by path and then method.
 func (c *Contract) Operations() []*Operation { return slices.Clone(c.operations) }
 

@@ -46,11 +46,13 @@ func TestRoutesMatchTheContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	households := apptest.Households(t, pool, log, accounts, notifier, apptest.Options{})
 	router, err := app.NewRouter(app.Deps{
 		Logger: log, Contract: c, Health: health.New(log, time.Second),
 		Pool: pool, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Modules: mods, MaxBodyBytes: 1, Accounts: accounts,
-		Households: apptest.Households(t, pool, log, accounts, notifier, apptest.Options{}),
+		Households: households,
 		Notify:     notifier,
+		Privacy:    apptest.Privacy(t, pool, log, accounts, households, notifier, mods, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 	})

@@ -35,9 +35,11 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/mail"
 	"github.com/kareltilcer/household/server/internal/platform/mfa"
+	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/password"
+	"github.com/kareltilcer/household/server/internal/platform/privacy"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
@@ -312,6 +314,41 @@ func Households(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.
 	s, err := household.New(household.Config{
 		Pool: pool, Log: log, Throttles: ratelimit.NewThrottles(pool, o.Now), Notify: notifier, WebURL: web,
 		Now: o.Now, Hooks: o.Hooks, Accounts: accounts.Identity,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// Privacy returns the export and erasure service for a router over pool, logging to log, on the clock
+// of o: over accounts' identity service, households and notifier, with the modules of registry and
+// the platform's own, and the files pipeline of o, or one over a bucket nobody made, whose store
+// refuses every archive.
+func Privacy(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.Accounts, households *household.Service,
+	notifier *notify.Service, registry *module.Registry, o Options,
+) *privacy.Service {
+	t.Helper()
+	beginner, ok := pool.(tenant.Beginner)
+	if !ok {
+		t.Fatalf("apptest: %T opens no transactions", pool)
+	}
+	catalog, err := registry.WithPlatform(household.Admin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalogs, err := i18n.Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := o.Files
+	if fs == nil {
+		fs = pipeline(t, pool, log, o, unmade(t))
+	}
+	s, err := privacy.New(privacy.Config{
+		Pool: beginner, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Log: log, Registry: catalog,
+		Accounts: accounts.Identity, Households: households, Files: fs, Notify: notifier, Catalogs: catalogs,
+		APIVersion: "test", Now: o.Now,
 	})
 	if err != nil {
 		t.Fatal(err)

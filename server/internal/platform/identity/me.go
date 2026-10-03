@@ -37,8 +37,9 @@ type meJSON struct {
 	DeletionScheduledAt  *time.Time `json:"deletion_scheduled_at"`
 }
 
-// loadMe reads user as the contract's Me, their picture's link among it (avatar.Service.URL). A
-// scheduled deletion is item 20's; until then it reads as absent.
+// loadMe reads user as the contract's Me, their picture's link among it (avatar.Service.URL), and
+// the day their account is deleted, once that is scheduled (FR-PR4): an account that signs nobody in
+// from then on, so it is read only by a request already under way.
 func (s *Service) loadMe(ctx context.Context, tx pgx.Tx, user uuid.UUID) (meJSON, error) {
 	me := meJSON{ID: user}
 	var (
@@ -50,10 +51,11 @@ func (s *Service) loadMe(ctx context.Context, tx pgx.Tx, user uuid.UUID) (meJSON
 		  array(SELECT c.type::text FROM credentials c WHERE c.user_id = u.id ORDER BY c.type),
 		  EXISTS (SELECT FROM mfa_totp t WHERE t.user_id = u.id AND t.activated_at IS NOT NULL),
 		  (SELECT count(*) FROM mfa_recovery_codes r WHERE r.user_id = u.id AND r.used_at IS NULL),
+		  (SELECT d.executes_at FROM account_deletions d WHERE d.user_id = u.id),
 		  `+avatar.Columns("u.id")+`
 		FROM users u WHERE u.id = $1`, user).
 		Scan(&me.Email, &me.EmailVerified, &me.DisplayName, &me.Locale, &me.Timezone, &me.FirstDayOfWeek, &me.Credentials,
-			&me.MFAEnabled, &left, &picture.ID, &picture.ContentType)
+			&me.MFAEnabled, &left, &me.DeletionScheduledAt, &picture.ID, &picture.ContentType)
 	if err != nil {
 		return me, err
 	}

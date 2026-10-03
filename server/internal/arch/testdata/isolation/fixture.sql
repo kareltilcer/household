@@ -121,3 +121,10 @@ INSERT INTO notification_deliveries (household_id, id, notification_id, user_id,
    '01900000-0000-7000-8000-0000000000b1', 'direct', 'web_push', 'sent', 'Milk', 'Milk', now()),
   ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000e4', '01900000-0000-7000-8000-0000000000e2',
    '01900000-0000-7000-8000-0000000000b1', 'direct', 'web_push', 'sent', 'Bread', 'Bread', now());
+
+-- A member who left each household, whose private data waits there for its window to end.
+INSERT INTO users (id) VALUES ('01900000-0000-7000-8000-0000000000dd');
+
+INSERT INTO departures (household_id, user_id, cause, departed_at, erase_after) VALUES
+  ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000dd', 'left', now(), now() + interval '30 days'),
+  ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000dd', 'removed', now(), now() + interval '30 days');

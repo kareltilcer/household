@@ -48,10 +48,12 @@ func TestMeterReadsOnlyWhatCountsCatchesEachViolation(t *testing.T) {
 // every table that has one: the tenant root's id, which lists the households, and what the sampler
 // sums and the files workers schedule by.
 var meterColumns = map[string][]string{
-	// Item 16's: the clocks the hourly entitlement transitions find a household's next move by.
-	"public.households": {"id", "billing_state", "trial_ends_at", "dunning_ends_at", "grace_ends_at", "retained_until", "retention_warnings"},
-	"public.files":      {"household_id", "module", "variant", "byte_size", "owner_id"},
-	"public.file_jobs":  {"household_id", "run_at"},
+	// Item 16's: the clocks the hourly entitlement transitions find a household's next move by; and
+	// item 20's, the day a household's scheduled deletion falls due.
+	"public.households": {"id", "billing_state", "trial_ends_at", "dunning_ends_at", "grace_ends_at", "retained_until", "retention_warnings",
+		"deletion_scheduled_at"},
+	"public.files":     {"household_id", "module", "variant", "byte_size", "owner_id"},
+	"public.file_jobs": {"household_id", "run_at"},
 	// Item 15's: what the notification workers find due, and what the expiry sweep finds past its time.
 	"public.notifications":           {"household_id", "status", "run_at", "args_expires_at"},
 	"public.notification_deliveries": {"household_id", "body_expires_at"},
@@ -62,6 +64,9 @@ var meterColumns = map[string][]string{
 	"public.invitations": {"household_id", "status", "expires_at", "updated_at"},
 	// Item 18's: the replicas the expiry sweep finds that have not reported for their time.
 	"public.sync_replicas": {"household_id", "reported_at"},
+	// Item 20's: the departures whose window ended, and the households a user left, which their own
+	// export and their account's erasure find by them: who left which household, never what they kept.
+	"public.departures": {"household_id", "user_id", "erase_after", "erased_at"},
 }
 
 // meterViolations returns each privilege the meter role holds in schema, or in every schema that

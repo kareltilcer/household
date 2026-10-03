@@ -268,3 +268,15 @@ func nullUUID(id uuid.UUID) any {
 	}
 	return id
 }
+
+// RedactedKey is the summary a reader is shown of an event about a private item that is not theirs
+// (FR-AU4): a fixed, generic one, which says that something private changed and nothing of what.
+const RedactedKey = "activity.event.private"
+
+// Redacted reports whether an event with visibility, private to owner, is redacted for reader
+// (FR-AU4): a private item's event is, for everyone but its owner. The one rule every reader of the
+// log applies, the activity log (item 52) and an export's (item 20) alike: the summary becomes
+// RedactedKey, the entity id is dropped, and the diff comes back empty.
+func Redacted(visibility Visibility, owner *uuid.UUID, reader uuid.UUID) bool {
+	return visibility == Private && (owner == nil || *owner != reader)
+}

@@ -274,6 +274,95 @@ func TestListAndDeleteKeepToAPrefix(t *testing.T) {
 	}
 }
 
+// An upload of unknown length is written in parts and read back whole: one shorter than a part, one
+// that ends past a part's boundary, and one with nothing in it.
+func TestUploadWritesABodyOfAnyLengthInParts(t *testing.T) {
+	s := testsupport.ObjectStore(t)
+	long := make([]byte, objectstore.PartSize+1024)
+	for i := range long {
+		long[i] = byte(i * 31)
+	}
+	for name, body := range map[string][]byte{"short": []byte("an archive"), "long": long, "empty": {}} {
+		key := "u/a/exports/b/" + name
+		// A reader that yields a few bytes at a time, as an archive being built does.
+		n, err := s.Upload(t.Context(), key, iotest(bytes.NewReader(body)), "application/zip")
+		if err != nil || n != int64(len(body)) {
+			t.Fatalf("upload %s = %d, %v; want %d bytes", name, n, err, len(body))
+		}
+		got, info, err := s.Get(t.Context(), key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		read, err := io.ReadAll(got)
+		_ = got.Close()
+		if err != nil || sha256.Sum256(read) != sha256.Sum256(body) || info.ContentType != "application/zip" {
+			t.Fatalf("%s read back as %d bytes of %q, %v; want the %d uploaded as application/zip", name, len(read), info.ContentType, err, len(body))
+		}
+	}
+	if _, err := s.Upload(t.Context(), "u/a/../b", strings.NewReader("x"), "application/zip"); !errors.Is(err, objectstore.ErrInvalidKey) {
+		t.Fatalf("an upload to a key outside the form = %v, want ErrInvalidKey", err)
+	}
+}
+
+// iotest yields r's bytes in short reads.
+func iotest(r io.Reader) io.Reader { return shortReader{r} }
+
+type shortReader struct{ r io.Reader }
+
+func (s shortReader) Read(p []byte) (int, error) {
+	if len(p) > 64<<10 {
+		p = p[:64<<10]
+	}
+	return s.r.Read(p)
+}
+
+// An upload whose body fails keeps nothing at its key.
+func TestAFailedUploadLeavesNoObject(t *testing.T) {
+	s := testsupport.ObjectStore(t)
+	broken := io.MultiReader(strings.NewReader("half an archive"), failingReader{})
+	if _, err := s.Upload(t.Context(), "u/a/exports/b/broken", broken, "application/zip"); err == nil {
+		t.Fatal("an upload whose body failed succeeded")
+	}
+	if _, err := s.Head(t.Context(), "u/a/exports/b/broken"); !errors.Is(err, objectstore.ErrNotFound) {
+		t.Fatalf("head = %v, want ErrNotFound", err)
+	}
+}
+
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) {
+	return 0, errors.New("the archive could not be built")
+}
+
+// RemoveAll removes everything under a household's or an account's prefix and nothing beside it, and
+// refuses a prefix that could name more.
+func TestRemoveAllKeepsToItsPrefix(t *testing.T) {
+	s := testsupport.ObjectStore(t)
+	for _, k := range []string{"h/a/notes/1/original", "h/a/documents/2/original", "h/ab/notes/1/original", "u/a/avatar/1/picture"} {
+		if err := put(t, s, k, []byte(k), "text/plain"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := s.RemoveAll(t.Context(), "h/a/"); err != nil || n != 2 {
+		t.Fatalf("remove all = %d, %v; want the household's 2 objects", n, err)
+	}
+	var keys []string
+	if err := s.List(t.Context(), "", func(i objectstore.Info) error {
+		keys = append(keys, i.Key)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(keys, " ") != "h/ab/notes/1/original u/a/avatar/1/picture" {
+		t.Fatalf("left %v", keys)
+	}
+	for _, p := range []string{"", "h/", "h/a", "/", "h//", "u/a/../"} {
+		if _, err := s.RemoveAll(t.Context(), p); !errors.Is(err, objectstore.ErrInvalidKey) {
+			t.Errorf("remove all %q = %v, want ErrInvalidKey", p, err)
+		}
+	}
+}
+
 func TestAKeyOutsideTheFormIsRefused(t *testing.T) {
 	s := testsupport.ObjectStore(t)
 	for _, k := range []string{"", "/h/a", "h/../b", "h/a/", "H/a", "h//a", "h/a b"} {

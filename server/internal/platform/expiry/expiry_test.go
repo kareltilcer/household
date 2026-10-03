@@ -23,8 +23,8 @@ type world struct {
 	t     *testing.T
 	admin *pgxpool.Pool
 	s     *expiry.Sweeper
-	// purged counts the calls to purge the invitations.
-	purged int
+	// purged counts the calls to purge the invitations, and expired those to expire the exports.
+	purged, expired int
 }
 
 func newWorld(t *testing.T) *world {
@@ -36,6 +36,10 @@ func newWorld(t *testing.T) *world {
 		Pool: d.Pool(t, db.RoleApp), Meter: d.Pool(t, db.RoleMeter), Log: logging.New(io.Discard, slog.LevelDebug),
 		Invitations: func(context.Context) (int, error) {
 			w.purged++
+			return 0, nil
+		},
+		Exports: func(context.Context) (int, error) {
+			w.expired++
 			return 0, nil
 		},
 	})
