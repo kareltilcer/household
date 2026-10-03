@@ -1,6 +1,8 @@
 // PRD 10 §4's scenarios about what the server admits, beyond merging: 12, 14 and 17.
 
 import { expect } from 'vitest'
+import type { PendingAttachment } from '../../src/index.ts'
+import { until } from '../harness/wait.ts'
 import { answersOf, family, offline, online, staysQuiet, type Scenario } from './scenario.ts'
 
 export const admission: readonly Scenario[] = [
@@ -11,7 +13,7 @@ export const admission: readonly Scenario[] = [
       'The row is marked failed with a reason a member can act on; the row is never lost (D-25)',
     enabledBy: 17,
     needs: ['conformance.attachment'],
-    capabilities: ['uploadAttachment'],
+    capabilities: ['attachmentUrl'],
     async run(w) {
       const f = await family(w)
       const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
@@ -23,23 +25,26 @@ export const admission: readonly Scenario[] = [
         file_name: 'receipt.exe',
         attachment_status: 'pending',
       })
-      await online(w, petr)
-      expect((await w.admin.rows('conformance_attachments', f.home)).get(receipt)).toMatchObject({
-        attachment_status: 'pending',
+      // Taken offline, the file waits on the device beside the row that names it (D-25). An executable
+      // is a blocked type (FR-FL1): its upload fails, and no retry can make it pass.
+      await petr.attach('conformance_attachments', receipt, {
+        bytes: new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]),
+        contentType: 'application/x-msdownload',
+        fileName: 'receipt.exe',
       })
-
-      // An executable is a blocked type (FR-FL1): the upload fails, and no retry can make it pass.
-      const status = await w.target.uploadAttachment?.(
-        await petr.credentialNow(),
-        f.home.id,
-        receipt,
-        {
-          bytes: new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]),
-          contentType: 'application/x-msdownload',
-          fileName: 'receipt.exe',
-        },
-      )
-      expect(status).toBe(415)
+      // The row syncs first; the bytes follow once the server holds it.
+      await online(w, petr)
+      let refused: PendingAttachment | undefined
+      await until(async () => {
+        ;[refused] = await petr.replica.attachments().list()
+        return refused?.status === 'failed'
+      }, 20_000)
+      // The device keeps the refusal's code for the member, and the bytes no retry would send.
+      expect(refused).toMatchObject({
+        id: receipt,
+        status: 'failed',
+        code: 'unsupported_media_type',
+      })
       expect(await w.settle()).toBe(true)
 
       // The reason is the refusal's code, which a member's client words as something they can act on.
@@ -139,11 +144,9 @@ export const admission: readonly Scenario[] = [
         code: 'monotonicity_violation',
       })
       // What Petr typed stays with the rejection, for him to correct rather than read the meter again.
-      const recorded = await petr.db.get<{ mutation: string }>(
-        'SELECT mutation FROM conformance_outcomes WHERE entity_id = ?',
-        [typed],
-      )
-      expect(JSON.parse(recorded.mutation)).toMatchObject({ fields: { value: 250 } })
+      expect(kept?.mutation).toMatchObject({ fields: { value: 250 } })
+      // And it is the member's to see, until they retry, edit or discard it (DD-4).
+      expect((await petr.replica.inbox()).map((o) => o.entity_id)).toEqual([typed])
       await staysQuiet(w)
       expect(w.recorder.attemptsAt(answersOf(w, petr)[0]?.mutation_id ?? '')).toHaveLength(1)
     },

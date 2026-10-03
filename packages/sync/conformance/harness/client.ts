@@ -1,28 +1,28 @@
-// One client of the suite: a PowerSync database of its own, in its own SQLite file, subscribed
-// to one household's streams (D-4), writing through the suite's connector, over a network of its
-// own, on a clock of its own.
+// One client of the suite: a replica of @household/sync's (plan item 18) on its own SQLite file,
+// subscribed to one household's streams (D-4), writing through the library's connector, over a
+// network of its own, on a clock of its own. The suite drives the library as an app does; what it adds
+// is the network it can partition, the clock it can skew and the recorder the invariants read.
 
 import { PowerSyncDatabase } from '@powersync/node'
-import type { SyncStreamSubscription } from '@powersync/common'
-import type { Household, Member } from './admin.ts'
 import {
-  ConformanceConnector,
+  ChecksumWatch,
+  Replica,
+  schemaOf,
   type Held,
   type HoldReason,
-  type Journal,
   type Observer,
-} from './connector.ts'
-import {
-  encodeMetadata,
-  type SyncMutation,
-  type SyncMutationResult,
-  type WriteMetadata,
-} from './mutation.ts'
+  type RecordedOutcome,
+} from '../../src/index.ts'
+import { NodeFileSystemAdapter, multipart } from '../../src/node.ts'
+import type { Household, Member } from './admin.ts'
+import { apiUrl } from './env.ts'
 import { Network } from './network.ts'
 import type { Recorder } from './recorder.ts'
 import type { Rng } from './rng.ts'
-import { heldTable, outcomesTable, schema, tableSpec, type TableName } from './schema.ts'
-import { Unauthorized, type Target } from './target.ts'
+import { suiteRegistry, tableSpec, type TableName } from './schema.ts'
+import type { Target } from './target.ts'
+
+export type { RecordedOutcome } from '../../src/index.ts'
 
 export interface ClientOptions {
   readonly name: string
@@ -48,33 +48,17 @@ export interface ClientContext {
   readonly dir: string
 }
 
-/** An answer the client recorded in its outcomes table. */
-export interface RecordedOutcome {
-  readonly mutation_id: string
-  readonly entity_type: string
-  readonly entity_id: string
-  readonly op: string
-  readonly outcome: SyncMutationResult['outcome']
-  readonly code: string | null
-  readonly version: number | null
-  readonly row: unknown
-}
-
 export class Client {
   readonly name: string
   readonly member: Member
   readonly household: Household
   readonly network = new Network()
-  readonly db: PowerSyncDatabase
-  readonly connector: ConformanceConnector
   skewMs: number
+  private replicaNow: Replica
   private readonly options: ClientOptions
   private readonly ctx: ClientContext
+  private readonly dbFilename: string
   private credential: string | null = null
-  private subscriptions: SyncStreamSubscription[] | null = null
-  private onlineNow = false
-  /** A flush replayHeld started and that has not finished. */
-  private replaying: Promise<void> | null = null
 
   constructor(ctx: ClientContext, options: ClientOptions) {
     this.ctx = ctx
@@ -83,10 +67,26 @@ export class Client {
     this.member = options.member
     this.household = options.household
     this.skewMs = options.skewMs ?? 0
-    this.db = new PowerSyncDatabase({
-      schema,
-      database: { dbFilename: `${options.name}-${ctx.rng.uuid()}.sqlite`, dbLocation: ctx.dir },
-    })
+    this.dbFilename = `${options.name}-${ctx.rng.uuid()}.sqlite`
+    this.replicaNow = this.open()
+  }
+
+  /** The library's replica the client drives. */
+  get replica(): Replica {
+    return this.replicaNow
+  }
+
+  get db(): Replica['db'] {
+    return this.replicaNow.db
+  }
+
+  get connector(): Replica['connector'] {
+    return this.replicaNow.connector
+  }
+
+  /** A replica on the client's SQLite file, as it was left. */
+  private open(): Replica {
+    const { ctx, options } = this
     const recorder = ctx.recorder
     const observer: Observer = {
       attempted: (attempt) => {
@@ -99,22 +99,50 @@ export class Client {
         recorder.malformed(this.name, attempt, reason)
       },
     }
-    this.connector = new ConformanceConnector({
-      pushUrl: ctx.target.pushUrl(options.household.id),
-      fetch: this.network.fetch,
+    const checksums = new ChecksumWatch()
+    const db = new PowerSyncDatabase({
+      schema: schemaOf(suiteRegistry),
+      database: { dbFilename: this.dbFilename, dbLocation: ctx.dir },
+      logger: checksums,
+    })
+    return new Replica({
+      db,
+      registry: suiteRegistry,
+      household: options.household.id,
+      apiUrl: `${apiUrl}/api/v1`,
       credential: {
         current: () => this.credentialNow(),
         renew: async () => {
           await this.renew()
         },
       },
-      journal: this.journal(),
-      newKey: () => ctx.rng.uuid(),
+      fetch: this.network.fetch,
+      newId: () => ctx.rng.uuid(this.now().getTime()),
+      now: () => this.now(),
       observer,
+      checksums,
+      reportEveryMs: 0,
+      // Short, so that a run is quick: the upload throttle, and the wait before a failed upload or a
+      // dropped connection is tried again.
+      connection: { crudUploadThrottleMs: 20, retryDelayMs: 150 },
+      attachments: {
+        storage: new NodeFileSystemAdapter(`${ctx.dir}/${this.dbFilename}.files`),
+        uploadUrl: (_entity, household, id) => ctx.target.attachmentUrl?.(household, id) ?? null,
+        transport: multipart,
+      },
+      onWrite: (w) => {
+        recorder.wrote(this.name, {
+          mutationId: w.mutationId,
+          table: tableSpec(w.table).table as TableName,
+          entityId: w.entityId,
+          op: w.op,
+        })
+      },
       ...(options.maxBatch === undefined ? {} : { maxBatch: options.maxBatch }),
       ...(options.retryRejections === undefined
         ? {}
         : { retryRejections: options.retryRejections }),
+      ...(options.extraStreams === undefined ? {} : { extraStreams: options.extraStreams }),
     })
   }
 
@@ -139,222 +167,88 @@ export class Client {
   }
 
   /** Connects to PowerSync, subscribed to the household's streams: the client comes online. */
-  async online(): Promise<void> {
-    const { target } = this.ctx
-    if (this.subscriptions === null) {
-      this.subscriptions = []
-      for (const stream of [...target.streams, ...(this.options.extraStreams ?? [])]) {
-        this.subscriptions.push(
-          await this.db.syncStream(stream, { household_id: this.household.id }).subscribe(),
-        )
-      }
-    }
-    await this.db.connect(
-      {
-        fetchCredentials: async () => {
-          const credential = await this.credentialNow()
-          try {
-            return await target.powerSyncCredentials(
-              credential,
-              this.household.id,
-              this.network.fetch,
-            )
-          } catch (error) {
-            if (!(error instanceof Unauthorized)) throw error
-            return target.powerSyncCredentials(
-              await this.renew(),
-              this.household.id,
-              this.network.fetch,
-            )
-          }
-        },
-        uploadData: () => this.flush(),
-      },
-      // Short, so that a run is quick: the upload throttle, and the wait before a failed upload
-      // or a dropped connection is tried again.
-      { crudUploadThrottleMs: 20, retryDelayMs: 150 },
-    )
-    this.onlineNow = true
-  }
-
-  /**
-   * Runs the connector now, outside PowerSync's upload loop, which starts only on a local write:
-   * the held mutations whose cause has cleared replay (ConformanceConnector.resume).
-   */
-  async flush(): Promise<void> {
-    await this.connector.upload({
-      peek: async (limit) => {
-        const batch = await this.db.getCrudBatch(limit)
-        return batch === null ? null : { entries: batch.crud, complete: () => batch.complete() }
-      },
-    })
-  }
-
-  /**
-   * Starts a flush when the queue is empty and the connector holds mutations whose cause has
-   * cleared: PowerSync calls uploadData only while its queue holds a write, so a replay the network
-   * or the server failed after the queue drained would otherwise wait for the next local write.
-   * It does not wait for the flush, whose failure the next call tries again.
-   */
-  async replayHeld(): Promise<void> {
-    if (!this.onlineNow || this.replaying !== null || (await this.pending()) > 0) return
-    if (!(await this.replayable())) return
-    this.replaying = this.flush()
-      .catch(() => undefined)
-      .finally(() => {
-        this.replaying = null
-      })
-  }
-
-  /**
-   * Whether the connector holds mutations whose cause has cleared and that wait to replay: every
-   * deferred one, and the entitlement holds resume() let through.
-   */
-  async replayable(): Promise<boolean> {
-    return (
-      (await this.held('deferred')).length > 0 ||
-      (this.connector.resuming && (await this.held('entitlement')).length > 0)
-    )
+  online(): Promise<void> {
+    return this.replicaNow.connect()
   }
 
   /** Disconnects from PowerSync: the client goes offline, its replica and its queue kept. */
-  async offline(): Promise<void> {
-    this.onlineNow = false
-    await this.db.disconnect()
+  offline(): Promise<void> {
+    return this.replicaNow.disconnect()
   }
 
   /** Whether the client is online: between online() and offline(). */
   get isOnline(): boolean {
-    return this.onlineNow
+    return this.replicaNow.connected
   }
 
-  async close(): Promise<void> {
-    for (const s of this.subscriptions ?? []) s.unsubscribe()
-    await this.replaying
-    await this.db.close()
+  /**
+   * Closes the client's database and opens it again, as an app killed and started again does: what it
+   * held, its queue and what it was answered, are what it finds (PRD 03 §2.1, nothing is lost). It
+   * comes back offline.
+   */
+  async restart(): Promise<void> {
+    await this.replicaNow.close()
+    this.replicaNow = this.open()
+    await this.db.init()
   }
 
-  private metadata(extra: Partial<WriteMetadata> = {}): { meta: WriteMetadata; encoded: string } {
-    const meta: WriteMetadata = {
-      mutation_id: this.ctx.rng.uuid(),
-      client_time: this.now().toISOString(),
-      ...extra,
-    }
-    return { meta, encoded: encodeMetadata(meta) }
+  /** Runs the connector now, outside PowerSync's upload loop: the held mutations whose cause has cleared replay. */
+  flush(): Promise<void> {
+    return this.replicaNow.flush()
   }
 
-  private toClient(table: TableName, name: string, value: unknown): unknown {
-    return tableSpec(table).columns[name] === 'boolean'
-      ? value === true
-        ? 1
-        : value === false
-          ? 0
-          : value
-      : value
+  /** Starts a flush of held mutations whose cause has cleared, when nothing is queued (Replica.replayHeld). */
+  replayHeld(): Promise<void> {
+    return this.replicaNow.replayHeld()
+  }
+
+  /** Whether the client holds mutations whose cause has cleared, waiting to replay. */
+  replayable(): Promise<boolean> {
+    return this.replicaNow.replayable()
+  }
+
+  close(): Promise<void> {
+    return this.replicaNow.close()
   }
 
   /** Creates a row of table with fields, offline or not, and returns its id. */
-  async create(
+  create(
     table: TableName,
     fields: Readonly<Record<string, unknown>>,
-    options: { readonly id?: string } = {},
+    options: { readonly id?: string; readonly local?: Readonly<Record<string, unknown>> } = {},
   ): Promise<string> {
-    const id = options.id ?? this.ctx.rng.uuid(this.now().getTime())
-    const { meta, encoded } = this.metadata()
-    const names = Object.keys(fields)
-    const values = names.map((n) => this.toClient(table, n, fields[n]))
-    await this.db.execute(
-      `INSERT INTO ${table} (id, household_id, ${names.join(', ')}, _metadata) VALUES (?, ?, ${names.map(() => '?').join(', ')}, ?)`,
-      [id, this.household.id, ...values, encoded],
-    )
-    this.ctx.recorder.wrote(this.name, {
-      mutationId: meta.mutation_id,
-      table,
-      entityId: id,
-      op: 'create',
+    return this.replicaNow.create(table, fields, {
+      id: options.id ?? this.ctx.rng.uuid(this.now().getTime()),
+      ...(options.local === undefined ? {} : { local: options.local }),
     })
-    return id
   }
 
   /**
    * Sets fields of table's row id, against the version the replica holds, and reports whether the
    * replica held the row: a write to a row it does not hold queues nothing, and is not recorded.
-   * The row is read and written in one transaction, which no checkpoint can land inside: one that
-   * retracted the row between the two would leave a write recorded that was never queued.
    */
-  async update(
+  update(
     table: TableName,
     id: string,
     fields: Readonly<Record<string, unknown>>,
     options: { readonly action?: string; readonly carry?: Readonly<Record<string, unknown>> } = {},
   ): Promise<boolean> {
-    const names = Object.keys(fields)
-    const meta = await this.db.writeTransaction(async (tx) => {
-      const current = await tx.getOptional<{ version: number | null }>(
-        `SELECT version FROM ${table} WHERE id = ?`,
-        [id],
-      )
-      if (current === null) return null
-      const { meta, encoded } = this.metadata({
-        ...(current.version === null ? {} : { base_version: current.version }),
-        ...(options.action === undefined ? {} : { action: options.action }),
-        ...(options.carry === undefined ? {} : { fields: options.carry }),
-      })
-      await tx.execute(
-        `UPDATE ${table} SET ${names.map((n) => `${n} = ?`).join(', ')}, _metadata = ? WHERE id = ?`,
-        [...names.map((n) => this.toClient(table, n, fields[n])), encoded, id],
-      )
-      return meta
-    })
-    if (meta === null) return false
-    this.ctx.recorder.wrote(this.name, {
-      mutationId: meta.mutation_id,
-      table,
-      entityId: id,
-      op: options.action === undefined ? 'update' : 'action',
-    })
-    return true
+    return this.replicaNow.update(table, id, fields, options)
   }
 
-  /**
-   * Deletes table's row id, with its mutation's metadata, and reports whether the replica held it;
-   * read and written in one transaction, as update is.
-   */
-  async remove(table: TableName, id: string): Promise<boolean> {
-    const meta = await this.db.writeTransaction(async (tx) => {
-      const current = await tx.getOptional<{ version: number | null }>(
-        `SELECT version FROM ${table} WHERE id = ?`,
-        [id],
-      )
-      if (current === null) return null
-      const { meta, encoded } = this.metadata(
-        current.version === null ? {} : { base_version: current.version },
-      )
-      // A delete that carries metadata is written as an update of _deleted (trackMetadata).
-      await tx.execute(`UPDATE ${table} SET _deleted = 1, _metadata = ? WHERE id = ?`, [
-        encoded,
-        id,
-      ])
-      return meta
-    })
-    if (meta === null) return false
-    this.ctx.recorder.wrote(this.name, {
-      mutationId: meta.mutation_id,
-      table,
-      entityId: id,
-      op: 'delete',
-    })
-    return true
+  /** Deletes table's row id, with its mutation's metadata, and reports whether the replica held it. */
+  remove(table: TableName, id: string): Promise<boolean> {
+    return this.replicaNow.remove(table, id)
   }
 
   /**
    * Checks or unchecks item: the state it wants, at the client's time (state_set, scenario 3). The
    * first check the replica makes of an item creates its row; later ones update it, carrying the
-   * item_id the server keys the state on and the state itself: a state_set write carries the state
-   * it wants, not a delta (PRD 03 §2.5), and PowerSync's queued write leaves out a column the
-   * update did not change, so a check of an item the replica already shows checked would otherwise
-   * be sent without its state. It returns the id of the row it wrote, or null when a checkpoint
-   * took the row it found away before its write, which then queued nothing.
+   * item_id the server keys the state on and the state itself: a state_set write carries the state it
+   * wants, not a delta (PRD 03 §2.5), and a queued write leaves out a column the update did not change.
+   * The time it was checked at, and whether the server flagged the client's clock, are the server's to
+   * set: the replica shows them until the server's row arrives. It returns the id of the row it wrote,
+   * or null when a checkpoint took the row it found away before its write, which then queued nothing.
    */
   async check(item: string, checked: boolean): Promise<string | null> {
     const row = await this.db.getOptional<{ id: string }>(
@@ -363,20 +257,36 @@ export class Client {
     )
     const at = this.now().toISOString()
     if (row === null) {
-      return this.create('conformance_item_checks', {
-        item_id: item,
-        checked,
-        checked_at: at,
-        clock_flagged: false,
-      })
+      return this.create(
+        'conformance_item_checks',
+        { item_id: item, checked },
+        { local: { checked_at: at, clock_flagged: false } },
+      )
     }
-    const queued = await this.update(
+    const queued = await this.replicaNow.update(
       'conformance_item_checks',
       row.id,
-      { checked, checked_at: at },
-      { carry: { item_id: item, checked } },
+      { checked },
+      { local: { checked_at: at }, carry: { item_id: item, checked } },
     )
     return queued ? row.id : null
+  }
+
+  /** Keeps a file for table's row id, to be uploaded once the server holds the row (D-25). */
+  attach(
+    table: TableName,
+    id: string,
+    file: { readonly bytes: Uint8Array; readonly contentType: string; readonly fileName: string },
+  ): Promise<void> {
+    const data = file.bytes.buffer.slice(
+      file.bytes.byteOffset,
+      file.bytes.byteOffset + file.bytes.byteLength,
+    ) as ArrayBuffer
+    return this.replicaNow.attach(table, id, {
+      data,
+      contentType: file.contentType,
+      fileName: file.fileName,
+    })
   }
 
   /** table's rows in the replica, as its view shows them: the columns the schema declares. */
@@ -408,25 +318,18 @@ export class Client {
   }
 
   /** How many writes wait in the upload queue. */
-  async pending(): Promise<number> {
-    return (await this.db.getUploadQueueStats()).count
+  pending(): Promise<number> {
+    return this.replicaNow.queued()
   }
 
   /** The mutations held to replay, of reason or of any. */
-  async held(reason?: HoldReason): Promise<Held[]> {
-    const rows = await this.db.getAll<{ reason: HoldReason; mutation: string }>(
-      `SELECT reason, mutation FROM ${heldTable} ${reason === undefined ? '' : 'WHERE reason = ?'} ORDER BY position`,
-      reason === undefined ? [] : [reason],
-    )
-    return rows.map((r) => ({ reason: r.reason, mutation: JSON.parse(r.mutation) as SyncMutation }))
+  held(reason?: HoldReason): Promise<Held[]> {
+    return this.replicaNow.held(reason)
   }
 
   /** The answers other than `applied` the client recorded, oldest first. */
-  async outcomes(): Promise<RecordedOutcome[]> {
-    const rows = await this.db.getAll<Omit<RecordedOutcome, 'row'> & { row: string | null }>(
-      `SELECT mutation_id, entity_type, entity_id, op, outcome, code, version, row FROM ${outcomesTable} ORDER BY position`,
-    )
-    return rows.map((r) => ({ ...r, row: r.row === null ? null : (JSON.parse(r.row) as unknown) }))
+  outcomes(): Promise<RecordedOutcome[]> {
+    return this.replicaNow.outcomes()
   }
 
   /** The replica's buckets and the op each has applied up to: its checkpoint (PRD 10 §4, invariant 5). */
@@ -434,56 +337,5 @@ export class Client {
     return this.db.getAll<{ name: string; last_applied_op: number }>(
       'SELECT name, last_applied_op FROM ps_buckets',
     )
-  }
-
-  private journal(): Journal {
-    return {
-      record: async (mutation, result) => {
-        // After every answer recorded before it, as held mutations are (hold).
-        await this.db.execute(
-          `INSERT INTO ${outcomesTable} (id, mutation_id, entity_type, entity_id, op, outcome, code, message, version, row, mutation, answered_at, position)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(position), 0) + 1 FROM ${outcomesTable}))`,
-          [
-            this.ctx.rng.uuid(),
-            mutation.mutation_id,
-            mutation.entity_type,
-            mutation.entity_id,
-            mutation.op,
-            result.outcome,
-            result.code ?? null,
-            result.message ?? null,
-            result.version ?? null,
-            result.row === undefined ? null : JSON.stringify(result.row),
-            JSON.stringify(mutation),
-            new Date().toISOString(),
-          ],
-        )
-      },
-      hold: async (reason, mutation) => {
-        await this.db.writeTransaction(async (tx) => {
-          await tx.execute(`DELETE FROM ${heldTable} WHERE id = ?`, [mutation.mutation_id])
-          // Held after every mutation held before it, across restarts.
-          await tx.execute(
-            `INSERT INTO ${heldTable} (id, mutation_id, reason, position, mutation, held_at)
-             VALUES (?, ?, ?, (SELECT coalesce(max(position), 0) + 1 FROM ${heldTable}), ?, ?)`,
-            [
-              mutation.mutation_id,
-              mutation.mutation_id,
-              reason,
-              JSON.stringify(mutation),
-              new Date().toISOString(),
-            ],
-          )
-        })
-      },
-      held: (reason) => this.held(reason),
-      release: async (ids) => {
-        if (ids.length === 0) return
-        await this.db.execute(
-          `DELETE FROM ${heldTable} WHERE id IN (${ids.map(() => '?').join(', ')})`,
-          [...ids],
-        )
-      },
-    }
   }
 }

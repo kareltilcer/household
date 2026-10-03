@@ -20,6 +20,9 @@ garden.zone: access to every member of the household beside another axis; member
 garden.shed: columns that do not start with id, which a replica keys every row on
 garden.path: columns naming one that is not a lowercase identifier
 garden.pond: columns naming title twice
+garden.trellis: columns that leave out version, which a replica's report hashes each row by
+garden.trellis: a redacted projection's columns that leave out version, which a replica's report hashes each row by
+garden.trellis: a redacted projection's column owner_id, which its columns withhold from every replica
 garden.fence: columns that do not start with id, which a replica keys every row on
 garden.variety: no table, or one that is not a lowercase identifier
 garden.variety: create operation "postGardenVarieties" is empty or named twice
@@ -27,4 +30,4 @@ garden.variety: create operation "" is empty or named twice
 garden.planting: the name is declared twice
 notes.page: the name is not qualified by its module, garden
 Garden.Tool: the name is not <module>.<entity> in lowercase words joined by underscores
-garden entity 25: the name is not <module>.<entity> in lowercase words joined by underscores
+garden entity 26: the name is not <module>.<entity> in lowercase words joined by underscores

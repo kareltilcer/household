@@ -1,5 +1,4 @@
 import { isUuid } from '@household/api'
-import { UpdateType } from '@powersync/common'
 import { describe, expect, it } from 'vitest'
 import {
   acknowledgedWrites,
@@ -8,18 +7,20 @@ import {
   terminality,
   type Answered,
 } from './invariants.ts'
-import {
-  encodeMetadata,
-  ends,
-  isEntitlement,
-  toMutation,
-  type SyncMutation,
-  type SyncMutationResult,
-} from './mutation.ts'
+import type { SyncMutation, SyncMutationResult } from '../../src/index.ts'
 import { Network, NetworkFault, push } from './network.ts'
 import { Recorder } from './recorder.ts'
 import { Rng } from './rng.ts'
-import { canonical, canonicalRow, tableSpec, type CanonicalRow, type TableName } from './schema.ts'
+import {
+  canonical,
+  canonicalRow,
+  suiteRegistry,
+  tableSpec,
+  tables,
+  type CanonicalRow,
+  type TableName,
+  type TableSpec,
+} from './schema.ts'
 
 describe('the seeded generator', () => {
   it('draws the same sequence from the same seed, and another from another', () => {
@@ -109,113 +110,6 @@ describe('a network', () => {
     await expect(net.fetch('https://s.test/a')).rejects.toMatchObject({ fault: 'refuse' })
     net.heal()
     expect((await net.fetch('https://s.test/a')).status).toBe(200)
-  })
-})
-
-describe('a queued write', () => {
-  const metadata = encodeMetadata({
-    mutation_id: 'm-1',
-    client_time: '2026-09-29T10:00:00Z',
-    base_version: 4,
-  })
-
-  it('creates on a PUT, with only the fields a client writes, its booleans as booleans', () => {
-    expect(
-      toMutation({
-        op: UpdateType.PUT,
-        table: 'conformance_item_checks',
-        id: 'c-1',
-        opData: {
-          household_id: 'h',
-          item_id: 'i-1',
-          checked: 1,
-          checked_at: 'now',
-          clock_flagged: 0,
-        },
-        metadata: encodeMetadata({ mutation_id: 'm-1', client_time: '2026-09-29T10:00:00Z' }),
-      }),
-    ).toEqual({
-      mutation_id: 'm-1',
-      entity_type: 'conformance.item_checked',
-      entity_id: 'c-1',
-      op: 'create',
-      base_version: null,
-      action: null,
-      fields: { item_id: 'i-1', checked: true },
-      client_time: '2026-09-29T10:00:00Z',
-    })
-  })
-
-  it('updates on a PATCH, against its base version, with the fields its metadata carries', () => {
-    const m = toMutation({
-      op: UpdateType.PATCH,
-      table: 'conformance_item_checks',
-      id: 'c-1',
-      opData: { checked: 0 },
-      metadata: encodeMetadata({
-        mutation_id: 'm-2',
-        client_time: 't',
-        base_version: 2,
-        fields: { item_id: 'i-1' },
-      }),
-    })
-    expect(m).toMatchObject({
-      op: 'update',
-      base_version: 2,
-      fields: { checked: false, item_id: 'i-1' },
-    })
-  })
-
-  it('acts when its metadata names an action, and deletes on a DELETE', () => {
-    const acting = encodeMetadata({ mutation_id: 'm-3', client_time: 't', action: 'complete' })
-    expect(
-      toMutation({
-        op: UpdateType.PATCH,
-        table: 'conformance_items',
-        id: 'x',
-        opData: {},
-        metadata: acting,
-      }),
-    ).toMatchObject({
-      op: 'action',
-      action: 'complete',
-    })
-    expect(
-      toMutation({ op: UpdateType.DELETE, table: 'conformance_items', id: 'x', metadata }),
-    ).toMatchObject({
-      op: 'delete',
-      base_version: 4,
-      fields: {},
-    })
-  })
-
-  it('is refused without the metadata of its mutation', () => {
-    expect(() =>
-      toMutation({
-        op: UpdateType.PUT,
-        table: 'conformance_items',
-        id: 'x',
-        opData: { title: 'Milk' },
-      }),
-    ).toThrow('carries no metadata')
-    expect(() =>
-      toMutation({ op: UpdateType.PUT, table: 'conformance_notes_redacted', id: 'x', metadata }),
-    ).toThrow('projection')
-  })
-
-  it('is held for the entitlement under either spelling of its code', () => {
-    expect(
-      ['entitlement', 'entitlement_read_only', 'entitlement_restricted'].every(isEntitlement),
-    ).toBe(true)
-    expect([null, undefined, 'not_found', 'forbidden'].some(isEntitlement)).toBe(false)
-  })
-
-  it('ends on a terminal answer, and is held by a deferral or an entitlement rejection', () => {
-    expect(ends({ outcome: 'applied', code: null })).toBe(true)
-    expect(ends({ outcome: 'rejected', code: 'not_found' })).toBe(true)
-    expect(ends({ outcome: 'conflict', code: 'version_mismatch' })).toBe(true)
-    expect(ends({ outcome: 'rejected', code: 'entitlement_read_only' })).toBe(false)
-    expect(ends({ outcome: 'deferred', code: 'dependency_failed' })).toBe(false)
   })
 })
 
@@ -496,5 +390,18 @@ describe('a checkpoint', () => {
     r.sampled('eva', [{ name: 'b', last_applied_op: 11 }])
     r.sampled('eva', [{ name: 'b', last_applied_op: 11 }])
     expect(r.regressions).toEqual([{ client: 'eva', bucket: 'b', from: 12, to: 11 }])
+  })
+})
+
+describe("the suite's tables", () => {
+  it('are the tables and columns the generated registry says a replica holds, each of its kind', () => {
+    const declared = new Map<string, TableSpec>(tables.map((t) => [t.table, t]))
+    for (const [name, table] of Object.entries(suiteRegistry.tables)) {
+      const spec = declared.get(name)
+      expect(spec, name).toBeDefined()
+      expect(spec?.entity ?? null, name).toBe(table.redacted ? null : table.entity)
+      expect(spec?.columns, name).toEqual(table.columns)
+    }
+    expect([...declared.keys()].sort()).toEqual(Object.keys(suiteRegistry.tables).sort())
   })
 })

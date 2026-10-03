@@ -87,6 +87,15 @@ paths:
   /households/{household_id}/sync/mutations:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     post: { operationId: postSyncMutations, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Answered }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/sync/digest:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postSyncDigest, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Answered }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/sync/reset:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postSyncReset, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Marked }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/sync/state:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getSyncState, responses: { '200': { description: State }, default: { $ref: '#/components/responses/Problem' } } }
   /households/{household_id}/join-code:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     post: { operationId: postHouseholdsByHouseholdIdJoinCode, responses: { '200': { description: Made }, default: { $ref: '#/components/responses/Problem' } } }

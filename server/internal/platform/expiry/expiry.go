@@ -41,6 +41,10 @@ const (
 	// UsageDays is how many UTC days past one the count of a household's pushed mutations on it is
 	// kept: the fair-use ceiling reads only the day it is, and a week is what support asks about.
 	UsageDays = 7
+	// Replicas is how long a replica's last report is kept once it stops reporting (D-128): an app
+	// uninstalled or a browser cleared never reports again, and the sync-health screen would list it
+	// for as long as it was kept.
+	Replicas = 90 * 24 * time.Hour
 )
 
 // Querier runs a query: the meter role's pool.
@@ -124,6 +128,11 @@ var (
 			"SELECT DISTINCT household_id FROM sync_usage WHERE day < (now() AT TIME ZONE 'UTC')::date - $1::integer",
 			"DELETE FROM sync_usage WHERE household_id = $1 AND day < (now() AT TIME ZONE 'UTC')::date - $2::integer",
 			[]any{UsageDays}},
+		// A replica's last report, once it has not reported for its time (item 18).
+		{"replicas' reports",
+			"SELECT DISTINCT household_id FROM sync_replicas WHERE reported_at < now() - make_interval(secs => $1)",
+			"DELETE FROM sync_replicas WHERE household_id = $1 AND reported_at < now() - make_interval(secs => $2)",
+			[]any{Replicas.Seconds()}},
 		// What a notification said, past the seven days its delivery kept it for (FR-HA12): the
 		// outcome is kept for as long as the household is.
 		{"notification bodies",

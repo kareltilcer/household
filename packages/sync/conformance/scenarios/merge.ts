@@ -132,7 +132,12 @@ export const merge: readonly Scenario[] = [
         expect.objectContaining({ id: cheese, note: 'sliced' }),
       ])
       expect(rows.filter((r) => r['title'] === 'Cheese')).toEqual([])
-      expect(answersOf(w, petr).map((a) => a.outcome)).toEqual(['applied', 'applied', 'applied'])
+      // The edits merged into the queued create, which nothing had sent (06-clients §5): one mutation,
+      // carrying the final state.
+      const answers = w.recorder.answers.filter((a) => a.client === petr.name)
+      expect(answers.map((a) => [a.result.outcome, a.mutation.op, a.mutation.fields])).toEqual([
+        ['applied', 'create', { title: 'Gouda', note: 'sliced' }],
+      ])
       expect(await petr.row('conformance_items', cheese)).toMatchObject({
         title: 'Gouda',
         note: 'sliced',
@@ -158,8 +163,13 @@ export const merge: readonly Scenario[] = [
 
       const row = (await w.admin.rows('conformance_items', f.home)).get(jam)
       expect(row?.['deleted_at']).not.toBeNull()
-      expect(answersOf(w, petr).map((a) => a.outcome)).toEqual(['applied', 'applied', 'applied'])
-      // No error storm: one batch carried the three, and nothing follows it.
+      // The edit merged into the queued create (06-clients §5); the delete is a mutation of its own.
+      const answers = w.recorder.answers.filter((a) => a.client === petr.name)
+      expect(answers.map((a) => [a.result.outcome, a.mutation.op])).toEqual([
+        ['applied', 'create'],
+        ['applied', 'delete'],
+      ])
+      // No error storm: one batch carried them, and nothing follows it.
       expect(w.recorder.attempts.filter((a) => a.client === 'petr')).toHaveLength(1)
       await staysQuiet(w)
       if (w.target.tombstones === 'dropped')
@@ -222,12 +232,13 @@ export const merge: readonly Scenario[] = [
       await offline(petr, eva)
       const day = today(f.home)
       for (const c of [petr, eva]) {
-        await c.create('conformance_completions', {
-          chore_id: dishes,
-          occurrence: day,
-          done: true,
-          done_at: c.now().toISOString(),
-        })
+        // When it was done is the server's to set from the mutation's client time; the replica shows it
+        // until the server's row arrives.
+        await c.create(
+          'conformance_completions',
+          { chore_id: dishes, occurrence: day, done: true },
+          { local: { done_at: c.now().toISOString() } },
+        )
       }
       await online(w, petr, eva)
 
@@ -257,12 +268,13 @@ export const merge: readonly Scenario[] = [
       await offline(petr, eva)
       const day = today(f.home)
       for (const c of [petr, eva]) {
-        await c.create('conformance_completions', {
-          chore_id: dishes,
-          occurrence: day,
-          done: true,
-          done_at: c.now().toISOString(),
-        })
+        // When it was done is the server's to set from the mutation's client time; the replica shows it
+        // until the server's row arrives.
+        await c.create(
+          'conformance_completions',
+          { chore_id: dishes, occurrence: day, done: true },
+          { local: { done_at: c.now().toISOString() } },
+        )
       }
       await online(w, petr, eva)
 

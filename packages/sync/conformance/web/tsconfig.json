@@ -1,0 +1,9 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    // The test runs in a browser, its setup and configuration in Node.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "@vitest/browser-playwright"]
+  },
+  "include": ["."]
+}

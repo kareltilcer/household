@@ -21,6 +21,9 @@ dist/
 
 # Generated on every build from committed sources (each package's `gen` script)
 packages/*/src/generated/
+# But @household/sync's client registry, which `pnpm run gen` writes from the migrated schema and
+# commits, since no build has the database to write it (ADR 0019)
+!packages/sync/src/generated/
 
 # Turborepo and test output
 .turbo/
