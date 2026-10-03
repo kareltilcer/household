@@ -154,7 +154,7 @@ func TestAnAccountsDeletionIsResolvedScheduledAndCancelled(t *testing.T) {
 	expect(t, cancel(*d.CancelToken), http.StatusGone, problem.CodeTokenExpired)
 }
 
-// The link that cancels a deletion is the one way back in, and its email is sent once (D-130):
+// The link that cancels a deletion is the one way back in, and its email is sent once (D-136):
 // whoever lost it, or never got it, asks for a password reset, and the account's address is sent the
 // link again, with a new token in place of the one before. No reset link goes to an account no
 // password signs in; cancelled, the account is sent one as any other is; and once nothing cancels the
@@ -319,7 +319,7 @@ func TestAnErasedAccountLeavesATombstoneAndAFormerMember(t *testing.T) {
 }
 
 // The payer of a household that goes with the account blocks its deletion only while the household's
-// subscription still charges (FR-PR3, D-131): paid and current, or with a failed payment being tried
+// subscription still charges (FR-PR3, D-137): paid and current, or with a failed payment being tried
 // again. In grace nothing is charged any more, dunning exhausted or a trial ended unpaid (PRD 04 §3),
 // and there is nothing to cancel first: whoever let a trial run out deletes their account that day.
 func TestAHouseholdThatChargesNothingKeepsNobodyFromDeletingTheirAccount(t *testing.T) {
@@ -346,7 +346,7 @@ func TestAHouseholdThatChargesNothingKeepsNobodyFromDeletingTheirAccount(t *test
 // Nobody leaves a household to an owner who is leaving it too: an owner whose account is scheduled
 // for deletion counts as none (FR-HH4, FR-PR3). Where one is the last all the same when their account
 // is erased, the adult who has been a member longest is made an owner, and billing passes to them,
-// rather than the household being left with nobody to run it (D-131).
+// rather than the household being left with nobody to run it (D-137).
 func TestTheLastOwnerErasedIsSucceeded(t *testing.T) {
 	p := newPrivacySite(t)
 	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
@@ -388,7 +388,7 @@ func TestTheLastOwnerErasedIsSucceeded(t *testing.T) {
 }
 
 // Billing passes to an owner who is staying before one whose own account is scheduled for deletion,
-// however long either has been a member (D-131): an account that is disabled pays for nothing it can
+// however long either has been a member (D-137): an account that is disabled pays for nothing it can
 // see, and the owner who stays could not remove its payer.
 func TestBillingPassesToAnOwnerWhoStaysBeforeOneWhoIsLeaving(t *testing.T) {
 	p := newPrivacySite(t)
@@ -419,7 +419,7 @@ func TestBillingPassesToAnOwnerWhoStaysBeforeOneWhoIsLeaving(t *testing.T) {
 	}
 }
 
-// A household is not erased while an adult who could run it may still come back (D-131). An owner
+// A household is not erased while an adult who could run it may still come back (D-137). An owner
 // whose own account is scheduled for deletion counts as none for whoever would leave the household to
 // them, and is its owner still when the other owner's account is erased first: the household goes on
 // until their own 30 days are over, and is theirs if they cancel.
@@ -467,7 +467,7 @@ func TestAHouseholdOutlivesAnOwnerWhileAnotherMayStillComeBack(t *testing.T) {
 }
 
 // Where the only adult left in a household is one whose own account is scheduled for deletion, they
-// are made its owner all the same (D-131): the household is theirs if they come back, and goes with
+// are made its owner all the same (D-137): the household is theirs if they come back, and goes with
 // their account if they do not. It goes with the last owner's account only when child profiles alone
 // are left in it.
 func TestTheLastOwnerErasedIsSucceededByAnAdultWhoMayStillComeBack(t *testing.T) {
@@ -508,7 +508,7 @@ func TestTheLastOwnerErasedIsSucceededByAnAdultWhoMayStillComeBack(t *testing.T)
 }
 
 // A household its only owner chose to delete with their account goes the night the account does,
-// whoever owns it by then (D-131): an owner who came back to it and left its deletion standing was
+// whoever owns it by then (D-137): an owner who came back to it and left its deletion standing was
 // told the day, and it is not kept a night past that day for them.
 func TestAHouseholdChosenWithAnAccountGoesWithItWhoeverOwnsItByThen(t *testing.T) {
 	p := newPrivacySite(t)
@@ -552,7 +552,7 @@ func TestAHouseholdChosenWithAnAccountGoesWithItWhoeverOwnsItByThen(t *testing.T
 
 // An account that declined a household's invitation, and never joined it, is named by that
 // household's log all the same, as who declined. Erased, it reads as a former member there too
-// (FR-PR4, D-135): the job finds the household by the record the decline left, which keeps nothing
+// (FR-PR4, D-141): the job finds the household by the record the decline left, which keeps nothing
 // of theirs for a window and gives their own export nothing.
 func TestAnErasedAccountsNameLeavesTheLogOfAHouseholdItOnlyDeclined(t *testing.T) {
 	p := newPrivacySite(t)
@@ -872,7 +872,7 @@ func TestAHouseholdsDeletionErasesEveryRowOfIt(t *testing.T) {
 	}
 }
 
-// A household's deletion is scheduled five times a day (PRD 02 §9, D-132): each scheduling emails
+// A household's deletion is scheduled five times a day (PRD 02 §9, D-138): each scheduling emails
 // every member, as the cancellation after it does, and no member mutes either, so an owner who
 // scheduled and cancelled in a loop would otherwise send them as fast as the API answers. A request
 // that schedules nothing, one refused or one that finds a deletion pending, counts for nothing, and

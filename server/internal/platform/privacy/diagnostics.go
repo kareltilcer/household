@@ -19,7 +19,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
-// What a diagnostic bundle is held to as it is stored (D-136). Its rows are billed to nobody and no
+// What a diagnostic bundle is held to as it is stored (D-142). Its rows are billed to nobody and no
 // household's fair use counts them, so they need a ceiling of their own (PRD 04 §5): generous for a
 // member who sends a few while a problem is looked into, and there to catch automation.
 const (
@@ -47,7 +47,7 @@ func (s *Service) sendDiagnostics(w http.ResponseWriter, r *http.Request) {
 	user, _ := auth.User(ctx)
 	// The payload is kept as its bytes were sent, never decoded and encoded again: a number read into
 	// a float64 on the way would come back another number past 2^53, and the bundle would no longer
-	// be what its member saw (D-136).
+	// be what its member saw (D-142).
 	var req struct {
 		ID              *uuid.UUID      `json:"id"`
 		Screen          string          `json:"screen"`

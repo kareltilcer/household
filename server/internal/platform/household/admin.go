@@ -208,7 +208,7 @@ type Hooks struct {
 	// membership in and keep none in, declining its invitation (FR-HH3): the event names them as who
 	// did it, and nothing else of the household's says its log does. Item 20 keeps that record
 	// (privacy.Named), by which the erasure of their account finds the log to take their name off
-	// (FR-PR4, D-135). An error rolls the mutation back.
+	// (FR-PR4, D-141). An error rolls the mutation back.
 	Named func(ctx context.Context, tx pgx.Tx, household, user uuid.UUID) error
 }
 

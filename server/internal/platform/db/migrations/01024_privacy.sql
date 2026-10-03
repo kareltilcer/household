@@ -1,4 +1,4 @@
--- Export, erasure, diagnostics and consent (PRD 05 §3–5, §9; PRD 02 FR-PS1; plan item 20, ADR 0020):
+-- Export, erasure, diagnostics and consent (PRD 05 §3–5, §9; PRD 02 FR-PS1; plan item 20, ADR 0021):
 -- the exports a member asks for, the deletions an account and a household schedule, the members who
 -- left a household and whose private data waits there for its window to end, the tombstones erasure
 -- leaves, the diagnostic bundles a member chose to send, and what each account consented to.

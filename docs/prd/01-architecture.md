@@ -160,7 +160,7 @@ property of the system rather than a policy (**D-3**, and see
 | `households`, `memberships`, `invitations` | Household-keyed but not RLS-isolated the same way | The membership table is how tenancy is *resolved*, so it is read before a tenant context exists; it has its own policy keyed on `user_id` |
 | `plans`, `subscriptions`, `invoices` | Household-keyed, billing schema | Readable by the billing service role; contains no content. The daily usage samples billing averages are tenant tables, written in each household's context (FR-ST2) |
 | `country_profiles`, `unit_dimensions`, `units`, `crop_catalog`, `tariff_presets` | Global reference data | Curated by the platform, read-only to tenants, versioned. Loaded from sourced files in `reference-data/` as the server migrates ([ADR 0008](../adr/0008-reference-data-pipeline.md)). The languages are not a table: they ship with the catalogs (§9 of [03](03-platform-strands.md)) |
-| `account_deletions`, `consents`, `exports`, `diagnostic_bundles`, `erasures` | Global | What an account asked for and consented to, and what erasure leaves: a scheduled deletion, which disables the account; an export, its requester's, a household's among them; a diagnostic bundle its member chose to send; and the tombstone of an erased household or account, its id, the day and the cause ([ADR 0020](../adr/0020-export-erasure-and-the-tombstones.md)) |
+| `account_deletions`, `consents`, `exports`, `diagnostic_bundles`, `erasures` | Global | What an account asked for and consented to, and what erasure leaves: a scheduled deletion, which disables the account; an export, its requester's, a household's among them; a diagnostic bundle its member chose to send; and the tombstone of an erased household or account, its id, the day and the cause ([ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md)) |
 | `platform_audit` | Global | Append-only record of platform-staff actions |
 
 ### 2.5 Users across households
@@ -239,7 +239,7 @@ one of the registered catalogs, which are owned by the platform.
 | **Sync entities** | `platform/sync` | Sync engine, clients | Which entities replicate offline, their merge policy and their access predicate |
 | **Reminder kinds** | `platform/reminders` | Reminders module, notifications | Date-bearing things a module produces that a member may want reminding about |
 | **Search scopes** | `platform/search` | Global search | What a module contributes to cross-module search, and how a hit is rendered |
-| **Export / erase** | `platform/privacy` | Data export, right to erasure | How a module serialises and how it deletes: its part of an export's archive, written in the household's own transaction for the scope its requester takes, and what a cascade from the household's row does not reach, or what one member kept privately ([ADR 0020](../adr/0020-export-erasure-and-the-tombstones.md)) |
+| **Export / erase** | `platform/privacy` | Data export, right to erasure | How a module serialises and how it deletes: its part of an export's archive, written in the household's own transaction for the scope its requester takes, and what a cascade from the household's row does not reach, or what one member kept privately ([ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md)) |
 
 Four of these are new in Household, and each exists for the same reason the first four did:
 a platform capability needs data from every module while importing none of them.
@@ -323,7 +323,7 @@ platform work in the product.
 | | |
 |---|---|
 | **Store** | S3-compatible, EU region, private buckets, no public access under any condition |
-| **Key shape** | `h/{household_id}/{module}/{entity_id}/{variant}` — the tenant is the first path segment, so a bucket policy, a lifecycle rule, a usage listing and a tenant erasure are all prefix operations. A user's picture is the account's, `u/{user_id}/avatar/{id}/picture`, and so is its erasure (**D-107**); an export's archive is its requester's, `u/{user_id}/exports/{id}/{claim}`, and goes with their account too (**D-133**) |
+| **Key shape** | `h/{household_id}/{module}/{entity_id}/{variant}` — the tenant is the first path segment, so a bucket policy, a lifecycle rule, a usage listing and a tenant erasure are all prefix operations. A user's picture is the account's, `u/{user_id}/avatar/{id}/picture`, and so is its erasure (**D-107**); an export's archive is its requester's, `u/{user_id}/exports/{id}/{claim}`, and goes with their account too (**D-139**) |
 | **Access** | Never direct. Uploads go through the API (which sniffs the type, enforces the size cap and the storage quota); downloads are served as short-lived pre-signed URLs the API issues after authorizing the caller |
 | **Immutability** | Bytes are write-once, as in `home`: the store refuses a second write to a key (`If-None-Match`), whoever races for it. A changed file is a new entity |
 | **Backups** | Object versioning plus cross-account replication within the EU |

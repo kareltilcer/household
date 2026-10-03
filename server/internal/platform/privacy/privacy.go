@@ -1,5 +1,5 @@
 // Package privacy is the platform's export and erasure (PRD 05 §3–5, §9; PRD 01 §4's export and
-// erase catalog; plan item 20, ADR 0020): the rights a member exercises themself, in the app, with
+// erase catalog; plan item 20, ADR 0021): the rights a member exercises themself, in the app, with
 // no support ticket (D-35).
 //
 //   - Exports (FR-PR2): a member's of everything about them, and an owner's of a household, each a

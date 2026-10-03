@@ -504,7 +504,7 @@ func TestAnOwnersExportOfTheHouseholdMatchesItsManifest(t *testing.T) {
 }
 
 // A household's archive holds what an owner reads, and is its requester's to take only while they
-// are one (D-133): made a member since it was built, they still read the job, without its link, and
+// are one (D-139): made a member since it was built, they still read the job, without its link, and
 // an owner again, with it.
 func TestAHouseholdsArchiveIsItsRequestersWhileTheyAreAnOwner(t *testing.T) {
 	p := newPrivacySite(t)

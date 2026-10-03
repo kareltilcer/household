@@ -202,7 +202,7 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   a table that does, and the erasure test over the isolation fixture fails one that does not.
   Erasure is no entity's history and records no audit event; it goes through `tenant.InWriteTx` and
   `tenant.AccountTx`, and leaves a tombstone, a `users` row emptied or a row of `erasures`
-  ([ADR 0020](docs/adr/0020-export-erasure-and-the-tombstones.md)). The nightly erasure job runs at
+  ([ADR 0021](docs/adr/0021-export-erasure-and-the-tombstones.md)). The nightly erasure job runs at
   02:30 UTC, before PowerSync's compaction.
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.

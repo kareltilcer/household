@@ -157,7 +157,7 @@ func scopeOf(r *http.Request) (uuid.UUID, *uuid.UUID) {
 }
 
 // listExports is getMeExports and getExports: the caller's own exports, of everything about them or
-// of the household, the newest first. An export is its requester's (ADR 0020): what it holds is what
+// of the household, the newest first. An export is its requester's (ADR 0021): what it holds is what
 // they may read, their private items among it and nobody else's, so no other member lists it, an
 // owner included, and a member who asked for none reads an empty list.
 func (s *Service) listExports(w http.ResponseWriter, r *http.Request) {

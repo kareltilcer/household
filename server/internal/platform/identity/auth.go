@@ -237,7 +237,7 @@ type emailLink struct {
 	// back marks a link a person asks for to get back in to their account. An account scheduled for
 	// deletion signs nobody in, whatever its password (FR-PR4), so a new password would leave its
 	// owner where they were: it is sent the link that cancels the deletion in its place, again
-	// (renewCancelLink, D-130).
+	// (renewCancelLink, D-136).
 	back bool
 }
 
@@ -456,7 +456,7 @@ func (s *Service) logout(w http.ResponseWriter, r *http.Request) {
 // requestReset is postAuthPasswordReset (FR-ID6): a link, valid for an hour, to an address that
 // has an account, and nothing to one that has none. Which it was is decided after the response. An
 // account scheduled for deletion is sent the link that cancels the deletion instead, as often as a
-// reset's would be sent (sendLink, D-130): the one thing that lets its owner in again.
+// reset's would be sent (sendLink, D-136): the one thing that lets its owner in again.
 func (s *Service) requestReset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {

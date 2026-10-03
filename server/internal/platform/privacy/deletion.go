@@ -101,7 +101,7 @@ func resolve(standings []household.Standing, chosen []uuid.UUID) ([]uuid.UUID, e
 // them, nothing signs it in again, and its address is sent the link that cancels it. The answer
 // carries that link's token too, the one thing the client that asked still holds. The email is sent
 // once and may not arrive: asking for a password reset at the address sends the link again, with a
-// new token in place of this one (identity.Service.renewCancelLink, D-130).
+// new token in place of this one (identity.Service.renewCancelLink, D-136).
 //
 // It keeps no Idempotency-Key, whose fingerprint would be a fast hash of the password (D-97).
 func (s *Service) requestDeletion(w http.ResponseWriter, r *http.Request) {
@@ -263,7 +263,7 @@ func (s *Service) cancelDeletion(w http.ResponseWriter, r *http.Request) {
 
 // Named is the household surface's Named hook, which runs in the transaction of a mutation a user
 // makes in a household they are no member of, declining its invitation: the event it records names
-// them as who did it, and an erased account's name comes off the events it caused (FR-PR4, D-135),
+// them as who did it, and an erased account's name comes off the events it caused (FR-PR4, D-141),
 // which the nightly job finds household by household, by the account's memberships and its
 // departures (eraseAccount). So the household keeps a departure of theirs that says only that its log
 // names them: nothing was kept there to delete, so it is written as erased already, which no window

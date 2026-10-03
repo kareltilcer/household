@@ -3,7 +3,7 @@
 Households' files, users' pictures and the archives of their exports live in one private bucket of an
 S3-compatible store; the API writes them, once each, and hands out links pre-signed for one object
 for fifteen minutes at most ([ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md),
-[ADR 0020](../adr/0020-export-erasure-and-the-tombstones.md), PRD 01 §8). The converter sidecar
+[ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md), PRD 01 §8). The converter sidecar
 derives an office document's PDF and a PDF's first page. Read this before an environment's first
 deploy, when uploads fail with `502 storage_unavailable`, when previews stop appearing, when an
 export fails or an erasure's objects stay, and when the sweep or a household's storage figures look
@@ -16,7 +16,7 @@ wrong.
 | The bucket | `HOUSEHOLD_OBJECT_STORE_URL`'s path: `http(s)://ACCESS_KEY:SECRET@host:port/bucket?region=…`. `household` on the compose RustFS in development, which the server makes when it starts; a deployment's is provisioned, never made by the server |
 | A household's files | `h/{household_id}/{module}/{entity_id}/{variant}`: `original` as uploaded, `thumbnail`, `preview` and `pdf` derived. Their rows are `files`, in the household |
 | Users' pictures | `u/{user_id}/avatar/{id}/picture`. Their rows are `avatars`, global. Metered to no household (D-107) |
-| Exports' archives | `u/{user_id}/exports/{export_id}/{claim}`, one per try of an export, under its requester's prefix whether it is their own export or a household's. Their rows are `exports`, global: a `ready` row names its archive in `object`, for seven days. Metered to no household (D-133). Every API instance runs the worker that builds them, sent in 32 MiB parts as a multipart upload |
+| Exports' archives | `u/{user_id}/exports/{export_id}/{claim}`, one per try of an export, under its requester's prefix whether it is their own export or a household's. Their rows are `exports`, global: a `ready` row names its archive in `object`, for seven days. Metered to no household (D-139). Every API instance runs the worker that builds them, sent in 32 MiB parts as a multipart upload |
 | What erasure leaves | `erasures`, global: a row per erased household or account, with `purged_at` once the objects under `h/{household_id}/` or `u/{user_id}/` were removed. The nightly job (`privacy.erase`, 02:30 UTC) removes them when it erases, and again each night for three days |
 | Work after a commit | `file_jobs`: `variants` for an original's variants, `purge` for a deleted entity's bytes. Every API instance runs the workers |
 | The converter | `HOUSEHOLD_CONVERTER_URL`, the image `deploy/converter` builds; `pnpm run up:convert` in development |

@@ -408,7 +408,7 @@ func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Tim
 		}
 		// The household's fate was read in a transaction that has ended: it is erased only as it was
 		// read, with the members it had then. One who joined since, by an invitation the account sent
-		// before it was disabled, makes it theirs to run (D-131): the account stays scheduled, and the
+		// before it was disabled, makes it theirs to run (D-137): the account stays scheduled, and the
 		// job's next run resolves the household again.
 		erased, err := s.eraseHousehold(ctx, id, fate.Cause, now, func(ctx context.Context, tx pgx.Tx) (bool, error) {
 			var members int

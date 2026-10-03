@@ -78,7 +78,7 @@ containing:
 Every module implements `ExportSource` or it does not ship
 ([01-architecture.md](01-architecture.md) §4).
 
-**An export is its requester's (D-133).** `manifest.json` names every other entry with its length
+**An export is its requester's (D-139).** `manifest.json` names every other entry with its length
 and its SHA-256, the archive's own schema version and the API's, so that whoever holds the archive
 can check it is whole. A household's export holds every shared row, its requester's own private
 items and a child profile's ([02](02-identity-and-access.md) FR-CH3), and never another adult's,
@@ -106,7 +106,7 @@ The flow resolves each of the user's households first, and states plainly what w
 | Non-sole owner, or a member | The membership ends. Household content the user created **stays** — it is the household's record, not the individual's — with authorship shown as a former member. Their **private root** is deleted |
 | Billing payer | Must transfer billing or cancel first |
 
-**D-131** settles what the table leaves open. An owner whose own account is scheduled for deletion
+**D-137** settles what the table leaves open. An owner whose own account is scheduled for deletion
 counts as no owner, so that nobody leaves a household to an owner who is leaving it too. The payer
 blocks while the household goes on without them, and while one that goes with the account still
 charges: `active`, or `past_due`. In `grace` nothing is charged any more
@@ -126,18 +126,18 @@ tombstone.
 
 The account signs nobody in during the 30 days, whatever proved who was asking, and each attempt
 fails as a wrong password does ([02](02-identity-and-access.md) FR-ID3). **The link cancels it,
-signed out (D-130)**: its token is the email's and the answer's to the request that scheduled the
+signed out (D-136)**: its token is the email's and the answer's to the request that scheduled the
 deletion, and nothing else brings the account back. The email is sent once, so a password reset
 asked for at the account's address sends the link again, with a new token in place of the one
 before: a new password would sign nobody in. At execution each household is resolved again
-as it then stands (D-131): where the account is by then the only owner, of a household it did not
+as it then stands (D-137): where the account is by then the only owner, of a household it did not
 choose to delete, the adult who has been a member longest becomes its owner, and a household left
 with nobody who could own it, child profiles alone, goes with the account. An adult whose own
 account is scheduled for deletion may still come back, so a household is never erased from under
 one for want of an owner: an owner in that state stays its owner, a member in that state succeeds
 where nobody is staying, and the household is resolved again when their account is erased in its
 turn. **What the household recorded of the person in
-its own events stays (D-135)**: who did a thing loses their name, and *Removed Petr* keeps Petr's,
+its own events stays (D-141)**: who did a thing loses their name, and *Removed Petr* keeps Petr's,
 as a note that names him does.
 
 **FR-PR5 — Backups are excluded from the 30-day guarantee and the policy says so.** Encrypted
@@ -150,14 +150,14 @@ within that window and backups are never restored selectively into production.
 affects every member, and notifies all members immediately. Same 30-day window, same irreversible
 execution.
 
-**The household works as it did for the 30 days (D-132)**: the window is its members' time to take
+**The household works as it did for the 30 days (D-138)**: the window is its members' time to take
 what is theirs, each by their own export. Every member is emailed when it is scheduled and when it
 is cancelled, whatever they muted, and the members other than the one who did it are sent a push;
 the household's row says when it goes, and any owner cancels. Since no member can stop those emails,
 a household's deletion is scheduled five times a day and no more
 ([02](02-identity-and-access.md) §9). Its erasure deletes every row of it,
 by deleting its own, which every tenant table hangs from, and every object under its prefix; its
-child profiles, which are nothing outside it, are erased with it (D-134).
+child profiles, which are nothing outside it, are erased with it (D-140).
 
 **FR-PR7 — When a member leaves or is removed**, their **private root** in Notes and Documents is
 deleted after a 30-day window in which they can export it. An owner may hard-delete a departed
@@ -167,7 +167,7 @@ carried over — and doing so is logged in the household's own activity log wher
 The window is the platform's: it starts in the transaction that ends the membership, and the nightly
 job asks each module to delete what the member kept privately once it has passed. A member who is
 back in the household by then keeps what they had. A child profile removed from its household is an
-account nobody can sign in to: it is erased when the same 30 days have passed (D-134). The owner's
+account nobody can sign in to: it is erased when the same 30 days have passed (D-140). The owner's
 hard-delete lands with the first module that has a private root (plan item 43).
 
 ## 6. The no-content-access guarantee
@@ -253,7 +253,7 @@ Beyond [02](02-identity-and-access.md) §6:
 | Aggregate counts per household | Anything at all from a child profile |
 
 Consent is the account's, kept beside it, off until its user turns it on, and given by saying so:
-setting the consents replaces both, so one a request leaves out is withdrawn (D-136). A child profile
+setting the consents replaces both, so one a request leaves out is withdrawn (D-142). A child profile
 is asked nothing and consents to nothing (§7).
 
 Consent is asked once, plainly, with a genuine decline that is as easy as accept, and it is

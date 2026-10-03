@@ -203,7 +203,7 @@ func (s *Service) EndCancelLink(ctx context.Context, tx pgx.Tx, user uuid.UUID, 
 
 // renewCancelLink gives the link that cancels user's scheduled deletion a new token, in tx, and
 // returns it with how many days the link still has: what the account's address is sent when someone
-// asks for a way back in to it (sendLink, D-130), since the email that carried the link is sent once,
+// asks for a way back in to it (sendLink, D-136), since the email that carried the link is sent once,
 // and whoever lost it, or never got it, has nothing else to ask for. It returns "" for an account
 // with no deletion its user asked for, and for one no link of which still cancels anything: used,
 // past its time, or ended as the deletion's execution began (EndCancelLink).

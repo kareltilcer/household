@@ -1,11 +1,11 @@
-# 0020 — An export is its requester's archive, built by a worker and streamed to the store; erasure deletes a household by its row, an account table by table, and leaves a tombstone
+# 0021 — An export is its requester's archive, built by a worker and streamed to the store; erasure deletes a household by its row, an account table by table, and leaves a tombstone
 
 - **Status:** Accepted
 - **Date:** 2026-10-03
 - **Plan item:** 20
 - **Decides for:** [PRD 05](../prd/05-privacy-and-compliance.md) §3–5, §9; [02](../prd/02-identity-and-access.md)
   FR-ID8, FR-PS1; [01](../prd/01-architecture.md) §2.4, §4; [03](../prd/03-platform-strands.md) §5; D-6, D-35,
-  D-93, D-130–D-136; [ADR 0005](0005-tenancy-registry-and-row-level-security.md),
+  D-93, D-136–D-142; [ADR 0005](0005-tenancy-registry-and-row-level-security.md),
   [ADR 0006](0006-sync-ready-schema-and-the-mutation-spine.md) and
   [ADR 0015](0015-files-object-storage-the-meter-and-pictures.md)'s consequences for item 20
 
@@ -45,7 +45,7 @@ member's private data, or for a household, where a module deletes only what the 
 household's row does not reach. The platform's own module, admin, names its two functions on
 `module.PlatformModule`, and architecture test 3 holds it to them as it holds a module.
 
-**An export is a row of its requester's, global, and a job (D-133).** `exports` is keyed by its user
+**An export is a row of its requester's, global, and a job (D-139).** `exports` is keyed by its user
 and names a household or none; it is listed and linked to that user alone. A worker in every instance
 claims the export that waited longest by moving it past a six-hour lease, builds it, and settles it
 under the claim it took, so that a try whose lease another took writes nothing. A build that panics,
@@ -62,7 +62,7 @@ per read of the job, as every link is (D-9), and a household's only for a reques
 owner when they read it, as the worker builds one only for a requester who still is; the email that
 says it is ready links to the list.
 
-**A household is erased by deleting its row (D-134).** `privacy.EraseRows` asks each module, then
+**A household is erased by deleting its row (D-140).** `privacy.EraseRows` asks each module, then
 deletes the household's row, as the request role in the household's context: every tenant table
 references `households (id) ON DELETE CASCADE`, directly or through a table that does, and referential
 actions run past row-level security and the request role's privileges, so the audit log, which that
@@ -73,8 +73,8 @@ that lost one of household B's.
 **An account is erased table by table, last.** In each household the account is in, each module
 first deletes what the member kept privately, the notifications sent to them go, and `forget_actor`
 takes their name off the events they caused, a `SECURITY DEFINER` function that makes that one change
-of a log the request role otherwise only appends to (D-135). Then the household surface says what
-becomes of the household (`household.Service.Depart`, D-131): it goes with the account and is erased
+of a log the request role otherwise only appends to (D-141). Then the household surface says what
+becomes of the household (`household.Service.Depart`, D-137): it goes with the account and is erased
 as above, or it goes on, the membership ended by a mutation of the system's through the spine, with
 the owner who succeeds, where one must, made by a mutation before it. A household that goes is erased
 under its row's lock only with the members it was resolved with: one who joined since leaves the
@@ -102,7 +102,7 @@ its bytes after the first pass, and the files sweep lists only households that e
 **The deletions are columns and rows a job finds.** A household's is four columns of its own row,
 written through the spine as its settings are, so that its members' replicas learn of it and its log
 records who scheduled it; the meter role reads `deletion_scheduled_at` to find the households due, as
-it reads the entitlement's clocks. Scheduling one counts among the household's five a day (D-132) in
+it reads the entitlement's clocks. Scheduling one counts among the household's five a day (D-138) in
 the mutation's own transaction (`ratelimit.Throttles.TakeIn`), so that a request that schedules
 nothing, refused or answered with the deletion already pending, counts for nothing and leaves no
 refund to make. An account's is a row of `account_deletions`, whose existence
@@ -120,7 +120,7 @@ find.
 ninety minutes before PowerSync's compaction, which then drops the erased rows from bucket storage
 (D-93).
 
-**The account comes back by its link (D-130).** `POST /auth/deletion/cancel` is public and takes the
+**The account comes back by its link (D-136).** `POST /auth/deletion/cancel` is public and takes the
 token the email carried; `DELETE /me/deletion` is removed from the contract. The email is sent once,
 after the response, and is not always delivered, so a password reset asked for at the account's
 address sends the link again in place of a reset link, which would set a password that signs nobody

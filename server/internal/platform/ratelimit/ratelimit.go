@@ -87,7 +87,7 @@ var (
 	// each is an email to an address its owners chose.
 	InvitationHousehold = Limit{Name: "invitation.household", Max: 20, Window: 24 * time.Hour}
 	// A household's deletion is scheduled five times a day, counted by the household, by an owner or
-	// with an owner's account (D-132): each scheduling emails every member, as the cancellation that
+	// with an owner's account (D-138): each scheduling emails every member, as the cancellation that
 	// follows it does, and no member mutes either.
 	DeletionHousehold = Limit{Name: "deletion.household", Max: 5, Window: 24 * time.Hour}
 	// A client's network looks up thirty household codes an hour that open no household (D-104): a

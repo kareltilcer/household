@@ -526,7 +526,7 @@ schedulers to forget one of.
 | `Idempotency-Key` records of REST requests | 7 days | [01-architecture.md](01-architecture.md) §6 |
 | Preserved note-body losers | 30 days | [modules/07-notes.md](modules/07-notes.md) FR-NO10 |
 | Generated export archives | 7 days after generation | [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §3 |
-| An export's row, once its archive is gone or it failed | 30 days after it ended | **D-133** |
+| An export's row, once its archive is gone or it failed | 30 days after it ended | **D-139** |
 | Diagnostic bundles | 30 days | [02-identity-and-access.md](02-identity-and-access.md) FR-PS1 |
 | Rendered notification bodies in the delivery log, and the arguments a settled notification was rendered from | 7 days — the outcome is kept, the body is not | [modules/17-household-admin.md](modules/17-household-admin.md) FR-HA12 |
 | Soft-deleted rows past their module's undo window | Per module | Module pages |
