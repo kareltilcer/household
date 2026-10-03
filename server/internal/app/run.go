@@ -365,11 +365,11 @@ const (
 // allowance (FR-BI3), the storage lines of the month that ended (item 19), and then the
 // sweeps of the objects no row records, a household's and the accounts' pictures (item 14), the
 // erasure of what was scheduled for deletion and has come due (item 20), and the expiry sweep, the
-// exports' archives among what it removes; hourly, the expiry of single-use tokens and of the invitations that stopped working a
-// month ago (D-110), and the households' trial, dunning and grace transitions with the warnings before
-// a lapsed household's data is deleted (item 16); every fifteen minutes, Expo's receipts; and every
-// minute, PowerSync's replication lag (item 17). Each is a job of its own, so that one that fails is
-// tried again alone, not with the others that ran.
+// exports' archives among what it removes; hourly, the expiry of single-use tokens and of the
+// invitations that stopped working a month ago (D-110), and the households' trial, dunning and grace
+// transitions with the warnings before a lapsed household's data is deleted (item 16); every fifteen
+// minutes, Expo's receipts; and every minute, PowerSync's replication lag (item 17). Each is a job of
+// its own, so that one that fails is tried again alone, not with the others that ran.
 // catalog is the module registry with admin, which the invitations' deletions and the transitions are
 // checked against.
 func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog *module.Registry, pipeline *files.Service,

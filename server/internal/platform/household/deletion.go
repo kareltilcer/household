@@ -276,9 +276,11 @@ type Standing struct {
 	SoleOwner bool
 	// Payer is whether the user is its payer of record, and Paying whether the household has a
 	// subscription that will charge again (billing_subscriptions, item 19): its own, live at the
-	// processor, and not cancelled at its period's end. One its payer cancelled charges nothing more
-	// however long the period it paid for still runs, and a household with none, in its trial, in
-	// grace or lapsed, charges nothing at all (PRD 04 §3).
+	// processor, and not cancelled at its period's end, or one that waits on a first payment the
+	// processor has on its way, a bank debit's, which is the household's own, and renews, once that
+	// goes through (D-131). One its payer cancelled charges nothing more however long the period it
+	// paid for still runs, and a household with none, in its trial, in grace or lapsed, charges
+	// nothing at all (PRD 04 §3).
 	Payer, Paying bool
 	// WithAccount is whether its deletion is scheduled to follow the user's account's.
 	WithAccount bool
@@ -322,8 +324,8 @@ func standing(ctx context.Context, tx pgx.Tx, user uuid.UUID, st *Standing) erro
 	if err := tx.QueryRow(ctx, `
 		SELECT h.name, h.billing_payer_id, h.deletion_account,
 		  EXISTS (SELECT FROM billing_subscriptions b
-		          WHERE b.household_id = h.id AND b.standing = 'current' AND NOT b.cancel_at_period_end
-		            AND b.status IN ('active', 'past_due', 'trialing')),
+		          WHERE b.household_id = h.id AND b.status IN ('active', 'past_due', 'trialing')
+		            AND (b.standing = 'pending' OR (b.standing = 'current' AND NOT b.cancel_at_period_end))),
 		  (SELECT count(*) FROM memberships m WHERE m.household_id = h.id)
 		FROM households h WHERE h.id = $1`, st.Household).Scan(&st.Name, &payer, &account, &st.Paying, &st.Members); err != nil {
 		return err

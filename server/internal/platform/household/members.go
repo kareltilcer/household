@@ -801,9 +801,9 @@ func leaveBlocked(reasons []problem.Code) *problem.Problem {
 
 // leave takes the caller out of the household (FR-HH4), which any member may do at any time, unless
 // they are its last owner, or its payer, which are refused together. What they made stays with the
-// household; their private root is kept 30 days more (Hooks.Lost, FR-PR7); the invitations they sent that are still
-// waiting are withdrawn (withdraw). A child profile does not leave, since it is nothing outside its
-// household, and is refused 403: an owner removes it (D-104).
+// household; their private root is kept 30 days more (Hooks.Lost, FR-PR7); the invitations they sent
+// that are still waiting are withdrawn (withdraw). A child profile does not leave, since it is
+// nothing outside its household, and is refused 403: an owner removes it (D-104).
 func (s *Service) leave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope := tenant.From(ctx)

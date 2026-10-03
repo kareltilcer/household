@@ -43,7 +43,8 @@ type Erased struct {
 // scheduled and has come due:
 //
 //   - the households whose deletion an owner scheduled 30 days ago, and the lapsed ones whose
-//     retention ran out with their three warnings sent;
+//     retention ran out with their three warnings sent, but for one being paid for again, its
+//     payment on its way at the processor (due);
 //   - the accounts whose deletion was scheduled 30 days ago, each with the households that go with
 //     it, and the child profiles of every household erased, which are nothing outside it;
 //   - the private data of the members who left a household 30 days ago;
@@ -160,36 +161,58 @@ func (s *Service) Erase(ctx context.Context) (Erased, error) {
 	return done, failed
 }
 
-// eraseDue erases household if it is still due at now, read again under its lock: its deletion
-// scheduled and come due, or its retention run out (D-119). An owner who cancelled, or a
-// subscription that resumed, since the search leaves nothing to do. A deletion that follows an
-// account's is that account's to execute, with everything else of its (eraseAccount); should the
-// account's deletion no longer stand, cancelled while this household's cancellation failed, it is
-// cancelled here.
+// due reads why household is to be erased at now, in tx in its context, "" when it is not: its
+// deletion scheduled and come due, with the account that deletion follows when it follows one, or its
+// retention run out with its three warnings sent (D-119).
+//
+// A lapsed household whose payer is paying for it again, the processor having the payment on its
+// way, is not due while it is (billing.Awaited): resuming restores a household at any point of its
+// retention (PRD 04 §3, D-32), a bank debit takes days to say how it went (D-131), and the household
+// is lapsed still until it has. Erased meanwhile, it would be gone for a payer who paid in time. The
+// processor's word ends the wait either way: the household is active, or the subscription is over
+// and the household due again. A deletion its owner scheduled waits for no payment.
+func due(ctx context.Context, tx pgx.Tx, household uuid.UUID, now time.Time) (string, *uuid.UUID, error) {
+	var (
+		scheduled, retained *time.Time
+		account             *uuid.UUID
+		state               string
+		warnings            int
+	)
+	err := tx.QueryRow(ctx, `
+		SELECT deletion_scheduled_at, deletion_account, billing_state::text, retained_until, retention_warnings
+		FROM households WHERE id = $1`, household).Scan(&scheduled, &account, &state, &retained, &warnings)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return "", nil, nil
+	case err != nil:
+		return "", nil, err
+	case scheduled != nil && !scheduled.After(now):
+		return causeRequested, account, nil
+	case (state == "read_only" || state == "canceled") && retained != nil && !retained.After(now) && warnings >= 3:
+		awaited, err := billing.Awaited(ctx, tx, household)
+		if err != nil || awaited {
+			return "", nil, err
+		}
+		return causeLapsed, nil, nil
+	}
+	return "", nil, nil
+}
+
+// eraseDue erases household if it is still due at now (due), read again under its lock: its deletion
+// scheduled and come due, or its retention run out (D-119). An owner who cancelled, a subscription
+// that resumed, or a payment that is on its way to resuming one, since the search leaves nothing to
+// do. A deletion that follows an account's is that account's to execute, with everything else of its
+// (eraseAccount); should the account's deletion no longer stand, cancelled while this household's
+// cancellation failed, it is cancelled here.
 func (s *Service) eraseDue(ctx context.Context, household uuid.UUID, now time.Time) (bool, error) {
 	var (
 		cause   string
 		account *uuid.UUID
 	)
 	err := tenant.InTx(s.system(ctx, household), func(tx pgx.Tx) error {
-		var scheduled, retained *time.Time
-		var billing string
-		var warnings int
-		err := tx.QueryRow(ctx, `
-			SELECT deletion_scheduled_at, deletion_account, billing_state::text, retained_until, retention_warnings
-			FROM households WHERE id = $1`, household).Scan(&scheduled, &account, &billing, &retained, &warnings)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		switch {
-		case err != nil:
-			return err
-		case scheduled != nil && !scheduled.After(now):
-			cause = causeRequested
-		case (billing == "read_only" || billing == "canceled") && retained != nil && !retained.After(now) && warnings >= 3:
-			cause = causeLapsed
-		}
-		return nil
+		var err error
+		cause, account, err = due(ctx, tx, household, now)
+		return err
 	})
 	if err != nil || cause == "" {
 		return false, err
@@ -212,14 +235,10 @@ func (s *Service) eraseDue(ctx context.Context, household uuid.UUID, now time.Ti
 		cause = causeAccount
 	}
 	return s.eraseHousehold(ctx, household, cause, now, func(ctx context.Context, tx pgx.Tx) (bool, error) {
-		// Still due, under the lock: neither cancelled nor resumed since it was read. A deletion
-		// cancelled leaves no day to compare, which is not due rather than unknown.
-		var due bool
-		err := tx.QueryRow(ctx, `
-			SELECT coalesce(deletion_scheduled_at <= $2, false)
-			  OR coalesce(billing_state IN ('read_only', 'canceled') AND retained_until <= $2 AND retention_warnings >= 3, false)
-			FROM households WHERE id = $1`, household, now).Scan(&due)
-		return due, err
+		// Still due, under the lock, which billing takes before it records what the processor says:
+		// neither cancelled nor resumed since it was read, nor being paid for again.
+		still, _, err := due(ctx, tx, household, now)
+		return still != "", err
 	})
 }
 

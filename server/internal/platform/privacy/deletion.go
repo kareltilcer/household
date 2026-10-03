@@ -57,7 +57,8 @@ func blocked(sole []household.Standing, payer []uuid.UUID) *problem.Problem {
 //   - one they are the only owner of, with other members in it, blocks, until they make someone
 //     else an owner or choose to delete it, which they do by naming it;
 //   - one they are the payer of blocks while it goes on without them, until billing is someone
-//     else's, and blocks while its subscription still charges, until that is cancelled;
+//     else's, and blocks while its subscription still charges, until that is cancelled, or is being
+//     paid for, until the processor says how its first payment went (household.Standing.Paying);
 //   - in any other, the membership ends when the account does.
 //
 // A household named that is not theirs alone to delete is refused 422.

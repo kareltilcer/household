@@ -151,3 +151,16 @@ INSERT INTO users (id) VALUES ('01900000-0000-7000-8000-0000000000dd');
 INSERT INTO departures (household_id, user_id, cause, departed_at, erase_after) VALUES
   ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000dd', 'left', now(), now() + interval '30 days'),
   ('01900000-0000-7000-8000-00000000000b', '01900000-0000-7000-8000-0000000000dd', 'removed', now(), now() + interval '30 days');
+
+-- What household B's owner's account keeps that names a household (item 20): an export of each,
+-- and a diagnostic bundle about each. Global rows, their account's, which go with the household they
+-- name all the same: the erasure test holds them to it.
+INSERT INTO exports (id, user_id, household_id) VALUES
+  ('01900000-0000-7000-8000-0000000000e7', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-00000000000a'),
+  ('01900000-0000-7000-8000-0000000000e8', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-00000000000b');
+
+INSERT INTO diagnostic_bundles (id, user_id, household_id, screen, payload, expires_at) VALUES
+  ('01900000-0000-7000-8000-0000000000e9', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-00000000000a',
+   'sync-health', '{}', now() + interval '30 days'),
+  ('01900000-0000-7000-8000-0000000000ea', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-00000000000b',
+   'sync-health', '{}', now() + interval '30 days');

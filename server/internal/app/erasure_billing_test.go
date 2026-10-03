@@ -127,6 +127,105 @@ func TestAHouseholdDeletedIsNoLongerCharged(t *testing.T) {
 	}
 }
 
+// A lapsed household whose payer subscribes again is not deleted while the processor has the payment
+// on its way (PRD 04 §3, D-32, D-131, D-140): a bank debit takes days to clear, the household is
+// lapsed still until it has, and its retention may run out meanwhile. Resuming at any point of the
+// window restores it, so the erasure waits for what the processor says: once the debit clears the
+// household is active, with nothing left of its countdown, and a debit that fails ends the
+// subscription, after which the household goes that night.
+func TestALapsedHouseholdIsKeptWhileItsPaymentIsOnItsWay(t *testing.T) {
+	// lapsed is a household whose retention ran out an hour ago with its three warnings sent, and
+	// whose payer has just subscribed again by bank debit.
+	lapsed := func(t *testing.T) (p *privacySite, stripe *billingtest.Stripe, h uuid.UUID, subscription, invoice string) {
+		t.Helper()
+		p, stripe = paidPrivacySite(t)
+		jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+		h = jana.create("Tilcerovi").ID
+		p.exec(`UPDATE households SET billing_state = 'read_only', lapsed_at = $2, retained_until = $3, retention_warnings = 3 WHERE id = $1`,
+			h, p.clock.now().Add(-395*24*time.Hour), p.clock.now().Add(-time.Hour))
+		subscription, invoice = stripe.ConfirmDebit(jana.startPaying(h, "year").ClientSecret)
+		p.told(stripe, "customer.subscription.updated", subscription)
+
+		p.erase()
+		if p.count("SELECT count(*) FROM households WHERE id = $1", h) != 1 {
+			t.Fatal("the household was erased with its payment on its way")
+		}
+		if status, _, _ := stripe.Subscription(subscription); status != billing.StatusActive {
+			t.Fatalf("the subscription being paid is %s at the processor", status)
+		}
+		return p, stripe, h, subscription, invoice
+	}
+
+	t.Run("the debit clears", func(t *testing.T) {
+		p, stripe, h, _, invoice := lapsed(t)
+		stripe.ClearDebit(invoice)
+		p.told(stripe, "invoice.paid", invoice)
+		p.erase()
+		if n := p.count("SELECT count(*) FROM households WHERE id = $1 AND billing_state = 'active' AND retained_until IS NULL", h); n != 1 {
+			t.Fatal("paid for again, the household is not active with its countdown cleared")
+		}
+	})
+
+	t.Run("the debit fails", func(t *testing.T) {
+		p, stripe, h, subscription, invoice := lapsed(t)
+		stripe.FailDebit(invoice)
+		p.told(stripe, "invoice.voided", invoice)
+		p.told(stripe, "customer.subscription.deleted", subscription)
+		p.erase()
+		if rows := p.rowsOf(h); len(rows) != 0 {
+			t.Fatalf("its payment failed and its retention run out, the household keeps %v", rows)
+		}
+		if n := p.count("SELECT count(*) FROM erasures WHERE kind = 'household' AND id = $1 AND cause = 'lapsed'", h); n != 1 {
+			t.Error("no tombstone of the lapsed household")
+		}
+	})
+}
+
+// A payer whose first payment is still on its way has a subscription that will charge (FR-PR3, D-137,
+// D-131): a bank debit takes days to clear, and the subscription it pays for is the household's, and
+// renews, once it has. Their account is not deleted from under it, disabled where nothing could
+// cancel what then charges: the request is blocked as it is by a subscription that renews, until the
+// processor says how the payment went and, where it went through, the payer has cancelled.
+func TestAPayerWaitsForAPaymentOnItsWayBeforeDeletingTheirAccount(t *testing.T) {
+	p, stripe := paidPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	janaID := jana.me().ID
+	h := jana.create("Tilcerovi")
+	subscription, invoice := stripe.ConfirmDebit(jana.startPaying(h.ID, "month").ClientSecret)
+	p.told(stripe, "customer.subscription.updated", subscription)
+
+	blocked := func(when string) {
+		t.Helper()
+		rec := jana.deleteAccount(passphrase)
+		expect(t, rec, http.StatusConflict, problem.CodeAccountDeletionBlocked)
+		var doc struct {
+			Payer []uuid.UUID `json:"billing_payer_for"`
+		}
+		decode(t, rec, &doc)
+		if len(doc.Payer) != 1 || doc.Payer[0] != h.ID {
+			t.Fatalf("%s, blocked by %+v", when, doc)
+		}
+	}
+	blocked("with the payment on its way")
+
+	// The debit clears: the subscription is the household's and renews, until its payer cancels it.
+	stripe.ClearDebit(invoice)
+	p.told(stripe, "invoice.paid", invoice)
+	blocked("with the subscription paid for and renewing")
+	expect(t, jana.post(billingPath(h.ID, "/cancel"), ""), http.StatusOK, "")
+	expect(t, jana.deleteAccount(passphrase), http.StatusAccepted, "")
+
+	// Erased with its household, so that nothing of either is left due for another test's job.
+	p.clock.advance(30*24*time.Hour + time.Minute)
+	p.erase()
+	if n := p.count("SELECT count(*) FROM users WHERE id = $1 AND deleted_at IS NOT NULL", janaID); n != 1 || p.customers(janaID) != 0 {
+		t.Errorf("her account was not erased with its customer: %d customers kept", p.customers(janaID))
+	}
+	if status, _, _ := stripe.Subscription(subscription); status != billing.StatusCanceled {
+		t.Errorf("the subscription of the erased household is %s at the processor", status)
+	}
+}
+
 // What billing keeps of a payer is theirs to take (FR-PR2): the payer's export of the household holds
 // billing.json, their subscription with its payment method's summary and the invoices issued to
 // them, without the processor's ids; another owner's holds none of it (FR-BI5), and neither does the

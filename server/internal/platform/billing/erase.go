@@ -14,8 +14,8 @@ import (
 )
 
 // What export and erasure ask of billing (plan item 20, ADR 0021): a household deleted is no longer
-// charged, an erased account's customers go with it, and what billing keeps of a payer is theirs to
-// take.
+// charged, one being paid for again is not deleted for having lapsed, an erased account's customers
+// go with it, and what billing keeps of a payer is theirs to take.
 
 // Close ends, at the processor, every subscription of household's that is not over there: the one
 // it has, one that waits, and one another took the place of that still runs to its period's end. tx
@@ -43,6 +43,22 @@ func (s *Service) Close(ctx context.Context, tx pgx.Tx, household uuid.UUID) err
 		}
 	}
 	return nil
+}
+
+// Awaited reports whether household has a subscription that waits on a payment the processor has on
+// its way (D-131): one that is not the household's yet and charges there all the same, as one paid
+// for by a bank debit does for the days the debit takes. A lapsed household in that state is being
+// paid for again, which restores it at any point of its retention (PRD 04 §3, D-32), so its erasure
+// waits for what the processor says of the payment: gone through, the household is active and no
+// longer due, and failed, the subscription is ended and nothing waits any more. tx is a transaction
+// of the household's.
+func Awaited(ctx context.Context, tx pgx.Tx, household uuid.UUID) (bool, error) {
+	subs, err := readSubscriptions(ctx, tx, household)
+	if err != nil {
+		return false, err
+	}
+	waiting, ok := standing(subs, standingPending)
+	return ok && waiting.live(), nil
 }
 
 // Forget deletes user's customers at the processor, each with whatever subscription it still has

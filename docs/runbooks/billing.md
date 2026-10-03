@@ -123,8 +123,9 @@ deleted household's subscriptions at Stripe before its rows go, and deletes an e
 customers there with their rows.
 
 1. `privacy: an erasure failed` in the API's log, with Stripe's error beside it, means Stripe could
-   not be asked: nothing of that household or account was erased, and the job tries again fifteen
-   minutes later and the next night. A household keeps being due until it is erased.
+   not be asked: that household was not erased, or that account's own rows and customers were not,
+   whatever of its households the run had already been through, and the job tries again fifteen
+   minutes later and the next night. A household or an account keeps being due until it is erased.
 2. A subscription ended this way is cancelled at once, with no final invoice and nothing prorated.
    Stripe then sends `customer.subscription.deleted` for a household the server no longer has, which
    it answers `204` and makes nothing of.
@@ -132,6 +133,11 @@ customers there with their rows.
    the server keeps none of them once the household is gone.
 4. A deleted household that is still charged was erased while Stripe held a subscription the server
    had no row for. Cancel it in Stripe's dashboard, by the household's id in its metadata.
+5. A lapsed household past its `retained_until`, its three warnings sent, that the job leaves alone
+   is being paid for again: `billing_subscriptions` has a row of its with `standing = 'pending'` and a
+   `status` that charges, a bank debit on its way (above). It is `active` once `invoice.paid`
+   arrives, and erased the night after the debit failed. One that stays so for weeks is one whose
+   `invoice.paid` or `invoice.voided` never arrived: resend it.
 
 ## A key leaks or is rotated
 

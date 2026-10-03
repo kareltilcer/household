@@ -81,8 +81,13 @@ to go. `billing.Service.Forget` deletes the account's customers at the processor
 transaction that leaves the tombstone deletes their rows; the processor ends whatever subscription a
 customer still has with it, and keeps the invoices it issued as its own record (PRD 05 §1). Whether a
 payer must cancel first is read from billing's rows (`household.Standing.Paying`): a subscription of
-the household's own that is live and not cancelled at its period's end. An export carries
-`billing.json`, its requester's own subscriptions and invoices and nobody else's (FR-BI5).
+the household's own that is live and not cancelled at its period's end, or one that waits on a first
+payment the processor has on its way, which renews once that goes through. The same wait keeps a
+lapsed household from being erased by its clock (`billing.Awaited`, D-140): resuming restores a
+household at any point of its retention, a bank debit takes days to clear, and the job reads the
+household as not due, at its search and again under the row's lock, until the processor has said
+how the payment went. An export carries `billing.json`, its requester's own subscriptions and
+invoices and nobody else's (FR-BI5).
 
 **An account is erased table by table, last.** In each household the account is in, each module
 first deletes what the member kept privately, the notifications sent to them go, and `forget_actor`
@@ -170,9 +175,9 @@ that moment would be one it had not seen.
 - A new tenant table references its household with `ON DELETE CASCADE`, or its module erases it; the
   erasure test fails the PR otherwise. The isolation fixture's row for the table is what proves it.
 - `billing.Processor` gains `DeleteCustomer`, and billing `Close`, `Forget` and `Export`: what
-  [ADR 0020](0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md) left to this item.
-  What the processor says later of a subscription whose household is gone is about nothing, as
-  billing already takes it (`errGone`).
+  [ADR 0020](0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md) left to this item;
+  and `Awaited`, which the erasure of a lapsed household waits on. What the processor says later of
+  a subscription whose household is gone is about nothing, as billing already takes it (`errGone`).
 - Item 21 reads `diagnostic_bundles` (`getPlatformDiagnosticsByBundleId`), and may record erasures in
   the platform audit log.
 - Items 25 and 29 build A-20 over `postMeDeletion`, and item 25 the page the email's link opens,

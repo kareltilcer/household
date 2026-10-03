@@ -90,7 +90,10 @@ the platform is not storing abandoned data indefinitely at its own cost. Resumin
 at any point in the window restores `active` and clears the countdown; the household is told the
 date on the banner from the day it enters the state, so nobody is deleted by surprise. The date is
 the day the data is deleted, 12 months and 30 days after the lapse, and the three warnings are
-emailed to every owner a month, a week and a day before it (**D-119**).
+emailed to every owner a month, a week and a day before it (**D-119**). A household being paid for
+again when that day comes, its payment still on its way at the processor as a bank debit's is for
+days (D-131), is not deleted while it is: the payment gone through, it is `active`, and failed, it
+is deleted that night (**D-140**).
 
 **FR-BI1 — `read_only` is enforced in one place.** The tenant middleware resolves the
 entitlement state and, in a non-writing state, refuses every unsafe method with `402 Payment
