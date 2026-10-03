@@ -19,7 +19,7 @@
     "db:setup": "cd server && go run ./cmd/household-api bootstrap && go run ./cmd/household-api migrate",
     "dev:api": "cd server && go run ./cmd/household-api serve",
     "gen": "turbo run gen && pnpm run gen:go",
-    "gen:go": "cd server && go generate ./...",
+    "gen:go": "cd server && go generate ./... && go test -count=1 -run TestTheClientRegistriesAreTheGeneratedOnes ./internal/syncconfig -args -write",
     "typecheck": "turbo run typecheck",
     "lint": "pnpm run lint:ts && pnpm run lint:go && pnpm run lint:api && pnpm run format:check",
     "lint:ts": "turbo run lint",

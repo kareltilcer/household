@@ -52,19 +52,14 @@ export interface Target {
   /** Sets household's entitlement (item 16), which scenario 14 needs. */
   readonly setEntitlement?: (household: string, state: 'active' | 'read_only') => Promise<void>
   /**
-   * Uploads an attachment's bytes (item 14), named fileName, which scenario 12 needs, and answers the
-   * upload's status.
+   * The URL an attachment's bytes are uploaded to (item 14's pipeline), which a client's pending queue
+   * sends them to (item 18, D-25) and scenario 12 needs.
    */
-  readonly uploadAttachment?: (
-    credential: string,
-    household: string,
-    attachment: string,
-    file: { readonly bytes: Uint8Array; readonly contentType: string; readonly fileName: string },
-  ) => Promise<number>
+  readonly attachmentUrl?: (household: string, attachment: string) => string
 }
 
 /** A capability a target may lack, which a scenario that needs it waits for. */
-export type Capability = 'compact' | 'setEntitlement' | 'uploadAttachment'
+export type Capability = 'compact' | 'setEntitlement' | 'attachmentUrl'
 
 /** A refusal of the API credential a request carried, which signing in again answers. */
 export class Unauthorized extends Error {}
@@ -90,12 +85,14 @@ interface Generated {
 
 /**
  * The streams the suite's clients subscribe to, as server/internal/syncconfig generated them beside
- * the configuration PowerSync runs (stack/powersync/streams.json): every stream but the negative
- * control's.
+ * the configuration PowerSync runs, in the suite's client registry (stack/powersync/registry.json):
+ * every stream but the negative control's.
  */
-const generated = JSON.parse(
-  readFileSync(new URL('../stack/powersync/streams.json', import.meta.url), 'utf8'),
-) as readonly Generated[]
+const generated = (
+  JSON.parse(
+    readFileSync(new URL('../stack/powersync/registry.json', import.meta.url), 'utf8'),
+  ) as { readonly streams: readonly Generated[] }
+).streams
 
 function isTable(name: string): name is TableName {
   return tables.some((t) => t.table === name)
@@ -183,16 +180,8 @@ export const engine: Target = {
   },
   // The conformance API's own route (server/internal/conformance/upload.go), through item 14's
   // pipeline: the contract names no operation of the conformance module's.
-  async uploadAttachment(credential, household, attachment, file) {
-    const form = new FormData()
-    form.append('file', new Blob([file.bytes], { type: file.contentType }), file.fileName)
-    const response = await fetch(
-      `${apiUrl}/conformance/households/${household}/attachments/${attachment}/content`,
-      { method: 'POST', headers: { authorization: `Bearer ${credential}` }, body: form },
-    )
-    await response.arrayBuffer()
-    return response.status
-  },
+  attachmentUrl: (household, attachment) =>
+    `${apiUrl}/conformance/households/${household}/attachments/${attachment}/content`,
   async setEntitlement(household, state) {
     const client = new pg.Client({ connectionString: adminDatabaseUrl })
     await client.connect()

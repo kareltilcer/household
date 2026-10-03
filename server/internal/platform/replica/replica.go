@@ -1,8 +1,9 @@
 // Package replica is the platform's side of the read half of sync (D-93, ADR 0001, ADR 0014): the
 // credentials a client's replica connects to PowerSync with, and the keys PowerSync verifies them
-// by. PowerSync replicates each household's rows into the buckets its generated streams define
-// (internal/syncconfig); the API hands a member PowerSync's URL and a token of PowerSync's own, and
-// publishes the public keys that sign it.
+// by; and each replica's report of itself, which the server holds against PostgreSQL (Reports,
+// D-125, ADR 0019). PowerSync replicates each household's rows into the buckets its generated streams
+// define (internal/syncconfig); the API hands a member PowerSync's URL and a token of PowerSync's
+// own, and publishes the public keys that sign it.
 //
 // The token is signed with the keys that sign a device's access tokens (item 9), and carries an
 // audience, which PowerSync checks and the API's authentication refuses: a PowerSync token opens no

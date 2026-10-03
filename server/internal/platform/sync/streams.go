@@ -2,7 +2,6 @@ package sync
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -233,24 +232,4 @@ func Config(header string, streams []Stream) []byte {
 		}
 	}
 	return b.Bytes()
-}
-
-// Manifest returns streams as JSON, one object for each with its name, its entity and the client
-// table its rows replicate into: what the conformance suite's clients subscribe to, and the tables
-// they compare.
-func Manifest(streams []Stream) ([]byte, error) {
-	type entry struct {
-		Stream string `json:"stream"`
-		Entity string `json:"entity"`
-		Table  string `json:"table"`
-	}
-	entries := make([]entry, 0, len(streams))
-	for _, s := range streams {
-		entries = append(entries, entry{Stream: s.Name, Entity: s.Entity, Table: s.Output})
-	}
-	out, err := json.MarshalIndent(entries, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	return append(out, '\n'), nil
 }

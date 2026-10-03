@@ -1,9 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    // The conformance suite runs on Node: its PowerSync clients (@powersync/node), its database
-    // reads and the API it starts. Item 18's library adds the web and React Native builds.
+    // The library's core and its Node replica, and the conformance suite, which runs on Node: its
+    // PowerSync clients (@powersync/node), its database reads and the API it starts. The web replica
+    // (web/) and the React Native one (native/) are typechecked against their own platforms' types,
+    // and the suite's browser smoke test (conformance/web/) against the DOM's.
     "types": ["node"]
   },
-  "include": ["src", "conformance"]
+  "include": ["src", "conformance"],
+  "exclude": ["conformance/web"]
 }

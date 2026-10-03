@@ -6,6 +6,7 @@
  */
 import i18n from '../vectors/i18n.json'
 import money from '../vectors/money.json'
+import replicaDigest from '../vectors/replica-digest.json'
 import storage from '../vectors/storage.json'
 
 /** One case: an input, and either the output it gives or the code of the error it raises. */
@@ -24,7 +25,9 @@ export interface VectorFile {
 }
 
 /** Every vector file, by the name its file has in vectors/. */
-export const vectors = { i18n, money, storage } satisfies Readonly<Record<string, VectorFile>>
+export const vectors = { i18n, money, 'replica-digest': replicaDigest, storage } satisfies Readonly<
+  Record<string, VectorFile>
+>
 
 const fileFields: ReadonlySet<string> = new Set(['description', 'sources', 'groups'])
 const caseFields: ReadonlySet<string> = new Set(['name', 'input', 'output', 'error'])

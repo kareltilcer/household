@@ -1,0 +1,143 @@
+{
+  "description": "Generated from the entity registry and the schema its migrations make, by server/internal/syncconfig (plan item 18, ADR 0019). Do not edit it: `pnpm run gen` writes it, and a test fails it when it is not what the registry generates.",
+  "streams": [
+    {
+      "stream": "admin_household_settings",
+      "entity": "admin.household_settings",
+      "table": "households"
+    },
+    {
+      "stream": "admin_invitation_owner",
+      "entity": "admin.invitation",
+      "table": "invitations"
+    },
+    {
+      "stream": "admin_invitation_granted",
+      "entity": "admin.invitation",
+      "table": "invitations"
+    },
+    {
+      "stream": "admin_membership",
+      "entity": "admin.membership",
+      "table": "memberships"
+    },
+    {
+      "stream": "admin_module_enablement",
+      "entity": "admin.module_enablement",
+      "table": "module_enablement"
+    }
+  ],
+  "entities": {
+    "admin.household_settings": {
+      "module": "admin",
+      "table": "households",
+      "policy": "strict_version",
+      "offline_writes": false
+    },
+    "admin.invitation": {
+      "module": "admin",
+      "table": "invitations",
+      "policy": "strict_version",
+      "offline_writes": false
+    },
+    "admin.membership": {
+      "module": "admin",
+      "table": "memberships",
+      "policy": "strict_version",
+      "offline_writes": false
+    },
+    "admin.module_enablement": {
+      "module": "admin",
+      "table": "module_enablement",
+      "policy": "strict_version",
+      "offline_writes": false
+    }
+  },
+  "tables": {
+    "households": {
+      "entity": "admin.household_settings",
+      "redacted": false,
+      "columns": {
+        "base_currency": "text",
+        "billing_payer_id": "uuid",
+        "billing_state": "text",
+        "country": "text",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "first_day_of_week": "integer",
+        "grace_ends_at": "timestamp",
+        "locale": "text",
+        "name": "text",
+        "restricted_at": "timestamp",
+        "restricted_by": "uuid",
+        "restricted_by_label": "text",
+        "restriction_reason": "text",
+        "retained_until": "timestamp",
+        "timezone": "text",
+        "trial_ends_at": "timestamp",
+        "units": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "invitations": {
+      "entity": "admin.invitation",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "dashboard_layout": "json",
+        "deleted_at": "timestamp",
+        "email": "text",
+        "expires_at": "timestamp",
+        "grants": "json",
+        "household_id": "uuid",
+        "invited_by": "uuid",
+        "kind": "text",
+        "max_uses": "integer",
+        "message": "text",
+        "role": "text",
+        "status": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "uses": "integer",
+        "version": "integer"
+      }
+    },
+    "memberships": {
+      "entity": "admin.membership",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "dashboard_locked": "boolean",
+        "deleted_at": "timestamp",
+        "grants": "json",
+        "household_id": "uuid",
+        "pin_locked": "boolean",
+        "role": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "user_id": "uuid",
+        "version": "integer"
+      }
+    },
+    "module_enablement": {
+      "entity": "admin.module_enablement",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "enabled": "boolean",
+        "household_id": "uuid",
+        "module": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    }
+  }
+}

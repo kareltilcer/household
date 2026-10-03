@@ -10,6 +10,15 @@ packages:
 allowBuilds:
   better-sqlite3: false
 
+# react-native is in the workspace for its types alone: @household/sync's React Native build is
+# typechecked against them (plan item 18), and nothing here bundles or runs an app yet. Its CLI
+# plugin brings Metro, whose file map reaches braces <= 3.0.3 (GHSA-vfj7-8cjw-p6xm, a stack
+# exhaustion on deeply nested patterns, with no patched version), so the plugin is left out of the
+# install rather than the advisory out of the audit. Plan item 28, which builds the mobile app on
+# Metro, removes this line and settles the advisory for a tree that runs it.
+overrides:
+  'react-native>@react-native/community-cli-plugin': '-'
+
 # One version of every shared tool across the workspace. A package names a tool as
 # `catalog:` instead of a range, so two packages cannot drift onto different compilers
 # or linters and disagree about what the same source means.

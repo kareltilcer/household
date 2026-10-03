@@ -198,6 +198,8 @@ func TestTheNightlySweepReachesEveryHousehold(t *testing.T) {
 		w.exec(`INSERT INTO sync_usage (household_id, day, mutations)
 		        SELECT $1, (now() AT TIME ZONE 'UTC')::date - ago, 10 FROM unnest(ARRAY[0, $2::integer, $2::integer + 1]) AS ago`,
 			h, expiry.UsageDays)
+		w.exec(`INSERT INTO sync_replicas (household_id, id, user_id, label, reported_at, pending_mutations, unresolved, checksum_failures)
+		        SELECT $1, gen_random_uuid(), $2, ago, now() - ago::interval, 0, 0, 0 FROM unnest(ARRAY['89 days', '91 days']) AS ago`, h, u)
 		n, kept := idgen.New(), idgen.New()
 		w.exec(`INSERT INTO notifications (household_id, id, user_id, category, message, args, status, settled_at, args_expires_at)
 		        VALUES ($1, $2, $4, 'direct', 'email.invitation', '{"message": "old"}', 'sent', now() - interval '8 days', now() - interval '1 second'),
@@ -236,6 +238,14 @@ func TestTheNightlySweepReachesEveryHousehold(t *testing.T) {
 		if len(days) != 2 || days[0] != 0 || days[1] != expiry.UsageDays {
 			t.Errorf("household %s: the pushed mutations' days kept, by how many days ago: %v; want today's and the one %d days ago",
 				h, days, expiry.UsageDays)
+		}
+		var replicas []string
+		if err := w.admin.QueryRow(t.Context(), `SELECT array(SELECT label FROM sync_replicas WHERE household_id = $1)`, h).
+			Scan(&replicas); err != nil {
+			t.Fatal(err)
+		}
+		if len(replicas) != 1 || replicas[0] != "89 days" {
+			t.Errorf("household %s: the replicas kept, by how long since they reported: %v; want the one 89 days ago", h, replicas)
 		}
 	}
 }

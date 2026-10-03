@@ -1,0 +1,573 @@
+{
+  "description": "Generated from the entity registry and the schema its migrations make, by server/internal/syncconfig (plan item 18, ADR 0019). Do not edit it: `pnpm run gen` writes it, and a test fails it when it is not what the registry generates.",
+  "streams": [
+    {
+      "stream": "admin_household_settings",
+      "entity": "admin.household_settings",
+      "table": "households"
+    },
+    {
+      "stream": "admin_invitation_owner",
+      "entity": "admin.invitation",
+      "table": "invitations"
+    },
+    {
+      "stream": "admin_invitation_granted",
+      "entity": "admin.invitation",
+      "table": "invitations"
+    },
+    {
+      "stream": "admin_membership",
+      "entity": "admin.membership",
+      "table": "memberships"
+    },
+    {
+      "stream": "admin_module_enablement",
+      "entity": "admin.module_enablement",
+      "table": "module_enablement"
+    },
+    {
+      "stream": "conformance_attachment_owner",
+      "entity": "conformance.attachment",
+      "table": "conformance_attachments"
+    },
+    {
+      "stream": "conformance_attachment_granted",
+      "entity": "conformance.attachment",
+      "table": "conformance_attachments"
+    },
+    {
+      "stream": "conformance_budget_owner",
+      "entity": "conformance.budget",
+      "table": "conformance_budgets"
+    },
+    {
+      "stream": "conformance_budget_granted",
+      "entity": "conformance.budget",
+      "table": "conformance_budgets"
+    },
+    {
+      "stream": "conformance_chore_owner",
+      "entity": "conformance.chore",
+      "table": "conformance_chores"
+    },
+    {
+      "stream": "conformance_chore_granted",
+      "entity": "conformance.chore",
+      "table": "conformance_chores"
+    },
+    {
+      "stream": "conformance_completion_owner",
+      "entity": "conformance.completion",
+      "table": "conformance_completions"
+    },
+    {
+      "stream": "conformance_completion_granted",
+      "entity": "conformance.completion",
+      "table": "conformance_completions"
+    },
+    {
+      "stream": "conformance_conversation_owner",
+      "entity": "conformance.conversation",
+      "table": "conformance_conversations"
+    },
+    {
+      "stream": "conformance_conversation_granted",
+      "entity": "conformance.conversation",
+      "table": "conformance_conversations"
+    },
+    {
+      "stream": "conformance_conversation_member_owner",
+      "entity": "conformance.conversation_member",
+      "table": "conformance_conversation_members"
+    },
+    {
+      "stream": "conformance_conversation_member_granted",
+      "entity": "conformance.conversation_member",
+      "table": "conformance_conversation_members"
+    },
+    {
+      "stream": "conformance_item_owner",
+      "entity": "conformance.item",
+      "table": "conformance_items"
+    },
+    {
+      "stream": "conformance_item_granted",
+      "entity": "conformance.item",
+      "table": "conformance_items"
+    },
+    {
+      "stream": "conformance_item_checked_owner",
+      "entity": "conformance.item_checked",
+      "table": "conformance_item_checks"
+    },
+    {
+      "stream": "conformance_item_checked_granted",
+      "entity": "conformance.item_checked",
+      "table": "conformance_item_checks"
+    },
+    {
+      "stream": "conformance_message_owner",
+      "entity": "conformance.message",
+      "table": "conformance_messages"
+    },
+    {
+      "stream": "conformance_message_granted",
+      "entity": "conformance.message",
+      "table": "conformance_messages"
+    },
+    {
+      "stream": "conformance_note_shared_owner",
+      "entity": "conformance.note",
+      "table": "conformance_notes"
+    },
+    {
+      "stream": "conformance_note_shared_granted",
+      "entity": "conformance.note",
+      "table": "conformance_notes"
+    },
+    {
+      "stream": "conformance_note_private_owner",
+      "entity": "conformance.note",
+      "table": "conformance_notes"
+    },
+    {
+      "stream": "conformance_note_private_granted",
+      "entity": "conformance.note",
+      "table": "conformance_notes"
+    },
+    {
+      "stream": "conformance_note_redacted_owner",
+      "entity": "conformance.note",
+      "table": "conformance_notes_redacted"
+    },
+    {
+      "stream": "conformance_note_redacted_granted",
+      "entity": "conformance.note",
+      "table": "conformance_notes_redacted"
+    },
+    {
+      "stream": "conformance_note_comment_shared_owner",
+      "entity": "conformance.note_comment",
+      "table": "conformance_note_comments"
+    },
+    {
+      "stream": "conformance_note_comment_shared_granted",
+      "entity": "conformance.note_comment",
+      "table": "conformance_note_comments"
+    },
+    {
+      "stream": "conformance_note_comment_private_owner",
+      "entity": "conformance.note_comment",
+      "table": "conformance_note_comments"
+    },
+    {
+      "stream": "conformance_note_comment_private_granted",
+      "entity": "conformance.note_comment",
+      "table": "conformance_note_comments"
+    },
+    {
+      "stream": "conformance_reading_owner",
+      "entity": "conformance.reading",
+      "table": "conformance_readings"
+    },
+    {
+      "stream": "conformance_reading_granted",
+      "entity": "conformance.reading",
+      "table": "conformance_readings"
+    }
+  ],
+  "entities": {
+    "admin.household_settings": {
+      "module": "admin",
+      "table": "households",
+      "policy": "strict_version",
+      "offline_writes": false
+    },
+    "admin.invitation": {
+      "module": "admin",
+      "table": "invitations",
+      "policy": "strict_version",
+      "offline_writes": false
+    },
+    "admin.membership": {
+      "module": "admin",
+      "table": "memberships",
+      "policy": "strict_version",
+      "offline_writes": false
+    },
+    "admin.module_enablement": {
+      "module": "admin",
+      "table": "module_enablement",
+      "policy": "strict_version",
+      "offline_writes": false
+    },
+    "conformance.attachment": {
+      "module": "conformance",
+      "table": "conformance_attachments",
+      "policy": "lww_field",
+      "offline_writes": true
+    },
+    "conformance.budget": {
+      "module": "conformance",
+      "table": "conformance_budgets",
+      "policy": "strict_version",
+      "offline_writes": true
+    },
+    "conformance.chore": {
+      "module": "conformance",
+      "table": "conformance_chores",
+      "policy": "strict_version",
+      "offline_writes": true
+    },
+    "conformance.completion": {
+      "module": "conformance",
+      "table": "conformance_completions",
+      "policy": "state_set",
+      "offline_writes": true
+    },
+    "conformance.conversation": {
+      "module": "conformance",
+      "table": "conformance_conversations",
+      "policy": "strict_version",
+      "offline_writes": true
+    },
+    "conformance.conversation_member": {
+      "module": "conformance",
+      "table": "conformance_conversation_members",
+      "policy": "strict_version",
+      "offline_writes": true
+    },
+    "conformance.item": {
+      "module": "conformance",
+      "table": "conformance_items",
+      "policy": "lww_field",
+      "offline_writes": true
+    },
+    "conformance.item_checked": {
+      "module": "conformance",
+      "table": "conformance_item_checks",
+      "policy": "state_set",
+      "offline_writes": true
+    },
+    "conformance.message": {
+      "module": "conformance",
+      "table": "conformance_messages",
+      "policy": "additive",
+      "offline_writes": true
+    },
+    "conformance.note": {
+      "module": "conformance",
+      "table": "conformance_notes",
+      "redacted": "conformance_notes_redacted",
+      "policy": "lww_row",
+      "offline_writes": true
+    },
+    "conformance.note_comment": {
+      "module": "conformance",
+      "table": "conformance_note_comments",
+      "policy": "lww_field",
+      "offline_writes": true
+    },
+    "conformance.reading": {
+      "module": "conformance",
+      "table": "conformance_readings",
+      "policy": "additive",
+      "offline_writes": true
+    }
+  },
+  "tables": {
+    "conformance_attachments": {
+      "entity": "conformance.attachment",
+      "redacted": false,
+      "columns": {
+        "attachment_status": "text",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "failure_reason": "text",
+        "file_name": "text",
+        "household_id": "uuid",
+        "item_id": "uuid",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_budgets": {
+      "entity": "conformance.budget",
+      "redacted": false,
+      "columns": {
+        "amount_minor": "integer",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "currency": "text",
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "name": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_chores": {
+      "entity": "conformance.chore",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "name": "text",
+        "rotation": "uuid[]",
+        "rotation_index": "integer",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_completions": {
+      "entity": "conformance.completion",
+      "redacted": false,
+      "columns": {
+        "chore_id": "uuid",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "done": "boolean",
+        "done_at": "timestamp",
+        "household_id": "uuid",
+        "occurrence": "date",
+        "rotated": "boolean",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_conversation_members": {
+      "entity": "conformance.conversation_member",
+      "redacted": false,
+      "columns": {
+        "conversation_id": "uuid",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "floor_seq": "integer",
+        "household_id": "uuid",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "user_id": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_conversations": {
+      "entity": "conformance.conversation",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "title": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_item_checks": {
+      "entity": "conformance.item_checked",
+      "redacted": false,
+      "columns": {
+        "checked": "boolean",
+        "checked_at": "timestamp",
+        "clock_flagged": "boolean",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "item_id": "uuid",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_items": {
+      "entity": "conformance.item",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "note": "text",
+        "quantity": "integer",
+        "title": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_messages": {
+      "entity": "conformance.message",
+      "redacted": false,
+      "columns": {
+        "body": "text",
+        "conversation_id": "uuid",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "readers": "uuid[]",
+        "seq": "integer",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_note_comments": {
+      "entity": "conformance.note_comment",
+      "redacted": false,
+      "columns": {
+        "body": "text",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "note_id": "uuid",
+        "owner_id": "uuid",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer",
+        "visibility": "text"
+      }
+    },
+    "conformance_notes": {
+      "entity": "conformance.note",
+      "redacted": false,
+      "columns": {
+        "body": "text",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "owner_id": "uuid",
+        "title": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer",
+        "visibility": "text"
+      }
+    },
+    "conformance_notes_redacted": {
+      "entity": "conformance.note",
+      "redacted": true,
+      "columns": {
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "owner_id": "uuid",
+        "version": "integer"
+      }
+    },
+    "conformance_readings": {
+      "entity": "conformance.reading",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "household_id": "uuid",
+        "meter_id": "uuid",
+        "read_at": "timestamp",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "value": "integer",
+        "version": "integer"
+      }
+    },
+    "households": {
+      "entity": "admin.household_settings",
+      "redacted": false,
+      "columns": {
+        "base_currency": "text",
+        "billing_payer_id": "uuid",
+        "billing_state": "text",
+        "country": "text",
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "first_day_of_week": "integer",
+        "grace_ends_at": "timestamp",
+        "locale": "text",
+        "name": "text",
+        "restricted_at": "timestamp",
+        "restricted_by": "uuid",
+        "restricted_by_label": "text",
+        "restriction_reason": "text",
+        "retained_until": "timestamp",
+        "timezone": "text",
+        "trial_ends_at": "timestamp",
+        "units": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    },
+    "invitations": {
+      "entity": "admin.invitation",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "dashboard_layout": "json",
+        "deleted_at": "timestamp",
+        "email": "text",
+        "expires_at": "timestamp",
+        "grants": "json",
+        "household_id": "uuid",
+        "invited_by": "uuid",
+        "kind": "text",
+        "max_uses": "integer",
+        "message": "text",
+        "role": "text",
+        "status": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "uses": "integer",
+        "version": "integer"
+      }
+    },
+    "memberships": {
+      "entity": "admin.membership",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "dashboard_locked": "boolean",
+        "deleted_at": "timestamp",
+        "grants": "json",
+        "household_id": "uuid",
+        "pin_locked": "boolean",
+        "role": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "user_id": "uuid",
+        "version": "integer"
+      }
+    },
+    "module_enablement": {
+      "entity": "admin.module_enablement",
+      "redacted": false,
+      "columns": {
+        "created_at": "timestamp",
+        "created_by": "uuid",
+        "deleted_at": "timestamp",
+        "enabled": "boolean",
+        "household_id": "uuid",
+        "module": "text",
+        "updated_at": "timestamp",
+        "updated_by": "uuid",
+        "version": "integer"
+      }
+    }
+  }
+}

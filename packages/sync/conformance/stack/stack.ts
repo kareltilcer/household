@@ -3,6 +3,7 @@
 
 import { resolve } from 'node:path'
 import { pgPort } from '../harness/env.ts'
+import { webOrigin } from '../web/origin.ts'
 
 export const stackDir = import.meta.dirname
 export const composeFile = resolve(stackDir, 'docker-compose.yml')
@@ -29,7 +30,8 @@ export async function answers(url: string): Promise<boolean> {
 /**
  * The environment `household-api` and `conformance-api` run with against the stack's database: one
  * connection string per role, as .env.example gives them for the development one, PowerSync's
- * replication role and its bucket storage among them, as powersync/powersync.yaml names them.
+ * replication role and its bucket storage among them, as powersync/powersync.yaml names them; and the
+ * origin the browser smoke test's page is served from, which an unsafe request may come from.
  */
 export const serverEnv: Readonly<Record<string, string>> = {
   HOUSEHOLD_ENV: 'development',
@@ -43,4 +45,5 @@ export const serverEnv: Readonly<Record<string, string>> = {
     'household_powersync_storage',
     'powersync_storage',
   ),
+  HOUSEHOLD_ALLOWED_ORIGINS: webOrigin,
 }

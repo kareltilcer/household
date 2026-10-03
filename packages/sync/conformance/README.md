@@ -1,11 +1,12 @@
 # The sync conformance suite
 
-PRD 10 §4's falsifier (plan items 12, 13 and 17, [ADR 0013](../../../docs/adr/0013-conformance-suite-stand-ins-and-the-oracle.md),
+PRD 10 §4's falsifier (plan items 12, 13, 17 and 18, [ADR 0013](../../../docs/adr/0013-conformance-suite-stand-ins-and-the-oracle.md),
 [ADR 0014](../../../docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md),
-[ADR 0018](../../../docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)):
-PowerSync clients, each on its own SQLite file, driven through scripted partitions, lost answers,
-duplicate delivery, skewed clocks and access changes against the real stack, with PRD 10 §4's six
-invariants judged after every scenario and every seeded fuzz schedule.
+[ADR 0018](../../../docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md),
+[ADR 0019](../../../docs/adr/0019-the-sync-client-library.md)): `@household/sync`'s replicas, each on its
+own SQLite file, driven through scripted partitions, lost answers, duplicate delivery, skewed clocks and
+access changes against the real stack, with PRD 10 §4's six invariants judged after every scenario and
+every seeded fuzz schedule.
 
 ## Running it
 
@@ -14,6 +15,7 @@ Needs Docker, pnpm and Go, as the repository does.
 ```bash
 pnpm --filter @household/sync conformance:up     # PostgreSQL with logical replication, PowerSync, prepared
 pnpm --filter @household/sync conformance        # the self-tests, the switched-on scenarios, a short fuzz run
+pnpm --filter @household/sync conformance:web    # the web replica in Chromium against the same stack
 pnpm --filter @household/sync conformance:down   # remove the stack
 ```
 
@@ -45,19 +47,21 @@ CONFORMANCE_FUZZ_RUNS=150 CONFORMANCE_FUZZ_STEPS=150 pnpm --filter @household/sy
 
 | Path | What |
 |---|---|
-| `stack/` | The compose file, PowerSync's configuration with its generated streams and their manifest, and `conformance:up` |
-| `harness/` | Clients, the suite's connector, the network, the seeded generator, the invariants, the fuzzer; `*.test.ts` beside them are its unit tests, run by `pnpm test` |
+| `stack/` | The compose file, PowerSync's configuration with its generated streams, the suite's generated client registry, and `conformance:up` |
+| `harness/` | Clients (the library's replicas on the suite's network and clock), the network, the seeded generator, the invariants and the tables they compare, the fuzzer; `*.test.ts` beside them are its unit tests, run by `pnpm test` |
 | `scenarios/` | The 18 scenarios and the access-loss cases, and `enabled`: the ones switched on |
-| `suite/` | What `conformance` runs: the harness's self-tests and negative controls, the scenarios, the fuzzer |
+| `suite/` | What `conformance` runs: the harness's self-tests and negative controls, the scenarios, the fuzzer, and the library's own proofs (`library.test.ts`: a restart before the queue drains, every replica's report matching at rest, a reset's download) |
+| `web/` | What `conformance:web` runs: the web replica (`@household/sync/web`, wa-sqlite over IndexedDB) in Playwright's Chromium through Vitest's browser mode, the API behind its server's proxy |
 | `../../../server/internal/conformance` | The conformance module the scenarios write, its writers for every entity, and the suite's sign-in and attachments' uploads; `cmd/conformance-api` serves them with the server's API |
 
 ## The engine
 
 The suite runs against the engine (`harness/target.ts`): the server's own API with the conformance
 module registered, its push and its credentials, and PowerSync on the streams generated from the
-entity registry (`pnpm run gen` writes `stack/powersync/sync-config.yaml` and `streams.json`), beside
-one stream broken on purpose for the negative control. A client subscribes to every generated stream,
-admin's included, and its replica is compared on every table the schema declares. The suite signs its
+entity registry (`pnpm run gen` writes `stack/powersync/sync-config.yaml` and `registry.json`), beside
+one stream broken on purpose for the negative control. A client is the library's replica, its schema
+built from `registry.json`; it subscribes to every generated stream, admin's included, and its replica
+is compared on every table the oracle declares (`harness/schema.ts`, held by a test to the registry). The suite signs its
 members in through a sign-in of its own, which signs a new device of theirs in. A grant and a module's
 enablement are written as the database's administrator, since item 10's routes cannot name the
 conformance module; a member leaving a conversation and a note made private are pushed, as a member

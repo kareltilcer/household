@@ -20,8 +20,7 @@
 
 import type { Admin } from './admin.ts'
 import type { Client } from './client.ts'
-import type { HoldReason } from './connector.ts'
-import { ends, type SyncMutationResult } from './mutation.ts'
+import { ends, type HoldReason, type SyncMutationResult } from '../../src/index.ts'
 import type { Recorder } from './recorder.ts'
 import {
   canonicalRow,

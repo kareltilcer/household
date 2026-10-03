@@ -35,11 +35,12 @@ pnpm run dev:api      # serve the API on 127.0.0.1:8080 (/api/v1/healthz, /api/v
 pnpm test             # Vitest through turbo, then go test against the compose Postgres
 pnpm run lint         # ESLint, golangci-lint, Redocly and Prettier
 pnpm typecheck        # tsc in every package
-pnpm run gen          # code generation (turbo run gen + go generate)
+pnpm run gen          # code generation (turbo run gen + go generate + the client registries, which need Postgres)
 pnpm run format       # Prettier and gofmt/goimports, rewriting files
 pnpm run down         # stop the services; volumes are kept
 pnpm --filter @household/sync conformance:up   # the sync conformance stack: PostgreSQL with logical replication, PowerSync
 pnpm --filter @household/sync conformance      # the conformance suite against it (packages/sync/conformance)
+pnpm --filter @household/sync conformance:web  # @household/sync's web replica in Chromium against it (Playwright)
 ```
 
 - **`pnpm run up`, never `pnpm up`.** `pnpm up` is pnpm's own `update` command and rewrites
@@ -67,6 +68,12 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   conformance suite's stack, and architecture test 10 fails a committed one that is not what the
   registry generates, a table a stream reads that its migration did not publish with `replicate`,
   and a table the replication role may `SELECT` that no stream needs ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)).
+  The client registries `@household/sync` builds a replica from (`packages/sync/src/generated/registry.json`
+  and the suite's beside its configuration) are generated from the entity registry and the migrated
+  schema's column types: `pnpm run gen` writes them through `internal/syncconfig`'s test with `-write`,
+  so it needs PostgreSQL up, and that test fails a committed one that is not what they generate. A
+  column the server sets is written by a client as `local`, shown by its replica and never sent
+  ([ADR 0019](docs/adr/0019-the-sync-client-library.md)).
 - **Generated, never committed:** `packages/api/src/generated/` (the typed client, from
   `openapi.yaml`) and `packages/i18n/src/generated/` (message keys and arguments, from
   `catalogs/en.json`). turbo writes them before every typecheck, lint and test; after a
@@ -157,7 +164,9 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
   transaction when the mutation took one and in a transaction of its own when it took none
   ([ADR 0014](docs/adr/0014-powersync-deployment-generated-streams-credentials-and-the-push.md)),
   and its count of the mutations a household pushed in a day (`sync_usage`,
-  [ADR 0018](docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)).
+  [ADR 0018](docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)); and each
+  replica's last report of itself (`sync_replicas`), which leaves with its member's membership
+  ([ADR 0019](docs/adr/0019-the-sync-client-library.md)).
   The household surface (`internal/platform/household`) is `admin`, a module the platform
   serves itself: it writes through `mutation.Apply` with the actions and entities
   `module.PlatformModule` declares, and holds a household its caller is not yet in, creating

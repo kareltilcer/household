@@ -214,69 +214,95 @@ describe('an ESLint suppression', () => {
   })
 })
 
+/**
+ * The TypeScript projects a package's typecheck script compiles, each by its tsconfig file: its own
+ * tsconfig.json, `tsc --noEmit`, and each project a further `tsc --noEmit --project <dir>` names, joined
+ * by `&&`, which @household/sync's web and React Native builds take to typecheck against their own
+ * platforms' types (plan item 18). Null for a script of any other shape, which the guards cannot vouch
+ * for.
+ */
+function typecheckProjects(dir: string): string[] | null {
+  const script = field(readRecord(`${dir}/package.json`), 'scripts', 'typecheck')
+  if (typeof script !== 'string') return null
+  const [own, ...rest] = script.split('&&').map((command) => command.trim())
+  if (own !== 'tsc --noEmit') return null
+  const projects = ['tsconfig.json']
+  for (const command of rest) {
+    const project = /^tsc --noEmit --project ([\w./-]+)$/.exec(command)?.[1]
+    if (project === undefined || project.startsWith('/') || project.split('/').includes('..'))
+      return null
+    projects.push(project.endsWith('.json') ? project : `${project}/tsconfig.json`)
+  }
+  return projects
+}
+
 describe.each(packages)('%s', (dir) => {
   it('is typechecked and linted by exactly the commands these guards read', () => {
     const scripts = field(readRecord(`${dir}/package.json`), 'scripts')
-    // Exact commands, not patterns. The guards below read tsconfig.json and the ESLint
-    // config file, so `tsc -p <another project>` or `eslint --rule …` would compile or lint
-    // under settings neither guard sees.
+    // Exact commands, not patterns. The guards below read the tsconfig files typecheckProjects names
+    // and the ESLint config file, so `tsc -b`, `tsc -p` under other flags or `eslint --rule …` would
+    // compile or lint under settings neither guard sees.
     const remedy =
-      'the strictness guards read only tsconfig.json and the ESLint config, so they vouch for ' +
-      'no other command. For another layout (`tsc -b` over project references, say), first ' +
-      'extend tooling/src/workspace.test.ts to check what that command compiles or lints'
-    expect(field(scripts, 'typecheck'), `${dir} typecheck: ${remedy}`).toBe('tsc --noEmit')
+      'the strictness guards read only the tsconfig files `tsc --noEmit` and `tsc --noEmit --project ' +
+      '<dir>` compile and the ESLint config, so they vouch for no other command. For another layout ' +
+      '(`tsc -b` over project references, say), first extend tooling/src/workspace.test.ts to check ' +
+      'what that command compiles or lints'
+    expect(typecheckProjects(dir), `${dir} typecheck: ${remedy}`).not.toBeNull()
     expect(field(scripts, 'lint'), `${dir} lint: ${remedy}`).toBe('eslint . --max-warnings=0')
   })
 
-  it('is configured with the strict flags of 06-clients', () => {
-    const parsed = ts.getParsedCommandLineOfConfigFile(
-      join(root, dir, 'tsconfig.json'),
-      {},
-      {
-        ...ts.sys,
-        onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
-          throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+  it.each(typecheckProjects(dir) ?? ['tsconfig.json'])(
+    'is configured in %s with the strict flags of 06-clients',
+    (project) => {
+      const parsed = ts.getParsedCommandLineOfConfigFile(
+        join(root, dir, project),
+        {},
+        {
+          ...ts.sys,
+          onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+            throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+          },
         },
-      },
-    )
-    if (parsed === undefined) throw new Error(`${dir}/tsconfig.json did not parse`)
-    expect(parsed.errors.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual(
-      [],
-    )
-    // A solution-style tsconfig (`files: []` plus references) would pass every flag below
-    // while `tsc --noEmit` compiled nothing.
-    expect(parsed.fileNames, `${dir}/tsconfig.json compiles no files`).not.toEqual([])
+      )
+      if (parsed === undefined) throw new Error(`${dir}/${project} did not parse`)
+      expect(
+        parsed.errors.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n')),
+      ).toEqual([])
+      // A solution-style tsconfig (`files: []` plus references) would pass every flag below
+      // while `tsc --noEmit` compiled nothing.
+      expect(parsed.fileNames, `${dir}/${project} compiles no files`).not.toEqual([])
 
-    const { options } = parsed
-    expect({
-      strict: options.strict,
-      noUncheckedIndexedAccess: options.noUncheckedIndexedAccess,
-      exactOptionalPropertyTypes: options.exactOptionalPropertyTypes,
-      noImplicitOverride: options.noImplicitOverride,
-      noFallthroughCasesInSwitch: options.noFallthroughCasesInSwitch,
-    }).toEqual({
-      strict: true,
-      noUncheckedIndexedAccess: true,
-      exactOptionalPropertyTypes: true,
-      noImplicitOverride: true,
-      noFallthroughCasesInSwitch: true,
-    })
+      const { options } = parsed
+      expect({
+        strict: options.strict,
+        noUncheckedIndexedAccess: options.noUncheckedIndexedAccess,
+        exactOptionalPropertyTypes: options.exactOptionalPropertyTypes,
+        noImplicitOverride: options.noImplicitOverride,
+        noFallthroughCasesInSwitch: options.noFallthroughCasesInSwitch,
+      }).toEqual({
+        strict: true,
+        noUncheckedIndexedAccess: true,
+        exactOptionalPropertyTypes: true,
+        noImplicitOverride: true,
+        noFallthroughCasesInSwitch: true,
+      })
 
-    // `strict: true` is only a default for this family; any member can still be turned
-    // off beside it, and the package would compile as non-strict while claiming strict.
-    const family = [
-      'alwaysStrict',
-      'noImplicitAny',
-      'noImplicitThis',
-      'strictBindCallApply',
-      'strictBuiltinIteratorReturn',
-      'strictFunctionTypes',
-      'strictNullChecks',
-      'strictPropertyInitialization',
-      'useUnknownInCatchVariables',
-    ] as const
-    expect(family.filter((flag) => options[flag] === false)).toEqual([])
-  })
+      // `strict: true` is only a default for this family; any member can still be turned
+      // off beside it, and the package would compile as non-strict while claiming strict.
+      const family = [
+        'alwaysStrict',
+        'noImplicitAny',
+        'noImplicitThis',
+        'strictBindCallApply',
+        'strictBuiltinIteratorReturn',
+        'strictFunctionTypes',
+        'strictNullChecks',
+        'strictPropertyInitialization',
+        'useUnknownInCatchVariables',
+      ] as const
+      expect(family.filter((flag) => options[flag] === false)).toEqual([])
+    },
+  )
 
   it('lints `any`, non-null assertions and unlinked suppressions as errors, in tests too', async () => {
     const settings = await Promise.all(

@@ -155,7 +155,7 @@ is the single most valuable artefact produced in Phase 0.
 | 2 | Two clients offline edit **the same field** | One wins by server receipt; the loser is surfaced, not silently dropped. Under D-93: the later write is answered `merged`, carrying the row, and the activity log keeps the value it replaced (**D-122**) |
 | 3 | Two clients offline check the **same** shopping item | One check; idempotent; no conflict dialog |
 | 4 | Client A creates X offline and edits it twice before syncing | One entity, final state, no id remapping |
-| 5 | Client A creates X, edits X, deletes X — all offline | Server sees three mutations for an id it never had; net effect is a tombstone and **no error storm** |
+| 5 | Client A creates X, edits X, deletes X — all offline | Server sees mutations for an id it never had, the create carrying the edit merged into it (**D-129**) and the delete; net effect is a tombstone and **no error storm** |
 | 6 | Client offline past the compaction horizon | `410` → resnapshot → converges. Under D-93: the client catches up from PowerSync's compacted buckets, downloading again any bucket whose checksum no longer matches, and converges with its queue intact |
 | 7 | **Grant revoked while the client is offline** | On reconnect, retractions delete the local rows; queued mutations against them are `rejected`, surfaced once, and not retried forever |
 | 8 | Batch where mutation 3 fails | 1–2 apply, 3 rejected, 4+ `deferred`; retry resolves |

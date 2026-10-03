@@ -18,9 +18,6 @@ deleteDeletion
 getExports
 postExports
 getExportsByExportId
-getSyncState
-postSyncReset
-postSyncDigest
 getSearch
 getActivity
 getActivityByEventId

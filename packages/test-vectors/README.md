@@ -6,6 +6,7 @@ Shared test vectors: JSON files of inputs and expected outputs that the Vitest a
 |---|---|---|
 | [`vectors/money.json`](vectors/money.json) | Money in minor units: ISO 4217 exponents, half-up once, D-57's split | `packages/domain/src/money.test.ts`, `server/internal/platform/money` |
 | [`vectors/i18n.json`](vectors/i18n.json) | The catalogs' ICU MessageFormat subset, and choosing a member's language | `packages/i18n/src/message.test.ts`, `server/internal/platform/i18n` |
+| [`vectors/replica-digest.json`](vectors/replica-digest.json) | A replica's report: xxh3-64, each row's `(entity_id, version)` pair hash, and an entity type's entry (D-125) | `packages/sync/src/digest.test.ts`, `server/internal/platform/replica` |
 | [`vectors/storage.json`](vectors/storage.json) | Storage blocks: the daily average, the blocks above the allowance, their charge and the month's projection (PRD 04 §4) | `packages/domain/src/storage.test.ts`, `server/internal/platform/storage` |
 
 ## The format
