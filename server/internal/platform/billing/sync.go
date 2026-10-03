@@ -212,22 +212,50 @@ func (s *Service) sync(ctx context.Context, household uuid.UUID, id string) erro
 	return s.settle(ctx, household)
 }
 
-// retire cancels old at the processor, a subscription another took the place of, and records that it
-// did: at the end of the period it is paid up for, or at once when it is past due.
+// retire cancels old at the processor, a subscription another took the place of, and records what
+// the processor then says of it: at the end of the period it is paid up for, or at once when it is
+// past due.
 func (s *Service) retire(ctx context.Context, household uuid.UUID, old subscription) error {
 	if old.status == StatusPastDue {
 		if err := s.Processor.Cancel(ctx, old.id); err != nil {
 			return err
 		}
-		old.status = StatusCanceled
-	} else {
-		said, err := s.Processor.CancelAtPeriodEnd(ctx, old.id, true)
+	} else if _, err := s.Processor.CancelAtPeriodEnd(ctx, old.id, true); err != nil {
+		return err
+	}
+	return s.record(ctx, household, old.id)
+}
+
+// record writes what the processor says of household's subscription id as it stands, read once the
+// household's lock is held, as sync reads it, so that the reading recorded last is the latest: a copy
+// of the row read before the lock was let go, written back whole, would undo whatever a delivery
+// recorded of it since, the event of its own cancellation among them. A subscription no row records
+// is sync's to take up, and is left.
+func (s *Service) record(ctx context.Context, household uuid.UUID, id string) error {
+	now := s.Now()
+	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
+		if err := lock(ctx, tx, household); err != nil {
+			return err
+		}
+		said, err := s.Processor.Subscription(ctx, id)
 		if err != nil {
 			return err
 		}
-		old.status, old.cancelAtPeriodEnd = said.Status, true
+		subs, err := readSubscriptions(ctx, tx, household)
+		if err != nil {
+			return err
+		}
+		for _, sub := range subs {
+			if sub.id == id {
+				return sub.said(said, now).update(ctx, tx, household)
+			}
+		}
+		return nil
+	})
+	if errors.Is(err, errGone) {
+		return nil
 	}
-	return tenant.InWriteTx(ctx, func(tx pgx.Tx) error { return old.update(ctx, tx, household) })
+	return err
 }
 
 // settle brings household's row to what its subscriptions, as they are recorded, make of it (decide),
@@ -427,7 +455,9 @@ func (s *Service) syncInvoice(ctx context.Context, household uuid.UUID, id strin
 				Args: i18n.Args{"number": inv.Number}, Route: billingRoute(household),
 			})
 		}
-		if inv.Status == "open" && inv.Attempts >= 2 && inv.Attempts > attempts {
+		// A retry that failed leaves the invoice open, or, where the account writes off what its last
+		// retry could not collect, uncollectible by the time it is read here.
+		if (inv.Status == "open" || inv.Status == "uncollectible") && inv.Attempts >= 2 && inv.Attempts > attempts {
 			again := "no"
 			if !inv.NextAttempt.IsZero() {
 				again = "yes"
@@ -546,6 +576,13 @@ func (s *Service) methodConfirmed(ctx context.Context, intent SetupIntent) error
 // period does, and so does the trial of the one that takes over from it, so that billing handed on
 // twice within one paid period charges nobody for days already paid for (D-131).
 //
+// What the household is paid up for is the processor's to say, as it stands under the lock, and is
+// recorded as sync records it: the row is what the last event to arrive said, and a renewal or a
+// collection whose event is still on its way would otherwise have the new subscription charged at
+// once for a period the old one has just been paid for, or the old one ended at once, unrefunded. One
+// the processor says has ended since leaves none to take over: it is settled, and the payer moves
+// alone.
+//
 // A subscription still waiting is read from the processor before anything is decided of it. One of
 // theirs that charges is this confirmation's own, made by an earlier delivery that did not get as far
 // as recording it: it is recorded, and none is made. Any other is over, one an earlier card could not
@@ -582,6 +619,18 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 		if cur.payer == intent.User {
 			// Theirs already, by an earlier delivery of this confirmation: nothing more is asked for.
 			mine = cur.id
+			return nil
+		}
+		held, err := s.Processor.Subscription(ctx, cur.id)
+		if err != nil {
+			return err
+		}
+		cur = cur.said(held, now)
+		if err := cur.update(ctx, tx, household); err != nil {
+			return err
+		}
+		if cur.standing != standingCurrent {
+			alone = true
 			return nil
 		}
 		if waiting, ok := standing(subs, standingPending); ok {
@@ -631,7 +680,12 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 	case mine != "":
 		return s.sync(ctx, household, mine)
 	case alone:
-		// An offer taken back since it was read, or an owner made a member, moves nothing.
+		// What a subscription that ended makes of the household first, which is a function of what is
+		// recorded and changes nothing where its own event has settled it already. Then the payer: an
+		// offer taken back since it was read, or an owner made a member, moves nothing.
+		if err := s.settle(ctx, household); err != nil {
+			return err
+		}
 		_, err := s.acceptAlone(ctx, household, intent.User)
 		return err
 	}

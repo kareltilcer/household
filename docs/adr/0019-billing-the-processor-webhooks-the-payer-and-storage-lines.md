@@ -76,17 +76,21 @@ writes them in context, and the meter role lists the households that have a subs
 nothing else happens until `setup_intent.succeeded` arrives. Then, while the offer stands and they
 are an owner still, their own subscription is made on their own customer with the confirmed method:
 with a trial that ends when the period the household is already paid up for ends, when it is paid
-up, and charged at once when Stripe could not collect the old one. Paid up is a subscription that is
-active, and one that is itself on such a trial: billing handed on twice inside one paid period gives
-the third payer's subscription the same end to wait for, and the second's is cancelled before it
-ever charges. Recording it puts it in the old
+up, and charged at once when Stripe could not collect the old one. What it is paid up for is read
+from Stripe then, under the lock, as a webhook's own object is, and recorded: the row is what the
+last event to arrive said, and a renewal or a collection whose event is still on its way would
+otherwise charge the new payer at once for a period the old one has just paid for. Paid up is a
+subscription that is active, and one that is itself on such a trial: billing handed on twice inside
+one paid period gives the third payer's subscription the same end to wait for, and the second's is
+cancelled before it ever charges. Recording it puts it in the old
 one's place; the old one is cancelled at Stripe at its period's end, or at once with its open invoice
 voided; and settling moves `billing_payer_id`, as an `admin.household.payer` event, drops the offer
 and emails the former payer. A card Stripe declines at that charge leaves their subscription waiting
 unpaid and billing where it was; a later card makes a subscription of its own, the one waiting
 cancelled for it. A subscription is always made with its payment method, and never has one set while
 it waits unpaid, which Stripe does not promise to take. A household with no subscription has no card
-to hand over, and the payer moves at accept.
+to hand over, and the payer moves at accept; so does one whose subscription Stripe says has ended by
+the time the card is confirmed, once that end is settled.
 
 **Storage is an invoice item for each calendar month, in arrears** (D-128). `storage.Allowance.Blocks`
 is PRD 04 §4's formula over the mean of the month's daily samples, UTC's as the samples are (D-109);
@@ -131,7 +135,14 @@ fails the build (`HOUSEHOLD_TEST_STRIPE_URL`).
   `BillingInterval`, `BillingTransferAcceptance`, the codes `already_subscribed`, `not_subscribed` and
   `billing_unavailable`, and loses `postBillingCheckoutSession` and `postBillingPortalSession`.
 - Holding the household's row lock across one request to Stripe serialises a household's webhooks at
-  the cost of a connection held for that request. Webhooks are a few a household a month.
+  the cost of a connection held for that request. Webhooks are a few a household a month. The
+  adapter gives each request 20 seconds (`billing.DefaultTimeout`), where the SDK's own client waits
+  80: a Stripe that answers slowly must not hold the pool's connections, a request at a time, until
+  none is left for anyone. A request cut off is sent again under its idempotency key, and what
+  Stripe did meanwhile arrives as an event.
+- A payment method's summary keeps its last four only where they are digits, as a card's are. A SEPA
+  Direct Debit's are the last four characters of an IBAN, letters in some countries, and such an
+  account is known by its kind alone.
 - A month's storage line rides the subscription's next invoice. A subscription set to cancel at its
   period's end has no next invoice, so the storage of its last month is not billed: the customer's
   favour, and at most twenty blocks. Revisit if it matters.

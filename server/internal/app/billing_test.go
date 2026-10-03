@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -457,6 +458,71 @@ func TestAFailedPaymentIsRetriedThenGivenUp(t *testing.T) {
 	}
 }
 
+// An account set to leave a subscription unpaid, and to write off the invoice its last retry could
+// not collect, ends in grace as one set to cancel it does (docs/runbooks/billing.md): the last retry
+// is emailed though the invoice is no longer open by the time it is read, and a cancellation the
+// payer took back before any of it does not make the lapse a cancellation.
+func TestStripeGivingUpByLeavingTheSubscriptionUnpaid(t *testing.T) {
+	s, stripe := billingSite(t)
+	address := s.a("jana@example")
+	jana := s.person("Jana", address)
+	h := jana.create("Tilcerovi")
+	subscription, _ := s.paid(stripe, jana, h.ID, "month")
+	failed := func() int { return has(s.subjects(address), "couldn") }
+	expect(t, jana.post(billingPath(h.ID, "/cancel"), ""), http.StatusOK, "")
+	expect(t, jana.post(billingPath(h.ID, "/resume"), ""), http.StatusOK, "")
+
+	invoice := stripe.FailPayment(subscription, true)
+	s.told(stripe, "customer.subscription.updated", subscription)
+	s.told(stripe, "invoice.payment_failed", invoice)
+	if failed() != 0 {
+		t.Fatal("the first failure was emailed, which is the banner's alone")
+	}
+	stripe.FailPayment(subscription, false)
+	stripe.WriteOff(invoice)
+	stripe.LeaveUnpaid(subscription)
+	s.told(stripe, "invoice.payment_failed", invoice)
+	s.told(stripe, "invoice.marked_uncollectible", invoice)
+	if n := failed(); n != 1 {
+		t.Fatalf("%d emails of the last retry, whose invoice Stripe wrote off, want 1", n)
+	}
+	mail := s.outbox.To(address)
+	if body := mail[len(mail)-1].Body; !strings.Contains(body, "last attempt") {
+		t.Fatalf("the last retry's email: %s", body)
+	}
+	s.told(stripe, "customer.subscription.updated", subscription)
+	sub := jana.subscription(h.ID)
+	if sub.State != "grace" || sub.Interval != nil || sub.GraceEndsAt == nil || sub.DataRetainedUntil != nil {
+		t.Fatalf("after Stripe left it unpaid: %+v", sub)
+	}
+}
+
+// A payment method is kept as its summary (PRD 04 §6), and a bank account's last four only where they
+// are digits: the last four characters of an IBAN are letters in some countries, and a household
+// whose payer pays from such an account is active all the same, its method known by its kind.
+func TestAPayerPaysFromAnAccountWhoseIBANEndsInLetters(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+
+	stripe.DebitFrom("13AA")
+	s.paid(stripe, jana, h.ID, "year")
+	if method := jana.subscription(h.ID).PaymentMethod; method == nil || method.Brand != "sepa_debit" || method.Last4 != nil {
+		t.Fatalf("an account whose IBAN ends in letters: %+v", method)
+	}
+
+	// One whose last four are digits has them kept.
+	stripe.DebitFrom("3000")
+	rec := jana.post(billingPath(h.ID, "/payment-method"), "")
+	expect(t, rec, http.StatusOK, "")
+	var setup intentDoc
+	decode(t, rec, &setup)
+	s.told(stripe, "setup_intent.succeeded", stripe.ConfirmSetup(setup.ClientSecret))
+	if method := jana.subscription(h.ID).PaymentMethod; method == nil || method.Brand != "sepa_debit" || method.Last4 == nil || *method.Last4 != "3000" {
+		t.Fatalf("an account whose IBAN ends in digits: %+v", method)
+	}
+}
+
 // The payer cancels at the period's end and may take it back until then; once the period ends the
 // household is canceled, read-only with its deletion date, and subscribing again restores it at any
 // point of its retention (D-32). Another owner may do neither.
@@ -846,6 +912,121 @@ func TestACardConfirmedAfterTheSubscriptionEndedMovesThePayerAlone(t *testing.T)
 	if sub := eva.subscription(h.ID); sub.State != "canceled" || sub.Payer.UserID != evaID || sub.Transfer != nil {
 		t.Fatalf("after the card was confirmed: %+v", sub)
 	}
+}
+
+// handover is a household Jana pays for by the month, with Eva its other owner, whom billing is
+// about to be handed to.
+type handover struct {
+	s         *site
+	stripe    *billingtest.Stripe
+	jana, eva *browser
+	h, evaID  uuid.UUID
+	// old is Jana's subscription at Stripe.
+	old string
+}
+
+func newHandover(t *testing.T) handover {
+	t.Helper()
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	eva, evaID := s.joined(jana, h.ID, "Eva", s.a("eva@example"), "owner", nil)
+	old, _ := s.paid(stripe, jana, h.ID, "month")
+	return handover{s: s, stripe: stripe, jana: jana, eva: eva, h: h.ID, evaID: evaID, old: old}
+}
+
+// confirm has Jana offer billing and Eva accept and confirm her card, which Stripe then says.
+func (x handover) confirm(t *testing.T) {
+	t.Helper()
+	offers(t, x.jana, x.h, x.evaID)
+	answer := accepts(t, x.eva, x.h)
+	if answer.Confirmation == nil {
+		t.Fatal("no card to confirm")
+	}
+	x.s.told(x.stripe, "setup_intent.succeeded", x.stripe.ConfirmSetup(answer.Confirmation.ClientSecret))
+}
+
+// A take-over is decided from what Stripe says of the household's subscription as the card is
+// confirmed, not from what the last event to arrive said of it (FR-BI6, D-131, D-132). One that
+// renewed, or whose retried payment was collected, while the event that says so is still on its way
+// is paid up: the new payer's waits for the end of the period just paid for, rather than being
+// charged at once for days the old payer has paid for, and the old one runs to that end, rather than
+// being ended at once. One that has ended leaves none to take over: it is settled, and the payer
+// moves alone.
+func TestATakeOverIsDecidedFromWhatStripeSaysNow(t *testing.T) {
+	t.Run("renewed", func(t *testing.T) {
+		x := newHandover(t)
+		// The period the row records ended a minute ago; Stripe has renewed it and been paid for the next.
+		now := x.s.clock.now()
+		if _, err := x.s.admin.Exec(t.Context(), `
+			UPDATE billing_subscriptions SET current_period_start = $2, current_period_end = $3 WHERE household_id = $1`,
+			x.h, now.AddDate(0, -1, 0), now.Add(-time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+		x.stripe.EndPeriod(x.old)
+		renewed := now.AddDate(0, 1, 0).Unix()
+		x.stripe.Requests()
+		x.confirm(t)
+		trial := "none made"
+		for _, r := range x.stripe.Requests() {
+			if r.Method == http.MethodPost && r.Path == "/v1/subscriptions" {
+				trial = r.Form.Get("trial_end")
+			}
+		}
+		if trial != strconv.FormatInt(renewed, 10) {
+			t.Fatalf("the new subscription's first charge falls due at %q, want the end of the period just paid for, %d", trial, renewed)
+		}
+		ids := x.stripe.Subscriptions()
+		if status, _, _ := x.stripe.Subscription(ids[len(ids)-1]); status != "trialing" {
+			t.Fatalf("the new subscription is %s, want waiting", status)
+		}
+		if status, cancel, _ := x.stripe.Subscription(x.old); status != "active" || !cancel {
+			t.Fatalf("the old subscription: %s, cancels at its period's end: %v", status, cancel)
+		}
+		sub := x.eva.subscription(x.h)
+		if sub.State != "active" || sub.Payer.UserID != x.evaID || sub.CurrentPeriodEnd == nil || sub.CurrentPeriodEnd.Unix() != renewed {
+			t.Fatalf("after the take-over: %+v", sub)
+		}
+	})
+
+	t.Run("collected", func(t *testing.T) {
+		x := newHandover(t)
+		invoice := x.stripe.FailPayment(x.old, true)
+		x.s.told(x.stripe, "customer.subscription.updated", x.old)
+		if state, _, _ := x.jana.entitlement(x.h); state != "past_due" {
+			t.Fatalf("after the failed payment the household is %s", state)
+		}
+		// Stripe's retry collects it, and the event that says so has not arrived.
+		if err := x.stripe.Processor().Pay(t.Context(), invoice); err != nil {
+			t.Fatal(err)
+		}
+		x.confirm(t)
+		ids := x.stripe.Subscriptions()
+		if status, _, _ := x.stripe.Subscription(ids[len(ids)-1]); status != "trialing" {
+			t.Fatalf("the new subscription is %s, want waiting for the end of the period just collected", status)
+		}
+		if status, cancel, _ := x.stripe.Subscription(x.old); status != "active" || !cancel || x.stripe.InvoiceStatus(invoice) != "paid" {
+			t.Fatalf("the old subscription: %s, cancels at its period's end: %v, its invoice %s; want it run to the end it was paid for",
+				status, cancel, x.stripe.InvoiceStatus(invoice))
+		}
+		if sub := x.eva.subscription(x.h); sub.State != "active" || sub.Payer.UserID != x.evaID {
+			t.Fatalf("after the take-over: %+v", sub)
+		}
+	})
+
+	t.Run("ended", func(t *testing.T) {
+		x := newHandover(t)
+		expect(t, x.jana.post(billingPath(x.h, "/cancel"), ""), http.StatusOK, "")
+		// The period ends and Stripe cancels it, and the event that says so has not arrived.
+		x.stripe.EndPeriod(x.old)
+		x.confirm(t)
+		if n := len(x.stripe.Subscriptions()); n != 1 {
+			t.Fatalf("%d subscriptions at Stripe, want none made for a household whose subscription has ended", n)
+		}
+		if sub := x.eva.subscription(x.h); sub.State != "canceled" || sub.Interval != nil || sub.Payer.UserID != x.evaID || sub.Transfer != nil {
+			t.Fatalf("after the card was confirmed: %+v", sub)
+		}
+	})
 }
 
 // An offer's email that waits for the mail server goes with the offer: once billing has moved,

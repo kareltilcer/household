@@ -135,6 +135,43 @@ func TestWhatTheProcessorSaysMovesASubscriptionsStanding(t *testing.T) {
 	}
 }
 
+// What is kept of a subscription is what the processor says of it now. Why it was cancelled goes once
+// the cancellation is taken back, so that one the processor later leaves unpaid, saying no more, is a
+// lapse into grace and not its payer's cancellation; and a payment method's last four are kept only
+// where they are the four digits the row holds, which the last four characters of an IBAN are not
+// in every country.
+func TestWhatIsKeptOfWhatTheProcessorSays(t *testing.T) {
+	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	earlier := now.Add(-48 * time.Hour)
+	requested := ReasonRequested
+	row := subscription{id: "sub_1", standing: standingCurrent, interval: Month, reason: &requested, startedAt: &earlier}
+
+	if resumed := row.said(Subscription{Status: StatusActive}, now); resumed.reason != nil {
+		t.Errorf("a cancellation taken back is still kept as %q", *resumed.reason)
+	}
+	unpaid := row.said(Subscription{Status: StatusActive}, now).said(Subscription{Status: StatusUnpaid}, now)
+	lapsed := decide(households.Billing{Status: entitlement.Status{Billing: entitlement.PastDue, DunningEndsAt: &earlier}},
+		[]subscription{unpaid}, now)
+	if unpaid.standing != standingEnded || lapsed.Status.Billing != entitlement.Grace {
+		t.Errorf("one left unpaid after a cancellation taken back is %s and makes the household %s, want grace",
+			unpaid.standing, lapsed.Status.Billing)
+	}
+	if failed := row.said(Subscription{Status: StatusCanceled, CancellationReason: "payment_failed"}, now); failed.reason == nil ||
+		*failed.reason != "payment_failed" {
+		t.Errorf("the reason the processor gives is kept as %v", failed.reason)
+	}
+
+	for last4, kept := range map[string]bool{"4242": true, "3000": true, "13AA": false, "12a4": false, "424": false, "42424": false, "": false} {
+		got := row.said(Subscription{Status: StatusActive, PaymentMethod: &PaymentMethod{ID: "pm_1", Brand: "sepa_debit", Last4: last4}}, now)
+		if (got.last4 != nil) != kept {
+			t.Errorf("the last four %q: kept %v, want %v", last4, got.last4 != nil, kept)
+		}
+		if got.brand == nil || *got.brand != "sepa_debit" {
+			t.Errorf("the last four %q: the method's kind is not kept", last4)
+		}
+	}
+}
+
 // An invoice's lines are told apart as the contract's Invoice names them: the plan's fee, a month's
 // storage blocks with their count, a proration, and a credit.
 func TestAnInvoicesLinesAreToldApart(t *testing.T) {

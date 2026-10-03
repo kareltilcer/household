@@ -237,8 +237,8 @@ func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 			return problem.New(http.StatusForbidden, problem.CodeAccountUnverified)
 		}
 		subs, err := readSubscriptions(ctx, tx, household)
-		if w, ok := standing(subs, standingPending); ok {
-			waiting = w.id
+		if pending, ok := standing(subs, standingPending); ok {
+			waiting = pending.id
 		}
 		return err
 	})

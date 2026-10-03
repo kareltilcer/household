@@ -75,6 +75,9 @@ type Stripe struct {
 	keyed         map[string]string
 	requests      []Request
 	down, decline bool
+	// iban is the last four characters of the account every payment method made from now on debits,
+	// "" for a card.
+	iban string
 }
 
 // New starts a stand-in that reads the time from now, and stops it when t ends.
@@ -340,13 +343,19 @@ func (s *Stripe) createSubscription(r *http.Request, form url.Values) (any, *api
 	return s.render(s.subscriptions[id]), nil
 }
 
-// method is the payment method id, a card the stand-in keeps.
+// method is the payment method id, which the stand-in keeps: a card, or a SEPA Direct Debit while
+// DebitFrom names an account.
 func (s *Stripe) method(id string) object {
 	if m, ok := s.methods[id]; ok {
 		return m
 	}
 	m := s.fixture("payment_method")
 	m["id"] = id
+	if s.iban != "" {
+		delete(m, "card")
+		m["type"] = "sepa_debit"
+		m["sepa_debit"] = object{"bank_code": "08810", "branch_code": "", "country": "LI", "fingerprint": "fp_" + id, "last4": s.iban}
+	}
 	s.methods[id] = m
 	return m
 }
@@ -377,7 +386,12 @@ func (s *Stripe) updateSubscription(r *http.Request, form url.Values) (any, *api
 		return nil, notFound("subscription", r.PathValue("id"))
 	}
 	if v := form.Get("cancel_at_period_end"); v != "" {
+		// Stripe says why from the day the cancellation is asked for, and no longer once it is taken back.
 		sub["cancel_at_period_end"] = v == "true"
+		sub["cancellation_details"] = object{"comment": nil, "feedback": nil, "reason": nil}
+		if v == "true" {
+			sub["cancellation_details"] = object{"comment": nil, "feedback": nil, "reason": "cancellation_requested"}
+		}
 	}
 	if v := form.Get("default_payment_method"); v != "" {
 		sub["default_payment_method"] = s.method(v)
@@ -599,6 +613,28 @@ func (s *Stripe) GiveUp(id string) {
 	sub["status"], sub["cancellation_details"] = "canceled", object{"reason": "payment_failed"}
 }
 
+// LeaveUnpaid is Stripe giving up on the subscription id as an account set to mark it unpaid does:
+// it is unpaid, with no word on why it ended.
+func (s *Stripe) LeaveUnpaid(id string) {
+	s.t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.subscription(id)["status"] = "unpaid"
+}
+
+// WriteOff is Stripe marking the invoice id uncollectible, as an account set to write off what its
+// last retry could not collect does.
+func (s *Stripe) WriteOff(id string) {
+	s.t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, ok := s.invoices[id]
+	if !ok {
+		s.t.Fatalf("billingtest: no invoice %s", id)
+	}
+	inv["status"], inv["next_payment_attempt"] = "uncollectible", nil
+}
+
 // Expire is Stripe ending the subscription id, whose first payment was never confirmed.
 func (s *Stripe) Expire(id string) {
 	s.t.Helper()
@@ -662,6 +698,15 @@ func (s *Stripe) Decline(decline bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.decline = decline
+}
+
+// DebitFrom has every payment method confirmed from now on be a SEPA Direct Debit from an account
+// whose IBAN ends in last4, its last four characters, which are not digits in every country; "" has
+// them be cards again.
+func (s *Stripe) DebitFrom(last4 string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.iban = last4
 }
 
 // Subscription is what the stand-in holds of the subscription id: its status, whether it is set to

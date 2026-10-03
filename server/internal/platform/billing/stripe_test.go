@@ -184,6 +184,39 @@ func TestCancelVoidsWhatTheCancellationLeftOpen(t *testing.T) {
 	}
 }
 
+// A Stripe that does not answer is given up on once the processor's timeout has passed, as a failure
+// of Stripe's own that may be asked again: billing asks Stripe inside a transaction, under the
+// household's lock, and must not hold either for the 80 seconds the SDK's own client waits.
+func TestARequestToStripeIsBounded(t *testing.T) {
+	stop := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-stop:
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+	defer close(stop)
+	none := int64(0)
+	p, err := billing.NewStripe(billing.StripeConfig{
+		SecretKey: billingtest.SecretKey, WebhookSecret: billingtest.WebhookSecret, URL: server.URL,
+		Timeout: 50 * time.Millisecond, MaxNetworkRetries: &none,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	began := time.Now()
+	if _, err := p.Subscription(t.Context(), "sub_1"); !errors.Is(err, billing.ErrUnavailable) {
+		t.Fatalf("a Stripe that does not answer: %v, want it unavailable", err)
+	}
+	if waited := time.Since(began); waited > billing.DefaultTimeout/2 {
+		t.Fatalf("waited %s for a Stripe given 50ms", waited)
+	}
+	if billing.DefaultTimeout <= 0 || billing.DefaultTimeout > 30*time.Second {
+		t.Fatalf("a request with no timeout of its own waits %s", billing.DefaultTimeout)
+	}
+}
+
 // A webhook's event is read from its payload once its signature verifies, whatever API version it
 // was rendered at; the household is its object's metadata's, or its parent subscription's.
 func TestAnEventIsReadOnceItsSignatureVerifies(t *testing.T) {

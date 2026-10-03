@@ -106,6 +106,11 @@ func (s subscription) paidUp() bool {
 // said is s as the processor says p stands, at now: its fields as p has them, and its standing moved
 // on where p moved it. One waiting becomes the household's once it is live, and is over once it
 // expired unpaid; the household's is over once the processor cancelled it or gave up collecting it.
+//
+// Why it was cancelled is as the processor says it now, none included: a cancellation at the period's
+// end has its reason from the day it is asked for, and one its payer took back has none again. A
+// reason kept from then would make a subscription the processor later gave up on, saying no more than
+// that it is unpaid, its payer's own cancellation, and the household canceled where it is in grace.
 func (s subscription) said(p Subscription, now time.Time) subscription {
 	next := s
 	next.status, next.cancelAtPeriodEnd = p.Status, p.CancelAtPeriodEnd
@@ -118,7 +123,7 @@ func (s subscription) said(p Subscription, now time.Time) subscription {
 	next.brand, next.last4, next.expMonth, next.expYear = nil, nil, nil, nil
 	if pm := p.PaymentMethod; pm != nil {
 		next.brand = &pm.Brand
-		if len(pm.Last4) == 4 {
+		if fourDigits(pm.Last4) {
 			next.last4 = &pm.Last4
 		}
 		if pm.ExpMonth >= 1 && pm.ExpMonth <= 12 {
@@ -126,6 +131,7 @@ func (s subscription) said(p Subscription, now time.Time) subscription {
 			next.expMonth, next.expYear = &month, &year
 		}
 	}
+	next.reason = nil
 	if p.CancellationReason != "" {
 		next.reason = &p.CancellationReason
 	}
@@ -136,6 +142,21 @@ func (s subscription) said(p Subscription, now time.Time) subscription {
 		next.standing, next.endedAt = standingEnded, &now
 	}
 	return next
+}
+
+// fourDigits reports whether s is the four digits the row keeps of a payment method (01022). A card's
+// last four are; a bank account's are the last four characters of its IBAN, which in some countries
+// are letters, and are then not kept: the method is known by its kind alone, as one with none is.
+func fourDigits(s string) bool {
+	if len(s) != 4 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // insert writes s as household's, in tx; one already kept is left as it is.

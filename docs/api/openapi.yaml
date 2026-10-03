@@ -9729,7 +9729,7 @@ components:
               required: [brand, last4, exp_month, exp_year]
               properties:
                 brand: { type: string, description: 'A card''s brand, or the kind of another method, such as `sepa_debit`.' }
-                last4: { type: [string, 'null'] }
+                last4: { type: [string, 'null'], description: 'Its last four digits. Null for a method that has none: a bank account whose IBAN ends in letters is one.' }
                 exp_month: { type: [integer, 'null'] }
                 exp_year: { type: [integer, 'null'] }
         base_price:

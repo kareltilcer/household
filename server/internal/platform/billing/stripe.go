@@ -34,14 +34,23 @@ type Stripe struct {
 	secret string
 }
 
+// DefaultTimeout bounds a request to Stripe. The SDK's own client waits 80 seconds, and billing asks
+// Stripe inside a transaction that holds a pooled connection and the household's row lock (ADR 0019):
+// a Stripe that answers slowly would otherwise hold both for minutes, a request at a time, until the
+// pool had none left for anyone. A request cut off is sent again by the SDK under the idempotency key
+// it gave it, and what Stripe did meanwhile arrives as an event.
+const DefaultTimeout = 20 * time.Second
+
 // StripeConfig is what the Stripe processor needs.
 type StripeConfig struct {
 	// SecretKey is the API key, a restricted or secret key; WebhookSecret signs the webhooks.
 	SecretKey, WebhookSecret string
 	// URL is where the API is reached, Stripe's own when "": a test's stand-in.
 	URL string
-	// HTTPClient makes the requests, the SDK's own, with its timeouts, when nil.
+	// HTTPClient makes the requests, one that gives each Timeout when nil.
 	HTTPClient *http.Client
+	// Timeout bounds each request the client made for a nil HTTPClient sends, DefaultTimeout when zero.
+	Timeout time.Duration
 	// MaxNetworkRetries is how many times a request that failed on Stripe's side or on the way is
 	// sent again, the SDK's two when nil.
 	MaxNetworkRetries *int64
@@ -52,8 +61,16 @@ func NewStripe(cfg StripeConfig) (*Stripe, error) {
 	if cfg.SecretKey == "" || cfg.WebhookSecret == "" {
 		return nil, errors.New("billing: Stripe needs its API key and its webhook secret")
 	}
+	client := cfg.HTTPClient
+	if client == nil {
+		timeout := cfg.Timeout
+		if timeout <= 0 {
+			timeout = DefaultTimeout
+		}
+		client = &http.Client{Timeout: timeout}
+	}
 	backend := &stripe.BackendConfig{
-		HTTPClient: cfg.HTTPClient, MaxNetworkRetries: cfg.MaxNetworkRetries,
+		HTTPClient: client, MaxNetworkRetries: cfg.MaxNetworkRetries,
 		// The SDK logs each request's failure with its parameters; the server logs what it answers.
 		LeveledLogger: &stripe.LeveledLogger{Level: stripe.LevelNull},
 	}

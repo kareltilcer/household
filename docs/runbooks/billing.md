@@ -55,7 +55,8 @@ step in the mode the environment uses.
    retries at **1, 2, 2 and 2 days after the previous attempt**, which is PRD 04 §6's days 1, 3, 5
    and 7 after the first failure. When all retries fail: **cancel the subscription**. Marking it
    `unpaid` instead ends in grace the same way; leaving it `past_due` still ends in grace, a day
-   late, by the hourly job.
+   late, by the hourly job. The invoice may be left open or marked uncollectible: the last retry is
+   emailed either way.
    Turn Stripe's own customer emails for failed payments and invoices **off**: the server sends its
    own, in the payer's language.
 5. **The webhook endpoint**: `https://<api>/api/v1/webhooks/stripe`, at the API version stripe-go is
