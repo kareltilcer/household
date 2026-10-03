@@ -1,11 +1,13 @@
 # Object storage and the converter
 
-Households' files and users' pictures live in one private bucket of an S3-compatible store; the
-API writes them, once each, and hands out links pre-signed for one object for fifteen minutes at
-most ([ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md), PRD 01 §8). The
-converter sidecar derives an office document's PDF and a PDF's first page. Read this before an
-environment's first deploy, when uploads fail with `502 storage_unavailable`, when previews stop
-appearing, and when the sweep or a household's storage figures look wrong.
+Households' files, users' pictures and the archives of their exports live in one private bucket of an
+S3-compatible store; the API writes them, once each, and hands out links pre-signed for one object
+for fifteen minutes at most ([ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md),
+[ADR 0020](../adr/0020-export-erasure-and-the-tombstones.md), PRD 01 §8). The converter sidecar
+derives an office document's PDF and a PDF's first page. Read this before an environment's first
+deploy, when uploads fail with `502 storage_unavailable`, when previews stop appearing, when an
+export fails or an erasure's objects stay, and when the sweep or a household's storage figures look
+wrong.
 
 ## What is where
 
@@ -14,6 +16,8 @@ appearing, and when the sweep or a household's storage figures look wrong.
 | The bucket | `HOUSEHOLD_OBJECT_STORE_URL`'s path: `http(s)://ACCESS_KEY:SECRET@host:port/bucket?region=…`. `household` on the compose RustFS in development, which the server makes when it starts; a deployment's is provisioned, never made by the server |
 | A household's files | `h/{household_id}/{module}/{entity_id}/{variant}`: `original` as uploaded, `thumbnail`, `preview` and `pdf` derived. Their rows are `files`, in the household |
 | Users' pictures | `u/{user_id}/avatar/{id}/picture`. Their rows are `avatars`, global. Metered to no household (D-107) |
+| Exports' archives | `u/{user_id}/exports/{export_id}/{claim}`, one per try of an export, under its requester's prefix whether it is their own export or a household's. Their rows are `exports`, global: a `ready` row names its archive in `object`, for seven days. Metered to no household (D-133). Every API instance runs the worker that builds them, sent in 32 MiB parts as a multipart upload |
+| What erasure leaves | `erasures`, global: a row per erased household or account, with `purged_at` once the objects under `h/{household_id}/` or `u/{user_id}/` were removed. The nightly job (`privacy.erase`, 02:30 UTC) removes them when it erases, and again each night for three days |
 | Work after a commit | `file_jobs`: `variants` for an original's variants, `purge` for a deleted entity's bytes. Every API instance runs the workers |
 | The converter | `HOUSEHOLD_CONVERTER_URL`, the image `deploy/converter` builds; `pnpm run up:convert` in development |
 | The samples | `usage_samples`, `usage_sample_modules`, `usage_sample_members`, one set per household per UTC day |
@@ -25,12 +29,18 @@ appearing, and when the sweep or a household's storage figures look wrong.
    access policy of any kind: every read is a pre-signed link.
 2. **Turn versioning on**, with a lifecycle rule that expires noncurrent versions and delete markers
    after 35 days, the backups' retention (PRD 07 §3). A purge or a sweep then removes an object at
-   once for everyone, and the store keeps its previous version for the backups' window only.
+   once for everyone, and the store keeps its previous version for the backups' window only. **Add a
+   rule that aborts incomplete multipart uploads after a day**: an export's archive is sent in parts,
+   the API aborts an upload that fails, and one whose process died in the middle leaves parts no
+   listing shows and no sweep removes. A try lasts six hours at most, so a day aborts none still
+   running.
 3. **Replicate it** to a second account in the EU (PRD 01 §8).
-4. **Give the API a key of its own**, allowed `GetObject`, `PutObject` (conditional writes included),
-   `DeleteObject`, `ListBucket` and `HeadBucket` on this bucket and nothing else. The URL carrying it is
-   a secret, like the database's; outside development the server refuses the compose store's
-   published one and plain http.
+4. **Give the API a key of its own**, allowed `GetObject`, `PutObject` (conditional writes and
+   multipart uploads included), `AbortMultipartUpload`, `DeleteObject`, `ListBucket` and `HeadBucket`
+   on this bucket and nothing else. Without `AbortMultipartUpload` an export still builds, and the
+   parts of one that failed stay until the lifecycle rule takes them. The URL carrying it is a
+   secret, like the database's; outside development the server refuses the compose store's published
+   one and plain http.
 5. **Put an edge in front of the bucket that adds `X-Content-Type-Options: nosniff`** to every
    response (FR-FL2). The store cannot: a pre-signed URL sets the response's type and disposition, and
    no other header. Name the edge's scheme and host in `HOUSEHOLD_OBJECT_STORE_PUBLIC_URL` when
@@ -101,6 +111,35 @@ UPDATE files SET variants = 'pending'
 WHERE household_id = '<household>' AND module = '<module>' AND entity_id = '<entity>' AND variant = 'original';
 INSERT INTO file_jobs (household_id, kind, module, entity_id) VALUES ('<household>', 'variants', '<module>', '<entity>');
 ```
+
+## An export fails, or an erasure's objects stay
+
+An export is tried three times, five minutes apart, and has then failed, with nothing of its archive
+kept; its requester asks again (five of a kind a day). One whose process stopped goes back to the
+queue uncounted, and one whose worker died is taken again once its six-hour lease has passed.
+
+```sql
+-- As the database's administrator: the exports waiting or running, and those that failed in the last day.
+SELECT status, count(*), max(attempts), min(run_at) FROM exports WHERE status IN ('queued', 'running') GROUP BY status;
+SELECT id, user_id, household_id, attempts, ended_at FROM exports WHERE status = 'failed' AND ended_at > now() - interval '1 day';
+
+-- The erasures whose objects are not known to be gone.
+SELECT kind, id, cause, erased_at FROM erasures WHERE purged_at IS NULL;
+```
+
+- `privacy: an export failed` in the API's log carries the error of each try: the store's, when it
+  refused the upload, in which case uploads fail too (above); `privacy: an export panicked` is a bug
+  in a module's part of it, to report with the panic's type and stack, and that export is not tried
+  again.
+- Exports `queued` with `run_at` in the past: no worker is running them. Every instance runs one, and
+  logs `privacy: claim an export` when it cannot reach the database.
+- An archive the store keeps under `u/{user_id}/exports/` that no `ready` row names is removed by the
+  expiry sweep once it is a day old (`expiry.sweep`, 03:00 UTC), as is a `ready` export's seven days
+  after it was ready.
+- An erasure with `purged_at` null: the rows are gone and the store refused the listing or a delete,
+  which the job logs with the error, as `privacy: an erasure failed` the night it erased and as
+  `privacy: remove an erasure's objects` on the nights after. It tries each again every night until
+  it succeeds; nothing else names those objects, so do not delete the row.
 
 ## Storage figures look wrong
 

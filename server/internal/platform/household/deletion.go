@@ -29,7 +29,7 @@ import (
 const DeletionWindow = 30 * 24 * time.Hour
 
 // What every member is told when their household's deletion is scheduled, and when it is cancelled
-// (FR-PR6): an email, one of the fixed set that arrives whatever a member muted (D-130), and a push
+// (FR-PR6): an email, one of the fixed set that arrives whatever a member muted (D-132), and a push
 // to the members other than the one who did it.
 const (
 	emailDeletion                    mail.Template = "email.household_deletion"
@@ -403,9 +403,9 @@ type Fate struct {
 // loses the membership, recorded without the name the account no longer has, with the invitations
 // the user sent; where they were its only owner who is staying, the adult who has been a member
 // longest is made an owner first, so that no household is left with nobody to run it (D-131), and
-// where they were its payer, billing passes to an owner who stays. A household they were the only
-// member of, one whose deletion follows their account's, and one left with no adult but them, is the
-// caller's to erase.
+// where they were its payer, billing passes to an owner who stays, or, with none staying, to one
+// whose own account is scheduled for deletion. A household they were the only member of, one whose
+// deletion follows their account's, and one left with no adult but them, is the caller's to erase.
 //
 // An adult whose own account is scheduled for deletion may still come back, so a household with one
 // in it is not one nobody could own: another owner in that state stays its owner, and with no owner
@@ -529,12 +529,14 @@ func (s *Service) Depart(ctx context.Context, catalog *module.Registry, househol
 			return mutation.Record{}, err
 		}
 		if len(members) == 1 && payer != nil && *payer == user {
-			// Billing passes to the owner who has been one longest, the successor among them.
+			// Billing passes to an owner who is staying, the successor among them, before one whose own
+			// account is scheduled for deletion, and among either to the one who has been a member
+			// longest (D-131): an owner in that state is disabled, and pays for nothing they can see.
 			if _, err := tx.Exec(ctx, `
 				UPDATE households SET billing_payer_id = (
 				  SELECT m.user_id FROM memberships m
 				  WHERE m.household_id = $1 AND m.role = 'owner' AND m.user_id <> $2
-				  ORDER BY m.created_at, m.id LIMIT 1)
+				  ORDER BY EXISTS (SELECT FROM account_deletions d WHERE d.user_id = m.user_id), m.created_at, m.id LIMIT 1)
 				WHERE id = $1`, household, user); err != nil {
 				return mutation.Record{}, err
 			}

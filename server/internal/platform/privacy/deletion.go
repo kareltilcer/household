@@ -174,6 +174,11 @@ func (s *Service) requestDeletion(w http.ResponseWriter, r *http.Request) {
 		if err := identity.LockAccount(ctx, tx, user); err != nil {
 			return err
 		}
+		// The proof was checked before this transaction: a password reset or changed since then wins,
+		// and the request answers as a wrong password does.
+		if err := s.cfg.Accounts.HoldConfirmation(ctx, tx, user, owner); err != nil {
+			return err
+		}
 		now := s.cfg.Now()
 		d = household.Deletion{ID: idgen.New(), Scope: scopeUser, RequestedAt: now.UTC(), ExecutesAt: now.Add(household.DeletionWindow).UTC()}
 		tag, err := tx.Exec(ctx, `

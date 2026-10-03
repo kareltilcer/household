@@ -197,9 +197,18 @@ func writeJSON(w io.Writer, v any) error {
 // segmentRunes caps one segment of an entry's name.
 const segmentRunes = 120
 
+// devices are the names Windows keeps for its devices, which it refuses as a file's or a folder's
+// whatever their case and whatever extension follows them: CON, and CON.md.
+var devices = map[string]bool{
+	"con": true, "prn": true, "aux": true, "nul": true,
+	"com1": true, "com2": true, "com3": true, "com4": true, "com5": true, "com6": true, "com7": true, "com8": true, "com9": true,
+	"lpt1": true, "lpt2": true, "lpt3": true, "lpt4": true, "lpt5": true, "lpt6": true, "lpt7": true, "lpt8": true, "lpt9": true,
+}
+
 // clean is p as an archive names an entry: its segments, each without the characters a file system
-// refuses, without the dots and spaces that end a name on Windows, and never empty, "." or "..", so
-// that an entry stays inside the folder the archive is unpacked into whatever a note is titled.
+// refuses, without the dots and spaces that end a name on Windows, never one of the names Windows
+// keeps for its devices, and never empty, "." or "..", so that an entry stays inside the folder the
+// archive is unpacked into, and is unpacked at all, whatever a note is titled.
 func clean(p string) string {
 	var out []string
 	for seg := range strings.SplitSeq(strings.ReplaceAll(p, `\`, "/"), "/") {
@@ -211,6 +220,10 @@ func clean(p string) string {
 			return r
 		}, seg)
 		seg = strings.TrimRight(strings.TrimSpace(seg), ". ")
+		// A device's name is one up to its first dot, with the spaces before it: "NUL .txt" is NUL.
+		if stem, _, _ := strings.Cut(seg, "."); devices[strings.ToLower(strings.TrimRight(stem, " "))] {
+			seg = "_" + seg
+		}
 		if r := []rune(seg); len(r) > segmentRunes {
 			ext := []rune(path.Ext(seg))
 			if len(ext) > 16 {

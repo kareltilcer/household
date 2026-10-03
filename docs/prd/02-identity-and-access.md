@@ -432,8 +432,9 @@ member hits a problem and taps *"send diagnostics"*; the client assembles a bund
 screen they were on, shows them **exactly what it contains, rendered, before it is sent**, lets
 them redact fields, and attaches it to their ticket. It expires in 30 days. The member is the
 one who decided to share, and they saw what they shared. **D-20.** The server keeps the bundle as
-it was sent and reads none of it, 256 KiB at most, about a household its sender belongs to or
-about none (D-136).
+it was sent and reads none of it: a payload of 256 KiB at most, at most 200 redacted fields named
+in 200 characters each, about a household its sender belongs to or about none, and twenty bundles
+an account in a day (D-136).
 
 **FR-PS2 — Every staff action is doubly logged.** Once in the platform audit log (append-only,
 separate schema, retained 7 years) and once, where it touches a household, in that household's
@@ -454,6 +455,7 @@ to the household as *"Household support extended your trial"*.
 | Verification email resend, per IP | 20 / hour |
 | Invitation send, per household | 20 / day |
 | Export requests, per user, their own and each household's apart | 5 / day; while one waits or runs, asking again answers it (D-133) |
+| Diagnostic bundles, per account | 20 / day; one sent again with its `id` is answered as it was and counts once (D-136) |
 | Second-step codes, per account | 5 wrong / 5 min, the first code that turns it on included; the tenth wrong since the last right one locks the authenticator (FR-ID5) |
 | Sign-in begun with Google or Apple, per IP | 60 / hour |
 | Child PIN attempts | 10 wrong since the last right one, then owner unlock; a child's failed sign-ins count against the network as a password's do |

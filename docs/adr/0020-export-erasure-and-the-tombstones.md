@@ -80,7 +80,11 @@ account scheduled, and the household is resolved again on the job's next run. On
 follows the account's goes with it whoever owns it by then, as it would the night after were it kept.
 The account's own tables go in one transaction at the end, which empties the `users` row and sets
 `deleted_at`: a failure before it leaves the deletion scheduled, and the next night goes over the
-households again, each step a no-op where it was done. It finds them by the account's memberships and
+households again, each step a no-op where it was done. The job ends the deletion's cancel link before
+it reads the deletion it is to execute, the link first and the row after, as a cancellation takes
+them: one under way is waited for and has taken the row by then, and one that comes later finds its
+link spent, so that nothing cancels a deletion whose execution has begun, and no account is answered
+as kept and erased all the same. It finds the households by the account's memberships and
 its departures, so in each household whichever of the two it is goes last: a membership ended before
 what the household keeps of the member was deleted would leave a failed night's remainder there for
 good.
@@ -150,6 +154,7 @@ token the email carried; `DELETE /me/deletion` is removed from the contract.
 - Item 43 adds the owner's hard-delete of a departed member's private items before their window ends
   (FR-PR7), with the first private root it applies to.
 - A multipart upload a process died in the middle of leaves parts the store keeps until its own
-  lifecycle rule aborts them; items 30 and 88 set that rule on the bucket.
+  lifecycle rule aborts them; items 30 and 88 set that rule on the bucket, and give the API's key
+  `AbortMultipartUpload`, as [the object-storage runbook](../runbooks/object-storage.md) says.
 - The erasure's deletes replicate to PowerSync row by row; a large household's erasure is a large
   transaction in the replication slot, which item 90 measures.

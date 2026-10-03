@@ -323,7 +323,7 @@ platform work in the product.
 | | |
 |---|---|
 | **Store** | S3-compatible, EU region, private buckets, no public access under any condition |
-| **Key shape** | `h/{household_id}/{module}/{entity_id}/{variant}` — the tenant is the first path segment, so a bucket policy, a lifecycle rule, a usage listing and a tenant erasure are all prefix operations. A user's picture is the account's, `u/{user_id}/avatar/{id}/picture`, and so is its erasure (**D-107**) |
+| **Key shape** | `h/{household_id}/{module}/{entity_id}/{variant}` — the tenant is the first path segment, so a bucket policy, a lifecycle rule, a usage listing and a tenant erasure are all prefix operations. A user's picture is the account's, `u/{user_id}/avatar/{id}/picture`, and so is its erasure (**D-107**); an export's archive is its requester's, `u/{user_id}/exports/{id}/{claim}`, and goes with their account too (**D-133**) |
 | **Access** | Never direct. Uploads go through the API (which sniffs the type, enforces the size cap and the storage quota); downloads are served as short-lived pre-signed URLs the API issues after authorizing the caller |
 | **Immutability** | Bytes are write-once, as in `home`: the store refuses a second write to a key (`If-None-Match`), whoever races for it. A changed file is a new entity |
 | **Backups** | Object versioning plus cross-account replication within the EU |

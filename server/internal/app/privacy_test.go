@@ -460,12 +460,31 @@ func TestAnOwnersExportOfTheHouseholdMatchesItsManifest(t *testing.T) {
 		t.Errorf("the email reads %q: %s", last.Subject, last.Body)
 	}
 
-	// Seven days on it is expired, whether or not the sweep has run, and the sweep removes its bytes.
+	// An archive no export names, which a try that died after it stored its bytes left, is removed by
+	// the sweep once it is a day old, and never sooner: an export being settled names its own a moment
+	// after it stored it. The archive the ready export names stays.
 	stored := p.objects("u/" + janaID.String() + "/exports/")
 	if len(stored) != 1 {
 		t.Fatalf("the store holds %v", stored)
 	}
-	p.clock.advance(7 * 24 * time.Hour)
+	orphan := "u/" + janaID.String() + "/exports/" + idgen.New().String() + "/" + idgen.New().String()
+	if err := p.store.PutOnce(t.Context(), orphan, strings.NewReader("orphan"), 6,
+		objectstore.Object{ContentType: "application/zip", SHA256: sha256.Sum256([]byte("orphan"))}); err != nil {
+		t.Fatal(err)
+	}
+	if p.expire(); len(p.objects("u/"+janaID.String()+"/exports/")) != 2 {
+		t.Fatalf("the sweep removed an archive not yet a day old: %v", p.objects("u/"+janaID.String()+"/exports/"))
+	}
+	p.clock.advance(2 * 24 * time.Hour)
+	if p.expire(); !slices.Equal(p.objects("u/"+janaID.String()+"/exports/"), stored) {
+		t.Fatalf("two days on the sweep left %v, want the ready export's archive alone, %v", p.objects("u/"+janaID.String()+"/exports/"), stored)
+	}
+	if e := exportOf(t, jana.get(path+"/"+queued.ID.String()), http.StatusOK); e.Status != "ready" || e.DownloadURL == nil {
+		t.Fatalf("swept beside an orphan, the export reads %+v", e)
+	}
+
+	// Seven days on it is expired, whether or not the sweep has run, and the sweep removes its bytes.
+	p.clock.advance(5 * 24 * time.Hour)
 	if e := exportOf(t, jana.get(path+"/"+queued.ID.String()), http.StatusOK); e.Status != "expired" || e.DownloadURL != nil {
 		t.Fatalf("past its seven days it reads %+v", e)
 	}

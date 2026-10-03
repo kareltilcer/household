@@ -62,6 +62,10 @@ func LockAccount(ctx context.Context, tx pgx.Tx, user uuid.UUID) error {
 // Owner is the account a deletion is confirmed for: where its email goes, and in which language.
 type Owner struct {
 	Address, Locale string
+	// set is when the password that confirmed it was set, nil for an account that has none and
+	// confirmed with its address: what the transaction that schedules the deletion holds the
+	// account to (HoldConfirmation).
+	set *time.Time
 }
 
 // ConfirmDeletion checks that proof authorises the deletion of user's account (FR-PR3): the
@@ -99,12 +103,30 @@ func (s *Service) ConfirmDeletion(ctx context.Context, user uuid.UUID, proof str
 	}
 	if hasPassword {
 		c, err := s.reauthenticate(ctx, user, proof)
-		return Owner{Address: c.address, Locale: c.language}, err
+		return Owner{Address: c.address, Locale: c.language, set: &c.set}, err
 	}
 	if !strings.EqualFold(strings.TrimSpace(proof), *address) {
 		return Owner{}, InvalidCredentials()
 	}
 	return Owner{Address: *address, Locale: language}, nil
+}
+
+// HoldConfirmation holds user's account, in tx, to what ConfirmDeletion checked before tx began, and
+// answers as a wrong password is answered when it no longer stands: the password it verified is
+// still the account's, as a change of password holds its own check (unchanged), or the account that
+// confirmed with its address still has no password. A reset that landed since ended what the check
+// proved, with every session of whoever asked. The caller holds the user's row first (LockAccount),
+// as a reset does before it writes the password, so that the two take them in one order.
+func (s *Service) HoldConfirmation(ctx context.Context, tx pgx.Tx, user uuid.UUID, o Owner) error {
+	if o.set != nil {
+		return unchanged(ctx, tx, user, *o.set)
+	}
+	var has bool
+	err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT FROM credentials WHERE user_id = $1 AND type = 'password')", user).Scan(&has)
+	if err == nil && has {
+		err = InvalidCredentials()
+	}
+	return err
 }
 
 // Disable ends everything that signs user in, in tx (FR-PR4): every web session and every device's
@@ -149,6 +171,26 @@ func (s *Service) SpendCancelLink(ctx context.Context, tx pgx.Tx, token string) 
 	}
 	_, err = tx.Exec(ctx, "UPDATE email_tokens SET used_at = $2 WHERE id = $1", t.id, s.Sessions.Now())
 	return t.user, err
+}
+
+// EndCancelLink spends, in tx, the link that would still cancel user's deletion, once that deletion
+// has fallen due at due: what executes the deletion calls it first, before it reads the deletion it
+// is to execute, so that from then on nothing cancels it. A link lasts as long as the window, issued a
+// clock's reading after the day was set, and two instances' clocks differ: without this, a
+// cancellation that passed its check as the erasure began would be answered as done, and the account
+// erased all the same.
+//
+// The link is taken before the deletion's row, as a cancellation takes them (SpendCancelLink, then
+// the row), so that the two wait for each other in one order. A cancellation that holds the link
+// first is waited for, and has deleted the row by the time the caller reads it; one that comes after
+// finds the link spent. A deletion that is not due keeps its link.
+func (s *Service) EndCancelLink(ctx context.Context, tx pgx.Tx, user uuid.UUID, due time.Time) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE email_tokens SET used_at = $2
+		WHERE user_id = $1 AND purpose::text = $3 AND used_at IS NULL
+		  AND EXISTS (SELECT FROM account_deletions d WHERE d.user_id = $1 AND d.executes_at <= $4)`,
+		user, s.Sessions.Now(), purposeCancelDeletion, due)
+	return err
 }
 
 // SendLink sends template to address after the response, in the language of locale, with the link

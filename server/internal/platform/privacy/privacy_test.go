@@ -33,6 +33,14 @@ func TestAnEntrysNameIsCleaned(t *testing.T) {
 		"files/probe/" + long(200) + ".pdf": "files/probe/" + long(116) + ".pdf",
 		// Cut where a sentence ends, the name does not end in the dot the cut left.
 		long(119) + ". " + long(40): long(119),
+		// A name Windows keeps for a device is no file's there, whatever its case or its extension.
+		"notes/CON.md":         "notes/_CON.md",
+		"notes/nul":            "notes/_nul",
+		"aux/Lpt1 .tar.gz":     "_aux/_Lpt1 .tar.gz",
+		"notes/console.md":     "notes/console.md",
+		"notes/com10.md":       "notes/com10.md",
+		"notes/my.con.md":      "notes/my.con.md",
+		"files/probe/COM1.pdf": "files/probe/_COM1.pdf",
 	} {
 		if got := clean(name); got != want {
 			t.Errorf("clean(%q) = %q, want %q", name, got, want)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -299,6 +300,38 @@ func TestTheLastOwnerErasedIsSucceeded(t *testing.T) {
 	}
 }
 
+// Billing passes to an owner who is staying before one whose own account is scheduled for deletion,
+// however long either has been a member (D-131): an account that is disabled pays for nothing it can
+// see, and the owner who stays could not remove its payer.
+func TestBillingPassesToAnOwnerWhoStaysBeforeOneWhoIsLeaving(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	janaID := jana.me().ID
+	h := jana.create("Tilcerovi")
+	petr, petrID := p.joined(jana, h.ID, "Petr", p.a("petr@tilcerovi.cz"), "member", nil)
+	_, evaID := p.joined(jana, h.ID, "Eva", p.a("eva@tilcerovi.cz"), "member", nil)
+	for _, id := range []uuid.UUID{petrID, evaID} {
+		expect(t, jana.post(householdPath(h.ID, "/ownership/transfer"), jsonBody(t, map[string]any{"user_id": id})), http.StatusOK, "")
+	}
+	// Billing is item 19's to move; here it moves as the administrator moves it: away from Jana for
+	// her to ask, and back, so that it is hers to pass on when her account is erased.
+	p.exec("UPDATE households SET billing_payer_id = $2 WHERE id = $1", h.ID, petrID)
+	expect(t, jana.deleteAccount(passphrase), http.StatusAccepted, "")
+	p.exec("UPDATE households SET billing_payer_id = $2 WHERE id = $1", h.ID, janaID)
+	// Petr, an owner who joined before Eva, goes too, ten days on: Eva is the owner who stays.
+	p.clock.advance(10 * 24 * time.Hour)
+	expect(t, petr.deleteAccount(passphrase), http.StatusAccepted, "")
+
+	p.clock.advance(20*24*time.Hour + time.Minute)
+	p.erase()
+	if n := p.count("SELECT count(*) FROM memberships WHERE household_id = $1 AND user_id = $2", h.ID, janaID); n != 0 {
+		t.Fatal("her membership outlived her account")
+	}
+	if n := p.count("SELECT count(*) FROM households WHERE id = $1 AND billing_payer_id = $2", h.ID, evaID); n != 1 {
+		t.Error("billing passed to an owner whose own account is scheduled for deletion, with one who stays beside him")
+	}
+}
+
 // A household is not erased while an adult who could run it may still come back (D-131). An owner
 // whose own account is scheduled for deletion counts as none for whoever would leave the household to
 // them, and is its owner still when the other owner's account is erased first: the household goes on
@@ -507,6 +540,39 @@ func TestASignInBesideADeletionBeingScheduledIsRefusedAndNeverWaits(t *testing.T
 	p.browser().login(address, passphrase)
 }
 
+// A deletion is held to the proof that confirmed it (FR-PR3). The password is checked before the
+// transaction that schedules the deletion, as a password's change checks its own: one reset or
+// changed in between ends what the check proved, and the scheduling answers as a wrong password does.
+func TestADeletionIsHeldToThePasswordThatConfirmedIt(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	janaID := jana.me().ID
+	owner, err := p.identity.ConfirmDeletion(t.Context(), janaID, passphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The scheduling's transaction, as far as its hold on what was confirmed.
+	hold := func() error {
+		tx, err := p.admin.Begin(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(context.WithoutCancel(t.Context())) }()
+		return p.identity.HoldConfirmation(t.Context(), tx, janaID, owner)
+	}
+	if err := hold(); err != nil {
+		t.Fatalf("with the password it was confirmed with still the account's, the hold answered %v", err)
+	}
+	// A reset lands between the check and the scheduling: the password is one set at another moment.
+	p.exec("UPDATE credentials SET updated_at = clock_timestamp() WHERE user_id = $1 AND type = 'password'", janaID)
+	var refused *problem.Problem
+	if err := hold(); !errors.As(err, &refused) || refused.Code != problem.CodeInvalidCredentials {
+		t.Fatalf("with the password set again since it was checked, the hold answered %v", err)
+	}
+	// And the request itself goes on working with the password as it now is.
+	expect(t, jana.deleteAccount(passphrase), http.StatusAccepted, "")
+}
+
 // An erasure that fails partway is finished the next night, with nothing of it left undone (FR-PR4):
 // while a module's part of a household fails, the account stays scheduled and its membership stays,
 // which is how the job finds the household again.
@@ -551,6 +617,49 @@ func TestAnErasureThatFailedPartwayIsFinishedTheNextNight(t *testing.T) {
 	}
 }
 
+// Nothing cancels a deletion once its execution has begun (FR-PR4). The link is issued a clock's
+// reading after the day is set and lasts that much longer, so it would still pass its own check as
+// the nightly job finds the account due: the job ends it before it reads the deletion, and an account
+// it had begun on, and left half erased when a module's part failed, is not brought back.
+func TestADeletionBeingExecutedIsNoLongerCancelled(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	janaID := jana.me().ID
+	h := jana.create("Tilcerovi")
+	petr, petrID := p.joined(jana, h.ID, "Petr", p.a("petr@tilcerovi.cz"), "member", nil)
+	p.probe(h.ID, map[uuid.UUID]string{janaID: "manage", petrID: "contribute"})
+	p.item(h.ID, petrID, true, "petr.txt", "Petr's own")
+
+	// The clock runs while the request is served, as a real one does.
+	p.clock.run(time.Second)
+	rec := petr.deleteAccount(passphrase)
+	p.clock.run(0)
+	expect(t, rec, http.StatusAccepted, "")
+	var d deletionDoc
+	decode(t, rec, &d)
+	// The instant after the deletion falls due, with its link not yet past its own time.
+	p.clock.advance(d.ExecutesAt.Add(time.Millisecond).Sub(p.clock.now()))
+	if n := p.count("SELECT count(*) FROM email_tokens WHERE user_id = $1 AND purpose = 'cancel_deletion' AND used_at IS NULL AND expires_at > $2",
+		petrID, p.clock.now()); n != 1 {
+		t.Fatal("the link does not outlast the day its deletion falls due: the test proves nothing")
+	}
+
+	p.refuse.Store(true)
+	if _, err := p.privacy.Erase(t.Context()); err == nil {
+		t.Fatal("the job reported nothing of a module that refused")
+	}
+	p.refuse.Store(false)
+	expect(t, p.browser().post("/auth/deletion/cancel", jsonBody(t, map[string]string{"token": *d.CancelToken})),
+		http.StatusGone, problem.CodeTokenAlreadyUsed)
+	if n := p.count("SELECT count(*) FROM account_deletions WHERE user_id = $1", petrID); n != 1 {
+		t.Fatal("a deletion whose execution had begun was cancelled")
+	}
+	p.erase()
+	if p.count("SELECT count(*) FROM users WHERE id = $1 AND deleted_at IS NOT NULL", petrID) != 1 {
+		t.Fatal("the next run did not erase the account")
+	}
+}
+
 // A household's deletion is an owner's, who types its name (FR-PR6, FR-HA16): every member is told,
 // any owner cancels it within 30 days, and after them the nightly job erases every row of it and
 // every object, with its child profiles' accounts, and nothing of any other household.
@@ -567,6 +676,9 @@ func TestAHouseholdsDeletionErasesEveryRowOfIt(t *testing.T) {
 	p.item(h.ID, petrID, true, "petr.txt", "Petr's own")
 	exportOf(t, jana.post(householdPath(h.ID, "/exports"), ""), http.StatusAccepted)
 	p.work()
+	// A bundle a member sent about it is the account's, and goes with the household it was about.
+	expect(t, petr.post("/me/diagnostics", jsonBody(t, map[string]any{"screen": "sync-health", "household_id": h.ID, "payload": map[string]any{}})),
+		http.StatusCreated, "")
 	path := householdPath(h.ID, "/deletion")
 	schedule := func(b *browser, name string) *httptest.ResponseRecorder {
 		return b.post(path, jsonBody(t, map[string]string{"confirm_name": name}))
@@ -615,7 +727,7 @@ func TestAHouseholdsDeletionErasesEveryRowOfIt(t *testing.T) {
 	before := p.rowsOf(h.ID)
 	for _, table := range []string{
 		"households", "memberships", "module_enablement", "module_grants", "invitations", "audit_events", "audit_changes",
-		"notifications", "notification_deliveries", "files", "probe_items", "exports",
+		"notifications", "notification_deliveries", "files", "probe_items", "exports", "diagnostic_bundles",
 	} {
 		if before[table] == 0 {
 			t.Errorf("the household holds no row of %s to erase: %v", table, before)
@@ -839,4 +951,42 @@ func TestConsentsAndDiagnosticBundles(t *testing.T) {
 	if errs := fieldErrorsOf(t, petr.post("/me/diagnostics", jsonBody(t, bundle))); len(errs) != 1 || errs[0].Field != "/household_id" {
 		t.Fatalf("a bundle about another's household answered %+v", errs)
 	}
+
+	// What its member took out is named, and the names are held to a size as the payload is: a bundle
+	// is no way to keep whatever fits a request.
+	for what, fields := range map[string][]string{
+		"201 fields":               make([]string, 201),
+		"a name of 201 characters": {strings.Repeat("x", 201)},
+	} {
+		bundle["id"], bundle["redacted_fields"] = idgen.New(), fields
+		if errs := fieldErrorsOf(t, jana.post("/me/diagnostics", jsonBody(t, bundle))); len(errs) != 1 || errs[0].Field != "/redacted_fields" {
+			t.Errorf("a bundle with %s answered %+v", what, errs)
+		}
+	}
+	// An account sends twenty in a day (PRD 02 §9): Jana sent one an hour ago, and the twenty-first is
+	// refused until that one is a day old, while one sent before is still answered as it was.
+	bundle["redacted_fields"] = []string{}
+	for i := 2; i <= 20; i++ {
+		bundle["id"] = idgen.New()
+		expect(t, jana.post("/me/diagnostics", jsonBody(t, bundle)), http.StatusCreated, "")
+	}
+	last := bundle["id"]
+	bundle["id"] = idgen.New()
+	rec = jana.post("/me/diagnostics", jsonBody(t, bundle))
+	expect(t, rec, http.StatusTooManyRequests, problem.CodeRateLimited)
+	if rec.Header().Get("Retry-After") == "" {
+		t.Error("the refusal names no time to try again")
+	}
+	if n := p.count("SELECT count(*) FROM diagnostic_bundles WHERE id = $1", bundle["id"]); n != 0 {
+		t.Error("a bundle past the day's twenty was kept")
+	}
+	late := bundle["id"]
+	bundle["id"] = last
+	expect(t, jana.post("/me/diagnostics", jsonBody(t, bundle)), http.StatusCreated, "")
+	// Another account's count is its own.
+	bundle["id"], bundle["household_id"] = idgen.New(), nil
+	expect(t, petr.post("/me/diagnostics", jsonBody(t, bundle)), http.StatusCreated, "")
+	p.clock.advance(23 * time.Hour)
+	bundle["id"], bundle["household_id"] = late, h.ID
+	expect(t, jana.post("/me/diagnostics", jsonBody(t, bundle)), http.StatusCreated, "")
 }

@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -51,13 +52,8 @@ func AccountExport(ctx context.Context, tx pgx.Tx, user uuid.UUID) (map[string]a
 	}
 	out := map[string]any{"browser_subscriptions": browsers, "defaults": nil}
 	if defaults != nil {
-		out["defaults"] = jsonRaw(defaults)
+		// As PostgreSQL wrote it, embedded as it is.
+		out["defaults"] = json.RawMessage(defaults)
 	}
 	return out, nil
 }
-
-// jsonRaw is JSON as PostgreSQL wrote it, embedded as it is.
-type jsonRaw []byte
-
-// MarshalJSON returns j itself.
-func (j jsonRaw) MarshalJSON() ([]byte, error) { return j, nil }

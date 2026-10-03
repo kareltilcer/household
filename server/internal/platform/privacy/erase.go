@@ -18,11 +18,12 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
 
-// What erased a household or an account, as its tombstone says it (erasures.cause).
+// What erased a household or an account, as its tombstone says it (erasures.cause). A household that
+// goes with an erased account is erased for the cause the household surface answers
+// (household.Fate.Cause), which says it too when nobody is left in it who could own it.
 const (
-	causeAccount   = "account"
-	causeLapsed    = "lapsed"
-	causeOwnerless = "ownerless"
+	causeAccount = "account"
+	causeLapsed  = "lapsed"
 
 	kindHousehold = "household"
 	kindAccount   = "account"
@@ -341,7 +342,8 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 }
 
 // eraseAccount executes user's scheduled deletion (FR-PR3, FR-PR4), read again as it is: cancelled
-// since the search, it does nothing. Household by household, in each one's own context, what the
+// since the search, it does nothing, and from that read on its link cancels nothing
+// (identity.Service.EndCancelLink). Household by household, in each one's own context, what the
 // household keeps of the user is deleted (forget), what they kept privately by its modules, what was
 // sent to them, and their name on the events they caused; and the household surface ends their
 // membership and says what becomes of the household (household.Service.Depart): one that goes with
@@ -360,6 +362,12 @@ func (s *Service) eraseHousehold(ctx context.Context, household uuid.UUID, cause
 func (s *Service) eraseAccount(ctx context.Context, user uuid.UUID, now time.Time) (int, bool, error) {
 	var cause string
 	err := tenant.AccountTx(ctx, s.cfg.Pool, uuid.Nil, func(tx pgx.Tx) error {
+		// The link that cancels it ends here, before the deletion is read: a cancellation under way
+		// is waited for, and has taken the deletion's row by the time it is read below; one that comes
+		// later finds its link spent. Nothing cancels a deletion once its execution has begun.
+		if err := s.cfg.Accounts.EndCancelLink(ctx, tx, user, now); err != nil {
+			return err
+		}
 		err := tx.QueryRow(ctx, "SELECT cause FROM account_deletions WHERE user_id = $1 AND executes_at <= $2", user, now).Scan(&cause)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil

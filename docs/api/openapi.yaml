@@ -1260,8 +1260,10 @@ paths:
 
         The server keeps what it is sent and reads none of it. `household_id`, when given, is a
         household the caller belongs to, and any other is refused `422`; so are a `screen` over 200
-        characters and a `payload` over 256 KiB. A bundle sent again with the `id` it was sent with
-        is kept once, and answered as it was.
+        characters, a `payload` over 256 KiB, and `redacted_fields` past 200 names or with a name
+        over 200 characters. A bundle sent again with the `id` it was sent with is kept once, and
+        answered as it was. An account sends twenty bundles in a day; past that a new one is refused
+        `429` until the oldest is a day old (D-136).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -9452,7 +9454,7 @@ components:
         household_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }
         ticket_reference: { type: [string, 'null'] }
         payload: { type: object, additionalProperties: true, description: 'Exactly what the member saw and approved: the replica''s sync state, its last checkpoint, its queue depth, its checksum and digest mismatches and its last mutation outcomes with their codes, and no field values (PRD 10 §6). 256 KiB at most.' }
-        redacted_fields: { type: array, items: { type: string } }
+        redacted_fields: { type: array, items: { type: string }, description: 'The names of the fields the member took out before sending: 200 at most, of 200 characters each.' }
         created_at: { type: string, format: date-time, readOnly: true }
         expires_at: { type: string, format: date-time, readOnly: true }
 
