@@ -128,3 +128,9 @@ Extending a trial, a credit and a paid invoice sent again are `billing.Service`'
 `Credit` and `ResendInvoice`, which the staff API calls (item 21); an invoice that is not paid is
 not sent again, since the email says the payment went through. Anything else, a refund above
 all, is done in Stripe's dashboard: the server reads what Stripe then says.
+
+A credit is the payer's customer's at Stripe, not the household's: what is left of one, or of a
+proration after a change from yearly to monthly, pays the next invoice of any subscription they
+pay in that currency. A first invoice it covers whole starts the subscription with no payment to
+confirm: the household is `active` as the payer subscribes, and has no payment method until they
+add one (`postBillingPaymentMethod`).

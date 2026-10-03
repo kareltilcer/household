@@ -17,8 +17,9 @@ type Processor interface {
 	// CreateCustomer makes the payer's customer.
 	CreateCustomer(ctx context.Context, c NewCustomer) (string, error)
 	// Subscribe makes a subscription. One with no payment method is made incomplete, and the
-	// confirmation is what its first payment is confirmed with; one with a payment method is charged
-	// with it, or starts once its trial ends, and has no confirmation.
+	// confirmation is what its first payment is confirmed with: nil where its first invoice needs no
+	// payment, a credit on the customer's balance covering it, when it is active at once. One with a
+	// payment method is charged with it, or starts once its trial ends, and has no confirmation.
 	Subscribe(ctx context.Context, s NewSubscription) (Subscription, *Confirmation, error)
 	// Subscription reads a subscription as it stands now.
 	Subscription(ctx context.Context, id string) (Subscription, error)
@@ -184,8 +185,11 @@ type Subscription struct {
 	InvoiceStatus string
 }
 
-// The processor's states of an invoice that billing reads of a subscription's latest.
+// The processor's states of an invoice, as billing reads them of the invoice itself and of a
+// subscription's latest.
 const (
+	InvoiceDraft         = "draft"
+	InvoiceOpen          = "open"
 	InvoicePaid          = "paid"
 	InvoiceVoid          = "void"
 	InvoiceUncollectible = "uncollectible"

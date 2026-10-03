@@ -20,9 +20,10 @@ CREATE TABLE billing_customers (
 );
 
 -- A household's subscriptions at the processor. standing says what each is to the household: pending
--- while its first payment, or the card of the owner taking billing over, is not confirmed yet;
--- current once it is the household's; ended when it ran out, was cancelled, or another took its
--- place. At most one is pending and one current. status is the processor's own word for it, and the
+-- until it is paid for, its first payment gone through, which for a bank debit is days after the
+-- processor has it active, or, where it waits out a period another paid for, its payer's card
+-- confirmed; current once it is the household's; ended when it ran out, was cancelled, or another took
+-- its place. At most one is pending and one current. status is the processor's own word for it, and the
 -- period, the payment method's summary and why it was cancelled are as it last said them: a
 -- subscription its payer cancelled leaves the household canceled, and one the processor gave up
 -- collecting leaves it in grace (PRD 04 §3).

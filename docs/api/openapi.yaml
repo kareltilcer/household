@@ -1896,6 +1896,11 @@ paths:
         with a subscription already is refused `409`, `already_subscribed`, as is one whose payment
         for one is on its way: a subscription's interval is changed with `PATCH`, and a cancellation
         taken back with `…/billing/resume`.
+
+        A subscription with nothing to pay, a credit of the payer's at the processor covering its
+        first invoice, has no payment to confirm and so no secret to answer: the household is
+        `active` as the request returns, which is answered `409`, `already_subscribed`, as any other
+        for a household that is subscribed.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/BillingInterval' } } }
@@ -1904,7 +1909,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { description: 'The caller is an owner who is not the payer (`forbidden`), or their address is not verified (`account_unverified`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: 'The household has a subscription already, or a payment for one on its way (`already_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'The household has a subscription already, a payment for one on its way, or one this request made with nothing to pay (`already_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/BillingUnavailable' }
@@ -2043,8 +2048,11 @@ paths:
         payer goes on paying, and a card that is not accepted changes nothing. Their own
         subscription then starts when the period the household is already paid up for ends, so
         that nothing lapses in between and nobody pays for it twice; where the period's own payment
-        is being retried, it starts at once. Where the household has no subscription there is no
-        card to supply yet: `confirmation` is null, and they are the payer at once.
+        is being retried, it starts at once. Charged at once by a bank debit, it takes billing over
+        only when the debit clears, days later: until then the payer goes on paying and the
+        subscription reads `payment_pending`, and a debit that fails moves nothing, which the caller
+        is emailed. Where the household has no subscription there is no card to supply yet:
+        `confirmation` is null, and they are the payer at once.
 
         Only an owner whose address is verified takes billing over. With no offer open to the caller
         it answers `404`. No `Idempotency-Key` is kept, since the answer may carry a secret.

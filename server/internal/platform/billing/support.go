@@ -113,7 +113,7 @@ func (s *Service) ResendInvoice(ctx context.Context, household, invoice uuid.UUI
 		if err != nil {
 			return err
 		}
-		if status != "paid" {
+		if status != InvoicePaid {
 			return ErrInvoiceUnpaid
 		}
 		args := i18n.Args{"number": ""}

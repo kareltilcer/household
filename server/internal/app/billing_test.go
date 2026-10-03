@@ -612,6 +612,77 @@ func TestAFirstPaymentByBankDebitCountsOnceItClears(t *testing.T) {
 			t.Fatalf("subscriptions at Stripe: %v", ids)
 		}
 	})
+
+	// The payer is told as the end is recorded, whichever delivery records it: where the server ended
+	// the subscription at Stripe and got no further, the event of that cancellation is what records
+	// it, and the email goes with it rather than with nothing.
+	t.Run("the debit fails and another delivery records the end", func(t *testing.T) {
+		s, stripe := billingSite(t)
+		jana := s.person("Jana", s.a("jana@example"))
+		h := jana.create("Tilcerovi")
+
+		subscription, invoice := stripe.ConfirmDebit(jana.startPaying(h.ID, "year").ClientSecret)
+		s.told(stripe, "customer.subscription.updated", subscription)
+		stripe.FailDebit(invoice)
+		if err := stripe.Processor().Cancel(t.Context(), subscription); err != nil {
+			t.Fatal(err)
+		}
+		for range 2 {
+			s.told(stripe, "customer.subscription.deleted", subscription)
+			s.told(stripe, "invoice.voided", invoice)
+		}
+		if sub := jana.subscription(h.ID); sub.State != "trialing" || sub.PaymentPending || sub.Interval != nil {
+			t.Fatalf("once the debit failed: %+v", sub)
+		}
+		if subjects := s.subjects(s.a("jana@example")); has(subjects, "did not go through") != 1 {
+			t.Fatalf("the payer's mail: %q, want told once that the payment did not go through", subjects)
+		}
+	})
+}
+
+// A take-over's subscription that waits on a bank debit which has failed, the event that says so not
+// yet handled, is none a later card leaves in its way (FR-BI6, D-131): as that card is confirmed it
+// is ended, its payer told once, and the card makes a subscription of its own, which takes billing
+// over.
+func TestATakeOverAfterADebitThatFailedIsMadeWithTheNextCard(t *testing.T) {
+	x := newHandover(t)
+	invoice := x.stripe.FailPayment(x.old, true)
+	x.s.told(x.stripe, "customer.subscription.updated", x.old)
+	x.stripe.DebitFrom("3000")
+	x.confirm(t)
+	ids := x.stripe.Subscriptions()
+	if len(ids) != 2 {
+		t.Fatalf("subscriptions at Stripe: %v", ids)
+	}
+	debited := ids[1]
+	if sub := x.eva.subscription(x.h); sub.State != "past_due" || !sub.PaymentPending || sub.Payer.UserID == x.evaID {
+		t.Fatalf("while the debit is on its way: %+v", sub)
+	}
+	x.stripe.FailDebit(x.s.latestInvoice(x.stripe, debited))
+
+	x.stripe.DebitFrom("")
+	x.confirm(t)
+	ids = x.stripe.Subscriptions()
+	if len(ids) != 3 {
+		t.Fatalf("subscriptions at Stripe after the card: %v, want one made with it", ids)
+	}
+	if status, _, _ := x.stripe.Subscription(debited); status != "canceled" {
+		t.Fatalf("the subscription whose debit failed is %s, want ended", status)
+	}
+	if status, _, _ := x.stripe.Subscription(ids[2]); status != "active" {
+		t.Fatalf("the card's subscription is %s", status)
+	}
+	if status, _, _ := x.stripe.Subscription(x.old); status != "canceled" || x.stripe.InvoiceStatus(invoice) != "void" {
+		t.Fatalf("the subscription that could not be collected: %s, its invoice %s", status, x.stripe.InvoiceStatus(invoice))
+	}
+	sub := x.eva.subscription(x.h)
+	if sub.State != "active" || sub.PaymentPending || sub.Payer.UserID != x.evaID || sub.Transfer != nil ||
+		sub.PaymentMethod == nil || sub.PaymentMethod.Brand == "sepa_debit" {
+		t.Fatalf("after the card: %+v", sub)
+	}
+	if subjects := x.s.subjects(x.s.a("eva@example")); has(subjects, "did not go through") != 1 {
+		t.Fatalf("the taker's mail: %q, want told once that the debit did not go through", subjects)
+	}
 }
 
 // Billing taken over with a bank debit, where the household's period could not be collected and the
@@ -1486,6 +1557,46 @@ func TestAnUnrecordedSubscriptionThatChargesIsTakenUp(t *testing.T) {
 	expect(t, jana.post(billingPath(h.ID, "/subscription"), `{"interval":"year"}`), http.StatusConflict, problem.CodeAlreadySubscribed)
 }
 
+// A subscription no row records whose first payment, a bank debit, did not go through is ended at
+// Stripe as one recorded is, where it would otherwise stay active and charge its next period
+// (D-131): the household's own waiting one is left as it is, and the household as it was.
+func TestAnUnrecordedSubscriptionWhoseDebitFailedIsEnded(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	janaID := jana.me().ID
+	jana.startPaying(h.ID, "year")
+	waiting := stripe.Subscriptions()[0]
+
+	p := stripe.Processor()
+	customer, err := p.CreateCustomer(t.Context(), billing.NewCustomer{User: janaID, Email: s.a("jana@example"), Name: "Jana"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stripe.DebitFrom("3000")
+	debited, _, err := p.Subscribe(t.Context(), billing.NewSubscription{
+		Customer: customer, Price: billingtest.Prices()[billing.Fallback].Month.ID, Household: h.ID, Payer: janaID, PaymentMethod: "pm_debit",
+	})
+	if err != nil || debited.Status != billing.StatusActive || debited.Paid() {
+		t.Fatalf("a subscription debited at Stripe alone: %+v, %v", debited, err)
+	}
+	stripe.FailDebit(debited.LatestInvoice)
+	s.told(stripe, "invoice.voided", debited.LatestInvoice)
+	s.told(stripe, "customer.subscription.updated", debited.ID)
+	if status, _, _ := stripe.Subscription(debited.ID); status != "canceled" {
+		t.Fatalf("the unrecorded subscription whose debit failed is %s, want ended", status)
+	}
+	if status, _, _ := stripe.Subscription(waiting); status != "incomplete" {
+		t.Fatalf("the one that waited is %s, want left as it was", status)
+	}
+	if sub := jana.subscription(h.ID); sub.State != "trialing" || sub.PaymentPending || sub.Interval != nil {
+		t.Fatalf("once the debit failed: %+v", sub)
+	}
+	if n := s.count("SELECT count(*) FROM billing_subscriptions WHERE household_id = $1", h.ID); n != 1 {
+		t.Fatalf("%d subscriptions recorded, want the one that waits", n)
+	}
+}
+
 // An invoice whose event is handled before that of its subscription, one no row records yet, is not
 // dropped for arriving first: the subscription is taken up as its own event would have it, and the
 // invoice is kept and emailed to its payer, once, whatever arrives after.
@@ -1531,6 +1642,40 @@ func TestAnInvoiceHandledBeforeItsUnrecordedSubscriptionIsKept(t *testing.T) {
 	s.told(stripe, "customer.subscription.created", charged.ID)
 	s.told(stripe, "invoice.paid", charged.LatestInvoice)
 	kept("its subscription's event after it")
+}
+
+// A subscription with nothing to pay, a credit on its payer's balance at Stripe covering its first
+// invoice, is active there at once and has no payment to confirm (D-131). It is recorded and settled
+// in the request that made it, which is answered as any for a household that is subscribed, rather
+// than dropped as a failure of Stripe's for its event to take up: asking again makes no second one.
+func TestASubscriptionWithNothingToPayIsTheHouseholdsAtOnce(t *testing.T) {
+	s, stripe := billingSite(t)
+	address := s.a("jana@example")
+	jana := s.person("Jana", address)
+	h := jana.create("Tilcerovi")
+
+	stripe.Covered(true)
+	for range 2 {
+		expect(t, jana.post(billingPath(h.ID, "/subscription"), `{"interval":"month"}`), http.StatusConflict, problem.CodeAlreadySubscribed)
+	}
+	ids := stripe.Subscriptions()
+	if len(ids) != 1 {
+		t.Fatalf("subscriptions at Stripe: %v, want the one the credit paid for", ids)
+	}
+	sub := jana.subscription(h.ID)
+	if sub.State != "active" || sub.PaymentPending || sub.Interval == nil || *sub.Interval != "month" || sub.PaymentMethod != nil {
+		t.Fatalf("once it was made: %+v", sub)
+	}
+
+	// Its events find it recorded and settled, and its invoice is its payer's.
+	s.told(stripe, "customer.subscription.created", ids[0])
+	s.told(stripe, "invoice.paid", s.latestInvoice(stripe, ids[0]))
+	if n := has(s.subjects(address), "invoice"); n != 1 {
+		t.Fatalf("%d invoice emails, want 1", n)
+	}
+	if n := s.count("SELECT count(*) FROM audit_events WHERE household_id = $1 AND module = 'admin' AND action = 'household.entitlement'", h.ID); n != 1 {
+		t.Fatalf("%d entitlement events, want 1", n)
+	}
 }
 
 // A payer whose account has no name, as one a provider made may have none, is made a customer without

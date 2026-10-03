@@ -75,6 +75,9 @@ type Stripe struct {
 	keyed         map[string]string
 	requests      []Request
 	down, decline bool
+	// covered has a customer's credit pay the first invoice of every subscription made unpaid from now
+	// on (Covered).
+	covered bool
 	// iban is the last four characters of the account every payment method made from now on debits,
 	// "" for a card.
 	iban string
@@ -323,6 +326,13 @@ func (s *Stripe) createSubscription(r *http.Request, form url.Values) (any, *api
 			// default_incomplete: the client confirms its first payment.
 			if form.Get("payment_behavior") != "default_incomplete" {
 				s.t.Errorf("billingtest: a subscription with no payment method is made %q", form.Get("payment_behavior"))
+			}
+			if s.covered {
+				// Its first invoice needs no payment: Stripe makes it active at once, the invoice paid from the
+				// customer's balance, with no payment to confirm and no payment method.
+				sub["status"] = "active"
+				s.invoice(sub, amount, "paid")["amount_due"] = int64(0)
+				break
 			}
 			inv := s.invoice(sub, amount, "open")
 			inv["confirmation_secret"] = object{"client_secret": inv["id"].(string) + "_secret", "type": "payment_intent"} //nolint:forcetypeassert // An id.
@@ -826,6 +836,16 @@ func (s *Stripe) Decline(decline bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.decline = decline
+}
+
+// Covered has the first invoice of every subscription made unpaid from now on need no payment, as
+// one whose customer holds a credit at Stripe that covers it: Stripe makes such a subscription active
+// at once, its invoice paid from the balance, with nothing for the customer to confirm. false has a
+// first invoice wait to be paid again.
+func (s *Stripe) Covered(covered bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.covered = covered
 }
 
 // DebitFrom has every payment method confirmed from now on be a SEPA Direct Debit from an account

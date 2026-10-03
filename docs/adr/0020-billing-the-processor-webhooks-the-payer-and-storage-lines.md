@@ -47,7 +47,11 @@ older than it. For the same reason a subscription Stripe holds for a household t
 its request having ended between Stripe's answer and its record, is the household's once it is paid for,
 whatever waits there, and is ended as a second one waiting only while it waits itself. An invoice of
 such a subscription whose event is handled before the subscription's own has it taken up first, and
-is then recorded, rather than dropped for arriving first.
+is then recorded, rather than dropped for arriving first. One Stripe makes with nothing to pay, a
+credit on its payer's balance there covering its first invoice, is `active` at once and has no
+secret to answer: it is recorded as any other and settled in the request, which answers
+`409 already_subscribed`, as any for a household that is subscribed. Left to its event, a request
+sent again before that arrived would make a second.
 
 **Paid is the invoice's word, not the subscription's** (D-131). For a payment method that says late
 how it went, a SEPA Direct Debit, Stripe makes the subscription `active` as the debit is asked for,
@@ -60,7 +64,10 @@ a debit clears Stripe changes nothing of the subscription and sends no event of 
 invoice's event has its subscription read again while its row waits. One `active` over an invoice
 that is `void` or `uncollectible` has failed (`Subscription.Failed`): it is cancelled at Stripe,
 where it would otherwise charge its next period for a household it was never the subscription of,
-and its payer is emailed, once, that it was not started.
+and its payer is emailed, once, that it was not started. The email is queued in the transaction that
+records the end of a subscription which waited while Stripe had it charging, whichever delivery that
+is: the cancellation's own event may be handled before the delivery that cancelled it records
+anything, and a delivery sent again after a failure finds it cancelled already.
 
 **A webhook says what to look at; the handler reads it from Stripe** (D-134). `POST
 /webhooks/stripe` verifies the signature and takes from the event only its type, its object's id and
@@ -88,8 +95,8 @@ isolated as every tenant table is and written through `tenant.InWriteTx` in the 
 they are the platform's record of what the processor said, no entity's history, and replicate to no
 device. `billing_customers`, a user's Stripe customer in each currency they pay in, is a global
 account table written through `tenant.AccountTx`. A subscription's `standing` says what it is to the
-household: `pending` until its payment or its payer's card is confirmed, `current`, or `ended`; at
-most one of each of the first two. No "billing service role" exists: the request role reads and
+household: `pending` until it is paid for (`Subscription.Paid`), `current`, or `ended`; at most one
+of each of the first two. No "billing service role" exists: the request role reads and
 writes them in context, and the meter role lists the households that have a subscription.
 
 **Billing moves once the new payer's card is confirmed** (FR-BI6, D-133). The payer offers
@@ -112,12 +119,16 @@ one's place; the old one is cancelled at Stripe at its period's end, or at once 
 voided; and settling moves `billing_payer_id`, as an `admin.household.payer` event, drops the offer
 and emails the former payer. A card Stripe declines at that charge leaves their subscription waiting
 unpaid and billing where it was; a later card makes a subscription of its own, the one waiting
-cancelled for it. A subscription is always made with its payment method, and never has one set while
-it waits unpaid, which Stripe does not promise to take. A household with no subscription has no card
-to hand over, and the payer moves at accept; so does one whose subscription Stripe says has ended by
-the time the card is confirmed, once that end is settled. The payer moves alone only while the
-household has none under its lock: one paid for since it was looked at has a card to confirm, and
-is never left its former payer's to pay and its new payer's to cancel.
+cancelled for it. A bank debit charged then leaves it waiting too, for the days the debit takes:
+billing moves once it clears, and until then the old subscription is retried and its payer pays. A
+debit that fails ends it as any first payment's does, and a later card confirmed before that failure
+is handled has it ended first and then makes its own. A subscription is always made with its payment
+method, and never has one set while it waits unpaid, which Stripe does not promise to take. A
+household with no subscription has no card to hand over, and the payer moves at accept; so does one
+whose subscription Stripe says has ended by the time the card is confirmed, once that end is
+settled. The payer moves alone only while the household has none under its lock: one paid for since
+it was looked at has a card to confirm, and is never left its former payer's to pay and its new
+payer's to cancel.
 
 **Storage is an invoice item for each calendar month, in arrears** (D-130). `storage.Allowance.Blocks`
 is PRD 04 §4's formula over the mean of the month's daily samples, UTC's as the samples are (D-109);

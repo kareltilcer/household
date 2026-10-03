@@ -207,6 +207,12 @@ func payer(ctx context.Context, tx pgx.Tx) (*tenant.Scope, facts, error) {
 // as it was meanwhile, its subscription read with payment_pending, and a debit that fails ends the
 // subscription, after which the payer may subscribe again. Only a payer whose address is verified
 // subscribes (PRD 02 §3).
+//
+// A subscription the processor makes with nothing to pay, a credit on its payer's balance there
+// covering its first invoice, is active at once and has no payment to confirm. It is recorded as any
+// other, so that a request sent again finds it rather than making a second, and settled here rather
+// than when its event arrives: the household is subscribed, and the request is answered 409 as any
+// other for a household that is (unconfirmed).
 func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope, err := owner(ctx)
@@ -274,7 +280,11 @@ func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var confirmation *Confirmation
+	var (
+		confirmation *Confirmation
+		// made is the subscription this request made, when the processor made it with nothing to confirm.
+		made Subscription
+	)
 	err = tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
 		if err := lock(ctx, tx, household); err != nil {
 			return err
@@ -327,17 +337,36 @@ func (s *Service) subscribe(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if c == nil {
-			return ErrUnavailable
+		// Recorded whatever is left to confirm of it: it is at the processor either way.
+		if confirmation = c; c == nil {
+			made = sub
 		}
-		confirmation = c
 		return newRow(sub, user, req.Interval).insert(ctx, tx, household)
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	if confirmation == nil {
+		s.fail(w, r, s.unconfirmed(ctx, household, made))
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, s.intent(confirmation))
+}
+
+// unconfirmed is subscribe's answer for made, a subscription of household's the processor made with
+// no payment to confirm, recorded already: what the processor says of it is settled, and where it is
+// paid for, its first invoice having needed no payment, the household is subscribed and the answer
+// is the 409 any household that is gets. Anything else with nothing to confirm is the processor's own
+// failure: its row waits, and the request sent again ends it for another.
+func (s *Service) unconfirmed(ctx context.Context, household uuid.UUID, made Subscription) error {
+	if err := s.sync(ctx, household, made.ID); err != nil {
+		return err
+	}
+	if made.Paid() {
+		return errSubscribed
+	}
+	return ErrUnavailable
 }
 
 // current returns the household's subscription for its payer, the caller, read in a transaction of

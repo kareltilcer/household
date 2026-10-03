@@ -115,7 +115,7 @@ func TestWhatTheProcessorSaysMovesASubscriptionsStanding(t *testing.T) {
 		want     string
 	}{
 		"waiting, paid":                          {standingPending, Subscription{Status: StatusActive, PaymentMethod: card, InvoiceStatus: InvoicePaid}, standingCurrent},
-		"waiting, a debit on its way":            {standingPending, Subscription{Status: StatusActive, PaymentMethod: card, InvoiceStatus: "open"}, standingPending},
+		"waiting, a debit on its way":            {standingPending, Subscription{Status: StatusActive, PaymentMethod: card, InvoiceStatus: InvoiceOpen}, standingPending},
 		"waiting, a debit that failed":           {standingPending, Subscription{Status: StatusActive, PaymentMethod: card, InvoiceStatus: InvoiceVoid}, standingPending},
 		"waiting, its invoice not read":          {standingPending, Subscription{Status: StatusActive, PaymentMethod: card}, standingPending},
 		"waiting, still unpaid":                  {standingPending, Subscription{Status: StatusIncomplete}, standingPending},
@@ -144,7 +144,7 @@ func TestWhatTheProcessorSaysMovesASubscriptionsStanding(t *testing.T) {
 	for said, want := range map[Subscription]bool{
 		{Status: StatusActive, InvoiceStatus: InvoiceVoid}:          true,
 		{Status: StatusActive, InvoiceStatus: InvoiceUncollectible}: true,
-		{Status: StatusActive, InvoiceStatus: "open"}:               false,
+		{Status: StatusActive, InvoiceStatus: InvoiceOpen}:          false,
 		{Status: StatusActive, InvoiceStatus: InvoicePaid}:          false,
 		{Status: StatusActive}:                                      false,
 		{Status: StatusPastDue, InvoiceStatus: InvoiceVoid}:         false,
