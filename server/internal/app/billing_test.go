@@ -677,6 +677,256 @@ func TestTakingOverWithNothingPaidUp(t *testing.T) {
 	}
 }
 
+// acceptedDoc is postBillingTransferAccept's answer, as a client reads it.
+type acceptedDoc struct {
+	Subscription subscriptionDoc `json:"subscription"`
+	Confirmation *intentDoc      `json:"confirmation"`
+}
+
+// offers has from, the payer of h, offer its billing to the owner to, and expects it taken.
+func offers(t *testing.T, from *browser, h, to uuid.UUID) {
+	t.Helper()
+	expect(t, from.post(billingPath(h, "/transfer"), fmt.Sprintf(`{"user_id":%q}`, to)), http.StatusAccepted, "")
+}
+
+// accepts has b accept the billing of h offered them, and returns the answer.
+func accepts(t *testing.T, b *browser, h uuid.UUID) acceptedDoc {
+	t.Helper()
+	var out acceptedDoc
+	rec := b.post(billingPath(h, "/transfer/accept"), "")
+	expect(t, rec, http.StatusOK, "")
+	decode(t, rec, &out)
+	return out
+}
+
+// Billing handed on a second time before the period the first payer paid for has ended is paid for
+// by that period still (FR-BI6, D-131): the next payer's subscription waits for its end, as the one
+// it takes over from does, which is then never charged, and nobody pays for days already paid for.
+// A card's confirmation delivered again once the subscription it made is the household's makes no
+// other.
+func TestTakingOverAgainWithinThePaidPeriod(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	eva, evaID := s.joined(jana, h.ID, "Eva", s.a("eva@example"), "owner", nil)
+	janaID := jana.me().ID
+	first, _ := s.paid(stripe, jana, h.ID, "year")
+	// take hands billing from the payer to the other owner, and returns the setup they confirmed.
+	take := func(from, to *browser, toID uuid.UUID) string {
+		t.Helper()
+		offers(t, from, h.ID, toID)
+		answer := accepts(t, to, h.ID)
+		if answer.Confirmation == nil {
+			t.Fatal("no card to confirm")
+		}
+		setup := stripe.ConfirmSetup(answer.Confirmation.ClientSecret)
+		s.told(stripe, "setup_intent.succeeded", setup)
+		return setup
+	}
+
+	take(jana, eva, evaID)
+	setup := take(eva, jana, janaID)
+	ids := stripe.Subscriptions()
+	if len(ids) != 3 {
+		t.Fatalf("subscriptions at Stripe: %v", ids)
+	}
+	if status, cancel, _ := stripe.Subscription(ids[2]); status != "trialing" || cancel {
+		t.Fatalf("the third subscription is %s, want waiting for the end of the period already paid for", status)
+	}
+	if status, cancel, _ := stripe.Subscription(ids[1]); status != "trialing" || !cancel {
+		t.Fatalf("the second subscription: %s, cancels at its period's end: %v; want ended before it charges", status, cancel)
+	}
+	if status, cancel, _ := stripe.Subscription(first); status != "active" || !cancel {
+		t.Fatalf("the first subscription: %s, cancels at its period's end: %v", status, cancel)
+	}
+	if sub := jana.subscription(h.ID); sub.State != "active" || sub.Payer.UserID != janaID || sub.PaymentMethod == nil {
+		t.Fatalf("after the second take-over: %+v", sub)
+	}
+
+	// The confirmation is delivered again while an offer to her is open, as when its first delivery
+	// stopped short of settling: the subscription is hers already, and Stripe is asked for no other.
+	now := s.clock.now()
+	if _, err := s.admin.Exec(t.Context(), `
+		INSERT INTO billing_transfers (household_id, offered_by, offered_to, offered_at, expires_at) VALUES ($1, $2, $3, $4, $5)`,
+		h.ID, evaID, janaID, now, now.Add(billing.OfferFor)); err != nil {
+		t.Fatal(err)
+	}
+	stripe.Requests()
+	s.told(stripe, "setup_intent.succeeded", setup)
+	for _, r := range stripe.Requests() {
+		if r.Method == http.MethodPost && r.Path == "/v1/subscriptions" {
+			t.Fatal("a subscription was asked for again for a payer whose subscription is the household's")
+		}
+	}
+	if sub := jana.subscription(h.ID); sub.State != "active" || sub.Payer.UserID != janaID {
+		t.Fatalf("after the second delivery: %+v", sub)
+	}
+}
+
+// A card declined as billing is taken over moves nothing: the taker's subscription waits unpaid, and
+// the payer of record stays. A second card is tried on the subscription that waits, rather than
+// another made, and billing moves once it is paid (FR-BI6).
+func TestATakeOverWhoseCardIsDeclinedIsTriedAgain(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	eva, evaID := s.joined(jana, h.ID, "Eva", s.a("eva@example"), "owner", nil)
+	janaID := jana.me().ID
+	old, _ := s.paid(stripe, jana, h.ID, "month")
+	invoice := stripe.FailPayment(old, true)
+	s.told(stripe, "customer.subscription.updated", old)
+	offers(t, jana, h.ID, evaID)
+	confirm := func() {
+		t.Helper()
+		s.told(stripe, "setup_intent.succeeded", stripe.ConfirmSetup(accepts(t, eva, h.ID).Confirmation.ClientSecret))
+	}
+
+	stripe.Decline(true)
+	confirm()
+	ids := stripe.Subscriptions()
+	if len(ids) != 2 {
+		t.Fatalf("subscriptions at Stripe: %v", ids)
+	}
+	if status, _, _ := stripe.Subscription(ids[1]); status != "incomplete" {
+		t.Fatalf("the subscription whose card was declined is %s", status)
+	}
+	if status, _, _ := stripe.Subscription(old); status != "past_due" {
+		t.Fatalf("the payer's subscription is %s before billing has moved", status)
+	}
+	if sub := eva.subscription(h.ID); sub.State != "past_due" || sub.Payer.UserID != janaID || sub.Transfer == nil {
+		t.Fatalf("after the declined card: %+v", sub)
+	}
+
+	stripe.Decline(false)
+	confirm()
+	if ids := stripe.Subscriptions(); len(ids) != 2 {
+		t.Fatalf("a second card made another subscription: %v", ids)
+	}
+	if status, _, _ := stripe.Subscription(ids[1]); status != "active" {
+		t.Fatalf("the subscription tried again is %s", status)
+	}
+	if status, _, _ := stripe.Subscription(old); status != "canceled" || stripe.InvoiceStatus(invoice) != "void" {
+		t.Fatalf("the subscription that could not be collected: %s, its invoice %s", status, stripe.InvoiceStatus(invoice))
+	}
+	if sub := eva.subscription(h.ID); sub.State != "active" || sub.Payer.UserID != evaID || sub.Transfer != nil || sub.PaymentMethod == nil {
+		t.Fatalf("after the second card: %+v", sub)
+	}
+}
+
+// A card confirmed after the subscription it was to take over has ended moves the payer alone, as
+// accepting with no subscription does, while the offer made its owner still stands (FR-BI6).
+func TestACardConfirmedAfterTheSubscriptionEndedMovesThePayerAlone(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	eva, evaID := s.joined(jana, h.ID, "Eva", s.a("eva@example"), "owner", nil)
+	subscription, _ := s.paid(stripe, jana, h.ID, "month")
+	offers(t, jana, h.ID, evaID)
+	answer := accepts(t, eva, h.ID)
+	if answer.Confirmation == nil {
+		t.Fatal("no card to confirm")
+	}
+
+	expect(t, jana.post(billingPath(h.ID, "/cancel"), ""), http.StatusOK, "")
+	stripe.EndPeriod(subscription)
+	s.told(stripe, "customer.subscription.deleted", subscription)
+	if sub := eva.subscription(h.ID); sub.State != "canceled" || sub.Payer.UserID == evaID || sub.Transfer == nil {
+		t.Fatalf("once the subscription ended: %+v", sub)
+	}
+
+	s.told(stripe, "setup_intent.succeeded", stripe.ConfirmSetup(answer.Confirmation.ClientSecret))
+	if n := len(stripe.Subscriptions()); n != 1 {
+		t.Fatalf("%d subscriptions at Stripe, want none made for a household that has none to take over", n)
+	}
+	if sub := eva.subscription(h.ID); sub.State != "canceled" || sub.Payer.UserID != evaID || sub.Transfer != nil {
+		t.Fatalf("after the card was confirmed: %+v", sub)
+	}
+}
+
+// An offer's email that waits for the mail server goes with the offer: once billing has moved,
+// nothing offers it again when the mail server takes mail again.
+func TestAnOffersWaitingEmailGoesOnceBillingMoves(t *testing.T) {
+	s, _ := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	eva, evaID := s.joined(jana, h.ID, "Eva", s.a("eva@example"), "owner", nil)
+	offered := func() int { return has(s.subjects(s.a("eva@example")), "offered you billing") }
+
+	s.outbox.Refuse(1)
+	offers(t, jana, h.ID, evaID)
+	if n := offered(); n != 0 {
+		t.Fatalf("%d offers emailed while the mail server refused them", n)
+	}
+	// On trial there is no card to confirm: she is the payer at once, and the offer is spent.
+	if answer := accepts(t, eva, h.ID); answer.Confirmation != nil || answer.Subscription.Payer.UserID != evaID {
+		t.Fatalf("accepted: %+v", answer)
+	}
+	if _, err := s.admin.Exec(t.Context(), "UPDATE notifications SET run_at = now() WHERE household_id = $1 AND status = 'queued'", h.ID); err != nil {
+		t.Fatal(err)
+	}
+	s.notifier.Drain(t.Context(), h.ID)
+	if n := offered(); n != 0 {
+		t.Fatalf("the offer was emailed %d times after billing had moved", n)
+	}
+}
+
+// A subscription never paid expires and changes nothing (D-129): the household is as it was. One
+// Stripe holds for the household that no row records, its request having ended between Stripe's
+// answer and its record, is taken up as the one waiting, so that asking again answers its secret
+// rather than making another, and paying it makes it the household's; a second such is cancelled.
+func TestASubscriptionNeverPaidOrNeverRecorded(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	janaID := jana.me().ID
+
+	first := jana.startPaying(h.ID, "year")
+	expired := stripe.Subscriptions()[0]
+	stripe.Expire(expired)
+	s.told(stripe, "customer.subscription.updated", expired)
+	if state, _, _ := jana.entitlement(h.ID); state != "trialing" {
+		t.Fatalf("a subscription that expired unpaid made the household %s", state)
+	}
+	if n := s.count("SELECT count(*) FROM billing_subscriptions WHERE household_id = $1 AND standing = 'ended' AND started_at IS NULL", h.ID); n != 1 {
+		t.Fatalf("%d subscriptions over without having been the household's, want 1", n)
+	}
+
+	p := stripe.Processor()
+	customer, err := p.CreateCustomer(t.Context(), billing.NewCustomer{User: janaID, Email: s.a("jana@example"), Name: "Jana"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unrecorded := func() (string, string) {
+		t.Helper()
+		sub, confirmation, err := p.Subscribe(t.Context(), billing.NewSubscription{
+			Customer: customer, Price: billingtest.Prices()[billing.Fallback].Year.ID, Household: h.ID, Payer: janaID, Monthly: true,
+		})
+		if err != nil || confirmation == nil {
+			t.Fatalf("a subscription made at Stripe alone: %+v, %v", confirmation, err)
+		}
+		return sub.ID, confirmation.ClientSecret
+	}
+	lost, secret := unrecorded()
+	s.told(stripe, "customer.subscription.created", lost)
+	if again := jana.startPaying(h.ID, "year"); again.ClientSecret != secret || again.ClientSecret == first.ClientSecret {
+		t.Fatalf("asked again: %q, want the unrecorded one's %q", again.ClientSecret, secret)
+	}
+	second, _ := unrecorded()
+	s.told(stripe, "customer.subscription.created", second)
+	if status, _, _ := stripe.Subscription(second); status != "canceled" {
+		t.Fatalf("a second unrecorded subscription is %s, want cancelled", status)
+	}
+	if status, _, _ := stripe.Subscription(lost); status != "incomplete" {
+		t.Fatalf("the one taken up is %s, want waiting still", status)
+	}
+
+	subscription, _ := stripe.ConfirmPayment(secret)
+	s.told(stripe, "customer.subscription.updated", subscription)
+	if sub := jana.subscription(h.ID); sub.State != "active" || sub.Interval == nil || *sub.Interval != "year" || sub.Payer.UserID != janaID {
+		t.Fatalf("after the one taken up was paid: %+v", sub)
+	}
+}
+
 // usage sets household h's daily samples of the month day falls in, bytes for each day from its
 // first, and what it stores now.
 func (s *site) usage(h uuid.UUID, month time.Time, current int64, bytes ...int64) {

@@ -99,7 +99,6 @@ func New(t testing.TB, now func() time.Time) *Stripe {
 	mux.HandleFunc("POST /v1/invoices/{id}/void", s.handle(s.voidInvoice))
 	mux.HandleFunc("GET /v1/invoiceitems", s.handle(s.listItems))
 	mux.HandleFunc("POST /v1/invoiceitems", s.handle(s.createItem))
-	mux.HandleFunc("GET /v1/prices/{id}", s.handle(s.getPrice))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("billingtest: the server asked Stripe for %s %s, which the stand-in does not answer", r.Method, r.URL.Path)
 		fail(w, http.StatusNotFound, "invalid_request_error", "", "no such route")
@@ -244,19 +243,6 @@ func price(id string) (currency, interval string, amount int64, ok bool) {
 		}
 	}
 	return "", "", 0, false
-}
-
-func (s *Stripe) getPrice(r *http.Request, _ url.Values) (any, *apiError) {
-	id := r.PathValue("id")
-	currency, interval, amount, ok := price(id)
-	if !ok {
-		return nil, notFound("price", id)
-	}
-	out := object{"id": id, "object": "price", "active": true, "currency": currency, "unit_amount": amount, "type": "one_time", "recurring": nil}
-	if interval != "" {
-		out["type"], out["recurring"] = "recurring", object{"interval": interval, "interval_count": 1}
-	}
-	return out, nil
 }
 
 // item is sub's one item.

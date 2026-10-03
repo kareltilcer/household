@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -18,6 +19,11 @@ import (
 
 // OfferFor is how long the payer's offer of billing stands before it lapses, as an invitation does.
 const OfferFor = 14 * 24 * time.Hour
+
+// offerKey is what an offer's email waits under in its household (notify.Notification.Replaces): a
+// later offer's replaces it, and an offer taken back, declined or spent, as billing moves, drops it,
+// so that no offer arrives that is no longer open once the mail server takes mail again.
+const offerKey = "billing:offer"
 
 // takeoverRoute is the web client's take-over screen of household (A-29), which the offer's email
 // opens.
@@ -76,7 +82,7 @@ func (s *Service) offer(w http.ResponseWriter, r *http.Request) {
 		// The latest offer's email alone: one to someone the payer offered it to before is dropped.
 		return s.Notify.Queue(ctx, tx, notify.Notification{
 			To: req.UserID, Category: notify.Direct, Message: emailBillingOffer, Email: true,
-			Args: i18n.Args{"member": name}, Route: takeoverRoute(household), Replaces: "billing:offer",
+			Args: i18n.Args{"member": name}, Route: takeoverRoute(household), Replaces: offerKey,
 		})
 	})
 	if err != nil {
@@ -118,7 +124,7 @@ func (s *Service) withdraw(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(ctx, "DELETE FROM billing_transfers WHERE household_id = $1", household); err != nil {
 			return err
 		}
-		if err := s.Notify.Withdraw(ctx, tx, "billing:offer"); err != nil {
+		if err := s.Notify.Withdraw(ctx, tx, offerKey); err != nil {
 			return err
 		}
 		if offer.to != user {
@@ -193,7 +199,11 @@ func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
 	}
 	var confirmation *intentDoc
 	if !has {
-		if err := s.acceptAlone(r, household, user); err != nil {
+		stood, err := s.acceptAlone(ctx, household, user)
+		if err == nil && !stood {
+			err = problem.NotFound()
+		}
+		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
@@ -234,10 +244,11 @@ func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
 }
 
 // acceptAlone makes user the payer of household, which has no subscription to take over, while the
-// offer made them still stands: read again under the household's lock, in the mutation that moves
-// the payer.
-func (s *Service) acceptAlone(r *http.Request, household, user uuid.UUID) error {
-	ctx := r.Context()
+// offer made them still stands and they are an owner still: both read again under the household's
+// lock, in the mutation that moves the payer. It reports whether the offer stood. ctx is in the
+// household's context: the caller's, as they accept, or the system's, as the card they confirmed
+// for a subscription that has ended since arrives (takeOver).
+func (s *Service) acceptAlone(ctx context.Context, household, user uuid.UUID) (bool, error) {
 	gone := false
 	err := s.bill(ctx, household, func(tx pgx.Tx, b households.Billing) (households.Billing, error) {
 		offer, ok, err := readOffer(ctx, tx, household, s.Now())
@@ -256,8 +267,5 @@ func (s *Service) acceptAlone(r *http.Request, household, user uuid.UUID) error 
 		b.Payer = &user
 		return b, nil
 	})
-	if err == nil && gone {
-		return problem.NotFound()
-	}
-	return err
+	return err == nil && !gone, err
 }

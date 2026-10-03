@@ -198,8 +198,16 @@ func (s *Stripe) Cancel(ctx context.Context, id string) error {
 	}
 	if sub.Status != stripe.SubscriptionStatusCanceled && sub.Status != stripe.SubscriptionStatusIncompleteExpired {
 		params := &stripe.SubscriptionCancelParams{InvoiceNow: stripe.Bool(false), Prorate: stripe.Bool(false)}
-		if _, err := s.client.V1Subscriptions.Cancel(ctx, id, params); err != nil && !missing(err) {
+		params.AddExpand("latest_invoice")
+		cancelled, err := s.client.V1Subscriptions.Cancel(ctx, id, params)
+		switch {
+		case missing(err):
+		case err != nil:
 			return fault(err)
+		default:
+			// Its invoice as the cancellation left it, not as it was read before: where ending a
+			// subscription never paid voided its first invoice with it, nothing is left to void.
+			sub = cancelled
 		}
 	}
 	// What it could not collect is owed by nobody once it is cancelled: an open invoice would be tried
@@ -294,7 +302,7 @@ func (s *Stripe) Invoice(ctx context.Context, id string) (Invoice, error) {
 	}
 	out := Invoice{
 		ID: inv.ID, Number: inv.Number, Status: string(inv.Status), Currency: strings.ToUpper(string(inv.Currency)),
-		TotalMinor: inv.Total, Attempts: int(inv.AttemptCount), PDF: inv.InvoicePDF,
+		TotalMinor: inv.Total, Attempts: int(inv.AttemptCount),
 		IssuedAt: unix(inv.Created), PeriodStart: unix(inv.PeriodStart), PeriodEnd: unix(inv.PeriodEnd),
 	}
 	if inv.Customer != nil {
@@ -344,6 +352,14 @@ func (s *Stripe) Invoice(ctx context.Context, id string) (Invoice, error) {
 		out.PeriodStart, out.PeriodEnd = unix(from), unix(to)
 	}
 	return out, nil
+}
+
+func (s *Stripe) InvoicePDF(ctx context.Context, id string) (string, error) {
+	inv, err := s.client.V1Invoices.Retrieve(ctx, id, &stripe.InvoiceRetrieveParams{})
+	if err != nil {
+		return "", fault(err)
+	}
+	return inv.InvoicePDF, nil
 }
 
 // lineOf is an invoice's line as the contract's Invoice has it: the base fee, the storage blocks, a
@@ -427,18 +443,6 @@ func (s *Stripe) Credit(ctx context.Context, c NewCredit) error {
 	return fault(err)
 }
 
-func (s *Stripe) Price(ctx context.Context, id string) (PriceInfo, error) {
-	price, err := s.client.V1Prices.Retrieve(ctx, id, &stripe.PriceRetrieveParams{})
-	if err != nil {
-		return PriceInfo{}, fault(err)
-	}
-	out := PriceInfo{AmountMinor: price.UnitAmount, Currency: strings.ToUpper(string(price.Currency))}
-	if price.Recurring != nil {
-		out.Interval = string(price.Recurring.Interval)
-	}
-	return out, nil
-}
-
 // Event verifies payload against signature, Stripe's Stripe-Signature header, within the SDK's
 // tolerance of five minutes. It reads only what the event is about: the handlers read the object
 // itself from Stripe, as it stands, so the version an endpoint's events are rendered at need not be
@@ -487,11 +491,8 @@ func subscriptionOf(sub *stripe.Subscription) Subscription {
 	if sub.Items != nil && len(sub.Items.Data) > 0 {
 		item := sub.Items.Data[0]
 		out.PeriodStart, out.PeriodEnd = unix(item.CurrentPeriodStart), unix(item.CurrentPeriodEnd)
-		if item.Price != nil {
-			out.Price = item.Price.ID
-			if item.Price.Recurring != nil {
-				out.Interval = string(item.Price.Recurring.Interval)
-			}
+		if item.Price != nil && item.Price.Recurring != nil {
+			out.Interval = string(item.Price.Recurring.Interval)
 		}
 	}
 	if d := sub.CancellationDetails; d != nil {

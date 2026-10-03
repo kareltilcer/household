@@ -13,8 +13,11 @@
 // (household.Bill), through the mutation spine: active with every clock cleared, past_due with its
 // dunning_ends_at, grace once the processor gives up, canceled with its lapsed_at and retained_until
 // once a cancelled subscription's period ends. A webhook delivered twice, or out of order, settles
-// the same state, and the hourly job (household.Service.Transition) stays the backstop for one that
-// never arrives.
+// the same state. The hourly job (household.Service.Transition) stays the backstop for the one clock
+// the row keeps, a failed payment's: a household past due enters grace once its dunning_ends_at has
+// passed, whatever arrives. Nothing stands in for the end of a subscription whose events never
+// arrive: the processor delivers for three days, and one lost after that is sent again from the
+// processor by hand (docs/runbooks/billing.md).
 //
 // Storage is billed by the calendar month, UTC's, in arrears (D-128): each night BillStorage adds the
 // month that ended as one line to the subscription's next invoice, the blocks its daily average

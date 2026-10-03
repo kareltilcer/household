@@ -3,7 +3,11 @@ package billing_test
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -99,6 +103,9 @@ func TestStripeTakesWhatTheProcessorSends(t *testing.T) {
 	if err != nil || invoice.ID == "" || invoice.Currency == "" || invoice.IssuedAt.IsZero() {
 		t.Fatalf("Invoice: %+v, %v", invoice, err)
 	}
+	if _, err := p.InvoicePDF(ctx, "in_mock"); err != nil {
+		t.Fatalf("InvoicePDF: %v", err)
+	}
 	if err := p.Pay(ctx, "in_mock"); err != nil && errors.Is(err, billing.ErrUnavailable) {
 		t.Fatalf("Pay: %v", err)
 	}
@@ -113,8 +120,67 @@ func TestStripeTakesWhatTheProcessorSends(t *testing.T) {
 	if err := p.Credit(ctx, billing.NewCredit{Customer: customer, AmountMinor: 500, Currency: "EUR", Note: "An apology"}); err != nil {
 		t.Fatalf("Credit: %v", err)
 	}
-	if price, err := p.Price(ctx, "price_base"); err != nil || price.Currency == "" {
-		t.Fatalf("Price: %+v, %v", price, err)
+}
+
+// Cancel voids the invoice the cancellation left open, and no other: whether ending a subscription
+// never paid voids its first invoice with it is Stripe's to decide, and an invoice it has voided is
+// not voided again, which Stripe would refuse.
+func TestCancelVoidsWhatTheCancellationLeftOpen(t *testing.T) {
+	for name, tc := range map[string]struct {
+		// after is the latest invoice's status once the subscription is cancelled; it was open before.
+		after string
+		voids int32
+	}{
+		"an invoice the cancellation voided":    {"void", 0},
+		"an invoice the cancellation left open": {"open", 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var cancels, voids atomic.Int32
+			answer := func(w http.ResponseWriter, body string) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, body)
+			}
+			subscription := func(status, invoice string) string {
+				return `{"id":"sub_1","object":"subscription","status":"` + status +
+					`","latest_invoice":{"id":"in_1","object":"invoice","status":"` + invoice + `"}}`
+			}
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /v1/subscriptions/sub_1", func(w http.ResponseWriter, _ *http.Request) {
+				answer(w, subscription("incomplete", "open"))
+			})
+			mux.HandleFunc("DELETE /v1/subscriptions/sub_1", func(w http.ResponseWriter, r *http.Request) {
+				cancels.Add(1)
+				if got := r.URL.Query()["expand[0]"]; len(got) != 1 || got[0] != "latest_invoice" {
+					t.Errorf("the cancellation expands %v, want its latest invoice", got)
+				}
+				answer(w, subscription("incomplete_expired", tc.after))
+			})
+			mux.HandleFunc("POST /v1/invoices/in_1/void", func(w http.ResponseWriter, _ *http.Request) {
+				voids.Add(1)
+				if tc.after != "open" {
+					w.WriteHeader(http.StatusBadRequest)
+					answer(w, `{"error":{"type":"invalid_request_error","message":"This invoice is not open."}}`)
+					return
+				}
+				answer(w, `{"id":"in_1","object":"invoice","status":"void"}`)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+			none := int64(0)
+			p, err := billing.NewStripe(billing.StripeConfig{
+				SecretKey: billingtest.SecretKey, WebhookSecret: billingtest.WebhookSecret, URL: server.URL,
+				HTTPClient: server.Client(), MaxNetworkRetries: &none,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := p.Cancel(t.Context(), "sub_1"); err != nil {
+				t.Fatalf("Cancel: %v", err)
+			}
+			if cancels.Load() != 1 || voids.Load() != tc.voids {
+				t.Fatalf("%d cancellations and %d voids, want 1 and %d", cancels.Load(), voids.Load(), tc.voids)
+			}
+		})
 	}
 }
 

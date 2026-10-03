@@ -85,6 +85,11 @@ step in the mode the environment uses.
 4. A household whose payer starts subscribing again while one waits unpaid is also read from Stripe
    first, which records a payment whose event never arrived.
 
+The same holds the other way round. A subscription that ended at Stripe, cancelled at its period's
+end or given up on, while the household still reads `active` is one whose events never arrived in the
+three days Stripe delivers them for. No job makes up for that: the hourly one runs the clock of a
+failed payment only. Resend its `customer.subscription.deleted`, or any event of it.
+
 ## A month's storage was not billed
 
 `billing_storage_months` has no row for the household and the month.

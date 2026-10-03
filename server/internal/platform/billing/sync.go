@@ -314,8 +314,8 @@ func decide(b households.Billing, subs []subscription, now time.Time) households
 
 // bill changes household's row to what decide makes of it under the household's lock
 // (household.Bill), in one mutation of ctx's, and does what a move of the payer brings with it in the
-// same transaction: the offer it was made on is spent, and whoever paid until now is told by email
-// (FR-BI6). decide reads in tx and writes nothing.
+// same transaction: the offer it was made on is spent, its email with it should that still wait, and
+// whoever paid until now is told by email (FR-BI6). decide reads in tx and writes nothing.
 func (s *Service) bill(ctx context.Context, household uuid.UUID, decide func(pgx.Tx, households.Billing) (households.Billing, error)) error {
 	res, err := mutation.Apply(ctx, func(tx pgx.Tx) (mutation.Record, error) {
 		var before, after households.Billing
@@ -332,6 +332,9 @@ func (s *Service) bill(ctx context.Context, household uuid.UUID, decide func(pgx
 			return rec, nil
 		}
 		if _, err := tx.Exec(ctx, "DELETE FROM billing_transfers WHERE household_id = $1", household); err != nil {
+			return mutation.Record{}, err
+		}
+		if err := s.Notify.Withdraw(ctx, tx, offerKey); err != nil {
 			return mutation.Record{}, err
 		}
 		if before.Payer == nil {
@@ -536,15 +539,22 @@ func (s *Service) methodConfirmed(ctx context.Context, intent SetupIntent) error
 // (FR-BI6), while the offer made them still stands and they are an owner still. With a subscription
 // to take over, it makes theirs, charged with the card: from the end of the period the household is
 // paid up for, or at once when the processor could not collect it; sync then puts it in the old
-// one's place, and settle moves the payer. With none, the payer alone moves.
+// one's place, and settle moves the payer. With none, the payer alone moves (acceptAlone).
+//
+// The household is paid up by a subscription that is active, and by one that itself waits out a
+// period another paid for, a take-over's whose period has not begun: its trial ends where that
+// period does, and so does the trial of the one that takes over from it, so that billing handed on
+// twice within one paid period charges nobody for days already paid for (D-131).
 //
 // A subscription of theirs still waiting is one an earlier card could not pay: it is tried again
-// with this one rather than made a second time. One waiting for someone else is over.
+// with this one rather than made a second time. One waiting for someone else is over. And where the
+// household's subscription is theirs already, an earlier delivery made it and did not get as far as
+// settling: it is recorded and settled again, and none is made.
 func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 	household, now := intent.Household, s.Now()
 	var (
-		made, again string
-		alone       bool
+		made, again, mine string
+		alone             bool
 	)
 	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
 		if err := lock(ctx, tx, household); err != nil {
@@ -564,6 +574,11 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 		cur, ok := standing(subs, standingCurrent)
 		if !ok {
 			alone = true
+			return nil
+		}
+		if cur.payer == intent.User {
+			// Theirs already, by an earlier delivery of this confirmation: nothing more is asked for.
+			mine = cur.id
 			return nil
 		}
 		if waiting, ok := standing(subs, standingPending); ok {
@@ -589,7 +604,7 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 			IdempotencyID: "takeover:" + intent.ID,
 		}
 		// Paid up: the new one waits for the period's end. Past due, or about to renew, it starts now.
-		if cur.status == StatusActive && cur.periodEnd != nil && cur.periodEnd.After(now.Add(time.Hour)) {
+		if cur.paidUp() && cur.periodEnd != nil && cur.periodEnd.After(now.Add(time.Hour)) {
 			n.TrialEnd = *cur.periodEnd
 		}
 		sub, _, err := s.Processor.Subscribe(ctx, n)
@@ -606,10 +621,14 @@ func (s *Service) takeOver(ctx context.Context, intent SetupIntent) error {
 		return err
 	case made != "":
 		return s.sync(ctx, household, made)
+	case mine != "":
+		return s.sync(ctx, household, mine)
 	case again != "":
 		return s.retry(ctx, household, again, intent.PaymentMethod)
 	case alone:
-		return s.movePayer(ctx, household, intent.User)
+		// An offer taken back since it was read, or an owner made a member, moves nothing.
+		_, err := s.acceptAlone(ctx, household, intent.User)
+		return err
 	}
 	return nil
 }
@@ -632,12 +651,4 @@ func (s *Service) retry(ctx context.Context, household uuid.UUID, id, paymentMet
 		}
 	}
 	return s.sync(ctx, household, id)
-}
-
-// movePayer makes to the payer of household, which has no subscription to move.
-func (s *Service) movePayer(ctx context.Context, household, to uuid.UUID) error {
-	return s.bill(ctx, household, func(_ pgx.Tx, b households.Billing) (households.Billing, error) {
-		b.Payer = &to
-		return b, nil
-	})
 }

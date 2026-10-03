@@ -76,7 +76,10 @@ writes them in context, and the meter role lists the households that have a subs
 nothing else happens until `setup_intent.succeeded` arrives. Then, while the offer stands and they
 are an owner still, their own subscription is made on their own customer with the confirmed method:
 with a trial that ends when the period the household is already paid up for ends, when it is paid
-up, and charged at once when Stripe could not collect the old one. Recording it puts it in the old
+up, and charged at once when Stripe could not collect the old one. Paid up is a subscription that is
+active, and one that is itself on such a trial: billing handed on twice inside one paid period gives
+the third payer's subscription the same end to wait for, and the second's is cancelled before it
+ever charges. Recording it puts it in the old
 one's place; the old one is cancelled at Stripe at its period's end, or at once with its open invoice
 voided; and settling moves `billing_payer_id`, as an `admin.household.payer` event, drops the offer
 and emails the former payer. A household with no subscription has no card to hand over, and the

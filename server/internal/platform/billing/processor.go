@@ -41,6 +41,9 @@ type Processor interface {
 	SetupIntent(ctx context.Context, id string) (SetupIntent, error)
 	// Invoice reads an invoice as it stands now, with its lines.
 	Invoice(ctx context.Context, id string) (Invoice, error)
+	// InvoicePDF reads where an invoice is downloaded now, "" while it has no PDF: the link is the
+	// processor's, handed out as it is asked for and never kept (D-133).
+	InvoicePDF(ctx context.Context, id string) (string, error)
 	// Pay tries to collect an open invoice now.
 	Pay(ctx context.Context, invoice string) error
 	// StorageLine adds a month's storage blocks to the subscription's next invoice, once: asked again
@@ -48,8 +51,6 @@ type Processor interface {
 	StorageLine(ctx context.Context, l StorageLine) (string, error)
 	// Credit credits a customer's balance, which their next invoices draw on.
 	Credit(ctx context.Context, c NewCredit) error
-	// Price reads one of the processor's prices.
-	Price(ctx context.Context, id string) (PriceInfo, error)
 	// Event verifies a webhook's payload against its signature and reads what it is about.
 	Event(payload []byte, signature string) (Event, error)
 }
@@ -86,7 +87,7 @@ const (
 var ErrSignature = errors.New("billing: the webhook's signature does not verify")
 
 // ErrUnavailable is a Processor's failure that is the processor's own or the network's, rather than
-// a refusal of what it was asked: the request is answered 502 and may be sent again.
+// a refusal of what it was asked: the request is answered 503 and may be sent again.
 var ErrUnavailable = errors.New("billing: the payment processor is unavailable")
 
 // NewCustomer is a payer's customer to make.
@@ -166,7 +167,6 @@ type Subscription struct {
 	Status       string
 	// Household and Payer are what its metadata names.
 	Household, Payer       uuid.UUID
-	Price                  string
 	Interval               string
 	Currency               string
 	PeriodStart, PeriodEnd time.Time
@@ -235,15 +235,6 @@ type Invoice struct {
 	// again, the zero time when it will not.
 	Attempts    int
 	NextAttempt time.Time
-	// PDF is where the invoice is downloaded.
-	PDF string
-}
-
-// PriceInfo is one of the processor's prices: what it charges, and each interval for a recurring one.
-type PriceInfo struct {
-	AmountMinor int64
-	Currency    string
-	Interval    string
 }
 
 // Event is what a webhook says happened: its type, the object it is about, and the household that

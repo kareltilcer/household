@@ -97,6 +97,12 @@ func (s subscription) live() bool {
 	return s.status == StatusActive || s.status == StatusPastDue || s.status == StatusTrialing
 }
 
+// paidUp reports whether s, as the processor last said it, leaves the household paid for until its
+// period ends: active, or waiting out a period another has paid for, which its own trial ends with.
+func (s subscription) paidUp() bool {
+	return s.status == StatusActive || s.status == StatusTrialing
+}
+
 // said is s as the processor says p stands, at now: its fields as p has them, and its standing moved
 // on where p moved it. One waiting becomes the household's once it is live, and is over once it
 // expired unpaid; the household's is over once the processor cancelled it or gave up collecting it.
@@ -178,8 +184,6 @@ type facts struct {
 	currency string
 	country  string
 	locale   string
-	timezone string
-	name     string
 }
 
 // readFacts reads household's, in tx in its context.
@@ -188,9 +192,9 @@ func readFacts(ctx context.Context, tx pgx.Tx, household uuid.UUID) (facts, erro
 	err := tx.QueryRow(ctx, `
 		SELECT h.billing_payer_id, u.display_name,
 		  EXISTS (SELECT FROM memberships m WHERE m.household_id = h.id AND m.user_id = h.billing_payer_id),
-		  h.base_currency, h.country, h.locale, h.timezone, h.name
+		  h.base_currency, h.country, h.locale
 		FROM households h LEFT JOIN users u ON u.id = h.billing_payer_id
-		WHERE h.id = $1`, household).Scan(&f.payer, &f.label, &f.member, &f.currency, &f.country, &f.locale, &f.timezone, &f.name)
+		WHERE h.id = $1`, household).Scan(&f.payer, &f.label, &f.member, &f.currency, &f.country, &f.locale)
 	return f, err
 }
 

@@ -250,12 +250,12 @@ func (s *Service) getInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.Processor != nil {
-		said, err := s.Processor.Invoice(ctx, row.stripe)
+		pdf, err := s.Processor.InvoicePDF(ctx, row.stripe)
 		switch {
 		case err != nil:
 			s.Log.LogAttrs(ctx, slog.LevelWarn, "billing: an invoice's link was not read", slog.Any("error", err))
-		case said.PDF != "":
-			doc.PDFURL = &said.PDF
+		case pdf != "":
+			doc.PDFURL = &pdf
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, doc)
