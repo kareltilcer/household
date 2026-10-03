@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Revoked, type Credential } from './connector.ts'
 import { localTables, metaKeys } from './schema.ts'
@@ -10,6 +11,21 @@ import { testRegistry } from './testing.ts'
 import type { SyncMutation } from './mutation.ts'
 
 const household = '01920000-0000-7000-8000-00000000000a'
+
+/**
+ * Waits until holds is true, looking every 20 ms for at most five seconds: a row's watcher emits on a
+ * schedule of its own, throttled, and later under a loaded run. It returns either way, so that the
+ * assertion after it reports the state the watcher reached.
+ */
+async function eventually(
+  holds: () => boolean | Promise<boolean>,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const start = Date.now()
+  while (!(await holds()) && Date.now() - start < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
 
 /** The body a request was sent with, which the library always sends as text. */
 function bodyOf(init: RequestInit | undefined): string {
@@ -229,67 +245,72 @@ describe('a replica', () => {
     const { fetch } = routes({ '/sync/mutations': (url, init) => answer(url, init) })
     const { replica } = await open({ fetch })
     const states: RowState[] = []
-    const milk = await replica.create('items', { title: 'Milk' })
-    const stop = replica.watchRowState('items', milk, (s) => states.push(s))
-    const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 120))
-    await settle()
-    expect(await replica.rowState('items', milk)).toEqual({
-      kind: 'pending',
-      op: 'create',
-      held: null,
-    })
-    await replica.journal.sent(Number.MAX_SAFE_INTEGER)
-    expect(await replica.rowState('items', milk)).toEqual({ kind: 'syncing', op: 'create' })
-    await replica.flush()
-    await arrive(replica, 'items', milk, { household_id: household, title: 'Milk', version: 1 })
-    expect(await replica.rowState('items', milk)).toEqual({ kind: 'synced', deleted: false })
-    await settle()
-
-    // Another member's deletion leaves a tombstone, which is no withdrawal.
-    await arrive(replica, 'items', milk, {
-      household_id: household,
-      title: 'Milk',
-      version: 2,
-      deleted_at: '2026-10-02T10:00:00Z',
-    })
-    await settle()
-    expect(states.at(-1)).toEqual({ kind: 'synced', deleted: true })
-
-    // A row that leaves the replica was withdrawn; with its module turned off, it says so.
-    const bread = newId()
-    await arrive(replica, 'items', bread, { household_id: household, title: 'Bread', version: 1 })
     const breadStates: RowState[] = []
-    const stopBread = replica.watchRowState('items', bread, (s) => breadStates.push(s))
-    await settle()
-    await arrive(replica, 'module_enablement', newId(), { module: 'test', enabled: 0, version: 1 })
-    await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [bread])
-    await settle()
-    expect(breadStates).toEqual([
-      { kind: 'synced', deleted: false },
-      { kind: 'withdrawn', reason: 'module' },
-    ])
-
-    // A refused write is the member's to see, before anything else of the row.
-    answer = (_url, init) => {
-      const { mutations } = JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }
-      return json(200, {
-        results: mutations.map((m) => ({
-          mutation_id: m.mutation_id,
-          outcome: 'conflict',
-          code: 'version_conflict',
-          version: 3,
-          row: { id: m.entity_id, title: 'Theirs', version: 3 },
-        })),
+    const milk = await replica.create('items', { title: 'Milk' })
+    const stops = [replica.watchRowState('items', milk, (s) => states.push(s))]
+    try {
+      await eventually(() => states.length > 0)
+      expect(await replica.rowState('items', milk)).toEqual({
+        kind: 'pending',
+        op: 'create',
+        held: null,
       })
+      await replica.journal.sent(Number.MAX_SAFE_INTEGER)
+      expect(await replica.rowState('items', milk)).toEqual({ kind: 'syncing', op: 'create' })
+      await replica.flush()
+      await arrive(replica, 'items', milk, { household_id: household, title: 'Milk', version: 1 })
+      expect(await replica.rowState('items', milk)).toEqual({ kind: 'synced', deleted: false })
+      await eventually(() => isDeepStrictEqual(states.at(-1), { kind: 'synced', deleted: false }))
+
+      // Another member's deletion leaves a tombstone, which is no withdrawal.
+      await arrive(replica, 'items', milk, {
+        household_id: household,
+        title: 'Milk',
+        version: 2,
+        deleted_at: '2026-10-02T10:00:00Z',
+      })
+      await eventually(() => isDeepStrictEqual(states.at(-1), { kind: 'synced', deleted: true }))
+      expect(states.at(-1)).toEqual({ kind: 'synced', deleted: true })
+
+      // A row that leaves the replica was withdrawn; with its module turned off, it says so.
+      const bread = newId()
+      await arrive(replica, 'items', bread, { household_id: household, title: 'Bread', version: 1 })
+      stops.push(replica.watchRowState('items', bread, (s) => breadStates.push(s)))
+      await eventually(() => breadStates.length > 0)
+      await arrive(replica, 'module_enablement', newId(), {
+        module: 'test',
+        enabled: 0,
+        version: 1,
+      })
+      await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [bread])
+      await eventually(() => breadStates.at(-1)?.kind === 'withdrawn')
+      expect(breadStates).toEqual([
+        { kind: 'synced', deleted: false },
+        { kind: 'withdrawn', reason: 'module' },
+      ])
+
+      // A refused write is the member's to see, before anything else of the row.
+      answer = (_url, init) => {
+        const { mutations } = JSON.parse(bodyOf(init)) as { mutations: SyncMutation[] }
+        return json(200, {
+          results: mutations.map((m) => ({
+            mutation_id: m.mutation_id,
+            outcome: 'conflict',
+            code: 'version_conflict',
+            version: 3,
+            row: { id: m.entity_id, title: 'Theirs', version: 3 },
+          })),
+        })
+      }
+      const eggs = newId()
+      await arrive(replica, 'items', eggs, { household_id: household, title: 'Eggs', version: 2 })
+      await replica.update('items', eggs, { title: 'Mine' })
+      await replica.flush()
+      const state = await replica.rowState('items', eggs)
+      expect(state.kind).toBe('conflict')
+    } finally {
+      for (const stop of stops) stop()
     }
-    const eggs = newId()
-    await arrive(replica, 'items', eggs, { household_id: household, title: 'Eggs', version: 2 })
-    await replica.update('items', eggs, { title: 'Mine' })
-    await replica.flush()
-    const state = await replica.rowState('items', eggs)
-    expect(state.kind).toBe('conflict')
-    stop()
-    stopBread()
   })
 
   it('tells a refused create the member discards, which leaves the replica, from a withdrawn row', async () => {
@@ -306,20 +327,22 @@ describe('a replica', () => {
       },
     })
     const { replica } = await open({ fetch })
-    const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 120))
     const milk = await replica.create('items', { title: 'Milk' })
     const states: RowState[] = []
     const stop = replica.watchRowState('items', milk, (s) => states.push(s))
-    await settle()
-    await replica.flush()
-    // The next checkpoint takes away the row the server never had.
-    await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [milk])
-    await settle()
-    const [refused] = await replica.inbox()
-    await replica.discard(refused?.mutation_id ?? '')
-    await settle()
-    expect(states.map((s) => s.kind)).toEqual(['pending', 'rejected', 'absent'])
-    stop()
+    try {
+      await eventually(() => states.length > 0)
+      await replica.flush()
+      // The next checkpoint takes away the row the server never had.
+      await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [milk])
+      await eventually(() => states.at(-1)?.kind === 'rejected')
+      const [refused] = await replica.inbox()
+      await replica.discard(refused?.mutation_id ?? '')
+      await eventually(() => states.at(-1)?.kind === 'absent')
+      expect(states.map((s) => s.kind)).toEqual(['pending', 'rejected', 'absent'])
+    } finally {
+      stop()
+    }
   })
 
   it("drops a refused create's waiting file once the member discards it, and keeps one whose row the server holds", async () => {
@@ -461,7 +484,8 @@ describe('a replica', () => {
 
     verdict = { matched: false, resnapshot_required: true, entries: [] }
     await replica.report()
-    await new Promise((r) => setTimeout(r, 100))
+    // It downloads itself again after the report, once nothing is queued.
+    await eventually(async () => (await replica.journal.meta(metaKeys.resnapshot)) === null)
     expect(await replica.db.getAll('SELECT id FROM items')).toEqual([])
     expect(await replica.held()).toHaveLength(1)
     expect(await replica.journal.meta(metaKeys.resnapshot)).toBeNull()
@@ -531,7 +555,8 @@ describe('a replica', () => {
     expect(existsSync(waiting?.local_uri ?? '')).toBe(true)
     await replica.journal.setMeta(metaKeys.notBefore, '0')
     await expect(replica.flush()).rejects.toThrow(Revoked)
-    await new Promise((r) => setTimeout(r, 100))
+    // It wipes itself outside the upload that found the revocation, and then says so.
+    await eventually(() => revoked)
     expect(revoked).toBe(true)
     expect(await replica.db.getAll('SELECT id FROM items')).toEqual([])
     expect(await replica.db.getAll(`SELECT id FROM ${localTables.meta}`)).toEqual([])
@@ -556,7 +581,8 @@ describe('a replica', () => {
     const [one, two] = await Promise.all([replica.id(), replica.id()])
     expect(one).toBe(two)
     await expect(replica.report()).rejects.toThrow(Revoked)
-    await new Promise((r) => setTimeout(r, 100))
+    // It wipes itself outside the upload that found the revocation, and then says so.
+    await eventually(() => revoked)
     expect(revoked).toBe(true)
   })
 
