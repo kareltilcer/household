@@ -96,7 +96,7 @@ func (s *Service) searchUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q, limit := trimmed(r, "q"), cursor.Limit(r)
-	items := make([]userItem, 0, limit)
+	items := []userItem{}
 	more := false
 	err = s.read(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `

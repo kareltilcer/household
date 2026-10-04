@@ -195,7 +195,7 @@ func (s *Service) listAudit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	limit := cursor.Limit(r)
-	items := make([]auditDoc, 0, limit)
+	items := []auditDoc{}
 	more := false
 	err = s.read(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
@@ -426,7 +426,9 @@ func (s *Service) setStaff(w http.ResponseWriter, r *http.Request) {
 	reason, err := reasoned(req.Reason)
 	var role Role
 	if err == nil && req.Role != nil {
-		if role, err = ParseRole(*req.Role); err != nil {
+		// The refusal names the field, and carries nothing of what the request sent in it.
+		var unknown error
+		if role, unknown = ParseRole(*req.Role); unknown != nil {
 			err = invalid("/role", problem.FieldInvalid)
 		}
 	}

@@ -166,7 +166,7 @@ func (s *Service) searchHouseholds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q, state, limit := trimmed(r, "q"), trimmed(r, "state"), cursor.Limit(r)
-	items := make([]householdItem, 0, limit)
+	items := []householdItem{}
 	more := false
 	err = s.read(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `

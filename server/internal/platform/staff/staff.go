@@ -20,7 +20,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -59,13 +58,17 @@ const (
 // reaches reports whether r may do what needs the role min.
 func (r Role) reaches(min Role) bool { return r == Admin || r == min }
 
-// ParseRole returns the platform role s names.
+// ErrNoRole is ParseRole's answer for a name that is no platform role. It does not say the name: an
+// error may be logged, and what a request sent is kept out of the log (FR-NF5).
+var ErrNoRole = errors.New("staff: no such platform role: support or platform_admin")
+
+// ParseRole returns the platform role s names, or ErrNoRole.
 func ParseRole(s string) (Role, error) {
 	switch r := Role(s); r {
 	case Support, Admin:
 		return r, nil
 	}
-	return "", errors.New("staff: " + strconv.Quote(s) + " is no platform role: support or platform_admin")
+	return "", ErrNoRole
 }
 
 // Label is the actor a staff action is recorded by in a household's own log (FR-AL7): the platform's

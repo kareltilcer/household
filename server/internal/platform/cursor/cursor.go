@@ -120,13 +120,17 @@ const (
 	MaxLimit     = 200
 )
 
-// Limit is the page size r asks for; the edge has held it to the contract's Limit.
+// Limit is the page size r asks for; the edge has held it to the contract's Limit. It is never more
+// than MaxLimit, whatever the request says, so that nothing sized by it is sized by the client.
 func Limit(r *http.Request) int {
 	n, err := strconv.Atoi(r.URL.Query().Get("limit"))
 	if err != nil || n < 1 {
 		return DefaultLimit
 	}
-	return min(n, MaxLimit)
+	if n > MaxLimit {
+		return MaxLimit
+	}
+	return n
 }
 
 // PageMeta is the contract's PageMeta: the cursor the next page resumes from, null on the last
