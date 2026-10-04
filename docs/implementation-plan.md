@@ -811,7 +811,7 @@ Phase 0 · after 10, 7 · size M
   - The role matrix is tested.
   - The no-content-access test runs in CI.
   - A staff action appears in the household's activity.
-- **PR:** —
+- **PR:** [#27](https://github.com/kareltilcer/household/pull/27)
 
 ### 22 · Crop catalog I — schema, climate data and the first 100 crops · `planned`
 
