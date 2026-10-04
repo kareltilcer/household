@@ -255,11 +255,16 @@ func (s *Stripe) deleteCustomer(r *http.Request, _ url.Values) (any, *apiError) 
 	return object{"id": id, "object": "customer", "deleted": true}, nil
 }
 
+// credit credits the customer's balance. A keyed request sent again is the credit it made, as Stripe
+// replays it, and no second one.
 func (s *Stripe) credit(r *http.Request, form url.Values) (any, *apiError) {
 	form.Set("customer", r.PathValue("id"))
-	s.credits = append(s.credits, form)
+	id := s.once(r, func() string {
+		s.credits = append(s.credits, form)
+		return s.id("cbtxn")
+	})
 	amount, _ := strconv.ParseInt(form.Get("amount"), 10, 64)
-	return object{"id": s.id("cbtxn"), "object": "customer_balance_transaction", "amount": amount, "currency": form.Get("currency")}, nil
+	return object{"id": id, "object": "customer_balance_transaction", "amount": amount, "currency": form.Get("currency")}, nil
 }
 
 // price is what one of the account's prices charges: its currency, its interval, "" for a block's,

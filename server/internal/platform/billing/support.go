@@ -65,9 +65,16 @@ func (s *Service) ExtendTrial(ctx context.Context, household uuid.UUID, until ti
 	})
 }
 
+// creditNoteKey is the catalog key of what a credit says on the processor's record, which its
+// customer may read: that it is from Household's support, in the household's language, as a storage
+// line's description is, and never why, which is the platform's log's alone.
+const creditNoteKey = "billing.support_credit"
+
 // Credit credits amount to the customer who pays household's subscription, at the processor, whose
-// next invoices draw on it; note says why, on the processor's record.
-func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.Money, note string) error {
+// next invoices draw on it. request, when not empty, names the request the credit is made for: sent
+// again under the same one, after an answer that never arrived or a record of it that did not
+// commit, it is the one credit at the processor and not a second (NewCredit.IdempotencyID).
+func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.Money, request string) error {
 	p, err := s.processor()
 	if err != nil {
 		return ErrUnavailable
@@ -75,7 +82,10 @@ func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.
 	if amount.AmountMinor <= 0 {
 		return errors.New("billing: a credit is a positive amount")
 	}
-	var cur subscription
+	var (
+		cur    subscription
+		locale string
+	)
 	err = tenant.InTx(s.system(ctx, household), func(tx pgx.Tx) error {
 		subs, err := readSubscriptions(ctx, tx, household)
 		if err != nil {
@@ -85,7 +95,9 @@ func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.
 		if cur, ok = standing(subs, standingCurrent); !ok {
 			return ErrNoSubscription
 		}
-		return nil
+		f, err := readFacts(ctx, tx, household)
+		locale = f.locale
+		return err
 	})
 	if err != nil {
 		return err
@@ -93,7 +105,13 @@ func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.
 	if cur.currency != amount.Currency {
 		return ErrCurrency
 	}
-	return p.Credit(ctx, NewCredit{Customer: cur.customer, AmountMinor: amount.AmountMinor, Currency: amount.Currency, Note: note})
+	note, err := s.Catalogs.Render(i18n.Match(locale), creditNoteKey, nil)
+	if err != nil {
+		return err
+	}
+	return p.Credit(ctx, NewCredit{
+		Customer: cur.customer, AmountMinor: amount.AmountMinor, Currency: amount.Currency, Note: note, IdempotencyID: request,
+	})
 }
 
 // ResendInvoice emails household's invoice to its payer again, as it was when it was paid, in tx, a

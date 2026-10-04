@@ -90,25 +90,12 @@ type membershipDoc struct {
 // first. An erased account, which keeps nothing but its id, is not among them.
 func (s *Service) searchUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	after, err := userKeys.FromRequest(r)
+	before, last, err := userKeys.Before(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	var (
-		before time.Time
-		last   uuid.UUID
-	)
-	if after != nil {
-		if before, err = time.Parse(time.RFC3339Nano, after[0]); err == nil {
-			last, err = uuid.Parse(after[1])
-		}
-		if err != nil {
-			s.fail(w, r, cursor.Malformed())
-			return
-		}
-	}
-	q, limit := trimmed(r, "q"), limitOf(r)
+	q, limit := trimmed(r, "q"), cursor.Limit(r)
 	items := make([]userItem, 0, limit)
 	more := false
 	err = s.read(ctx, func(tx pgx.Tx) error {
@@ -117,7 +104,7 @@ func (s *Service) searchUsers(w http.ResponseWriter, r *http.Request) {
 			WHERE u.deleted_at IS NULL
 			  AND ($1 = '' OR u.id::text = lower($1) OR `+contains("coalesce(u.email, '')", "$1")+`)
 			  AND ($2::timestamptz IS NULL OR (u.created_at, u.id) < ($2, $3))
-			ORDER BY u.created_at DESC, u.id DESC LIMIT $4`, q, nullTime(before), last, limit+1)
+			ORDER BY u.created_at DESC, u.id DESC LIMIT $4`, q, before, last, limit+1)
 		if err != nil {
 			return err
 		}
@@ -137,11 +124,10 @@ func (s *Service) searchUsers(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	meta := pageMeta{HasMore: more}
+	meta := cursor.PageMeta{}
 	if more {
 		end := items[len(items)-1]
-		next := userKeys.Encode(end.CreatedAt.Format(time.RFC3339Nano), end.ID.String())
-		meta.NextCursor = &next
+		meta = userKeys.After(end.CreatedAt, end.ID)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "meta": meta})
 }

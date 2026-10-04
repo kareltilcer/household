@@ -374,6 +374,15 @@ func TestTheRefusalMatrix(t *testing.T) {
 
 	rec := w.upload(h, jana, "big.txt", bytes.Repeat([]byte("a"), 1001), id())
 	expect(t, rec, http.StatusRequestEntityTooLarge, problem.CodePayloadTooLarge)
+	// A household whose ceiling the platform raised takes a file of that size (PRD 04 §5), and none
+	// over its own.
+	roomy := w.household(true)
+	eva := w.member(roomy, access.Owner, nil)
+	w.exec(`INSERT INTO household_limits (household_id, key, value, reason, set_by_label)
+		VALUES ($1, 'file_size_bytes', 1500, 'Scans of the building plans', 'staff@household.example')`, roomy)
+	expect(t, w.upload(roomy, eva, "big.txt", bytes.Repeat([]byte("a"), 1001), id()), http.StatusCreated, "")
+	expect(t, w.upload(roomy, eva, "bigger.txt", bytes.Repeat([]byte("a"), 1501), id()), http.StatusRequestEntityTooLarge,
+		problem.CodePayloadTooLarge)
 
 	elf := append([]byte("\x7fELF\x02\x01\x01"), make([]byte, 64)...)
 	expect(t, w.upload(h, jana, "tool", elf, id()), http.StatusUnsupportedMediaType, problem.CodeUnsupportedMediaType)

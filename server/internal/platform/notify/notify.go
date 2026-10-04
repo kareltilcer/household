@@ -357,15 +357,21 @@ var (
 	ErrNotRedrivable = errors.New("notify: the notification cannot be sent again")
 )
 
+// Redrivable is the SQL condition, over a row of notifications, that Redrive sends it again: it
+// failed, to a member, its link carried no secret, and its arguments are still kept. It is true or
+// false and never NULL: the expiry sweep leaves a notification whose arguments it emptied with no
+// time at which they would be, and such a one cannot go again. What the platform's staff are shown
+// as one they can send again is read by the same condition.
+const Redrivable = `(status = 'failed' AND NOT sealed AND user_id IS NOT NULL AND coalesce(args_expires_at > now(), false))`
+
 // Redrive queues household's notification id again, in tx in its context: one that failed, sent as
 // it was queued, to the same member, with its tries starting over (PRD 02 §8, plan item 21). Whether
 // it reaches them is decided again as it goes out, by their grants, their mutes and their quiet
 // hours as they are then (FR-NT5). The caller calls Nudge once tx has committed.
 func (s *Service) Redrive(ctx context.Context, tx pgx.Tx, household, id uuid.UUID) error {
 	var redrivable bool
-	err := tx.QueryRow(ctx, `
-		SELECT status = 'failed' AND NOT sealed AND user_id IS NOT NULL AND args_expires_at > now()
-		FROM notifications WHERE household_id = $1 AND id = $2 FOR UPDATE`, household, id).Scan(&redrivable)
+	err := tx.QueryRow(ctx, "SELECT "+Redrivable+" FROM notifications WHERE household_id = $1 AND id = $2 FOR UPDATE", household, id).
+		Scan(&redrivable)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return ErrNoNotification

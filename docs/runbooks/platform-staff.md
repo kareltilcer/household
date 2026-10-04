@@ -36,7 +36,8 @@ operator, on the server, as the request role:
    ```
 
    It refuses an address nobody has, and one that is not verified. It is recorded in the platform's
-   log as the `operator`'s.
+   log as the `operator`'s. The command logs what it did: `made one of the platform's staff`, or,
+   for an account that held the role already, that nothing changed.
 4. They sign in and call `GET /api/v1/platform/staff`: it lists them, with `mfa_enabled` true.
 
 From then on staff are made and unmade through the API (`PUT /platform/staff/{user_id}`), each change
@@ -49,8 +50,10 @@ household-api staff revoke someone@example.com
 ```
 
 or, as a `platform_admin`, `PUT /platform/staff/{user_id}` with `"role": null`. They are staff no
-longer from their next request. The last `platform_admin` cannot be revoked or made `support`: make
-another first.
+longer from their next request, and a change of the staff they had on its way meanwhile is refused.
+The command says `not one of the platform's staff: nothing changed` for an address whose account was
+not staff, so check it is the one they sign in with. The last `platform_admin` cannot be revoked or
+made `support`: make another first.
 
 Erasing an account takes it out of the staff too. What it did stays in the log, under the address it
 had.
@@ -74,8 +77,11 @@ household reads it as done by *Household support*.
 
 The log is append-only: the request role may insert and read, and no role updates or deletes. Entries
 older than seven years are removed by the nightly expiry sweep through
-`platform.purge_audit_log()`. To check the sweep ran, look for `platform audit entries` in the
-`expiry.sweep` job's log.
+`platform.purge_audit_log()`. The sweep says so only when it removed some, `expiry: deleted what was
+past its time` with the retention `platform audit entries` and how many, or when the purge failed,
+`expiry: a retention failed` with the same retention: a night with nothing past its seven years, as
+every night of the log's first seven is, logs neither. That the sweep itself ran is the scheduler's
+`scheduler: a job ran` for the job `expiry.sweep`.
 
 ## When a staff request fails
 

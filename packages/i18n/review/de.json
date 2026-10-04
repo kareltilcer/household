@@ -41,6 +41,7 @@
   "admin.support.suspend": "Suspended the household: {notice}",
   "admin.support.unsuspend": "Lifted the household’s suspension",
   "billing.storage_line": "Extra storage, {month}: {blocks, plural, one {# block} other {# blocks}} of {gb} GB",
+  "billing.support_credit": "Credit from Household support",
   "email.account_deletion.body": "Hello,\n\nYou asked us to delete your Household account. It is switched off now: nobody can sign in to it, and every browser and device has been signed out. In {days, plural, one {# day} other {# days}} it will be deleted for good, together with what you kept privately. What you added to a household you share stays with that household, without your name on it.\n\nIf you change your mind, open the link below before then. It cancels the deletion, and you can sign in again as before.\n\n{link}\n\nIf you didn’t ask for this, open the link now, then sign in and change your password.",
   "email.account_deletion.subject": "Your Household account will be deleted in {days, plural, one {# day} other {# days}}",
   "email.billing_moved.body": "Hello,\n\n{member} took over billing for {household} on Household, as you offered. From now on the subscription is charged to them, not to you. What you have already paid for runs to the end of its period, and nothing was charged twice.\n\nYou are still an owner of {household}, and can see its billing here:\n\n{link}",

@@ -610,6 +610,16 @@ func TestAHouseholdHoldsSoManyObjects(t *testing.T) {
 	if objects := w.objects(fmt.Sprintf("h/%s/probe/%s/", h, item)); len(objects) != 0 {
 		t.Fatalf("the refused upload stored %v", objects)
 	}
+	// Raised for this household, the ceiling is its own (PRD 04 §5): the upload goes through, and the
+	// one past it is refused, naming the household's ceiling.
+	w.exec(`INSERT INTO household_limits (household_id, key, value, reason, set_by_label)
+		VALUES ($1, 'object_count', $2, 'An archive of scans', 'staff@household.example')`, h, fairuse.Objects+1)
+	expect(t, w.upload(h, jana, "note.txt", []byte("one more"), map[string]string{"id": item.String()}), http.StatusCreated, "")
+	rec = w.upload(h, jana, "note.txt", []byte("one too many again"), map[string]string{"id": idgen.New().String()})
+	expect(t, rec, http.StatusForbidden, problem.CodeFairUseCeiling)
+	if r := refusalOf(t, rec); r.Resource != fairuse.ResourceObjects || r.Ceiling != fairuse.Objects+1 {
+		t.Fatalf("the refusal past the raised ceiling: %+v", r)
+	}
 }
 
 // A module of a household holds 250 000 rows at most (PRD 04 §5, D-116), counted where the night's
@@ -641,6 +651,19 @@ func TestAModuleHoldsSoManyRows(t *testing.T) {
 	expect(t, w.do(http.MethodPost, items(h), jana, itemBody(it, h)), http.StatusForbidden, problem.CodeFairUseCeiling)
 	w.exec("DELETE FROM probe_items WHERE id IN (SELECT id FROM probe_items WHERE household_id = $1 AND deleted_at IS NOT NULL)", h)
 	expect(t, w.do(http.MethodPost, items(h), jana, itemBody(it, h)), http.StatusCreated, "")
+
+	// At the ceiling again, the household creates once the platform raises it for it (PRD 04 §5), and
+	// is held to its own from then on.
+	next := idgen.New()
+	expect(t, w.do(http.MethodPost, items(h), jana, itemBody(next, h)), http.StatusForbidden, problem.CodeFairUseCeiling)
+	w.exec(`INSERT INTO household_limits (household_id, key, value, reason, set_by_label)
+		VALUES ($1, 'rows_per_module', $2, 'A farm of a garden', 'staff@household.example')`, h, fairuse.Rows+1)
+	expect(t, w.do(http.MethodPost, items(h), jana, itemBody(next, h)), http.StatusCreated, "")
+	rec = w.do(http.MethodPost, items(h), jana, itemBody(idgen.New(), h))
+	expect(t, rec, http.StatusForbidden, problem.CodeFairUseCeiling)
+	if r := refusalOf(t, rec); r.Resource != fairuse.ResourceRows || r.Module != "probe" || r.Ceiling != fairuse.Rows+1 {
+		t.Fatalf("the refusal past the raised ceiling: %+v", r)
+	}
 }
 
 // A user owns five households at most (PRD 04 §5, D-116): the fourth they make tells them they are

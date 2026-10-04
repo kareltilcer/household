@@ -529,6 +529,58 @@ func TestABucketJustShortOfATokenWaits(t *testing.T) {
 	}
 }
 
+// A key whose rate was raised fills at its own (PRD 04 §5): its burst and its refill are in the same
+// proportion as the buckets' own, no other key's bucket changes, and a bucket put back to the
+// buckets' rate keeps no more than their burst.
+func TestABucketFillsAtARateOfItsOwn(t *testing.T) {
+	c := newClock()
+	usual := ratelimit.Rate{PerMinute: 60, Burst: 3}
+	b := ratelimit.NewBuckets(usual, c.now)
+	raised := b.Rate().At(600)
+	if raised != (ratelimit.Rate{PerMinute: 600, Burst: 30}) {
+		t.Fatalf("the rate raised to 600 a minute: %+v", raised)
+	}
+	for i := range 30 {
+		if wait := b.TakeAt("raised", raised); wait != 0 {
+			t.Fatalf("request %d of a raised burst waits %v", i+1, wait)
+		}
+	}
+	if wait := b.TakeAt("raised", raised); wait != 100*time.Millisecond {
+		t.Fatalf("past the raised burst: waits %v, want a tenth of a second", wait)
+	}
+	for range 3 {
+		if wait := b.Take("usual"); wait != 0 {
+			t.Fatalf("another key, within the buckets' own burst: waits %v", wait)
+		}
+	}
+	if wait := b.Take("usual"); wait != time.Second {
+		t.Fatalf("another key, past the buckets' own burst: waits %v, want a second", wait)
+	}
+	// A second on, the raised bucket holds ten tokens and the other one.
+	c.advance(time.Second)
+	for i := range 10 {
+		if wait := b.TakeAt("raised", raised); wait != 0 {
+			t.Fatalf("token %d of a raised second waits %v", i+1, wait)
+		}
+	}
+	if wait := b.TakeAt("raised", raised); wait == 0 {
+		t.Fatal("a raised bucket gave more than its second's tokens")
+	}
+	// Put back to the buckets' own rate, a bucket that held more than their burst keeps their burst.
+	c.advance(time.Hour)
+	if wait := b.TakeAt("raised", raised); wait != 0 {
+		t.Fatalf("an idle raised bucket: waits %v", wait)
+	}
+	for i := range 3 {
+		if wait := b.Take("raised"); wait != 0 {
+			t.Fatalf("request %d once put back waits %v", i+1, wait)
+		}
+	}
+	if wait := b.Take("raised"); wait != time.Second {
+		t.Fatalf("put back, past the buckets' own burst: waits %v, want a second", wait)
+	}
+}
+
 func TestTheMiddlewareRefusesWithRetryAfter(t *testing.T) {
 	c := newClock()
 	b := ratelimit.NewBuckets(ratelimit.Rate{PerMinute: 6, Burst: 1}, c.now)

@@ -139,9 +139,25 @@ func TestTheStaffCommandMakesAndUnmakesStaff(t *testing.T) {
 			t.Errorf("%s: exit %d, staff %q", email, code, staffed(email))
 		}
 	}
-	if code := run(ctx, []string{"staff", "grant", "Karel@household.test", "support"}, env(t), io.Discard, io.Discard); code != 0 ||
-		staffed("karel@household.test") != "support" {
-		t.Fatalf("grant: exit %d, staff %q", code, staffed("karel@household.test"))
+	// The command says what it did: taking out an account that is not staff changes nothing, and is
+	// said to, so that an address mistaken for a staff member's does not read as one taken out.
+	said := func(args ...string) string {
+		t.Helper()
+		var stdout bytes.Buffer
+		if code := run(ctx, args, env(t), &stdout, io.Discard); code != 0 {
+			t.Fatalf("%v: exit %d, %s", args, code, stdout.String())
+		}
+		return stdout.String()
+	}
+	if out := said("staff", "revoke", "karel@household.test"); !strings.Contains(out, "nothing changed") {
+		t.Errorf("revoking an account that is not staff: %s", out)
+	}
+	if out := said("staff", "grant", "Karel@household.test", "support"); staffed("karel@household.test") != "support" ||
+		!strings.Contains(out, "made one of the platform's staff") {
+		t.Fatalf("grant: staff %q, %s", staffed("karel@household.test"), out)
+	}
+	if out := said("staff", "grant", "karel@household.test", "support"); !strings.Contains(out, "nothing changed") {
+		t.Errorf("granting the role an account holds already: %s", out)
 	}
 	if code := run(ctx, []string{"staff", "grant", "karel@household.test", "platform_admin"}, env(t), io.Discard, io.Discard); code != 0 ||
 		staffed("karel@household.test") != "platform_admin" {

@@ -165,23 +165,10 @@ type auditDoc struct {
 // those of one staff member, about one household, or within a time (FR-PS2).
 func (s *Service) listAudit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	after, err := auditKeys.FromRequest(r)
+	before, last, err := auditKeys.Before(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
-	}
-	var (
-		before time.Time
-		last   uuid.UUID
-	)
-	if after != nil {
-		if before, err = time.Parse(time.RFC3339Nano, after[0]); err == nil {
-			last, err = uuid.Parse(after[1])
-		}
-		if err != nil {
-			s.fail(w, r, cursor.Malformed())
-			return
-		}
 	}
 	// The edge has held each to its form: an id, and an instant with its offset.
 	q := r.URL.Query()
@@ -207,7 +194,7 @@ func (s *Service) listAudit(w http.ResponseWriter, r *http.Request) {
 			*into = &t
 		}
 	}
-	limit := limitOf(r)
+	limit := cursor.Limit(r)
 	items := make([]auditDoc, 0, limit)
 	more := false
 	err = s.read(ctx, func(tx pgx.Tx) error {
@@ -217,7 +204,7 @@ func (s *Service) listAudit(w http.ResponseWriter, r *http.Request) {
 			WHERE ($1::uuid IS NULL OR actor_id = $1) AND ($2::uuid IS NULL OR household_id = $2)
 			  AND ($3::timestamptz IS NULL OR occurred_at >= $3) AND ($4::timestamptz IS NULL OR occurred_at < $4)
 			  AND ($5::timestamptz IS NULL OR (occurred_at, id) < ($5, $6))
-			ORDER BY occurred_at DESC, id DESC LIMIT $7`, actor, household, from, to, nullTime(before), last, limit+1)
+			ORDER BY occurred_at DESC, id DESC LIMIT $7`, actor, household, from, to, before, last, limit+1)
 		if err != nil {
 			return err
 		}
@@ -238,11 +225,10 @@ func (s *Service) listAudit(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	meta := pageMeta{HasMore: more}
+	meta := cursor.PageMeta{}
 	if more {
 		end := items[len(items)-1]
-		next := auditKeys.Encode(end.OccurredAt.Format(time.RFC3339Nano), end.ID.String())
-		meta.NextCursor = &next
+		meta = auditKeys.After(end.OccurredAt, end.ID)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "meta": meta})
 }
@@ -312,11 +298,38 @@ var (
 // counts the platform_admins as the other left them: a lock on the staff table that lets it be read.
 const staffLock = "LOCK TABLE platform.staff IN SHARE ROW EXCLUSIVE MODE"
 
+// lockStaff takes the staff's lock in tx and refuses by unless they are a platform_admin still, once
+// it is held. The admission read their role in a transaction before this one; a platform_admin taken
+// out of the staff, or made support, while their request was on its way would otherwise finish it as
+// one, and could make themself one again. Every change of the staff takes the same lock, so the role
+// read under it is the one that change committed. They are answered as their next request would be:
+// 404 for one who is staff no longer, 403 for one who is support. The operator, who acts through the
+// command line and has no row, is not asked.
+func lockStaff(ctx context.Context, tx pgx.Tx, by member) error {
+	if _, err := tx.Exec(ctx, staffLock); err != nil {
+		return err
+	}
+	if by.id == uuid.Nil {
+		return nil
+	}
+	var held *string
+	if err := tx.QueryRow(ctx, "SELECT (SELECT role::text FROM platform.staff WHERE user_id = $1)", by.id).Scan(&held); err != nil {
+		return err
+	}
+	switch {
+	case held == nil:
+		return problem.NotFound()
+	case Role(*held) != Admin:
+		return problem.New(http.StatusForbidden, problem.CodeForbidden)
+	}
+	return nil
+}
+
 // grant makes user one of the platform's staff with role, or changes the role they have, in tx,
 // recorded as by's action e; a role they hold already is left as it is and recorded nowhere. It
 // returns whether it changed anything.
 func grant(ctx context.Context, tx pgx.Tx, by member, user uuid.UUID, role Role, e entry, now time.Time) (bool, error) {
-	if _, err := tx.Exec(ctx, staffLock); err != nil {
+	if err := lockStaff(ctx, tx, by); err != nil {
 		return false, err
 	}
 	var eligible bool
@@ -355,7 +368,7 @@ func grant(ctx context.Context, tx pgx.Tx, by member, user uuid.UUID, role Role,
 // revoke takes user out of the platform's staff, in tx, recorded as by's action e; one who is not
 // staff is left as they are and recorded nowhere. It returns whether it changed anything.
 func revoke(ctx context.Context, tx pgx.Tx, by member, user uuid.UUID, e entry) (bool, error) {
-	if _, err := tx.Exec(ctx, staffLock); err != nil {
+	if err := lockStaff(ctx, tx, by); err != nil {
 		return false, err
 	}
 	var held *string
@@ -452,29 +465,35 @@ func (s *Service) setStaff(w http.ResponseWriter, r *http.Request) {
 // Grant makes the account whose address is email one of the platform's staff with role, as the
 // operator, through the command line (household-api staff grant): how the first platform_admin is
 // made, when there is nobody yet who could make one through the API (runbooks/platform-staff.md). It
-// is recorded in the platform's log as the operator's.
-func Grant(ctx context.Context, pool tenant.Beginner, email string, role Role, now time.Time) error {
-	return tenant.AccountTx(ctx, pool, uuid.Nil, func(tx pgx.Tx) error {
+// is recorded in the platform's log as the operator's. It reports whether it changed anything: an
+// account that holds the role already is left as it is.
+func Grant(ctx context.Context, pool tenant.Beginner, email string, role Role, now time.Time) (bool, error) {
+	var changed bool
+	err := tenant.AccountTx(ctx, pool, uuid.Nil, func(tx pgx.Tx) error {
 		user, err := byAddress(ctx, tx, email)
 		if err != nil {
 			return err
 		}
-		_, err = grant(ctx, tx, member{}, user, role, entry{reason: "made staff through the command line"}, now)
+		changed, err = grant(ctx, tx, member{}, user, role, entry{reason: "made staff through the command line"}, now)
 		return err
 	})
+	return changed && err == nil, err
 }
 
 // Revoke takes the account whose address is email out of the platform's staff, as the operator,
-// through the command line (household-api staff revoke).
-func Revoke(ctx context.Context, pool tenant.Beginner, email string) error {
-	return tenant.AccountTx(ctx, pool, uuid.Nil, func(tx pgx.Tx) error {
+// through the command line (household-api staff revoke). It reports whether it changed anything: an
+// account that is not staff is left as it is.
+func Revoke(ctx context.Context, pool tenant.Beginner, email string) (bool, error) {
+	var changed bool
+	err := tenant.AccountTx(ctx, pool, uuid.Nil, func(tx pgx.Tx) error {
 		user, err := byAddress(ctx, tx, email)
 		if err != nil {
 			return err
 		}
-		_, err = revoke(ctx, tx, member{}, user, entry{reason: "taken out of the staff through the command line"})
+		changed, err = revoke(ctx, tx, member{}, user, entry{reason: "taken out of the staff through the command line"})
 		return err
 	})
+	return changed && err == nil, err
 }
 
 // byAddress returns, in tx, the account whose address is email.

@@ -1,11 +1,14 @@
 package app_test
 
 import (
+	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,7 +30,7 @@ import (
 func (s *site) grant(address string, role staff.Role) {
 	s.t.Helper()
 	pool := testsupport.Open(s.t).Pool(s.t, db.RoleApp)
-	if err := staff.Grant(s.t.Context(), pool, address, role, s.clock.now()); err != nil {
+	if _, err := staff.Grant(s.t.Context(), pool, address, role, s.clock.now()); err != nil {
 		s.t.Fatal(err)
 	}
 }
@@ -417,10 +420,14 @@ func TestARaisedCeilingIsTheOneTheHouseholdIsHeldTo(t *testing.T) {
 	thirteenth := func() *httptest.ResponseRecorder { return jana.makeChild(h.ID, "Třinácté", "1234", nil) }
 	expect(t, thirteenth(), http.StatusForbidden, problem.CodeFairUseCeiling)
 
-	// A ceiling is raised: one below what every household is held to is refused, as is one nobody names.
+	// A ceiling is raised: one below what every household is held to is refused, as is one nobody
+	// names, and one past what every client reads exactly, which where a ceiling is enforced would
+	// overflow what is computed from it, and refuse what it was raised to allow.
 	for body, field := range map[string]string{
-		`{"key": "members", "value": 11, "reason": "fewer"}`: "/value",
-		`{"key": "households", "value": 9, "reason": "?"}`:   "/key",
+		`{"key": "members", "value": 11, "reason": "fewer"}`:                           "/value",
+		`{"key": "households", "value": 9, "reason": "?"}`:                             "/key",
+		`{"key": "file_size_bytes", "value": 9223372036854775807, "reason": "no end"}`: "/value",
+		`{"key": "members", "value": 9007199254740992, "reason": "no end"}`:            "/value",
 	} {
 		if fields := fieldErrorsOf(t, admin.patch(limits, body, nil)); len(fields) != 1 || fields[0].Field != field {
 			t.Fatalf("%s: %+v", body, fields)
@@ -696,6 +703,93 @@ func TestThePlatformsStaffAreManagedByItsAdmins(t *testing.T) {
 	}
 }
 
+// A change of the staff is made by one who is a platform_admin still when it is made (D-144): the
+// request of an admin that was on its way while another took them out of the staff is answered as
+// their next would be, changes nothing, and does not make them staff again.
+func TestAnAdminTakenOutWhileTheirRequestIsOnItsWayChangesNoStaff(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	s.staffer("Karel", s.a("karel@example"), staff.Admin)
+	leaving := s.staffer("Otto", s.a("otto@example"), staff.Admin)
+	otto := leaving.me().ID
+	ctx := t.Context()
+
+	// Another admin's change holds the staff's lock, as it does until it commits. Otto's request is
+	// admitted, an admin as he still is, and waits for the lock.
+	tx, err := s.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, "LOCK TABLE platform.staff IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+		t.Fatal(err)
+	}
+	var (
+		rec *httptest.ResponseRecorder
+		wg  sync.WaitGroup
+	)
+	// The same signed-in browser, with a copy of its cookies, since the test goes on meanwhile.
+	b := &browser{s: s, cookies: maps.Clone(leaving.cookies), peer: leaving.peer}
+	wg.Go(func() {
+		rec = b.put("/platform/staff/"+otto.String(), `{"role": "platform_admin", "reason": "staying"}`)
+	})
+	for waited := time.Duration(0); ; waited += 10 * time.Millisecond {
+		if n := s.count(`SELECT count(*) FROM pg_locks l JOIN pg_database d ON d.oid = l.database
+			WHERE d.datname = current_database() AND l.relation = 'platform.staff'::regclass AND NOT l.granted`); n > 0 {
+			break
+		}
+		if waited > 30*time.Second {
+			t.Fatal("the request never waited for the staff's lock")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM platform.staff WHERE user_id = $1", otto); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	expect(t, rec, http.StatusNotFound, problem.CodeNotFound)
+	if n := s.count("SELECT count(*) FROM platform.staff WHERE user_id = $1", otto); n != 0 {
+		t.Fatal("an admin taken out of the staff made themself staff again")
+	}
+}
+
+// A key answers a repeat with what the first request was answered, so the staff API reads it only
+// once its caller is admitted (D-144): a staff member's repeat is answered from their key, and one
+// taken out of the staff who sends a request of theirs again is answered 404, as a stranger is, and
+// not what they were answered while they were staff.
+func TestAFormerStaffMemberIsNotAnsweredFromTheirKey(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	admin := s.staffer("Karel", s.a("karel@example"), staff.Admin)
+	support := s.staffer("Sára", s.a("sara@example"), staff.Support)
+	sara := support.me().ID
+	// A flag of this test's own: the package's tests share one database.
+	key := "keyed_" + strings.ReplaceAll(s.domain, ".", "_") + ".flag"
+	expect(t, admin.put("/platform/flags/"+key, `{"enabled": false, "reason": "ship it dark"}`), http.StatusOK, "")
+
+	set := func() *httptest.ResponseRecorder {
+		return support.send(request{
+			method: http.MethodPut, path: platformPath(h.ID, "/flags/"+key), body: `{"enabled": true, "reason": "they asked to try it"}`,
+			header: http.Header{"Idempotency-Key": {"sara-sets-the-flag"}},
+		})
+	}
+	first := set()
+	expect(t, first, http.StatusOK, "")
+	again := set()
+	expect(t, again, http.StatusOK, "")
+	if again.Body.String() != first.Body.String() || len(s.events(h.ID, "support.flag")) != 1 {
+		t.Fatalf("the repeat: %s, with %d changes recorded; want the first answer, %s, and the one change",
+			again.Body, len(s.events(h.ID, "support.flag")), first.Body)
+	}
+
+	rec := admin.put("/platform/staff/"+sara.String(), `{"role": null, "reason": "left the team"}`)
+	expect(t, rec, http.StatusNoContent, "")
+	expect(t, set(), http.StatusNotFound, problem.CodeNotFound)
+}
+
 // The platform never loses its last platform_admin: nobody could make another through the API.
 func TestTheLastPlatformAdminKeepsTheRole(t *testing.T) {
 	s := newSite(t, apptest.Options{})
@@ -915,6 +1009,15 @@ func TestSupportRedriveANotificationThatFailed(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// One that failed more than seven days ago, as the expiry sweep leaves it: its arguments emptied,
+	// and no time left at which they would be.
+	swept := idgen.New()
+	if _, err := s.admin.Exec(t.Context(), `
+		INSERT INTO notifications (household_id, id, user_id, category, message, email, status, reason, created_at, settled_at)
+		VALUES ($1, $2, $3, 'direct', 'email.household_unsuspended', true, 'failed', 'email_failed', now() - interval '9 days',
+		        now() - interval '8 days')`, h.ID, swept, jana.me().ID); err != nil {
+		t.Fatal(err)
+	}
 	redrive := func(id uuid.UUID) *httptest.ResponseRecorder {
 		return support.post(platformPath(h.ID, "/notifications/"+id.String()+"/redrive"), `{"reason": "their mail server was down"}`)
 	}
@@ -923,11 +1026,12 @@ func TestSupportRedriveANotificationThatFailed(t *testing.T) {
 	for _, n := range d.Notifications {
 		redrivable[n.ID] = n.Redrivable
 	}
-	if !redrivable[failed] || redrivable[sealed] {
+	if len(redrivable) != 3 || !redrivable[failed] || redrivable[sealed] || redrivable[swept] {
 		t.Fatalf("the notifications as support reads them: %+v", d.Notifications)
 	}
 
 	expect(t, redrive(sealed), http.StatusConflict, problem.CodeNotApplicable)
+	expect(t, redrive(swept), http.StatusConflict, problem.CodeNotApplicable)
 	expect(t, redrive(idgen.New()), http.StatusNotFound, problem.CodeNotFound)
 	sent := len(s.outbox.To(address))
 	expect(t, redrive(failed), http.StatusAccepted, "")
@@ -941,6 +1045,98 @@ func TestSupportRedriveANotificationThatFailed(t *testing.T) {
 	expect(t, redrive(failed), http.StatusConflict, problem.CodeNotApplicable)
 	if got := s.events(h.ID, "support.redrive"); !slices.Equal(got, []string{"service:support:system"}) {
 		t.Fatalf("the household's log: %v", got)
+	}
+}
+
+// A credit goes to the balance of the customer who pays the household's subscription (PRD 02 §8), in
+// the currency it pays in, and is in both logs. It is made once at the payment processor however
+// often its request is sent: the processor is asked before the transaction that records the credit
+// commits, so a request whose answer never arrived is sent again, and the processor is told it is the
+// same request.
+func TestSupportCreditTheHouseholdsPayer(t *testing.T) {
+	s, stripe := billingSite(t)
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	admin := s.staffer("Karel", s.a("karel@example"), staff.Admin)
+	support := s.staffer("Sára", s.a("sara@example"), staff.Support)
+	credit := func(key string, minor int64, currency string) *httptest.ResponseRecorder {
+		t.Helper()
+		header := http.Header{}
+		if key != "" {
+			header.Set("Idempotency-Key", key)
+		}
+		return support.send(request{
+			method: http.MethodPost, path: platformPath(h.ID, "/credit"), header: header,
+			body: jsonBody(t, map[string]any{
+				"amount": map[string]any{"amount_minor": minor, "currency": currency}, "reason": "An outage on our side",
+			}),
+		})
+	}
+	// asked are the names the credits the server asked Stripe for since the last call were asked under.
+	asked := func() []string {
+		var keys []string
+		for _, r := range stripe.Requests() {
+			if strings.HasSuffix(r.Path, "/balance_transactions") {
+				keys = append(keys, r.IdempotencyKey)
+			}
+		}
+		return keys
+	}
+	recorded := func() int { return len(s.events(h.ID, "support.credit")) }
+
+	// A household nobody pays for has nothing to credit; one that is paid for is credited in the
+	// currency it pays in. Neither refusal is recorded.
+	expect(t, credit("", 500, "EUR"), http.StatusConflict, problem.CodeNotSubscribed)
+	s.paid(stripe, jana, h.ID, "year")
+	if fields := fieldErrorsOf(t, credit("", 500, "CZK")); len(fields) != 1 || fields[0].Field != "/amount/currency" {
+		t.Fatalf("a credit in another currency: %+v", fields)
+	}
+	asked()
+
+	// The processor fails: nothing is recorded, and the request, sent again, is the same request there.
+	stripe.Down(true)
+	expect(t, credit("the-outage", 500, "EUR"), http.StatusServiceUnavailable, problem.CodeBillingUnavailable)
+	stripe.Down(false)
+	failed := asked()
+	if len(failed) != 1 || !strings.HasPrefix(failed[0], "credit:") || recorded() != 0 || len(stripe.Credits()) != 0 {
+		t.Fatalf("the credit that failed was asked under %q, with %d recorded and %d made", failed, recorded(), len(stripe.Credits()))
+	}
+	expect(t, credit("the-outage", 500, "EUR"), http.StatusNoContent, "")
+	if again := asked(); !slices.Equal(again, failed) {
+		t.Fatalf("the request sent again was asked under %q, want the name it had, %q", again, failed)
+	}
+	credits := stripe.Credits()
+	if len(credits) != 1 || credits[0].Get("amount") != "-500" || credits[0].Get("currency") != "eur" ||
+		credits[0].Get("description") != "Kredit od podpory Household" {
+		t.Fatalf("the credits at Stripe: %v", credits)
+	}
+	// Answered once, a repeat is answered from its key, and the processor is not asked again.
+	expect(t, credit("the-outage", 500, "EUR"), http.StatusNoContent, "")
+	if again := asked(); len(again) != 0 || len(stripe.Credits()) != 1 || recorded() != 1 {
+		t.Fatalf("a repeat asked the processor %q: %d credits made, %d recorded", again, len(stripe.Credits()), recorded())
+	}
+	// Another request is another credit, under a name of its own; one with no key has none.
+	expect(t, credit("another", 500, "EUR"), http.StatusNoContent, "")
+	expect(t, credit("", 250, "EUR"), http.StatusNoContent, "")
+	if other := asked(); len(other) != 2 || other[0] == failed[0] || !strings.HasPrefix(other[0], "credit:") ||
+		strings.HasPrefix(other[1], "credit:") || len(stripe.Credits()) != 3 {
+		t.Fatalf("two more credits were asked under %q, with %d made", other, len(stripe.Credits()))
+	}
+
+	// Each is in the household's own log, as done by the platform's support, and in the platform's, with
+	// what was credited and why.
+	if got := s.events(h.ID, "support.credit"); !slices.Equal(got, slices.Repeat([]string{"service:support:system"}, 3)) {
+		t.Fatalf("the household's log: %v", got)
+	}
+	var credited []string
+	for _, e := range admin.logged("?household_id=" + h.ID.String()) {
+		if e.Action != "household.credit" || e.Reason == nil || *e.Reason != "An outage on our side" || e.Meta["currency"] != "EUR" {
+			t.Fatalf("the platform's log: %+v", e)
+		}
+		credited = append(credited, fmt.Sprint(e.Meta["amount_minor"]))
+	}
+	if !slices.Equal(credited, []string{"250", "500", "500"}) {
+		t.Fatalf("the platform's log records credits of %v minor units, newest first", credited)
 	}
 }
 

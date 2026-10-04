@@ -8581,9 +8581,9 @@ paths:
       summary: Raise a fair-use ceiling for one household
       description: |
         `platform_admin` only. One ceiling (PRD 04 §5) raised for the household, to a `value` at or
-        above the one every household is held to, or, with a null `value`, put back to it. The
-        household is held to it from its next request. `chat_messages` is kept and read once Chat
-        counts its messages.
+        above the one every household is held to and no more than 2^53 − 1, or, with a null
+        `value`, put back to it. The household is held to it from its next request. `chat_messages`
+        is kept and read once Chat counts its messages.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -8631,7 +8631,10 @@ paths:
         A credit to the balance of the customer who pays the household's subscription, at the
         payment processor, which its next invoices draw on. The amount is in the currency the
         household is charged in. A household nobody pays for has nothing to credit (`409`,
-        `not_subscribed`).
+        `not_subscribed`). Send it with an `Idempotency-Key`: the processor is asked before the
+        credit is recorded, so a request answered `503`, or not at all, may have credited the
+        customer, and sent again under the same key it is the one credit, where without a key it
+        would be a second.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -10514,7 +10517,7 @@ components:
       required: [key, value, reason]
       properties:
         key: { $ref: '#/components/schemas/PlatformLimitKey' }
-        value: { type: [integer, 'null'], format: int64, minimum: 1, description: 'What the household is held to in place of the ceiling every household has, which it is at or above: a ceiling is raised. Null puts the ceiling back.' }
+        value: { type: [integer, 'null'], format: int64, minimum: 1, maximum: 9007199254740991, description: 'What the household is held to in place of the ceiling every household has, which it is at or above: a ceiling is raised. At most 2^53 − 1, the largest integer every client reads exactly. Null puts the ceiling back.' }
         reason: { $ref: '#/components/schemas/StaffReason' }
 
     PlatformLimitOverride:

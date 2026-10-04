@@ -1912,7 +1912,7 @@ func TestTheSupportActions(t *testing.T) {
 		AND lapsed_at IS NULL AND retained_until IS NULL AND retention_warnings = 0`, h.ID, until); n != 1 {
 		t.Fatal("the lapsed trial was not put back on trial")
 	}
-	if err := s.billing.Credit(ctx, h.ID, money.Money{AmountMinor: 500, Currency: "EUR"}, "an apology"); !errors.Is(err, billing.ErrNoSubscription) {
+	if err := s.billing.Credit(ctx, h.ID, money.Money{AmountMinor: 500, Currency: "EUR"}, ""); !errors.Is(err, billing.ErrNoSubscription) {
 		t.Fatalf("a credit with no subscription: %v", err)
 	}
 
@@ -1924,11 +1924,25 @@ func TestTheSupportActions(t *testing.T) {
 	if err := s.billing.Credit(ctx, h.ID, money.Money{AmountMinor: 500, Currency: "CZK"}, ""); !errors.Is(err, billing.ErrCurrency) {
 		t.Fatalf("a credit in another currency: %v", err)
 	}
-	if err := s.billing.Credit(ctx, h.ID, money.Money{AmountMinor: 500, Currency: "EUR"}, "an apology"); err != nil {
+	// Made for a request, it is made once: the request sent again, after an answer that never arrived,
+	// is the credit it made at the processor and no second one. What it says there is the catalog's, in
+	// the household's language, Czech's here.
+	for range 2 {
+		if err := s.billing.Credit(ctx, h.ID, money.Money{AmountMinor: 500, Currency: "EUR"}, "credit:a-request"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	credits := stripe.Credits()
+	if len(credits) != 1 || credits[0].Get("amount") != "-500" || credits[0].Get("currency") != "eur" ||
+		credits[0].Get("description") != "Kredit od podpory Household" {
+		t.Fatalf("the credits at Stripe: %v", credits)
+	}
+	// With no request to name, each is a credit of its own.
+	if err := s.billing.Credit(ctx, h.ID, money.Money{AmountMinor: 500, Currency: "EUR"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if credits := stripe.Credits(); len(credits) != 1 || credits[0].Get("amount") != "-500" || credits[0].Get("currency") != "eur" {
-		t.Fatalf("the credits at Stripe: %v", credits)
+	if n := len(stripe.Credits()); n != 2 {
+		t.Fatalf("%d credits at Stripe, want the one made for a request and the one made for none", n)
 	}
 	var invoice uuid.UUID
 	if err := s.admin.QueryRow(ctx, "SELECT id FROM billing_invoices WHERE household_id = $1", h.ID).Scan(&invoice); err != nil {

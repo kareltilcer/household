@@ -149,7 +149,7 @@ role**. Platform staff have no database credential that can read household conte
 [G8](00-overview.md) is made a property of the system rather than a policy (**D-3**, **D-143**, and
 see [05-privacy-and-compliance.md](05-privacy-and-compliance.md)).
 
-> **Under D-93 a fourth role replicates, and it bypasses row-level security.** PowerSync reads the
+> **Under D-93 a fifth role replicates, and it bypasses row-level security.** PowerSync reads the
 > write-ahead log and sets no tenant, so its replication role holds `REPLICATION`, whose stream of
 > changes neither row-level security nor the role's table grants filter, and `BYPASSRLS`, without
 > which it could read no table's initial snapshot, since every tenant table forces row-level

@@ -2,10 +2,14 @@ package staff
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -154,25 +158,12 @@ const (
 // one of whose members has it as their address, in the state the request names, newest first.
 func (s *Service) searchHouseholds(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	after, err := householdKeys.FromRequest(r)
+	before, last, err := householdKeys.Before(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	var (
-		before time.Time
-		last   uuid.UUID
-	)
-	if after != nil {
-		if before, err = time.Parse(time.RFC3339Nano, after[0]); err == nil {
-			last, err = uuid.Parse(after[1])
-		}
-		if err != nil {
-			s.fail(w, r, cursor.Malformed())
-			return
-		}
-	}
-	q, state, limit := trimmed(r, "q"), trimmed(r, "state"), limitOf(r)
+	q, state, limit := trimmed(r, "q"), trimmed(r, "state"), cursor.Limit(r)
 	items := make([]householdItem, 0, limit)
 	more := false
 	err = s.read(ctx, func(tx pgx.Tx) error {
@@ -184,7 +175,7 @@ func (s *Service) searchHouseholds(w http.ResponseWriter, r *http.Request) {
 			  AND ($2 = '' OR `+stateSQL+` = $2)
 			  AND ($3::timestamptz IS NULL OR (h.created_at, h.id) < ($3, $4))
 			ORDER BY h.created_at DESC, h.id DESC LIMIT $5`,
-			q, state, nullTime(before), last, limit+1)
+			q, state, before, last, limit+1)
 		if err != nil {
 			return err
 		}
@@ -204,21 +195,12 @@ func (s *Service) searchHouseholds(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	meta := pageMeta{HasMore: more}
+	meta := cursor.PageMeta{}
 	if more {
 		end := items[len(items)-1]
-		next := householdKeys.Encode(end.CreatedAt.Format(time.RFC3339Nano), end.ID.String())
-		meta.NextCursor = &next
+		meta = householdKeys.After(end.CreatedAt, end.ID)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "meta": meta})
-}
-
-// nullTime is t, or NULL for the zero time.
-func nullTime(t time.Time) any {
-	if t.IsZero() {
-		return nil
-	}
-	return t
 }
 
 // getHousehold is getPlatformHouseholdsByHouseholdId.
@@ -375,8 +357,7 @@ func (s *Service) details(ctx context.Context, tx pgx.Tx, d *householdDetail) er
 	}
 
 	rows, err = tx.Query(ctx, `
-		SELECT id, category::text, message, status::text, reason, created_at, settled_at,
-		  status = 'failed' AND NOT sealed AND user_id IS NOT NULL AND args_expires_at > now()
+		SELECT id, category::text, message, status::text, reason, created_at, settled_at, `+notify.Redrivable+`
 		FROM notifications WHERE household_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2`, d.ID, shownNotifications)
 	if err != nil {
 		return err
@@ -512,13 +493,27 @@ func (s *Service) extendTrial(w http.ResponseWriter, r *http.Request) {
 	s.answerHousehold(w, r, id)
 }
 
-// balanceNote is what a credit says on the payment processor's record, which its customer may read:
-// never the reason staff gave, which is the platform's log's alone.
-const balanceNote = "Credit from Household support"
+// creditRequest names, to the payment processor, the request a credit is made for: the caller's
+// Idempotency-Key, with who sent it, for which household and what amount. The processor is asked
+// before the transaction that records the credit commits, so an answer of its that never arrived, or
+// a commit that failed after it, leaves the caller to send the request again: under the same name
+// the processor answers the credit it made, and makes no second one. A request with no key has no
+// name, and sent again is another request.
+func creditRequest(r *http.Request, m member, household uuid.UUID, amount money.Money) string {
+	key := r.Header.Get(idempotency.Header)
+	if key == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		m.id.String(), household.String(), strconv.FormatInt(amount.AmountMinor, 10), amount.Currency, key,
+	}, "\x00")))
+	return "credit:" + hex.EncodeToString(sum[:])
+}
 
 // credit is postPlatformHouseholdsByHouseholdIdCredit: a credit to the balance of the customer who
 // pays the household's subscription, at the payment processor, in the currency it is charged in,
-// which its next invoices draw on.
+// which its next invoices draw on. What it says on the processor's record, which its customer may
+// read, is billing's to render, in the household's language, and never the reason staff gave.
 func (s *Service) credit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id, err := pathUUID(r, "household_id")
@@ -546,7 +541,8 @@ func (s *Service) credit(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	scoped := s.acting(ctx, caller(ctx), entry{
+	m := caller(ctx)
+	scoped := s.acting(ctx, m, entry{
 		action: "household.credit", household: id, reason: reason,
 		meta: map[string]any{"amount_minor": req.Amount.AmountMinor, "currency": req.Amount.Currency},
 	})
@@ -554,12 +550,9 @@ func (s *Service) credit(w http.ResponseWriter, r *http.Request) {
 		if _, err := mutation.Note(scoped, tx, household.SupportEvent(household.SupportCredit, nil)); err != nil {
 			return err
 		}
-		if err := idempotency.Commit(ctx, tx); err != nil {
-			return err
-		}
 		// Last, so that the processor is asked only once everything that records the credit is
 		// written, and none of it is kept when the processor refuses.
-		return s.cfg.Billing.Credit(ctx, id, req.Amount, balanceNote)
+		return s.cfg.Billing.Credit(ctx, id, req.Amount, creditRequest(r, m, id, req.Amount))
 	})
 	switch {
 	case errors.Is(err, billing.ErrNoSubscription):
@@ -647,10 +640,8 @@ func (s *Service) send(w http.ResponseWriter, r *http.Request, param, action, ev
 		if err := do(scoped, tx, id, thing); err != nil {
 			return err
 		}
-		if _, err := mutation.Note(scoped, tx, household.SupportEvent(event, nil)); err != nil {
-			return err
-		}
-		return idempotency.Commit(ctx, tx)
+		_, err := mutation.Note(scoped, tx, household.SupportEvent(event, nil))
+		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -672,9 +663,17 @@ var ceilings = map[string]int64{
 	fairuse.KeyFileBytes:     files.MaxBytes,
 }
 
+// maxRaised is the most a ceiling is raised to, the contract's maximum of a PlatformLimitChange's
+// value: the largest integer every client reads exactly, 2^53 − 1. It also keeps what is computed
+// from a ceiling where it is enforced within an int64, the four fifths of it the owners are warned
+// at (fairuse.Warns) and the length of a form that carries a file of its size (files.Receive), which
+// a value near the largest int64 would overflow, refusing every upload it was raised to allow.
+const maxRaised = 1<<53 - 1
+
 // setLimit is patchPlatformHouseholdsByHouseholdIdLimits: one fair-use ceiling raised for the
-// household, to a value at or above the one every household is held to, or, with a null value, put
-// back to it (PRD 04 §5). The ceiling holds from the household's next request.
+// household, to a value at or above the one every household is held to and no more than maxRaised,
+// or, with a null value, put back to it (PRD 04 §5). The ceiling holds from the household's next
+// request.
 func (s *Service) setLimit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	m := caller(ctx)
@@ -698,7 +697,7 @@ func (s *Service) setLimit(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 	case !named:
 		err = invalid("/key", problem.FieldInvalid)
-	case req.Value != nil && *req.Value < ceiling:
+	case req.Value != nil && (*req.Value < ceiling || *req.Value > maxRaised):
 		// A ceiling is raised: below the one every household is held to, it would be a penalty.
 		err = invalid("/value", problem.FieldInvalid)
 	default:
@@ -735,10 +734,8 @@ func (s *Service) setLimit(w http.ResponseWriter, r *http.Request) {
 			}
 			out = overridden(req.Key, *req.Value, reason, &m.id, m.email, at)
 		}
-		if _, err := mutation.Note(scoped, tx, household.SupportEvent(household.SupportLimit, args)); err != nil {
-			return err
-		}
-		return idempotency.Commit(ctx, tx)
+		_, err := mutation.Note(scoped, tx, household.SupportEvent(household.SupportLimit, args))
+		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -875,10 +872,8 @@ func (s *Service) setHouseholdFlag(w http.ResponseWriter, r *http.Request) {
 		if !changed {
 			return nil
 		}
-		if _, err := mutation.Note(scoped, tx, household.SupportEvent(household.SupportFlag, args)); err != nil {
-			return err
-		}
-		return idempotency.Commit(ctx, tx)
+		_, err := mutation.Note(scoped, tx, household.SupportEvent(household.SupportFlag, args))
+		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)

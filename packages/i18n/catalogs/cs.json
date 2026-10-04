@@ -41,6 +41,7 @@
   "admin.support.suspend": "Pozastavení domácnosti: {notice}",
   "admin.support.unsuspend": "Zrušení pozastavení domácnosti",
   "billing.storage_line": "Úložiště navíc, {month}: {blocks, plural, one {# blok} few {# bloky} many {# bloku} other {# bloků}} po {gb} GB",
+  "billing.support_credit": "Kredit od podpory Household",
   "email.account_deletion.body": "Dobrý den,\n\npožádali jste o smazání svého účtu Household. Účet je nyní vypnutý: nikdo se k němu nepřihlásí a všechny prohlížeče i zařízení byly odhlášeny. Za {days, plural, one {# den} few {# dny} many {# dne} other {# dní}} bude smazán natrvalo, spolu s tím, co jste si uchovávali soukromě. Co jste přidali do domácnosti, kterou sdílíte, zůstává této domácnosti, bez vašeho jména.\n\nPokud si to rozmyslíte, otevřete do té doby odkaz níže. Smazání zruší a přihlásíte se znovu jako dřív.\n\n{link}\n\nPokud jste o to nežádali, otevřete odkaz hned, poté se přihlaste a změňte si heslo.",
   "email.account_deletion.subject": "Váš účet Household bude smazán za {days, plural, one {# den} few {# dny} many {# dne} other {# dní}}",
   "email.billing_moved.body": "Dobrý den,\n\n{member} převzal(a) placení předplatného domácnosti {household} v aplikaci Household, jak jste nabídli. Předplatné se od teď účtuje jemu či jí, ne vám. Co jste už zaplatili, platí do konce svého období a nic se neúčtovalo dvakrát.\n\nVlastníkem domácnosti {household} zůstáváte a její předplatné vidíte zde:\n\n{link}",

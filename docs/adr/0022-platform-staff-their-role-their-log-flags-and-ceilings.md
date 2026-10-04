@@ -57,8 +57,14 @@ and no actor id. The staff package builds that context for each action and calls
 `billing.Service.ExtendTrial`, whose event is the entitlement's own; `household.Service.Suspend` and
 `Unsuspend`, which change the household's row. An action that changes no entity's row is recorded by
 `mutation.Note`, an event with no sync change, in a transaction the staff package opens
-(`tenant.InWriteTx`). Both are the platform's alone: architecture test 4 fails a module that names
-either.
+(`tenant.InWriteTx`); it marks the request's Idempotency-Key committed there, as `Apply` does. Both
+are the platform's alone: architecture test 4 fails a module that names either.
+
+A credit is the one action whose effect is outside the database. The processor is asked last, inside
+the transaction that records the credit, so that a refusal records nothing; and the credit is named
+to it by the request's Idempotency-Key (`NewCredit.IdempotencyID`), so that a request sent again
+after an answer that never arrived, or a commit that failed, is the one credit there. What it says on
+the processor's record is a catalog message in the household's language, as a storage line is.
 
 **The platform's log is written by the spine's witness (D-145).** `Service.Witness` runs in the
 mutation's transaction once its event is written, and the staff package's witness inserts the entry:
@@ -74,10 +80,14 @@ log names a household by its id alone and outlives its erasure.
 
 **A staff member is an account (D-144).** `platform.staff` holds an account's role. The staff
 middleware reads the row and the account's second step on every request, as the request role, and
-admits by the role the route asks for. `household-api staff grant <email> <role>` and `staff revoke
-<email>` change the staff as the operator, recorded as the operator's; they are how the first
-`platform_admin` is made. Granting, revoking and demoting take a lock on the table, so that two at
-once cannot both find the other still an admin, and refuse the last one.
+admits by the role the route asks for. A route reads its Idempotency-Key only behind that admission,
+as a module's does behind its gate: a key answers a repeat with what the first request was answered,
+and one who is staff no longer is answered `404`, not that. `household-api staff grant <email>
+<role>` and `staff revoke <email>` change the staff as the operator, recorded as the operator's; they
+are how the first `platform_admin` is made. Granting, revoking and demoting take a lock on the table,
+so that two at once cannot both find the other still an admin, refuse the last one, and read the
+caller's own role again under the lock, so that an admin taken out while their request was on its way
+does not finish it as one.
 
 **A flag is data, and a module's flag gates its level (D-146).** `platform.feature_flags` holds a
 flag's setting for the platform and `household_flags`, a tenant table, a household's own. The tenant
@@ -93,7 +103,9 @@ in the transaction that enforces the ceiling: the members', a module's rows, the
 day's sync mutations, each of which had the household's context open already. The two with no
 transaction read it from the scope (`Scope.Limit`): a file's size, and the API's rate, for which the
 in-memory buckets now fill at a rate of their own (`ratelimit.Buckets.TakeAt`). `chat_messages` is
-kept and read by item 85.
+kept and read by item 85. A value is at most 2^53 − 1, the contract's maximum: what every client
+reads exactly, and far enough below the largest `int64` that nothing computed from a ceiling where it
+is enforced, four fifths of it or a form's length past it, overflows.
 
 **The loader keeps an edit (D-148).** Every reference table carries `edited_at`. The loader's upsert
 writes a row that exists when `(edited_at IS NULL) = (its values differ from the files')`: an
@@ -128,7 +140,7 @@ the rule.
   test 12's list, in the same PR. A new tenant table staff read calls `enable_staff_read`.
 - A support action on a household is a function that takes the caller's context and, where it is no
   mutation, a transaction: the staff package supplies both. `billing.Service.ResendInvoice` changed
-  shape for it.
+  shape for it, and `Credit` takes the name of its request and renders its own note.
 - The household's log now holds events with no sync change beside them (`admin.support.credit`,
   `…invoice`, `…redrive`, `…limit`, `…flag`). Item 52 renders a `service` actor's label through the
   catalog (`activity.actor.support`).

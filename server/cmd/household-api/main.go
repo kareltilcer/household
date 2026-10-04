@@ -128,18 +128,32 @@ func manageStaff(ctx context.Context, cfg *config.Config, log *slog.Logger, chan
 		return err
 	}
 	defer pool.Close()
+	// What the log says is what was done: an account that was not staff, or held the role already, is
+	// left as it is, and said to be, so that an address mistaken for a staff member's does not read as
+	// one taken out.
+	env := slog.String("env", string(cfg.Env))
 	if change.role == "" {
-		if err := staff.Revoke(ctx, pool, change.email); err != nil {
+		changed, err := staff.Revoke(ctx, pool, change.email)
+		switch {
+		case err != nil:
 			return err
+		case changed:
+			log.LogAttrs(ctx, slog.LevelInfo, "taken out of the platform's staff", env)
+		default:
+			log.LogAttrs(ctx, slog.LevelInfo, "not one of the platform's staff: nothing changed", env)
 		}
-		log.LogAttrs(ctx, slog.LevelInfo, "taken out of the platform's staff", slog.String("env", string(cfg.Env)))
 		return nil
 	}
-	if err := staff.Grant(ctx, pool, change.email, change.role, time.Now()); err != nil {
+	role := slog.String("role", string(change.role))
+	changed, err := staff.Grant(ctx, pool, change.email, change.role, time.Now())
+	switch {
+	case err != nil:
 		return err
+	case changed:
+		log.LogAttrs(ctx, slog.LevelInfo, "made one of the platform's staff", env, role)
+	default:
+		log.LogAttrs(ctx, slog.LevelInfo, "one of the platform's staff with the role already: nothing changed", env, role)
 	}
-	log.LogAttrs(ctx, slog.LevelInfo, "made one of the platform's staff", slog.String("env", string(cfg.Env)),
-		slog.String("role", string(change.role)))
 	return nil
 }
 

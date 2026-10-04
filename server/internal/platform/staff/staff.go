@@ -31,6 +31,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/audit"
 	"github.com/kareltilcer/household/server/internal/platform/auth"
 	"github.com/kareltilcer/household/server/internal/platform/billing"
+	"github.com/kareltilcer/household/server/internal/platform/entitlement"
 	"github.com/kareltilcer/household/server/internal/platform/household"
 	"github.com/kareltilcer/household/server/internal/platform/identity"
 	"github.com/kareltilcer/household/server/internal/platform/idgen"
@@ -115,34 +116,40 @@ func New(cfg Config) (*Service, error) {
 	return &Service{cfg: cfg}, nil
 }
 
-// Routes registers the staff API, on the API's router, behind the authentication, a check that there
-// is a caller and the account's Idempotency-Key: each route admits the staff whose role reaches it.
-func (s *Service) Routes(r chi.Router) {
-	support, admin := r.With(s.admit(Support)), r.With(s.admit(Admin))
-	const h = "/platform/households/{household_id}"
+// Routes returns what registers the staff API on the API's router, behind the authentication and a
+// check that there is a caller. Each route admits the staff whose role reaches it, and only then
+// reads the request's Idempotency-Key, through keyed, the account's: a key answers a repeat with what
+// the first request was answered, so it is read behind the admission, as a module's is behind its
+// gate, and a caller who is staff no longer is answered 404 and not what they were answered while
+// they were (D-144).
+func (s *Service) Routes(keyed func(http.Handler) http.Handler) func(chi.Router) {
+	return func(r chi.Router) {
+		support, admin := r.With(s.admit(Support), keyed), r.With(s.admit(Admin), keyed)
+		const h = "/platform/households/{household_id}"
 
-	support.Get("/platform/households", s.searchHouseholds)
-	support.Get(h, s.getHousehold)
-	support.Post(h+"/trial", s.extendTrial)
-	support.Post(h+"/credit", s.credit)
-	support.Post(h+"/invoices/{invoice_id}/resend", s.resendInvoice)
-	support.Post(h+"/notifications/{notification_id}/redrive", s.redrive)
-	support.Put(h+"/flags/{key}", s.setHouseholdFlag)
-	admin.Patch(h+"/limits", s.setLimit)
-	admin.Put(h+"/suspension", s.setSuspension)
+		support.Get("/platform/households", s.searchHouseholds)
+		support.Get(h, s.getHousehold)
+		support.Post(h+"/trial", s.extendTrial)
+		support.Post(h+"/credit", s.credit)
+		support.Post(h+"/invoices/{invoice_id}/resend", s.resendInvoice)
+		support.Post(h+"/notifications/{notification_id}/redrive", s.redrive)
+		support.Put(h+"/flags/{key}", s.setHouseholdFlag)
+		admin.Patch(h+"/limits", s.setLimit)
+		admin.Put(h+"/suspension", s.setSuspension)
 
-	support.Get("/platform/users", s.searchUsers)
-	support.Get("/platform/users/{user_id}", s.getUser)
-	support.Post("/platform/users/{user_id}/actions", s.actOnUser)
+		support.Get("/platform/users", s.searchUsers)
+		support.Get("/platform/users/{user_id}", s.getUser)
+		support.Post("/platform/users/{user_id}/actions", s.actOnUser)
 
-	support.Get("/platform/diagnostics/{bundle_id}", s.getDiagnostics)
+		support.Get("/platform/diagnostics/{bundle_id}", s.getDiagnostics)
 
-	support.Get("/platform/flags", s.listFlags)
-	support.Put("/platform/flags/{key}", s.setFlag)
+		support.Get("/platform/flags", s.listFlags)
+		support.Put("/platform/flags/{key}", s.setFlag)
 
-	admin.Get("/platform/audit", s.listAudit)
-	admin.Get("/platform/staff", s.listStaff)
-	admin.Put("/platform/staff/{user_id}", s.setStaff)
+		admin.Get("/platform/audit", s.listAudit)
+		admin.Get("/platform/staff", s.listStaff)
+		admin.Put("/platform/staff/{user_id}", s.setStaff)
+	}
 }
 
 // member is a staff member, as a request found them.
@@ -338,33 +345,8 @@ func pathUUID(r *http.Request, name string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// The page of a listing: the contract's Limit, 50 unless the request says, 200 at most.
-const (
-	defaultLimit = 50
-	maxLimit     = 200
-)
-
-// limitOf is the page size r asks for, which the edge has held to the contract's Limit.
-func limitOf(r *http.Request) int {
-	n, err := strconv.Atoi(r.URL.Query().Get("limit"))
-	if err != nil || n < 1 {
-		return defaultLimit
-	}
-	return min(n, maxLimit)
-}
-
-// pageMeta is the contract's PageMeta.
-type pageMeta struct {
-	NextCursor *string `json:"next_cursor"`
-	HasMore    bool    `json:"has_more"`
-}
-
 // actorRef is the contract's ActorRef, of a staff member: their address as it was.
-type actorRef struct {
-	UserID         *uuid.UUID `json:"user_id"`
-	Label          string     `json:"label"`
-	IsFormerMember bool       `json:"is_former_member"`
-}
+type actorRef = entitlement.ActorRef
 
 // read runs fn in one read-only transaction of the staff role's, so that what a response puts
 // together is of one moment.

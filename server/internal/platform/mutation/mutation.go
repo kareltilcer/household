@@ -241,8 +241,10 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 // entity's row, and so is no mutation Apply would record, a credit applied at the payment processor,
 // an invoice sent again, a ceiling raised (FR-AL7, D-75). The event is held to what Apply holds one
 // to: an action its module declares, recorded by the actor ctx's scope and service name, with how it
-// arrived. It is the platform's, as tenant.InWriteTx is, whose transaction it needs: architecture
-// test 4 keeps both out of every module, whose every event is a mutation's.
+// arrived; and, as in Apply, the Idempotency-Key ctx's request holds is marked committed in tx, which
+// commits what the event records, so that no caller of Note has it to remember. It is the
+// platform's, as tenant.InWriteTx is, whose transaction it needs: architecture test 4 keeps both out
+// of every module, whose every event is a mutation's.
 func Note(ctx context.Context, tx pgx.Tx, e audit.Event) (uuid.UUID, error) {
 	reg, _ := ctx.Value(catalogKey{}).(*module.Registry)
 	if reg == nil {
@@ -261,6 +263,9 @@ func Note(ctx context.Context, tx pgx.Tx, e audit.Event) (uuid.UUID, error) {
 	}
 	if _, ok := reg.Action(e.Module + "." + e.Action); !ok {
 		return uuid.Nil, fmt.Errorf("mutation: audit action %s.%s is not one its module declares", e.Module, e.Action)
+	}
+	if err := idempotency.Commit(ctx, tx); err != nil {
+		return uuid.Nil, err
 	}
 	actor, svc := acting(ctx, scope)
 	if err := label(ctx, tx, &actor); err != nil {

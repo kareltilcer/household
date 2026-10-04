@@ -178,7 +178,8 @@ func Lost(catalog *module.Registry, now func() time.Time) func(context.Context, 
 // caller's own push subscriptions and notification preferences (item 15) are the account's routes, as
 // are their consents, their exports and the diagnostic bundle they send (item 20). So are the
 // platform's staff's, under /platform (item 21), whose keys are their accounts': each admits the
-// staff whose role reaches it, and answers anyone else 404. Asking for the
+// staff whose role reaches it, and answers anyone else 404, before it reads a key, so that one who
+// is staff no longer is not answered from theirs. Asking for the
 // account's deletion carries its password and keeps no key (D-97); cancelling one is reached signed
 // out, with the link its email carried, since the account signs nobody in.
 //
@@ -327,8 +328,9 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 				keyed.With(catalog).Group(d.Households.AccountRoutes)
 				keyed.Group(d.Notify.AccountRoutes)
 				keyed.Group(d.Privacy.AccountRoutes)
-				keyed.Group(d.Staff.Routes)
 			})
+			// Its key is read once the caller is admitted as staff, as a module's is behind its gate.
+			account.Group(d.Staff.Routes(idempotency.AccountMiddleware(d.Pool, d.Logger, d.MaxBodyBytes)))
 		})
 		// Leaving keeps its key on the account, found before the membership it ended is looked for,
 		// so that a repeat is answered as the first request was rather than as a stranger.
