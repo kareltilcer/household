@@ -62,7 +62,7 @@ which is in no pair, so it carries a reason of its own.
 sixteen module accents among them, and `data-theme` takes `light`, `dark` or `system` on the root
 or on any element. The light block is `:root, [data-theme='light'], [data-theme='system']`; the
 dark block redeclares only what changes, and the `system` block repeats it under
-`prefers-color-scheme: dark`. `--dens-rule`, whose colour is a theme's, is the one reference: it is
+`prefers-color-scheme: dark`. `--dens-rule`, whose colour is a theme's, is the one colour that is a reference: it is
 declared on `:root, [data-theme]`, so each theme scope computes its own, and a compact scope and a
 theme scope inside one take the divider. Reduced motion zeroes the three durations, under the
 media query and under `data-motion='reduced'`, and leaves the thresholds: the 2000 ms hold is not a

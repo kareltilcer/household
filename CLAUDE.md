@@ -125,10 +125,11 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   declared contrast pairs, which its test holds to their minimums, and the scales; application code
   names a semantic or a component token, never a raw colour or a ramp's primitive, which ESLint
   (`household/semantic-tokens`) and the stylesheets' check (`pnpm run lint:css`) fail in `apps/**`,
-  and spends the type, space, radius and motion scales by name ([D-152](docs/prd/09-decisions.md)). A new colour token is in a declared
-  pair or exempt with its reason. A glyph or an illustration is a drawing in `@household/icons`,
-  which each client draws with its own component; an icon-only control takes its label from the
-  register (`controls`), and a status is its colour, its glyph and its word together
+  and spends the type, space, radius and motion scales by name
+  ([D-152](docs/prd/09-decisions.md)). A new colour token is in a declared pair or exempt with its
+  reason. A glyph or an illustration is a drawing in `@household/icons`, which each client draws
+  with its own component; an icon-only control takes its label from the register (`controls`), and
+  a status is its colour, its glyph and its word together
   ([ADR 0024](docs/adr/0024-design-tokens-icons-and-the-illustration-kit.md)).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
