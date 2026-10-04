@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/kareltilcer/household/server/internal/platform/breach"
 	"github.com/kareltilcer/household/server/internal/platform/config"
 	"github.com/kareltilcer/household/server/internal/platform/db"
@@ -92,6 +94,75 @@ func TestUsageErrorsExit2(t *testing.T) {
 	}
 	if code := run(t.Context(), nil, noDatabase, io.Discard, &stderr); code != 2 || !strings.Contains(stderr.String(), config.DatabaseURLVar) {
 		t.Errorf("production with no database: exit %d, %s", code, stderr.String())
+	}
+}
+
+// The staff command makes an account one of the platform's staff, or takes it out of them, as the
+// operator: how the first platform_admin is made (runbooks/platform-staff.md). The account is one
+// with a verified address, the change is in the platform's log as the operator's, and the last
+// platform_admin keeps the role.
+func TestTheStaffCommandMakesAndUnmakesStaff(t *testing.T) {
+	ctx := t.Context()
+	for _, args := range [][]string{{"staff"}, {"staff", "grant", "karel@household.test"}, {"staff", "grant", "karel@household.test", "owner"},
+		{"staff", "revoke"}, {"staff", "promote", "karel@household.test", "support"}} {
+		var stderr bytes.Buffer
+		if code := run(ctx, args, env(t), io.Discard, &stderr); code != 2 || !strings.Contains(stderr.String(), "staff grant <email>") {
+			t.Errorf("%v: exit %d, %s", args, code, stderr.String())
+		}
+	}
+
+	admin, err := pgx.Connect(ctx, testsupport.Open(t).URL(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = admin.Close(context.Background()) })
+	for _, stmt := range []string{
+		"INSERT INTO users (id, email, email_verified_at) VALUES ('01900000-0000-7000-8000-00000000c0a1', 'karel@household.test', now())",
+		"INSERT INTO users (id, email) VALUES ('01900000-0000-7000-8000-00000000c0a2', 'unverified@household.test')",
+	} {
+		if _, err := admin.Exec(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	staffed := func(email string) (role string) {
+		t.Helper()
+		if err := admin.QueryRow(ctx, `SELECT coalesce((SELECT s.role::text FROM platform.staff s JOIN users u ON u.id = s.user_id
+			WHERE u.email = $1), '')`, email).Scan(&role); err != nil {
+			t.Fatal(err)
+		}
+		return role
+	}
+
+	// An address nobody has, and one that is not verified, are not made staff.
+	for _, email := range []string{"nobody@household.test", "unverified@household.test"} {
+		if code := run(ctx, []string{"staff", "grant", email, "support"}, env(t), io.Discard, io.Discard); code != 1 || staffed(email) != "" {
+			t.Errorf("%s: exit %d, staff %q", email, code, staffed(email))
+		}
+	}
+	if code := run(ctx, []string{"staff", "grant", "Karel@household.test", "support"}, env(t), io.Discard, io.Discard); code != 0 ||
+		staffed("karel@household.test") != "support" {
+		t.Fatalf("grant: exit %d, staff %q", code, staffed("karel@household.test"))
+	}
+	if code := run(ctx, []string{"staff", "grant", "karel@household.test", "platform_admin"}, env(t), io.Discard, io.Discard); code != 0 ||
+		staffed("karel@household.test") != "platform_admin" {
+		t.Fatalf("a role changed: exit %d, staff %q", code, staffed("karel@household.test"))
+	}
+	// The last platform_admin keeps the role: nobody could make another through the API.
+	if code := run(ctx, []string{"staff", "revoke", "karel@household.test"}, env(t), io.Discard, io.Discard); code != 1 ||
+		staffed("karel@household.test") != "platform_admin" {
+		t.Fatalf("the last platform_admin revoked: exit %d, staff %q", code, staffed("karel@household.test"))
+	}
+	if code := run(ctx, []string{"staff", "grant", "karel@household.test", "support"}, env(t), io.Discard, io.Discard); code != 1 {
+		t.Fatalf("the last platform_admin made support: exit %d", code)
+	}
+	var entries int
+	if err := admin.QueryRow(ctx, `SELECT count(*) FROM platform.audit_log
+		WHERE action = 'staff.grant' AND actor_id IS NULL AND actor_label = 'operator' AND actor_role IS NULL
+		  AND target_user_id = '01900000-0000-7000-8000-00000000c0a1'`).Scan(&entries); err != nil {
+		t.Fatal(err)
+	}
+	if entries != 2 {
+		t.Fatalf("%d entries of the operator's in the platform's log, want the two grants", entries)
 	}
 }
 

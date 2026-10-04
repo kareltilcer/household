@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -313,6 +314,47 @@ func TestADisabledModuleIsAbsentAndKeepsItsData(t *testing.T) {
 	expect(t, rec, http.StatusOK, "")
 	if got := listed(t, rec); !slices.Equal(got, []uuid.UUID{it}) {
 		t.Fatalf("re-enabled, the module lists %v, want %v", got, []uuid.UUID{it})
+	}
+}
+
+// A module ships dark behind its flag (PRD 06 §7, D-146): where the flag module.<id> is off, the
+// module is absent to every member, its owners included, as a module the household does not enable
+// is; a household's own setting of the flag comes before the platform's; and a module with no such
+// flag is served as it is enabled. Its data stays, and turning the flag on brings it back.
+func TestAModuleBehindAFlagIsAbsentWhereItIsOff(t *testing.T) {
+	w := newWorld(t)
+	flag := tenant.ModuleFlag(probe.Name)
+	// The flag is the platform's, and the package's tests share one database: it goes with the test.
+	t.Cleanup(func() {
+		for _, stmt := range []string{"DELETE FROM household_flags WHERE key = $1", "DELETE FROM platform.feature_flags WHERE key = $1"} {
+			if _, err := w.admin.Exec(context.Background(), stmt, flag); err != nil {
+				t.Errorf("%s: %v", stmt, err)
+			}
+		}
+	})
+	dark, early := w.household(true), w.household(true)
+	it := w.item(dark)
+	owner, pioneer := w.member(dark, access.Owner, nil), w.member(early, access.Owner, nil)
+
+	expect(t, w.do(http.MethodGet, items(dark), owner, ""), http.StatusOK, "")
+	w.exec("INSERT INTO platform.feature_flags (key, enabled) VALUES ($1, false)", flag)
+	w.exec("INSERT INTO household_flags (household_id, key, enabled) VALUES ($1, $2, true)", early, flag)
+
+	expect(t, w.do(http.MethodGet, items(dark), owner, ""), http.StatusNotFound, problem.CodeNotFound)
+	expect(t, w.do(http.MethodPost, items(dark), owner, itemBody(idgen.New(), dark)), http.StatusNotFound, problem.CodeNotFound)
+	// On for the household that tries it first, whatever the platform's says.
+	expect(t, w.do(http.MethodGet, items(early), pioneer, ""), http.StatusOK, "")
+	expect(t, w.do(http.MethodPost, items(early), pioneer, itemBody(idgen.New(), early)), http.StatusCreated, "")
+
+	// And off for one household where it is on for the platform.
+	w.exec("UPDATE platform.feature_flags SET enabled = true WHERE key = $1", flag)
+	w.exec("INSERT INTO household_flags (household_id, key, enabled) VALUES ($1, $2, false)", dark, flag)
+	expect(t, w.do(http.MethodGet, items(dark), owner, ""), http.StatusNotFound, problem.CodeNotFound)
+	w.exec("DELETE FROM household_flags WHERE household_id = $1", dark)
+	rec := w.do(http.MethodGet, items(dark), owner, "")
+	expect(t, rec, http.StatusOK, "")
+	if got := listed(t, rec); !slices.Equal(got, []uuid.UUID{it}) {
+		t.Fatalf("with its flag on, the module lists %v, want %v", got, []uuid.UUID{it})
 	}
 }
 

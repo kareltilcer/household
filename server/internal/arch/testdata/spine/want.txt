@@ -6,4 +6,6 @@ modules/notes/notes.go:13: module notes opens a write transaction of its own; a 
 modules/pets/account.go:14: module pets opens a write transaction of its own; a module writes through mutation.Apply, which records the audit event and the sync change
 modules/pets/assume.go:14: module pets makes a tenant scope of its own; a module reads and writes the household the tenant middleware resolved
 modules/pets/outside.go:13: module pets steps outside its household's context; a module reads and writes the household the tenant middleware resolved
+modules/pets/service.go:13: module pets names a service as the actor of its mutations; a module's mutation is its caller's, and only the platform acts for its staff
+modules/pets/unrecorded.go:15: module pets records an event that changes no row; a module's every event is a mutation's, recorded through mutation.Apply with its sync change
 modules/tasks/testdata/fixture/fixture.go:13: module tasks opens a write transaction of its own; a module writes through mutation.Apply, which records the audit event and the sync change
