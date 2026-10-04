@@ -620,9 +620,11 @@ func (s *Service) Depart(ctx context.Context, catalog *module.Registry, househol
 }
 
 // export is admin's ExportSource (D-6, FR-PR2): the household's settings, its members with their
-// roles and grants, its modules and its invitations, as the API answers them, for an owner's export
-// of the household; the household's name and the requester's own membership for a member's export
-// of what is theirs; and nothing for one who has left, whose membership is gone.
+// roles and grants, its modules and its invitations, as the API answers them, and what the
+// platform's staff set for it, its own settings of feature flags and the fair-use ceilings raised for
+// it (item 21), for an owner's export of the household; the household's name and the requester's own
+// membership for a member's export of what is theirs; and nothing for one who has left, whose
+// membership is gone.
 func export(ctx context.Context, tx pgx.Tx, e module.Export, a module.Archive) error {
 	if e.Scope == module.ExportDeparted {
 		return nil
@@ -673,7 +675,13 @@ func export(ctx context.Context, tx pgx.Tx, e module.Export, a module.Archive) e
 	for _, i := range invitations {
 		invited = append(invited, i.row())
 	}
-	return a.JSON(map[string]any{"household": h.row(), "members": bodies, "modules": modules, "invitations": invited})
+	flags, limits, err := staffSet(ctx, tx, e.Household)
+	if err != nil {
+		return err
+	}
+	return a.JSON(map[string]any{
+		"household": h.row(), "members": bodies, "modules": modules, "invitations": invited, "flags": flags, "limits": limits,
+	})
 }
 
 // erase is admin's EraseSource (D-6): nothing of its own. The household's settings, memberships,

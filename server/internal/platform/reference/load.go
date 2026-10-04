@@ -19,6 +19,10 @@ type Report struct {
 	Version int64
 	// Inserted, Updated and Unchanged count the rows the files hold, by what the load did to each.
 	Inserted, Updated, Unchanged int
+	// Held counts the rows an administrator edited whose values the files do not have: the load
+	// leaves each as its administrator left it (D-148). Released counts the edited rows the files
+	// have caught up with, which are the files' again; a release changes no value, and no version.
+	Held, Released int
 	// Kept counts the rows the files no longer hold. The loader never deletes one: an app in the
 	// field may still name it (D-11).
 	Kept int
@@ -44,6 +48,11 @@ const loadLock = db.ReferenceLock
 // Loading the same files again writes nothing. A row the files hold is inserted at version 1, and
 // updated, its version incremented, only when a column differs; a dataset's version is incremented
 // only when a load wrote any of its rows. A row the files no longer hold is kept.
+//
+// A row an administrator edited (edited_at) is theirs until the files hold the same values (D-148,
+// ADR 0022): while they differ the load leaves it as it is, and reports it held, so that a change
+// made without a deploy is not undone by the next one; once they agree, the row is the files' again,
+// and a later change to the files updates it as it does any other.
 //
 // Each of sets, the modules' reference data, is read and checked with the platform's, before
 // anything is written, and then written by its own Load in the same transaction, after the
@@ -85,12 +94,14 @@ func Load(ctx context.Context, db Beginner, fsys fs.FS, sets ...Set) ([]Report, 
 	return reports, nil
 }
 
-// Upsert runs stmt, an INSERT … ON CONFLICT DO UPDATE … WHERE the row differs, RETURNING (xmax =
-// 0): true for a row it inserted, false for one it updated, and no row at all for one it left
-// alone, since the update's WHERE held nothing to change. It counts the outcome in r.
+// Upsert runs stmt, an INSERT … ON CONFLICT DO UPDATE … WHERE Theirs(…), RETURNING (xmax = 0) and
+// Released(…): a row it inserted, one it updated, one an administrator had edited that it released,
+// and no row at all for one it left alone, since the update's WHERE held nothing to change: a row
+// as the files have it, or an edited one they differ from, which Finish tells apart. It counts the
+// outcome in r. A set's Load writes its rows through it, as the platform's own datasets are.
 func Upsert(ctx context.Context, tx pgx.Tx, r *Report, stmt string, args ...any) error {
-	var inserted bool
-	err := tx.QueryRow(ctx, stmt, args...).Scan(&inserted)
+	var inserted, released bool
+	err := tx.QueryRow(ctx, stmt, args...).Scan(&inserted, &released)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		r.Unchanged++
@@ -98,10 +109,34 @@ func Upsert(ctx context.Context, tx pgx.Tx, r *Report, stmt string, args ...any)
 		return err
 	case inserted:
 		r.Inserted++
+	case released:
+		r.Released++
 	default:
 		r.Updated++
 	}
 	return nil
+}
+
+// The three parts of an upsert that keep an administrator's edit (D-148). A statement names its
+// table t, sets edited_at to NULL and its version by Bumped, updates WHERE Theirs(differs), differs
+// being whether the row's values are not the files', and returns Released(table, key). A set's
+// table carries edited_at as the platform's do, and its Load writes its statements of the same parts.
+
+// Bumped is the version of a row the upsert writes: one more for a row the files changed, and the
+// same for an edited row released, whose values did not change.
+const Bumped = "t.version + CASE WHEN t.edited_at IS NULL THEN 1 ELSE 0 END"
+
+// Theirs is the condition under which the upsert writes a row that exists: one nobody edited whose
+// values differ from the files', which takes them, or an edited one whose values are the files',
+// which is released. An edited row that differs is left alone, and so is an unedited one that does
+// not.
+func Theirs(differs string) string { return "(t.edited_at IS NULL) = (" + differs + ")" }
+
+// Released is whether the row the upsert wrote had been edited, read as the statement found it: a
+// subquery in RETURNING sees the row as it was before the statement, where the row itself is as the
+// statement left it. An inserted row was not there, and reads as not edited.
+func Released(table, key string) string {
+	return "coalesce((SELECT o.edited_at IS NOT NULL FROM " + table + " o WHERE o." + key + " = t." + key + "), false)"
 }
 
 // Held is the rows of one of a dataset's tables that its files hold: their keys, in the column
@@ -111,23 +146,28 @@ type Held struct {
 	Keys       []string
 }
 
-// Finish counts in r the rows of each table that the files no longer hold, and settles the
+// Finish counts in r the rows of each table that the files no longer hold, and those an
+// administrator edited that the files differ from, which the load left as they are, and settles the
 // dataset's version: incremented when the load wrote any of its rows, read otherwise.
 func Finish(ctx context.Context, tx pgx.Tx, r *Report, tables ...Held) error {
 	for _, h := range tables {
+		table, key := pgx.Identifier{h.Table}.Sanitize(), pgx.Identifier{h.Key}.Sanitize()
 		keys := h.Keys
 		if keys == nil {
 			// nil binds as NULL, against which no row would count as kept.
 			keys = []string{}
 		}
-		var kept int
-		if err := tx.QueryRow(ctx,
-			"SELECT count(*) FROM "+pgx.Identifier{h.Table}.Sanitize()+
-				" WHERE NOT ("+pgx.Identifier{h.Key}.Sanitize()+" = ANY ($1))", keys,
-		).Scan(&kept); err != nil {
+		var kept, edited int
+		if err := tx.QueryRow(ctx, "SELECT count(*) FILTER (WHERE NOT ("+key+" = ANY ($1))),"+
+			" count(*) FILTER (WHERE "+key+" = ANY ($1) AND edited_at IS NOT NULL) FROM "+table, keys,
+		).Scan(&kept, &edited); err != nil {
 			return err
 		}
 		r.Kept += kept
+		// An edited row the files hold is still edited only when they differ: the upsert released the
+		// rest. It was counted as left alone.
+		r.Held += edited
+		r.Unchanged -= edited
 	}
 	if !r.Changed() {
 		err := tx.QueryRow(ctx, "SELECT version FROM reference_datasets WHERE name = $1", r.Dataset).Scan(&r.Version)
@@ -157,14 +197,14 @@ func loadCountries(ctx context.Context, tx pgx.Tx, countries []Country) (Report,
 			  vat_standard_percent = EXCLUDED.vat_standard_percent, default_units = EXCLUDED.default_units,
 			  first_day_of_week = EXCLUDED.first_day_of_week, holiday_set = EXCLUDED.holiday_set,
 			  inspection_label = EXCLUDED.inspection_label, document_type_set = EXCLUDED.document_type_set,
-			  version = t.version + 1
-			WHERE (t.name, t.currency, t.vat_standard_percent, t.default_units, t.first_day_of_week,
+			  version = `+Bumped+`, edited_at = NULL
+			WHERE `+Theirs(`(t.name, t.currency, t.vat_standard_percent, t.default_units, t.first_day_of_week,
 			       t.holiday_set, t.inspection_label, t.document_type_set)
 			  IS DISTINCT FROM
 			      (EXCLUDED.name, EXCLUDED.currency, EXCLUDED.vat_standard_percent, EXCLUDED.default_units,
 			       EXCLUDED.first_day_of_week, EXCLUDED.holiday_set, EXCLUDED.inspection_label,
-			       EXCLUDED.document_type_set)
-			RETURNING (xmax = 0)`,
+			       EXCLUDED.document_type_set)`)+`
+			RETURNING (xmax = 0), `+Released("country_profiles", "code"),
 			c.Code, c.Name.Value, c.Currency.Value, c.VATStandardPercent.Value, c.DefaultUnits.Value,
 			c.FirstDayOfWeek.Value, c.HolidaySet.Value, c.InspectionLabel.Value, c.DocumentTypeSet.Value,
 		); err != nil {
@@ -184,9 +224,9 @@ func loadUnits(ctx context.Context, tx pgx.Tx, dimensions []Dimension) (Report, 
 		if err := Upsert(ctx, tx, &r, `
 			INSERT INTO unit_dimensions AS t (key, name, base_unit) VALUES ($1, $2::jsonb, $3)
 			ON CONFLICT (key) DO UPDATE SET name = EXCLUDED.name, base_unit = EXCLUDED.base_unit,
-			  version = t.version + 1
-			WHERE (t.name, t.base_unit) IS DISTINCT FROM (EXCLUDED.name, EXCLUDED.base_unit)
-			RETURNING (xmax = 0)`,
+			  version = `+Bumped+`, edited_at = NULL
+			WHERE `+Theirs("(t.name, t.base_unit) IS DISTINCT FROM (EXCLUDED.name, EXCLUDED.base_unit)")+`
+			RETURNING (xmax = 0), `+Released("unit_dimensions", "key"),
 			d.Key, d.Name.Value, d.BaseUnit.Value,
 		); err != nil {
 			return r, fmt.Errorf("%s: %w", d.Key, err)
@@ -207,14 +247,14 @@ func loadUnits(ctx context.Context, tx pgx.Tx, dimensions []Dimension) (Report, 
 				  cldr = EXCLUDED.cldr, name = EXCLUDED.name, to_base_offset = EXCLUDED.to_base_offset,
 				  to_base_numerator = EXCLUDED.to_base_numerator,
 				  to_base_denominator = EXCLUDED.to_base_denominator, counterpart = EXCLUDED.counterpart,
-				  version = t.version + 1
-				WHERE (t.dimension, t.system, t.symbol, t.cldr, t.name, t.to_base_offset,
+				  version = `+Bumped+`, edited_at = NULL
+				WHERE `+Theirs(`(t.dimension, t.system, t.symbol, t.cldr, t.name, t.to_base_offset,
 				       t.to_base_numerator, t.to_base_denominator, t.counterpart)
 				  IS DISTINCT FROM
 				      (EXCLUDED.dimension, EXCLUDED.system, EXCLUDED.symbol, EXCLUDED.cldr, EXCLUDED.name,
 				       EXCLUDED.to_base_offset, EXCLUDED.to_base_numerator, EXCLUDED.to_base_denominator,
-				       EXCLUDED.counterpart)
-				RETURNING (xmax = 0)`,
+				       EXCLUDED.counterpart)`)+`
+				RETURNING (xmax = 0), `+Released("units", "key"),
 				u.Key, d.Key, u.System.Value, u.Symbol.Value, u.CLDR.Value, u.Name.Value,
 				u.ToBase.Value.Offset, u.ToBase.Value.Numerator, u.ToBase.Value.Denominator, counterpart,
 			); err != nil {

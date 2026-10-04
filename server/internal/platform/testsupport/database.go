@@ -30,6 +30,7 @@ var Passwords = db.Passwords{
 	Migrate:   "household_migrate",
 	App:       "household_app",
 	Meter:     "household_meter",
+	Staff:     "household_staff",
 	PowerSync: "household_powersync",
 }
 

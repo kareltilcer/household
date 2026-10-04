@@ -71,11 +71,47 @@ var meterColumns = map[string][]string{
 
 // meterViolations returns each privilege the meter role holds in schema, or in every schema that
 // is not PostgreSQL's own when schema is "", that allowed does not name: allowed names a table's
-// readable columns, household_id for one it does not name. A sequence's USAGE is among them, since
-// it draws the sequence's next value, a write, and so is a table's MAINTAIN (PostgreSQL 17), which
-// locks it against every write and vacuums, reindexes or refreshes it; the CASE asks each relation
-// only for the privileges its kind has, which PostgreSQL's functions refuse to be asked for otherwise.
+// readable columns, household_id for one it does not name.
 func meterViolations(t *testing.T, tx pgx.Tx, schema string, allowed map[string][]string) []string {
+	t.Helper()
+	var out []string
+	for _, g := range roleGrants(t, tx, schema, db.RoleMeter) {
+		if len(g.whole) > 0 {
+			out = append(out, fmt.Sprintf("%s: the meter role holds %s on all of it; grant it SELECT on the columns it counts by, one at a time",
+				g.name, strings.Join(g.whole, ", ")))
+			continue
+		}
+		readable, ok := allowed[g.name]
+		if !ok {
+			readable = []string{"household_id"}
+		}
+		for _, grant := range g.columns {
+			column, privilege, _ := strings.Cut(grant, " ")
+			switch {
+			case privilege != "SELECT":
+				out = append(out, fmt.Sprintf("%s.%s: the meter role holds %s on it; it only reads", g.name, column, privilege))
+			case !slices.Contains(readable, column):
+				out = append(out, fmt.Sprintf("%s.%s: the meter role reads it, and it neither names a household nor counts, sizes or schedules rows",
+					g.name, column))
+			}
+		}
+	}
+	return out
+}
+
+// relationGrants are the privileges a role holds on one table, view or sequence: whole those it
+// holds on all of it, and columns those it holds on a column, each "<column> <privilege>".
+type relationGrants struct {
+	name           string
+	whole, columns []string
+}
+
+// roleGrants returns what role holds on each relation in schema, or in every schema that is not
+// PostgreSQL's own when schema is "", in name order. A sequence's USAGE is among them, since it draws
+// the sequence's next value, a write, and so is a table's MAINTAIN (PostgreSQL 17), which locks it
+// against every write and vacuums, reindexes or refreshes it; the CASE asks each relation only for the
+// privileges its kind has, which PostgreSQL's functions refuse to be asked for otherwise.
+func roleGrants(t *testing.T, tx pgx.Tx, schema, role string) []relationGrants {
 	t.Helper()
 	rows, err := tx.Query(t.Context(), `
 		SELECT n.nspname || '.' || c.relname,
@@ -93,35 +129,16 @@ func meterViolations(t *testing.T, tx pgx.Tx, schema string, allowed map[string]
 		WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
 		  AND n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
 		  AND ($1 = '' OR n.nspname = $1)
-		ORDER BY n.nspname, c.relname`, schema, db.RoleMeter)
+		ORDER BY n.nspname, c.relname`, schema, role)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var (
-		out            []string
-		name           string
-		whole, columns []string
+		out []relationGrants
+		g   relationGrants
 	)
-	if _, err := pgx.ForEachRow(rows, []any{&name, &whole, &columns}, func() error {
-		if len(whole) > 0 {
-			out = append(out, fmt.Sprintf("%s: the meter role holds %s on all of it; grant it SELECT on the columns it counts by, one at a time",
-				name, strings.Join(whole, ", ")))
-			return nil
-		}
-		readable, ok := allowed[name]
-		if !ok {
-			readable = []string{"household_id"}
-		}
-		for _, grant := range columns {
-			column, privilege, _ := strings.Cut(grant, " ")
-			switch {
-			case privilege != "SELECT":
-				out = append(out, fmt.Sprintf("%s.%s: the meter role holds %s on it; it only reads", name, column, privilege))
-			case !slices.Contains(readable, column):
-				out = append(out, fmt.Sprintf("%s.%s: the meter role reads it, and it neither names a household nor counts, sizes or schedules rows",
-					name, column))
-			}
-		}
+	if _, err := pgx.ForEachRow(rows, []any{&g.name, &g.whole, &g.columns}, func() error {
+		out = append(out, relationGrants{name: g.name, whole: slices.Clone(g.whole), columns: slices.Clone(g.columns)})
 		return nil
 	}); err != nil {
 		t.Fatal(err)

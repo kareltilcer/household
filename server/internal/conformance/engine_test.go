@@ -643,4 +643,12 @@ func TestPushHoldsAHouseholdToItsDaysMutations(t *testing.T) {
 	if n := w.count("SELECT mutations FROM sync_usage WHERE household_id = $1 AND day = $2", household, today); n != fairuse.SyncMutations+1 {
 		t.Errorf("the day counts %d mutations, want %d: the refused batch is not counted", n, fairuse.SyncMutations+1)
 	}
+	// Raised for this household, the day's fair use is its own (PRD 04 §5): the batch is taken, and
+	// counted.
+	w.exec(`INSERT INTO household_limits (household_id, key, value, reason, set_by_label)
+		VALUES ($1, 'sync_mutations_per_day', $2, 'An import from another app', 'staff@household.example')`, household, 2*fairuse.SyncMutations)
+	w.want(w.results(w.push(household, token, key(), item())), push.Applied)
+	if n := w.count("SELECT mutations FROM sync_usage WHERE household_id = $1 AND day = $2", household, today); n != fairuse.SyncMutations+2 {
+		t.Errorf("the day counts %d mutations once its fair use is raised, want %d", n, fairuse.SyncMutations+2)
+	}
 }

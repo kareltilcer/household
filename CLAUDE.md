@@ -219,6 +219,20 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   subscriptions ended at the payment processor first, and an erased account's customers there are
   deleted with it (`billing.Service.Close`, `Forget`). The nightly erasure job runs at 02:30 UTC,
   before PowerSync's compaction.
+- **Platform staff** (`internal/platform/staff`, PRD 02 §8) read what they see as a role of its own,
+  `household_staff`, which holds `SELECT` on the columns that are metadata and nothing else: a
+  migration that adds a column staff read grants it to the role and names it in architecture test
+  12's list, and the no-content-access test connects as every role the server runs as (D-3, D-143).
+  What staff do, they do as the request role in the household's own context, through the spine as the
+  service actor `support` (`mutation.AsService`, and `mutation.Note` for an action that changes no
+  entity's row, both of which test 4 keeps out of modules), each action carrying a reason and
+  written to the platform's log, `platform.audit_log`, append-only and kept seven years, in the
+  transaction of its effect (D-145). A caller who is not staff is answered `404`. A fair-use ceiling is
+  read through `fairuse.Ceiling` or `tenant.Scope.Limit`, never from its constant alone, and a module
+  ships dark behind the flag `module.<id>` (D-146, D-147). The first `platform_admin` is made with
+  `household-api staff grant`
+  ([ADR 0022](docs/adr/0022-platform-staff-their-role-their-log-flags-and-ceilings.md),
+  [runbook](docs/runbooks/platform-staff.md)).
 - **Reference data** is sourced JSON under `reference-data/`, one record a file: every field a value
   with its `source`, flagged `drafted` until an expert has checked it, and every text in the five
   languages. `reference.Read` checks it, and `household-api migrate` loads it into versioned global
@@ -227,7 +241,7 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   `module.ReferenceSource`: its `Read` checks what its schemas cannot, and its `Load` writes its
   tables. Garden's, the crop catalog and the climate profiles, is `internal/modules/garden/catalog`,
   where a timing is days from a frost date and never a calendar date
-  ([ADR 0022](docs/adr/0022-the-crop-catalogs-source-the-reference-set-hook-and-the-climate-dataset.md)).
+  ([ADR 0023](docs/adr/0023-the-crop-catalogs-source-the-reference-set-hook-and-the-climate-dataset.md)).
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`

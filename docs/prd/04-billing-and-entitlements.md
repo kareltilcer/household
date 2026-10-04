@@ -73,7 +73,7 @@ A household is always in exactly one state, and the state is resolved once per r
 | `read_only` | ✓ | ✗ | ✗ | pull only | After grace. Data intact and fully exportable throughout the **12-month** retention window, then warned and deleted — D-32 |
 | `canceled` | ✓ | ✗ | ✗ | pull only | Customer cancelled. Same as `read_only`, same retention window, different messaging |
 | `restricted` | ✓ | ✗ | ✗ | pull only | **Owner-initiated**, not billing-related. GDPR Art. 18. Reversible by any owner at any time — see FR-BI7 |
-| `suspended` | ✗ | ✗ | ✗ | ✗ | Abuse or legal. Rare, staff-initiated, always with notice. Every household route answers `404`; the household list still names it, for the lockout; its replicas are emptied (**D-115**) |
+| `suspended` | ✗ | ✗ | ✗ | ✗ | Abuse or legal. Rare, staff-initiated, always with notice: `platform_admin` suspends with what the household is told of why, which its lockout shows and each of its owners is emailed, as they are when it is lifted (**D-147**). Every household route answers `404`; the household list still names it, with the notice, for the lockout; its replicas are emptied (**D-115**) |
 
 The states are resolved by a precedence (**D-114**): a suspension outranks everything; a lapse
 (`read_only`, `canceled`) outranks a restriction, since only a lapse carries a deletion date; and a
@@ -223,7 +223,9 @@ reached the ceiling is refused whole, `429` with `Retry-After` the end of the da
 and the owners were told once as the day passed 80 % (**D-127**).
 
 Exceeding a ceiling is a support conversation, not an automatic charge. `platform_admin` can
-raise any of them per household. A module's rows are the rows the database holds: a row a member
+raise any of them per household, to a value at or above the one every household is held to, and put
+it back (**D-147**); the household is held to its own from its next request, and is warned at 80 % of
+it. The households a user may own are the user's, and no household's to have raised. A module's rows are the rows the database holds: a row a member
 deletes stays, a tombstone, and counts until it is erased, so deleting does not bring a household
 back below the ceiling (**D-116**).
 

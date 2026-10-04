@@ -120,7 +120,9 @@ func TestStripeTakesWhatTheProcessorSends(t *testing.T) {
 	if err != nil || line == "" {
 		t.Fatalf("StorageLine: %q, %v", line, err)
 	}
-	if err := p.Credit(ctx, billing.NewCredit{Customer: customer, AmountMinor: 500, Currency: "EUR", Note: "An apology"}); err != nil {
+	if err := p.Credit(ctx, billing.NewCredit{
+		Customer: customer, AmountMinor: 500, Currency: "EUR", Note: "An apology", IdempotencyID: "credit:" + uuid.NewString(),
+	}); err != nil {
 		t.Fatalf("Credit: %v", err)
 	}
 	if err := p.DeleteCustomer(ctx, customer); err != nil {

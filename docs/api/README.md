@@ -6,9 +6,9 @@ clients. It is not a description of the implementation — the implementation is
 | | |
 |---|---|
 | Specification | OpenAPI 3.1.0 |
-| Paths | 329 |
-| Operations | 496 |
-| Schemas | 446 |
+| Paths | 339 |
+| Operations | 508 |
+| Schemas | 459 |
 | `operationId` | Present and unique on every operation |
 
 ## Validate

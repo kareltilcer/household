@@ -12,6 +12,7 @@ package fairuse
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -35,6 +36,37 @@ const (
 // SyncMutations is the mutations a household's replicas may push on one UTC day (PRD 04 §5): a
 // ceiling on a rate, which the push answers 429 past, until the day ends (D-127).
 const SyncMutations = 100_000
+
+// ChatMessages is the messages a household's conversations may hold (PRD 04 §5), which Chat counts
+// (plan item 85).
+const ChatMessages = 500_000
+
+// The ceilings platform_admin raises for one household (PRD 04 §5, plan item 21), as the contract's
+// PlatformLimitOverride names them. The households a user may own are the user's, and no
+// household's to have raised.
+const (
+	KeyMembers       = "members"
+	KeyRows          = "rows_per_module"
+	KeyChatMessages  = "chat_messages"
+	KeySyncMutations = "sync_mutations_per_day"
+	KeyAPIRate       = "api_rate"
+	KeyObjects       = "object_count"
+	KeyFileBytes     = "file_size_bytes"
+)
+
+// Ceiling is household's ceiling of key, read in tx in its context: what the platform raised it to
+// for this household (household_limits), or fallback, the constant every other household is held to.
+func Ceiling(ctx context.Context, tx pgx.Tx, household uuid.UUID, key string, fallback int64) (int64, error) {
+	var value int64
+	err := tx.QueryRow(ctx, "SELECT value FROM household_limits WHERE household_id = $1 AND key = $2", household, key).Scan(&value)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fallback, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return value, nil
+}
 
 // The resources a refusal and a warning name, as the contract's FairUseProblem spells them.
 const (
@@ -86,11 +118,11 @@ func Notice(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UU
 const syncMessage = "notification.fair_use_sync"
 
 // SyncNotice queues, in tx in household's context, the push that tells each of its owners its
-// replicas pushed count mutations today, 80 % of SyncMutations or more: once a day, where the count
-// crosses it (Crossed). The caller nudges n once tx commits.
-func SyncNotice(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UUID, count int64) error {
+// replicas pushed count mutations today, 80 % of ceiling, the day's fair use, or more: once a day,
+// where the count crosses it (Crossed). The caller nudges n once tx commits.
+func SyncNotice(ctx context.Context, tx pgx.Tx, n *notify.Service, household uuid.UUID, count, ceiling int64) error {
 	return warn(ctx, tx, n, household, syncMessage, "fair_use:sync_mutations",
-		i18n.Args{"held": count, "ceiling": int64(SyncMutations)})
+		i18n.Args{"held": count, "ceiling": ceiling})
 }
 
 // warn queues, in tx in household's context, msg with args to each of its owners, a household

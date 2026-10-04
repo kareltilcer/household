@@ -57,15 +57,19 @@ func NewRowCeiling(meter tenant.Beginner, modules *module.Registry) *RowCeiling 
 // Check is the mutation spine's ceiling (mutation.Ceiling). A module that declares no tables, as the
 // platform's own do not, holds no rows fair use counts.
 func (c *RowCeiling) Check(ctx context.Context, tx pgx.Tx, household uuid.UUID, mod string, creates int64) error {
-	const ceiling = fairuse.Rows
 	own := c.tables[mod]
 	if len(own) == 0 {
 		return nil
 	}
+	// The household's own ceiling, where the platform raised it (PRD 04 §5).
+	ceiling, err := fairuse.Ceiling(ctx, tx, household, fairuse.KeyRows, fairuse.Rows)
+	if err != nil {
+		return err
+	}
 	// The module's rows in the household's latest sample, none when that sample has no row for it:
 	// the sampler writes none for a module that holds nothing, whose older rows are long past.
 	var sampled int64
-	err := tx.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT coalesce(m.row_count, 0) FROM usage_samples s
 		LEFT JOIN usage_sample_modules m ON m.household_id = s.household_id AND m.sampled_on = s.sampled_on AND m.module = $2
 		WHERE s.household_id = $1

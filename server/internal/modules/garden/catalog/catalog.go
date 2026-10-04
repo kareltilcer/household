@@ -2,7 +2,7 @@
 // families its crops belong to, the pests and diseases that trouble them, the catalog's varieties
 // and its rules of what grows beside and after what, and the climate profiles a household's place
 // resolves to. Its source is reference-data/garden, which goes through the platform's pipeline
-// (ADR 0008, ADR 0022): Set is what the module hands the registry, and its Read is the catalog's
+// (ADR 0008, ADR 0023): Set is what the module hands the registry, and its Read is the catalog's
 // validator, the schemas and then what a schema cannot see.
 //
 // The package is the first of the Garden module's, which arrives with plan items 68 to 71: the

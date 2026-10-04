@@ -10,7 +10,7 @@ import (
 )
 
 // Set is one module's reference data: the datasets it keeps in a directory of its own in
-// reference-data, named for it (ADR 0008, ADR 0022). The pipeline is the platform's: the fields
+// reference-data, named for it (ADR 0008, ADR 0023). The pipeline is the platform's: the fields
 // with their sources, the languages, the review flags and the versions. What a set's records are
 // is its module's, which declares the set through module.ReferenceSource, and Read and Load take
 // the registry's sets beside the platform's own data.
@@ -31,8 +31,10 @@ type Set struct {
 	// Load writes what Read returned into the set's tables, in the load's transaction, and reports
 	// what it did to each of its datasets, whose names begin with the set's: garden_crops. It
 	// writes through Upsert and settles each dataset with Finish, so that a row's version and its
-	// dataset's move only when a value changed and no row is ever deleted. It is nil while a set
-	// has no tables: its files are then checked and nothing of it is written.
+	// dataset's move only when a value changed and no row is ever deleted. Its tables carry
+	// edited_at and its statements are of Bumped, Theirs and Released, so that a row an
+	// administrator edited is kept until the files agree, as the platform's are (D-148). It is nil
+	// while a set has no tables: its files are then checked and nothing of it is written.
 	Load func(ctx context.Context, tx pgx.Tx, data any) ([]Report, error)
 }
 

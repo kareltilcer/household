@@ -539,7 +539,7 @@ func (s *Service) createChild(w http.ResponseWriter, r *http.Request) {
 		if payer, err = lockAsOwner(ctx, tx); err != nil {
 			return mutation.Record{}, err
 		}
-		members, err := memberCeiling(ctx, tx, household)
+		members, ceiling, err := memberCeiling(ctx, tx, household)
 		if err != nil {
 			return mutation.Record{}, err
 		}
@@ -565,7 +565,7 @@ func (s *Service) createChild(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return mutation.Record{}, err
 		}
-		if noticed, err = s.membersNotice(ctx, tx, household, members); err != nil {
+		if noticed, err = s.membersNotice(ctx, tx, household, members, ceiling); err != nil {
 			return mutation.Record{}, err
 		}
 		rec := childRecord(household, payer, m, actionChildCreate)

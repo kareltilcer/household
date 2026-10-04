@@ -429,6 +429,28 @@ bypass it, PowerSync's replication role, and PowerSync's bucket storage holds th
 outside it; both credentials are the sync service's own, and neither platform role holds either
 (01 §2.3).
 
+**What staff see is read through a database role of its own**, `household_staff`, which holds the
+columns that are metadata and nothing else, so that no staff endpoint could answer a field of a
+content row, whatever it asked for; **what staff do is written by the request role**, in the
+household's own context, through the mutation spine (**D-143**). An account's name is not among what
+they read: the address identifies it.
+
+**A staff member is an account** with a role among the platform's staff **and the second step on**,
+both read on every request, so that one taken out of the staff, or one who turned the step off, is
+admitted to nothing from the next request (**D-144**). `platform_admin` makes and unmakes staff; the
+first is made by the operator, through the server's command line, and the last keeps the role. A
+caller who is not staff is answered `404` under `/platform`, as for anything else they may not see;
+a staff member whose second step is off, or whose role does not reach the operation, `403`.
+
+The table above is what the platform's roles are for, and plan item 21 builds it but for four things
+that wait for what they act on: the curated crop catalog, the tariff presets and the catalog's
+suggestions are edited with the items that make their tables (plan items 56, 68 and 71); crash
+reports reach support through the error aggregation plan item 89 sets up; a household's deletion on
+a legal request, whose window and whose notice this specification does not state, is plan item 91's;
+and migrations are run by the deploy, as the migrate role, never through the API. Suspending a
+household and raising a fair-use ceiling are `platform_admin`'s ([04](04-billing-and-entitlements.md)
+§3, §5).
+
 **FR-PS1 — The diagnostic bundle** is how content bugs are debugged without content access. A
 member hits a problem and taps *"send diagnostics"*; the client assembles a bundle scoped to the
 screen they were on, shows them **exactly what it contains, rendered, before it is sent**, lets
@@ -442,6 +464,16 @@ an account in a day (D-142).
 separate schema, retained 7 years) and once, where it touches a household, in that household's
 own activity log where the household can see it. A support agent extending a trial is visible
 to the household as *"Household support extended your trial"*.
+
+Every action carries a reason, and both records are written in the transaction of the action's
+effect, so that neither exists without it (**D-145**). The platform's log says who, by the address
+they had then, what, about which household or account, and why; the household's own says what, done
+by *Household support*, and neither who nor why: the reason is the platform's own note, and may say
+what a household should not read. An action that changes nothing, a suspension lifted from a
+household that has none, is recorded in neither. A read is no action: what staff read is metadata,
+and is logged in neither. An action on an account alone, a reset link sent, a second step unlocked,
+touches no household, and is in the platform's log only; the account is told by email where its
+owner would be (a second step turned off).
 
 ## 9. Rate limiting and abuse
 

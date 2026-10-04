@@ -17,8 +17,10 @@ import (
 )
 
 // The support actions of PRD 02 §8 that are billing's: extending a trial, applying a credit and
-// re-issuing an invoice. They are what item 21's staff API calls, once it has checked who calls and
-// logged it; nothing here is reached by a household's own routes.
+// re-issuing an invoice. They are what item 21's staff API calls (internal/platform/staff), once it
+// has checked who calls, in a context that names the platform's staff as the actor and records each
+// action in the platform's own log (mutation.AsService); nothing here is reached by a household's
+// own routes.
 
 // What a support action refuses.
 var (
@@ -63,9 +65,16 @@ func (s *Service) ExtendTrial(ctx context.Context, household uuid.UUID, until ti
 	})
 }
 
+// creditNoteKey is the catalog key of what a credit says on the processor's record, which its
+// customer may read: that it is from Household's support, in the household's language, as a storage
+// line's description is, and never why, which is the platform's log's alone.
+const creditNoteKey = "billing.support_credit"
+
 // Credit credits amount to the customer who pays household's subscription, at the processor, whose
-// next invoices draw on it; note says why, on the processor's record.
-func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.Money, note string) error {
+// next invoices draw on it. request, when not empty, names the request the credit is made for: sent
+// again under the same one, after an answer that never arrived or a record of it that did not
+// commit, it is the one credit at the processor and not a second (NewCredit.IdempotencyID).
+func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.Money, request string) error {
 	p, err := s.processor()
 	if err != nil {
 		return ErrUnavailable
@@ -73,7 +82,10 @@ func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.
 	if amount.AmountMinor <= 0 {
 		return errors.New("billing: a credit is a positive amount")
 	}
-	var cur subscription
+	var (
+		cur    subscription
+		locale string
+	)
 	err = tenant.InTx(s.system(ctx, household), func(tx pgx.Tx) error {
 		subs, err := readSubscriptions(ctx, tx, household)
 		if err != nil {
@@ -83,7 +95,9 @@ func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.
 		if cur, ok = standing(subs, standingCurrent); !ok {
 			return ErrNoSubscription
 		}
-		return nil
+		f, err := readFacts(ctx, tx, household)
+		locale = f.locale
+		return err
 	})
 	if err != nil {
 		return err
@@ -91,42 +105,42 @@ func (s *Service) Credit(ctx context.Context, household uuid.UUID, amount money.
 	if cur.currency != amount.Currency {
 		return ErrCurrency
 	}
-	return p.Credit(ctx, NewCredit{Customer: cur.customer, AmountMinor: amount.AmountMinor, Currency: amount.Currency, Note: note})
-}
-
-// ResendInvoice emails household's invoice to its payer again, as it was when it was paid. Only a
-// paid one is sent: the email is the one that says the payment went through, and one still open,
-// voided or written off is read on the billing screen.
-func (s *Service) ResendInvoice(ctx context.Context, household, invoice uuid.UUID) error {
-	scoped := s.system(ctx, household)
-	err := tenant.InWriteTx(scoped, func(tx pgx.Tx) error {
-		var (
-			payer  uuid.UUID
-			number *string
-			status string
-		)
-		err := tx.QueryRow(ctx, "SELECT payer_id, number, status FROM billing_invoices WHERE household_id = $1 AND id = $2", household, invoice).
-			Scan(&payer, &number, &status)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNoInvoice
-		}
-		if err != nil {
-			return err
-		}
-		if status != InvoicePaid {
-			return ErrInvoiceUnpaid
-		}
-		args := i18n.Args{"number": ""}
-		if number != nil {
-			args["number"] = *number
-		}
-		return s.Notify.Queue(scoped, tx, notify.Notification{
-			To: payer, Category: notify.Direct, Message: emailInvoice, Email: true, Args: args, Route: billingRoute(household),
-		})
-	})
+	note, err := s.Catalogs.Render(i18n.Match(locale), creditNoteKey, nil)
 	if err != nil {
 		return err
 	}
-	s.Notify.Nudge(ctx, household)
-	return nil
+	return p.Credit(ctx, NewCredit{
+		Customer: cur.customer, AmountMinor: amount.AmountMinor, Currency: amount.Currency, Note: note, IdempotencyID: request,
+	})
+}
+
+// ResendInvoice emails household's invoice to its payer again, as it was when it was paid, in tx, a
+// transaction of the household that may write, in ctx's scope, so that what records the action
+// commits with it. Only a paid one is sent: the email is the one that says the payment went through,
+// and one still open, voided or written off is read on the billing screen. The caller nudges the
+// transport once tx has committed.
+func (s *Service) ResendInvoice(ctx context.Context, tx pgx.Tx, household, invoice uuid.UUID) error {
+	var (
+		payer  uuid.UUID
+		number *string
+		status string
+	)
+	err := tx.QueryRow(ctx, "SELECT payer_id, number, status FROM billing_invoices WHERE household_id = $1 AND id = $2", household, invoice).
+		Scan(&payer, &number, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoInvoice
+	}
+	if err != nil {
+		return err
+	}
+	if status != InvoicePaid {
+		return ErrInvoiceUnpaid
+	}
+	args := i18n.Args{"number": ""}
+	if number != nil {
+		args["number"] = *number
+	}
+	return s.Notify.Queue(ctx, tx, notify.Notification{
+		To: payer, Category: notify.Direct, Message: emailInvoice, Email: true, Args: args, Route: billingRoute(household),
+	})
 }

@@ -10,7 +10,7 @@ package db
 
 // The one-key locks, each spelling eight letters.
 const (
-	// CatalogLock serialises changes to the three roles and to the databases they own. CreateRoles
+	// CatalogLock serialises changes to the four roles and to the databases they own. CreateRoles
 	// and PrepareDatabase hold it for their transaction; the tests hold it while they create and drop
 	// databases. PostgreSQL does not queue these behind one another: two ALTER ROLEs on one role, or
 	// an ALTER ROLE beside a CREATE or DROP DATABASE, fail with "tuple concurrently updated". Every

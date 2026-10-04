@@ -55,7 +55,8 @@ type Processor interface {
 	// StorageLine adds a month's storage blocks to the subscription's next invoice, once: asked again
 	// for the same household and month, it answers the line it added.
 	StorageLine(ctx context.Context, l StorageLine) (string, error)
-	// Credit credits a customer's balance, which their next invoices draw on.
+	// Credit credits a customer's balance, which their next invoices draw on. Asked again under the
+	// same IdempotencyID, it answers the credit it made, and makes no second one.
 	Credit(ctx context.Context, c NewCredit) error
 	// DeleteCustomer deletes a payer's customer, an erased account's (plan item 20): the processor
 	// ends whatever subscription it still has with it, and keeps the invoices it issued as its own
@@ -136,12 +137,15 @@ type NewSetup struct {
 	Subscription string
 }
 
-// NewCredit is a credit to a customer's balance.
+// NewCredit is a credit to a customer's balance. IdempotencyID, when set, names the request the
+// credit is made for, so that the request sent again, after an answer that never arrived, is the
+// one credit and not a second.
 type NewCredit struct {
-	Customer    string
-	AmountMinor int64
-	Currency    string
-	Note        string
+	Customer      string
+	AmountMinor   int64
+	Currency      string
+	Note          string
+	IdempotencyID string
 }
 
 // StorageLine is a month's storage blocks to bill (PRD 04 §4).

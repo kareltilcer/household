@@ -86,7 +86,7 @@ type StorageSource interface {
 // (architecture test 5), and the mutation spine a change of an entity no module declares.
 type SyncSource interface{ SyncEntities() []sync.Entity }
 
-// ReferenceSource declares the module's reference data (PRD 01 §2.4, ADR 0008, ADR 0022): a set of
+// ReferenceSource declares the module's reference data (PRD 01 §2.4, ADR 0008, ADR 0023): a set of
 // its own, the directory of reference-data named for the module, whose records are the module's
 // and whose pipeline is the platform's. The server checks it and loads it with the platform's own
 // reference data as it migrates (reference.Load), and the registry refuses a set that is not named

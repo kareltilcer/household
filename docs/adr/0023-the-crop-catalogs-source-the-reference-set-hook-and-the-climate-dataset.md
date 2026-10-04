@@ -1,9 +1,9 @@
-# 0022 — The crop catalog is a module's reference set of crops timed from the frost dates, read through a hook of the pipeline, with a climate dataset computed from NASA POWER
+# 0023 — The crop catalog is a module's reference set of crops timed from the frost dates, read through a hook of the pipeline, with a climate dataset computed from NASA POWER
 
 - **Status:** Accepted
 - **Date:** 2026-10-04
 - **Plan item:** 22
-- **Decides for:** [11-garden](../prd/modules/11-garden.md) (the crop knowledge base, FR-GA1 to FR-GA3, FR-GA21); [01-architecture](../prd/01-architecture.md) §2.4; D-66, D-143, D-144, D-145; PL-10; [ADR 0008](0008-reference-data-pipeline.md)
+- **Decides for:** [11-garden](../prd/modules/11-garden.md) (the crop knowledge base, FR-GA1 to FR-GA3, FR-GA21); [01-architecture](../prd/01-architecture.md) §2.4; D-66, D-149, D-150, D-151; PL-10; [ADR 0008](0008-reference-data-pipeline.md)
 
 ## Context
 
@@ -44,7 +44,10 @@ module, the schemas its files are held to, a `Read` that reads them through the 
 - A set's datasets are named `<set>_<dataset>` in `reference_datasets`, which `Load` holds them
   to. A set writes through `reference.Upsert` and `reference.Finish`, which are what the
   platform's own datasets are written with, so its rows and its datasets are versioned the same
-  way and none of its rows is ever deleted.
+  way and none of its rows is ever deleted. Its tables carry `edited_at`, and its statements are
+  of `reference.Bumped`, `reference.Theirs` and `reference.Released`, so that a row an
+  administrator edited is kept until the files agree, as the platform's rows are (D-148,
+  [ADR 0022](0022-platform-staff-their-role-their-log-flags-and-ceilings.md)).
 - A set with no `Load` has no tables yet: it is checked and nothing of it is written. Garden's is
   one until plan item 68 makes its tables.
 
@@ -81,13 +84,13 @@ variety is served. **A rule is a claim about a pair**, a relation
 with its basis, `agronomic` or `traditional`, and its severity, and a reason in every language. A
 pair is written once, its lesser key first.
 
-**A frost date is the one-year-in-ten date of a night at or below 2 °C** ([D-143](../prd/09-decisions.md)).
+**A frost date is the one-year-in-ten date of a night at or below 2 °C** ([D-149](../prd/09-decisions.md)).
 The last spring frost is the day after which such a night comes in one spring in ten, and the first
 autumn frost the day before which one comes in one autumn in ten. 2 °C at two metres is the
 temperature at which the ground frosts, and the threshold the frost warning holds a tender plant to
 (plan item 71).
 
-**The climate dataset is computed from NASA POWER** ([D-144](../prd/09-decisions.md)): daily minimum
+**The climate dataset is computed from NASA POWER** ([D-150](../prd/09-decisions.md)): daily minimum
 temperature at 2 m from MERRA-2, 1991 to 2020, at 118 towns of the five countries, one request a
 town. Its licence is recorded on its source: NASA's Earth science data are free and open to any
 use, and POWER asks to be cited. `reference-data/README.md` gives the method and

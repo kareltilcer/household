@@ -17,9 +17,10 @@ import (
 	"golang.org/x/text/secure/precis"
 )
 
-// The three roles of PRD 01 §2.3, which the server runs as. None is a superuser or may bypass
-// row-level security; there is deliberately no support role and no bypass role (D-3). The one
-// exception D-93 makes is no role of the server's: RolePowerSync, PowerSync's own.
+// The four roles of PRD 01 §2.3, which the server runs as. None is a superuser or may bypass
+// row-level security; there is deliberately no role that reads a household's content across
+// households and no bypass role (D-3). The one exception D-93 makes is no role of the server's:
+// RolePowerSync, PowerSync's own.
 const (
 	// RoleMigrate owns the database and every table in it, and is used only to migrate,
 	// at deploy time. As owner it would bypass row-level security, which is why every
@@ -33,6 +34,13 @@ const (
 	// usage sampler, every API instance's files workers, looking for the households with work
 	// due, and the live counts fair use compares with before a write (storage.Count).
 	RoleMeter = "household_meter"
+	// RoleStaff reads across households for the platform staff API (PRD 02 §8, item 21), and only
+	// the columns that are metadata: an account's address and sign-ins, a household's name, members,
+	// plan and state, what it stores per module, how its deliveries went, and its audit events'
+	// action keys, never a summary, a diff or any field of a content row (migration 01025 grants
+	// them, architecture test 12). It writes nothing: a staff action is written by the request role,
+	// through the mutation spine (D-143).
+	RoleStaff = "household_staff"
 )
 
 // RolePowerSync is the role PowerSync replicates as (ADR 0001, D-93): REPLICATION, to stream the
@@ -48,10 +56,10 @@ const (
 // generated streams and the read-path isolation test hold the tenant boundary it passes.
 const RolePowerSync = "household_powersync"
 
-// Roles lists the three roles the server runs as.
-var Roles = []string{RoleMigrate, RoleApp, RoleMeter}
+// Roles lists the four roles the server runs as.
+var Roles = []string{RoleMigrate, RoleApp, RoleMeter, RoleStaff}
 
-// managed are the roles CreateRoles makes, each with the attributes it holds: the three the server
+// managed are the roles CreateRoles makes, each with the attributes it holds: the four the server
 // runs as, and PowerSync's.
 var managed = []struct {
 	role  string
@@ -60,10 +68,11 @@ var managed = []struct {
 	{RoleMigrate, roleAttributes{login: true}},
 	{RoleApp, roleAttributes{login: true}},
 	{RoleMeter, roleAttributes{login: true}},
+	{RoleStaff, roleAttributes{login: true}},
 	{RolePowerSync, roleAttributes{login: true, replication: true, bypassRLS: true}},
 }
 
-// ManagedRoles lists the roles CreateRoles makes, in the order it makes them: the three the server
+// ManagedRoles lists the roles CreateRoles makes, in the order it makes them: the four the server
 // runs as, and PowerSync's.
 func ManagedRoles() []string {
 	out := make([]string, len(managed))
@@ -75,10 +84,10 @@ func ManagedRoles() []string {
 
 // Passwords are the login passwords Bootstrap sets, one per role.
 type Passwords struct {
-	Migrate, App, Meter, PowerSync string
+	Migrate, App, Meter, Staff, PowerSync string
 }
 
-// Of returns role's password, or "" for a role that is not one of the four.
+// Of returns role's password, or "" for a role that is not one of the five.
 func (p Passwords) Of(role string) string {
 	switch role {
 	case RoleMigrate:
@@ -87,6 +96,8 @@ func (p Passwords) Of(role string) string {
 		return p.App
 	case RoleMeter:
 		return p.Meter
+	case RoleStaff:
+		return p.Staff
 	case RolePowerSync:
 		return p.PowerSync
 	}
@@ -160,8 +171,8 @@ func grantable(ctx context.Context, tx pgx.Tx, role string) (string, error) {
 		role, admin, strings.Join(missing, " and ")), nil
 }
 
-// Bootstrap creates the three roles and PowerSync's, or restores an existing one's attributes
-// and sets its password, and then prepares database: the migrate role owns it, and only the four
+// Bootstrap creates the four roles and PowerSync's, or restores an existing one's attributes
+// and sets its password, and then prepares database: the migrate role owns it, and only the five
 // roles and the caller may connect to it. It runs as a role that may create roles, a
 // superuser locally and in CI, and is safe to run again.
 //
@@ -182,7 +193,7 @@ func Bootstrap(ctx context.Context, admin *pgx.Conn, database string, passwords 
 	})
 }
 
-// CreateRoles creates the three roles and PowerSync's, or restores an existing one's drifted
+// CreateRoles creates the four roles and PowerSync's, or restores an existing one's drifted
 // attributes and sets its password. It holds a transaction-scoped advisory lock, since CREATE
 // ROLE races with itself: two sessions that both find a role missing both try to create it. It
 // refuses, naming what is missing, to make PowerSync's role, or restore its REPLICATION or
@@ -278,7 +289,7 @@ func scramSecret(password string, salt []byte, iterations int) (string, error) {
 		"$" + encode(storedKey[:]) + ":" + encode(keyed("Server Key")), nil
 }
 
-// PrepareDatabase hands database to the migrate role and lets only the four roles and the
+// PrepareDatabase hands database to the migrate role and lets only the five roles and the
 // caller connect to it. Bootstrap runs it; the tests run it on each database they
 // clone, since CREATE DATABASE does not copy a template's privileges.
 //
@@ -292,7 +303,7 @@ func PrepareDatabase(ctx context.Context, tx pgx.Tx, database string) error {
 	for _, stmt := range []string{
 		"REVOKE ALL ON DATABASE %I FROM PUBLIC",
 		// The caller keeps its own way in before it stops owning the database.
-		"GRANT CONNECT ON DATABASE %I TO CURRENT_USER, " + RoleMigrate + ", " + RoleApp + ", " + RoleMeter + ", " + RolePowerSync,
+		"GRANT CONNECT ON DATABASE %I TO CURRENT_USER, " + RoleMigrate + ", " + RoleApp + ", " + RoleMeter + ", " + RoleStaff + ", " + RolePowerSync,
 		"ALTER DATABASE %I OWNER TO " + RoleMigrate,
 	} {
 		if err := execFormatted(ctx, tx, stmt, database); err != nil {

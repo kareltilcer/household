@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/kareltilcer/household/server/internal/platform/fairuse"
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 )
@@ -86,12 +87,14 @@ const (
 // (httpx.BodyDeadline); a client that sends it slower is disconnected. The caller closes what it
 // returns.
 func (s *Service) Receive(w http.ResponseWriter, r *http.Request, rules Rules) (*Upload, error) {
+	limit := s.maxBytes
 	if scope := tenant.From(r.Context()); scope != nil {
 		if err := scope.Entitlement().Uploadable(scope.Role()); err != nil {
 			return nil, err
 		}
+		// A household whose ceiling the platform raised takes a larger file (PRD 04 §5).
+		limit = scope.Limit(fairuse.KeyFileBytes, limit)
 	}
-	limit := s.maxBytes
 	if rules.MaxBytes > 0 {
 		limit = min(limit, rules.MaxBytes)
 	}

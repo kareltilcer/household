@@ -55,9 +55,11 @@ func toys(load bool) reference.Set {
 				keys = append(keys, b.Key)
 				if err := reference.Upsert(ctx, tx, &r, `
 					INSERT INTO toy_bricks AS t (key, colour) VALUES ($1, $2)
-					ON CONFLICT (key) DO UPDATE SET colour = EXCLUDED.colour, version = t.version + 1
-					WHERE t.colour IS DISTINCT FROM EXCLUDED.colour
-					RETURNING (xmax = 0)`, b.Key, b.Colour.Value); err != nil {
+					ON CONFLICT (key) DO UPDATE SET colour = EXCLUDED.colour,
+					  version = `+reference.Bumped+`, edited_at = NULL
+					WHERE `+reference.Theirs("t.colour IS DISTINCT FROM EXCLUDED.colour")+`
+					RETURNING (xmax = 0), `+reference.Released("toy_bricks", "key"),
+					b.Key, b.Colour.Value); err != nil {
 					return nil, err
 				}
 			}
@@ -253,11 +255,13 @@ func TestReadRefusesSetsItCannotTellApart(t *testing.T) {
 	}
 }
 
-// toyTable makes the set's table in tx, as its module's migration would.
+// toyTable makes the set's table in tx, as its module's migration would: with edited_at, as the
+// platform's reference tables have it (D-148).
 func toyTable(t *testing.T, tx pgx.Tx) {
 	t.Helper()
 	if _, err := tx.Exec(t.Context(), `CREATE TABLE toy_bricks (
-		key text PRIMARY KEY, version bigint NOT NULL DEFAULT 1, colour text NOT NULL)`); err != nil {
+		key text PRIMARY KEY, version bigint NOT NULL DEFAULT 1, colour text NOT NULL,
+		edited_at timestamptz)`); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -302,6 +306,26 @@ func TestLoadWritesASetWithThePlatformsData(t *testing.T) {
 	var version int64
 	if err := tx.QueryRow(t.Context(), "SELECT version FROM reference_datasets WHERE name = 'toys_bricks'").Scan(&version); err != nil || version != 2 {
 		t.Errorf("the set's dataset is at version %d: %v", version, err)
+	}
+
+	// An administrator's edit of a set's row is kept as the platform's own are (D-148): held while
+	// the files differ, and the files' again, at the version the edit left, once they agree.
+	if _, err := tx.Exec(t.Context(),
+		"UPDATE toy_bricks SET colour = 'scarlet', version = version + 1, edited_at = now() WHERE key = 'red'"); err != nil {
+		t.Fatal(err)
+	}
+	if r, want := loadToys(map[string]string{"red": "crimson"}), (reference.Report{Dataset: "toys_bricks", Version: 2, Held: 1, Kept: 1}); r != want {
+		t.Errorf("an edited row the files differ from: %+v, want %+v", r, want)
+	}
+	if r, want := loadToys(map[string]string{"red": "scarlet"}), (reference.Report{Dataset: "toys_bricks", Version: 2, Released: 1, Kept: 1}); r != want {
+		t.Errorf("an edited row the files have caught up with: %+v, want %+v", r, want)
+	}
+	if err := tx.QueryRow(t.Context(),
+		"SELECT string_agg(key || ' ' || colour || ' ' || version || ' ' || (edited_at IS NULL), ', ' ORDER BY key) FROM toy_bricks").Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if want := "blue blue 1 true, red scarlet 3 true"; rows != want {
+		t.Errorf("the set's rows are %q, want %q", rows, want)
 	}
 
 	// Files that hold no record of a table keep every row of it, and say so: the set's Load hands

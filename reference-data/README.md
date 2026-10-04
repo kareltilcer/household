@@ -18,7 +18,7 @@ same for every household, and read-only to them ([PRD 01 §2.4](../docs/prd/01-a
 The country profiles and the units are the platform's own. A module's reference data is a **set**:
 a directory named for the module, with a `sources.json` of its own that its fields cite, read and
 checked by the module's own code through the same pipeline
-([ADR 0022](../docs/adr/0022-the-crop-catalogs-source-the-reference-set-hook-and-the-climate-dataset.md)).
+([ADR 0023](../docs/adr/0023-the-crop-catalogs-source-the-reference-set-hook-and-the-climate-dataset.md)).
 
 ## A field
 
@@ -137,7 +137,7 @@ frost, the hardiness zone and the length of the season, with the altitude they h
 minimum temperature at 2 metres, 1991 to 2020, and states the method in full:
 
 - **A frost date is the one-year-in-ten date of a night at or below 2 °C**
-  ([D-143](../docs/prd/09-decisions.md)): the last spring frost is the day after which such a night
+  ([D-149](../docs/prd/09-decisions.md)): the last spring frost is the day after which such a night
   comes in one spring in ten, and the first autumn frost the day before which one comes in one
   autumn in ten. The catalog's windows are counted from these dates, so a tender crop goes out
   from day 0.

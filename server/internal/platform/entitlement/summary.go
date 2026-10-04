@@ -13,7 +13,7 @@ import (
 // which reads its memberships and so needs the household's context.
 const Columns = `h.billing_state::text, h.trial_ends_at, h.dunning_ends_at, h.grace_ends_at, h.lapsed_at,
 	h.retained_until, h.retention_warnings, h.restricted_at, h.restricted_by, h.restricted_by_label,
-	h.restriction_reason, h.suspended_at,
+	h.restriction_reason, h.suspended_at, h.suspension_notice,
 	h.restricted_by IS NOT NULL AND NOT EXISTS (
 	  SELECT FROM memberships rm WHERE rm.household_id = h.id AND rm.user_id = h.restricted_by)`
 
@@ -29,14 +29,14 @@ type Row struct {
 	warnings                                    int16
 	restrictedAt                                *time.Time
 	restrictedBy                                *uuid.UUID
-	label, reason                               *string
+	label, reason, notice                       *string
 	former                                      bool
 }
 
 // Dest are the destinations a query's Scan takes Columns into.
 func (r *Row) Dest() []any {
 	return []any{&r.billing, &r.trial, &r.dunning, &r.grace, &r.lapsed, &r.retained, &r.warnings,
-		&r.restrictedAt, &r.restrictedBy, &r.label, &r.reason, &r.suspended, &r.former}
+		&r.restrictedAt, &r.restrictedBy, &r.label, &r.reason, &r.suspended, &r.notice, &r.former}
 }
 
 // Status is what r received.
@@ -44,6 +44,7 @@ func (r *Row) Status() (Status, error) {
 	s := Status{
 		Billing: State(r.billing), TrialEndsAt: r.trial, DunningEndsAt: r.dunning, GraceEndsAt: r.grace,
 		LapsedAt: r.lapsed, RetainedUntil: r.retained, RetentionWarnings: int(r.warnings), SuspendedAt: r.suspended,
+		SuspensionNotice: r.notice,
 	}
 	if !slices.Contains(billing, s.Billing) {
 		return Status{}, fmt.Errorf("entitlement: %q is no subscription state", r.billing)
@@ -72,6 +73,8 @@ type Summary struct {
 	DataRetainedUntil *time.Time          `json:"data_retained_until"`
 	Restriction       *RestrictionSummary `json:"restriction"`
 	SuspendedAt       *time.Time          `json:"suspended_at"`
+	// SuspensionNotice is what the platform told the household of why, which the lockout shows.
+	SuspensionNotice *string `json:"suspension_notice"`
 	// StorageUsedBytes is what the household stores, StorageBlocks the 10 GB blocks its month's daily
 	// average has put in effect, and StorageIncludedBytes the base allowance and those blocks (PRD 04
 	// §4, item 19): what WithStorage is told, since the household's row records none of it.
@@ -123,7 +126,7 @@ func (s Status) Summary(now time.Time) Summary {
 			RestrictedAt: r.At.UTC(), Reason: r.Reason,
 		}
 	}
-	out.SuspendedAt = utc(s.SuspendedAt)
+	out.SuspendedAt, out.SuspensionNotice = utc(s.SuspendedAt), s.SuspensionNotice
 	return out
 }
 

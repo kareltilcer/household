@@ -15,8 +15,9 @@ import (
 
 // Architecture test 2 (PRD 01 §2.2, §10, D-2): every tenant table carries household_id uuid NOT
 // NULL, enables and forces row-level security, and has as its only permissive policies the
-// tenant isolation that enable_tenant_isolation creates and the meter role's read beside it
-// (enable_metering), which reaches that role alone. Another permissive policy would widen what a
+// tenant isolation that enable_tenant_isolation creates, the meter role's read beside it
+// (enable_metering) and the staff role's (enable_staff_read), each of which reaches its role alone
+// and reads only the columns tests 11 and 12 hold it to. Another permissive policy would widen what a
 // household can read, since permissive policies are ORed; a rule narrower than the tenant's is a
 // restrictive policy, which is ANDed with it, and names the roles it narrows, since one that
 // reached the meter role would hide rows from the usage sample. A materialized view cannot hold a
@@ -79,7 +80,10 @@ type exemption struct {
 	// key is the column that names the household of an own-policy table's row, when it is not
 	// household_id: the tenant root's own id.
 	key string
-	why string
+	// outlives marks a global table whose rows name a household and are kept once it is erased: the
+	// platform's own log of what its staff did, which is kept seven years (FR-PS2).
+	outlives bool
+	why      string
 }
 
 // column returns the column that names the household of the table's row.
@@ -135,6 +139,12 @@ var exemptions = map[string]exemption{
 	"public.country_profiles":   {why: "PRD 01 §2.4: reference data, the same for every household"},
 	"public.unit_dimensions":    {why: "PRD 03 §9: reference data, the same for every household"},
 	"public.units":              {why: "PRD 03 §9: reference data, the same for every household"},
+	// Item 21's: who the platform's staff are, what they did and the flags a feature ships behind,
+	// in a schema of the platform's own, none of which is a household's. The log names the household
+	// an action touched, by its id alone, and is kept once that household is erased.
+	"platform.staff":         {why: "PRD 02 §8: the accounts that are platform staff, and their role"},
+	"platform.audit_log":     {outlives: true, why: "FR-PS2: the platform's log of every staff action, append-only, kept seven years"},
+	"platform.feature_flags": {why: "PRD 06 §7: a feature flag's setting for the whole platform"},
 	"public.households": {ownPolicy: true, key: "id", why: "the tenant root, keyed on id; its members read it " +
 		"before a household context exists, to list their households"},
 	"public.memberships": {ownPolicy: true, why: "PRD 01 §2.4: how tenancy is resolved, read before a " +
@@ -172,12 +182,14 @@ type policy struct {
 	roles       []string
 }
 
-// metered reports whether p is the meter role's read (enable_metering): permissive, for reading
-// only, to that role alone, over every row. It widens no household's reads, and the role reads
-// through it only the columns it is granted, which test 11 holds to what names, counts, sizes or
-// schedules rows (PRD 01 §2.3).
+// metered reports whether p is the meter role's read (enable_metering) or the staff role's
+// (enable_staff_read): permissive, for reading only, to that role alone, over every row. It widens
+// no household's reads, and the role reads through it only the columns it is granted, which test 11
+// holds to what names, counts, sizes or schedules rows and test 12 to what is metadata (PRD 01
+// §2.3).
 func (p policy) metered() bool {
-	return p.permissive && p.command == "r" && p.using == "true" && p.with == "" && slices.Equal(p.roles, []string{db.RoleMeter})
+	return p.permissive && p.command == "r" && p.using == "true" && p.with == "" &&
+		(slices.Equal(p.roles, []string{db.RoleMeter}) || slices.Equal(p.roles, []string{db.RoleStaff}))
 }
 
 // foreignKey is a foreign key, as the catalog describes it: the table it references, its
