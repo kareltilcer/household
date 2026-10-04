@@ -1,12 +1,13 @@
 // Computes garden/climate/<country>.json from NASA POWER, so that the numbers can be computed
-// again (ADR 0022, D-143, D-144). It is run by hand, when the places or the method change:
+// again (ADR 0023, D-149, D-150). It is run by hand, when the places or the method change:
 //
 //   node reference-data/tools/garden-climate.mjs <cache directory>
 //   pnpm exec prettier --write "reference-data/garden/climate/*.json"
 //
 // It asks POWER once for each place the cache directory does not hold yet, for the daily minimum
 // temperature at 2 metres (T2M_MIN, from MERRA-2) of 1991 to 2020 at the place's coordinates, one
-// request after another, and keeps each answer in the cache. From those thirty years:
+// request after another, and keeps in the cache what it reads out of each answer: the elevation of
+// the grid cell and each day's minimum, as numbers. From those thirty years:
 //
 //   - a year's last spring frost is its last day from 1 January to 31 July at or below 2 °C, and
 //     its first autumn frost its first such day from 1 August to 31 December;
@@ -22,7 +23,7 @@
 // more than three of the thirty years have no such night before August, or none after July, is
 // left out: the cell is the sea's, not the town's. Every value is written as drafted (PL-10): a
 // grid of 0.5° by 0.625° is no station.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -176,49 +177,89 @@ const zone = (meanLowestC) => {
   return `${n}${f + 60 - (n - 1) * 10 < 5 ? 'a' : 'b'}`
 }
 
-/** POWER's answer for a place: from the cache, or asked for and kept there. */
+/** Every day of the thirty years in order, each as its year, its month and its day of the month. */
+const DAYS = []
+for (let t = Date.UTC(FIRST_YEAR, 0, 1); t <= Date.UTC(LAST_YEAR, 11, 31); t += 86_400_000) {
+  const d = new Date(t)
+  DAYS.push([d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()])
+}
+
+/** POWER gives a temperature and an elevation to two decimal places. */
+const hundredths = (value) => Math.round(Number(value) * 100) / 100
+
+/**
+ * What the tool keeps of POWER's answer for a place, and all it computes from: the elevation of
+ * its grid cell, and the minimum of each of DAYS in order, null where POWER has none. Each is read
+ * out of the answer by a key this tool makes and held to being a number, so that the cache holds
+ * numbers the tool wrote and never the document a server sent.
+ */
+function readings(answer, key) {
+  const sent = answer?.properties?.parameter?.T2M_MIN
+  const elevation = hundredths(answer?.geometry?.coordinates?.[2])
+  const fill = hundredths(answer?.header?.fill_value)
+  if (
+    typeof sent !== 'object' ||
+    sent === null ||
+    !Number.isFinite(elevation) ||
+    !Number.isFinite(fill)
+  ) {
+    throw new Error(`${key}: POWER's answer is not the one asked for`)
+  }
+  const pad = (n) => String(n).padStart(2, '0')
+  const minima = DAYS.map(([year, month, day]) => {
+    const t = hundredths(sent[`${year}${pad(month)}${pad(day)}`])
+    if (!Number.isFinite(t))
+      throw new Error(`${key}: POWER's answer has no ${year}-${pad(month)}-${pad(day)}`)
+    return t === fill ? null : t
+  })
+  return { elevation, minima }
+}
+
+/** A place's readings: from the cache, or asked of POWER and kept there. */
 async function daily(country, key, latitude, longitude) {
   const file = join(cache, `${country}_${key}.json`)
-  if (!existsSync(file)) {
-    const url =
-      'https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M_MIN&community=AG' +
-      `&longitude=${longitude}&latitude=${latitude}&start=${FIRST_YEAR}0101&end=${LAST_YEAR}1231&format=JSON`
-    const res = await fetch(url, { signal: AbortSignal.timeout(180_000) })
-    if (!res.ok) throw new Error(`${key}: POWER answered ${res.status}`)
-    writeFileSync(file, await res.text())
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+  try {
+    const kept = JSON.parse(readFileSync(file, 'utf8'))
+    if (!Array.isArray(kept.minima) || kept.minima.length !== DAYS.length) {
+      throw new Error(`${file} is not this tool's: delete it, and the place is asked for again`)
+    }
+    return kept
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err
   }
-  return JSON.parse(readFileSync(file, 'utf8'))
+  const url =
+    'https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M_MIN&community=AG' +
+    `&longitude=${longitude}&latitude=${latitude}&start=${FIRST_YEAR}0101&end=${LAST_YEAR}1231&format=JSON`
+  const res = await fetch(url, { signal: AbortSignal.timeout(180_000) })
+  if (!res.ok) throw new Error(`${key}: POWER answered ${res.status}`)
+  const kept = readings(await res.json(), key)
+  writeFileSync(file, JSON.stringify(kept) + '\n')
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+  return kept
 }
 
 const field = (value, source) => ({ value, source, drafted: true })
 const byCountry = new Map()
 const leftOut = []
 for (const [country, key, name, latitude, longitude] of PLACES) {
-  const answer = await daily(country, key, latitude, longitude)
-  const minima = answer.properties.parameter.T2M_MIN
-  const fill = answer.header.fill_value
-  const lasts = []
-  const firsts = []
-  const lowests = []
-  for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
-    // 0 and 366 stand for a year with no such night before August, and none after July.
-    let last = 0
-    let first = 366
-    let lowest = Infinity
-    for (const [date, t] of Object.entries(minima)) {
-      if (!date.startsWith(String(year)) || t === fill) continue
-      const month = Number(date.slice(4, 6))
-      const n = dayOfYear(month, Number(date.slice(6, 8)))
-      lowest = Math.min(lowest, t)
-      if (t > THRESHOLD_C) continue
-      if (month <= 7) last = Math.max(last, n)
-      else first = Math.min(first, n)
-    }
-    lasts.push(last)
-    firsts.push(first)
-    lowests.push(lowest)
-  }
+  const { elevation, minima } = await daily(country, key, latitude, longitude)
+  // Each year's last frost, first frost and lowest minimum. 0 and 366 stand for a year with no
+  // such night before August, and none after July.
+  const years = new Map()
+  DAYS.forEach(([year, month, day], i) => {
+    const t = minima[i]
+    if (t === null) return
+    const y = years.get(year) ?? { last: 0, first: 366, lowest: Infinity }
+    years.set(year, y)
+    y.lowest = Math.min(y.lowest, t)
+    if (t > THRESHOLD_C) return
+    const n = dayOfYear(month, day)
+    if (month <= 7) y.last = Math.max(y.last, n)
+    else y.first = Math.min(y.first, n)
+  })
+  const lasts = [...years.values()].map((y) => y.last)
+  const firsts = [...years.values()].map((y) => y.first)
+  const lowests = [...years.values()].map((y) => y.lowest)
   if (
     lasts.filter((n) => n === 0).length > FROSTLESS_YEARS ||
     firsts.filter((n) => n === 366).length > FROSTLESS_YEARS
@@ -235,7 +276,7 @@ for (const [country, key, name, latitude, longitude] of PLACES) {
     key: `${country.toLowerCase()}_${key}`,
     name: field(name, 'geonames'),
     location: field({ latitude, longitude }, 'geonames'),
-    altitude_m: field(Math.round(answer.geometry.coordinates[2]), 'nasa-power'),
+    altitude_m: field(Math.round(elevation), 'nasa-power'),
     last_spring_frost: field(monthDay(last), 'nasa-power'),
     first_autumn_frost: field(monthDay(first), 'nasa-power'),
     hardiness_zone: field(zone(lowests.reduce((a, b) => a + b, 0) / lowests.length), 'nasa-power'),
