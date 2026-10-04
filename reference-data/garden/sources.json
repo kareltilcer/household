@@ -18,7 +18,8 @@
     },
     "harrington-germination": {
       "title": "J. F. Harrington, Department of Vegetable Crops, University of California, Davis: Soil temperature conditions for vegetable seed germination, as Oregon State University Extension publishes it",
-      "url": "https://extension.oregonstate.edu/gardening/soil-compost/soil-temperature-conditions-vegetable-seed-germination"
+      "url": "https://extension.oregonstate.edu/gardening/soil-compost/soil-temperature-conditions-vegetable-seed-germination",
+      "note": "The table is of vegetable seed. A herb's, a flower's or a green manure's germination temperature and days cite it for want of that crop's own source, which the reviewer finds: the value is not in the table."
     },
     "lwg-2104-mischkultur": {
       "title": "Bayerische Landesanstalt für Weinbau und Gartenbau, Bayerische Gartenakademie: Merkblatt 2104, Mischkulturen im Gemüsegarten",
@@ -27,7 +28,8 @@
     },
     "lwg-2111-fruchtfolge": {
       "title": "Bayerische Landesanstalt für Weinbau und Gartenbau, Bayerische Gartenakademie: Merkblatt 2111, Fruchtfolge für Gemüsebeete",
-      "url": "https://www.lwg.bayern.de/mam/cms06/gartenakademie/dateien/2111-2016.pdf"
+      "url": "https://www.lwg.bayern.de/mam/cms06/gartenakademie/dateien/2111-2016.pdf",
+      "note": "The leaflet is of the vegetable bed. A herb's, a fruit's, a flower's or a green manure's rotation break cites it for want of that crop's own source, which the reviewer finds: the value is not in the leaflet."
     },
     "nasa-power": {
       "title": "NASA Langley Research Center, Prediction Of Worldwide Energy Resources (POWER) project: daily minimum temperature at 2 metres (T2M_MIN, from MERRA-2, on a grid of 0.5° by 0.625°), 1991 to 2020, and the elevation of its grid cell",
@@ -45,12 +47,13 @@
     },
     "rhs-crop-rotation": {
       "title": "Royal Horticultural Society: Crop rotation",
-      "url": "https://www.rhs.org.uk/vegetables/crop-rotation"
+      "url": "https://www.rhs.org.uk/vegetables/crop-rotation",
+      "note": "The page is of the vegetable plot. A herb's, a fruit's, a flower's or a green manure's feeder class cites it for want of that crop's own source, which the reviewer finds: the value is not on the page."
     },
     "rhs-grow-your-own": {
       "title": "Royal Horticultural Society: Grow your own fruit, vegetables and herbs, a growing guide per crop",
       "url": "https://www.rhs.org.uk/advice/grow-your-own",
-      "note": "The guides give sowing and planting times by month for the United Kingdom. A window here is those months restated as days from the frost dates, which is the drafting a reviewer checks."
+      "note": "The guides give sowing and planting times by month for the United Kingdom. A window here is those months restated as days from the frost dates, which is the drafting a reviewer checks. They are of fruit, vegetables and herbs: a flower's or a green manure's field cites them for want of that plant's own guide, which the reviewer finds."
     },
     "rhs-hardiness": {
       "title": "Royal Horticultural Society: RHS hardiness rating",
@@ -59,15 +62,18 @@
     },
     "rutgers-soil-ph": {
       "title": "Rutgers New Jersey Agricultural Experiment Station: Commercial Vegetable Production Recommendations, soil and nutrient management (target soil pH by crop)",
-      "url": "https://njaes.rutgers.edu/pubs/commercial-veg-rec/soil-nutrient-management.pdf"
+      "url": "https://njaes.rutgers.edu/pubs/commercial-veg-rec/soil-nutrient-management.pdf",
+      "note": "The recommendations are for vegetables. A herb's, a fruit's, a flower's or a green manure's soil pH cites them for want of that crop's own source, which the reviewer finds: the value is not in them."
     },
     "usda-handbook-66": {
       "title": "USDA Agricultural Research Service: Agriculture Handbook 66, The Commercial Storage of Fruits, Vegetables, and Florist and Nursery Stocks (2016)",
-      "url": "https://www.ars.usda.gov/arsuserfiles/oc/np/commercialstorage/commercialstorage.pdf"
+      "url": "https://www.ars.usda.gov/arsuserfiles/oc/np/commercialstorage/commercialstorage.pdf",
+      "note": "The handbook gives how long the fresh harvest keeps in store. A shelf life frozen, dried, canned or fermented in a field that cites it is not from it: the reviewer checks those against nchfp."
     },
     "vt-planting-guide": {
       "title": "Virginia Cooperative Extension, publication 426-331: Virginia's Home Garden Vegetable Planting Guide, recommended planting dates and amounts to plant",
-      "url": "https://pubs.ext.vt.edu/426/426-331/426-331.html"
+      "url": "https://pubs.ext.vt.edu/426/426-331/426-331.html",
+      "note": "The guide is of the vegetables of a home garden. A herb's, a fruit's, a flower's or a green manure's spacing, plants per square metre and yield cite it for want of that crop's own source, which the reviewer finds: the value is not in the guide."
     },
     "wikidata": {
       "title": "Wikidata: a taxon's label in each language",

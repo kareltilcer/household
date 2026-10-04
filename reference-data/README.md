@@ -61,7 +61,9 @@ Another test checks each conversion against the relations that define its unit, 
 mistyped digit fails. An editor that reads `$schema` validates a file as it is written.
 
 A set is checked by its module's tests, with the same `reference.Read`, until its module is
-registered; from then a deploy checks it too.
+registered; from then a deploy checks it too. A set's own checks read its directory and no other,
+against the schemas the set names, and a file there that they do not read is refused: a record in
+a directory the set does not have is one nothing would check.
 
 ## How it loads
 
@@ -115,8 +117,10 @@ the crop by it, and it never changes once shipped.
   sown or planted in autumn and stands the winter (FR-GA17): garlic, a strawberry bed.
 - A crop has a `harvest` window and at least one of `sow_indoor`, `sow_direct` and `transplant`:
   its one main cropping. A second sowing season is said in its notes.
-- A note, and a rule's reason, names no day, no month and no year, in any language: "after the
-  last frost" is true wherever the household is.
+- A note, and a rule's reason, names no date, no month and no year, in any language: "after the
+  last frost" is true wherever the household is. The one day it may name is the longest of the
+  year, midsummer: a sowing that bolts in lengthening days and a harvest that ends with them
+  answer to it and not to the frost, and it is the same day wherever the household is.
 
 **A variety** belongs to one crop and overrides only what differs (FR-GA2): a field it does not
 name is its crop's. **A rule** is the pair it is about and what is claimed of it: a relation, its
@@ -160,18 +164,22 @@ beyond what the schemas do:
 
 - a crop whose family, pest or disease the catalog does not hold, or whose Latin name or name in
   a language is another crop's;
-- a crop with no harvest window or no sowing or planting one, one sown under cover and never
-  planted out, and a window or a range that runs backwards;
+- a crop with no sowing or planting window beside the harvest window its schema requires, one
+  sown under cover and never planted out, and a window or a range that runs backwards;
 - a crop started from seed with no sowing window, germination temperature or days to germinate,
-  one with a sowing window and no depth, and an annual with no days to maturity;
-- a variety whose key another of its crop has;
+  one with a sowing window and no depth or a depth and no sowing window, and an annual with no
+  days to maturity;
+- a variety whose key another of its crop has, one that makes of its crop a crop refused above
+  (sown under cover and never planted out, sown with no depth, a perennial with days to maturity,
+  a green manure with a yield), and one that overrides the spacing and not the plants per square
+  metre its crop gives;
 - a rule that names a record the catalog does not hold, a pair written twice or with its greater
   key first, and a succession between a crop and a family;
 - a place whose key does not carry its country or is another place's, whose frost dates are not
   days of the year in order, or whose season is not the days between them.
 
 The tests hold the shipped catalog to its hundred crops, the climate to the countries that have a
-profile, and every note and reason to naming no date.
+profile, and every note and reason to naming no month and no date.
 
 ### Reviewing it
 
@@ -179,4 +187,8 @@ Everything in the set was drafted, and is flagged: `"drafted": true` on a field 
 review ledger. `rg -c '"drafted": true' reference-data/garden` counts what is left, file by file.
 A source is the document to check a value against, not a claim that it was copied from there:
 the names against EPPO's and Wikidata's, the timings against the growing guides restated as days
-from the frost dates, and the climate values against station records.
+from the frost dates, and the climate values against station records. A source's `note` in
+[`garden/sources.json`](garden/sources.json) says what it does not cover: the spacing, yield,
+germination, soil pH, rotation break and feeder class of a herb, a fruit, a flower or a green
+manure cite documents written of vegetables, for want of that crop's own, and the reviewer who
+checks such a value gives it the source it was checked against.

@@ -66,10 +66,11 @@ type Crop struct {
 	SoilPH      reference.Field[PH]     `json:"soil_ph"`
 	// RotationBreakYears is the years before the crop or its family returns to a bed.
 	RotationBreakYears reference.Field[int] `json:"rotation_break_years"`
-	// SowDepthCM is nil for a crop that is only ever planted out.
+	// SowDepthCM is nil for a crop that is only ever planted out, and for no other.
 	SowDepthCM *reference.Field[float64] `json:"sow_depth_cm"`
 	Spacing    reference.Field[Spacing]  `json:"spacing"`
-	// PlantsPerM2 is nil where it is what the spacing gives.
+	// PlantsPerM2 is what a square metre holds at the spacing, as a grower counts them; nil, it is
+	// what the spacing gives.
 	PlantsPerM2 *reference.Field[float64] `json:"plants_per_m2"`
 	// GerminationTempC and DaysToGerminate are a crop's that is started from seed.
 	GerminationTempC *reference.Field[float64] `json:"germination_temp_c"`
@@ -154,7 +155,8 @@ type Variety struct {
 	Overrides Overrides                             `json:"overrides"`
 }
 
-// Overrides are the fields a variety may differ in; nil is the crop's own.
+// Overrides are the fields a variety may differ in; nil is the crop's own. One that overrides the
+// spacing of a crop that gives its plants per square metre overrides those too.
 type Overrides struct {
 	SowDepthCM     *reference.Field[float64]  `json:"sow_depth_cm"`
 	Spacing        *reference.Field[Spacing]  `json:"spacing"`

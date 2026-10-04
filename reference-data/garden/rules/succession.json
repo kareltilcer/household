@@ -310,7 +310,7 @@
           "relation": "succession",
           "basis": "agronomic",
           "severity": "warn",
-          "min_years_gap": 3
+          "min_years_gap": 4
         },
         "source": "eppo-gd",
         "drafted": true

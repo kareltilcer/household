@@ -66,14 +66,17 @@ func (e *Invalid) Error() string {
 //     same dimension in the other system.
 //
 // It reads each of sets, the modules' reference data, in the same pass: a set's files against the
-// schemas it names, its fields against the sources its own directory lists, and whatever else its
-// Read checks (Set). Its error is an *Invalid listing every problem, the platform's and each
-// set's, not only the first.
+// schemas it names and no other set's, its fields against the sources its own directory lists, and
+// whatever else its Read checks (Set). A set reads within its own directory, and a file there that
+// its Read did not read is a problem: a record in a directory nothing lists is one nothing checks.
+// Its error is an *Invalid listing every problem, the platform's and each set's, not only the
+// first.
 func Read(fsys fs.FS, sets ...Set) (*Data, error) {
 	if err := checkSets(sets); err != nil {
 		return nil, err
 	}
-	names := []string{sourcesSchema, countrySchema, dimensionSchema}
+	own := []string{sourcesSchema, countrySchema, dimensionSchema}
+	names := slices.Clone(own)
 	for _, set := range sets {
 		names = append(names, set.Schemas...)
 	}
@@ -81,7 +84,7 @@ func Read(fsys fs.FS, sets ...Set) (*Data, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &Reader{fsys: fsys, schemas: schemas}
+	r := &Reader{fsys: fsys, schemas: only(schemas, own...)}
 
 	sources, sourcesRead := r.sources(sourcesFile)
 
@@ -108,11 +111,13 @@ func Read(fsys fs.FS, sets ...Set) (*Data, error) {
 	problems := r.problems
 
 	for _, set := range sets {
-		// A reader of its own: a set's fields cite the sources its own directory lists.
-		sr := &Reader{fsys: fsys, schemas: schemas}
+		// A reader of its own: a set's fields cite the sources its own directory lists, and it reads
+		// that directory alone, against the schema of a source list and the schemas it names.
+		sr := &Reader{fsys: fsys, schemas: only(schemas, append([]string{sourcesSchema}, set.Schemas...)...), dir: set.Name}
 		listed := path.Join(set.Name, sourcesFile)
 		sources, sourcesRead := sr.sources(listed)
 		read := set.Read(sr)
+		sr.unread()
 		if sourcesRead {
 			for _, id := range sr.checkSources(listed, sources) {
 				data.Uncited = append(data.Uncited, set.Name+"/"+id)
@@ -164,11 +169,27 @@ func compileSchemas(fsys fs.FS, names []string) (map[string]*jsonschema.Schema, 
 	return schemas, nil
 }
 
+// only returns those of schemas that names names: what one Reader holds its files to.
+func only(schemas map[string]*jsonschema.Schema, names ...string) map[string]*jsonschema.Schema {
+	out := make(map[string]*jsonschema.Schema, len(names))
+	for _, name := range names {
+		if s, ok := schemas[name]; ok {
+			out[name] = s
+		}
+	}
+	return out
+}
+
 // Reader reads reference data files for Read and collects what is wrong with them: the platform's
-// own files, and then, one Reader each, the files of every Set, whose Read is handed it.
+// own files, and then, one Reader each, the files of every Set, whose Read is handed it. A set's
+// Reader reads the set's directory and no other, against the schemas the set names.
 type Reader struct {
-	fsys     fs.FS
-	schemas  map[string]*jsonschema.Schema
+	fsys    fs.FS
+	schemas map[string]*jsonschema.Schema
+	// dir is the directory a set's Reader reads within, the set's own; empty for the platform's.
+	dir string
+	// asked are the files Decode was asked for and the entries Files refused: unread leaves them be.
+	asked    map[string]bool
 	problems []string
 	// citations are the sources the fields of the files read so far name, and where.
 	citations []citation
@@ -185,9 +206,52 @@ func (r *Reader) Problem(file, pointer, format string, args ...any) {
 	r.problems = append(r.problems, file+"#"+pointer+": "+fmt.Sprintf(format, args...))
 }
 
+// within reports whether name is in the directory the Reader reads, recording a problem with it
+// when it is not: a set's Reader reads its own set.
+func (r *Reader) within(name string) bool {
+	if clean := path.Clean(name); r.dir == "" || clean == r.dir || strings.HasPrefix(clean, r.dir+"/") {
+		return true
+	}
+	r.Problem(name, "", "is outside %s, the directory of the set that reads it", r.dir)
+	return false
+}
+
+// ask notes that name was asked for, or refused: it is no file that nothing read.
+func (r *Reader) ask(name string) {
+	if r.asked == nil {
+		r.asked = map[string]bool{}
+	}
+	r.asked[path.Clean(name)] = true
+}
+
+// unread records as a problem each file of a set's directory that its Read neither decoded nor
+// had refused: a record in a directory the set does not list, say, which nothing would check or
+// load.
+func (r *Reader) unread() {
+	_ = fs.WalkDir(r.fsys, r.dir, func(name string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			// The directory itself is missing or unreadable, which the set's sources.json has said.
+			if name != r.dir {
+				r.Problem(name, "", "%v", err)
+			}
+			return nil
+		case r.asked[name] && d.IsDir():
+			return fs.SkipDir
+		case r.asked[name] || d.IsDir():
+			return nil
+		}
+		r.Problem(name, "", "is read by nothing: %s's Read does not decode it", r.dir)
+		return nil
+	})
+}
+
 // Files returns the dataset files in dir, in the order of their names, and records anything else
 // there as a problem: a directory holds one <key>.json file per record.
 func (r *Reader) Files(dir string) []string {
+	if !r.within(dir) {
+		return nil
+	}
 	entries, err := fs.ReadDir(r.fsys, dir)
 	if err != nil {
 		r.Problem(dir, "", "%v", err)
@@ -198,6 +262,7 @@ func (r *Reader) Files(dir string) []string {
 		name := path.Join(dir, e.Name())
 		if e.IsDir() || path.Ext(e.Name()) != ".json" {
 			r.Problem(name, "", "is not a record: %s holds one <key>.json file per record", dir)
+			r.ask(name)
 			continue
 		}
 		names = append(names, name)
@@ -205,11 +270,22 @@ func (r *Reader) Files(dir string) []string {
 	return names
 }
 
+// Named checks that file is named for key, the value at at in it: a record's file is <key>.json.
+func (r *Reader) Named(file, at, key string) {
+	if path.Base(file) != key+".json" {
+		r.Problem(file, at, "is %s, so the file is %s.json", key, key)
+	}
+}
+
 // Decode reads the file name, checks it against schema, one of schemas/ that Read compiled,
 // decodes it into v and notes the source of each of its fields, for Read to check against the
-// sources listed. It reports false, having recorded why, when the file cannot be read, is not
-// JSON, or does not pass the schema.
+// sources listed. It reports false, having recorded why, when the file is not one the Reader may
+// read, cannot be read, is not JSON, or does not pass the schema.
 func (r *Reader) Decode(name, schema string, v any) bool {
+	if !r.within(name) {
+		return false
+	}
+	r.ask(name)
 	raw, err := fs.ReadFile(r.fsys, name)
 	if err != nil {
 		r.Problem(name, "", "%v", err)
@@ -337,9 +413,7 @@ func (r *Reader) Localized(file, at string, text Localized) {
 
 // checkCountry checks what the country schema cannot about c, read from file.
 func (r *Reader) checkCountry(file string, c Country) {
-	if path.Base(file) != c.Code+".json" {
-		r.Problem(file, "/code", "is %s, so the file is %s.json", c.Code, c.Code)
-	}
+	r.Named(file, "/code", c.Code)
 	r.Localized(file, "/name/value", c.Name.Value)
 	if _, err := money.Exponent(c.Currency.Value); err != nil {
 		r.Problem(file, "/currency/value", "%s is not an ISO 4217 currency", c.Currency.Value)
@@ -360,9 +434,7 @@ func (r *Reader) checkDimensions(files []string, dims []Dimension) {
 	cldr := map[string]string{}
 	for i, d := range dims {
 		file := files[i]
-		if path.Base(file) != d.Key+".json" {
-			r.Problem(file, "/key", "is %s, so the file is %s.json", d.Key, d.Key)
-		}
+		r.Named(file, "/key", d.Key)
 		r.Localized(file, "/name/value", d.Name.Value)
 		base := false
 		for j, u := range d.Units {

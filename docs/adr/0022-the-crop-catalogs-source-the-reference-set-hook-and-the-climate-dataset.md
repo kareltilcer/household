@@ -37,6 +37,10 @@ module, the schemas its files are held to, a `Read` that reads them through the 
 - A set's fields cite the sources `<set>/sources.json` lists, held to the platform's schema for a
   source list. The sources of one set are not another's, so that the test of a set's sources
   being cited is the set's own.
+- A set's `Read` is handed a `Reader` of its own: it reads the set's directory and nothing outside
+  it, against the schemas the set names and no other set's, and a file of that directory which it
+  does not read is a problem. The whole directory is embedded, so a record in a directory the
+  set's `Read` does not list would otherwise ship unchecked and unloaded.
 - A set's datasets are named `<set>_<dataset>` in `reference_datasets`, which `Load` holds them
   to. A set writes through `reference.Upsert` and `reference.Finish`, which are what the
   platform's own datasets are written with, so its rows and its datasets are versioned the same
@@ -71,7 +75,9 @@ stands the winter. A crop has four windows, the contract's and `home`'s: `sow_in
 waits for is the crop's `germination_temp_c`.
 
 **A variety overrides only what differs** (FR-GA2): its timing, spacing, maturity, yield and
-storage fields, each absent where it is its crop's. **A rule is a claim about a pair**, a relation
+storage fields, each absent where it is its crop's. `Read` holds the crop with a variety's
+differences to the rules it holds a crop to, since that is the record a household growing the
+variety is served. **A rule is a claim about a pair**, a relation
 with its basis, `agronomic` or `traditional`, and its severity, and a reason in every language. A
 pair is written once, its lesser key first.
 
@@ -84,8 +90,8 @@ temperature at which the ground frosts, and the threshold the frost warning hold
 **The climate dataset is computed from NASA POWER** ([D-144](../prd/09-decisions.md)): daily minimum
 temperature at 2 m from MERRA-2, 1991 to 2020, at 118 towns of the five countries, one request a
 town. Its licence is recorded on its source: NASA's Earth science data are free and open to any
-use, and POWER asks to be cited. `reference-data/garden/README.md` gives the method, so that the
-numbers can be computed again:
+use, and POWER asks to be cited. `reference-data/README.md` gives the method and
+`reference-data/tools/garden-climate.mjs` is it, so that the numbers can be computed again:
 - A year's last spring frost is its last day from 1 January to 31 July at or below 2 °C, and its
   first autumn frost its first such day from 1 August.
 - A place's dates are the 27th of the thirty years' last frosts in order, and the 3rd of their
@@ -131,7 +137,13 @@ ledger (ADR 0008), and a reviewer who has checked a value against its source rem
 
 **What gets harder:**
 - Every crop needs its names and its notes in five languages before it can merge, and a note may
-  name no month.
+  name no month and no date. The longest day it may name: a sowing that bolts in lengthening days
+  and a harvest that ends with them answer to it, and it is the same day wherever the household
+  is.
+- A source is cited by the kind of field, and the documents of spacing, yield, germination, soil
+  pH, rotation and feeding are written of vegetables: a herb's, a fruit's, a flower's or a green
+  manure's value cites them for want of its own source, which each source's note says and the
+  reviewer of the flag supplies.
 - The catalog describes one cropping of a crop. A crop sown both in spring and in late summer has
   the second in its notes.
 - The grid is coarse. Towns of one cell share their values, a town below its cell's altitude reads

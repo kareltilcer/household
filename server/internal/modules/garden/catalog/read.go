@@ -38,13 +38,16 @@ const (
 //   - a file is named for its record;
 //   - a crop's family, pests and diseases are records of the catalog, its Latin name and its name
 //     in each language are no other crop's, and its ranges run from the lesser to the greater;
-//   - a crop has a harvest window and a sowing or planting one, one sown under cover is planted
-//     out, and a window runs forwards;
-//   - a crop with a sowing window has a sowing depth, one started from seed has a sowing window, a
-//     germination temperature and days to germinate, and one that is not a perennial has days to
-//     maturity;
+//   - a crop has a sowing or planting window beside the harvest window its schema requires, one
+//     sown under cover is planted out, and a window runs forwards;
+//   - a crop with a sowing window has a sowing depth and one without has none, one started from
+//     seed has a sowing window, a germination temperature and days to germinate, and one that is
+//     not a perennial has days to maturity;
 //   - a crop has a harvest unit, a yield and a storage, but a green manure, which has none;
-//   - a variety's key is its crop's alone, and what it overrides is held to the same;
+//   - a variety's key is its crop's alone, and what it overrides is held to the same: each value as
+//     the crop's own is, and the crop with the variety's differences to the rules between a crop's
+//     fields, so that a variety makes of no crop one they refuse, and one that overrides the
+//     spacing overrides the plants per square metre its crop gives (checkVariety);
 //   - a rule names two crops, or two families, that the catalog holds, a pair once and its lesser
 //     key first;
 //   - a place's key carries its country and is no other place's, its frost dates are days of the
@@ -74,7 +77,7 @@ func read(r *reference.Reader) *Catalog {
 		if !r.Decode(name, familySchema, &f) {
 			continue
 		}
-		named(r, name, "/key", f.Key)
+		r.Named(name, "/key", f.Key)
 		r.Localized(name, "/name/value", f.Name.Value)
 		if strings.ToLower(f.NameLatin.Value) != f.Key {
 			r.Problem(name, "/name_latin/value", "is %s, so the key is %s", f.NameLatin.Value, strings.ToLower(f.NameLatin.Value))
@@ -128,13 +131,6 @@ func read(r *reference.Reader) *Catalog {
 	return c
 }
 
-// named checks that file is named for key, the value at at.
-func named(r *reference.Reader, file, at, key string) {
-	if path.Base(file) != key+".json" {
-		r.Problem(file, at, "is %s, so the file is %s.json", key, key)
-	}
-}
-
 // problems reads the pests or the diseases in dir into out, and returns their keys.
 func problems(r *reference.Reader, dir string, out *[]Problem) map[string]bool {
 	keys := map[string]bool{}
@@ -143,7 +139,7 @@ func problems(r *reference.Reader, dir string, out *[]Problem) map[string]bool {
 		if !r.Decode(name, problemSchema, &p) {
 			continue
 		}
-		named(r, name, "/key", p.Key)
+		r.Named(name, "/key", p.Key)
 		r.Localized(name, "/name/value", p.Name.Value)
 		keys[p.Key] = true
 		*out = append(*out, p)
@@ -167,7 +163,7 @@ func (u unique) claim(r *reference.Reader, file, at, kind, value string) {
 
 // checkCrop checks what the crop schema cannot about crop, read from file.
 func checkCrop(r *reference.Reader, file string, crop Crop, families, pests, diseases map[string]bool, seen unique) {
-	named(r, file, "/key", crop.Key)
+	r.Named(file, "/key", crop.Key)
 	r.Localized(file, "/name/value", crop.Name.Value)
 	r.Localized(file, "/care_notes/value", crop.CareNotes.Value)
 	seen.claim(r, file, "/name_latin/value", "Latin name", crop.NameLatin.Value)
@@ -196,9 +192,12 @@ func checkCrop(r *reference.Reader, file string, crop Crop, families, pests, dis
 		r.Problem(file, "/windows", "is sown under cover and never planted out: it has no transplant window")
 	}
 
-	sown := w.SowIndoor != nil || w.SowDirect != nil
-	if sown && crop.SowDepthCM == nil {
+	sown := w.sown()
+	switch {
+	case sown && crop.SowDepthCM == nil:
 		r.Problem(file, "", "has a sowing window and no sow_depth_cm")
+	case !sown && crop.SowDepthCM != nil:
+		r.Problem(file, "/sow_depth_cm", "is a sowing's, and the crop has no sowing window")
 	}
 	if crop.Propagation.Value == "seed" {
 		if !sown {
@@ -250,18 +249,73 @@ func checkCrop(r *reference.Reader, file string, crop Crop, families, pests, dis
 		} else {
 			keys[v.Key] = i
 		}
-		if v.Note != nil {
-			r.Localized(file, at+"/note/value", v.Note.Value)
-		}
-		o := v.Overrides
-		ordered(r, file, at+"/overrides/days_to_maturity/value", o.DaysToMaturity)
-		if o.Windows != nil {
-			checkWindows(r, file, at+"/overrides/windows", *o.Windows)
-		}
-		if o.Storage != nil {
-			methods(r, file, at+"/overrides/storage/value", o.Storage.Value)
+		checkVariety(r, file, at, crop, v)
+	}
+}
+
+// checkVariety checks v, the variety at at of crop in file. What it overrides is held to what the
+// crop's own values are, and then the crop with the variety's differences, which is the record a
+// household growing the variety is served (FR-GA2), to the rules between a crop's fields. A
+// problem the crop has without the variety is the crop's, and is not said again of each variety.
+func checkVariety(r *reference.Reader, file, at string, crop Crop, v Variety) {
+	if v.Note != nil {
+		r.Localized(file, at+"/note/value", v.Note.Value)
+	}
+	o, over := v.Overrides, at+"/overrides"
+	ordered(r, file, over+"/days_to_maturity/value", o.DaysToMaturity)
+	if o.DaysToMaturity != nil && crop.LifeCycle.Value == "perennial" {
+		r.Problem(file, over+"/days_to_maturity", "is not a perennial's, which crops year after year from where it stands")
+	}
+	if o.Storage != nil {
+		methods(r, file, over+"/storage/value", o.Storage.Value)
+	}
+	for _, harvest := range []struct {
+		name    string
+		present bool
+	}{{"yield", o.Yield != nil}, {"storage", o.Storage != nil}} {
+		if harvest.present && crop.PlantType.Value == GreenManure {
+			r.Problem(file, over+"/"+harvest.name, "is a harvest's, and a green manure is dug in, not harvested")
 		}
 	}
+	if o.Spacing != nil && o.PlantsPerM2 == nil && crop.PlantsPerM2 != nil {
+		r.Problem(file, over, "overrides spacing and not plants_per_m2, which its crop gives for the crop's own spacing")
+	}
+
+	w := crop.Windows
+	if o.Windows != nil {
+		checkWindows(r, file, over+"/windows", *o.Windows)
+		w = w.with(*o.Windows)
+	}
+	if w.SowIndoor != nil && w.Transplant == nil && crop.Windows.SowIndoor == nil {
+		r.Problem(file, over+"/windows", "is sown under cover and never planted out: neither it nor its crop has a transplant window")
+	}
+	switch sown := w.sown(); {
+	case sown && !crop.Windows.sown() && crop.SowDepthCM == nil && o.SowDepthCM == nil:
+		r.Problem(file, over, "has a sowing window and no sow_depth_cm, and neither has its crop")
+	case !sown && o.SowDepthCM != nil:
+		r.Problem(file, over+"/sow_depth_cm", "is a sowing's, and neither the variety nor its crop has a sowing window")
+	}
+}
+
+// sown reports whether w has a sowing window, under cover or where the crop grows.
+func (w Windows) sown() bool { return w.SowIndoor != nil || w.SowDirect != nil }
+
+// with returns w with each window o has in place of its own: a crop's windows as a variety's
+// overrides leave them.
+func (w Windows) with(o Windows) Windows {
+	if o.SowIndoor != nil {
+		w.SowIndoor = o.SowIndoor
+	}
+	if o.SowDirect != nil {
+		w.SowDirect = o.SowDirect
+	}
+	if o.Transplant != nil {
+		w.Transplant = o.Transplant
+	}
+	if o.Harvest != nil {
+		w.Harvest = o.Harvest
+	}
+	return w
 }
 
 // listed checks that each of keys, the value at at in file, is a record of dir.
@@ -309,7 +363,7 @@ func methods(r *reference.Reader, file, at string, stored []Stored) {
 // checkRules checks what the rules schema cannot about set, read from file: that each rule names
 // records of the catalog, of the kind its scope is about, and that no pair is ruled on twice.
 func checkRules(r *reference.Reader, file string, set RuleSet, crops, families map[string]bool) {
-	named(r, file, "/scope", set.Scope)
+	r.Named(file, "/scope", set.Scope)
 	seen := map[[2]string]int{}
 	for i, rule := range set.Rules {
 		at := "/rules/" + strconv.Itoa(i)
@@ -358,7 +412,7 @@ func known(r *reference.Reader, file, at string, rule Rule, records map[string]b
 // checkClimate checks what the climate schema cannot about climate, read from file. places holds
 // where each place's key was first seen, across every country.
 func checkClimate(r *reference.Reader, file string, climate Climate, places map[string]string) {
-	named(r, file, "/country", climate.Country)
+	r.Named(file, "/country", climate.Country)
 	prefix := strings.ToLower(climate.Country) + "_"
 	names := map[string]int{}
 	for i, p := range climate.Places {

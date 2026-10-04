@@ -106,28 +106,40 @@ func TestTheClimateCoversTheCountryProfiles(t *testing.T) {
 	}
 }
 
-// months are the names of the months in each shipped language, in the forms a sentence uses.
+// months are the names of the months in each shipped language, in the forms a sentence uses: the
+// noun in its cases, and the adjective made of it ("květnový výsev", "majowy siew", a German
+// compound such as "Augustaussaat"; not one of Mai, which Mais would be).
 var months = map[i18n.Locale]string{
 	i18n.English: `January|February|March|April|May|June|July|August|September|October|November|December`,
 	i18n.Czech: `(?i:led(en|na|nu)|únor(a|u)?|břez(en|na|nu)|dub(en|na|nu)|květ(en|na|nu)|červ(en|na|nu)|červen(ec|ce|ci)|` +
-		`srp(en|na|nu)|září|říj(en|na|nu)|listopadu?|prosin(ec|ce|ci))`,
+		`srp(en|na|nu)|září|říj(en|na|nu)|listopadu?|prosin(ec|ce|ci)|` +
+		`(ledn|únor|březn|dubn|květn|červn|červenc|srpn|zářij|říjn|listopad|prosinc)ov\p{L}+)`,
 	i18n.Slovak: `(?i:január[ai]?|február[ai]?|mar(ec|ca|ci)|apríl[ai]?|máj[ai]?|jún[ai]?|júl[ai]?|august[ae]?|` +
-		`septemb(er|ra|ri)|októb(er|ra|ri)|novemb(er|ra|ri)|decemb(er|ra|ri))`,
-	i18n.German: `Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember`,
+		`septemb(er|ra|ri)|októb(er|ra|ri)|novemb(er|ra|ri)|decemb(er|ra|ri)|` +
+		`(január|február|marc|apríl|máj|jún|júl|august|septembr|októbr|novembr|decembr)ov\p{L}+)`,
+	i18n.German: `Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember|` +
+		`(Januar|Februar|März|April|Juni|Juli|August|September|Oktober|November|Dezember)\p{L}+`,
 	i18n.Polish: `(?i:stycz(eń|nia|niu)|lut(y|ego|ym)|marz?(ec|ca|cu)|kwie(cień|tnia|tniu)|maj[au]?|czerw(iec|ca|cu)|` +
-		`lip(iec|ca|cu)|sierp(ień|nia|niu)|wrze(sień|śnia|śniu)|październik[au]?|listopad(a|zie)?|grud(zień|nia|niu))`,
+		`lip(iec|ca|cu)|sierp(ień|nia|niu)|wrze(sień|śnia|śniu)|październik[au]?|listopad(a|zie)?|grud(zień|nia|niu)|` +
+		`(styczni|lut|marc|kwietni|maj|czerwc|lipc|sierpni|wrześni|październik|listopad|grudni)ow\p{L}+)`,
 }
 
 // Plan item 22: timings are offsets from the household's frost dates, and no absolute dates. A
 // window cannot hold one, which the schema sees to; this holds what a member reads, a crop's
-// notes, a variety's and a rule's reason, to naming no day, no month and no year, in any of the
+// notes, a variety's and a rule's reason, to naming no date, no month and no year, in any of the
 // languages: "after the last frost" is true in Kuřim and in Córdoba, and "in the middle of May"
-// in one of them.
+// in one of them. The longest day is not such a date, and a note may name it (midsummer, the
+// solstice): a sowing that bolts in lengthening days and a harvest that ends with them answer to
+// it, and it is the same day in both.
 func TestTheCatalogHoldsNoAbsoluteDate(t *testing.T) {
 	_, c := shipped(t)
 	numeric := regexp.MustCompile(`\d{4}-\d{2}-\d{2}|\b\d{1,2}\.\s?\d{1,2}\.|\b(1[89]|20)\d{2}\b`)
 	named := map[i18n.Locale]*regexp.Regexp{}
-	for l, names := range months {
+	for _, l := range i18n.Locales {
+		names, ok := months[l]
+		if !ok {
+			t.Fatalf("the months are not named in %s, a language the server ships", l)
+		}
 		// A word of its own: \b is ASCII's, and a month may begin or end with a letter that is not.
 		named[l] = regexp.MustCompile(`(^|[^\p{L}])(` + names + `)($|[^\p{L}])`)
 	}
@@ -156,8 +168,29 @@ func TestTheCatalogHoldsNoAbsoluteDate(t *testing.T) {
 			check("the "+set.Scope+" rule on "+rule.A+" and "+rule.B, rule.Reason.Value)
 		}
 	}
-	if len(named) != len(i18n.Locales) {
-		t.Errorf("months are named in %d languages, and the server ships %d", len(named), len(i18n.Locales))
+}
+
+// The patterns that hold the notes to naming no month see each form a sentence uses, and leave
+// alone the words that only begin as a month does.
+func TestTheMonthPatternsSeeEachForm(t *testing.T) {
+	for l, texts := range map[i18n.Locale]struct{ named, clear []string }{
+		i18n.English: {[]string{"Sow in mid-May.", "March sowings bolt."}, []string{"It may bolt.", "Sow after midsummer."}},
+		i18n.Czech:   {[]string{"Sejte v květnu.", "Květnový výsev vybíhá.", "srpnové výsevy"}, []string{"Květní stvoly odstraňujte.", "po posledním mrazu", "po letním slunovratu"}},
+		i18n.Slovak:  {[]string{"Sejte v máji.", "májový výsev", "augustové výsevy"}, []string{"okolo letného slnovratu", "po poslednom mraze"}},
+		i18n.German:  {[]string{"Mitte Mai säen.", "Die Augustaussaat gelingt.", "Märzsaaten schossen."}, []string{"Der Mais gibt Halt.", "zur Sommersonnenwende"}},
+		i18n.Polish:  {[]string{"Siej w maju.", "majowy siew", "sierpniowe siewy"}, []string{"połyśnicę marchwiankę", "około przesilenia letniego", "pod lipą"}},
+	} {
+		re := regexp.MustCompile(`(^|[^\p{L}])(` + months[l] + `)($|[^\p{L}])`)
+		for _, s := range texts.named {
+			if !re.MatchString(s) {
+				t.Errorf("%s: %q names a month, and the pattern does not see it", l, s)
+			}
+		}
+		for _, s := range texts.clear {
+			if m := re.FindStringSubmatch(s); m != nil {
+				t.Errorf("%s: %q names no month, and the pattern sees %q", l, s, m[2])
+			}
+		}
 	}
 }
 

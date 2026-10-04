@@ -150,5 +150,55 @@
       "pl": "Water at the base. (pl)"
     },
     "source": "book"
-  }
+  },
+  "varieties": [
+    {
+      "key": "red",
+      "name": {
+        "value": "Red One",
+        "source": "book"
+      },
+      "overrides": {
+        "days_to_maturity": {
+          "value": {
+            "min": 70,
+            "max": 90
+          },
+          "source": "book"
+        }
+      }
+    },
+    {
+      "key": "sown",
+      "name": {
+        "value": "Sown One",
+        "source": "book"
+      },
+      "overrides": {
+        "windows": {
+          "sow_direct": {
+            "value": {
+              "anchor": "last_frost",
+              "from_days": -28,
+              "to_days": 0
+            },
+            "source": "book"
+          }
+        }
+      }
+    },
+    {
+      "key": "deep",
+      "name": {
+        "value": "Deep One",
+        "source": "book"
+      },
+      "overrides": {
+        "sow_depth_cm": {
+          "value": 5,
+          "source": "book"
+        }
+      }
+    }
+  ]
 }

@@ -24,7 +24,6 @@
   "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
   "soil_ph": { "value": { "min": 6.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
   "rotation_break_years": { "value": 10, "source": "lwg-2111-fruchtfolge", "drafted": true },
-  "sow_depth_cm": { "value": 15, "source": "rhs-grow-your-own", "drafted": true },
   "spacing": {
     "value": { "row_cm": 120, "plant_cm": 40 },
     "source": "vt-planting-guide",

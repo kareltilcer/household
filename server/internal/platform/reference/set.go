@@ -20,11 +20,13 @@ import (
 type Set struct {
 	// Name is the set's and its directory's, and the module's: garden.
 	Name string
-	// Schemas are the schemas the set's files are held to, each a file of schemas/.
+	// Schemas are the schemas the set's files are held to, each a file of schemas/. Its Reader
+	// decodes against these and no other set's.
 	Schemas []string
 	// Read reads the set's files through r, Files and Decode, and checks what a schema cannot see,
-	// recording each problem with r. It returns what it read, which Data.Sets keeps under the
-	// set's name and Load hands to the set's Load.
+	// recording each problem with r. r reads the set's own directory and nothing outside it, and
+	// a file there that Read does not decode is a problem of its own. It returns what it read,
+	// which Data.Sets keeps under the set's name and Load hands to the set's Load.
 	Read func(r *Reader) any
 	// Load writes what Read returned into the set's tables, in the load's transaction, and reports
 	// what it did to each of its datasets, whose names begin with the set's: garden_crops. It

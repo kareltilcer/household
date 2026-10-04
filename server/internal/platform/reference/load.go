@@ -105,8 +105,7 @@ func Upsert(ctx context.Context, tx pgx.Tx, r *Report, stmt string, args ...any)
 }
 
 // Held is the rows of one of a dataset's tables that its files hold: their keys, in the column
-// Key. Keys is empty rather than nil for a table the files hold no row of: nil binds as NULL,
-// against which Finish would count no row as kept.
+// Key. Keys is nil or empty for a table the files hold no row of.
 type Held struct {
 	Table, Key string
 	Keys       []string
@@ -116,10 +115,15 @@ type Held struct {
 // dataset's version: incremented when the load wrote any of its rows, read otherwise.
 func Finish(ctx context.Context, tx pgx.Tx, r *Report, tables ...Held) error {
 	for _, h := range tables {
+		keys := h.Keys
+		if keys == nil {
+			// nil binds as NULL, against which no row would count as kept.
+			keys = []string{}
+		}
 		var kept int
 		if err := tx.QueryRow(ctx,
 			"SELECT count(*) FROM "+pgx.Identifier{h.Table}.Sanitize()+
-				" WHERE NOT ("+pgx.Identifier{h.Key}.Sanitize()+" = ANY ($1))", h.Keys,
+				" WHERE NOT ("+pgx.Identifier{h.Key}.Sanitize()+" = ANY ($1))", keys,
 		).Scan(&kept); err != nil {
 			return err
 		}
@@ -174,8 +178,7 @@ func loadCountries(ctx context.Context, tx pgx.Tx, countries []Country) (Report,
 // transaction commits, so a dimension is written before the base unit it names exists.
 func loadUnits(ctx context.Context, tx pgx.Tx, dimensions []Dimension) (Report, error) {
 	r := Report{Dataset: Units}
-	// Empty rather than nil (Held).
-	dimensionKeys, unitKeys := []string{}, []string{}
+	var dimensionKeys, unitKeys []string
 	for _, d := range dimensions {
 		dimensionKeys = append(dimensionKeys, d.Key)
 		if err := Upsert(ctx, tx, &r, `

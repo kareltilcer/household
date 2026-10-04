@@ -72,6 +72,10 @@
     },
     "source": "book"
   },
+  "plants_per_m2": {
+    "value": 2.5,
+    "source": "book"
+  },
   "germination_temp_c": {
     "value": 10,
     "source": "book"
@@ -154,5 +158,66 @@
       "pl": "Water at the base. (pl)"
     },
     "source": "book"
-  }
+  },
+  "varieties": [
+    {
+      "key": "leafy",
+      "name": {
+        "value": "Leafy One",
+        "source": "book"
+      },
+      "overrides": {
+        "yield": {
+          "value": {
+            "per_m2": 3
+          },
+          "source": "book"
+        },
+        "storage": {
+          "value": [
+            {
+              "method": "fresh",
+              "shelf_life_days": 5
+            }
+          ],
+          "source": "book"
+        }
+      }
+    },
+    {
+      "key": "early",
+      "name": {
+        "value": "Early One",
+        "source": "book"
+      },
+      "overrides": {
+        "windows": {
+          "sow_indoor": {
+            "value": {
+              "anchor": "last_frost",
+              "from_days": -56,
+              "to_days": -42
+            },
+            "source": "book"
+          }
+        }
+      }
+    },
+    {
+      "key": "wide",
+      "name": {
+        "value": "Wide One",
+        "source": "book"
+      },
+      "overrides": {
+        "spacing": {
+          "value": {
+            "row_cm": 100,
+            "plant_cm": 60
+          },
+          "source": "book"
+        }
+      }
+    }
+  ]
 }

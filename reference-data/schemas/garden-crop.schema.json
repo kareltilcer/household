@@ -189,7 +189,7 @@
       }
     },
     "sowDepth": {
-      "description": "How deep the seed is sown, or the tuber, clove or set planted, in cm.",
+      "description": "How deep the seed is sown, or the tuber, clove or set planted, in cm. A crop with a sowing window has one, and a crop that is only planted out has none.",
       "$ref": "defs.schema.json#/$defs/field",
       "properties": { "value": { "type": "number", "minimum": 0, "maximum": 30 } }
     },
@@ -209,7 +209,7 @@
       }
     },
     "plantsPerM2": {
-      "description": "The plants a square metre holds, where it is not simply what the spacing gives.",
+      "description": "The plants a square metre holds at the crop's spacing, as a grower counts them. Absent, it is what the spacing gives. A variety that overrides the spacing of a crop that has one overrides it too.",
       "$ref": "defs.schema.json#/$defs/field",
       "properties": { "value": { "type": "number", "exclusiveMinimum": 0, "maximum": 2000 } }
     },
@@ -297,7 +297,7 @@
           "$ref": "defs.schema.json#/$defs/localizedField"
         },
         "overrides": {
-          "description": "The timing, spacing, maturity, yield and storage fields in which the variety differs from its crop. A window it does not name is the crop's.",
+          "description": "The timing, spacing, maturity, yield and storage fields in which the variety differs from its crop. A window it does not name is the crop's. The crop with these differences is held to what a crop is: a variety sown under cover is planted out, one with a sowing window has a sowing depth, its own or its crop's, a perennial's has no days to maturity, and a green manure's no yield and no storage.",
           "type": "object",
           "minProperties": 1,
           "properties": {

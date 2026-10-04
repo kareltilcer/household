@@ -3,7 +3,7 @@ package reference_test
 import (
 	"context"
 	"errors"
-	"path"
+	"io/fs"
 	"slices"
 	"strings"
 	"testing"
@@ -39,9 +39,7 @@ func toys(load bool) reference.Set {
 				if !r.Decode(name, brickSchema, &b) {
 					continue
 				}
-				if path.Base(name) != b.Key+".json" {
-					r.Problem(name, "/key", "is %s, so the file is %s.json", b.Key, b.Key)
-				}
+				r.Named(name, "/key", b.Key)
 				bricks = append(bricks, b)
 			}
 			return bricks
@@ -50,7 +48,8 @@ func toys(load bool) reference.Set {
 	if load {
 		set.Load = func(ctx context.Context, tx pgx.Tx, data any) ([]reference.Report, error) {
 			r := reference.Report{Dataset: "toys_bricks"}
-			keys := []string{}
+			// Nil while the files hold no brick, which Finish takes for none.
+			var keys []string
 			bricks, _ := data.([]brick)
 			for _, b := range bricks {
 				keys = append(keys, b.Key)
@@ -129,6 +128,7 @@ func TestReadReportsASetsProblemsWithThePlatforms(t *testing.T) {
 	fsys[bricksDir+"/green.json"] = &fstest.MapFile{Data: []byte(
 		`{"key": "green", "colour": {"value": "green", "source": "iso-4217"}}`)}
 	fsys[bricksDir+"/blue.json"] = &fstest.MapFile{Data: []byte(`{"key": "navy", "colour": {"value": "blue"}}`)}
+	fsys[bricksDir+"/black.json"] = &fstest.MapFile{Data: []byte(`{"key": "white", "colour": {"value": "white", "source": "catalogue"}}`)}
 	fsys[bricksDir+"/notes.txt"] = &fstest.MapFile{Data: []byte("not a record")}
 	delete(fsys, "countries/GB.json")
 	fsys["countries/GB.json"] = &fstest.MapFile{Data: []byte(`{}`)}
@@ -148,6 +148,7 @@ func TestReadReportsASetsProblemsWithThePlatforms(t *testing.T) {
 		}
 	}
 	want := []string{
+		"toys/bricks/black.json#/key: is white, so the file is white.json",
 		"toys/bricks/blue.json#/colour: missing property 'source'",
 		"toys/bricks/green.json#/colour/source: names iso-4217, which toys/sources.json does not list",
 		"toys/bricks/notes.txt#: is not a record: toys/bricks holds one <key>.json file per record",
@@ -177,6 +178,57 @@ func TestASetIsHeldToTheSchemasItNames(t *testing.T) {
 	set.Schemas = []string{"missing.schema.json"}
 	if _, err := reference.Read(withToys(t, nil), set); err == nil || errors.As(err, &invalid) {
 		t.Fatalf("Read with a schema schemas/ does not hold: %v, want it refused outright", err)
+	}
+
+	// Another set's naming the schema, or the platform's, does not lend it.
+	set.Schemas = nil
+	fsys := withToys(t, map[string]string{"red": "red"})
+	fsys["games/sources.json"] = &fstest.MapFile{Data: []byte(`{"sources": {}}`)}
+	games := reference.Set{Name: "games", Schemas: []string{brickSchema}, Read: func(r *reference.Reader) any {
+		var c reference.Country
+		r.Decode("games/sources.json", "country.schema.json", &c)
+		return nil
+	}}
+	_, err = reference.Read(fsys, set, games)
+	wants := []string{
+		"games/sources.json#: is held to country.schema.json, which its set does not name among its schemas",
+		want,
+	}
+	if !errors.As(err, &invalid) || !slices.Equal(invalid.Problems, wants) {
+		t.Fatalf("Read beside a set that names the schema: %v, want %v", err, wants)
+	}
+}
+
+// A set reads its own directory: a file outside it is not its to read, and a file inside it that
+// its Read does not decode is a record nothing checks.
+func TestASetReadsItsOwnDirectoryAndAllOfIt(t *testing.T) {
+	set := toys(false)
+	bricks := set.Read
+	set.Read = func(r *reference.Reader) any {
+		var c reference.Country
+		r.Decode("countries/CZ.json", brickSchema, &c)
+		r.Files("units")
+		r.Files("toys/../countries")
+		return bricks(r)
+	}
+	fsys := withToys(t, map[string]string{"red": "red"})
+	fsys["toys/brick/blue.json"] = &fstest.MapFile{Data: []byte(`{"key": "blue", "colour": {"value": "blue", "source": "catalogue"}}`)}
+	fsys["toys/README.md"] = &fstest.MapFile{Data: []byte("# Toys")}
+	fsys[bricksDir+"/spare/green.json"] = &fstest.MapFile{Data: []byte(`{}`)}
+
+	_, err := reference.Read(fsys, set)
+	var invalid *reference.Invalid
+	want := []string{
+		"countries/CZ.json#: is outside toys, the directory of the set that reads it",
+		"toys/../countries#: is outside toys, the directory of the set that reads it",
+		"toys/README.md#: is read by nothing: toys's Read does not decode it",
+		"toys/brick/blue.json#: is read by nothing: toys's Read does not decode it",
+		// A directory among the records is refused once, and what it holds with it.
+		"toys/bricks/spare#: is not a record: toys/bricks holds one <key>.json file per record",
+		"units#: is outside toys, the directory of the set that reads it",
+	}
+	if !errors.As(err, &invalid) || !slices.Equal(invalid.Problems, want) {
+		t.Fatalf("Read: %v, want:\n  %s", err, strings.Join(want, "\n  "))
 	}
 }
 
@@ -250,6 +302,18 @@ func TestLoadWritesASetWithThePlatformsData(t *testing.T) {
 	var version int64
 	if err := tx.QueryRow(t.Context(), "SELECT version FROM reference_datasets WHERE name = 'toys_bricks'").Scan(&version); err != nil || version != 2 {
 		t.Errorf("the set's dataset is at version %d: %v", version, err)
+	}
+
+	// Files that hold no record of a table keep every row of it, and say so: the set's Load hands
+	// Finish no keys at all.
+	none := withToys(t, nil)
+	none[bricksDir] = &fstest.MapFile{Mode: fs.ModeDir}
+	reports, err := reference.Load(t.Context(), tx, none, toys(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, want := reports[len(reports)-1], (reference.Report{Dataset: "toys_bricks", Version: 2, Kept: 2}); r != want {
+		t.Errorf("files with no brick: %+v, want %+v", r, want)
 	}
 }
 
