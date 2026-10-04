@@ -53,8 +53,8 @@
     "eslint": "catalog:",
     "pg": "8.23.0",
     "playwright": "1.63.0",
-    "react": "19.3.0",
-    "react-native": "0.87.1",
+    "react": "catalog:",
+    "react-native": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

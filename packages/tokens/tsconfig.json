@@ -1,4 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"]
+  "compilerOptions": {
+    // scripts/css.ts runs on Node, and the tests read the committed stylesheet, the contract and
+    // the font files. The sources themselves import nothing of Node's: both clients bundle them.
+    "types": ["node"]
+  },
+  "include": ["src", "scripts"]
 }

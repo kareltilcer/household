@@ -1,0 +1,10 @@
+/* The two faces (PL-13), self-hosted: a bundler resolves each import to a package in this
+   workspace's node_modules and serves its files from the app's own origin. No font CDN (N8).
+   IBM Plex Sans is one variable file per script and style, weights 100 to 700; IBM Plex Mono is
+   one file per script and weight, in the weights the type scale sets it in. Each declares its
+   scripts by unicode-range, Latin Extended among them, so a browser fetches only the ones a page
+   writes in. Both are SIL OFL 1.1, and each package carries its licence. */
+@import '@fontsource-variable/ibm-plex-sans/wght.css';
+@import '@fontsource-variable/ibm-plex-sans/wght-italic.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';

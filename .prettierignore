@@ -1,5 +1,7 @@
-# Generated or vendored.
+# Generated or vendored. A test holds each committed one to what generates it.
 pnpm-lock.yaml
+packages/tokens/tokens.css
+packages/icons/src/lucide.json
 **/dist/
 **/coverage/
 **/.turbo/

@@ -38,6 +38,7 @@
     "@redocly/cli": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "stylelint": "catalog:",
     "turbo": "2.11.4",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:"
