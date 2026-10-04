@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "leek_moth",
+  "name": {
+    "value": {
+      "en": "Leek moth",
+      "cs": "Molík česnekový",
+      "sk": "Psota pórová",
+      "de": "Lauchmotte",
+      "pl": "Wgryzka szczypiorka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Acrolepiopsis assectella", "source": "eppo-gd", "drafted": true }
+}

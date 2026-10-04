@@ -1,0 +1,78 @@
+{
+  "$schema": "../schemas/sources.schema.json",
+  "sources": {
+    "eppo-gd": {
+      "title": "EPPO Global Database: the scientific name of a plant or a pest, its common names in each language, and the hosts of a pest",
+      "url": "https://gd.eppo.int/"
+    },
+    "eu-variety-catalogue": {
+      "title": "European Commission: plant variety catalogues, databases and information systems (the common catalogue of varieties of vegetable species)",
+      "url": "https://food.ec.europa.eu/plants/plant-reproductive-material/plant-variety-catalogues-databases-information-systems_en",
+      "note": "The catalogue lists a variety by name and maintainer. What a variety differs in is drafted from its breeder's or its seed house's description, which the reviewer finds from there."
+    },
+    "geonames": {
+      "title": "GeoNames geographical database: a place's name and its coordinates",
+      "url": "https://www.geonames.org/",
+      "licence": "Creative Commons Attribution 4.0: free to use, with attribution to GeoNames.",
+      "note": "The gazetteer the places are to be checked against. Their coordinates were drafted to two decimal places and not copied from it."
+    },
+    "harrington-germination": {
+      "title": "J. F. Harrington, Department of Vegetable Crops, University of California, Davis: Soil temperature conditions for vegetable seed germination, as Oregon State University Extension publishes it",
+      "url": "https://extension.oregonstate.edu/gardening/soil-compost/soil-temperature-conditions-vegetable-seed-germination"
+    },
+    "lwg-2104-mischkultur": {
+      "title": "Bayerische Landesanstalt für Weinbau und Gartenbau, Bayerische Gartenakademie: Merkblatt 2104, Mischkulturen im Gemüsegarten",
+      "url": "https://www.lwg.bayern.de/mam/cms06/gartenakademie/dateien/2104-2020.pdf",
+      "note": "The leaflet says of the literature on neighbours that its reports of experience often contradict one another. A claim it supports no further than that is traditional here."
+    },
+    "lwg-2111-fruchtfolge": {
+      "title": "Bayerische Landesanstalt für Weinbau und Gartenbau, Bayerische Gartenakademie: Merkblatt 2111, Fruchtfolge für Gemüsebeete",
+      "url": "https://www.lwg.bayern.de/mam/cms06/gartenakademie/dateien/2111-2016.pdf"
+    },
+    "nasa-power": {
+      "title": "NASA Langley Research Center, Prediction Of Worldwide Energy Resources (POWER) project: daily minimum temperature at 2 metres (T2M_MIN, from MERRA-2, on a grid of 0.5° by 0.625°), 1991 to 2020, and the elevation of its grid cell",
+      "url": "https://power.larc.nasa.gov/",
+      "licence": "NASA's Earth science data are free and open to any use. The POWER project asks to be cited: these data were obtained from the NASA Langley Research Center (LaRC) POWER Project funded through the NASA Earth Science/Applied Science Program.",
+      "note": "The values are computed from the source, not copied: reference-data/tools/garden-climate.mjs is the method. A hardiness zone is the USDA's, from the mean of each year's lowest daily minimum."
+    },
+    "nchfp": {
+      "title": "National Center for Home Food Preservation, University of Georgia: freezing, drying, canning, fermenting and storing",
+      "url": "https://nchfp.uga.edu/"
+    },
+    "powo": {
+      "title": "Plants of the World Online, Royal Botanic Gardens, Kew: accepted names and families",
+      "url": "https://powo.science.kew.org/"
+    },
+    "rhs-crop-rotation": {
+      "title": "Royal Horticultural Society: Crop rotation",
+      "url": "https://www.rhs.org.uk/vegetables/crop-rotation"
+    },
+    "rhs-grow-your-own": {
+      "title": "Royal Horticultural Society: Grow your own fruit, vegetables and herbs, a growing guide per crop",
+      "url": "https://www.rhs.org.uk/advice/grow-your-own",
+      "note": "The guides give sowing and planting times by month for the United Kingdom. A window here is those months restated as days from the frost dates, which is the drafting a reviewer checks."
+    },
+    "rhs-hardiness": {
+      "title": "Royal Horticultural Society: RHS hardiness rating",
+      "url": "https://www.rhs.org.uk/plants/trials-awards/award-of-garden-merit/rhs-hardiness-rating",
+      "note": "tender is H1 to H2, half_hardy H3, hardy H4 and above."
+    },
+    "rutgers-soil-ph": {
+      "title": "Rutgers New Jersey Agricultural Experiment Station: Commercial Vegetable Production Recommendations, soil and nutrient management (target soil pH by crop)",
+      "url": "https://njaes.rutgers.edu/pubs/commercial-veg-rec/soil-nutrient-management.pdf"
+    },
+    "usda-handbook-66": {
+      "title": "USDA Agricultural Research Service: Agriculture Handbook 66, The Commercial Storage of Fruits, Vegetables, and Florist and Nursery Stocks (2016)",
+      "url": "https://www.ars.usda.gov/arsuserfiles/oc/np/commercialstorage/commercialstorage.pdf"
+    },
+    "vt-planting-guide": {
+      "title": "Virginia Cooperative Extension, publication 426-331: Virginia's Home Garden Vegetable Planting Guide, recommended planting dates and amounts to plant",
+      "url": "https://pubs.ext.vt.edu/426/426-331/426-331.html"
+    },
+    "wikidata": {
+      "title": "Wikidata: a taxon's label in each language",
+      "url": "https://www.wikidata.org/",
+      "licence": "Creative Commons CC0: no rights reserved."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "celery_fly",
+  "name": {
+    "value": {
+      "en": "Celery leaf miner",
+      "cs": "Vrtule celerová",
+      "sk": "Vrtivka zelerová",
+      "de": "Selleriefliege",
+      "pl": "Liściolubka selerowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Euleia heraclei", "source": "eppo-gd", "drafted": true }
+}

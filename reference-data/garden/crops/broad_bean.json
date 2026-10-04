@@ -1,0 +1,90 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "broad_bean",
+  "name": {
+    "value": {
+      "en": "Broad bean",
+      "cs": "Bob zahradní",
+      "sk": "Bôb záhradný",
+      "de": "Dicke Bohne",
+      "pl": "Bób"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Vicia faba", "source": "powo", "drafted": true },
+  "family": { "value": "fabaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "fixer", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 5, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 45, "plant_cm": 15 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 15, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 4, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 10, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 90, "max": 110 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -70, "to_days": -35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 30, "to_days": 65 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["support", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1.5, "per_plant": 0.1 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "dried", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["black_bean_aphid", "pea_weevil"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["chocolate_spot", "rust"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Sow as early as the soil allows: late sowings are overrun by black aphids. Pinching out the soft tips once the lowest pods have set removes where the aphids gather. Pick while the scar on the bean is still pale, before it turns black.",
+      "cs": "Vysévejte co nejdříve, jak půda dovolí: pozdní výsevy zamoří černé mšice. Zaštípnutím měkkých vrcholů po nasazení spodních lusků odstraníte místo, kde se mšice drží. Sklízejte, dokud je pupek na semeni světlý, než zčerná.",
+      "sk": "Vysievajte čo najskôr, ako pôda dovolí: neskoré výsevy zamoria čierne vošky. Zaštipnutím mäkkých vrcholov po nasadení spodných strukov odstránite miesto, kde sa vošky držia. Zberajte, kým je pupok na semene svetlý, skôr než sčernie.",
+      "de": "So früh säen, wie es der Boden zulässt: Späte Saaten werden von schwarzen Läusen überrannt. Das Entspitzen der weichen Triebspitzen nach dem Ansatz der untersten Hülsen nimmt ihnen den Sammelplatz. Ernten, solange der Nabel der Bohne noch hell ist.",
+      "pl": "Siej tak wcześnie, jak pozwala gleba: późne siewy opanowują czarne mszyce. Uszczyknięcie miękkich wierzchołków po zawiązaniu najniższych strąków usuwa miejsce, gdzie się gromadzą. Zbieraj, póki znaczek na nasieniu jest jasny, zanim sczernieje."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

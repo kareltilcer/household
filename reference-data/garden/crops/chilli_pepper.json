@@ -1,0 +1,104 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "chilli_pepper",
+  "name": {
+    "value": {
+      "en": "Chilli pepper",
+      "cs": "Paprika pálivá",
+      "sk": "Paprika štipľavá",
+      "de": "Chili",
+      "pl": "Papryka ostra"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Capsicum annuum Longum Group", "source": "powo", "drafted": true },
+  "family": { "value": "solanaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 6.8 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0.5, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 50, "plant_cm": 40 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 5, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 15, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 8, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 70, "max": 100 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -95, "to_days": -67 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 7, "to_days": 21 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 80, "to_days": 140 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["prick_out", "harden_off", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1.5, "per_plant": 0.3 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 14 },
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["aphid", "spider_mite", "thrips", "whitefly"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["grey_mould", "mosaic_virus", "blossom_end_rot"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "The fruits ripen and colour late, so in a cool summer it does better in a large pot that can be moved under cover. Warmth and rather dry soil make the fruits hotter; wear gloves when cutting them up.",
+      "cs": "Plody dozrávají a vybarvují se pozdě, v chladném létě se jí proto daří lépe ve velkém květináči, který lze přenést pod střechu. Teplo a sušší půda pálivost zvyšují; při krájení plodů noste rukavice.",
+      "sk": "Plody dozrievajú a vyfarbujú sa neskoro, v chladnom lete sa jej preto darí lepšie vo veľkom kvetináči, ktorý možno preniesť pod strechu. Teplo a suchšia pôda štipľavosť zvyšujú; pri krájaní plodov noste rukavice.",
+      "de": "Die Früchte reifen und färben spät, in kühlen Sommern gedeiht er daher besser im großen Topf, der unter Dach gestellt werden kann. Wärme und eher trockener Boden machen die Früchte schärfer; beim Schneiden Handschuhe tragen.",
+      "pl": "Owoce dojrzewają i wybarwiają się późno, dlatego w chłodne lato lepiej rośnie w dużej donicy, którą można przenieść pod dach. Ciepło i nieco suchsza gleba zwiększają ostrość; do krojenia owoców zakładaj rękawiczki."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

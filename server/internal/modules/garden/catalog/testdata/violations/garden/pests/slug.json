@@ -1,0 +1,12 @@
+{
+  "key": "slug",
+  "name": {
+    "value": {
+      "en": "Slugs (en)",
+      "cs": "Slugs (cs)",
+      "sk": "Slugs (sk)",
+      "de": "Slugs (de)"
+    },
+    "source": "book"
+  }
+}

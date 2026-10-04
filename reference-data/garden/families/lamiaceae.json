@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-family.schema.json",
+  "key": "lamiaceae",
+  "name": {
+    "value": {
+      "en": "Mint family",
+      "cs": "Hluchavkovité",
+      "sk": "Hluchavkovité",
+      "de": "Lippenblütler",
+      "pl": "Jasnotowate"
+    },
+    "source": "wikidata",
+    "drafted": true
+  },
+  "name_latin": { "value": "Lamiaceae", "source": "powo", "drafted": true }
+}

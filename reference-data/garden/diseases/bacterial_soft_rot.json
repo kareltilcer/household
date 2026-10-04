@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "bacterial_soft_rot",
+  "name": {
+    "value": {
+      "en": "Bacterial soft rot",
+      "cs": "Bakteriální měkká hniloba",
+      "sk": "Bakteriálna mäkká hniloba",
+      "de": "Bakterielle Nassfäule",
+      "pl": "Mokra zgnilizna bakteryjna"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Pectobacterium carotovorum", "source": "eppo-gd", "drafted": true }
+}

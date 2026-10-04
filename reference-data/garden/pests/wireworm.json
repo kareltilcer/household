@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "wireworm",
+  "name": {
+    "value": {
+      "en": "Wireworms",
+      "cs": "Drátovci",
+      "sk": "Drôtovce",
+      "de": "Drahtwürmer",
+      "pl": "Drutowce"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Elateridae", "source": "eppo-gd", "drafted": true }
+}

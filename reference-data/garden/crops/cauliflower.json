@@ -1,0 +1,103 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "cauliflower",
+  "name": {
+    "value": {
+      "en": "Cauliflower",
+      "cs": "Květák",
+      "sk": "Karfiol",
+      "de": "Blumenkohl",
+      "pl": "Kalafior"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Brassica oleracea var. botrytis", "source": "powo", "drafted": true },
+  "family": { "value": "brassicaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "high", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 60, "plant_cm": 50 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 3.3, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 5, "max": 10 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 60, "max": 90 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -88, "to_days": -60 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -42, "to_days": -10 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 25, "to_days": 80 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["prick_out", "harden_off", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "piece", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 3, "per_plant": 1 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["cabbage_root_fly", "cabbage_white", "cabbage_aphid", "flea_beetle", "slug"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["clubroot", "downy_mildew", "black_rot"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "A check to growth from cold, drought or overgrown seedlings makes it form a tiny head too early: plant young and never let it dry out. Fold a leaf over the curd to keep it white; plants set out in early summer head in autumn.",
+      "cs": "Zastavení růstu chladem, suchem nebo přestárlou sadbou vede k předčasné drobné růžici: sázejte mladé sazenice a nenechte je zaschnout. Růžici zakryjte nalomeným listem, aby zůstala bílá; rostliny vysazené začátkem léta dají růžice na podzim.",
+      "sk": "Zastavenie rastu chladom, suchom alebo prestarnutou sadbou vedie k predčasnej drobnej ružici: sádzajte mladé sadenice a nenechajte ich zaschnúť. Ružicu zakryte nalomeným listom, aby zostala biela; rastliny vysadené začiatkom leta dajú ružice na jeseň.",
+      "de": "Wachstumsstockungen durch Kälte, Trockenheit oder überständige Jungpflanzen führen zu vorzeitigen, winzigen Köpfen: jung pflanzen und nie austrocknen lassen. Ein über die Blume geknicktes Blatt hält sie weiß; im Frühsommer Gepflanztes erntet man im Herbst.",
+      "pl": "Zahamowanie wzrostu przez chłód, suszę lub przerośniętą rozsadę kończy się przedwczesną, drobną różą: sadź młodą rozsadę i nie dopuszczaj do przesuszenia. Różę osłoń nadłamanym liściem, aby pozostała biała; rośliny sadzone na początku lata dają róże jesienią."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

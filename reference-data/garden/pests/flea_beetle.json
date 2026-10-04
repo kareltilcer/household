@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "flea_beetle",
+  "name": {
+    "value": {
+      "en": "Flea beetles",
+      "cs": "Dřepčíci",
+      "sk": "Skočky",
+      "de": "Erdflöhe",
+      "pl": "Pchełki"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Phyllotreta", "source": "eppo-gd", "drafted": true }
+}

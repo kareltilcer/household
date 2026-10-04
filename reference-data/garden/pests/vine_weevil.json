@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "vine_weevil",
+  "name": {
+    "value": {
+      "en": "Vine weevil",
+      "cs": "Lalokonosec rýhovaný",
+      "sk": "Nosánik ryhovaný",
+      "de": "Gefurchter Dickmaulrüssler",
+      "pl": "Opuchlak truskawkowiec"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Otiorhynchus sulcatus", "source": "eppo-gd", "drafted": true }
+}

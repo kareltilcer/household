@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "vole",
+  "name": {
+    "value": {
+      "en": "Voles",
+      "cs": "Hraboši",
+      "sk": "Hraboše",
+      "de": "Wühlmäuse",
+      "pl": "Nornice"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Arvicolinae", "source": "eppo-gd", "drafted": true }
+}

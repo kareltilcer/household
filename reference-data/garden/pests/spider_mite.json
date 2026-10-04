@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "spider_mite",
+  "name": {
+    "value": {
+      "en": "Red spider mite",
+      "cs": "Sviluška chmelová",
+      "sk": "Roztočec chmeľový",
+      "de": "Gemeine Spinnmilbe",
+      "pl": "Przędziorek chmielowiec"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Tetranychus urticae", "source": "eppo-gd", "drafted": true }
+}

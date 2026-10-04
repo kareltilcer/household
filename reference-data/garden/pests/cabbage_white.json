@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "cabbage_white",
+  "name": {
+    "value": {
+      "en": "Cabbage white butterfly",
+      "cs": "Bělásek zelný",
+      "sk": "Mlynárik kapustový",
+      "de": "Großer Kohlweißling",
+      "pl": "Bielinek kapustnik"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Pieris brassicae", "source": "eppo-gd", "drafted": true }
+}

@@ -1,0 +1,94 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "french_bean",
+  "name": {
+    "value": {
+      "en": "Dwarf French bean",
+      "cs": "Fazol keříčkový",
+      "sk": "Fazuľa kríčková",
+      "de": "Buschbohne",
+      "pl": "Fasola karłowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Phaseolus vulgaris var. nanus", "source": "powo", "drafted": true },
+  "family": { "value": "fabaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "fixer", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 3, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 40, "plant_cm": 8 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 31, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 10, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 6, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 55, "max": 70 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 60 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 60, "to_days": 135 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1.5, "per_plant": 0.05 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["black_bean_aphid", "bean_seed_fly", "slug", "spider_mite"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["halo_blight", "anthracnose", "rust", "mosaic_virus"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Wait for warm soil: in cold, wet ground the seed rots. Sow a new short row every three weeks until midsummer and pick the pods young, every few days. Never eat them raw, as they are poisonous until cooked.",
+      "cs": "Počkejte na prohřátou půdu: ve studené a mokré semena zahnívají. Do poloviny léta vysévejte každé tři týdny nový krátký řádek a lusky sklízejte mladé, každých pár dní. Nikdy je nejezte syrové, bez tepelné úpravy jsou jedovaté.",
+      "sk": "Počkajte na prehriatu pôdu: v studenej a mokrej semená zahnívajú. Do polovice leta vysievajte každé tri týždne nový krátky riadok a struky zberajte mladé, každých pár dní. Nikdy ich nejedzte surové, bez tepelnej úpravy sú jedovaté.",
+      "de": "Auf warmen Boden warten: In kalter, nasser Erde fault das Saatgut. Bis zum Hochsommer alle drei Wochen eine neue kurze Reihe säen und die Hülsen jung pflücken, alle paar Tage. Nie roh essen, ungekocht sind sie giftig.",
+      "pl": "Poczekaj na ciepłą glebę: w zimnej i mokrej nasiona gniją. Do połowy lata siej co trzy tygodnie nowy krótki rządek, a strąki zbieraj młode, co kilka dni. Nigdy nie jedz ich na surowo, bez gotowania są trujące."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

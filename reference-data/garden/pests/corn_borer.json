@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "corn_borer",
+  "name": {
+    "value": {
+      "en": "European corn borer",
+      "cs": "Zavíječ kukuřičný",
+      "sk": "Vijačka kukuričná",
+      "de": "Maiszünsler",
+      "pl": "Omacnica prosowianka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Ostrinia nubilalis", "source": "eppo-gd", "drafted": true }
+}

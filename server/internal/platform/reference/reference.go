@@ -7,6 +7,9 @@
 // into the reference tables when the server migrates, which is the path by which a change to the
 // data ships without a change to the code (D-61, D-70). Routes serves them to any authenticated
 // user, read-only.
+//
+// A module's own set is a Set: a directory of reference-data named for the module, which Read
+// and Load take beside the platform's data, from the registry (module.ReferenceSource).
 package reference
 
 import (
@@ -101,7 +104,10 @@ var identity = Conversion{Offset: "0", Numerator: "1", Denominator: "1"}
 type Data struct {
 	Countries  []Country
 	Dimensions []Dimension
+	// Sets is what each module's set read of its own files, by the set's name (Set).
+	Sets map[string]any
 	// Uncited are the sources sources.json lists that no field cites, sorted: harmless to a load,
 	// which is why Read does not refuse them, and refused by the test of the data the server ships.
+	// A set's follow the platform's, each as <set>/<source>.
 	Uncited []string
 }

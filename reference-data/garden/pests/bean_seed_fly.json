@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "bean_seed_fly",
+  "name": {
+    "value": {
+      "en": "Bean seed fly",
+      "cs": "Květilka všežravá",
+      "sk": "Kvetárka všežravá",
+      "de": "Bohnenfliege",
+      "pl": "Śmietka kiełkówka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Delia platura", "source": "eppo-gd", "drafted": true }
+}

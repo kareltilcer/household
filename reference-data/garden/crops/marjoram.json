@@ -1,0 +1,95 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "marjoram",
+  "name": {
+    "value": {
+      "en": "Marjoram",
+      "cs": "Majoránka zahradní",
+      "sk": "Majorán záhradný",
+      "de": "Majoran",
+      "pl": "Majeranek ogrodowy"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Origanum majorana", "source": "powo", "drafted": true },
+  "family": { "value": "lamiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0.2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 25, "plant_cm": 15 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 25, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 15, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 8, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 55, "max": 75 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -63, "to_days": -35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 21 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 55, "to_days": 125 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["prick_out", "harden_off"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 25, "per_plant": 1 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "frozen", "shelf_life_days": 180 }
+    ],
+    "source": "nchfp",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["damping_off", "grey_mould"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Sow on the surface, as the fine seed needs light, and plant out in small clumps after the last frost. Cut as the flower buds form, a few centimetres above the soil, so that it regrows for a second cut, and move the bed each year.",
+      "cs": "Vysévejte na povrch, jemné semeno klíčí na světle, a po posledním mrazu vysazujte v malých trsech. Sklízejte v době tvorby poupat pár centimetrů nad zemí, aby obrostla pro druhou seč, a záhon každý rok střídejte.",
+      "sk": "Vysievajte na povrch, jemné semeno klíči na svetle, a po poslednom mraze vysádzajte v malých trsoch. Zberajte v čase tvorby pukov pár centimetrov nad zemou, aby obrástol pre druhý zber, a záhon každý rok striedajte.",
+      "de": "Auf die Oberfläche säen, das feine Saatgut ist Lichtkeimer, und nach dem letzten Frost in kleinen Tuffs auspflanzen. Bei Knospenbildung einige Zentimeter über dem Boden schneiden, damit er für einen zweiten Schnitt nachtreibt, und das Beet jährlich wechseln.",
+      "pl": "Siej na powierzchni, bo drobne nasiona kiełkują na świetle, i po ostatnim przymrozku sadź małymi kępkami. Ścinaj w fazie pąków kilka centymetrów nad ziemią, aby odrósł na drugi zbiór, i co roku zmieniaj miejsce uprawy."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

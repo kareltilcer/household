@@ -1,0 +1,87 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "shallot",
+  "name": {
+    "value": {
+      "en": "Shallot",
+      "cs": "Šalotka",
+      "sk": "Šalotka",
+      "de": "Schalotte",
+      "pl": "Szalotka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Allium cepa Aggregatum Group", "source": "powo", "drafted": true },
+  "family": { "value": "amaryllidaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "low", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 3, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 25, "plant_cm": 15 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 27, "source": "vt-planting-guide", "drafted": true },
+  "days_to_maturity": {
+    "value": { "min": 100, "max": 130 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -65, "to_days": -35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 55, "to_days": 85 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 2.5, "per_plant": 0.1 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "dry_store", "shelf_life_days": 240 },
+      { "method": "fresh", "shelf_life_days": 14 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["onion_fly", "allium_leaf_miner", "thrips"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["downy_mildew", "neck_rot", "white_rot"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Each bulb planted splits into a cluster of six to ten. Plant with the tip at the surface, lift the whole cluster when the leaves yellow, dry it well, and keep back healthy medium-sized bulbs for planting next spring.",
+      "cs": "Každá zasazená cibulka se rozdělí na trs šesti až deseti. Sázejte špičkou v úrovni povrchu, celý trs vyryjte, až listy zežloutnou, dobře usušte a zdravé středně velké cibulky si nechte na jarní výsadbu.",
+      "sk": "Každá zasadená cibuľka sa rozdelí na trs šiestich až desiatich. Sádzajte špičkou na úrovni povrchu, celý trs vyryte, keď listy zožltnú, dobre usušte a zdravé stredne veľké cibuľky si nechajte na jarnú výsadbu.",
+      "de": "Jede gesteckte Zwiebel teilt sich in ein Nest von sechs bis zehn. Mit der Spitze auf Bodenhöhe stecken, das ganze Nest roden, wenn das Laub vergilbt, gut trocknen und gesunde mittelgroße Zwiebeln für das Stecken im nächsten Frühjahr aufheben.",
+      "pl": "Każda posadzona cebulka dzieli się na gniazdo sześciu do dziesięciu. Sadź wierzchołkiem na poziomie gleby, całe gniazdo wykop, gdy liście zżółkną, dobrze wysusz, a zdrowe cebulki średniej wielkości zostaw do sadzenia następnej wiosny."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

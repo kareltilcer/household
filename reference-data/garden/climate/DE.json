@@ -1,0 +1,440 @@
+{
+  "$schema": "../../schemas/garden-climate.schema.json",
+  "country": "DE",
+  "places": [
+    {
+      "key": "de_berlin",
+      "name": { "value": "Berlin", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.52, "longitude": 13.4 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 49, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-15", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-02", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 140, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_bremen",
+      "name": { "value": "Bremen", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.08, "longitude": 8.8 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 26, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-15", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-07", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 145, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_chemnitz",
+      "name": { "value": "Chemnitz", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.83, "longitude": 12.92 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 305, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-19", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-01", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 135, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_cottbus",
+      "name": { "value": "Cottbus", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.76, "longitude": 14.33 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 71, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-08", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-02", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 147, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_dresden",
+      "name": { "value": "Dresden", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.05, "longitude": 13.74 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 306, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-19", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-01", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 135, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_duesseldorf",
+      "name": { "value": "Düsseldorf", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.23, "longitude": 6.78 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 125, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-15", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-09", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 147, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_erfurt",
+      "name": { "value": "Erfurt", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.98, "longitude": 11.03 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 291, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-22", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-01", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 132, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_flensburg",
+      "name": { "value": "Flensburg", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 54.78, "longitude": 9.44 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 21, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-08", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-15", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 160, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_frankfurt_am_main",
+      "name": { "value": "Frankfurt am Main", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.11, "longitude": 8.68 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 172, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-12", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-08", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 149, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_freiburg_im_breisgau",
+      "name": { "value": "Freiburg im Breisgau", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48, "longitude": 7.85 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 702, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-29", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-18", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 112, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_garmisch_partenkirchen",
+      "name": { "value": "Garmisch-Partenkirchen", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 47.49, "longitude": 11.1 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 1207, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "06-22", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "08-30", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 69, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_hamburg",
+      "name": { "value": "Hamburg", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.55, "longitude": 9.99 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 30, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-16", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-03", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 140, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_hannover",
+      "name": { "value": "Hannover", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.37, "longitude": 9.74 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 79, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 140, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_karlsruhe",
+      "name": { "value": "Karlsruhe", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.01, "longitude": 8.4 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 202, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-11", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 147, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_kassel",
+      "name": { "value": "Kassel", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.32, "longitude": 9.5 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 294, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-22", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-29", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 130, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_kiel",
+      "name": { "value": "Kiel", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 54.32, "longitude": 10.14 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 14, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "04-29", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-20", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 174, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_koblenz",
+      "name": { "value": "Koblenz", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.36, "longitude": 7.59 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 294, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-17", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-30", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 136, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_koeln",
+      "name": { "value": "Köln", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.94, "longitude": 6.96 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 125, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-15", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-09", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 147, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_leipzig",
+      "name": { "value": "Leipzig", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.34, "longitude": 12.37 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 119, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-17", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 141, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_magdeburg",
+      "name": { "value": "Magdeburg", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.13, "longitude": 11.63 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 77, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-17", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 141, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_muenchen",
+      "name": { "value": "München", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.14, "longitude": 11.58 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 616, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-24", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-18", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 117, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_muenster",
+      "name": { "value": "Münster", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.96, "longitude": 7.63 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 66, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-16", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-11", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 148, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_nuernberg",
+      "name": { "value": "Nürnberg", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.45, "longitude": 11.08 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 426, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-19", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-29", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 133, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_passau",
+      "name": { "value": "Passau", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.57, "longitude": 13.46 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 550, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-27", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-24", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 120, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_regensburg",
+      "name": { "value": "Regensburg", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.02, "longitude": 12.1 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 449, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-24", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 129, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_rostock",
+      "name": { "value": "Rostock", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 54.09, "longitude": 12.14 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 26, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-03", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-13", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 163, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_saarbruecken",
+      "name": { "value": "Saarbrücken", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.24, "longitude": 7 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 277, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-04", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 139, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_schwerin",
+      "name": { "value": "Schwerin", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.63, "longitude": 11.41 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 36, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-16", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 142, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_stuttgart",
+      "name": { "value": "Stuttgart", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.78, "longitude": 9.18 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 353, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-15", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-29", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 137, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_ulm",
+      "name": { "value": "Ulm", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.4, "longitude": 9.99 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 563, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-25", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-20", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 118, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "de_wuerzburg",
+      "name": { "value": "Würzburg", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.79, "longitude": 9.93 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 294, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-19", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-29", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 133, "source": "nasa-power", "drafted": true }
+    }
+  ]
+}

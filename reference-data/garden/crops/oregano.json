@@ -1,0 +1,90 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "oregano",
+  "name": {
+    "value": {
+      "en": "Oregano",
+      "cs": "Dobromysl obecná",
+      "sk": "Pamajorán obyčajný",
+      "de": "Oregano",
+      "pl": "Lebiodka pospolita"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Origanum vulgare", "source": "powo", "drafted": true },
+  "family": { "value": "lamiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "low", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 8 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0.2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 30, "plant_cm": 30 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 10, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 12, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 7, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -70, "to_days": -35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -7, "to_days": 28 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 14, "to_days": 125 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["prick_out", "harden_off"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 20, "per_plant": 2 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "frozen", "shelf_life_days": 180 }
+    ],
+    "source": "nchfp",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["root_rot"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "The flavour is strongest in poor, dry, limy soil in full sun. Cut the stems for drying as the flowers open, divide the clumps every three or four years, and remove the seed heads, or it seeds itself around.",
+      "cs": "Nejvýraznější chuť má v chudé, suché, vápenité půdě na plném slunci. Stonky na sušení řežte na začátku kvetení, trsy každé tři až čtyři roky rozdělte a odkvetlá květenství odstraňujte, jinak se sama vysemeňuje.",
+      "sk": "Najvýraznejšiu chuť má v chudobnej, suchej, vápenatej pôde na plnom slnku. Stonky na sušenie režte na začiatku kvitnutia, trsy každé tri až štyri roky rozdeľte a odkvitnuté súkvetia odstraňujte, inak sa sám vysemeňuje.",
+      "de": "Das Aroma ist auf magerem, trockenem, kalkhaltigem Boden in voller Sonne am stärksten. Die Triebe zum Trocknen bei Blühbeginn schneiden, die Horste alle drei bis vier Jahre teilen und Verblühtes entfernen, sonst sät er sich überall aus.",
+      "pl": "Najmocniejszy aromat daje na ubogiej, suchej, wapiennej glebie w pełnym słońcu. Pędy do suszenia ścinaj na początku kwitnienia, kępy dziel co trzy lub cztery lata i usuwaj przekwitłe kwiatostany, bo inaczej sama się rozsiewa."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

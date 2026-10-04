@@ -11,6 +11,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/reference"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
@@ -210,5 +211,56 @@ func TestAPlatformModuleIsDeclaredBesideTheModules(t *testing.T) {
 	}
 	if _, err := withAdmin.WithPlatform(admin); err == nil || !strings.Contains(err.Error(), "two modules are named admin") {
 		t.Errorf("admin twice: %v", err)
+	}
+}
+
+// sourcing is a module that declares reference data of its own.
+type sourcing struct {
+	fake
+	set reference.Set
+}
+
+func (s sourcing) Reference() reference.Set { return s.set }
+
+// A module's reference data is a set named for it, which the registry hands the loader in the
+// order the modules were registered, the platform's modules beside them (WithPlatform).
+func TestTheRegistryHoldsTheReferenceSetsModulesDeclare(t *testing.T) {
+	read := func(*reference.Reader) any { return nil }
+	garden := sourcing{fake{"garden", nil}, reference.Set{Name: "garden", Read: read}}
+	finance := sourcing{fake{"finance", nil}, reference.Set{Name: "finance", Read: read}}
+	r, err := module.NewRegistry(garden, fake{"chat", nil}, finance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := func(r *module.Registry) []string {
+		var out []string
+		for _, set := range r.ReferenceSets() {
+			out = append(out, set.Name)
+		}
+		return out
+	}
+	if want := []string{"garden", "finance"}; !slices.Equal(names(r), want) {
+		t.Errorf("ReferenceSets: %v, want %v", names(r), want)
+	}
+	with, err := r.WithPlatform(module.PlatformModule{Name: "admin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"garden", "finance"}; !slices.Equal(names(with), want) {
+		t.Errorf("ReferenceSets with the platform's modules: %v, want %v", names(with), want)
+	}
+	var none *module.Registry
+	if none.ReferenceSets() != nil {
+		t.Error("a nil registry holds a reference set")
+	}
+
+	for name, set := range map[string]reference.Set{
+		"a set named for another module": {Name: "finance", Read: read},
+		"a set with no name":             {Read: read},
+		"a set with no Read":             {Name: "garden"},
+	} {
+		if _, err := module.NewRegistry(sourcing{fake{"garden", nil}, set}); err == nil {
+			t.Errorf("%s: the registry took it", name)
+		}
 	}
 }

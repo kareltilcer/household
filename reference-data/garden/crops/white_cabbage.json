@@ -1,0 +1,107 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "white_cabbage",
+  "name": {
+    "value": {
+      "en": "White cabbage",
+      "cs": "Zelí bílé",
+      "sk": "Kapusta biela",
+      "de": "Weißkohl",
+      "pl": "Kapusta biała"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": {
+    "value": "Brassica oleracea var. capitata f. alba",
+    "source": "powo",
+    "drafted": true
+  },
+  "family": { "value": "brassicaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "high", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 60, "plant_cm": 50 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 3.3, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 5, "max": 10 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 90, "max": 130 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -45, "to_days": -20 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": -45, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["harden_off", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 6, "per_plant": 2 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "cool_store", "shelf_life_days": 150 },
+      { "method": "fresh", "shelf_life_days": 21 },
+      { "method": "fermented", "shelf_life_days": 240 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["cabbage_white", "cabbage_moth", "cabbage_root_fly", "cabbage_aphid", "flea_beetle"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["clubroot", "black_rot", "downy_mildew"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Plant deep, up to the first leaves, firm the soil well and cover with fine mesh against butterflies and root fly. Water evenly, as a soaking after drought splits the heads; early varieties planted before the last frost are cut in summer.",
+      "cs": "Sázejte hluboko, až po první listy, půdu dobře přitlačte a proti běláskům a květilce přikryjte jemnou sítí. Zalévejte rovnoměrně, vydatná zálivka po suchu hlávky roztrhne; rané odrůdy vysazené před posledním mrazem se sklízejí v létě.",
+      "sk": "Sádzajte hlboko, až po prvé listy, pôdu dobre pritlačte a proti mlynárikom a kvetárke prikryte jemnou sieťou. Polievajte rovnomerne, výdatná zálievka po suchu hlávky roztrhne; skoré odrody vysadené pred posledným mrazom sa zberajú v lete.",
+      "de": "Tief pflanzen, bis zu den ersten Blättern, fest andrücken und gegen Kohlweißling und Kohlfliege mit feinem Netz abdecken. Gleichmäßig gießen, sonst platzen die Köpfe; frühe Sorten, vor dem letzten Frost gepflanzt, erntet man im Sommer.",
+      "pl": "Sadź głęboko, aż po pierwsze liście, dobrze dociśnij glebę i okryj gęstą siatką przeciw bielinkom i śmietce. Podlewaj równomiernie, bo obfite podlanie po suszy powoduje pękanie główek; wczesne odmiany sadzone przed ostatnim przymrozkiem zbiera się latem."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

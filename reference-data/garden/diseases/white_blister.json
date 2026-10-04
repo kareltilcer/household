@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "white_blister",
+  "name": {
+    "value": {
+      "en": "White blister",
+      "cs": "Plíseň bělostná",
+      "sk": "Pleseň biela",
+      "de": "Weißer Rost",
+      "pl": "Bielik krzyżowych"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Albugo candida", "source": "eppo-gd", "drafted": true }
+}

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "The catalog's rules of one scope",
+  "description": "What grows well or badly beside what, and what may follow what (PRD 11, FR-GA21). One file per scope, garden/rules/<scope>.json. A crop pair names two crops, a family pair two families, and each is written once, its lesser key first, and matched both ways. A succession names what was grown and what follows it, two crops or two families in that order, and a family may follow itself. An explicit crop pair beats a family pair.",
+  "type": "object",
+  "required": ["scope", "rules"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "scope": {
+      "description": "The scope of every rule in the file, and the file's name.",
+      "enum": ["crop_pair", "family_pair", "succession"]
+    },
+    "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+  },
+  "additionalProperties": false,
+  "if": { "properties": { "scope": { "const": "succession" } } },
+  "then": {
+    "properties": {
+      "rules": {
+        "items": {
+          "properties": {
+            "claim": {
+              "properties": {
+                "value": {
+                  "required": ["min_years_gap"],
+                  "properties": { "relation": { "const": "succession" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "rules": {
+        "items": {
+          "properties": {
+            "claim": {
+              "properties": {
+                "value": {
+                  "properties": {
+                    "relation": { "enum": ["companion", "antagonist", "cross_pollination"] },
+                    "min_years_gap": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "description": "A rule is the pair it is about, which with its scope is its identity and has no source, and what is claimed of the pair.",
+      "type": "object",
+      "required": ["a", "b", "claim", "reason"],
+      "properties": {
+        "a": { "$ref": "defs.schema.json#/$defs/key" },
+        "b": { "$ref": "defs.schema.json#/$defs/key" },
+        "claim": {
+          "description": "What is claimed, on what basis, and how loudly the plan check says it. A claim is agronomic where a mechanism is documented (a shared pest or disease, allelopathy, nitrogen fixation, competition, cross-pollination), and traditional where it is long practice with weak or contested evidence: the two are told apart by looking (D-66).",
+          "$ref": "defs.schema.json#/$defs/field",
+          "properties": {
+            "value": {
+              "type": "object",
+              "required": ["relation", "basis", "severity"],
+              "properties": {
+                "relation": {
+                  "enum": ["companion", "antagonist", "cross_pollination", "succession"]
+                },
+                "basis": { "enum": ["agronomic", "traditional"] },
+                "severity": { "enum": ["info", "warn", "error"] },
+                "min_years_gap": {
+                  "description": "The seasons that must pass before the successor follows.",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "reason": {
+          "description": "Why, in each language: the sentence the plan check shows.",
+          "$ref": "defs.schema.json#/$defs/localizedField"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "lavender",
+  "name": {
+    "value": {
+      "en": "Lavender",
+      "cs": "Levandule",
+      "sk": "Levanduľa",
+      "de": "Lavendel",
+      "pl": "Lawenda"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Lavandula angustifolia", "source": "powo", "drafted": true },
+  "family": { "value": "lamiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "flower", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "low", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 8 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0.3, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 50, "plant_cm": 40 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 5, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 12, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 14, "max": 28 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -90, "to_days": -60 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 35, "to_days": 75 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["prick_out", "harden_off"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 10, "per_plant": 2 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "fresh", "shelf_life_days": 7 }
+    ],
+    "source": "nchfp",
+    "drafted": true
+  },
+  "pests": { "value": [], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["root_rot"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "It wants lean, limy, sharply drained soil. Cut the spikes as the first flowers open, and trim the bush after flowering and again in spring, always above green leaves, as it does not shoot from old wood. Named varieties come true only from cuttings.",
+      "cs": "Chce chudou, vápenitou a dobře propustnou půdu. Květní klasy řežte, když se otevírají první květy, keř zkraťte po odkvětu a znovu na jaře, vždy nad zelenými listy, ze starého dřeva neobráží. Odrůdy se věrně množí jen řízky.",
+      "sk": "Chce chudobnú, vápenatú a dobre priepustnú pôdu. Kvetné klasy režte, keď sa otvárajú prvé kvety, ker skráťte po odkvitnutí a znova na jar, vždy nad zelenými listami, zo starého dreva neobrastá. Odrody sa verne množia len odrezkami.",
+      "de": "Er will mageren, kalkhaltigen, durchlässigen Boden. Die Ähren schneiden, wenn die ersten Blüten aufgehen, den Busch nach der Blüte und im Frühjahr stutzen, stets über grünem Laub: Aus altem Holz treibt er nicht aus. Sorten bleiben nur aus Stecklingen echt.",
+      "pl": "Wymaga ubogiej, wapiennej i bardzo przepuszczalnej gleby. Kłosy ścinaj, gdy otwierają się pierwsze kwiaty, krzew przytnij po kwitnieniu i ponownie wiosną, zawsze nad zielonymi liśćmi, bo nie odbija ze starego drewna. Odmiany powtarzają cechy tylko z sadzonek."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

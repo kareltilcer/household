@@ -1,0 +1,20 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "halo_blight",
+  "name": {
+    "value": {
+      "en": "Halo blight",
+      "cs": "Kroužkovitá bakteriální skvrnitost fazolu",
+      "sk": "Kruhová bakteriálna škvrnitosť fazule",
+      "de": "Fettfleckenkrankheit",
+      "pl": "Bakterioza obwódkowa fasoli"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": {
+    "value": "Pseudomonas savastanoi pv. phaseolicola",
+    "source": "eppo-gd",
+    "drafted": true
+  }
+}

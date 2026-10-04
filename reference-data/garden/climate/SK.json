@@ -1,0 +1,202 @@
+{
+  "$schema": "../../schemas/garden-climate.schema.json",
+  "country": "SK",
+  "places": [
+    {
+      "key": "sk_banska_bystrica",
+      "name": { "value": "Banská Bystrica", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.74, "longitude": 19.15 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 553, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-25", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-21", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 119, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_bratislava",
+      "name": { "value": "Bratislava", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.15, "longitude": 17.11 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 162, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-03", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-07", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 157, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_komarno",
+      "name": { "value": "Komárno", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 47.76, "longitude": 18.13 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 144, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-03", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-07", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 157, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_kosice",
+      "name": { "value": "Košice", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.72, "longitude": 21.26 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 259, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-11", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-30", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 142, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_liptovsky_mikulas",
+      "name": { "value": "Liptovský Mikuláš", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.08, "longitude": 19.61 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 819, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-31", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-08", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 100, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_lucenec",
+      "name": { "value": "Lučenec", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.33, "longitude": 19.67 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 553, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-25", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-21", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 119, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_martin",
+      "name": { "value": "Martin", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.07, "longitude": 18.92 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 640, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-26", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-13", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 110, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_michalovce",
+      "name": { "value": "Michalovce", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.75, "longitude": 21.92 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 354, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-24", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-26", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 125, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_nitra",
+      "name": { "value": "Nitra", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.31, "longitude": 18.09 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 293, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-16", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-01", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 138, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_poprad",
+      "name": { "value": "Poprad", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.06, "longitude": 20.3 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 1034, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "06-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "08-31", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 74, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_presov",
+      "name": { "value": "Prešov", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49, "longitude": 21.24 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 449, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-24", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-21", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 120, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_trencin",
+      "name": { "value": "Trenčín", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.89, "longitude": 18.04 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 450, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-23", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-19", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 119, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_trnava",
+      "name": { "value": "Trnava", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 48.38, "longitude": 17.59 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 223, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-07", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-01", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 147, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "sk_zilina",
+      "name": { "value": "Žilina", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.22, "longitude": 18.74 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 640, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-26", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-13", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 110, "source": "nasa-power", "drafted": true }
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "hyssop",
+  "name": {
+    "value": { "en": "Hyssop", "cs": "Yzop", "sk": "Yzop", "de": "Ysop", "pl": "Hyzop" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Hyssopus officinalis", "source": "powo", "drafted": true },
+  "family": { "value": "lamiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "low", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 8 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0.5, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 40, "plant_cm": 30 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 8, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 10, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 10, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -63, "to_days": -35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -7, "to_days": 28 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 20, "to_days": 125 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["prick_out", "harden_off"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 16, "per_plant": 2 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "dried", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": [], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": [], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Cut back hard in spring to keep the bush compact, and cut the shoot tips for drying as flowering begins. Bees and butterflies crowd the flowers. Replace the plants after four or five years, when they turn woody and bare.",
+      "cs": "Na jaře jej hluboko seřízněte, aby keřík zůstal kompaktní, a vrcholky výhonů na sušení řežte na začátku kvetení. Květy lákají včely a motýly. Po čtyřech až pěti letech rostliny obnovte, protože dřevnatějí a vyholují.",
+      "sk": "Na jar ho hlboko zrežte, aby kríček zostal kompaktný, a vrcholy výhonkov na sušenie režte na začiatku kvitnutia. Kvety lákajú včely a motýle. Po štyroch až piatich rokoch rastliny obnovte, pretože drevnatejú a vyholujú.",
+      "de": "Im Frühjahr kräftig zurückschneiden, damit der Busch kompakt bleibt, und die Triebspitzen zum Trocknen bei Blühbeginn schneiden. Die Blüten locken Bienen und Schmetterlinge. Nach vier bis fünf Jahren die Pflanzen ersetzen, wenn sie verholzen und verkahlen.",
+      "pl": "Wiosną przytnij go mocno, aby krzewinka pozostała zwarta, a wierzchołki pędów do suszenia ścinaj na początku kwitnienia. Kwiaty wabią pszczoły i motyle. Po czterech lub pięciu latach wymień rośliny, bo drewnieją i ogałacają się."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "cabbage_moth",
+  "name": {
+    "value": {
+      "en": "Cabbage moth",
+      "cs": "Můra zelná",
+      "sk": "Mora kapustová",
+      "de": "Kohleule",
+      "pl": "Piętnówka kapustnica"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Mamestra brassicae", "source": "eppo-gd", "drafted": true }
+}

@@ -1,0 +1,99 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "basil",
+  "name": {
+    "value": {
+      "en": "Basil",
+      "cs": "Bazalka",
+      "sk": "Bazalka",
+      "de": "Basilikum",
+      "pl": "Bazylia"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Ocimum basilicum", "source": "powo", "drafted": true },
+  "family": { "value": "lamiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 2, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0.3, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 25, "plant_cm": 20 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 16, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 15, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 5, "max": 10 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 30, "max": 45 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -49, "to_days": -28 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 7, "to_days": 28 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 40, "to_days": 130 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["prick_out", "harden_off"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 16, "per_plant": 1 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 180 },
+      { "method": "dried", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["slug", "aphid", "whitefly"], "source": "eppo-gd", "drafted": true },
+  "diseases": {
+    "value": ["downy_mildew", "fusarium_wilt", "grey_mould", "damping_off"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Press the seed onto the surface and barely cover it, as it needs light; pinch out the tips above a pair of leaves to keep the plant bushy and stop it flowering.",
+      "cs": "Semena jen přitlačte k povrchu a téměř nezasypávejte, klíčí na světle; vrcholky zaštipujte nad párem listů, aby rostlina houstla a nekvetla.",
+      "sk": "Semená len pritlačte k povrchu a takmer nezasypávajte, klíčia na svetle; vrcholky zaštipujte nad párom listov, aby rastlina hustla a nekvitla.",
+      "de": "Die Samen nur andrücken und kaum bedecken, sie sind Lichtkeimer; die Triebspitzen über einem Blattpaar entspitzen, damit die Pflanze buschig bleibt und nicht blüht.",
+      "pl": "Nasiona tylko dociśnij do powierzchni i ledwie przykryj, kiełkują na świetle; uszczykuj wierzchołki nad parą liści, aby roślina się krzewiła i nie kwitła."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

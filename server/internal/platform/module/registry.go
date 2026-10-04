@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
+	"github.com/kareltilcer/household/server/internal/platform/reference"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 )
 
@@ -32,6 +33,7 @@ type Registry struct {
 	byName   map[string]Module
 	platform []PlatformModule
 	blocks   []db.Block
+	sets     []reference.Set
 	actions  map[string]AuditAction
 	entities map[string]sync.Entity
 }
@@ -63,6 +65,7 @@ func (r *Registry) WithPlatform(mods ...PlatformModule) (*Registry, error) {
 		byName:   map[string]Module{},
 		platform: append([]PlatformModule(nil), r.Platform()...),
 		blocks:   r.Blocks(),
+		sets:     r.ReferenceSets(),
 		actions:  map[string]AuditAction{},
 		entities: map[string]sync.Entity{},
 	}
@@ -146,6 +149,16 @@ func NewRegistry(mods ...Module) (*Registry, error) {
 			if err := r.addEntities(n, source.SyncEntities(), false); err != nil {
 				return nil, err
 			}
+		}
+		if source, ok := m.(ReferenceSource); ok {
+			set := source.Reference()
+			if set.Name != n {
+				return nil, fmt.Errorf("module: %s declares the reference set %q; a module's set is named for it", n, set.Name)
+			}
+			if set.Read == nil {
+				return nil, fmt.Errorf("module: %s declares a reference set with no Read", n)
+			}
+			r.sets = append(r.sets, set)
 		}
 	}
 	if _, err := db.Assemble(append([]db.Block{db.Platform()}, r.blocks...)...); err != nil {
@@ -245,6 +258,15 @@ func (r *Registry) Blocks() []db.Block {
 		return nil
 	}
 	return append([]db.Block(nil), r.blocks...)
+}
+
+// ReferenceSets returns the modules' reference data, in the order the modules were registered:
+// what reference.Read and reference.Load take beside the platform's own.
+func (r *Registry) ReferenceSets() []reference.Set {
+	if r == nil {
+		return nil
+	}
+	return append([]reference.Set(nil), r.sets...)
 }
 
 // Action returns the audit action whose key is key, "<module>.<action>".

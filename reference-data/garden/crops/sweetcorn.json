@@ -1,0 +1,96 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "sweetcorn",
+  "name": {
+    "value": {
+      "en": "Sweetcorn",
+      "cs": "Kukuřice cukrová",
+      "sk": "Kukurica cukrová",
+      "de": "Zuckermais",
+      "pl": "Kukurydza cukrowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Zea mays var. saccharata", "source": "powo", "drafted": true },
+  "family": { "value": "poaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 2, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 4, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 60, "plant_cm": 30 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 5.5, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 10, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 6, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 75, "max": 100 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -28, "to_days": -14 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -7, "to_days": 21 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 14 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 80, "to_days": 130 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["harden_off"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "piece", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 8, "per_plant": 1.5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 3 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["corn_borer", "bird", "wireworm"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["corn_smut"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Wind-pollinated, so plant in a block of at least four short rows rather than one long row, or the cobs fill badly. It is ripe when the silks have turned brown and a kernel, when pressed, gives milky juice; eat or freeze it the same day.",
+      "cs": "Opyluje ji vítr, proto ji sázejte do bloku nejméně čtyř krátkých řad místo jedné dlouhé, jinak se palice špatně ozrní. Zralá je, když blizny zhnědnou a zrno po zmáčknutí pustí mléčnou šťávu; snězte nebo zmrazte ji ještě týž den.",
+      "sk": "Opeľuje ju vietor, preto ju sádzajte do bloku najmenej štyroch krátkych radov namiesto jedného dlhého, inak sa šúľky zle ozrnia. Zrelá je, keď blizny zhnednú a zrno po stlačení pustí mliečnu šťavu; zjedzte alebo zmrazte ju ešte v ten deň.",
+      "de": "Windbestäuber, daher im Block aus mindestens vier kurzen Reihen statt in einer langen pflanzen, sonst füllen sich die Kolben schlecht. Reif ist er, wenn die Fäden braun sind und ein angedrücktes Korn milchigen Saft gibt; am selben Tag essen oder einfrieren.",
+      "pl": "Jest wiatropylna, więc sadź ją w bloku z co najmniej czterech krótkich rzędów zamiast jednego długiego, inaczej kolby słabo się zaziarnią. Dojrzała jest, gdy znamiona zbrązowieją, a naciśnięte ziarno puszcza mleczny sok; zjedz lub zamroź ją tego samego dnia."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

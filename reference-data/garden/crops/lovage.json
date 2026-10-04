@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "lovage",
+  "name": {
+    "value": {
+      "en": "Lovage",
+      "cs": "Libeček",
+      "sk": "Ligurček",
+      "de": "Liebstöckel",
+      "pl": "Lubczyk"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Levisticum officinale", "source": "powo", "drafted": true },
+  "family": { "value": "apiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "partial", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 80, "plant_cm": 80 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 1.5, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 10, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 14, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -60, "to_days": -30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -7, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": -30, "to_days": 130 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["harden_off"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 12, "per_plant": 8 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "dried", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid", "celery_fly"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": [], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "One plant is enough for a household: it grows up to two metres tall and lives for many years. Cut out the flower stems to keep young leaves coming, and divide the clump in spring to renew it.",
+      "cs": "Pro domácnost stačí jedna rostlina: dorůstá až dvou metrů a vydrží mnoho let. Květní lodyhy vyřezávejte, aby dorůstaly mladé listy, a trs na jaře omlaďte dělením.",
+      "sk": "Pre domácnosť stačí jedna rastlina: dorastá až do dvoch metrov a vydrží mnoho rokov. Kvetné stonky vyrezávajte, aby dorastali mladé listy, a trs na jar omlaďte delením.",
+      "de": "Eine Pflanze genügt für einen Haushalt: Sie wird bis zu zwei Meter hoch und bleibt viele Jahre. Die Blütenstängel herausschneiden, damit junge Blätter nachwachsen, und den Stock im Frühjahr durch Teilung verjüngen.",
+      "pl": "Jedna roślina wystarczy dla całego domu: dorasta do dwóch metrów i rośnie wiele lat. Wycinaj pędy kwiatostanowe, aby odrastały młode liście, a kępę odmładzaj wiosną przez podział."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

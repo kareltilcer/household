@@ -1,0 +1,97 @@
+{
+  "scope": "succession",
+  "rules": [
+    {
+      "a": "solanaceae",
+      "b": "solanaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "error",
+          "min_years_gap": 4
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "solanaceae and solanaceae. (en)",
+          "cs": "solanaceae and solanaceae. (cs)",
+          "sk": "solanaceae and solanaceae. (sk)",
+          "de": "solanaceae and solanaceae. (de)",
+          "pl": "solanaceae and solanaceae. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "tomato",
+      "b": "solanaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 3
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "tomato and solanaceae. (en)",
+          "cs": "tomato and solanaceae. (cs)",
+          "sk": "tomato and solanaceae. (sk)",
+          "de": "tomato and solanaceae. (de)",
+          "pl": "tomato and solanaceae. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "nowhere",
+      "b": "tomato",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 3
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "nowhere and tomato. (en)",
+          "cs": "nowhere and tomato. (cs)",
+          "sk": "nowhere and tomato. (sk)",
+          "de": "nowhere and tomato. (de)",
+          "pl": "nowhere and tomato. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "leek",
+      "b": "tomato",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 2
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "leek and tomato. (en)",
+          "cs": "leek and tomato. (cs)",
+          "sk": "leek and tomato. (sk)",
+          "de": "leek and tomato. (de)",
+          "pl": "leek and tomato. (pl)"
+        },
+        "source": "book"
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-family.schema.json",
+  "key": "grossulariaceae",
+  "name": {
+    "value": {
+      "en": "Currant family",
+      "cs": "Meruzalkovité",
+      "sk": "Egrešovité",
+      "de": "Stachelbeergewächse",
+      "pl": "Agrestowate"
+    },
+    "source": "wikidata",
+    "drafted": true
+  },
+  "name_latin": { "value": "Grossulariaceae", "source": "powo", "drafted": true }
+}

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "The sources reference data cites",
-  "description": "Every field of every record names one of these (PL-10). A source is a published document, by its URL, or a document in this repository, by its path; a test checks the path exists. The loader refuses a field that names a source not listed here, and a test refuses a source nothing names.",
+  "description": "Every field of every record names one of these (PL-10). A source is a published document, by its URL, or a document in this repository, by its path; a test checks the path exists. The loader refuses a field that names a source not listed here, and a test refuses a source nothing names. The platform's own data cites sources.json at the root, and a module's set the sources.json in its own directory. A source whose data is copied or computed from, rather than read and restated, records the licence it is used under.",
   "type": "object",
   "required": ["sources"],
   "properties": {
@@ -16,6 +16,10 @@
           "title": { "$ref": "defs.schema.json#/$defs/text" },
           "url": { "type": "string", "pattern": "^https://[^\\s]+$" },
           "path": { "type": "string", "pattern": "^[a-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9._-]+)*$" },
+          "licence": {
+            "description": "The licence or terms the source's data is used under, and what they ask of whoever uses it.",
+            "$ref": "defs.schema.json#/$defs/text"
+          },
           "note": { "$ref": "defs.schema.json#/$defs/text" }
         },
         "oneOf": [{ "required": ["url"] }, { "required": ["path"] }],

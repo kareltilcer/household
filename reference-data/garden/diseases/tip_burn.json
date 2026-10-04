@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "tip_burn",
+  "name": {
+    "value": {
+      "en": "Tip burn",
+      "cs": "Okrajová nekróza listů",
+      "sk": "Okrajová nekróza listov",
+      "de": "Innenbrand",
+      "pl": "Brzeżna nekroza liści"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  }
+}

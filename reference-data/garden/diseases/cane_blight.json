@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "cane_blight",
+  "name": {
+    "value": {
+      "en": "Cane blight",
+      "cs": "Odumírání výhonů maliníku",
+      "sk": "Odumieranie výhonov malín",
+      "de": "Rutensterben",
+      "pl": "Zamieranie pędów malin"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Paraconiothyrium fuckelii", "source": "eppo-gd", "drafted": true }
+}

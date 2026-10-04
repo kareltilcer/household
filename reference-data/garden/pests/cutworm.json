@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "cutworm",
+  "name": {
+    "value": {
+      "en": "Cutworms",
+      "cs": "Osenice",
+      "sk": "Siatice",
+      "de": "Erdraupen",
+      "pl": "Rolnice"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Agrotis", "source": "eppo-gd", "drafted": true }
+}

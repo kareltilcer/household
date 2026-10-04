@@ -1,0 +1,95 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "kale",
+  "name": {
+    "value": {
+      "en": "Kale",
+      "cs": "Kadeřávek",
+      "sk": "Kel kučeravý",
+      "de": "Grünkohl",
+      "pl": "Jarmuż"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Brassica oleracea var. sabellica", "source": "powo", "drafted": true },
+  "family": { "value": "brassicaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 60, "plant_cm": 45 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 3.7, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 5, "max": 10 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 70, "max": 110 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 40, "to_days": 75 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": 0, "to_days": 150 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["pest_check"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 2.5, "per_plant": 0.7 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "in_ground", "shelf_life_days": 120 },
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 300 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["cabbage_white", "cabbage_aphid", "whitefly", "flea_beetle"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": { "value": ["clubroot", "downy_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Pick the lower leaves first and leave the crown to grow on, and one planting feeds the kitchen all winter. Frost sweetens the leaves, and the bed can follow early potatoes or peas.",
+      "cs": "Sklízejte nejprve spodní listy a vrchol nechte růst, jedna výsadba pak zásobuje kuchyni celou zimu. Mráz listy zjemní a osladí a záhon může následovat po raných bramborách nebo hrachu.",
+      "sk": "Zberajte najprv spodné listy a vrchol nechajte rásť, jedna výsadba potom zásobuje kuchyňu celú zimu. Mráz listy zjemní a osladí a záhon môže nasledovať po skorých zemiakoch alebo hrachu.",
+      "de": "Zuerst die unteren Blätter pflücken und das Herz weiterwachsen lassen, dann versorgt eine Pflanzung die Küche den ganzen Winter. Frost macht die Blätter süßer, und das Beet kann auf Frühkartoffeln oder Erbsen folgen.",
+      "pl": "Zbieraj najpierw dolne liście, a wierzchołek zostaw, by rósł dalej; jedno nasadzenie zaopatruje wtedy kuchnię przez całą zimę. Mróz osładza liście, a grządka może następować po wczesnych ziemniakach lub grochu."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

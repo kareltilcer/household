@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "carrot_fly",
+  "name": {
+    "value": {
+      "en": "Carrot fly",
+      "cs": "Pochmurnatka mrkvová",
+      "sk": "Vrtivka mrkvová",
+      "de": "Möhrenfliege",
+      "pl": "Połyśnica marchwianka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Chamaepsila rosae", "source": "eppo-gd", "drafted": true }
+}

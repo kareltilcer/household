@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "black_bean_aphid",
+  "name": {
+    "value": {
+      "en": "Black bean aphid",
+      "cs": "Mšice maková",
+      "sk": "Voška maková",
+      "de": "Schwarze Bohnenlaus",
+      "pl": "Mszyca burakowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Aphis fabae", "source": "eppo-gd", "drafted": true }
+}

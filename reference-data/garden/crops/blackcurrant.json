@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "blackcurrant",
+  "name": {
+    "value": {
+      "en": "Blackcurrant",
+      "cs": "Rybíz černý",
+      "sk": "Ríbezľa čierna",
+      "de": "Schwarze Johannisbeere",
+      "pl": "Porzeczka czarna"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Ribes nigrum", "source": "powo", "drafted": true },
+  "family": { "value": "grossulariaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "fruit", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 5, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 200, "plant_cm": 150 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 0.3, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "transplant": {
+      "value": { "anchor": "previous_first_frost", "from_days": 5, "to_days": 45 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 45, "to_days": 80 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["mulch", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1, "per_plant": 3 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["blackcurrant_gall_mite", "aphid", "bird"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["blackcurrant_reversion", "american_gooseberry_mildew", "currant_leaf_spot", "rust"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Plant it a hand's width deeper than it stood in the nursery and cut every shoot back to two buds. It fruits best on young wood, so each winter cut a third of the oldest branches out at the base. Pick off swollen, rounded buds in winter: they hold gall mites.",
+      "cs": "Sázejte o šířku dlaně hlouběji, než rostl ve školce, a všechny výhony zkraťte na dvě očka. Nejlépe plodí na mladém dřevě, proto každou zimu vyřízněte u země třetinu nejstarších větví. Zduřelé kulaté pupeny v zimě vylamujte: jsou v nich vlnovníci.",
+      "sk": "Sádzajte o šírku dlane hlbšie, než rástla v škôlke, a všetky výhonky skráťte na dve očká. Najlepšie rodí na mladom dreve, preto každú zimu vyrežte pri zemi tretinu najstarších konárov. Zdurené guľaté puky v zime vylamujte: sú v nich vlnovníky.",
+      "de": "Eine Handbreit tiefer pflanzen als in der Baumschule und alle Triebe auf zwei Knospen kürzen. Sie trägt am besten an jungem Holz: jeden Winter ein Drittel der ältesten Triebe bodennah entfernen. Rundknospen im Winter ausbrechen, darin sitzen Gallmilben.",
+      "pl": "Sadź o szerokość dłoni głębiej, niż rosła w szkółce, a pędy skróć do dwóch pąków. Najlepiej owocuje na młodym drewnie, więc co zimę wytnij przy ziemi jedną trzecią najstarszych pędów. Nabrzmiałe, kuliste pąki zimą wyłamuj: siedzą w nich wielkopąkowce."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

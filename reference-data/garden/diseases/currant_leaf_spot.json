@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "currant_leaf_spot",
+  "name": {
+    "value": {
+      "en": "Currant leaf spot",
+      "cs": "Antraknóza rybízu",
+      "sk": "Antraknóza ríbezlí",
+      "de": "Blattfallkrankheit",
+      "pl": "Opadzina liści porzeczki"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Drepanopeziza ribis", "source": "eppo-gd", "drafted": true }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "leaf_spot",
+  "name": {
+    "value": {
+      "en": "Leaf spot",
+      "cs": "Skvrnitost listů",
+      "sk": "Škvrnitosť listov",
+      "de": "Blattfleckenkrankheit",
+      "pl": "Plamistość liści"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  }
+}

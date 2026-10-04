@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-family.schema.json",
+  "key": "vitaceae",
+  "name": {
+    "value": {
+      "en": "Grape family",
+      "cs": "Révovité",
+      "sk": "Viničovité",
+      "de": "Weinrebengewächse",
+      "pl": "Winoroślowate"
+    },
+    "source": "wikidata",
+    "drafted": true
+  },
+  "name_latin": { "value": "Vitaceae", "source": "powo", "drafted": true }
+}

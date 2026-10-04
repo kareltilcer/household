@@ -114,7 +114,7 @@ func migrate(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 		return fmt.Errorf("connect as the migrate role: %w", err)
 	}
 	defer func() { _ = conn.Close(context.Background()) }()
-	reports, err := reference.Load(ctx, conn, reference.Files())
+	reports, err := reference.Load(ctx, conn, reference.Files(), registry.ReferenceSets()...)
 	if err != nil {
 		return err
 	}

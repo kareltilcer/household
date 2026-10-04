@@ -1,0 +1,17 @@
+{
+  "key": "fabaceae",
+  "name": {
+    "value": {
+      "en": "Legumes (en)",
+      "cs": "Legumes (cs)",
+      "sk": "Legumes (sk)",
+      "de": "Legumes (de)",
+      "pl": "Legumes (pl)"
+    },
+    "source": "book"
+  },
+  "name_latin": {
+    "value": "Fabaceae",
+    "source": "book"
+  }
+}

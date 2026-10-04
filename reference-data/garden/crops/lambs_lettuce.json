@@ -1,0 +1,85 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "lambs_lettuce",
+  "name": {
+    "value": {
+      "en": "Lamb's lettuce",
+      "cs": "Polníček",
+      "sk": "Valeriánka poľná",
+      "de": "Feldsalat",
+      "pl": "Roszponka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Valerianella locusta", "source": "powo", "drafted": true },
+  "family": { "value": "caprifoliaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 2, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 15, "plant_cm": 3 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 220, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 8, "max": 20 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 60, "max": 100 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "first_frost", "from_days": -60, "to_days": -15 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": 0, "to_days": 170 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": { "value": { "per_m2": 1 }, "source": "vt-planting-guide", "drafted": true },
+  "storage": {
+    "value": [
+      { "method": "in_ground", "shelf_life_days": 120 },
+      { "method": "fresh", "shelf_life_days": 4 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["slug"], "source": "eppo-gd", "drafted": true },
+  "diseases": {
+    "value": ["downy_mildew", "powdery_mildew", "grey_mould"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Sow on firm, moist ground after a summer crop and press the seed in well; it will not germinate in hot soil. Cut whole rosettes just above the root, and only on frost-free days, as leaves handled while frozen go limp.",
+      "cs": "Vysévejte do ulehlé, vlhké půdy po letní plodině a semena dobře přitlačte; v horké půdě neklíčí. Řežte celé růžice těsně nad kořenem, a jen když nemrzne, protože listy sklizené zmrzlé zvadnou.",
+      "sk": "Vysievajte do uľahnutej, vlhkej pôdy po letnej plodine a semená dobre pritlačte; v horúcej pôde neklíčia. Režte celé ružice tesne nad koreňom, a len keď nemrzne, pretože listy zberané zamrznuté zvädnú.",
+      "de": "Auf festen, feuchten Boden nach einer Sommerkultur säen und die Saat gut andrücken; in heißem Boden keimt sie nicht. Ganze Rosetten knapp über der Wurzel schneiden, und nur an frostfreien Tagen, da gefroren geerntete Blätter schlaff werden.",
+      "pl": "Siej w osiadłą, wilgotną glebę po uprawie letniej i dobrze dociśnij nasiona; w gorącej glebie nie kiełkują. Ścinaj całe rozety tuż nad korzeniem, i tylko w dni bez mrozu, bo liście zbierane zamarznięte więdną."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

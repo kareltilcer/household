@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "whitefly",
+  "name": {
+    "value": {
+      "en": "Whitefly",
+      "cs": "Molice",
+      "sk": "Molice",
+      "de": "Weiße Fliegen",
+      "pl": "Mączliki"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Aleyrodidae", "source": "eppo-gd", "drafted": true }
+}

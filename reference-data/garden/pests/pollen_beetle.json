@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "pollen_beetle",
+  "name": {
+    "value": {
+      "en": "Pollen beetle",
+      "cs": "Blýskáček řepkový",
+      "sk": "Blyskáčik repkový",
+      "de": "Rapsglanzkäfer",
+      "pl": "Słodyszek rzepakowy"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Brassicogethes aeneus", "source": "eppo-gd", "drafted": true }
+}

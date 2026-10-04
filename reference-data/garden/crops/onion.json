@@ -1,0 +1,81 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "onion",
+  "name": {
+    "value": { "en": "Onion", "cs": "Cibule", "sk": "Cibuľa", "de": "Zwiebel", "pl": "Cebula" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Allium cepa", "source": "powo", "drafted": true },
+  "family": { "value": "amaryllidaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 25, "plant_cm": 10 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 40, "source": "vt-planting-guide", "drafted": true },
+  "days_to_maturity": {
+    "value": { "min": 110, "max": 135 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -60, "to_days": -28 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 70, "to_days": 105 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 3, "per_plant": 0.08 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "dry_store", "shelf_life_days": 180 },
+      { "method": "fresh", "shelf_life_days": 14 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["onion_fly", "allium_leaf_miner", "thrips", "leek_moth"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["downy_mildew", "neck_rot", "white_rot", "bolting"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Choose small sets, as large ones bolt, and push them in until only the tips show. Stop watering when the tops start to fall over, lift once they have fallen, and dry the bulbs in an airy place until the necks are papery.",
+      "cs": "Vybírejte drobnou sazečku, velká vybíhá do květu, a zatlačte ji tak, aby vyčnívala jen špička. Jakmile nať začne polehávat, přestaňte zalévat, po polehnutí sklízejte a cibule dosušte na vzdušném místě, dokud krčky nezaschnou.",
+      "sk": "Vyberajte drobnú sadzačku, veľká vybieha do kvetu, a zatlačte ju tak, aby vyčnievala len špička. Len čo vňať začne poliehať, prestaňte polievať, po poľahnutí zberajte a cibule dosušte na vzdušnom mieste, kým krčky nezaschnú.",
+      "de": "Kleine Steckzwiebeln wählen, große schossen, und so stecken, dass nur die Spitze herausschaut. Nicht mehr gießen, sobald das Laub umzuknicken beginnt, nach dem Umfallen ernten und an einem luftigen Ort trocknen, bis die Hälse papierartig sind.",
+      "pl": "Wybieraj drobną dymkę, bo duża wybija w pędy kwiatostanowe, i wciskaj ją tak, by wystawał tylko czubek. Gdy szczypior zacznie się załamywać, przestań podlewać, po załamaniu zbierz i dosusz cebule w przewiewnym miejscu, aż szyjki zaschną."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

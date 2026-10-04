@@ -1,0 +1,66 @@
+{
+  "$schema": "../../schemas/garden-rules.schema.json",
+  "scope": "family_pair",
+  "rules": [
+    {
+      "a": "amaryllidaceae",
+      "b": "apiaceae",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Umbellifers and alliums confuse each other's pests with their scent — the classic pairing of carrot and onion holds on a wider scale too.",
+          "cs": "Miříkovité a cibuloviny si navzájem pletou škůdce vůní — klasická dvojice mrkve a cibule platí i v širším měřítku.",
+          "sk": "Mrkvovité a cibuľoviny si navzájom mätú škodcov vôňou — klasická dvojica mrkvy a cibule platí aj v širšom meradle.",
+          "de": "Doldenblütler und Zwiebelgewächse verwirren mit ihrem Duft gegenseitig ihre Schädlinge — das klassische Paar Möhre und Zwiebel gilt auch im größeren Maßstab.",
+          "pl": "Selerowate i warzywa cebulowe zapachem mylą nawzajem swoje szkodniki — klasyczna para marchwi i cebuli sprawdza się też w szerszej skali."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "amaryllidaceae",
+      "b": "fabaceae",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Alliums suppress the nodule bacteria of legumes, so peas and beans next to onions and garlic fix nitrogen less well.",
+          "cs": "Cibuloviny tlumí hlízkové bakterie luskovin, takže hrách a fazole vedle cibule a česneku hůř vážou dusík.",
+          "sk": "Cibuľoviny tlmia hrčkotvorné baktérie strukovín, takže hrach a fazuľa vedľa cibule a cesnaku horšie viažu dusík.",
+          "de": "Zwiebelgewächse hemmen die Knöllchenbakterien der Hülsenfrüchtler, sodass Erbsen und Bohnen neben Zwiebeln und Knoblauch schlechter Stickstoff binden.",
+          "pl": "Warzywa cebulowe hamują bakterie brodawkowe roślin strączkowych, przez co groch i fasola obok cebuli i czosnku gorzej wiążą azot."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "fabaceae",
+      "b": "solanaceae",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Legumes enrich the soil with nitrogen, which nightshades in the same bed welcome.",
+          "cs": "Luskoviny obohatí půdu o dusík, který lilkovité v témže záhonu vítají.",
+          "sk": "Strukoviny obohatia pôdu o dusík, ktorý ľuľkovité v tom istom záhone privítajú.",
+          "de": "Hülsenfrüchtler reichern den Boden mit Stickstoff an, den Nachtschattengewächse im selben Beet gern annehmen.",
+          "pl": "Rośliny strączkowe wzbogacają glebę w azot, z którego psiankowate na tej samej grządce chętnie korzystają."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    }
+  ]
+}

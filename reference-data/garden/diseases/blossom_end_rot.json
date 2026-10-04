@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "blossom_end_rot",
+  "name": {
+    "value": {
+      "en": "Blossom end rot",
+      "cs": "Suchá hniloba špiček plodů",
+      "sk": "Suchá hniloba plodov",
+      "de": "Blütenendfäule",
+      "pl": "Sucha zgnilizna wierzchołkowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  }
+}

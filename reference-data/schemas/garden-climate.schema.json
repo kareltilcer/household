@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A country's climate profiles",
+  "description": "The frost dates, the hardiness zone and the length of the season at each place of a country, which a household's place resolves to and its crops' timings are counted from (PRD 11, FR-GA3). One file per country, garden/climate/<code>.json. A member may edit every value: they know their own frost pocket better than a dataset does.",
+  "type": "object",
+  "required": ["country", "places"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "country": {
+      "description": "ISO 3166-1 alpha-2, and the file's name: a country that has a profile in countries/.",
+      "type": "string",
+      "pattern": "^[A-Z]{2}$"
+    },
+    "places": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/place" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "monthDay": {
+      "description": "A day of the year as MM-DD: a normal of thirty years, which belongs to no one year.",
+      "type": "string",
+      "pattern": "^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+    },
+    "place": {
+      "type": "object",
+      "required": [
+        "key",
+        "name",
+        "location",
+        "altitude_m",
+        "last_spring_frost",
+        "first_autumn_frost",
+        "hardiness_zone",
+        "season_length_days"
+      ],
+      "properties": {
+        "key": {
+          "description": "The place's key, its country's code and its name: unique among every country's places, and the one field without a source.",
+          "$ref": "defs.schema.json#/$defs/key"
+        },
+        "name": {
+          "description": "The place's own name, as its country writes it, the same in every language.",
+          "$ref": "defs.schema.json#/$defs/textField"
+        },
+        "location": {
+          "description": "Where the place is, in degrees to two decimal places, the precision a household's own place is stored at (PRD 05 §2).",
+          "$ref": "defs.schema.json#/$defs/field",
+          "properties": {
+            "value": {
+              "type": "object",
+              "required": ["latitude", "longitude"],
+              "properties": {
+                "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+                "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "altitude_m": {
+          "description": "The altitude the values hold at, in metres above sea level: that of the source's grid cell, which is not the place's own where the land around it rises or falls.",
+          "$ref": "defs.schema.json#/$defs/field",
+          "properties": { "value": { "type": "integer", "minimum": -10, "maximum": 4000 } }
+        },
+        "last_spring_frost": {
+          "description": "The day after which a frost comes in one spring in ten.",
+          "$ref": "defs.schema.json#/$defs/field",
+          "properties": { "value": { "$ref": "#/$defs/monthDay" } }
+        },
+        "first_autumn_frost": {
+          "description": "The day before which a frost comes in one autumn in ten.",
+          "$ref": "defs.schema.json#/$defs/field",
+          "properties": { "value": { "$ref": "#/$defs/monthDay" } }
+        },
+        "hardiness_zone": {
+          "description": "The USDA plant hardiness zone, from the mean of each year's lowest temperature.",
+          "$ref": "defs.schema.json#/$defs/field",
+          "properties": { "value": { "type": "string", "pattern": "^(1[0-3]|[1-9])[ab]$" } }
+        },
+        "season_length_days": {
+          "description": "The days from the last spring frost to the first autumn frost.",
+          "$ref": "defs.schema.json#/$defs/field",
+          "properties": { "value": { "type": "integer", "minimum": 1, "maximum": 364 } }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

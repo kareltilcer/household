@@ -1,0 +1,83 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "asparagus",
+  "name": {
+    "value": {
+      "en": "Asparagus",
+      "cs": "Chřest",
+      "sk": "Špargľa",
+      "de": "Spargel",
+      "pl": "Szparag"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Asparagus officinalis", "source": "powo", "drafted": true },
+  "family": { "value": "asparagaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 10, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 15, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 120, "plant_cm": 40 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 2, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -45, "to_days": -15 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": -25, "to_days": 40 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["mulch", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 0.8, "per_plant": 0.4 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 4 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["asparagus_beetle", "slug"], "source": "eppo-gd", "drafted": true },
+  "diseases": {
+    "value": ["rust", "fusarium_wilt", "grey_mould"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Spread the roots of the crowns over a ridge in a trench and fill it in gradually as the shoots grow. Do not cut for the first two years, then stop at midsummer and let the fern grow: it feeds next year's spears.",
+      "cs": "Kořeny sazenic rozprostřete v rýze na hrůbek a rýhu zasypávejte postupně, jak výhony rostou. První dva roky nesklízejte, později končete kolem letního slunovratu a nechte vyrůst nať: ta vyživí výhony příštího roku.",
+      "sk": "Korene sadeníc rozprestrite v ryhe na hrobček a ryhu zasypávajte postupne, ako výhonky rastú. Prvé dva roky nezberajte, neskôr končite okolo letného slnovratu a nechajte vyrásť vňať: tá vyživí výhonky budúceho roka.",
+      "de": "Die Wurzeln der Jungpflanzen im Graben über einen kleinen Damm breiten und den Graben mit dem Austrieb nach und nach füllen. Zwei Jahre nicht stechen, später zur Sommersonnenwende aufhören und das Laub wachsen lassen: Es nährt die Stangen des nächsten Jahres.",
+      "pl": "Korzenie karp rozłóż w rowku na kopczyku i zasypuj go stopniowo, w miarę wzrostu pędów. Przez pierwsze dwa lata nie zbieraj, później kończ około przesilenia letniego i pozwól pędom rosnąć: to one odżywią wypustki w następnym roku."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

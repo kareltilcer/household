@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "leaf_miner",
+  "name": {
+    "value": {
+      "en": "Leaf miners",
+      "cs": "Vrtalky",
+      "sk": "Mínerky",
+      "de": "Minierfliegen",
+      "pl": "Miniarki"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  }
+}

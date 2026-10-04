@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "root_rot",
+  "name": {
+    "value": {
+      "en": "Root rot",
+      "cs": "Hniloba kořenů",
+      "sk": "Hniloba koreňov",
+      "de": "Wurzelfäule",
+      "pl": "Zgnilizna korzeni"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Phytophthora", "source": "eppo-gd", "drafted": true }
+}

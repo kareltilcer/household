@@ -1,0 +1,13 @@
+{
+  "key": "blight",
+  "name": {
+    "value": {
+      "en": "Blight (en)",
+      "cs": "Blight (cs)",
+      "sk": "Blight (sk)",
+      "de": "Blight (de)",
+      "pl": "Blight (pl)"
+    },
+    "source": "book"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "chamomile",
+  "name": {
+    "value": {
+      "en": "Chamomile",
+      "cs": "Heřmánek",
+      "sk": "Rumanček",
+      "de": "Kamille",
+      "pl": "Rumianek"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Matricaria chamomilla", "source": "powo", "drafted": true },
+  "family": { "value": "asteraceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "low", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 5.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 2, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 25, "plant_cm": 10 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 40, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 6, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 7, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 60, "max": 80 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -50, "to_days": -10 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 25, "to_days": 80 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": { "value": { "per_m2": 0.3 }, "source": "vt-planting-guide", "drafted": true },
+  "storage": {
+    "value": [
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "fresh", "shelf_life_days": 2 }
+    ],
+    "source": "nchfp",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["powdery_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "The seed needs light: press it onto fine, firmed soil and do not cover it. Pick the flower heads on a dry day, when the white rays stand out flat, every few days, and dry them quickly in the shade.",
+      "cs": "Semena klíčí na světle: přitlačte je k jemné utužené půdě a nezasypávejte. Úbory sbírejte za sucha, když bílé jazýčky stojí vodorovně, každých pár dní, a rychle je usušte ve stínu.",
+      "sk": "Semená klíčia na svetle: pritlačte ich k jemnej utlačenej pôde a nezasypávajte. Úbory zbierajte za sucha, keď biele jazýčky stoja vodorovne, každých pár dní, a rýchlo ich usušte v tieni.",
+      "de": "Lichtkeimer: die Samen auf feinen, festen Boden andrücken und nicht bedecken. Die Blütenköpfe an trockenen Tagen pflücken, wenn die weißen Zungenblüten waagerecht stehen, alle paar Tage, und rasch im Schatten trocknen.",
+      "pl": "Nasiona kiełkują na świetle: dociśnij je do drobnej, ubitej gleby i nie przykrywaj. Koszyczki zbieraj w suchy dzień, gdy białe płatki stoją poziomo, co kilka dni, i szybko susz w cieniu."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

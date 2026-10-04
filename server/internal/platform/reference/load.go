@@ -44,8 +44,12 @@ const loadLock = db.ReferenceLock
 // Loading the same files again writes nothing. A row the files hold is inserted at version 1, and
 // updated, its version incremented, only when a column differs; a dataset's version is incremented
 // only when a load wrote any of its rows. A row the files no longer hold is kept.
-func Load(ctx context.Context, db Beginner, fsys fs.FS) ([]Report, error) {
-	data, err := Read(fsys)
+//
+// Each of sets, the modules' reference data, is read and checked with the platform's, before
+// anything is written, and then written by its own Load in the same transaction, after the
+// platform's datasets, in the order given. A set with no Load is checked and not written.
+func Load(ctx context.Context, db Beginner, fsys fs.FS, sets ...Set) ([]Report, error) {
+	data, err := Read(fsys, sets...)
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +67,16 @@ func Load(ctx context.Context, db Beginner, fsys fs.FS) ([]Report, error) {
 			return fmt.Errorf("%s: %w", Countries, err)
 		}
 		reports = []Report{countries, units}
+		for _, set := range sets {
+			if set.Load == nil {
+				continue
+			}
+			loaded, err := loadSet(ctx, tx, set, data.Sets[set.Name])
+			if err != nil {
+				return err
+			}
+			reports = append(reports, loaded...)
+		}
 		return nil
 	})
 	if err != nil {
@@ -71,10 +85,10 @@ func Load(ctx context.Context, db Beginner, fsys fs.FS) ([]Report, error) {
 	return reports, nil
 }
 
-// upsert runs stmt, an INSERT … ON CONFLICT DO UPDATE … WHERE the row differs, RETURNING (xmax =
+// Upsert runs stmt, an INSERT … ON CONFLICT DO UPDATE … WHERE the row differs, RETURNING (xmax =
 // 0): true for a row it inserted, false for one it updated, and no row at all for one it left
 // alone, since the update's WHERE held nothing to change. It counts the outcome in r.
-func upsert(ctx context.Context, tx pgx.Tx, r *Report, stmt string, args ...any) error {
+func Upsert(ctx context.Context, tx pgx.Tx, r *Report, stmt string, args ...any) error {
 	var inserted bool
 	err := tx.QueryRow(ctx, stmt, args...).Scan(&inserted)
 	switch {
@@ -90,20 +104,22 @@ func upsert(ctx context.Context, tx pgx.Tx, r *Report, stmt string, args ...any)
 	return nil
 }
 
-// held is the rows of one of a dataset's tables that its files hold: their keys, in the column key.
-type held struct {
-	table, key string
-	keys       []string
+// Held is the rows of one of a dataset's tables that its files hold: their keys, in the column
+// Key. Keys is empty rather than nil for a table the files hold no row of: nil binds as NULL,
+// against which Finish would count no row as kept.
+type Held struct {
+	Table, Key string
+	Keys       []string
 }
 
-// finish counts in r the rows of each table that the files no longer hold, and settles the
+// Finish counts in r the rows of each table that the files no longer hold, and settles the
 // dataset's version: incremented when the load wrote any of its rows, read otherwise.
-func finish(ctx context.Context, tx pgx.Tx, r *Report, tables ...held) error {
+func Finish(ctx context.Context, tx pgx.Tx, r *Report, tables ...Held) error {
 	for _, h := range tables {
 		var kept int
 		if err := tx.QueryRow(ctx,
-			"SELECT count(*) FROM "+pgx.Identifier{h.table}.Sanitize()+
-				" WHERE NOT ("+pgx.Identifier{h.key}.Sanitize()+" = ANY ($1))", h.keys,
+			"SELECT count(*) FROM "+pgx.Identifier{h.Table}.Sanitize()+
+				" WHERE NOT ("+pgx.Identifier{h.Key}.Sanitize()+" = ANY ($1))", h.Keys,
 		).Scan(&kept); err != nil {
 			return err
 		}
@@ -128,7 +144,7 @@ func loadCountries(ctx context.Context, tx pgx.Tx, countries []Country) (Report,
 	codes := make([]string, 0, len(countries))
 	for _, c := range countries {
 		codes = append(codes, c.Code)
-		if err := upsert(ctx, tx, &r, `
+		if err := Upsert(ctx, tx, &r, `
 			INSERT INTO country_profiles AS t (code, name, currency, vat_standard_percent, default_units,
 			  first_day_of_week, holiday_set, inspection_label, document_type_set)
 			VALUES ($1, $2::jsonb, $3, $4::text::numeric, $5::unit_system, $6, $7, $8, $9)
@@ -151,18 +167,18 @@ func loadCountries(ctx context.Context, tx pgx.Tx, countries []Country) (Report,
 			return r, fmt.Errorf("%s: %w", c.Code, err)
 		}
 	}
-	return r, finish(ctx, tx, &r, held{table: "country_profiles", key: "code", keys: codes})
+	return r, Finish(ctx, tx, &r, Held{Table: "country_profiles", Key: "code", Keys: codes})
 }
 
 // loadUnits writes the dimensions and their units. The keys between them are checked when the
 // transaction commits, so a dimension is written before the base unit it names exists.
 func loadUnits(ctx context.Context, tx pgx.Tx, dimensions []Dimension) (Report, error) {
 	r := Report{Dataset: Units}
-	// Empty rather than nil: nil binds as NULL, against which finish would count no row as kept.
+	// Empty rather than nil (Held).
 	dimensionKeys, unitKeys := []string{}, []string{}
 	for _, d := range dimensions {
 		dimensionKeys = append(dimensionKeys, d.Key)
-		if err := upsert(ctx, tx, &r, `
+		if err := Upsert(ctx, tx, &r, `
 			INSERT INTO unit_dimensions AS t (key, name, base_unit) VALUES ($1, $2::jsonb, $3)
 			ON CONFLICT (key) DO UPDATE SET name = EXCLUDED.name, base_unit = EXCLUDED.base_unit,
 			  version = t.version + 1
@@ -178,7 +194,7 @@ func loadUnits(ctx context.Context, tx pgx.Tx, dimensions []Dimension) (Report, 
 			if u.Counterpart != nil {
 				counterpart = &u.Counterpart.Value
 			}
-			if err := upsert(ctx, tx, &r, `
+			if err := Upsert(ctx, tx, &r, `
 				INSERT INTO units AS t (key, dimension, system, symbol, cldr, name,
 				  to_base_offset, to_base_numerator, to_base_denominator, counterpart)
 				VALUES ($1, $2, $3::unit_system, $4, $5, $6::jsonb,
@@ -203,7 +219,7 @@ func loadUnits(ctx context.Context, tx pgx.Tx, dimensions []Dimension) (Report, 
 			}
 		}
 	}
-	return r, finish(ctx, tx, &r,
-		held{table: "unit_dimensions", key: "key", keys: dimensionKeys},
-		held{table: "units", key: "key", keys: unitKeys})
+	return r, Finish(ctx, tx, &r,
+		Held{Table: "unit_dimensions", Key: "key", Keys: dimensionKeys},
+		Held{Table: "units", Key: "key", Keys: unitKeys})
 }

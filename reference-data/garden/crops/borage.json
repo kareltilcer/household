@@ -1,0 +1,85 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "borage",
+  "name": {
+    "value": {
+      "en": "Borage",
+      "cs": "Brutnák",
+      "sk": "Borák",
+      "de": "Borretsch",
+      "pl": "Ogórecznik"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Borago officinalis", "source": "powo", "drafted": true },
+  "family": { "value": "boraginaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 2, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 40, "plant_cm": 30 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 8, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 10, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 7, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 50, "max": 65 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -35, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 20, "to_days": 130 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 10, "per_plant": 1.2 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 2 },
+      { "method": "frozen", "shelf_life_days": 180 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["powdery_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "It resents transplanting, so sow it where it is to grow; after that it seeds itself every year. Pick young leaves and the blue flowers, which bees work all summer; older plants flop and get mildew, so sow again in early summer.",
+      "cs": "Přesazování nesnáší, vysévejte ho proto přímo na místo; pak se už každý rok vysemení sám. Sklízejte mladé listy a modré květy, na které celé léto létají včely; starší rostliny poléhají a trpí padlím, proto počátkem léta vysejte znovu.",
+      "sk": "Presádzanie neznáša, preto ho vysievajte priamo na miesto; potom sa už každý rok vysemení sám. Zberajte mladé listy a modré kvety, na ktoré celé leto lietajú včely; staršie rastliny poliehajú a trpia múčnatkou, preto začiatkom leta vysejte znova.",
+      "de": "Er verträgt kein Verpflanzen, daher direkt ins Beet säen; danach sät er sich jedes Jahr selbst aus. Junge Blätter und die blauen Blüten ernten, die den ganzen Sommer Bienen anziehen; ältere Pflanzen kippen um und bekommen Mehltau, daher im Frühsommer nachsäen.",
+      "pl": "Nie znosi przesadzania, dlatego siej go wprost na miejsce; potem co roku rozsiewa się sam. Zbieraj młode liście i niebieskie kwiaty, które przez całe lato oblatują pszczoły; starsze rośliny wylegają i łapią mączniaka, dlatego wczesnym latem wysiej ponownie."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

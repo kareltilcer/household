@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "allium_leaf_miner",
+  "name": {
+    "value": {
+      "en": "Allium leaf miner",
+      "cs": "Vrtalka pórová",
+      "sk": "Mínerka pórová",
+      "de": "Lauchminierfliege",
+      "pl": "Miniarka porówka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Phytomyza gymnostoma", "source": "eppo-gd", "drafted": true }
+}

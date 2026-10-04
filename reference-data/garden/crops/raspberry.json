@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "raspberry",
+  "name": {
+    "value": {
+      "en": "Raspberry",
+      "cs": "Maliník",
+      "sk": "Malina",
+      "de": "Himbeere",
+      "pl": "Malina"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Rubus idaeus", "source": "powo", "drafted": true },
+  "family": { "value": "rosaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "fruit", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "high", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 5.5, "max": 6.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 5, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 180, "plant_cm": 45 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 1.2, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "transplant": {
+      "value": { "anchor": "previous_first_frost", "from_days": 10, "to_days": 45 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 40, "to_days": 85 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["support", "mulch", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1, "per_plant": 0.8 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 2 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["raspberry_beetle", "strawberry_blossom_weevil", "aphid", "spotted_wing_drosophila"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["cane_blight", "grey_mould", "root_rot", "mosaic_virus"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Summer raspberries fruit on last year's canes: cut the fruited ones to the ground after picking and tie in six to eight new ones per metre. Autumn-fruiting kinds crop on the current year's canes until the frost and are cut down completely in winter.",
+      "cs": "Letní maliníky plodí na loňských výhonech: odplozené po sklizni odřízněte u země a na metr vyvažte šest až osm nových. Podzimní odrůdy plodí na letošních výhonech až do mrazů a v zimě se seřezávají celé u země.",
+      "sk": "Letné maliny rodia na vlaňajších výhonkoch: odrodené po zbere odrežte pri zemi a na meter vyviažte šesť až osem nových. Jesenné odrody rodia na tohtoročných výhonkoch až do mrazov a v zime sa zrezávajú celé pri zemi.",
+      "de": "Sommerhimbeeren tragen an den Vorjahresruten: Abgetragene nach der Ernte bodennah abschneiden und sechs bis acht neue pro Meter anbinden. Herbstsorten tragen bis zum Frost an den diesjährigen Ruten und werden im Winter komplett bodennah abgeschnitten.",
+      "pl": "Maliny letnie owocują na zeszłorocznych pędach: po zbiorze wytnij przy ziemi te, które owocowały, i przywiąż sześć do ośmiu nowych na metr. Odmiany jesienne owocują na tegorocznych pędach aż do przymrozków i zimą ścina się je w całości przy ziemi."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

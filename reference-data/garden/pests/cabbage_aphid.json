@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "cabbage_aphid",
+  "name": {
+    "value": {
+      "en": "Mealy cabbage aphid",
+      "cs": "Mšice zelná",
+      "sk": "Voška kapustová",
+      "de": "Mehlige Kohlblattlaus",
+      "pl": "Mszyca kapuściana"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Brevicoryne brassicae", "source": "eppo-gd", "drafted": true }
+}

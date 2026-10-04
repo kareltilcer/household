@@ -1,0 +1,137 @@
+{
+  "scope": "crop_pair",
+  "rules": [
+    {
+      "a": "carrot",
+      "b": "tomato",
+      "claim": {
+        "value": {
+          "relation": "companion",
+          "basis": "traditional",
+          "severity": "info"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "carrot and tomato. (en)",
+          "cs": "carrot and tomato. (cs)",
+          "sk": "carrot and tomato. (sk)",
+          "de": "carrot and tomato. (de)",
+          "pl": "carrot and tomato. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "tomato",
+      "b": "carrot",
+      "claim": {
+        "value": {
+          "relation": "companion",
+          "basis": "traditional",
+          "severity": "info"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "tomato and carrot. (en)",
+          "cs": "tomato and carrot. (cs)",
+          "sk": "tomato and carrot. (sk)",
+          "de": "tomato and carrot. (de)",
+          "pl": "tomato and carrot. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "tomato",
+      "claim": {
+        "value": {
+          "relation": "antagonist",
+          "basis": "agronomic",
+          "severity": "warn"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "carrot and tomato. (en)",
+          "cs": "carrot and tomato. (cs)",
+          "sk": "carrot and tomato. (sk)",
+          "de": "carrot and tomato. (de)",
+          "pl": "carrot and tomato. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "onion",
+      "claim": {
+        "value": {
+          "relation": "companion",
+          "basis": "traditional",
+          "severity": "info"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "carrot and onion. (en)",
+          "cs": "carrot and onion. (cs)",
+          "sk": "carrot and onion. (sk)",
+          "de": "carrot and onion. (de)",
+          "pl": "carrot and onion. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "leek",
+      "b": "leek",
+      "claim": {
+        "value": {
+          "relation": "companion",
+          "basis": "traditional",
+          "severity": "info"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "leek and leek. (en)",
+          "cs": "leek and leek. (cs)",
+          "sk": "leek and leek. (sk)",
+          "de": "leek and leek. (de)",
+          "pl": "leek and leek. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "apiaceae",
+      "b": "solanaceae",
+      "claim": {
+        "value": {
+          "relation": "companion",
+          "basis": "traditional",
+          "severity": "info"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "apiaceae and solanaceae. (en)",
+          "cs": "apiaceae and solanaceae. (cs)",
+          "sk": "apiaceae and solanaceae. (sk)",
+          "de": "apiaceae and solanaceae. (de)",
+          "pl": "apiaceae and solanaceae. (pl)"
+        },
+        "source": "book"
+      }
+    }
+  ]
+}

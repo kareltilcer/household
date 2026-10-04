@@ -1,0 +1,17 @@
+{
+  "key": "apiaceae",
+  "name": {
+    "value": {
+      "en": "Umbellifers (en)",
+      "cs": "Umbellifers (cs)",
+      "sk": "Umbellifers (sk)",
+      "de": "Umbellifers (de)",
+      "pl": "Umbellifers (pl)"
+    },
+    "source": "book"
+  },
+  "name_latin": {
+    "value": "Brassicaceae",
+    "source": "book"
+  }
+}

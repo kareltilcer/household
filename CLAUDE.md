@@ -219,6 +219,15 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   subscriptions ended at the payment processor first, and an erased account's customers there are
   deleted with it (`billing.Service.Close`, `Forget`). The nightly erasure job runs at 02:30 UTC,
   before PowerSync's compaction.
+- **Reference data** is sourced JSON under `reference-data/`, one record a file: every field a value
+  with its `source`, flagged `drafted` until an expert has checked it, and every text in the five
+  languages. `reference.Read` checks it, and `household-api migrate` loads it into versioned global
+  tables, never deleting a row ([ADR 0008](docs/adr/0008-reference-data-pipeline.md)). A module's own
+  is a set, a directory named for the module with a `sources.json` of its own, declared through
+  `module.ReferenceSource`: its `Read` checks what its schemas cannot, and its `Load` writes its
+  tables. Garden's, the crop catalog and the climate profiles, is `internal/modules/garden/catalog`,
+  where a timing is days from a frost date and never a calendar date
+  ([ADR 0022](docs/adr/0022-the-crop-catalogs-source-the-reference-set-hook-and-the-climate-dataset.md)).
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`

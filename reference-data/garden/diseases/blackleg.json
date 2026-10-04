@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "blackleg",
+  "name": {
+    "value": {
+      "en": "Blackleg",
+      "cs": "Černání stonku bramboru",
+      "sk": "Čierna noha zemiakov",
+      "de": "Schwarzbeinigkeit",
+      "pl": "Czarna nóżka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Pectobacterium atrosepticum", "source": "eppo-gd", "drafted": true }
+}

@@ -1,0 +1,90 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "chives",
+  "name": {
+    "value": {
+      "en": "Chives",
+      "cs": "Pažitka",
+      "sk": "Pažítka",
+      "de": "Schnittlauch",
+      "pl": "Szczypiorek"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Allium schoenoprasum", "source": "powo", "drafted": true },
+  "family": { "value": "amaryllidaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 30, "plant_cm": 25 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 13, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 10, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -45, "to_days": 15 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -30, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": -30, "to_days": 140 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 30, "per_plant": 2.5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 180 },
+      { "method": "dried", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["allium_leaf_miner", "leek_moth", "thrips"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": { "value": ["rust", "downy_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Cut the leaves two to three centimetres above the soil and the clump regrows within weeks; remove flower stalks unless you want the edible flowers. Divide the clump every three years, and pot one up in autumn for the windowsill.",
+      "cs": "Listy seřezávejte dva až tři centimetry nad zemí a trs během pár týdnů obroste; květní stvoly odstraňujte, pokud nechcete jedlé květy. Trs každé tři roky rozdělte a na podzim jeden zasaďte do květináče na okno.",
+      "sk": "Listy zrezávajte dva až tri centimetre nad zemou a trs v priebehu pár týždňov obrastie; kvetné stonky odstraňujte, ak nechcete jedlé kvety. Trs každé tri roky rozdeľte a na jeseň jeden zasaďte do črepníka na okno.",
+      "de": "Die Halme zwei bis drei Zentimeter über dem Boden schneiden, der Horst treibt binnen Wochen nach; Blütenstiele entfernen, wenn die essbaren Blüten nicht gewünscht sind. Den Horst alle drei Jahre teilen und im Herbst einen für die Fensterbank eintopfen.",
+      "pl": "Liście ścinaj dwa do trzech centymetrów nad ziemią, a kępa odrośnie w ciągu kilku tygodni; pędy kwiatowe usuwaj, jeśli nie chcesz jadalnych kwiatów. Kępę co trzy lata podziel, a jesienią jedną posadź w doniczce na parapet."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

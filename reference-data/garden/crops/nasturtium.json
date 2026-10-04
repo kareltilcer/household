@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "nasturtium",
+  "name": {
+    "value": {
+      "en": "Nasturtium",
+      "cs": "Lichořeřišnice",
+      "sk": "Kapucínka",
+      "de": "Kapuzinerkresse",
+      "pl": "Nasturcja"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Tropaeolum majus", "source": "powo", "drafted": true },
+  "family": { "value": "tropaeolaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "flower", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 2, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 40, "plant_cm": 30 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 8, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 12, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 7, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 50, "max": 70 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -7, "to_days": 21 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": -95, "to_days": 0 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["pest_check"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 8, "per_plant": 1 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [{ "method": "fresh", "shelf_life_days": 3 }],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["black_bean_aphid", "cabbage_white", "flea_beetle"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": { "value": [], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "It flowers best on poor soil: rich soil and feeding give leaves instead of flowers. Flowers, leaves and green seeds are edible, and it draws blackfly and cabbage white caterpillars away from other crops.",
+      "cs": "Nejlépe kvete v chudé půdě: po hnojení roste do listu místo do květu. Květy, listy i zelená semena jsou jedlé a rostlina odlákává černé mšice a housenky běláska od jiných plodin.",
+      "sk": "Najlepšie kvitne v chudobnej pôde: po hnojení rastie do listu namiesto do kvetu. Kvety, listy aj zelené semená sú jedlé a rastlina odlákava čierne vošky a húsenice mlynárika od iných plodín.",
+      "de": "Sie blüht am besten auf magerem Boden: Düngung bringt Blätter statt Blüten. Blüten, Blätter und grüne Samen sind essbar, und sie lockt Schwarze Bohnenläuse und Kohlweißlingsraupen von anderen Kulturen weg.",
+      "pl": "Najlepiej kwitnie na ubogiej glebie: po nawożeniu rośnie w liście zamiast kwitnąć. Kwiaty, liście i zielone nasiona są jadalne, a roślina odciąga czarne mszyce i gąsienice bielinka od innych upraw."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

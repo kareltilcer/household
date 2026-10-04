@@ -1,0 +1,10 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "wasp",
+  "name": {
+    "value": { "en": "Wasps", "cs": "Vosy", "sk": "Osy", "de": "Wespen", "pl": "Osy" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Vespula", "source": "eppo-gd", "drafted": true }
+}

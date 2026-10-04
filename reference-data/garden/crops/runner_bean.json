@@ -1,0 +1,90 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "runner_bean",
+  "name": {
+    "value": {
+      "en": "Runner bean",
+      "cs": "Fazol šarlatový",
+      "sk": "Fazuľa šarlátová",
+      "de": "Feuerbohne",
+      "pl": "Fasola wielokwiatowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Phaseolus coccineus", "source": "powo", "drafted": true },
+  "family": { "value": "fabaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "fixer", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "high", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 5, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 80, "plant_cm": 20 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 6, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 10, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 7, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 70, "max": 90 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 75, "to_days": 140 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["support", "mulch"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 3, "per_plant": 0.5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "dried", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["black_bean_aphid", "slug", "bean_seed_fly"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": { "value": ["halo_blight", "rust"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Likes cooler, moister summers than other beans: in dry heat the flowers drop without setting, so mulch and water well once it flowers. Pick the pods young, before they turn stringy, or let them dry on the plant for the large seeds; cook both.",
+      "cs": "Chce chladnější a vlhčí léto než jiné fazoly: v suchém horku květy opadávají bez nasazení, proto od květu mulčujte a dobře zalévejte. Lusky sklízejte mladé, dokud nejsou vláknité, nebo je nechte na rostlině uschnout na velká semena; obojí vařte.",
+      "sk": "Chce chladnejšie a vlhkejšie leto než iné fazule: v suchej horúčave kvety opadávajú bez nasadenia, preto od kvitnutia mulčujte a dobre polievajte. Struky zberajte mladé, kým nie sú vláknité, alebo ich nechajte na rastline uschnúť na veľké semená; oboje varte.",
+      "de": "Mag kühlere, feuchtere Sommer als andere Bohnen: In trockener Hitze fallen die Blüten ohne Ansatz ab, also ab der Blüte mulchen und gut gießen. Hülsen jung pflücken, ehe sie fädig werden, oder für die großen Kerne an der Pflanze trocknen lassen; beides kochen.",
+      "pl": "Woli chłodniejsze i wilgotniejsze lato niż inne fasole: w suchym upale kwiaty opadają bez zawiązania, więc od kwitnienia ściółkuj i dobrze podlewaj. Strąki zbieraj młode, zanim złykowacieją, albo zasusz je na roślinie na duże nasiona; jedno i drugie gotuj."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

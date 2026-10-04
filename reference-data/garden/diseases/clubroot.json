@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "clubroot",
+  "name": {
+    "value": {
+      "en": "Clubroot",
+      "cs": "Nádorovitost košťálovin",
+      "sk": "Nádorovitosť hlúbovín",
+      "de": "Kohlhernie",
+      "pl": "Kiła kapusty"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Plasmodiophora brassicae", "source": "eppo-gd", "drafted": true }
+}

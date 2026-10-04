@@ -1,0 +1,27 @@
+{
+  "scope": "succession",
+  "rules": [
+    {
+      "a": "solanaceae",
+      "b": "solanaceae",
+      "claim": {
+        "value": {
+          "relation": "antagonist",
+          "basis": "agronomic",
+          "severity": "error"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "solanaceae and solanaceae. (en)",
+          "cs": "solanaceae and solanaceae. (cs)",
+          "sk": "solanaceae and solanaceae. (sk)",
+          "de": "solanaceae and solanaceae. (de)",
+          "pl": "solanaceae and solanaceae. (pl)"
+        },
+        "source": "book"
+      }
+    }
+  ]
+}
