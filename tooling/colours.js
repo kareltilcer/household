@@ -21,8 +21,11 @@ export const ramps = [
   'azure',
 ]
 
-/** A ramp's custom property, wherever in a text it is named. */
-export const primitive = new RegExp(String.raw`--(?:${ramps.join('|')})-\d`)
+/**
+ * A ramp's custom property, wherever in a text it is named. Where the two hyphens begin the name,
+ * that is: the modifier of a class, `tag--red-1`, names none.
+ */
+export const primitive = new RegExp(String.raw`(?<![\w-])--(?:${ramps.join('|')})-\d`)
 
 /**
  * A hexadecimal colour's digits, three, four, six or eight of them, as the source of a pattern:
@@ -34,7 +37,12 @@ export const hexDigits = '(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})'
 /** A colour in hexadecimal, as a word of a value. */
 export const hexColour = new RegExp(`^#${hexDigits}$`, 'i')
 
-/** The functions that state a colour by its coordinates. `color-mix()` over tokens states none. */
+/**
+ * The functions that state a colour by its coordinates. `color-mix()` over tokens states none. A
+ * relative colour, `rgb(from var(--accent) r g b / 50%)`, is among them for all that it begins
+ * from a token: each of its channels may be written out, which is any colour at all under a
+ * token's name, so a tint is a `color-mix()`.
+ */
 export const colourFunctions = new Set([
   'rgb',
   'rgba',

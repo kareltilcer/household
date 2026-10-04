@@ -4,7 +4,7 @@
   "a11y.control.camera": "Odfotiť",
   "a11y.control.close_sheet": "Zavrieť",
   "a11y.control.conflict": "Dve verzie: {name}. Otvorením ich vyriešite",
-  "a11y.control.delete": "Odstrániť: {name}",
+  "a11y.control.delete": "Vymazať: {name}",
   "a11y.control.download": "Stiahnuť: {name}",
   "a11y.control.edit": "Upraviť: {name}",
   "a11y.control.filter": "Filtrovať: {list}",

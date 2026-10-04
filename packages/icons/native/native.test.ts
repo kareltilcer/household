@@ -4,11 +4,13 @@
 // element of the same name, as react-native-svg's are, and the markup is held to the web's:
 // every element, every attribute and every value. What the stand-in does not prove, that
 // react-native-svg takes each attribute under that name and type, the type check of this
-// directory does, against react-native-svg's own types.
+// directory does, against react-native-svg's own types: handing an attribute to a component holds
+// its type, and svg.ts's `Taken` its name, which the last case here holds in its turn.
 import { resolve, type ColorName } from '@household/tokens'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import type { PathProps, SvgProps } from 'react-native-svg'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import {
   baseIds,
   compositions,
@@ -16,8 +18,11 @@ import {
   moduleGlyphs,
   statusGlyphs,
   type CompositionId,
+  type Drawing,
   type NavigationId,
+  type Path,
   type StatusId,
+  type Taken,
 } from '../src/index.ts'
 import * as web from '../web/index.ts'
 import * as native from './index.ts'
@@ -166,5 +171,21 @@ describe('the glyphs on React Native', () => {
     renderToStaticMarkup(createElement(native.BaseIcon, { name: 'trash-2', color }))
     expect(seen.root).toMatchObject({ accessible: false, accessibilityElementsHidden: true })
     expect(seen.root).not.toHaveProperty('accessibilityLabel')
+  })
+})
+
+// Checked by this directory's type check, and nothing at run time: the stand-in above takes
+// whatever it is handed, as an object's type does.
+describe('a drawing’s attributes', () => {
+  it('are each under a name react-native-svg’s component takes, or do not compile', () => {
+    expectTypeOf<Taken<Omit<Path, 'tag'>, PathProps>>().toEqualTypeOf<Omit<Path, 'tag'>>()
+    expectTypeOf<Taken<Omit<Drawing, 'children'>, SvgProps>>().toEqualTypeOf<
+      Omit<Drawing, 'children'>
+    >()
+    // SVG's own spelling of an attribute is not react-native-svg's, and neither is a slip.
+    type Hyphenated = Taken<{ readonly d: string; readonly 'stroke-width': number }, PathProps>
+    type Misspelt = Taken<{ readonly d: string; readonly strokeDashArray?: string }, PathProps>
+    expectTypeOf<Hyphenated>().toBeNever()
+    expectTypeOf<Misspelt>().toBeNever()
   })
 })

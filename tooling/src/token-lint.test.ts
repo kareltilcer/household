@@ -96,11 +96,26 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
     ],
     ['a named colour on a logical side', "export const a = { borderBlockEnd: '1px solid black' }"],
     ['a named colour in a decoration', "export const a = { textDecoration: 'underline red' }"],
+    // A member assigned to, and a class's property, take a colour as an object's property does.
+    ['a named colour assigned to a style', "document.body.style.backgroundColor = 'white'"],
+    [
+      'a named colour assigned behind a condition',
+      "document.body.style.color = n > 1 ? 'red' : 'black'",
+    ],
+    ['a named colour assigned under a written name', "document.body.style['color'] ??= 'red'"],
+    ['a named colour as a class’s property', "export class A { color = 'red' }"],
+    ['a named colour as a class’s static property', "export class A { static fill = 'tan' }"],
+    ['a hex colour a module exports by default', "export default '#fff'"],
+    [
+      'a relative colour, whose channels may be written out',
+      "export const a = { color: 'rgb(from var(--accent) r g b / 50%)' }",
+    ],
     // `to`, `name` and `key` name or link in an element, and anything at all in an object.
     ['a hex colour an object calls `to`', "export const a = { to: '#fff' }"],
     ['a hex colour an object calls `name`', "export const a = { name: '#1a1b22' }"],
     ['a hex colour an object calls `key`', "export const a = { key: '#abc' }"],
     ['a hex colour beside an element’s reference', "export const a = 'url(#fade) #fff'"],
+    ['a hex colour a member called `to` is assigned', "document.links[0].to = '#fff'"],
   ])('fails %s as a raw colour', async (_, code) => {
     expect(await script(app, `const n = 1\n${code}`)).toContain('raw')
   })
@@ -112,6 +127,11 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
     ['an import of the primitives', "import { neutral } from '@household/tokens/primitives'"],
     ['an import of them for nothing', "import '@household/tokens/primitives'"],
     ['a dynamic import of them', "export const a = import('@household/tokens/primitives')"],
+    [
+      'a dynamic import of them in a template',
+      'export const a = import(`@household/tokens/primitives`)',
+    ],
+    ['a require of them in a template', 'export const a = require(`@household/tokens/primitives`)'],
     ['a re-export of them', "export { hues } from '@household/tokens/primitives'"],
     ['a re-export of all of them', "export * from '@household/tokens/primitives'"],
     ['a require of them', "export const a = require('@household/tokens/primitives')"],
@@ -145,7 +165,14 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
       'export const a = <Path fill="url(#fade)" clipPath="url(\'#c0de\')" />',
     ],
     ['a mask drawn by reference', "export const a = { mask: 'url( #add )' }"],
+    ['an element referred to under a namespace', 'export const a = <use xlink:href="#bed" />'],
+    ['a fragment assigned to a location', "window.location.hash = '#add'"],
+    ['a link’s address assigned', "document.links[0].href = n > 1 ? '#facade' : '#decade'"],
+    ['a class’s own fragment', "export class A { hash = '#add' }"],
     ['a word that is a colour’s name where no colour goes', "export const a = { variant: 'tan' }"],
+    ['such a word assigned where none goes', "document.body.dataset.variant = 'tan'"],
+    ['such a word as a class’s property', "export class A { variant = 'tan' }"],
+    ['a class’s modifier that spells a ramp’s step', "export const a = 'tag tag--red-1'"],
     [
       'such a word behind a condition',
       "export const a = { variant: n > 1 ? 'tan' : 'plum', filter: 'gold' }",
@@ -203,6 +230,15 @@ describe('a stylesheet of an app', () => {
     ['a raw colour in a custom property', '.a { --row-rule: #dcdee6 }'],
     ['a raw colour inside a media query', '@media (min-width: 40em) { .a { color: #fff } }'],
     ['a raw colour in a registered property', '@property --x { initial-value: #fff }'],
+    [
+      'a relative colour, whose channels may be written out',
+      '.a { color: rgb(from var(--accent) r g b / 50%) }',
+    ],
+    // A constant of CSS Modules is a value under a name of the screen's own, as a custom
+    // property is, and the declaration that spends it names no colour.
+    ['a raw colour in a constant', '@value rule: #dcdee6; .a { border-color: rule }'],
+    ['a named colour in a constant with no colon', '@value rule white;'],
+    ['a colour function in a constant', '@VALUE scrim: rgb(0 0 0 / 40%);'],
   ])('fails %s as a raw colour', (_, code) => {
     expect(sheet(code)).toEqual(['raw'])
   })
@@ -211,6 +247,7 @@ describe('a stylesheet of an app', () => {
     ['a primitive', '.a { color: var(--neutral-200) }'],
     ['a primitive as a fallback', '.a { color: var(--accent, var(--indigo-600)) }'],
     ['a primitive declared', '.a { --moss-400: var(--accent) }'],
+    ['a primitive in a constant', '@value rule: var(--neutral-300);'],
   ])('fails %s as a primitive', (_, code) => {
     expect(sheet(code)).toEqual(['primitive'])
   })
@@ -242,7 +279,17 @@ describe('a stylesheet of an app', () => {
     ['a class that spells one', '.red { color: var(--danger) }'],
     ['a grid area that spells one', '.a { grid-area: tan }'],
     ['an animation that spells one', '.a { animation: plum var(--dur-slow) }'],
+    ['an animation that spells one, under a vendor’s prefix', '.a { -webkit-animation: plum 1s }'],
+    ['a transition that names one, under a vendor’s prefix', '.a { -moz-transition: tan 1s }'],
     ['a face that spells one', '.a { font-family: "Linen", Snow, sans-serif }'],
+    ['a constant over a token', '@value rule: var(--dens-rule); .a { border-color: rule }'],
+    ['a constant whose name spells a colour', '@value red: var(--danger);'],
+    ['a constant that is no colour', '@value narrow: (max-width: 40em);'],
+    ['constants taken from another module', '@value tan, red as plum from "./tones.module.css";'],
+    [
+      'a class composed whose modifier spells a ramp’s step',
+      '.a { composes: tag--red-1 from "./tag.module.css" }',
+    ],
     ['an address with a fragment', '.a { mask: url(sprite.svg#fff) }'],
     ['a quoted string', '.a::before { content: "red #fff" }'],
     ['a length that is no colour', '.a { margin: 0 auto; z-index: 100 }'],
@@ -261,6 +308,14 @@ describe('a stylesheet of an app', () => {
       'a.css',
     )
     expect(finding).toEqual({ file: 'a.css', line: 3, column: 3, rule: 'raw', text: 'fill: #fff' })
+    // In the stylesheet's order, a constant among the declarations.
+    expect(
+      lintStylesheet('.a {\n  fill: #fff;\n}\n@value rule: #dcdee6;\n.b { color: red }\n', 'a.css'),
+    ).toMatchObject([
+      { line: 2, column: 3, text: 'fill: #fff' },
+      { line: 4, column: 1, rule: 'raw', text: '@value rule: #dcdee6' },
+      { line: 5, column: 6, text: 'color: red' },
+    ])
   })
 
   it('would fail the tokens’ own stylesheet, where the values are written', () => {

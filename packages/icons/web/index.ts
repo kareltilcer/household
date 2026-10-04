@@ -17,6 +17,7 @@ import {
   type NavigationId,
   type Node,
   type StatusId,
+  type Taken,
 } from '../src/index.ts'
 
 export interface IconProps {
@@ -31,22 +32,29 @@ export interface IconProps {
 }
 
 // Each of a drawing's attributes is one React's SVG elements take, under the same name: the
-// assignments below are where a drawing is held to that.
+// assignments below are where a drawing is held to that. An assignment holds each one's type, and
+// `Taken` its name, which React would otherwise write into the DOM as it stands.
 function element(node: Node): ReactElement {
   if (node.tag === 'g') {
     const { tag, children, ...attributes } = node
-    const props: SVGAttributes<SVGGElement> = attributes
+    const props: SVGAttributes<SVGGElement> = attributes satisfies Taken<
+      typeof attributes,
+      SVGAttributes<SVGGElement>
+    >
     return createElement(tag, props, ...children.map(element))
   }
   const { tag, ...attributes } = node
-  const props: SVGAttributes<SVGElement> = attributes
+  const props: SVGAttributes<SVGElement> = attributes satisfies Taken<
+    typeof attributes,
+    SVGAttributes<SVGElement>
+  >
   return createElement(tag, props)
 }
 
 function draw(drawing: Drawing, label: string | undefined, className?: string): ReactElement {
   const { children, ...attributes } = drawing
   const props: SVGAttributes<SVGSVGElement> = {
-    ...attributes,
+    ...(attributes satisfies Taken<typeof attributes, SVGAttributes<SVGSVGElement>>),
     // A drawing with no width fills the width it is given, and its height follows its viewBox.
     width: drawing.width ?? '100%',
     ...(className === undefined ? {} : { className }),

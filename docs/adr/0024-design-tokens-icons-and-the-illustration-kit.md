@@ -72,10 +72,12 @@ duration token. `data-scale='200'` on the root doubles the root font size.
 the camel-cased ones React's SVG elements and react-native-svg's components both take.
 `@household/icons/web` draws it with React DOM and `@household/icons/native` with
 react-native-svg, each a few lines, and each typechecked in its own project against its library's
-own prop types. The native components are given what the web inherits: an icon its colour, an
-illustration its theme. A test draws the native components through a stand-in for
-react-native-svg whose every element is the SVG element of the same name, and holds the markup to
-the web's, element for element.
+own prop types: handing a drawing's attributes to an element holds each one's type, and a type of
+the model's (`Taken`) holds its name, since an object is assignable to props it has more names
+than and react-native-svg drops what it does not know. The native components are given what the
+web inherits: an icon its colour, an illustration its theme. A test draws the native components
+through a stand-in for react-native-svg whose every element is the SVG element of the same name,
+and holds the markup to the web's, element for element.
 
 **The greyscale gate is measured by the stroke's own geometry** (`raster.ts`): path data flattened
 to segments, and a pixel marked where more than 40/255 of it lies within half the stroke of one.
@@ -98,14 +100,17 @@ same two components, and it is spent with the icons.
 
 **The lint is an ESLint rule and a check of the workspace's own.** `household/semantic-tokens`
 holds `apps/**`'s TypeScript, and `tooling/src/stylesheets.ts` holds `apps/**/*.css`: it parses
-a stylesheet with PostCSS, which Vite already brings, and each value with postcss-value-parser,
-and reports a raw colour or a primitive (`pnpm run lint:css`, which `pnpm run lint` and CI run).
-Both read one list of ramps, of colour names and of a hex colour's digits (`tooling/colours.js`),
-and `tooling/src/token-lint.test.ts` holds both to their cases and the list to the package's ramps.
+a stylesheet with PostCSS, which Vite already brings, and each value with postcss-value-parser, a
+declaration's and a CSS Modules constant's (`@value`) alike, and reports a raw colour or a
+primitive (`pnpm run lint:css`, which `pnpm run lint` and CI run). Both read one list of ramps, of
+colour names and of a hex colour's digits (`tooling/colours.js`), and
+`tooling/src/token-lint.test.ts` holds both to their cases and the list to the package's ramps.
 A stylesheet's value is a colour's wherever a name of one stands in it; a string of TypeScript is
 looked at for a colour's name only where it is the value of a prop or a property that takes a
-colour, however that value is chosen or built, so a colour's name held in a variable is a review's
-to catch.
+colour, however that value is chosen, built or assigned, so a colour's name held in a variable is a
+review's to catch. A relative colour (`rgb(from var(--accent) r g b / 50%)`) is refused with every
+other colour function, since each of its channels may be written out: a tint is a `color-mix()`
+over tokens, as the prototype's are.
 
 ## Alternatives rejected
 

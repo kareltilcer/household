@@ -1,9 +1,9 @@
 // The glyphs and the compositions as the web draws them: each one's markup, held to a snapshot,
 // so that a change to a glyph's data, a set's weight or the way a drawing becomes SVG is a line
 // of a diff someone reads.
-import { createElement } from 'react'
+import { createElement, type SVGAttributes } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   baseIds,
   compositions,
@@ -11,7 +11,9 @@ import {
   statusGlyphs,
   type CompositionId,
   type NavigationId,
+  type Path,
   type StatusId,
+  type Taken,
 } from '../src/index.ts'
 import { BaseIcon, Illustration, ModuleIcon, StatusIcon } from './index.ts'
 
@@ -110,5 +112,18 @@ describe('an illustration', () => {
         createElement(Illustration, { composition: 'garden.setup.plot', width: 100 }),
       ),
     ).toContain('<svg viewBox="0 0 200 140" width="100" height="70" aria-hidden="true">')
+  })
+})
+
+// Checked by this directory's type check: an object is assignable to props it has more names
+// than, so what an assignment lets pass, `Taken` refuses.
+describe('a drawing’s attributes', () => {
+  it('are each under a name React’s SVG elements take, or do not compile', () => {
+    type Props = SVGAttributes<SVGElement>
+    expectTypeOf<Taken<Omit<Path, 'tag'>, Props>>().toEqualTypeOf<Omit<Path, 'tag'>>()
+    type Hyphenated = Taken<{ readonly d: string; readonly 'stroke-width': number }, Props>
+    type Misspelt = Taken<{ readonly d: string; readonly strokeDashArray?: string }, Props>
+    expectTypeOf<Hyphenated>().toBeNever()
+    expectTypeOf<Misspelt>().toBeNever()
   })
 })

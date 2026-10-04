@@ -6,7 +6,19 @@
  */
 import { resolve, type ColorName, type Theme } from '@household/tokens'
 import { createElement, type ReactElement } from 'react'
-import { Circle, G, Line, Path, Rect, Svg } from 'react-native-svg'
+import {
+  Circle,
+  G,
+  Line,
+  Path,
+  Rect,
+  Svg,
+  type CircleProps,
+  type LineProps,
+  type PathProps,
+  type RectProps,
+  type SvgProps,
+} from 'react-native-svg'
 import {
   baseIcon,
   illustration,
@@ -18,6 +30,7 @@ import {
   type NavigationId,
   type Node,
   type StatusId,
+  type Taken,
 } from '../src/index.ts'
 
 export interface IconProps {
@@ -36,7 +49,9 @@ export interface IconProps {
 const shapes = { path: Path, circle: Circle, rect: Rect, line: Line } as const
 
 // Each of a drawing's attributes is one react-native-svg's component takes, under the same name:
-// each case below is where a drawing is held to that component's own props.
+// each case below is where a drawing is held to that component's own props. Handing them to the
+// component holds each one's type, and `Taken` its name, which react-native-svg would otherwise
+// drop without a word.
 function element(node: Node): ReactElement {
   switch (node.tag) {
     case 'g': {
@@ -49,19 +64,19 @@ function element(node: Node): ReactElement {
     }
     case 'path': {
       const { tag, ...attributes } = node
-      return createElement(shapes[tag], attributes)
+      return createElement(shapes[tag], attributes satisfies Taken<typeof attributes, PathProps>)
     }
     case 'circle': {
       const { tag, ...attributes } = node
-      return createElement(shapes[tag], attributes)
+      return createElement(shapes[tag], attributes satisfies Taken<typeof attributes, CircleProps>)
     }
     case 'rect': {
       const { tag, ...attributes } = node
-      return createElement(shapes[tag], attributes)
+      return createElement(shapes[tag], attributes satisfies Taken<typeof attributes, RectProps>)
     }
     case 'line': {
       const { tag, ...attributes } = node
-      return createElement(shapes[tag], attributes)
+      return createElement(shapes[tag], attributes satisfies Taken<typeof attributes, LineProps>)
     }
   }
 }
@@ -71,7 +86,7 @@ function draw(drawing: Drawing, label: string | undefined, color?: string): Reac
   return createElement(
     Svg,
     {
-      ...attributes,
+      ...(attributes satisfies Taken<typeof attributes, SvgProps>),
       // What `currentColor` is, in a drawing stroked in it.
       ...(color === undefined ? {} : { color }),
       ...(label === undefined

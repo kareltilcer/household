@@ -56,6 +56,7 @@ export {
   type Presentation,
   type Rect,
   type Shape,
+  type Taken,
 } from './svg.ts'
 
 function paths(data: readonly string[]): Path[] {

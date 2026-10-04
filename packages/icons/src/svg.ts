@@ -67,6 +67,19 @@ export interface Drawing extends Presentation {
   readonly children: readonly Node[]
 }
 
+/**
+ * A drawing's attributes as a client's element takes them: the attributes themselves where the
+ * element's props have each of their names, and nothing where one is under a name they have not.
+ * An object is assignable to props it has more names than, so handing a drawing's attributes to
+ * an element holds each one's type and lets a name the element does not take pass, to be dropped
+ * when it is drawn. Each client holds what it hands over to this as well.
+ */
+export type Taken<Attributes, Props> = Attributes extends unknown
+  ? Exclude<keyof Attributes, keyof Props> extends never
+    ? Attributes
+    : never
+  : never
+
 /** A glyph of one stroke in the current colour, on the 24-unit grid. */
 export function glyph(children: readonly Shape[], strokeWidth: number, size: number): Drawing {
   return {

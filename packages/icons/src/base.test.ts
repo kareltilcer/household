@@ -35,8 +35,14 @@ describe('the base set', () => {
   })
 
   it('draws each glyph in shapes the drawing model has, with path data the pen reads', () => {
+    const vendored = (JSON.parse(committed('./lucide.json')) as { icons: Record<string, unknown> })
+      .icons
     for (const id of baseIds) {
       expect(baseGlyphs[id].length, id).toBeGreaterThan(0)
+      // Each shape whole, as the vendored file states it. base.ts reads the attributes the model
+      // has, so one of Lucide's it left behind would be a glyph drawn another way, and the
+      // checks below, which read what it kept, would not see a colour among what it did not.
+      expect(baseGlyphs[id], id).toEqual(vendored[id])
       for (const shape of baseGlyphs[id]) {
         expect(['path', 'circle', 'rect', 'line'], id).toContain(shape.tag)
         // No colour of its own, and no fill: a base glyph is one stroke in the current colour.
