@@ -164,3 +164,15 @@ INSERT INTO diagnostic_bundles (id, user_id, household_id, screen, payload, expi
    'sync-health', '{}', now() + interval '30 days'),
   ('01900000-0000-7000-8000-0000000000ea', '01900000-0000-7000-8000-0000000000b1', '01900000-0000-7000-8000-00000000000b',
    'sync-health', '{}', now() + interval '30 days');
+
+-- What the platform staff set for each household (item 21): a flag of its own, and a fair-use
+-- ceiling raised.
+INSERT INTO platform.feature_flags (key, enabled) VALUES ('isolation.fixture', false);
+
+INSERT INTO household_flags (household_id, key, enabled) VALUES
+  ('01900000-0000-7000-8000-00000000000a', 'isolation.fixture', true),
+  ('01900000-0000-7000-8000-00000000000b', 'isolation.fixture', true);
+
+INSERT INTO household_limits (household_id, key, value, reason, set_by_label) VALUES
+  ('01900000-0000-7000-8000-00000000000a', 'members', 20, 'Three generations under one roof', 'staff@household.example'),
+  ('01900000-0000-7000-8000-00000000000b', 'members', 20, 'Three generations under one roof', 'staff@household.example');

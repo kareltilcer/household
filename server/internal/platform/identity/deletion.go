@@ -269,6 +269,11 @@ func (s *Service) Erase(ctx context.Context, tx pgx.Tx, user uuid.UUID) error {
 			return err
 		}
 	}
+	// An account that was one of the platform's staff is one no longer (PRD 02 §8). What it did as
+	// one stays in the platform's log, under the address it had then (FR-PS2).
+	if _, err := tx.Exec(ctx, "DELETE FROM platform.staff WHERE user_id = $1", user); err != nil {
+		return err
+	}
 	// A graduation's link the user sent names them as its sender.
 	if _, err := tx.Exec(ctx, "DELETE FROM email_tokens WHERE sent_by = $1", user); err != nil {
 		return err

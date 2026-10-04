@@ -62,12 +62,15 @@ var allowed = map[string]bool{
 	"role":      true,
 
 	// A reference-data load (internal/platform/reference): the dataset's name, its version, and
-	// how many of its records the load inserted, updated, and kept that the files no longer hold.
+	// how many of its records the load inserted, updated, and kept that the files no longer hold;
+	// and how many an administrator edited that it held to their edit, or released to the files.
 	"dataset":  true,
 	"version":  true,
 	"inserted": true,
 	"updated":  true,
 	"kept":     true,
+	"held":     true,
+	"released": true,
 
 	// An email that was not sent (internal/platform/identity), or a notification that failed
 	// (internal/platform/notify): the catalog key of its template, never the address or anything

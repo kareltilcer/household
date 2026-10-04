@@ -197,12 +197,12 @@ What that means concretely:
 
 | | |
 |---|---|
-| **Enforced by** | The absence of a bypass role in PostgreSQL, plus RLS `FORCE` on every content table. Not by policy, not by an access-request workflow |
+| **Enforced by** | The absence of a bypass role in PostgreSQL, plus RLS `FORCE` on every content table, plus a role of the staff's own that holds the columns that are metadata and no others (**D-143**). Not by policy, not by an access-request workflow |
 | **Staff see** | Account and billing metadata, entitlement state, storage totals, delivery outcomes, crash reports, audit **action keys** without summaries or diffs, feature flags |
 | **Staff never see** | Any field of any content row, any file, any message, any rendered audit summary, any search term |
 | **The debugging path** | The member-initiated diagnostic bundle ([02](02-identity-and-access.md) FR-PS1): the member chooses to send, sees exactly what is in it before sending, can redact, and it expires in 30 days |
 | **The cost, stated** | Some bugs will be slower to diagnose. That is the trade, and it is made deliberately |
-| **The test** | An integration test connects as `household_app` and as every staff-facing service role and asserts that a content query for a household the connection has no membership in returns zero rows. It runs in CI on every commit |
+| **The test** | An integration test connects as each role the server runs as, `household_app`, `household_migrate`, `household_meter` and `household_staff`, and finds none a superuser or one that bypasses row-level security. As the first two it reads another household's rows in every content table, with no household in context and in a household of its own, and gets zero rows; as the last two, which read across households, it selects every column that is not one the role is granted, a count or a size for the meter and metadata for the staff, and is refused each. It runs in CI on every commit |
 
 > **Under D-93 one database credential does bypass row-level security: PowerSync's replication
 > role** ([01](01-architecture.md) §2.3, [ADR 0001](../adr/0001-sync-engine.md)). The sync

@@ -177,8 +177,10 @@ func (s *Service) updateModule(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// The owner's level as their next request finds it: Manage on a module the household enables, and
+	// none on one whose flag is off for it, which enabling does not serve (D-146).
 	level := access.None
-	if e.enabled {
+	if e.enabled && !scope.Dark(module) {
 		level = access.Manage
 	}
 	httpx.WriteJSON(w, http.StatusOK, moduleState{Module: module, Enabled: e.enabled, MyLevel: level})

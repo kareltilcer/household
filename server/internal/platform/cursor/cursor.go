@@ -23,8 +23,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 
 	"github.com/kareltilcer/household/server/internal/platform/problem"
 )
@@ -108,4 +112,58 @@ func (k Keyset) FromRequest(r *http.Request) ([]string, error) {
 // as the columns they are for.
 func Malformed() *problem.Problem {
 	return problem.Validation(problem.FieldError{Field: "query:" + Param, Code: problem.FieldMalformed})
+}
+
+// The page of a listing: the contract's Limit, 50 unless the request says, 200 at most.
+const (
+	DefaultLimit = 50
+	MaxLimit     = 200
+)
+
+// Limit is the page size r asks for; the edge has held it to the contract's Limit. It is never more
+// than MaxLimit, whatever the request says, so that nothing sized by it is sized by the client.
+func Limit(r *http.Request) int {
+	n, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || n < 1 {
+		return DefaultLimit
+	}
+	if n > MaxLimit {
+		return MaxLimit
+	}
+	return n
+}
+
+// PageMeta is the contract's PageMeta: the cursor the next page resumes from, null on the last
+// page, and whether there is a next page.
+type PageMeta struct {
+	NextCursor *string `json:"next_cursor"`
+	HasMore    bool    `json:"has_more"`
+}
+
+// Before returns where r's request resumes a listing ordered newest first, by an instant and then
+// by an id, a keyset of two values: the instant and the id of the last row of the page before, and
+// a nil instant for the first page, as a query's `$1::timestamptz IS NULL OR (at, id) < ($1, $2)`
+// takes them. A cursor whose values are not an instant and an id is malformed, the 422. It panics on
+// a keyset of another number of values, a programming error, as Encode does.
+func (k Keyset) Before(r *http.Request) (*time.Time, uuid.UUID, error) {
+	if k.arity != 2 {
+		panic("cursor: " + k.name + " is no keyset of an instant and an id")
+	}
+	values, err := k.FromRequest(r)
+	if err != nil || values == nil {
+		return nil, uuid.Nil, err
+	}
+	at, errAt := time.Parse(time.RFC3339Nano, values[0])
+	id, errID := uuid.Parse(values[1])
+	if errAt != nil || errID != nil {
+		return nil, uuid.Nil, Malformed()
+	}
+	return &at, id, nil
+}
+
+// After is the PageMeta of a page of such a listing that more rows follow: its cursor names the
+// page's last row, made at at with id.
+func (k Keyset) After(at time.Time, id uuid.UUID) PageMeta {
+	next := k.Encode(at.UTC().Format(time.RFC3339Nano), id.String())
+	return PageMeta{NextCursor: &next, HasMore: true}
 }

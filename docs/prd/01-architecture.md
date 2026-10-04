@@ -127,6 +127,7 @@ an empty set, not another family's data. A handler that writes a row with the wr
 | `household_migrate` | Migrations only, at deploy time | Bypasses (owns the tables) |
 | `household_app` | Every request | **Enforced** — no bypass exists |
 | `household_meter` | The nightly storage/usage sampler, the files workers' search for households with work due, and the live counts fair use compares with before a write | Enforced; reads aggregate columns only |
+| `household_staff` | What the platform staff API reads, across households ([02](02-identity-and-access.md) §8) | Enforced; reads metadata columns only, and writes nothing (**D-143**) |
 
 The meter role is the one that reads across households, and what it reads is held to that: every
 tenant table has, beside the tenant isolation, a `FOR SELECT` policy of the meter role's own, and the
@@ -135,12 +136,20 @@ schedule rows (a file's module, variant, size and attributed member, a job's tim
 privilege. It measures and never writes: what it finds is written in each household's own context by
 the request role (architecture tests 2 and 11, [ADR 0015](../adr/0015-files-object-storage-the-meter-and-pictures.md)).
 
-There is deliberately **no support role and no bypass role**. Platform staff have no database
-credential that can read household content, which is how [G8](00-overview.md) is made a
-property of the system rather than a policy (**D-3**, and see
-[05-privacy-and-compliance.md](05-privacy-and-compliance.md)).
+The staff role is the other that reads across households, and it is held as the meter is: a
+`FOR SELECT` policy of its own on the tenant tables it reads, and `SELECT` on the columns that are
+metadata, granted one at a time, an account's address and sign-ins, a household's name, members,
+plan and state, what it stores per module, how its deliveries went, and its audit events' action
+keys. It holds no other privilege, on those tables or any other, and it writes nothing: what staff
+do is written by the request role, in the household's own context, through the mutation spine
+(architecture test 12, [ADR 0022](../adr/0022-platform-staff-their-role-their-log-flags-and-ceilings.md)).
 
-> **Under D-93 a fourth role replicates, and it bypasses row-level security.** PowerSync reads the
+There is deliberately **no role that reads a household's content across households, and no bypass
+role**. Platform staff have no database credential that can read household content, which is how
+[G8](00-overview.md) is made a property of the system rather than a policy (**D-3**, **D-143**, and
+see [05-privacy-and-compliance.md](05-privacy-and-compliance.md)).
+
+> **Under D-93 a fifth role replicates, and it bypasses row-level security.** PowerSync reads the
 > write-ahead log and sets no tenant, so its replication role holds `REPLICATION`, whose stream of
 > changes neither row-level security nor the role's table grants filter, and `BYPASSRLS`, without
 > which it could read no table's initial snapshot, since every tenant table forces row-level
@@ -161,7 +170,8 @@ property of the system rather than a policy (**D-3**, and see
 | `billing_subscriptions`, `billing_invoices`, `billing_storage_months`, `billing_transfers` | Tenant tables, isolated as any other | What the payment processor said of a household's subscription, written in the household's context and replicated to no device; no content, and no card: a payment method is its summary alone. There is no billing role: the request role reads them in context. The plans are configuration, not a table. A payer's customer at the processor, `billing_customers`, is global, their account's ([ADR 0020](../adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md)). The daily usage samples billing averages are tenant tables, written in each household's context (FR-ST2) |
 | `country_profiles`, `unit_dimensions`, `units`, `crop_catalog`, `tariff_presets` | Global reference data | Curated by the platform, read-only to tenants, versioned. Loaded from sourced files in `reference-data/` as the server migrates ([ADR 0008](../adr/0008-reference-data-pipeline.md)). The languages are not a table: they ship with the catalogs (§9 of [03](03-platform-strands.md)) |
 | `account_deletions`, `consents`, `exports`, `diagnostic_bundles`, `erasures` | Global | What an account asked for and consented to, and what erasure leaves: a scheduled deletion, which disables the account; an export, its requester's, a household's among them; a diagnostic bundle its member chose to send; and the tombstone of an erased household or account, its id, the day and the cause ([ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md)) |
-| `platform_audit` | Global | Append-only record of platform-staff actions |
+| `platform.staff`, `platform.audit_log`, `platform.feature_flags` | Global, in a schema of the platform's own | Who the platform's staff are; the append-only record of what they did, kept seven years, which the request role inserts into and nothing updates or deletes but the purge of what is past its time (FR-PS2); and each feature flag's setting for the platform ([ADR 0022](../adr/0022-platform-staff-their-role-their-log-flags-and-ceilings.md)). The public schema's default privileges do not reach it, so each privilege there is granted by name |
+| `household_flags`, `household_limits` | Tenant tables, isolated as any other | What staff set for one household: its own setting of a feature flag, and a fair-use ceiling raised for it ([04](04-billing-and-entitlements.md) §5). Written in the household's context and replicated to no device |
 
 ### 2.5 Users across households
 
@@ -380,6 +390,8 @@ broken product for everyone who has not updated. **D-11.**
     and 17).
 11. A privilege of the meter role's beyond `SELECT` on a column that names a household or counts,
     sizes or schedules rows (§2.3; plan item 14).
+12. A privilege of the staff role's beyond `SELECT` on a column the test names as metadata
+    (§2.3, **D-143**; plan item 21).
 
 Numbers 1, 4 and 6 exist in `home` already and paid for themselves. Numbers 2, 3, 5, 7, 8 and 9
 are the ones that make commercial and multi-tenant correctness structural instead of
@@ -390,7 +402,13 @@ role's queries, not its `REPLICATION`: logical decoding checks no table's privil
 credential could decode every table's changes through a replication slot of its own, which is why
 that credential is the sync service's alone (§2.3, **D-3**). Number 11 holds §2.3's promise for the
 one role that reads every household: it counts, sizes and schedules their rows and never reads what
-they say.
+they say. Number 12 holds the same for the role the platform's staff read through: a column added to
+a table is not theirs to read until the test names it, and naming one is a statement that it is
+metadata. Beside them the no-content-access test ([05](05-privacy-and-compliance.md) §6) connects as
+each of the four roles and reads another household's rows: none as the request and the migrate role,
+and no column but the granted ones as the meter and the staff role. And test 4 keeps out of every
+module the two names by which the platform records what its staff did, `mutation.AsService` and
+`mutation.Note`.
 
 **Number 9 is the one that would otherwise be discovered late.** D-23 makes client-generated ids
 mandatory because an offline create needs a stable identity immediately — but the requirement is

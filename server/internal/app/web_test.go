@@ -115,4 +115,15 @@ func TestAHouseholdsRequestsAreLimited(t *testing.T) {
 		t.Error("no Retry-After")
 	}
 	expect(t, w.do(http.MethodGet, items(other), stranger, ""), http.StatusOK, "")
+
+	// A household whose rate the platform raised has a budget in that proportion (PRD 04 §5): six
+	// times the requests a minute, and six times the burst.
+	raised := w.household(true)
+	eva := w.member(raised, access.Owner, nil)
+	w.exec(`INSERT INTO household_limits (household_id, key, value, reason, set_by_label)
+		VALUES ($1, 'api_rate', 6, 'An integration that polls', 'staff@household.example')`, raised)
+	for range 12 {
+		expect(t, w.do(http.MethodGet, items(raised), eva, ""), http.StatusOK, "")
+	}
+	expect(t, w.do(http.MethodGet, items(raised), eva, ""), http.StatusTooManyRequests, problem.CodeRateLimited)
 }

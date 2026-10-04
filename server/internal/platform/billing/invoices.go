@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -23,12 +22,6 @@ import (
 // invoiceKeys is the invoices' listing order: the newest first, by when each was issued and then by
 // its id.
 var invoiceKeys = cursor.NewKeyset("billing.invoices", 2)
-
-// The page of a listing: the contract's Limit, 50 unless the request says, 200 at most.
-const (
-	defaultLimit = 50
-	maxLimit     = 200
-)
 
 // linkWait bounds the read of an invoice's link from the processor: an invoice is answered without
 // its link rather than as late as the processor's own timeout and retries would have it, which a
@@ -110,21 +103,6 @@ func (i invoiceRow) doc() (invoiceDoc, error) {
 	return out, nil
 }
 
-// pageMeta is the contract's PageMeta.
-type pageMeta struct {
-	NextCursor *string `json:"next_cursor"`
-	HasMore    bool    `json:"has_more"`
-}
-
-// limitOf is the request's page size; the edge has held it to the contract's range.
-func limitOf(r *http.Request) int {
-	n, err := strconv.Atoi(r.URL.Query().Get("limit"))
-	if err != nil || n < 1 {
-		return defaultLimit
-	}
-	return min(n, maxLimit)
-}
-
 // reads refuses user the invoices of household, read in tx, unless they are its payer or paid some of
 // them before handing billing on: an invoice is its payer's, and another owner sees billing's state
 // and none of them (FR-BI5).
@@ -152,25 +130,12 @@ func (s *Service) listInvoices(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	after, err := invoiceKeys.FromRequest(r)
+	before, last, err := invoiceKeys.Before(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	var (
-		before time.Time
-		last   uuid.UUID
-	)
-	if after != nil {
-		var errTime, errID error
-		before, errTime = time.Parse(time.RFC3339Nano, after[0])
-		last, errID = uuid.Parse(after[1])
-		if errTime != nil || errID != nil {
-			s.fail(w, r, cursor.Malformed())
-			return
-		}
-	}
-	limit := limitOf(r)
+	limit := cursor.Limit(r)
 	var rows []invoiceRow
 	err = tenant.InTx(ctx, func(tx pgx.Tx) error {
 		if err := reads(ctx, tx, scope.HouseholdID(), scope.UserID()); err != nil {
@@ -179,7 +144,7 @@ func (s *Service) listInvoices(w http.ResponseWriter, r *http.Request) {
 		found, err := tx.Query(ctx, "SELECT "+invoiceColumns+` FROM billing_invoices
 			WHERE household_id = $1 AND payer_id = $2 AND ($3::timestamptz IS NULL OR (issued_at, id) < ($3, $4))
 			ORDER BY issued_at DESC, id DESC LIMIT $5`,
-			scope.HouseholdID(), scope.UserID(), nullTime(before), last, limit+1)
+			scope.HouseholdID(), scope.UserID(), before, last, limit+1)
 		if err != nil {
 			return err
 		}
@@ -190,12 +155,10 @@ func (s *Service) listInvoices(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	meta := pageMeta{}
+	meta := cursor.PageMeta{}
 	if len(rows) > limit {
 		rows = rows[:limit]
-		end := rows[limit-1]
-		next := invoiceKeys.Encode(end.issued.UTC().Format(time.RFC3339Nano), end.id.String())
-		meta = pageMeta{NextCursor: &next, HasMore: true}
+		meta = invoiceKeys.After(rows[limit-1].issued, rows[limit-1].id)
 	}
 	items := make([]invoiceDoc, 0, len(rows))
 	for _, row := range rows {
@@ -207,13 +170,6 @@ func (s *Service) listInvoices(w http.ResponseWriter, r *http.Request) {
 		items = append(items, doc)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "meta": meta})
-}
-
-func nullTime(t time.Time) *time.Time {
-	if t.IsZero() {
-		return nil
-	}
-	return &t
 }
 
 // getInvoice is getBillingInvoicesByInvoiceId: one invoice the caller paid, with where its PDF is

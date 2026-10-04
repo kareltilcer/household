@@ -13,6 +13,7 @@
 //
 //	HOUSEHOLD_DATABASE_URL          the request role, for serve
 //	HOUSEHOLD_METER_DATABASE_URL    the meter role, for serve's files workers
+//	HOUSEHOLD_STAFF_DATABASE_URL    the staff role, for serve's platform staff API
 //	HOUSEHOLD_MIGRATE_DATABASE_URL  the migrate role, for setup
 //	HOUSEHOLD_HTTP_ADDR             where serve listens (127.0.0.1:8091)
 //	HOUSEHOLD_POWERSYNC_URL         PowerSync, as a client reaches it (http://127.0.0.1:8090)
@@ -44,6 +45,7 @@ var defaults = map[string]string{ //nolint:gosec // G101: loopback development v
 	config.DatabaseURLVar:        "postgres://household_app:household_app@127.0.0.1:5442/household?sslmode=disable",
 	config.MigrateDatabaseURLVar: "postgres://household_migrate:household_migrate@127.0.0.1:5442/household?sslmode=disable",
 	config.MeterDatabaseURLVar:   "postgres://household_meter:household_meter@127.0.0.1:5442/household?sslmode=disable",
+	config.StaffDatabaseURLVar:   "postgres://household_staff:household_staff@127.0.0.1:5442/household?sslmode=disable",
 	config.HTTPAddrVar:           "127.0.0.1:8091",
 	config.PowerSyncURLVar:       "http://127.0.0.1:8090",
 }

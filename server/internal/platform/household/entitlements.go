@@ -382,25 +382,28 @@ func (s *Service) ownedNotice(ctx context.Context, tx pgx.Tx, household, user uu
 }
 
 // memberCeiling refuses a new member of household, in tx under the household's lock (lockHousehold),
-// when it has fairuse.Members already (PRD 04 §5, D-116), child profiles among them, and otherwise
-// returns how many it has.
-func memberCeiling(ctx context.Context, tx pgx.Tx, household uuid.UUID) (int64, error) {
-	var members int64
+// when it has as many as it may already, fairuse.Members or what the platform raised that to for it
+// (PRD 04 §5, D-116), child profiles among them, and otherwise returns how many it has, and the
+// ceiling it is held to.
+func memberCeiling(ctx context.Context, tx pgx.Tx, household uuid.UUID) (members, ceiling int64, err error) {
+	if ceiling, err = fairuse.Ceiling(ctx, tx, household, fairuse.KeyMembers, fairuse.Members); err != nil {
+		return 0, 0, err
+	}
 	if err := tx.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE household_id = $1", household).Scan(&members); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	if members >= fairuse.Members {
-		return members, fairuse.Refusal(fairuse.ResourceMembers, fairuse.Members, "")
+	if members >= ceiling {
+		return members, ceiling, fairuse.Refusal(fairuse.ResourceMembers, ceiling, "")
 	}
-	return members, nil
+	return members, ceiling, nil
 }
 
-// membersNotice queues, in tx, the push that tells household's owners it crossed 80 % of its
+// membersNotice queues, in tx, the push that tells household's owners it crossed 80 % of ceiling, its
 // members' ceiling, when going from before members to one more crossed it, and reports whether it
 // did, for the caller to nudge the transport once tx commits.
-func (s *Service) membersNotice(ctx context.Context, tx pgx.Tx, household uuid.UUID, before int64) (bool, error) {
-	if !fairuse.Crossed(before, before+1, fairuse.Members) {
+func (s *Service) membersNotice(ctx context.Context, tx pgx.Tx, household uuid.UUID, before, ceiling int64) (bool, error) {
+	if !fairuse.Crossed(before, before+1, ceiling) {
 		return false, nil
 	}
-	return true, fairuse.Notice(ctx, tx, s.Notify, household, fairuse.ResourceMembers, "", before+1, fairuse.Members)
+	return true, fairuse.Notice(ctx, tx, s.Notify, household, fairuse.ResourceMembers, "", before+1, ceiling)
 }

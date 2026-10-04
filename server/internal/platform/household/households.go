@@ -86,6 +86,9 @@ type householdBody struct {
 	MyRole         access.Role             `json:"my_role,omitempty"`
 	MyGrants       map[string]access.Level `json:"my_grants,omitempty"`
 	Entitlement    *entitlement.Summary    `json:"entitlement,omitempty"`
+	// Flags are the feature flags that are on for the household (PRD 06 §7), which a client shows
+	// what ships dark by: on the household's own representation, not on a list of households.
+	Flags []string `json:"flags,omitempty"`
 	// DeletionScheduledAt is when the household is deleted, null while no deletion is pending.
 	DeletionScheduledAt *time.Time `json:"deletion_scheduled_at"`
 }
@@ -122,7 +125,9 @@ func (h settings) body(role access.Role, level func(string) access.Level, module
 // bodyFor is h as scope's caller reads it at now, with the entitlement the request found, the state
 // being resolved once per request (PRD 04 §3), and its storage standing at st against its allowance.
 func (h settings) bodyFor(scope *tenant.Scope, modules []string, now time.Time, st storage.Standing) householdBody {
-	return h.body(scope.Role(), scope.Level, modules, withStorage(scope.Entitlement().Summary(now), st))
+	b := h.body(scope.Role(), scope.Level, modules, withStorage(scope.Entitlement().Summary(now), st))
+	b.Flags = scope.Flags()
+	return b
 }
 
 // withStorage is e saying the household's storage as st has it.
@@ -242,7 +247,8 @@ var errIDTaken = invalid("/id", problem.FieldInvalid)
 // of is refused. A child profile is refused 403: it is a profile an owner manages in their household,
 // never a household's owner and payer (D-17, D-104). A user who owns as many households as they may
 // is refused 403 household_limit_reached, and one this household brings to 80 % of them is told
-// (PRD 04 §5, D-116).
+// (PRD 04 §5, D-116). It is answered as its owner's next request reads it: with the feature flags that
+// are on for it, and no level on a module whose flag holds it dark (D-146).
 func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := auth.User(ctx)
@@ -261,6 +267,9 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 		status  entitlement.Status
 		modules = Modules
 		noticed bool
+		// levels and flags are what the creator's next request finds: no request resolved them here.
+		levels map[string]access.Level
+		flags  []string
 	)
 	_, err := mutation.Apply(scoped, func(tx pgx.Tx) (mutation.Record, error) {
 		switch child, err := identity.IsChild(ctx, tx, user); {
@@ -307,6 +316,14 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 		if status, err = readStatus(ctx, tx, created.id); err != nil {
 			return mutation.Record{}, err
 		}
+		// Its owner manages every module it enables but one that ships dark, whose flag is off for the
+		// platform (D-146), and the flags that are on are the platform's: it has no setting of its own.
+		if levels, err = tenant.Levels(ctx, tx, created.id, user, access.Owner); err != nil {
+			return mutation.Record{}, err
+		}
+		if flags, err = tenant.Flags(ctx, tx, created.id); err != nil {
+			return mutation.Record{}, err
+		}
 		// Told in the household it made, of which it is a member now.
 		if noticed, err = s.ownedNotice(scoped, tx, created.id, user, owned); err != nil {
 			return mutation.Record{}, err
@@ -326,12 +343,14 @@ func (s *Service) createHousehold(w http.ResponseWriter, r *http.Request) {
 	if noticed {
 		s.Notify.Nudge(ctx, created.id)
 	}
-	// The creator is its owner, with Manage on every module, each of which it enables.
-	manage := func(string) access.Level { return access.Manage }
 	etag.Set(w, created.version)
 	// It stores nothing yet, against the base allowance.
 	fresh := s.Allowance.Standing(storage.Usage{})
-	httpx.WriteJSON(w, http.StatusCreated, created.body(access.Owner, manage, modules, withStorage(status.Summary(s.Now()), fresh)))
+	// The creator is its owner, as their next request reads it: Manage on every module it enables
+	// that no flag holds dark, with the flags that are on for it.
+	b := created.body(access.Owner, func(m string) access.Level { return levels[m] }, modules, withStorage(status.Summary(s.Now()), fresh))
+	b.Flags = flags
+	httpx.WriteJSON(w, http.StatusCreated, b)
 }
 
 // insertHousehold writes the household req names, with its creator as its payer, and returns it. An

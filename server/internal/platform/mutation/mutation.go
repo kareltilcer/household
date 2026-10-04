@@ -62,7 +62,54 @@ type (
 	catalogKey struct{}
 	viaKey     struct{}
 	ceilingKey struct{}
+	serviceKey struct{}
 )
+
+// Service is the platform acting on a household for someone who is no member of it: its staff (PRD
+// 02 §8). What it does there is written in the household's own log, where the household sees it
+// (FR-AL7, D-75), by a service actor named Label, and never by a member's name.
+type Service struct {
+	// Label names the actor in the household's log: "support" for the platform's staff, whichever of
+	// them it was. Who it was is the platform's own log's to say.
+	Label string
+	// Witness, when not nil, runs in the transaction of each event the service records, with the
+	// event's id, once the event is written: the platform's own record of the action (FR-PS2), which
+	// commits with its effect or not at all. An error rolls the mutation back.
+	Witness func(ctx context.Context, tx pgx.Tx, event uuid.UUID) error
+}
+
+// AsService returns ctx recording that its mutations are svc's. It names the actor only in a scope
+// with no caller, the platform's own (tenant.Assume), where Apply would otherwise record the system:
+// a member's mutation is the member's, whatever its context says. It is the platform's, as
+// tenant.Assume is: architecture test 4 keeps it out of every module.
+func AsService(ctx context.Context, svc Service) context.Context {
+	return context.WithValue(ctx, serviceKey{}, svc)
+}
+
+// acting returns who ctx's mutations are recorded as, in scope: the caller, a service the context
+// names where the scope has no caller, or the system. A user's label is read by label, in the
+// mutation's own transaction.
+func acting(ctx context.Context, scope *tenant.Scope) (audit.Actor, *Service) {
+	if user := scope.UserID(); user != uuid.Nil {
+		return audit.Actor{Type: audit.User, ID: user}, nil
+	}
+	if svc, ok := ctx.Value(serviceKey{}).(Service); ok && svc.Label != "" {
+		return audit.Actor{Type: audit.Service, Label: svc.Label}, &svc
+	}
+	return audit.Actor{Type: audit.System}, nil
+}
+
+// label reads, in tx, the name a user actor has now, so that the log still reads after they leave or
+// rename themselves (FR-AU3).
+func label(ctx context.Context, tx pgx.Tx, actor *audit.Actor) error {
+	if actor.Type != audit.User {
+		return nil
+	}
+	if err := tx.QueryRow(ctx, "SELECT display_name FROM users WHERE id = $1", actor.ID).Scan(&actor.Label); err != nil {
+		return fmt.Errorf("mutation: the actor's name: %w", err)
+	}
+	return nil
+}
 
 // Ceiling refuses a mutation of module that creates creates rows in household, read in tx, when they
 // would take the module past the rows it may hold (fair use, PRD 04 §5), with the problem that
@@ -112,8 +159,9 @@ func WithVia(ctx context.Context, via audit.Via) context.Context {
 // instance, is returned as it is, after the rollback.
 //
 // The actor is the caller in ctx's tenant scope, labelled with their display name as it is when
-// the event is written, or the system when the scope has no caller, and the audit event records
-// how the change arrived (WithVia) and the request it arrived in. The event's
+// the event is written, or, when the scope has no caller, the service ctx names (AsService) or the
+// system, and the audit event records how the change arrived (WithVia) and the request it arrived
+// in. The event's
 // action must be one its module declares, and each change must name an entity of that module,
 // consistent with the entity's declared access (sync.Change.Check); an event with a private
 // change is private to that change's owner.
@@ -142,10 +190,7 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 	if scope == nil {
 		return Result{}, tenant.ErrNoTenant
 	}
-	actor := audit.Actor{Type: audit.System}
-	if user := scope.UserID(); user != uuid.Nil {
-		actor = audit.Actor{Type: audit.User, ID: user}
-	}
+	actor, svc := acting(ctx, scope)
 
 	var res Result
 	err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
@@ -169,16 +214,16 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 		if err := idempotency.Commit(ctx, tx); err != nil {
 			return err
 		}
-		// The actor's name as it is now, so that the log still reads after they leave or rename
-		// themselves (FR-AU3): read here, in the mutation's own transaction, whichever front door
-		// let the request in.
-		if actor.Type == audit.User {
-			if err := tx.QueryRow(ctx, "SELECT display_name FROM users WHERE id = $1", actor.ID).Scan(&actor.Label); err != nil {
-				return fmt.Errorf("mutation: the actor's name: %w", err)
-			}
+		// The actor's name as it is now: read here, in the mutation's own transaction, whichever
+		// front door let the request in.
+		if err := label(ctx, tx, &actor); err != nil {
+			return err
 		}
 		if res.EventID, err = audit.Record(ctx, tx, scope.HouseholdID(), actor, via, reqctx.RequestID(ctx), rec.Event); err != nil {
 			return err
+		}
+		if svc != nil && svc.Witness != nil {
+			return svc.Witness(ctx, tx, res.EventID)
 		}
 		return nil
 	})
@@ -189,6 +234,53 @@ func Apply(ctx context.Context, fn func(tx pgx.Tx) (Record, error)) (Result, err
 		return Result{}, err
 	}
 	return res, nil
+}
+
+// Note records e in the log of ctx's household, in tx, a transaction of that household that may
+// write, and returns the event's id: something the platform did to a household that changed no
+// entity's row, and so is no mutation Apply would record, a credit applied at the payment processor,
+// an invoice sent again, a ceiling raised (FR-AL7, D-75). The event is held to what Apply holds one
+// to: an action its module declares, recorded by the actor ctx's scope and service name, with how it
+// arrived; and, as in Apply, the Idempotency-Key ctx's request holds is marked committed in tx, which
+// commits what the event records, so that no caller of Note has it to remember. It is the
+// platform's, as tenant.InWriteTx is, whose transaction it needs: architecture test 4 keeps both out
+// of every module, whose every event is a mutation's.
+func Note(ctx context.Context, tx pgx.Tx, e audit.Event) (uuid.UUID, error) {
+	reg, _ := ctx.Value(catalogKey{}).(*module.Registry)
+	if reg == nil {
+		return uuid.Nil, ErrNoCatalog
+	}
+	via, _ := ctx.Value(viaKey{}).(audit.Via)
+	if via == "" {
+		return uuid.Nil, ErrNoVia
+	}
+	scope := tenant.From(ctx)
+	if scope == nil {
+		return uuid.Nil, tenant.ErrNoTenant
+	}
+	if err := e.Check(); err != nil {
+		return uuid.Nil, err
+	}
+	if _, ok := reg.Action(e.Module + "." + e.Action); !ok {
+		return uuid.Nil, fmt.Errorf("mutation: audit action %s.%s is not one its module declares", e.Module, e.Action)
+	}
+	if err := idempotency.Commit(ctx, tx); err != nil {
+		return uuid.Nil, err
+	}
+	actor, svc := acting(ctx, scope)
+	if err := label(ctx, tx, &actor); err != nil {
+		return uuid.Nil, err
+	}
+	id, err := audit.Record(ctx, tx, scope.HouseholdID(), actor, via, reqctx.RequestID(ctx), e)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if svc != nil && svc.Witness != nil {
+		if err := svc.Witness(ctx, tx, id); err != nil {
+			return uuid.Nil, err
+		}
+	}
+	return id, nil
 }
 
 // creates is how many rows rec creates: its upserts of a row at its first version, which

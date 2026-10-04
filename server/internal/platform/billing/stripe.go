@@ -483,6 +483,9 @@ func (s *Stripe) Credit(ctx context.Context, c NewCredit) error {
 	if c.Note != "" {
 		params.Description = stripe.String(c.Note)
 	}
+	if c.IdempotencyID != "" {
+		params.SetIdempotencyKey(c.IdempotencyID)
+	}
 	_, err := s.client.V1CustomerBalanceTransactions.Create(ctx, params)
 	return fault(err)
 }

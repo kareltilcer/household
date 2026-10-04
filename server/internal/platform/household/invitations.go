@@ -968,7 +968,7 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return mutation.Record{}, err
 		}
-		members, err := memberCeiling(ctx, tx, household)
+		members, ceiling, err := memberCeiling(ctx, tx, household)
 		if err != nil {
 			return mutation.Record{}, err
 		}
@@ -976,7 +976,7 @@ func (s *Service) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		if m, err = insertMembership(ctx, tx, household, user, i.role, grants); err != nil {
 			return mutation.Record{}, err
 		}
-		if noticed, err = s.membersNotice(scoped, tx, household, members); err != nil {
+		if noticed, err = s.membersNotice(scoped, tx, household, members, ceiling); err != nil {
 			return mutation.Record{}, err
 		}
 		status := i.status

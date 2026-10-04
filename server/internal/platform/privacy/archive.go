@@ -316,11 +316,13 @@ func (s *Service) copyFiles(ctx context.Context, a *archive, household uuid.UUID
 }
 
 // The keys the activity log's rows are rendered with beside each event's own summary: who did a
-// thing once their account is gone (FR-PR4), the platform acting on its own, and the summary of an
-// event about a private item that is not the reader's (FR-AU4, audit.RedactedKey).
+// thing once their account is gone (FR-PR4), the platform acting on its own, a service acting on the
+// household, by the label its events carry, "support" for the platform's staff (FR-AL7, D-145), and
+// the summary of an event about a private item that is not the reader's (FR-AU4, audit.RedactedKey).
 const (
 	keyFormerMember = "activity.actor.former_member"
 	keySystem       = "activity.actor.system"
+	keyService      = "activity.actor."
 )
 
 // activity writes household's activity log as CSV, rendered in locale, as reader would read it on
@@ -367,6 +369,14 @@ func (s *Service) activity(ctx context.Context, tx pgx.Tx, w io.Writer, househol
 	_, err = pgx.ForEachRow(rows, []any{&at, &actorType, &label, &mod, &action, &entity, &entityID, &summaryKey, &args, &visibility, &owner}, func() error {
 		actor := ""
 		switch {
+		case label != nil && audit.ActorType(actorType) == audit.Service:
+			// A service's label is its name in the catalog, as a client renders it: "support" reads
+			// as Household support, in the reader's language. One with no message yet reads by its label.
+			text, err := s.cfg.Catalogs.Render(locale, keyService+*label, nil)
+			if err != nil {
+				text = *label
+			}
+			actor = text
 		case label != nil:
 			actor = *label
 		case audit.ActorType(actorType) == audit.User:

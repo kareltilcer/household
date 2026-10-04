@@ -58,10 +58,14 @@ func (d Digest) Hex() string {
 //
 // A soft-deleted row stays in its streams, a tombstone, and is counted. A suspended household reaches
 // no stream, and no request of its either, which the tenant middleware refuses.
+//
+// The caller's level is the one the streams read (Scope.Replicated), not the one their requests are
+// held to: no stream reads a feature flag, so a replica still holds the rows of a module whose flag
+// is off for the household (D-146), and its report of them matches.
 func Expected(ctx context.Context, tx pgx.Tx, scope *tenant.Scope, entities []sync.Entity) (map[string]Digest, error) {
 	out := make(map[string]Digest, len(entities))
 	for _, e := range entities {
-		if e.Access&sync.Members == 0 && scope.Level(e.Module()) == access.None {
+		if e.Access&sync.Members == 0 && scope.Replicated(e.Module()) == access.None {
 			out[e.Name] = Digest{}
 			continue
 		}

@@ -238,6 +238,56 @@ paths:
   /households/{household_id}/exports/{export_id}:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: export_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
     get: { operationId: getExportsByExportId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+  # The platform staff API (item 21), which the router always serves too.
+  /platform/households:
+    get: { operationId: getPlatformHouseholds, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/households/{household_id}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getPlatformHouseholdsByHouseholdId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/households/{household_id}/trial:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postPlatformHouseholdsByHouseholdIdTrial, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Extended }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/households/{household_id}/limits:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    patch: { operationId: patchPlatformHouseholdsByHouseholdIdLimits, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/households/{household_id}/suspension:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    put: { operationId: putPlatformHouseholdsByHouseholdIdSuspension, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/households/{household_id}/credit:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post: { operationId: postPlatformHouseholdsByHouseholdIdCredit, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Credited }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/households/{household_id}/invoices/{invoice_id}/resend:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: invoice_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    post: { operationId: postPlatformHouseholdsByHouseholdIdInvoicesByInvoiceIdResend, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Queued }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/households/{household_id}/notifications/{notification_id}/redrive:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: notification_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    post: { operationId: postPlatformHouseholdsByHouseholdIdNotificationsByNotificationIdRedrive, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Queued }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/households/{household_id}/flags/{key}:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }, { name: key, in: path, required: true, schema: { type: string } }]
+    put: { operationId: putPlatformHouseholdsByHouseholdIdFlagsByKey, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/users:
+    get: { operationId: getPlatformUsers, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/users/{user_id}:
+    parameters: [{ name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    get: { operationId: getPlatformUsersByUserId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/users/{user_id}/actions:
+    parameters: [{ name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    post: { operationId: postPlatformUsersByUserIdActions, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '202': { description: Done }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/diagnostics/{bundle_id}:
+    parameters: [{ name: bundle_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    get: { operationId: getPlatformDiagnosticsByBundleId, responses: { '200': { description: Found }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/flags:
+    get: { operationId: getPlatformFlags, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/flags/{key}:
+    parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
+    put: { operationId: putPlatformFlagsByKey, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '200': { description: Updated }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/audit:
+    get: { operationId: getPlatformAudit, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/staff:
+    get: { operationId: getPlatformStaff, responses: { '200': { description: Listed }, default: { $ref: '#/components/responses/Problem' } } }
+  /platform/staff/{user_id}:
+    parameters: [{ name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
+    put: { operationId: putPlatformStaffByUserId, requestBody: { $ref: '#/components/requestBodies/Any' }, responses: { '204': { description: Done }, default: { $ref: '#/components/responses/Problem' } } }
   /households/{household_id}/probe/items:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get:

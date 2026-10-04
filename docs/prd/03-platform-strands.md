@@ -536,6 +536,7 @@ schedulers to forget one of.
 | Revoked device sign-ins, with their refresh tokens | 30 days after they were revoked | **D-113** |
 | Trusts to skip the second step | Once expired | **D-113** |
 | Sign-in throttle counts | A day after their window and their block end | **D-113** |
+| Entries of the platform audit log | 7 years | [02-identity-and-access.md](02-identity-and-access.md) FR-PS2 |
 
 The hourly invitation and token expiry is the same operation on what expires within the hour:
 

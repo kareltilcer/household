@@ -42,6 +42,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/scheduler"
 	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/staff"
 	"github.com/kareltilcer/household/server/internal/platform/storage"
 	syncs "github.com/kareltilcer/household/server/internal/platform/sync"
 )
@@ -82,6 +83,11 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 		return err
 	}
 	defer meter.Close()
+	staffPool, err := db.Open(ctx, cfg.StaffDatabaseURL, name+"-staff")
+	if err != nil {
+		return err
+	}
+	defer staffPool.Close()
 	c, err := contract.Load()
 	if err != nil {
 		return err
@@ -124,6 +130,13 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	if err != nil {
 		return err
 	}
+	staffAPI, err := staff.New(staff.Config{
+		Pool: pool, Staff: staffPool, Log: log, Catalog: catalog, Accounts: accounts.Identity, Households: households,
+		Billing: bills, Notify: notifier,
+	})
+	if err != nil {
+		return err
+	}
 	replicas, err := replica.New(replica.Config{URL: cfg.PowerSyncURL, Keys: cfg.TokenKeys, Logger: log})
 	if err != nil {
 		return err
@@ -144,6 +157,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 		Notify:       notifier,
 		Billing:      bills,
 		Privacy:      eraser,
+		Staff:        staffAPI,
 	})
 	if err != nil {
 		return err

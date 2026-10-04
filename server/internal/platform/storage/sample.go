@@ -358,11 +358,20 @@ func (s *Sampler) warn(ctx context.Context, tx pgx.Tx, before counted, u *usage,
 	if err != nil {
 		return false, err
 	}
-	if fairuse.Crossed(before.objects, u.objects, fairuse.Objects) {
-		if err := fairuse.Notice(ctx, tx, s.Notify, u.household, fairuse.ResourceObjects, "", u.objects, fairuse.Objects); err != nil {
+	// Each ceiling is the household's own, where the platform raised it (PRD 04 §5).
+	objects, err := fairuse.Ceiling(ctx, tx, u.household, fairuse.KeyObjects, fairuse.Objects)
+	if err != nil {
+		return false, err
+	}
+	if fairuse.Crossed(before.objects, u.objects, objects) {
+		if err := fairuse.Notice(ctx, tx, s.Notify, u.household, fairuse.ResourceObjects, "", u.objects, objects); err != nil {
 			return false, err
 		}
 		warned = true
+	}
+	ceiling, err := fairuse.Ceiling(ctx, tx, u.household, fairuse.KeyRows, fairuse.Rows)
+	if err != nil {
+		return false, err
 	}
 	names := make([]string, 0, len(u.modules))
 	for name := range u.modules {
@@ -371,10 +380,10 @@ func (s *Sampler) warn(ctx context.Context, tx pgx.Tx, before counted, u *usage,
 	slices.Sort(names)
 	for _, name := range names {
 		rows := u.modules[name].rows
-		if !fairuse.Crossed(before.rows[name], rows, fairuse.Rows) {
+		if !fairuse.Crossed(before.rows[name], rows, ceiling) {
 			continue
 		}
-		if err := fairuse.Notice(ctx, tx, s.Notify, u.household, fairuse.ResourceRows, name, rows, fairuse.Rows); err != nil {
+		if err := fairuse.Notice(ctx, tx, s.Notify, u.household, fairuse.ResourceRows, name, rows, ceiling); err != nil {
 			return false, err
 		}
 		warned = true

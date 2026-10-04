@@ -231,7 +231,7 @@ tags:
   - name: chat
     description: Household messaging
   - name: platform
-    description: Platform staff endpoints — metadata only
+    description: Platform staff endpoints — metadata only, and the support actions, each recorded in the platform's log and in the household's own
   - name: health
     description: Liveness and readiness probes
 
@@ -1354,7 +1354,9 @@ paths:
         profile; a country Household has no profile of is refused `422` naming `/country`, and an `id`
         another household has, or had before it was erased (D-140), `422` naming `/id`. A child
         profile is refused `403`: it is a profile an owner manages in their household, never a
-        household's owner and payer (D-17, D-104).
+        household's owner and payer (D-17, D-104). The household is answered as its creator's next
+        read finds it: `flags` names the feature flags that are on for it, and `my_grants` no level
+        on a module whose flag is off for the platform, which enabling does not serve (D-146).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1887,7 +1889,9 @@ paths:
       description: |
         Owner only. Disabling makes the module's routes `404`, removes its widgets, stops and retracts
         its sync entities, and **retains its data**. Re-enabling restores everything. `admin`, the
-        household's settings, is never disabled (`403`).
+        household's settings, is never disabled (`403`). `my_level` is the owner's level as their next
+        request finds it: `none` on a module whose feature flag is off for the household, which
+        enabling does not serve (D-146).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -8501,16 +8505,32 @@ paths:
         security for content tables but one, which no staff member, staff tool or support system
         connects with: PowerSync's replication role, the sync service's own credential (D-3, D-93),
         whose reach the generated streams and a read-path isolation test hold instead. This is
-        enforced by the absence of a mechanism, not by policy.
+        enforced by the absence of a mechanism, not by policy: what staff read is read through a
+        database role that holds the columns that are metadata and nothing else, so no operation
+        here could answer a field of a content row (D-143).
+
+        The platform's staff are accounts a `platform_admin` made staff, `support` or
+        `platform_admin` (PRD 02 §8), each with the second step on. A caller who is not one of them
+        is answered `404` on every operation here, as for anything else they may not see; a staff
+        member whose second step is off is answered `403` (`staff_mfa_required`), and one whose role
+        does not reach the operation `403` (`forbidden`). Every operation that changes something
+        takes a `reason`, is recorded in the platform's log in the transaction of its effect
+        (`getPlatformAudit`), and, where it touches a household, in that household's own activity
+        log, where the household reads it as done by *Household support* (D-75). One that changes
+        nothing, a household already as asked, records nothing.
+
+        The households are answered newest first, each with its name, country, state and member
+        count.
       parameters:
-        - { name: q, in: query, required: false, schema: { type: string }, description: 'Matches household id, name, or a member email.' }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 254 }, description: 'Matches a household''s id, part of its name, or the whole address of one of its members.' }
         - { name: state, in: query, required: false, schema: { $ref: '#/components/schemas/EntitlementState' } }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
         '200': { description: Households, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformHouseholdPage' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -8521,11 +8541,13 @@ paths:
       tags: [platform]
       summary: One household's metadata
       description: |
-        Name, ids, member count, roles, plan, subscription state, storage totals per module, module
-        enablement, delivery outcomes, and audit **action keys** — with no summaries and no diffs.
+        Name, ids, member count, roles, plan, subscription state, invoice history, storage totals
+        per module, module enablement, delivery outcomes, feature flags, the fair-use ceilings raised
+        for it, and audit **action keys** — with no summaries and no diffs.
       responses:
         '200': { description: Metadata, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformHousehold' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -8535,17 +8557,25 @@ paths:
       operationId: postPlatformHouseholdsByHouseholdIdTrial
       tags: [platform]
       summary: Extend a trial
-      description: Written to the platform audit log **and** to the household's own activity log, where the household sees it.
+      description: |
+        `days` more of trial, of 24 hours each: from the end of a trial still running, or from now
+        for a household whose trial ended unpaid, in grace or read-only since, which is back on
+        trial. A household that has subscribed has no trial to extend (`409`, `not_applicable`).
+        Written to the platform audit log **and** to the household's own activity log, where the
+        household sees it. Answers the household's metadata as it stands then, not the
+        `Subscription` its owners read, whose payer and offer name members.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [days, reason], properties: { days: { type: integer, minimum: 1, maximum: 90 }, reason: { type: string } } } } }
+        content: { application/json: { schema: { type: object, required: [days, reason], properties: { days: { type: integer, minimum: 1, maximum: 90 }, reason: { $ref: '#/components/schemas/StaffReason' } } } } }
       responses:
-        '200': { description: Extended, content: { application/json: { schema: { $ref: '#/components/schemas/Subscription' } } } }
+        '200': { description: Extended, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformHousehold' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '429': { $ref: '#/components/responses/RateLimited' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaffNotApplicable' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /platform/households/{household_id}/limits:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
@@ -8553,31 +8583,187 @@ paths:
       operationId: patchPlatformHouseholdsByHouseholdIdLimits
       tags: [platform]
       summary: Raise a fair-use ceiling for one household
+      description: |
+        `platform_admin` only. One ceiling (PRD 04 §5) raised for the household, to a `value` at or
+        above the one every household is held to and no more than 2^53 − 1, or, with a null
+        `value`, put back to it. The household is held to it from its next request. A ceiling raised
+        to the `value` it has already stands as it was set, by whom and why, and is answered so.
+        `chat_messages` is kept and read once Chat counts its messages.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/PlatformLimitOverride' } } }
+        content: { application/json: { schema: { $ref: '#/components/schemas/PlatformLimitChange' } } }
       responses:
-        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformLimitOverride' } } } }
+        '200': { description: 'The ceiling as it stands: with a null `value` once it is put back', content: { application/json: { schema: { $ref: '#/components/schemas/PlatformLimitOverride' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '429': { $ref: '#/components/responses/RateLimited' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /platform/households/{household_id}/suspension:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    put:
+      operationId: putPlatformHouseholdsByHouseholdIdSuspension
+      tags: [platform]
+      summary: Suspend a household, or lift its suspension
+      description: |
+        `platform_admin` only. Abuse or legal, rare, and always with notice (PRD 04 §3): suspending
+        takes a `notice`, what the household is told of why, which its lockout shows and each of its
+        owners is emailed. A suspended household answers every household-scoped request `404` and
+        its replicas are emptied (D-115). Lifting it puts the household back in the state its
+        subscription gives it, and its owners are emailed. A household that stands as asked already
+        is answered as it is.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [suspended, reason], properties: { suspended: { type: boolean }, notice: { type: string, minLength: 1, maxLength: 500, description: Required when suspending. What the household is told of why. }, reason: { $ref: '#/components/schemas/StaffReason' } } } } }
+      responses:
+        '200': { description: The household as it stands, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformHousehold' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /platform/households/{household_id}/credit:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    post:
+      operationId: postPlatformHouseholdsByHouseholdIdCredit
+      tags: [platform]
+      summary: Apply a credit
+      description: |
+        A credit to the balance of the customer who pays the household's subscription, at the
+        payment processor, which its next invoices draw on. The amount is in the currency the
+        household is charged in. A household nobody pays for has nothing to credit (`409`,
+        `not_subscribed`). Send it with an `Idempotency-Key`: the processor is asked before the
+        credit is recorded, so a request answered `503`, or not at all, may have credited the
+        customer, and sent again under the same key it is the one credit, where without a key it
+        would be a second.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [amount, reason], properties: { amount: { $ref: '#/components/schemas/Money' }, reason: { $ref: '#/components/schemas/StaffReason' } } } } }
+      responses:
+        '204': { description: Credited }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'The household has no subscription (`not_subscribed`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { description: 'The payment processor cannot be asked (`billing_unavailable`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /platform/households/{household_id}/invoices/{invoice_id}/resend:
+    parameters:
+      - { $ref: '#/components/parameters/HouseholdId' }
+      - { name: invoice_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    post:
+      operationId: postPlatformHouseholdsByHouseholdIdInvoicesByInvoiceIdResend
+      tags: [platform]
+      summary: Re-issue an invoice
+      description: |
+        Emails the household's invoice to its payer again, as it was when it was paid. Only a paid
+        one is sent (`409`, `not_applicable`, otherwise): the email says the payment went through.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/StaffAction' } } }
+      responses:
+        '202': { description: Queued }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaffNotApplicable' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /platform/households/{household_id}/notifications/{notification_id}/redrive:
+    parameters:
+      - { $ref: '#/components/parameters/HouseholdId' }
+      - { name: notification_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    post:
+      operationId: postPlatformHouseholdsByHouseholdIdNotificationsByNotificationIdRedrive
+      tags: [platform]
+      summary: Re-drive a failed notification
+      description: |
+        Queues a notification that failed again, as it was queued, to the same member. Whether it
+        reaches them is decided again as it goes out, by their grants, their mutes and their quiet
+        hours as they are then. One that cannot go again is refused (`409`, `not_applicable`): one
+        that did not fail, one whose arguments are gone, seven days after it settled, one to an
+        address with no account, and one whose link carried a secret. `PlatformHousehold` says which
+        can (`redrivable`).
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/StaffAction' } } }
+      responses:
+        '202': { description: Queued }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaffNotApplicable' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /platform/households/{household_id}/flags/{key}:
+    parameters:
+      - { $ref: '#/components/parameters/HouseholdId' }
+      - { $ref: '#/components/parameters/FlagKey' }
+    put:
+      operationId: putPlatformHouseholdsByHouseholdIdFlagsByKey
+      tags: [platform]
+      summary: Set a feature flag for one household
+      description: |
+        The household's own setting of a flag the platform has, which comes before the platform's:
+        a feature turned on for the households that try it first, or off for one it troubles. A
+        null `enabled` takes the household's setting away. `404` for a flag the platform does not
+        have (`putPlatformFlagsByKey` makes one).
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [enabled, reason], properties: { enabled: { type: [boolean, 'null'] }, reason: { $ref: '#/components/schemas/StaffReason' } } } } }
+      responses:
+        '200': { description: The flag as it stands for the household, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformHouseholdFlag' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /platform/users:
     get:
       operationId: getPlatformUsers
       tags: [platform]
       summary: Search users — account metadata only
+      description: 'The accounts whose id `q` is, or whose address holds it, newest first. Never an account''s name. An erased account, which keeps nothing but its id, is not among them.'
       parameters:
-        - { name: q, in: query, required: false, schema: { type: string } }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 254 } }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
         '200': { description: Users, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformUserPage' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /platform/users/{user_id}:
+    parameters: [{ $ref: '#/components/parameters/UserId' }]
+    get:
+      operationId: getPlatformUsersByUserId
+      tags: [platform]
+      summary: One account's metadata
+      description: |
+        The address and its verification, the language, the browsers and devices the account is
+        signed in on, by when, whether its second step is on or locked, and the households it is
+        in, by their names and its role there.
+      responses:
+        '200': { description: Metadata, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformUser' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /platform/users/{user_id}/actions:
@@ -8585,17 +8771,36 @@ paths:
     post:
       operationId: postPlatformUsersByUserIdActions
       tags: [platform]
-      summary: Resend verification, trigger a reset, or lift a rate limit
+      summary: Resend verification, trigger a reset, lift a rate limit, or unlock or turn off a second step
+      description: |
+        - `resend_verification` sends the address a new verification link, whatever the resend's own
+          limits say. An address verified already has none to be sent (`409`, `not_applicable`).
+        - `send_password_reset` sends a link that sets a new password; an account scheduled for
+          deletion is sent the link that cancels the deletion in its place (D-136), and one whose
+          deletion no link cancels any more has nothing to be sent (`409`, `not_applicable`).
+        - `clear_rate_limit` forgets what is counted against the account on the sign-in surfaces
+          (PRD 02 §9): the attempts at its address and the wrong second-step codes.
+        - `unlock` unlocks an authenticator ten wrong codes locked (D-100), as a recovery code does.
+          One that is not locked, or an account with no second step, is `409` (`not_applicable`).
+        - `disable_mfa` turns the second step off, for an owner who has lost both the authenticator
+          and the recovery codes: both go, no browser or device stays trusted, and the address is
+          told. An account with no second step is `409` (`not_applicable`).
+
+        `404` for a user that is no account support can act on: none, one that is erased, or a child
+        profile, which has no address. Recorded in the platform's log; an account's action touches
+        no household's.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [action, reason], properties: { action: { type: string, enum: [resend_verification, send_password_reset, clear_rate_limit, unlock] }, reason: { type: string } } } } }
+        content: { application/json: { schema: { type: object, required: [action, reason], properties: { action: { type: string, enum: [resend_verification, send_password_reset, clear_rate_limit, unlock, disable_mfa] }, reason: { $ref: '#/components/schemas/StaffReason' } } } } }
       responses:
         '202': { description: Done }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '429': { $ref: '#/components/responses/RateLimited' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaffNotApplicable' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /platform/diagnostics/{bundle_id}:
     parameters: [{ name: bundle_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
@@ -8606,12 +8811,51 @@ paths:
       description: |
         The **only** route by which any household data reaches platform staff, and it exists because
         the member chose to send it, saw exactly what was in it, and could redact it. Expires 30 days
-        after submission.
+        after submission (`410`, `token_expired`).
       responses:
         '200': { description: The bundle, content: { application/json: { schema: { $ref: '#/components/schemas/DiagnosticBundle' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '410': { description: Expired, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /platform/flags:
+    get:
+      operationId: getPlatformFlags
+      tags: [platform]
+      summary: The feature flags
+      description: |
+        Every feature flag as the platform has it, in the order of their keys (PRD 06 §7). A flag is
+        on or off for every household that has no setting of its own
+        (`putPlatformHouseholdsByHouseholdIdFlagsByKey`). The flag `module.<id>` is its module's: a
+        household for which it is off holds no level on the module, whatever it enables and grants,
+        and a module with no such flag is served as it is enabled (D-146). Household settings is
+        never off: its flag, `module.admin`, gates nothing.
+      responses:
+        '200': { description: Flags, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/PlatformFlag' } } } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /platform/flags/{key}:
+    parameters: [{ $ref: '#/components/parameters/FlagKey' }]
+    put:
+      operationId: putPlatformFlagsByKey
+      tags: [platform]
+      summary: Make a feature flag, or turn it on or off for the platform
+      description: A flag is never deleted, since a household's setting names it. One set as it stands already is answered as it is.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [enabled, reason], properties: { enabled: { type: boolean }, reason: { $ref: '#/components/schemas/StaffReason' } } } } }
+      responses:
+        '200': { description: The flag as it stands, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformFlag' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /platform/audit:
@@ -8619,6 +8863,12 @@ paths:
       operationId: getPlatformAudit
       tags: [platform]
       summary: The platform audit log — every staff action, append-only
+      description: |
+        `platform_admin` only. Newest first, whole or those of one staff member, about one
+        household, or within a time: `from` inclusive, `to` exclusive. An entry is written in the
+        transaction of its action's effect, is never changed, and is kept seven years (FR-PS2). An
+        action made through the command line, as the first `platform_admin` is made, is the
+        `operator`'s, with no `user_id`.
       parameters:
         - { name: actor_id, in: query, required: false, schema: { $ref: '#/components/schemas/Uuid' } }
         - { name: household_id, in: query, required: false, schema: { $ref: '#/components/schemas/Uuid' } }
@@ -8629,7 +8879,45 @@ paths:
       responses:
         '200': { description: Entries, content: { application/json: { schema: { $ref: '#/components/schemas/PlatformAuditPage' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /platform/staff:
+    get:
+      operationId: getPlatformStaff
+      tags: [platform]
+      summary: The platform's staff
+      description: '`platform_admin` only. In the order they were made staff, each with whether its second step is on, without which it is admitted to nothing.'
+      responses:
+        '200': { description: Staff, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/PlatformStaffMember' } } } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /platform/staff/{user_id}:
+    parameters: [{ $ref: '#/components/parameters/UserId' }]
+    put:
+      operationId: putPlatformStaffByUserId
+      tags: [platform]
+      summary: Make an account staff, change its role, or take it out of the staff
+      description: |
+        `platform_admin` only. The account is one with a verified address (`404` otherwise): it is
+        admitted to nothing until its second step is on. A null `role` takes it out of the staff.
+        The last `platform_admin` keeps the role (`409`, `not_applicable`): the first is made through
+        the command line, and nobody could make another.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [role, reason], properties: { role: { oneOf: [{ $ref: '#/components/schemas/PlatformRole' }, { type: 'null' }] }, reason: { $ref: '#/components/schemas/StaffReason' } } } } }
+      responses:
+        '204': { description: Done }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaffNotApplicable' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -8746,6 +9034,7 @@ components:
       description: The tenant. Resolved in middleware, which verifies membership and sets the database tenant context.
       schema: { $ref: '#/components/schemas/Uuid' }
     UserId: { name: user_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    FlagKey: { name: key, in: path, required: true, description: 'A feature flag''s key: lowercase words joined by dots.', schema: { type: string, maxLength: 100, pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$' } }
     SessionId: { name: session_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
     DeviceId: { name: device_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
     ExportId: { name: export_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
@@ -8926,6 +9215,21 @@ components:
         they do not own, a conversation they are not in, or anything in a `suspended` household. The
         two are deliberately indistinguishable.
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    StaffForbidden:
+      description: |
+        The caller is one of the platform's staff and may not do this: their role does not reach the
+        operation (`forbidden`), or their account's second step is off (`staff_mfa_required`), which
+        the platform's staff are admitted with (PRD 02 §8). A caller who is not staff is answered
+        `404`, as for anything else they may not see.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    StaffNotApplicable:
+      description: |
+        The action does not apply to what it names as it stands (`not_applicable`): a household with
+        no trial to extend, an invoice that is not paid, a notification that cannot go again, an
+        address verified already, an account whose deletion no link cancels any more, a second step
+        that is not on or not locked, or the last `platform_admin`'s role. Nothing was done, and
+        nothing is recorded.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     Unprocessable:
       description: Validation failed. `errors` names each offending field.
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/ValidationProblem' } } }
@@ -9091,6 +9395,9 @@ components:
         - token_expired
         - token_already_used
         - redirect_uri_not_registered
+        # Platform staff
+        - staff_mfa_required
+        - not_applicable
         # Households, membership and billing
         - household_limit_reached
         - fair_use_ceiling
@@ -9664,6 +9971,7 @@ components:
             created_at: { type: string, format: date-time }
             deletion_scheduled_at: { type: [string, 'null'], format: date-time, description: 'When the household is deleted, 30 days after an owner scheduled it (`postDeletion`); null while no deletion is pending.' }
             entitlement: { $ref: '#/components/schemas/EntitlementSummary' }
+            flags: { type: array, items: { type: string }, description: 'The feature flags that are on for the household, in the order of their keys (PRD 06 §7): what a client shows a feature that ships dark by. On the household''s own representation, not on the list of households.' }
             my_role: { $ref: '#/components/schemas/HouseholdRole' }
             my_grants: { type: object, additionalProperties: { $ref: '#/components/schemas/AccessLevel' } }
 
@@ -9819,6 +10127,7 @@ components:
                 restricted_at: { type: string, format: date-time }
                 reason: { type: [string, 'null'] }
         suspended_at: { type: [string, 'null'], format: date-time, description: 'When the platform suspended the household, for the lockout.' }
+        suspension_notice: { type: [string, 'null'], description: 'The notice that went with the suspension: what the platform told the household of why, which the lockout shows. Null while it is not suspended.' }
         storage_used_bytes: { type: integer, format: int64, description: 'Every byte the household stores now, derived variants included.' }
         storage_included_bytes: { type: integer, format: int64, description: 'The base allowance plus any blocks currently in effect.' }
         storage_blocks: { type: integer, description: '10 GB blocks currently in effect, above the base allowance: those the daily average of the calendar month so far needs (PRD 04 §4).' }
@@ -10030,10 +10339,29 @@ components:
               date: { type: string, format: date }
               bytes: { type: integer, format: int64, description: 'Every byte stored when the day was sampled.' }
 
+    PlatformRole:
+      type: string
+      enum: [support, platform_admin]
+      description: 'A platform role (PRD 02 §8). Neither is a household role, and neither appears in any household''s member list. `platform_admin` does everything `support` does.'
+
+    StaffReason:
+      type: string
+      minLength: 1
+      maxLength: 500
+      description: Why the action is taken, which every staff action carries. Kept in the platform's log, and shown to no household.
+
+    StaffAction:
+      type: object
+      required: [reason]
+      properties:
+        reason: { $ref: '#/components/schemas/StaffReason' }
+
     PlatformHousehold:
       type: object
-      required: [id]
-      description: Metadata only. No field of this schema carries household content.
+      required: [id, name, country, created_at, state, member_count]
+      description: |
+        Metadata only. No field of this schema carries household content. A search answers the
+        required fields; one household's read, and an action on one, answers them all.
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         name: { type: string }
@@ -10041,10 +10369,17 @@ components:
         created_at: { type: string, format: date-time }
         state: { $ref: '#/components/schemas/EntitlementState' }
         member_count: { type: integer }
+        trial_ends_at: { type: [string, 'null'], format: date-time, description: Set while the subscription is trialing. }
+        grace_ends_at: { type: [string, 'null'], format: date-time, description: Set while the subscription is in grace. }
+        data_retained_until: { type: [string, 'null'], format: date-time, description: 'Set while it is `read_only` or `canceled`.' }
+        suspended_at: { type: [string, 'null'], format: date-time }
+        suspension_notice: { type: [string, 'null'], description: What the platform told the household of why it is suspended. }
+        deletion_scheduled_at: { type: [string, 'null'], format: date-time }
         members:
           type: array
           items:
             type: object
+            required: [user_id, email, role, is_child]
             properties:
               user_id: { $ref: '#/components/schemas/Uuid' }
               email: { type: [string, 'null'] }
@@ -10055,9 +10390,49 @@ components:
         storage_by_module: { type: object, additionalProperties: { type: integer, format: int64 } }
         recent_action_keys:
           type: array
-          description: Audit **action keys** only — no summaries, no diffs, no entity ids.
-          items: { type: object, properties: { action: { type: string }, count: { type: integer } } }
+          description: 'Audit **action keys** of the last 30 days, the most frequent first, 50 at most — no summaries, no diffs, no entity ids, no actors.'
+          items: { type: object, required: [action, count], properties: { action: { type: string }, count: { type: integer } } }
         limit_overrides: { type: array, items: { $ref: '#/components/schemas/PlatformLimitOverride' } }
+        flags: { type: array, description: Every feature flag as it stands for the household., items: { $ref: '#/components/schemas/PlatformHouseholdFlag' } }
+        subscription:
+          description: 'The plan: what the household pays by and how its subscription stands at the payment processor, null with none. No payment method.'
+          oneOf:
+            - { type: 'null' }
+            - type: object
+              required: [interval, status, currency, current_period_end, cancel_at_period_end]
+              properties:
+                interval: { type: string, enum: [month, year] }
+                status: { type: string, description: The processor's own word for it. }
+                currency: { type: string, pattern: '^[A-Z]{3}$' }
+                current_period_end: { type: [string, 'null'], format: date-time }
+                cancel_at_period_end: { type: boolean }
+        invoices:
+          type: array
+          description: 'The latest twelve invoices, newest first: the number, the state and the total, with no lines.'
+          items:
+            type: object
+            required: [id, number, status, total, issued_at]
+            properties:
+              id: { $ref: '#/components/schemas/Uuid' }
+              number: { type: [string, 'null'] }
+              status: { type: string, enum: [draft, open, paid, uncollectible, void] }
+              total: { $ref: '#/components/schemas/Money' }
+              issued_at: { type: string, format: date-time }
+        notifications:
+          type: array
+          description: 'Delivery outcomes: the latest twenty notifications, newest first, each by its message''s catalog key and how it went. Never what it said, or to which address.'
+          items:
+            type: object
+            required: [id, category, message, status, reason, created_at, settled_at, redrivable]
+            properties:
+              id: { $ref: '#/components/schemas/Uuid' }
+              category: { type: string, enum: [direct, household, reminders, digest] }
+              message: { type: string, description: 'The message''s catalog key, such as `email.invoice`.' }
+              status: { type: string, enum: [queued, sent, failed, dropped] }
+              reason: { type: [string, 'null'], description: 'Why one that was not sent was not, such as `email_failed` or `muted`.' }
+              created_at: { type: string, format: date-time }
+              settled_at: { type: [string, 'null'], format: date-time }
+              redrivable: { type: boolean, description: 'Whether support can send it again (`postPlatformHouseholdsByHouseholdIdNotificationsByNotificationIdRedrive`).' }
 
     PlatformHouseholdPage:
       type: object
@@ -10066,34 +10441,115 @@ components:
         items: { type: array, items: { $ref: '#/components/schemas/PlatformHousehold' } }
         meta: { $ref: '#/components/schemas/PageMeta' }
 
+    PlatformHouseholdFlag:
+      type: object
+      required: [key, enabled, overridden]
+      properties:
+        key: { type: string }
+        enabled: { type: boolean, description: 'Whether the flag is on for the household: its own setting, or the platform''s where it has none.' }
+        overridden: { type: boolean, description: Whether that is the household's own setting. }
+
+    PlatformFlag:
+      type: object
+      required: [key, enabled, updated_at]
+      properties:
+        key: { type: string }
+        enabled: { type: boolean, description: Whether the flag is on for every household that has no setting of its own. }
+        updated_at: { type: string, format: date-time }
+
+    PlatformUserSummary:
+      type: object
+      required: [id, email, email_verified, locale, created_at, last_sign_in_at, household_count, is_child, deletion_scheduled_at]
+      description: Account metadata only. Never the account's name.
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        email: { type: [string, 'null'] }
+        email_verified: { type: boolean }
+        locale: { type: string }
+        created_at: { type: string, format: date-time }
+        last_sign_in_at: { type: [string, 'null'], format: date-time, description: 'The latest of the browser sessions and device sign-ins the account still has: an ended session is not kept.' }
+        household_count: { type: integer }
+        is_child: { type: boolean }
+        deletion_scheduled_at: { type: [string, 'null'], format: date-time }
+
+    PlatformUser:
+      allOf:
+        - { $ref: '#/components/schemas/PlatformUserSummary' }
+        - type: object
+          required: [mfa_enabled, mfa_locked, staff_role, sessions, devices, households]
+          properties:
+            mfa_enabled: { type: boolean }
+            mfa_locked: { type: boolean, description: 'Ten wrong codes locked the authenticator (D-100), which `unlock` undoes.' }
+            staff_role: { oneOf: [{ $ref: '#/components/schemas/PlatformRole' }, { type: 'null' }] }
+            sessions:
+              type: array
+              description: The browsers the account is signed in on, the latest seen first.
+              items: { type: object, required: [created_at, last_seen_at], properties: { created_at: { type: string, format: date-time }, last_seen_at: { type: string, format: date-time } } }
+            devices:
+              type: array
+              description: The account's devices, the latest seen first.
+              items:
+                type: object
+                required: [id, platform, app_version, last_seen_at, signed_in]
+                properties:
+                  id: { $ref: '#/components/schemas/Uuid' }
+                  platform: { type: [string, 'null'], enum: [ios, android, null] }
+                  app_version: { type: [string, 'null'] }
+                  last_seen_at: { type: string, format: date-time }
+                  signed_in: { type: boolean }
+            households:
+              type: array
+              description: The households the account is in, in the order it joined them.
+              items:
+                type: object
+                required: [household_id, name, role]
+                properties:
+                  household_id: { $ref: '#/components/schemas/Uuid' }
+                  name: { type: string }
+                  role: { $ref: '#/components/schemas/HouseholdRole' }
+
     PlatformUserPage:
       type: object
       required: [items, meta]
       properties:
-        items:
-          type: array
-          items:
-            type: object
-            properties:
-              id: { $ref: '#/components/schemas/Uuid' }
-              email: { type: [string, 'null'] }
-              email_verified: { type: boolean }
-              locale: { type: string }
-              created_at: { type: string, format: date-time }
-              last_sign_in_at: { type: [string, 'null'], format: date-time }
-              household_count: { type: integer }
-              is_child: { type: boolean }
-              deletion_scheduled_at: { type: [string, 'null'], format: date-time }
+        items: { type: array, items: { $ref: '#/components/schemas/PlatformUserSummary' } }
         meta: { $ref: '#/components/schemas/PageMeta' }
+
+    PlatformLimitKey:
+      type: string
+      enum: [members, rows_per_module, chat_messages, sync_mutations_per_day, api_rate, object_count, file_size_bytes]
+      description: 'A fair-use ceiling (PRD 04 §5). `api_rate` is the household''s requests a minute, and `file_size_bytes` one file''s size.'
+
+    PlatformLimitChange:
+      type: object
+      required: [key, value, reason]
+      properties:
+        key: { $ref: '#/components/schemas/PlatformLimitKey' }
+        value: { type: [integer, 'null'], format: int64, minimum: 1, maximum: 9007199254740991, description: 'What the household is held to in place of the ceiling every household has, which it is at or above: a ceiling is raised. At most 2^53 − 1, the largest integer every client reads exactly. Null puts the ceiling back.' }
+        reason: { $ref: '#/components/schemas/StaffReason' }
 
     PlatformLimitOverride:
       type: object
+      required: [key, value]
       properties:
-        key: { type: string, enum: [members, rows_per_module, chat_messages, sync_mutations_per_day, api_rate, object_count, file_size_bytes] }
-        value: { type: integer, format: int64 }
+        key: { $ref: '#/components/schemas/PlatformLimitKey' }
+        value: { type: [integer, 'null'], format: int64, description: Null for a ceiling just put back. }
         reason: { type: string }
         set_by: { $ref: '#/components/schemas/ActorRef' }
         set_at: { type: string, format: date-time }
+
+    PlatformStaffMember:
+      type: object
+      required: [user_id, email, role, granted_at, granted_by, mfa_enabled]
+      properties:
+        user_id: { $ref: '#/components/schemas/Uuid' }
+        email: { type: [string, 'null'] }
+        role: { $ref: '#/components/schemas/PlatformRole' }
+        granted_at: { type: string, format: date-time }
+        granted_by:
+          description: The `platform_admin` who made them staff, null for the operator, through the command line.
+          oneOf: [{ $ref: '#/components/schemas/ActorRef' }, { type: 'null' }]
+        mfa_enabled: { type: boolean, description: Whether the account's second step is on. One whose step is off is admitted to nothing. }
 
     PlatformAuditPage:
       type: object
@@ -10103,15 +10559,19 @@ components:
           type: array
           items:
             type: object
+            required: [id, occurred_at, actor, actor_role, action, household_id, target_user_id, reason, meta]
             properties:
               id: { $ref: '#/components/schemas/Uuid' }
               occurred_at: { type: string, format: date-time }
-              actor: { $ref: '#/components/schemas/ActorRef' }
-              action: { type: string }
+              actor: { $ref: '#/components/schemas/ActorRef', description: 'The staff member, by the address they had then; the `operator`, with no `user_id`, for an action made through the command line.' }
+              actor_role: { oneOf: [{ $ref: '#/components/schemas/PlatformRole' }, { type: 'null' }] }
+              action: { type: string, description: 'What was done, such as `household.suspend` or `user.unlock`.' }
               household_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }
               target_user_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }
               reason: { type: [string, 'null'] }
+              meta: { type: object, additionalProperties: true, description: 'What else the action says of itself: a ceiling''s key and value, a flag''s, and the id of the event it wrote in the household''s own log.' }
         meta: { $ref: '#/components/schemas/PageMeta' }
+
     SyncCredentials:
       type: object
       required: [endpoint, token, expires_at]

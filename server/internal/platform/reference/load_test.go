@@ -226,6 +226,60 @@ func TestLoadingAChangeVersionsWhatChanged(t *testing.T) {
 	}
 }
 
+// A row an administrator edited is theirs until the files hold the same values (D-148, ADR 0022):
+// a load whose files differ from it leaves it as it is, reports it held and writes nothing; one
+// whose files have caught up with it releases it, changing no value and no version; and from then on
+// a change to the files updates it as it does any other row.
+func TestLoadingKeepsAnAdministratorsEditUntilTheFilesAgree(t *testing.T) {
+	tx := rolledBack(t)
+	rows := shipped(t)
+	// As an administrator's edit leaves a row: its value changed, its version moved on, and marked.
+	if _, err := tx.Exec(t.Context(),
+		"UPDATE country_profiles SET vat_standard_percent = 22, version = version + 1, edited_at = now() WHERE code = 'CZ'"); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshot(t, tx)
+
+	// The files still say 21: the edit is held, and nothing is written.
+	for range 2 {
+		r := load(t, tx, reference.Files())[reference.Countries]
+		if want := (reference.Report{Dataset: reference.Countries, Version: 1, Unchanged: rows[reference.Countries] - 1, Held: 1}); r != want {
+			t.Fatalf("the files differ from the edit: %+v, want %+v", r, want)
+		}
+		if after := snapshot(t, tx); after != before {
+			t.Fatalf("holding the edit wrote:\n%s\nwas:\n%s", after, before)
+		}
+	}
+
+	// The files catch up with the edit: the row is theirs again, at the version the edit left it.
+	agreed := edited(t, "countries/CZ.json", func(record map[string]any) {
+		field(t, record, "vat_standard_percent")["value"] = "22"
+	})
+	r := load(t, tx, agreed)[reference.Countries]
+	if want := (reference.Report{Dataset: reference.Countries, Version: 1, Unchanged: rows[reference.Countries] - 1, Released: 1}); r != want {
+		t.Fatalf("the files agree with the edit: %+v, want %+v", r, want)
+	}
+	var marked bool
+	if err := tx.QueryRow(t.Context(), "SELECT edited_at IS NOT NULL FROM country_profiles WHERE code = 'CZ'").Scan(&marked); err != nil {
+		t.Fatal(err)
+	}
+	if versions, vat := countryVersions(t, tx); marked || vat != "22" || versions["CZ"] != 2 {
+		t.Fatalf("released: marked %t, VAT %s, version %d; want unmarked, 22, at version 2", marked, vat, versions["CZ"])
+	}
+	// Loading them again writes nothing, as for any row the files have.
+	if r := load(t, tx, agreed)[reference.Countries]; r.Changed() || r.Held != 0 || r.Released != 0 {
+		t.Fatalf("loading the agreeing files again: %+v", r)
+	}
+
+	// A released row follows the files again.
+	if r := load(t, tx, reference.Files())[reference.Countries]; r.Updated != 1 || r.Held != 0 || r.Version != 2 {
+		t.Fatalf("the files change a released row: %+v, want it updated and the dataset at version 2", r)
+	}
+	if versions, vat := countryVersions(t, tx); vat != "21" || versions["CZ"] != 3 {
+		t.Fatalf("CZ at version %d with VAT %s, want version 3 with 21", versions["CZ"], vat)
+	}
+}
+
 // A record the files no longer hold stays, as it was, and is counted as kept: an app in the field
 // may still name it (D-11). Keeping it writes nothing, so no version moves.
 func TestLoadingKeepsARecordTheFilesDrop(t *testing.T) {

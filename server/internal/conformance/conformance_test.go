@@ -106,6 +106,7 @@ func newWorldOf(t *testing.T, o apptest.Options, m module.Module) *world {
 		Households: households,
 		Notify:     notifier,
 		Privacy:    apptest.Privacy(t, pool, log, accounts, households, bills, registry, o),
+		Staff:      apptest.Staff(t, pool, log, accounts, households, bills, notifier, registry, o),
 		Sync:       apptest.Sync(t, log, o),
 		Storage:    &storage.Picture{Log: log},
 		Billing:    bills,

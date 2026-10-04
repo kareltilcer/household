@@ -1,8 +1,11 @@
-// Command household-api is the Household server (PRD 01 §1). It has three commands:
+// Command household-api is the Household server (PRD 01 §1). It has four commands:
 //
 //	household-api [serve]     serve the API as the request role (the default)
 //	household-api migrate     apply pending migrations and load the reference data as the migrate role, at deploy time
 //	household-api bootstrap   create the roles and prepare the database, as an administrator
+//	household-api staff grant <email> <support|platform_admin>
+//	household-api staff revoke <email>
+//	                          make an account one of the platform's staff, or take it out of them, as the request role
 //
 // Configuration comes from the environment; internal/platform/config lists it, and
 // .env.example documents the development defaults.
@@ -17,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -29,6 +33,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/logging"
 	"github.com/kareltilcer/household/server/internal/platform/module"
 	"github.com/kareltilcer/household/server/internal/platform/reference"
+	"github.com/kareltilcer/household/server/internal/platform/staff"
 )
 
 func main() {
@@ -45,12 +50,16 @@ func main() {
 // command failed, 2 when it could not start.
 func run(ctx context.Context, args []string, getenv config.Getenv, stdout, stderr io.Writer) int {
 	command := config.Serve
-	switch len(args) {
-	case 0:
-	case 1:
+	if len(args) > 0 {
 		command = config.Command(args[0])
-	default:
-		_, _ = fmt.Fprintln(stderr, "usage: household-api [serve|migrate|bootstrap]")
+	}
+	// Only the staff command takes arguments of its own.
+	var change *staffChange
+	if command == config.Staff {
+		change = parseStaffChange(args[1:])
+	}
+	if (command == config.Staff && change == nil) || (command != config.Staff && len(args) > 1) {
+		_, _ = fmt.Fprintln(stderr, usage)
 		return 2
 	}
 	cfg, err := config.Load(command, getenv)
@@ -68,12 +77,84 @@ func run(ctx context.Context, args []string, getenv config.Getenv, stdout, stder
 		err = migrate(ctx, cfg, log)
 	case config.Bootstrap:
 		err = bootstrap(ctx, cfg, log)
+	case config.Staff:
+		err = manageStaff(ctx, cfg, log, *change)
 	}
 	if err != nil {
 		log.LogAttrs(ctx, slog.LevelError, "command failed", slog.String("env", string(cfg.Env)), slog.Any("error", err))
 		return 1
 	}
 	return 0
+}
+
+// usage is what a command line the server cannot read is answered with.
+const usage = `usage: household-api [serve|migrate|bootstrap]
+       household-api staff grant <email> <support|platform_admin>
+       household-api staff revoke <email>`
+
+// staffChange is what the staff command is asked for: an account, by its address, made one of the
+// platform's staff with role, or, with no role, taken out of them.
+type staffChange struct {
+	email string
+	role  staff.Role
+}
+
+// parseStaffChange reads the staff command's arguments, or returns nil for ones it cannot read.
+func parseStaffChange(args []string) *staffChange {
+	switch len(args) {
+	case 3:
+		if grant := [3]string(args); grant[0] == "grant" {
+			role, err := staff.ParseRole(grant[2])
+			if err != nil {
+				return nil
+			}
+			return &staffChange{email: grant[1], role: role}
+		}
+	case 2:
+		if revoke := [2]string(args); revoke[0] == "revoke" {
+			return &staffChange{email: revoke[1]}
+		}
+	}
+	return nil
+}
+
+// manageStaff makes the account change names one of the platform's staff, or takes it out of them,
+// as the operator: how the first platform_admin is made, when nobody could make one through the API
+// yet. The account is one with a verified address, and it is admitted to nothing until its second
+// step is on. It is recorded in the platform's log as the operator's.
+func manageStaff(ctx context.Context, cfg *config.Config, log *slog.Logger, change staffChange) error {
+	pool, err := db.Open(ctx, cfg.DatabaseURL, "household-api-staff")
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	// What the log says is what was done: an account that was not staff, or held the role already, is
+	// left as it is, and said to be, so that an address mistaken for a staff member's does not read as
+	// one taken out.
+	env := slog.String("env", string(cfg.Env))
+	if change.role == "" {
+		changed, err := staff.Revoke(ctx, pool, change.email)
+		switch {
+		case err != nil:
+			return err
+		case changed:
+			log.LogAttrs(ctx, slog.LevelInfo, "taken out of the platform's staff", env)
+		default:
+			log.LogAttrs(ctx, slog.LevelInfo, "not one of the platform's staff: nothing changed", env)
+		}
+		return nil
+	}
+	role := slog.String("role", string(change.role))
+	changed, err := staff.Grant(ctx, pool, change.email, change.role, time.Now())
+	switch {
+	case err != nil:
+		return err
+	case changed:
+		log.LogAttrs(ctx, slog.LevelInfo, "made one of the platform's staff", env, role)
+	default:
+		log.LogAttrs(ctx, slog.LevelInfo, "one of the platform's staff with the role already: nothing changed", env, role)
+	}
+	return nil
 }
 
 // serve serves the API until ctx ends. listening, when not nil, receives the address once
@@ -120,13 +201,15 @@ func migrate(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	}
 	for _, r := range reports {
 		level := slog.LevelInfo
-		if r.Kept > 0 {
+		if r.Kept > 0 || r.Held > 0 {
 			// A record the files dropped stays served; a data change that meant to withdraw it did not.
+			// And a record an administrator edited stays as they left it, while the files say otherwise
+			// (D-148): the files' value is not the one served until they agree.
 			level = slog.LevelWarn
 		}
 		log.LogAttrs(ctx, level, "reference data loaded", slog.String("dataset", r.Dataset),
 			slog.Int64("version", r.Version), slog.Int("inserted", r.Inserted), slog.Int("updated", r.Updated),
-			slog.Int("kept", r.Kept))
+			slog.Int("kept", r.Kept), slog.Int("held", r.Held), slog.Int("released", r.Released))
 	}
 	return nil
 }
@@ -146,6 +229,7 @@ func bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) error 
 		{cfg.MigrateDatabaseURL, &passwords.Migrate},
 		{cfg.DatabaseURL, &passwords.App},
 		{cfg.MeterDatabaseURL, &passwords.Meter},
+		{cfg.StaffDatabaseURL, &passwords.Staff},
 		{cfg.ReplicationDatabaseURL, &passwords.PowerSync},
 	} {
 		if *p.into, err = config.Password(p.url); err != nil {

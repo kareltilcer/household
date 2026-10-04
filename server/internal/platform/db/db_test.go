@@ -96,7 +96,7 @@ func TestCreateRolesRunsAgainForAnAdministratorWhoIsNoSuperuser(t *testing.T) {
 	for _, stmt := range []string{
 		"SELECT pg_advisory_xact_lock(" + strconv.FormatInt(db.CatalogLock, 10) + ")",
 		"CREATE ROLE household_test_managed_admin NOLOGIN CREATEROLE",
-		"GRANT household_migrate, household_app, household_meter, household_powersync TO household_test_managed_admin WITH ADMIN OPTION",
+		"GRANT household_migrate, household_app, household_meter, household_staff, household_powersync TO household_test_managed_admin WITH ADMIN OPTION",
 		"SET LOCAL ROLE household_test_managed_admin",
 	} {
 		if _, err := tx.Exec(t.Context(), stmt); err != nil {
@@ -141,7 +141,7 @@ func TestCreateRolesNamesWhatAnAdministratorLacksForPowerSync(t *testing.T) {
 		// The role drifted: a REPLICATION taken away, which bootstrap must give back.
 		"ALTER ROLE household_powersync NOREPLICATION",
 		"CREATE ROLE household_test_managed_admin NOLOGIN CREATEROLE BYPASSRLS",
-		"GRANT household_migrate, household_app, household_meter, household_powersync TO household_test_managed_admin WITH ADMIN OPTION",
+		"GRANT household_migrate, household_app, household_meter, household_staff, household_powersync TO household_test_managed_admin WITH ADMIN OPTION",
 		"SET LOCAL ROLE household_test_managed_admin",
 	} {
 		if _, err := tx.Exec(t.Context(), stmt); err != nil {
@@ -186,7 +186,8 @@ func TestCreateRolesSendsNoPassword(t *testing.T) {
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	passwords := db.Passwords{Migrate: "never-sent-migrate", App: "never-sent-app", Meter: "never-sent-meter", PowerSync: "never-sent-powersync"}
+	passwords := db.Passwords{Migrate: "never-sent-migrate", App: "never-sent-app", Meter: "never-sent-meter", Staff: "never-sent-staff",
+		PowerSync: "never-sent-powersync"}
 	if err := db.CreateRoles(t.Context(), tx, passwords); err != nil {
 		t.Fatalf("CreateRoles: %v", err)
 	}

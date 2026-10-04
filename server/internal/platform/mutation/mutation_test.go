@@ -693,6 +693,54 @@ func TestAMutationCommitsItsIdempotencyKey(t *testing.T) {
 	}
 }
 
+// Note records an event that changes no entity's row, in a transaction the platform opened (plan
+// item 21), and marks the request's Idempotency-Key committed there as Apply does, so that what the
+// transaction commits and its key commit together: a request answered other than 2xx after it keeps
+// its key committed, and a repeat is answered 409 and does not record the event again.
+func TestANoteCommitsItsIdempotencyKey(t *testing.T) {
+	w := newWorld(t)
+	h, u := w.member()
+	w.exec("UPDATE users SET display_name = 'Jana' WHERE id = $1", u)
+	noted := http.Header{"Idempotency-Key": {"noted"}}
+	var event uuid.UUID
+	w.serve(h, u, noted, func(rw http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
+			var err error
+			event, err = mutation.Note(ctx, tx, audit.Event{Module: "spine", Action: "item.update", SummaryKey: "spine.item.update"})
+			return err
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		rw.WriteHeader(http.StatusInternalServerError)
+	})
+	if rec := w.serve(h, u, noted, func(http.ResponseWriter, *http.Request) { t.Error("the repeat ran") }); rec.Code != http.StatusConflict {
+		t.Fatalf("a repeat of a request answered 500 after its note: %d %s", rec.Code, rec.Body)
+	}
+	if n := w.count(`SELECT count(*) FROM audit_events WHERE household_id = $1 AND id = $2 AND module = 'spine' AND action = 'item.update'
+		AND actor_type = 'user' AND actor_id = $3 AND actor_label = 'Jana' AND entity_id IS NULL`, h, event, u); n != 1 {
+		t.Fatalf("%d events as the note recorded it, want the one, by its caller", n)
+	}
+
+	// An action its module does not declare is no event, and marks no key.
+	undeclared := http.Header{"Idempotency-Key": {"undeclared"}}
+	w.serve(h, u, undeclared, func(rw http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		err := tenant.InWriteTx(ctx, func(tx pgx.Tx) error {
+			_, err := mutation.Note(ctx, tx, audit.Event{Module: "spine", Action: "item.remark", SummaryKey: "spine.item.remark"})
+			return err
+		})
+		if err == nil {
+			t.Error("a note of an action the module does not declare was recorded")
+		}
+		rw.WriteHeader(http.StatusInternalServerError)
+	})
+	if n := w.count("SELECT count(*) FROM idempotency_keys WHERE household_id = $1 AND key = 'undeclared'", h); n != 0 {
+		t.Fatalf("%d keys kept for a note that recorded nothing, want it released", n)
+	}
+}
+
 // A response larger than the 1 MiB a key keeps is not stored, however it was written: a repeat
 // of a request whose effect committed is answered 409 and does not run it again, and one that
 // committed nothing finds its key released and runs.

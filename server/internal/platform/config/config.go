@@ -65,12 +65,15 @@ const (
 	Serve Command = "serve"
 	// Migrate applies pending migrations as the migrate role, at deploy time.
 	Migrate Command = "migrate"
-	// Bootstrap creates the three roles and prepares the database, as an administrator.
+	// Bootstrap creates the four roles and prepares the database, as an administrator.
 	Bootstrap Command = "bootstrap"
+	// Staff makes an account one of the platform's staff, or takes it out of them, as the request
+	// role: how an operator makes the first platform_admin (runbooks/platform-staff.md).
+	Staff Command = "staff"
 )
 
 // Commands lists the commands.
-var Commands = []Command{Serve, Migrate, Bootstrap}
+var Commands = []Command{Serve, Migrate, Bootstrap, Staff}
 
 // The variables the server reads.
 const (
@@ -79,6 +82,7 @@ const (
 	DatabaseURLVar        = "HOUSEHOLD_DATABASE_URL"
 	MigrateDatabaseURLVar = "HOUSEHOLD_MIGRATE_DATABASE_URL"
 	MeterDatabaseURLVar   = "HOUSEHOLD_METER_DATABASE_URL"
+	StaffDatabaseURLVar   = "HOUSEHOLD_STAFF_DATABASE_URL"
 	AdminDatabaseURLVar   = "HOUSEHOLD_ADMIN_DATABASE_URL"
 	LogLevelVar           = "HOUSEHOLD_LOG_LEVEL"
 	ShutdownTimeoutVar    = "HOUSEHOLD_SHUTDOWN_TIMEOUT"
@@ -137,6 +141,7 @@ const (
 	devDatabaseURL        = "postgres://household_app:household_app@127.0.0.1:5432/household?sslmode=disable"
 	devMigrateDatabaseURL = "postgres://household_migrate:household_migrate@127.0.0.1:5432/household?sslmode=disable"
 	devMeterDatabaseURL   = "postgres://household_meter:household_meter@127.0.0.1:5432/household?sslmode=disable"
+	devStaffDatabaseURL   = "postgres://household_staff:household_staff@127.0.0.1:5432/household?sslmode=disable"
 	devAdminDatabaseURL   = "postgres://postgres:postgres@127.0.0.1:5432/household?sslmode=disable"
 	// PowerSync's (ADR 0001): the role it replicates as, its bucket storage, and where a client
 	// reaches the service docker-compose.yml runs.
@@ -181,6 +186,10 @@ type Config struct {
 	// it; Serve reads across households with it, the usage sampler, the files workers and the live
 	// counts fair use compares with (item 14).
 	MeterDatabaseURL string
+	// StaffDatabaseURL connects as the staff role. Bootstrap sets the role's password from it; Serve
+	// reads the metadata the platform staff API answers with through it, across households, and
+	// nothing else (item 21, D-143).
+	StaffDatabaseURL string
 	// AdminDatabaseURL connects as a role that may create roles, for Bootstrap only. The
 	// serving process never holds it.
 	AdminDatabaseURL string
@@ -324,22 +333,26 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 	case Serve:
 		c.DatabaseURL = url(DatabaseURLVar, devDatabaseURL, db.RoleApp)
 		c.MeterDatabaseURL = url(MeterDatabaseURLVar, devMeterDatabaseURL, db.RoleMeter)
-		l.sameDatabase(c.DatabaseURL, c.MeterDatabaseURL)
+		c.StaffDatabaseURL = url(StaffDatabaseURLVar, devStaffDatabaseURL, db.RoleStaff)
+		l.sameDatabase(c.DatabaseURL, c.MeterDatabaseURL, c.StaffDatabaseURL)
 		l.serving(c, dev)
 		l.files(c, dev)
 		l.notifications(c, dev)
 		l.billing(c)
 	case Migrate:
 		c.MigrateDatabaseURL = url(MigrateDatabaseURLVar, devMigrateDatabaseURL, db.RoleMigrate)
+	case Staff:
+		c.DatabaseURL = url(DatabaseURLVar, devDatabaseURL, db.RoleApp)
 	case Bootstrap:
 		// Bootstrap sets each role's password to the one its connection string carries, so
 		// the strings the other commands use are the only place a password is written down.
 		c.DatabaseURL = url(DatabaseURLVar, devDatabaseURL, db.RoleApp)
 		c.MigrateDatabaseURL = url(MigrateDatabaseURLVar, devMigrateDatabaseURL, db.RoleMigrate)
 		c.MeterDatabaseURL = url(MeterDatabaseURLVar, devMeterDatabaseURL, db.RoleMeter)
+		c.StaffDatabaseURL = url(StaffDatabaseURLVar, devStaffDatabaseURL, db.RoleStaff)
 		c.ReplicationDatabaseURL = url(ReplicationDatabaseURLVar, devReplicationDatabaseURL, db.RolePowerSync)
 		c.AdminDatabaseURL = url(AdminDatabaseURLVar, devAdminDatabaseURL, "")
-		l.sameDatabase(c.DatabaseURL, c.MigrateDatabaseURL, c.MeterDatabaseURL, c.ReplicationDatabaseURL)
+		l.sameDatabase(c.DatabaseURL, c.MigrateDatabaseURL, c.MeterDatabaseURL, c.StaffDatabaseURL, c.ReplicationDatabaseURL)
 		// The bucket storage may be kept on a cluster of its own, which Bootstrap does not prepare:
 		// outside development it is prepared here only when it is named.
 		if value := l.str(PowerSyncStorageURLVar, ""); value != "" || dev {

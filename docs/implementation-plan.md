@@ -789,19 +789,20 @@ Phase 0 · after 14, 15, 17 · size L
   - A generic erasure test over the registry leaves zero tenant rows for the household.
 - **PR:** [#25](https://github.com/kareltilcer/household/pull/25)
 
-### 21 · Platform staff, feature flags and reference-data admin · `planned`
+### 21 · Platform staff, feature flags and reference-data admin · `done`
 
 Phase 0 · after 10, 7 · size M
 
 - **Scope**
-  - **Staff identities**: `support` and `platform_admin`, with MFA required.
-  - **Staff API** (`/platform/*`): metadata-only endpoints, plus the support actions in [02 §8](prd/02-identity-and-access.md), billing's being item 19's `billing.Service.ExtendTrial`, `Credit` and `ResendInvoice`, among them unlocking a locked second step and turning one off whose owner has lost both the authenticator and the codes (D-100), which clears `mfa_totp` and `mfa_recovery_codes`.
-  - **Platform audit log**: a separate schema, append-only, kept 7 years.
-  - **Double logging** into the household's own activity ([D-75](prd/09-decisions.md), FR-PS2).
-  - **Feature flags** per household and per platform, so a module can ship dark.
-  - **Suspension and fair use**: staff set and lift a household's `suspended_at` (item 16, [D-115](prd/09-decisions.md)), with the notice that goes with it, and raise a household's fair-use ceilings (`patchPlatformHouseholdsByHouseholdIdLimits`), which item 16 keeps as constants (`internal/platform/fairuse`) until then.
-  - **Reference-data admin**: preset and catalog versioning, and the moderation queue for catalog suggestions (FR-GA4). Delivered as the API plus a minimal admin page in the web app. An edit writes the tables item 7's loader writes on every deploy, so this item decides whether the next load keeps an edit or overwrites it from `reference-data/` ([ADR 0008](adr/0008-reference-data-pipeline.md)).
-  - **No-content-access test** ([05 §6](prd/05-privacy-and-compliance.md)): connects as every role and expects zero rows from an unrelated household. PowerSync's replication role (item 13), which with its bucket storage's credential is the one exception to [D-3](prd/09-decisions.md), is left out; item 13's read-path isolation test holds it instead.
+  - **Staff identities**: `support` and `platform_admin`, each an account with a role among the platform's staff and the second step on, both read on every request ([D-144](prd/09-decisions.md)). `platform_admin` makes and unmakes staff, and the operator makes the first (`household-api staff grant`, [runbook](runbooks/platform-staff.md)).
+  - **Staff role**: what staff read, across households, they read through a fourth server role, `household_staff`, which holds `SELECT` on the columns that are metadata and nothing else ([D-143](prd/09-decisions.md), [ADR 0022](adr/0022-platform-staff-their-role-their-log-flags-and-ceilings.md)); architecture test 12 holds it to them.
+  - **Staff API** (`/platform/*`): metadata-only endpoints, households and accounts searched and read and a member's diagnostic bundle (item 20), plus the support actions in [02 §8](prd/02-identity-and-access.md): billing's, being item 19's `billing.Service.ExtendTrial`, `Credit` and `ResendInvoice`; the account's, a verification or a reset link sent again, the sign-in limits forgotten, and a locked second step unlocked or one turned off whose owner has lost both the authenticator and the codes (D-100), which clears `mfa_totp` and `mfa_recovery_codes`; and a failed notification sent again. The contract gains the ten operations these needed and it lacked.
+  - **Platform audit log**: `platform.audit_log`, in a schema of its own, append-only, kept 7 years, each entry written in the transaction of its action's effect ([D-145](prd/09-decisions.md)).
+  - **Double logging** into the household's own activity ([D-75](prd/09-decisions.md), FR-PS2), by the service actor `support` (`mutation.AsService`, `mutation.Note`).
+  - **Feature flags** per household and per platform; the flag `module.<id>` holds its module's level, so a module can ship dark ([D-146](prd/09-decisions.md)).
+  - **Suspension and fair use**: `platform_admin` sets and lifts a household's `suspended_at` (item 16, [D-115](prd/09-decisions.md)), with the notice that goes with it ([D-147](prd/09-decisions.md)), and raises a household's fair-use ceilings (`patchPlatformHouseholdsByHouseholdIdLimits`), which item 16 kept as constants (`internal/platform/fairuse`) and each ceiling's enforcement now reads for the household (`fairuse.Ceiling`, `tenant.Scope.Limit`).
+  - **Reference data**: an edit writes the tables item 7's loader writes on every deploy, and the next load keeps it: a row an administrator edited is theirs until the files in `reference-data/` hold the same values ([D-148](prd/09-decisions.md), [ADR 0008](adr/0008-reference-data-pipeline.md)). The operations that edit the crop catalog and the tariff presets and moderate the catalog's suggestions (FR-GA4), and their admin pages, move to the items that make their tables and their screens (56, 58, 68, 71 and 72).
+  - **No-content-access test** ([05 §6](prd/05-privacy-and-compliance.md)): connects as every role the server runs as and reads another household's rows: none as the request and the migrate role, and no column but the granted ones as the meter and the staff role. PowerSync's replication role (item 13), which with its bucket storage's credential is the one exception to [D-3](prd/09-decisions.md), is left out; item 13's read-path isolation test holds it instead.
 - **Inputs**
   - PRD: [02 §8](prd/02-identity-and-access.md); [05 §6](prd/05-privacy-and-compliance.md); D-3, D-75, D-93
   - API: tag `platform`
@@ -810,7 +811,7 @@ Phase 0 · after 10, 7 · size M
   - The role matrix is tested.
   - The no-content-access test runs in CI.
   - A staff action appears in the household's activity.
-- **PR:** —
+- **PR:** [#27](https://github.com/kareltilcer/household/pull/27)
 
 ### 22 · Crop catalog I — schema, climate data and the first 100 crops · `planned`
 
@@ -1656,11 +1657,12 @@ Phase 3 · after 6 · size L
 
 ### 56 · Utilities — server I: engine twin, presets, structure · `planned`
 
-Phase 3 · after 55, 34 · size XL
+Phase 3 · after 55, 34, 21 · size XL
 
 - **Scope**
   - **Go engine**, passing the same vectors.
   - **Presets**: **13 tariff presets for five countries**, drafted with sources and versioned (D-61), through item 7's pipeline ([ADR 0008](adr/0008-reference-data-pipeline.md)).
+  - **Preset admin** (from item 21): `getPlatformReferenceTariffPresets` and `postPlatformReferenceTariffPresets`, `platform_admin`'s, through item 21's staff API and read through its staff role, each edit in the platform's log. An edit marks its row (`edited_at`), which the loader then keeps until the files agree ([D-148](prd/09-decisions.md), [ADR 0022](adr/0022-platform-staff-their-role-their-log-flags-and-ceilings.md)).
   - **Services** in three modes ([D-60](prd/09-decisions.md)).
   - **Meters and registers**: meters with unit, digits, decimals, multiplier and direction; registers; conversions.
   - **Tariffs**: tariff versions carry a VAT flag, and `effective_from` is unique; components are ordered.
@@ -1707,6 +1709,7 @@ Phase 3 · after 57, 37 · size L
   - **Tariff composer** (D-12): **eight controls, no free-text or expression fields**, rendered as a human-readable breakdown.
   - **Meter replacement** (D-18).
   - **Mode upgrade** (D-19): nothing is lost.
+  - **Preset admin page** (from item 21): a minimal page for `platform_admin`, which lists the tariff presets and edits one (item 56's operations).
 - **Inputs**
   - Design: `utilities.js`, `utilities-ui.js`, `Utilities.dc.html`
 - **PR:** —
@@ -1885,10 +1888,11 @@ Phase 3 · after 63, 38, 66 · size L
 
 ### 68 · Garden — reference bundle and resolution · `planned`
 
-Phase 3 · after 22, 34 · size L
+Phase 3 · after 22, 34, 21 · size L
 
 - **Scope**
   - **Loading**: the catalog and climate profiles load into versioned global tables through item 7's loader, as `household-api migrate` runs ([ADR 0008](adr/0008-reference-data-pipeline.md)).
+  - **Catalog admin** (from item 21): `getPlatformReferenceCrops` and `postPlatformReferenceCrops`, `platform_admin`'s, through item 21's staff API and read through its staff role, each edit in the platform's log. An edit marks its row (`edited_at`), which the loader then keeps until the files agree ([D-148](prd/09-decisions.md), [ADR 0022](adr/0022-platform-staff-their-role-their-log-flags-and-ceilings.md)).
   - **Bundle**: a per-region bundle and its endpoint, added to `openapi.yaml` (Q11). Clients cache it; it is not synced.
   - **Resolution function**: variety → household override → catalog. One function serves four consumers.
   - **Climate resolution**:
@@ -1971,19 +1975,20 @@ Phase 3 · after 70, 21 · size M
     - exemptions for plantings under glass or with the haulm cut;
     - the metrics `frost_risk_tonight` and `plan_warnings`.
   - **Catalogs**: the `garden.work` widget with hold-to-complete, `harvest_ready`, 6 metrics, search.
-  - **Catalog suggestions**: queued for moderation in item 21's admin (GA4).
+  - **Catalog suggestions** (GA4): a member's suggestion is queued, never published as it is, and `platform_admin` reads the queue and accepts or rejects one (`getPlatformCatalogSuggestions`, `postPlatformCatalogSuggestionsBySuggestionId`, from item 21), through item 21's staff API; the submitter is told the outcome.
   - **Export**: CSV of plantings and harvests (GA23).
 - **Done when** at −2 °C the warning names 6 plantings in beds 3, 7 and 11, and at 6 °C it publishes nothing.
 - **PR:** —
 
 ### 72 · Garden — web I: setup, pots, beds, catalog, planting editor · `planned`
 
-Phase 3 · after 69, 37 · size L
+Phase 3 · after 69, 71, 37 · size L
 
 - **Scope**
   - **Setup**: the four questions (D-38).
   - **Tier homes**: pots (D-39) and beds (D-40).
   - **Catalog**: the browser (D-42) and household overrides (D-43).
+  - **Catalog admin page** (from item 21): a minimal page for `platform_admin`, which lists the catalog's crops and edits one (item 68's operations), and shows the queue of suggestions to accept or reject (item 71's).
   - **Planting editor** (D-44), echoing the resolved dates of its timing window.
   - **Tasks**: the generated list with tombstones (D-45) and drift detail (D-46).
   - **Storage log** (D-50).
@@ -2324,6 +2329,7 @@ Phase 5 · after 88 · size L
     - the entitlement distribution;
     - job lag.
   - **Logs**: an EU-hosted store kept 12 months.
+  - **Crash reports** for support ([02 §8](prd/02-identity-and-access.md)): the error aggregation's reports (Q14), found by an account's or a household's id and never carrying content. `home`'s `platform/statusreport`, a client of a status service Household does not have, is not ported (item 21).
   - **Availability**: external uptime monitoring against 99.9 %.
   - **Failure behaviour** (FR-NF3): tested for object storage, push, Stripe, weather and PowerSync outages (item 13).
   - **Drills**: a **monthly automated restore drill** into an isolated environment, and a failover drill, each ending with PowerSync replicating again.
@@ -2354,6 +2360,7 @@ Phase 5 · after 88 · size M
   - **Limits**: a review of per-household rate limits.
   - **Operations**: secret-rotation runbooks and the dependency-patch SLA (critical ≤ 72 h).
   - **Threat model**: a review of the four access axes.
+  - **Legal-request deletion**: `platform_admin` issues a household's deletion on a legal request ([02 §8](prd/02-identity-and-access.md), FR-AL7), through item 21's staff API and item 20's erasure, with a decision entry for what the PRD leaves unstated: its window, and whether its owners may cancel it.
   - **Penetration test**: remediation of findings. The test itself is off the PR list; a large finding takes a reserve slot.
 - **PR:** —
 
@@ -2478,3 +2485,4 @@ Tracked here so they are not forgotten. None of them takes a numbered slot.
 | 2026-10-03 | 18, 28 | Item 18: react-native is installed for its types, and its CLI plugin, which brings Metro and through it `braces` (GHSA-vfj7-8cjw-p6xm, no patched version), is left out by a pnpm override so that `pnpm audit` holds. Item 28, which bundles with Metro, removes the override and settles the advisory |
 | 2026-10-03 | 19, 20, 21, 27, 30, 88, Q1, Q17 | Item 19: billing is the platform's (`internal/platform/billing`), asking Stripe through one `Processor` interface (stripe-go v87); a customer confirms a payment or a card in Stripe's Payment Element by a secret the server hands out, so the contract's hosted `checkout-session` and `portal-session` are replaced by `postBillingSubscription`, `postBillingPaymentMethod` and `patchBillingSubscription` (Q17, D-131); `POST /webhooks/stripe` is proved by its signature and reads from Stripe what each event names, records it in tenant tables of its own (`01023`) and settles the household's row from what is recorded, through the spine (`household.Bill`), `active`, `past_due` with a clock a day past the retries, `grace` or `canceled` (D-134); billing moves between owners once the new payer's card is confirmed, their subscription starting when the paid period ends (D-133); an invoice is its payer's (D-135); and prices are configuration, a currency with none of its own charged EUR's, which settles Q1 for the build and leaves the CZK and PLN figures a GA prerequisite (D-132) ([ADR 0020](adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md); PRD 01 §2.4, 03 §5, 04 §1, §4, §6 and modules/17 amended). **Storage is billed by the calendar month as an invoice item, not as metered usage** as this item's scope first said (D-130): a metered price bills on the subscription's own interval, so a yearly plan's blocks would arrive twelve months at once, past D-33's ceiling on one invoice, and the block count is a ceiling of a mean the storage screen must show before it is billed. The Done-when's fixtures are a stand-in for Stripe's API (`billingtest`) that the real adapter runs against, and Stripe's own mock in a CI job, which validates every request; a payment in Stripe's test mode is item 30's. The contract also gains `deleteBillingTransfer`, `postWebhooksStripe`, `BillingIntent`, `BillingInterval`, `BillingTransferAcceptance` and the codes `already_subscribed`, `not_subscribed` and `billing_unavailable`. Item 20 cancels a deleted household's subscription and deletes an erased account's customers; item 21 calls the support actions; item 27 confirms the intents in the Payment Element and shows `plans`; items 30 and 88 set up Stripe per the new runbook |
 | 2026-10-03 | 20, 21, 25, 27, 29, 30, 43, 88, 90 | Item 20 ([ADR 0021](adr/0021-export-erasure-and-the-tombstones.md)): a module exports and erases in a transaction the platform hands it, for the scope its requester takes (`module.Export`, `module.Archive`, `module.Erasure`), and admin names both on `module.PlatformModule`; an export is its requester's row and a job a worker in every instance builds, streamed to the store in parts under the account's own prefix, five of a kind a day, a household's link handed to its requester while they are still an owner (D-139); a household's deletion is four columns of its own row, written through the spine, the household working until the nightly job deletes its row and with it every tenant row, which a test over the isolation fixture holds every tenant table to, and scheduled five times a day at most, counted in the scheduling's own transaction (D-138, D-140); an account's is a row whose existence disables it, cancelled signed out with the link its email carries, so `postAuthDeletionCancel` replaces `deleteMeDeletion` in the contract, and a password reset asked for meanwhile sends that link again in place of a reset link (D-136), resolved against its households when asked and again when executed, an owner pending deletion counting as none and the longest-standing adult succeeding a last owner (D-137); an erased account leaves an emptied `users` row and events without its name, the names a household recorded in its own summaries staying (D-141); a member who left keeps their private data for 30 days and a removed child profile's account is erased after them; consents replace, and a bundle is kept as sent, twenty an account a day (D-142). The contract gains `postAuthDeletionCancel`, `Household.deletion_scheduled_at`, the `403` of `postMeDeletion`, `putMeConsents` and `deleteDeletion`, the `422` of `postMeDeletion` and `postMeDiagnostics`, and says what each of the thirteen operations does; `getPlatformDiagnosticsByBundleId` stays item 21's. The owner's hard-delete of a departed member's private items sooner (FR-PR7), which the contract has no operation for, moves to item 43 with the first private root. Item 19 merged while this item was in review, so this item does what item 19 left it: a household erased has its subscriptions ended at Stripe first (`billing.Service.Close`), an erased account's customers there are deleted with its `billing_customers` rows (`Processor.DeleteCustomer`, `billing.Service.Forget`), a payer blocks their account's deletion only while the household has a subscription that will charge again, one whose first payment is still on its way among them, read from `billing_subscriptions`, as does an owner taking billing over whose own payment is on its way, billing is neither offered to an owner whose account is scheduled for deletion nor moved to one by a card they confirmed after asking (`billing.isOwner`, D-137), a lapsed household being paid for again is not erased while that payment is on its way, or while it is recorded and the household's row not yet settled from it (`billing.Awaited`, D-140), a subscription the rows say is not paid for, one that waits or the household's own past due, is ended with its household only while Stripe says so too, the record brought up to Stripe's first where it does not (`billing.ErrBehind`, `billing.Service.Refresh`), a deleted household's subscription ends at once with nothing refunded, and an export carries its requester's own `billing.json`; an erased household's id is refused to a new household (`postHouseholds`, D-140), whose files the purge of the old one's prefix would otherwise remove; its migration became `01024`, its ADR 0021 and its decisions D-136 to D-142, past the numbers item 19 took; item 21 reads the bundles; items 25 and 29 build A-20, item 25 the page the cancel link opens (`account/deletion/cancel`); item 27 reads `deletion_scheduled_at` from the household's row, and serves the two routes the export-ready email opens, `account/privacy` and `households/{household_id}/exports`; items 30 and 88 give the bucket a rule that aborts a multipart upload a dead process left, and the API's key `AbortMultipartUpload` (runbooks/object-storage.md); item 90 measures a large household's erasure in the replication slot |
+| 2026-10-04 | 21, 56, 58, 68, 71, 72, 89, 91 | Item 21 ([ADR 0022](adr/0022-platform-staff-their-role-their-log-flags-and-ceilings.md)): the platform's staff are accounts with a role in `platform.staff` and the second step on (D-144); what they read they read through a fourth server role, `household_staff`, held column by column to metadata by architecture test 12, since a search across households cannot be made as the request role, and in a household's context that role reads its content too (D-143; PRD 01 §2.3's "no support role" now says no role that reads content, your answer of 2026-10-04); what they do goes through the spine as the service actor `support`, with the platform's log written in the transaction of its effect (D-145); a flag is the platform's with a household's own setting before it, and `module.<id>` holds its module's level, but for household settings, which no flag turns off, and a replica's report is still compared with what the streams send it, which read no flag (D-146); a suspension carries its notice and a ceiling is raised, never lowered (D-147); and the loader keeps an administrator's edit until the files agree (D-148, your answer). **The six operations that edit the crop catalog and the tariff presets and moderate suggestions move to the items that make their tables, and the admin page to the web items that follow them** (your answer): the presets' to item 56 and their page to 58, the crop catalog's to item 68, which loads it, not item 22, which writes its files, and its page to 72, and the suggestions' to item 71; items 56 and 68 now wait for item 21, and item 72 for 71. `apps/web` is a stub until item 24, so the page could not be built here. The contract gains ten operations the scope needed and it lacked: a suspension, a credit, an invoice sent again, a notification re-driven, a flag set for the platform and for a household, the flags' list, the staff's list and a staff member's role, and one account's read; `postPlatformHouseholdsByHouseholdIdTrial` answers the household's metadata, not the owners' `Subscription`, whose payer and offer name members; `PlatformLimitOverride`'s request takes a null `value` to put a ceiling back; a caller who is not staff is answered `404` on every platform operation, and `staff_mfa_required` and `not_applicable` join the problem codes. `home`'s `platform/statusreport`, a client of a status service Household does not have, is not ported: crash reports are item 89's. A household's deletion on a legal request, which no item named and whose window the PRD does not state, is item 91's |

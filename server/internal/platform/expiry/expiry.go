@@ -119,6 +119,11 @@ var (
 		// A diagnostic bundle 30 days after its member sent it (FR-PS1).
 		{"diagnostic bundles", "DELETE FROM diagnostic_bundles WHERE expires_at <= now()", nil},
 	}
+	// purgeAuditLog deletes the entries of the platform's log past their seven years (FR-PS2), and
+	// returns how many: through the one function that may, since the log is append-only and the
+	// request role deletes nothing from it (migration 01025).
+	purgeAuditLog = "SELECT platform.purge_audit_log()"
+
 	nightlyHouseholds = []household{
 		{"Idempotency-Keys",
 			"SELECT DISTINCT household_id FROM idempotency_keys WHERE created_at < now() - make_interval(secs => $1)",
@@ -170,6 +175,12 @@ func (s *Sweeper) Sweep(ctx context.Context) error {
 	failed := s.accounts(ctx, nightlyAccounts)
 	n, err := s.inAccount(ctx, func(tx pgx.Tx) (int64, error) { return ratelimit.Sweep(ctx, tx) })
 	failed = errors.Join(failed, s.report(ctx, "sign-in throttles", n, err))
+	n, err = s.inAccount(ctx, func(tx pgx.Tx) (int64, error) {
+		var purged int64
+		err := tx.QueryRow(ctx, purgeAuditLog).Scan(&purged)
+		return purged, err
+	})
+	failed = errors.Join(failed, s.report(ctx, "platform audit entries", n, err))
 	archives, err := s.cfg.Exports(ctx)
 	failed = errors.Join(failed, s.report(ctx, "export archives", int64(archives), err))
 	for _, h := range nightlyHouseholds {

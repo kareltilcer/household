@@ -35,6 +35,8 @@ const (
 	CodeTokenExpired             Code = "token_expired"
 	CodeTokenAlreadyUsed         Code = "token_already_used"
 	CodeRedirectUriNotRegistered Code = "redirect_uri_not_registered"
+	CodeStaffMfaRequired         Code = "staff_mfa_required"
+	CodeNotApplicable            Code = "not_applicable"
 	CodeHouseholdLimitReached    Code = "household_limit_reached"
 	CodeFairUseCeiling           Code = "fair_use_ceiling"
 	CodeLastOwner                Code = "last_owner"
@@ -102,6 +104,8 @@ var Codes = []Code{
 	CodeTokenExpired,
 	CodeTokenAlreadyUsed,
 	CodeRedirectUriNotRegistered,
+	CodeStaffMfaRequired,
+	CodeNotApplicable,
 	CodeHouseholdLimitReached,
 	CodeFairUseCeiling,
 	CodeLastOwner,
