@@ -1,4 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"]
+  "compilerOptions": {
+    // The data and the drawings, which import nothing of any platform's, with their tests and
+    // scripts/, which run on Node. The components (web/, native/) are typechecked against their
+    // own platforms' types.
+    "types": ["node"]
+  },
+  "include": ["src", "scripts"]
 }
