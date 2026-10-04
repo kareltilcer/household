@@ -78,6 +78,9 @@ func (s *Service) Put(ctx context.Context, u *Upload, t Target) (Stored, error) 
 		recorded []byte
 		used     int64
 		objects  int64
+		// most is the objects the household may hold: fairuse.Objects, or what the platform raised
+		// that to for it (PRD 04 §5).
+		most int64
 	)
 	err := tenant.InTx(ctx, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
@@ -86,8 +89,12 @@ func (s *Service) Put(ctx context.Context, u *Upload, t Target) (Stored, error) 
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		return tx.QueryRow(ctx, "SELECT coalesce(sum(byte_size), 0), count(*) FROM files WHERE household_id = $1", household).
-			Scan(&used, &objects)
+		if err := tx.QueryRow(ctx, "SELECT coalesce(sum(byte_size), 0), count(*) FROM files WHERE household_id = $1", household).
+			Scan(&used, &objects); err != nil {
+			return err
+		}
+		most, err = fairuse.Ceiling(ctx, tx, household, fairuse.KeyObjects, fairuse.Objects)
+		return err
 	})
 	switch {
 	case err != nil:
@@ -97,8 +104,8 @@ func (s *Service) Put(ctx context.Context, u *Upload, t Target) (Stored, error) 
 	case recorded != nil:
 		return Stored{}, taken(t.Field)
 	}
-	if objects >= fairuse.Objects {
-		return Stored{}, fairuse.Refusal(fairuse.ResourceObjects, fairuse.Objects, "")
+	if objects >= most {
+		return Stored{}, fairuse.Refusal(fairuse.ResourceObjects, most, "")
 	}
 	if ceiling := s.allowance.Ceiling(); used+u.Size > ceiling {
 		return Stored{}, s.overCeiling(scope, used+u.Size-ceiling)

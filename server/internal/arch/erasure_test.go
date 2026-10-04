@@ -72,8 +72,9 @@ func erasureViolations(t *testing.T, tx pgx.Tx) []string {
 	var columns []string
 	if _, err := pgx.ForEachRow(rows, []any{&schema, &name, &columns}, func() error {
 		e, exempted := exemptions[schema+"."+name]
-		// A global table that names a household, an export or a diagnostic bundle, is held to it too.
-		if (exempted && !e.ownPolicy && !slices.Contains(columns, "household_id")) || !slices.Contains(columns, e.column()) {
+		// A global table that names a household, an export or a diagnostic bundle, is held to it too,
+		// but the platform's own log, which is kept past the household it names (FR-PS2).
+		if (exempted && !e.ownPolicy && !slices.Contains(columns, "household_id")) || !slices.Contains(columns, e.column()) || e.outlives {
 			return nil
 		}
 		targets = append(targets, target{name: schema + "." + name, ident: pgx.Identifier{schema, name}.Sanitize(), column: e.column()})

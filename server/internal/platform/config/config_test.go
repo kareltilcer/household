@@ -39,12 +39,14 @@ func TestDevelopmentNeedsNothingSet(t *testing.T) {
 	}
 }
 
-// The serving process gets the request role's connection and the meter role's, which reads across
-// households for the usage sample and the files workers (item 14), and nothing else: never the
+// The serving process gets the request role's connection, the meter role's, which reads across
+// households for the usage sample and the files workers (item 14), and the staff role's, which reads
+// the metadata the platform staff API answers with (item 21), and nothing else: never the
 // administrator's, which only bootstrap holds.
 func TestEachCommandGetsOnlyTheConnectionsItUses(t *testing.T) {
 	serve, _ := config.Load(config.Serve, env(nil))
-	if serve.DatabaseURL == "" || serve.MigrateDatabaseURL != "" || serve.AdminDatabaseURL != "" || serve.MeterDatabaseURL == "" {
+	if serve.DatabaseURL == "" || serve.MigrateDatabaseURL != "" || serve.AdminDatabaseURL != "" || serve.MeterDatabaseURL == "" ||
+		serve.StaffDatabaseURL == "" {
 		t.Errorf("serve: %+v", serve)
 	}
 	migrate, _ := config.Load(config.Migrate, env(nil))
@@ -53,7 +55,7 @@ func TestEachCommandGetsOnlyTheConnectionsItUses(t *testing.T) {
 	}
 	bootstrap, _ := config.Load(config.Bootstrap, env(nil))
 	if bootstrap.AdminDatabaseURL == "" || bootstrap.DatabaseURL == "" || bootstrap.MigrateDatabaseURL == "" || bootstrap.MeterDatabaseURL == "" ||
-		bootstrap.ReplicationDatabaseURL == "" || bootstrap.PowerSyncStorageURL == "" {
+		bootstrap.StaffDatabaseURL == "" || bootstrap.ReplicationDatabaseURL == "" || bootstrap.PowerSyncStorageURL == "" {
 		t.Errorf("bootstrap: %+v", bootstrap)
 	}
 	// PowerSync's credentials are the service's, and bootstrap's to set: never the serving process's.
@@ -68,8 +70,8 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%s: loaded with no connection strings", e)
 		}
-		for _, key := range []string{config.DatabaseURLVar, config.MigrateDatabaseURLVar, config.MeterDatabaseURLVar, config.AdminDatabaseURLVar,
-			config.ReplicationDatabaseURLVar} {
+		for _, key := range []string{config.DatabaseURLVar, config.MigrateDatabaseURLVar, config.MeterDatabaseURLVar, config.StaffDatabaseURLVar,
+			config.AdminDatabaseURLVar, config.ReplicationDatabaseURLVar} {
 			if !strings.Contains(err.Error(), key) {
 				t.Errorf("%s: the error does not name %s: %v", e, key, err)
 			}
@@ -81,7 +83,7 @@ func TestOutsideDevelopmentNothingIsDefaulted(t *testing.T) {
 		config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
 	}))
 	for _, key := range []string{config.WebURLVar, config.TrustedProxiesVar, config.SMTPURLVar, config.MailFromVar, config.BreachCorpusVar,
-		config.TokenKeysVar, config.MFAKeysVar, config.PowerSyncURLVar, config.MeterDatabaseURLVar, config.ObjectStoreURLVar,
+		config.TokenKeysVar, config.MFAKeysVar, config.PowerSyncURLVar, config.MeterDatabaseURLVar, config.StaffDatabaseURLVar, config.ObjectStoreURLVar,
 		config.ConverterURLVar, config.NotifyKeysVar, config.VAPIDKeyVar, config.StripeSecretKeyVar, config.StripePublishableKeyVar,
 		config.StripeWebhookSecretVar} {
 		if err == nil || !strings.Contains(err.Error(), key) {
@@ -113,6 +115,7 @@ func serving(vars map[string]string) map[string]string {
 		config.MFAKeysVar:          base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
 		config.PowerSyncURLVar:     "https://sync.household.example",
 		config.MeterDatabaseURLVar: dsn("household_meter", "m3ter", "db.internal:5432", "household"),
+		config.StaffDatabaseURLVar: dsn("household_staff", "st4ff", "db.internal:5432", "household"),
 		config.ObjectStoreURLVar:   "https://AKIA:" + "s3cret" + "@objects.household.example/household?region=eu-central-1",
 		config.ConverterURLVar:     "http://converter:3100",
 		config.NotifyKeysVar:       base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{4}, 32)),
@@ -329,6 +332,7 @@ func TestADefaultedPasswordIsSetOnlyOnALocalCluster(t *testing.T) {
 	}
 
 	remote[config.MeterDatabaseURLVar] = dsn("household_meter", "r", "db.internal:5432", "household")
+	remote[config.StaffDatabaseURLVar] = dsn("household_staff", "s", "db.internal:5432", "household")
 	remote[config.ReplicationDatabaseURLVar] = dsn("household_powersync", "p", "db.internal:5432", "household")
 	_, err = config.Load(config.Bootstrap, env(remote))
 	if err == nil || !strings.Contains(err.Error(), config.PowerSyncStorageURLVar) {
@@ -392,6 +396,7 @@ func TestPowerSyncsStorageIsADatabaseOfItsOwn(t *testing.T) {
 		config.DatabaseURLVar:            dsn("household_app", "a", "db.internal:5432", "household"),
 		config.MigrateDatabaseURLVar:     dsn("household_migrate", "m", "db.internal:5432", "household"),
 		config.MeterDatabaseURLVar:       dsn("household_meter", "r", "db.internal:5432", "household"),
+		config.StaffDatabaseURLVar:       dsn("household_staff", "s", "db.internal:5432", "household"),
 		config.ReplicationDatabaseURLVar: dsn("household_powersync", "p", "db.internal:5432", "household"),
 	}))
 	if err != nil || c.PowerSyncStorageURL != "" {

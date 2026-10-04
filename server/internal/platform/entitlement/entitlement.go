@@ -106,8 +106,10 @@ type Status struct {
 	RetentionWarnings int
 	// Restriction is the owner's restriction, nil for none.
 	Restriction *Restriction
-	// SuspendedAt is when the platform suspended the household, nil for never.
-	SuspendedAt *time.Time
+	// SuspendedAt is when the platform suspended the household, nil for never, and SuspensionNotice
+	// the notice that went with it (PRD 04 §3), which the lockout shows.
+	SuspendedAt      *time.Time
+	SuspensionNotice *string
 }
 
 // State is the household's state, by D-114's precedence.

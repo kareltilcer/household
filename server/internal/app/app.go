@@ -21,6 +21,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/contract"
 	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/entitlement"
+	"github.com/kareltilcer/household/server/internal/platform/fairuse"
 	"github.com/kareltilcer/household/server/internal/platform/grant"
 	"github.com/kareltilcer/household/server/internal/platform/health"
 	"github.com/kareltilcer/household/server/internal/platform/household"
@@ -269,13 +270,18 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 		user, ok := auth.User(r.Context())
 		return user.String(), ok
 	})
-	// Behind the tenant middleware, so that only a member spends a household's budget.
-	perHousehold := ratelimit.Middleware(a.HouseholdLimit, func(r *http.Request) (string, bool) {
+	// Behind the tenant middleware, so that only a member spends a household's budget, which is the
+	// household's own where the platform raised it (PRD 04 §5).
+	perHousehold := ratelimit.MiddlewareAt(a.HouseholdLimit, func(r *http.Request) (string, ratelimit.Rate, bool) {
 		s := tenant.From(r.Context())
 		if s == nil {
-			return "", false
+			return "", ratelimit.Rate{}, false
 		}
-		return s.HouseholdID().String(), true
+		rate := a.HouseholdLimit.Rate()
+		if raised := s.Limit(fairuse.KeyAPIRate, 0); raised > 0 {
+			rate = rate.At(float64(raised))
+		}
+		return s.HouseholdID().String(), rate, true
 	})
 
 	root := chi.NewRouter()

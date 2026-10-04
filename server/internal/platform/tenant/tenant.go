@@ -16,6 +16,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -46,13 +47,16 @@ type Beginner interface {
 }
 
 // Scope is the resolved tenant of one request: the household, the caller, their role there, their
-// effective level on each module, and the household's entitlement.
+// effective level on each module, the household's entitlement, the fair-use ceilings the platform
+// raised for it and the feature flags that are on for it.
 type Scope struct {
 	householdID uuid.UUID
 	userID      uuid.UUID
 	role        access.Role
 	levels      map[string]access.Level
 	entitlement entitlement.Status
+	limits      map[string]int64
+	flags       map[string]bool
 	pool        Beginner
 }
 
@@ -81,6 +85,34 @@ func (s *Scope) Level(module string) access.Level { return s.levels[module] }
 // (PRD 04 §3): the zero Status, which reads as trialing, in a scope the middleware did not resolve
 // (Assume).
 func (s *Scope) Entitlement() entitlement.Status { return s.entitlement }
+
+// Limit returns the household's fair-use ceiling of key, as the contract's PlatformLimitOverride names
+// it: what the platform raised it to for this household (PRD 04 §5), or fallback, the constant every
+// other household is held to, which is all a scope the middleware did not resolve knows (Assume): a
+// caller that holds a transaction there reads it instead (fairuse.Ceiling).
+func (s *Scope) Limit(key string, fallback int64) int64 {
+	if v, ok := s.limits[key]; ok {
+		return v
+	}
+	return fallback
+}
+
+// Flag reports whether the feature flag key is on for the household (PRD 06 §7): its own setting of
+// it, or the platform's where it has none. A flag nobody made is off, and so is every flag in a scope
+// the middleware did not resolve (Assume).
+func (s *Scope) Flag(key string) bool { return s.flags[key] }
+
+// Flags returns the feature flags that are on for the household, in the order of their keys.
+func (s *Scope) Flags() []string {
+	out := make([]string, 0, len(s.flags))
+	for key, on := range s.flags {
+		if on {
+			out = append(out, key)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
 
 // Assume returns ctx carrying the scope of household for user, whose role there is role, without
 // the membership check the middleware makes: the scope through which the platform reads and
@@ -271,8 +303,9 @@ func Middleware(cfg Config) (func(http.Handler) http.Handler, error) {
 
 // resolve returns user's scope in household, or errNotMember. The membership is read with only
 // the caller in context, through the policy that lets a user read their own memberships; the
-// household enters the context once the membership proves it, and its entitlement, its enablement
-// and the caller's grants are read under the tenant policy.
+// household enters the context once the membership proves it, and its entitlement, its enablement,
+// the caller's grants, and the ceilings and flags the platform set for it are read under the tenant
+// policy.
 func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Scope, error) {
 	s := &Scope{householdID: household, userID: user, levels: map[string]access.Level{}, pool: pool}
 	err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
@@ -303,8 +336,10 @@ func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Sc
 		if s.entitlement, err = e.Status(); err != nil {
 			return err
 		}
-		s.levels, err = Levels(ctx, tx, household, user, s.role)
-		return err
+		if s.levels, err = Levels(ctx, tx, household, user, s.role); err != nil {
+			return err
+		}
+		return s.settings(ctx, tx)
 	})
 	if err != nil {
 		return nil, err
@@ -312,15 +347,54 @@ func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Sc
 	return s, nil
 }
 
+// settings reads, in tx in the household's context, what the platform's staff set for it (plan item
+// 21): the fair-use ceilings raised for it, and every feature flag as it stands for it, its own
+// setting before the platform's. One statement for both, since most households have neither.
+func (s *Scope) settings(ctx context.Context, tx pgx.Tx) error {
+	rows, err := tx.Query(ctx, `
+		SELECT true, l.key, l.value, false FROM household_limits l WHERE l.household_id = $1
+		UNION ALL
+		SELECT false, f.key, 0, coalesce(hf.enabled, f.enabled)
+		FROM platform.feature_flags f
+		LEFT JOIN household_flags hf ON hf.household_id = $1 AND hf.key = f.key`, s.householdID)
+	if err != nil {
+		return err
+	}
+	var (
+		limit bool
+		key   string
+		value int64
+		on    bool
+	)
+	s.limits, s.flags = map[string]int64{}, map[string]bool{}
+	_, err = pgx.ForEachRow(rows, []any{&limit, &key, &value, &on}, func() error {
+		if limit {
+			s.limits[key] = value
+		} else {
+			s.flags[key] = on
+		}
+		return nil
+	})
+	return err
+}
+
+// ModuleFlag is the feature flag a module ships dark behind (PRD 06 §7, D-146): "module." and its
+// id. A household for which it is off holds no level on the module, whatever it enables and grants,
+// and a module with no such flag is served as it is enabled.
+func ModuleFlag(module string) string { return "module." + module }
+
 // Levels are user's effective levels on each of household's modules, whose role there is role
 // (Effective), read in tx in household's context: what a request of theirs is allowed, and what the
 // platform reads for them when it acts with no request, as a notification going out does (FR-NT5).
+// A module whose flag is off for the household (ModuleFlag) reads as one it does not enable.
 func Levels(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, role access.Role) (map[string]access.Level, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT e.module, e.enabled, coalesce(g.level::text, 'none')
+		SELECT e.module, e.enabled AND coalesce(hf.enabled, f.enabled, true), coalesce(g.level::text, 'none')
 		FROM module_enablement e
 		LEFT JOIN module_grants g
 		  ON g.household_id = e.household_id AND g.module = e.module AND g.user_id = $2
+		LEFT JOIN platform.feature_flags f ON f.key = 'module.' || e.module
+		LEFT JOIN household_flags hf ON hf.household_id = e.household_id AND hf.key = f.key
 		WHERE e.household_id = $1`, household, user)
 	if err != nil {
 		return nil, err

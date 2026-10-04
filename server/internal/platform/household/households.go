@@ -86,6 +86,9 @@ type householdBody struct {
 	MyRole         access.Role             `json:"my_role,omitempty"`
 	MyGrants       map[string]access.Level `json:"my_grants,omitempty"`
 	Entitlement    *entitlement.Summary    `json:"entitlement,omitempty"`
+	// Flags are the feature flags that are on for the household (PRD 06 §7), which a client shows
+	// what ships dark by: on the household's own representation, not on a list of households.
+	Flags []string `json:"flags,omitempty"`
 	// DeletionScheduledAt is when the household is deleted, null while no deletion is pending.
 	DeletionScheduledAt *time.Time `json:"deletion_scheduled_at"`
 }
@@ -122,7 +125,9 @@ func (h settings) body(role access.Role, level func(string) access.Level, module
 // bodyFor is h as scope's caller reads it at now, with the entitlement the request found, the state
 // being resolved once per request (PRD 04 §3), and its storage standing at st against its allowance.
 func (h settings) bodyFor(scope *tenant.Scope, modules []string, now time.Time, st storage.Standing) householdBody {
-	return h.body(scope.Role(), scope.Level, modules, withStorage(scope.Entitlement().Summary(now), st))
+	b := h.body(scope.Role(), scope.Level, modules, withStorage(scope.Entitlement().Summary(now), st))
+	b.Flags = scope.Flags()
+	return b
 }
 
 // withStorage is e saying the household's storage as st has it.

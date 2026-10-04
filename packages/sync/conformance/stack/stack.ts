@@ -38,6 +38,7 @@ export const serverEnv: Readonly<Record<string, string>> = {
   HOUSEHOLD_DATABASE_URL: url('household_app', 'household_app'),
   HOUSEHOLD_MIGRATE_DATABASE_URL: url('household_migrate', 'household_migrate'),
   HOUSEHOLD_METER_DATABASE_URL: url('household_meter', 'household_meter'),
+  HOUSEHOLD_STAFF_DATABASE_URL: url('household_staff', 'household_staff'),
   HOUSEHOLD_ADMIN_DATABASE_URL: url('postgres', 'postgres'),
   HOUSEHOLD_REPLICATION_DATABASE_URL: url('household_powersync', 'household_powersync'),
   HOUSEHOLD_POWERSYNC_STORAGE_URL: url(

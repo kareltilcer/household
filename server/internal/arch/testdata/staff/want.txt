@@ -1,0 +1,6 @@
+# Every violation architecture test 12 must report for tables.sql, table by table in name order.
+arch_testdata.counted.household_id: the staff role reads it, and it is not among the metadata staff may see (PRD 02 §8)
+arch_testdata.drawn: the staff role holds USAGE on all of it; grant it SELECT on the columns that are metadata, one at a time
+arch_testdata.noted.note: the staff role reads it, and it is not among the metadata staff may see (PRD 02 §8)
+arch_testdata.whole: the staff role holds SELECT on all of it; grant it SELECT on the columns that are metadata, one at a time
+arch_testdata.written.household_id: the staff role holds UPDATE on it; it only reads

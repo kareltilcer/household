@@ -364,6 +364,12 @@ type Rate struct {
 	Burst     float64
 }
 
+// At is r refilling at perMinute a minute, with its burst in the same proportion: the rate of a
+// household whose API ceiling the platform raised (PRD 04 §5).
+func (r Rate) At(perMinute float64) Rate {
+	return Rate{PerMinute: perMinute, Burst: r.Burst * perMinute / r.PerMinute}
+}
+
 // The API limits of PRD 02 §9: a signed-in user's, and a household's, which its members share
 // (D-96).
 var (
@@ -387,6 +393,8 @@ type Buckets struct {
 type bucket struct {
 	tokens float64
 	at     time.Time
+	// rate is what the bucket last filled at, which says when it is full again (sweep).
+	rate Rate
 }
 
 // NewBuckets returns buckets filling at rate; now is the clock, time.Now when nil.
@@ -397,30 +405,38 @@ func NewBuckets(rate Rate, now func() time.Time) *Buckets {
 	return &Buckets{rate: rate, now: now, buckets: map[string]*bucket{}}
 }
 
-// perSecond is how many tokens a bucket gains in a second.
-func (b *Buckets) perSecond() float64 { return b.rate.PerMinute / 60 }
+// perSecond is how many tokens a bucket filling at r gains in a second.
+func (r Rate) perSecond() float64 { return r.PerMinute / 60 }
+
+// Rate returns the rate the buckets fill at.
+func (b *Buckets) Rate() Rate { return b.rate }
 
 // Take takes a token from key's bucket, and returns how long until it holds one, zero when it
 // did. A new key's bucket starts full.
-func (b *Buckets) Take(key string) time.Duration {
+func (b *Buckets) Take(key string) time.Duration { return b.TakeAt(key, b.rate) }
+
+// TakeAt is Take for a key whose bucket fills at rate rather than at the buckets' own: a household
+// whose ceiling the platform raised. A bucket whose rate changed keeps the tokens it holds, up to
+// its new burst.
+func (b *Buckets) TakeAt(key string, rate Rate) time.Duration {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	now := b.now()
 	b.sweep(now)
 	k, ok := b.buckets[key]
 	if !ok {
-		k = &bucket{tokens: b.rate.Burst, at: now}
+		k = &bucket{tokens: rate.Burst, at: now}
 		b.buckets[key] = k
 	}
-	k.tokens = min(k.tokens+now.Sub(k.at).Seconds()*b.perSecond(), b.rate.Burst)
-	k.at = now
+	k.tokens = min(k.tokens+now.Sub(k.at).Seconds()*rate.perSecond(), rate.Burst)
+	k.at, k.rate = now, rate
 	if k.tokens >= 1 {
 		k.tokens--
 		return 0
 	}
 	// Rounded up, and never zero, which is a token taken: a bucket a nanosecond short of its next
 	// token waits a fraction of one, which truncating would make none.
-	return max(time.Duration(math.Ceil((1-k.tokens)/b.perSecond()*float64(time.Second))), 1)
+	return max(time.Duration(math.Ceil((1-k.tokens)/rate.perSecond()*float64(time.Second))), 1)
 }
 
 // sweep drops, at most once a minute, the buckets that have filled up again: a full bucket is what
@@ -430,9 +446,8 @@ func (b *Buckets) sweep(now time.Time) {
 		return
 	}
 	b.lastSweep = now
-	full := time.Duration(b.rate.Burst / b.perSecond() * float64(time.Second))
 	for key, k := range b.buckets {
-		if now.Sub(k.at) >= full {
+		if full := time.Duration(k.rate.Burst / k.rate.perSecond() * float64(time.Second)); now.Sub(k.at) >= full {
 			delete(b.buckets, key)
 		}
 	}
@@ -441,10 +456,19 @@ func (b *Buckets) sweep(now time.Time) {
 // Middleware refuses a request with 429 when its bucket is empty. key names the request's bucket,
 // and false for a request the limit does not count, which passes.
 func Middleware(b *Buckets, key func(*http.Request) (string, bool)) func(http.Handler) http.Handler {
+	return MiddlewareAt(b, func(r *http.Request) (string, Rate, bool) {
+		k, ok := key(r)
+		return k, b.rate, ok
+	})
+}
+
+// MiddlewareAt is Middleware for buckets that do not all fill at one rate: key names the request's
+// bucket and the rate it fills at.
+func MiddlewareAt(b *Buckets, key func(*http.Request) (string, Rate, bool)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if k, ok := key(r); ok {
-				if wait := b.Take(k); wait > 0 {
+			if k, rate, ok := key(r); ok {
+				if wait := b.TakeAt(k, rate); wait > 0 {
 					problem.Write(w, reqctx.RequestID(r.Context()), Refusal(wait))
 					return
 				}

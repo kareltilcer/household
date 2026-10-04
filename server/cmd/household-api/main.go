@@ -146,6 +146,7 @@ func bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) error 
 		{cfg.MigrateDatabaseURL, &passwords.Migrate},
 		{cfg.DatabaseURL, &passwords.App},
 		{cfg.MeterDatabaseURL, &passwords.Meter},
+		{cfg.StaffDatabaseURL, &passwords.Staff},
 		{cfg.ReplicationDatabaseURL, &passwords.PowerSync},
 	} {
 		if *p.into, err = config.Password(p.url); err != nil {
