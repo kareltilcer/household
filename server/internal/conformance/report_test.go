@@ -322,6 +322,51 @@ func TestAReplicaWithoutTheGrantHoldsNothingOfTheModule(t *testing.T) {
 	}
 }
 
+// A replica keeps a module's rows while the module's flag is off for its household: no stream reads a
+// flag, and one turned off retracts nothing already replicated (D-146). Its report is compared with
+// what the streams send it, which is those rows still, and matches. Compared with what its member's
+// requests may do, which is nothing while the flag is off, it would disagree for as long as the flag
+// stayed off, a disagreement that holds still, and the replica would be told to download itself again
+// after every report.
+func TestAReplicaKeepsAModulesRowsWhileItsFlagIsOff(t *testing.T) {
+	w := newWorld(t, apptest.Options{})
+	household, member := w.household("contribute")
+	token := w.signIn(member, 0)
+	milk := idgen.New()
+	w.want(w.results(w.push(household, token, key(), mutationOf(conformance.Item, "create", milk, map[string]any{"title": "Milk"}))), push.Applied)
+	// The flag is the platform's, and the package's tests share one database: it is on for the
+	// platform, off for this household alone, and goes with the test.
+	flag := tenant.ModuleFlag(conformance.Name)
+	t.Cleanup(func() {
+		for _, stmt := range []string{"DELETE FROM household_flags WHERE key = $1", "DELETE FROM platform.feature_flags WHERE key = $1"} {
+			if _, err := w.admin.Exec(context.Background(), stmt, flag); err != nil {
+				t.Errorf("%s: %v", stmt, err)
+			}
+		}
+	})
+	w.exec("INSERT INTO platform.feature_flags (key, enabled) VALUES ($1, true)", flag)
+	w.exec("INSERT INTO household_flags (household_id, key, enabled) VALUES ($1, $2, false)", household, flag)
+
+	replicaID := idgen.New()
+	holds := entryOf(conformance.Item, map[uuid.UUID]int64{milk: 1})
+	v := w.verdict(w.report(household, token, replicaID, holds))
+	if !v.Matched || v.ResnapshotRequired || v.Entries[0].ServerCount != 1 {
+		t.Fatalf("a replica holding the rows of a module whose flag is off: %+v", v)
+	}
+	if s := w.state(household, token); len(s.Replicas) != 1 || s.Replicas[0].NeedsResnapshot || len(s.Replicas[0].Mismatched) != 0 {
+		t.Errorf("the replica as its member reads it: %+v", s)
+	}
+	// What the member's requests may do is the flag's to say: the module takes no push while it is off.
+	refused := outcomes(w.results(w.push(household, token, key(), mutationOf(conformance.Item, "create", idgen.New(), map[string]any{"title": "Eggs"}))))
+	if len(refused) != 1 || strings.HasPrefix(refused[0], push.Applied) {
+		t.Fatalf("a push to a module whose flag is off: %v", refused)
+	}
+	// One that dropped them does disagree: the streams still send them.
+	if v := w.verdict(w.report(household, token, replicaID, entryOf(conformance.Item, nil))); v.Matched || v.Entries[0].ServerCount != 1 {
+		t.Fatalf("a replica that holds none of them: %+v", v)
+	}
+}
+
 // A replica's reports are its member's and leave with their membership, as the answers kept for them
 // do: a member removed from the household, or one who left it, leaves none behind, and another
 // member's stay. One removed while their report is answered is answered as the tenant middleware

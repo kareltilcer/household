@@ -151,8 +151,11 @@ const (
 	shownInvoices      = 12
 	shownNotifications = 20
 	shownActions       = 50
-	actionsWindow      = 30 * 24 * time.Hour
+	actionsWindow      = 30 * day
 )
+
+// day is the day a trial is extended by, and the log's last month is counted in: 24 hours.
+const day = 24 * time.Hour
 
 // searchHouseholds is getPlatformHouseholds: the households whose id q is, whose name holds it, or
 // one of whose members has it as their address, in the state the request names, newest first.
@@ -379,10 +382,10 @@ func utc(t *time.Time) *time.Time {
 	return &u
 }
 
-// limits reads, in tx, the fair-use ceilings raised for household, in the order of their keys.
-func limits(ctx context.Context, tx pgx.Tx, household uuid.UUID) ([]limitDoc, error) {
+// limits reads, in tx, the fair-use ceilings raised for household id, in the order of their keys.
+func limits(ctx context.Context, tx pgx.Tx, id uuid.UUID) ([]limitDoc, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT key, value, reason, set_by, set_by_label, set_at FROM household_limits WHERE household_id = $1 ORDER BY key`, household)
+		SELECT key, value, reason, set_by, set_by_label, set_at FROM household_limits WHERE household_id = $1 ORDER BY key`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -406,14 +409,14 @@ func overridden(key string, value int64, reason string, by *uuid.UUID, label str
 	return limitDoc{Key: key, Value: &value, Reason: &reason, SetBy: &actorRef{UserID: by, Label: label}, SetAt: &at}
 }
 
-// householdFlags reads, in tx, every feature flag as it stands for household, in the order of their
-// keys: its own setting of each, before the platform's.
-func householdFlags(ctx context.Context, tx pgx.Tx, household uuid.UUID) ([]flagDoc, error) {
+// householdFlags reads, in tx, every feature flag as it stands for household id, in the order of
+// their keys: its own setting of each, before the platform's.
+func householdFlags(ctx context.Context, tx pgx.Tx, id uuid.UUID) ([]flagDoc, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT f.key, coalesce(hf.enabled, f.enabled), hf.enabled IS NOT NULL
 		FROM platform.feature_flags f
 		LEFT JOIN household_flags hf ON hf.household_id = $1 AND hf.key = f.key
-		ORDER BY f.key`, household)
+		ORDER BY f.key`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +481,7 @@ func (s *Service) extendTrial(w http.ResponseWriter, r *http.Request) {
 	if entitlement.State(state) == entitlement.Trialing && ends.After(from) {
 		from = ends
 	}
-	until := from.AddDate(0, 0, req.Days)
+	until := extended(from, req.Days)
 	scoped := s.acting(ctx, caller(ctx), entry{
 		action: "household.trial", household: id, reason: reason, meta: map[string]any{"days": req.Days, "until": until.UTC()},
 	})
@@ -493,19 +496,26 @@ func (s *Service) extendTrial(w http.ResponseWriter, r *http.Request) {
 	s.answerHousehold(w, r, id)
 }
 
+// extended is from with days more of trial: days of 24 hours, as the trial itself is 720 hours
+// (migration 01020). A calendar day added to an instant, which is in the server's own zone as the
+// database driver and the clock hand it over, is an hour short or long across a change of the clocks.
+func extended(from time.Time, days int) time.Time {
+	return from.Add(time.Duration(days) * day)
+}
+
 // creditRequest names, to the payment processor, the request a credit is made for: the caller's
 // Idempotency-Key, with who sent it, for which household and what amount. The processor is asked
 // before the transaction that records the credit commits, so an answer of its that never arrived, or
 // a commit that failed after it, leaves the caller to send the request again: under the same name
 // the processor answers the credit it made, and makes no second one. A request with no key has no
 // name, and sent again is another request.
-func creditRequest(r *http.Request, m member, household uuid.UUID, amount money.Money) string {
+func creditRequest(r *http.Request, m member, id uuid.UUID, amount money.Money) string {
 	key := r.Header.Get(idempotency.Header)
 	if key == "" {
 		return ""
 	}
 	sum := sha256.Sum256([]byte(strings.Join([]string{
-		m.id.String(), household.String(), strconv.FormatInt(amount.AmountMinor, 10), amount.Currency, key,
+		m.id.String(), id.String(), strconv.FormatInt(amount.AmountMinor, 10), amount.Currency, key,
 	}, "\x00")))
 	return "credit:" + hex.EncodeToString(sum[:])
 }
@@ -607,7 +617,7 @@ func (s *Service) redrive(w http.ResponseWriter, r *http.Request) {
 // as event and in the platform's as action, naming the thing under param, and the transport is
 // nudged once that has committed.
 func (s *Service) send(w http.ResponseWriter, r *http.Request, param, action, event string,
-	do func(ctx context.Context, tx pgx.Tx, household, thing uuid.UUID) error,
+	do func(ctx context.Context, tx pgx.Tx, id, thing uuid.UUID) error,
 ) {
 	ctx := r.Context()
 	id, err := pathUUID(r, "household_id")
@@ -673,7 +683,8 @@ const maxRaised = 1<<53 - 1
 // setLimit is patchPlatformHouseholdsByHouseholdIdLimits: one fair-use ceiling raised for the
 // household, to a value at or above the one every household is held to and no more than maxRaised,
 // or, with a null value, put back to it (PRD 04 §5). The ceiling holds from the household's next
-// request.
+// request. One that stands as asked already, raised to that value or not raised at all, is answered as
+// it is, and recorded in neither log.
 func (s *Service) setLimit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	m := caller(ctx)
@@ -728,7 +739,22 @@ func (s *Service) setLimit(w http.ResponseWriter, r *http.Request) {
 				VALUES ($1, $2, $3, $4, $5, $6, $7)
 				ON CONFLICT (household_id, key) DO UPDATE SET value = excluded.value, reason = excluded.reason,
 				  set_by = excluded.set_by, set_by_label = excluded.set_by_label, set_at = excluded.set_at
+				WHERE l.value <> excluded.value
 				RETURNING set_at`, id, req.Key, *req.Value, reason, m.id, m.email, s.cfg.Now()).Scan(&at)
+			if errors.Is(err, pgx.ErrNoRows) {
+				// Raised to this value already: it stands as it was set, by whom and why, and nothing
+				// is recorded (D-145).
+				var (
+					why, label string
+					by         *uuid.UUID
+				)
+				if err := tx.QueryRow(ctx, "SELECT reason, set_by, set_by_label, set_at FROM household_limits WHERE household_id = $1 AND key = $2",
+					id, req.Key).Scan(&why, &by, &label, &at); err != nil {
+					return err
+				}
+				out = overridden(req.Key, *req.Value, why, by, label, at)
+				return nil
+			}
 			if err != nil {
 				return err
 			}

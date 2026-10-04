@@ -8554,12 +8554,12 @@ paths:
       tags: [platform]
       summary: Extend a trial
       description: |
-        `days` more of trial: from the end of a trial still running, or from now for a household
-        whose trial ended unpaid, in grace or read-only since, which is back on trial. A household
-        that has subscribed has no trial to extend (`409`, `not_applicable`). Written to the
-        platform audit log **and** to the household's own activity log, where the household sees it.
-        Answers the household's metadata as it stands then, not the `Subscription` its owners read,
-        whose payer and offer name members.
+        `days` more of trial, of 24 hours each: from the end of a trial still running, or from now
+        for a household whose trial ended unpaid, in grace or read-only since, which is back on
+        trial. A household that has subscribed has no trial to extend (`409`, `not_applicable`).
+        Written to the platform audit log **and** to the household's own activity log, where the
+        household sees it. Answers the household's metadata as it stands then, not the
+        `Subscription` its owners read, whose payer and offer name members.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -8582,8 +8582,9 @@ paths:
       description: |
         `platform_admin` only. One ceiling (PRD 04 §5) raised for the household, to a `value` at or
         above the one every household is held to and no more than 2^53 − 1, or, with a null
-        `value`, put back to it. The household is held to it from its next request. `chat_messages`
-        is kept and read once Chat counts its messages.
+        `value`, put back to it. The household is held to it from its next request. A ceiling raised
+        to the `value` it has already stands as it was set, by whom and why, and is answered so.
+        `chat_messages` is kept and read once Chat counts its messages.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -8824,7 +8825,8 @@ paths:
         on or off for every household that has no setting of its own
         (`putPlatformHouseholdsByHouseholdIdFlagsByKey`). The flag `module.<id>` is its module's: a
         household for which it is off holds no level on the module, whatever it enables and grants,
-        and a module with no such flag is served as it is enabled (D-146).
+        and a module with no such flag is served as it is enabled (D-146). Household settings is
+        never off: its flag, `module.admin`, gates nothing.
       responses:
         '200': { description: Flags, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/PlatformFlag' } } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }

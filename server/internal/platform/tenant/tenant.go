@@ -47,13 +47,15 @@ type Beginner interface {
 }
 
 // Scope is the resolved tenant of one request: the household, the caller, their role there, their
-// effective level on each module, the household's entitlement, the fair-use ceilings the platform
-// raised for it and the feature flags that are on for it.
+// effective level on each module, and their level on it as the generated streams read it, the
+// household's entitlement, the fair-use ceilings the platform raised for it and the feature flags that
+// are on for it.
 type Scope struct {
 	householdID uuid.UUID
 	userID      uuid.UUID
 	role        access.Role
 	levels      map[string]access.Level
+	replicated  map[string]access.Level
 	entitlement entitlement.Status
 	limits      map[string]int64
 	flags       map[string]bool
@@ -80,6 +82,14 @@ func (s *Scope) Role() access.Role { return s.role }
 // Level returns the caller's effective level on module: None for a module the household does
 // not enable, and for one it has no row for. grant.Require is how a handler asks.
 func (s *Scope) Level(module string) access.Level { return s.levels[module] }
+
+// Replicated returns the caller's level on module as the generated streams read it (sync.Streams): by
+// the household's enablement and the caller's grant alone. No stream reads a feature flag, and a
+// module's flag turned off retracts nothing already replicated (D-146), so a replica still holds the
+// rows of a module on which Level is None for its flag. What a replica holds is compared with this
+// (replica.Expected); what a request may do is Level's. None in a scope the middleware did not resolve
+// (Assume), as Level is.
+func (s *Scope) Replicated(module string) access.Level { return s.replicated[module] }
 
 // Entitlement returns the household's entitlement as the request found it, resolved once per request
 // (PRD 04 §3): the zero Status, which reads as trialing, in a scope the middleware did not resolve
@@ -336,7 +346,7 @@ func resolve(ctx context.Context, pool Beginner, household, user uuid.UUID) (*Sc
 		if s.entitlement, err = e.Status(); err != nil {
 			return err
 		}
-		if s.levels, err = Levels(ctx, tx, household, user, s.role); err != nil {
+		if s.levels, s.replicated, err = levels(ctx, tx, household, user, s.role); err != nil {
 			return err
 		}
 		return s.settings(ctx, tx)
@@ -380,16 +390,32 @@ func (s *Scope) settings(ctx context.Context, tx pgx.Tx) error {
 
 // ModuleFlag is the feature flag a module ships dark behind (PRD 06 §7, D-146): "module." and its
 // id. A household for which it is off holds no level on the module, whatever it enables and grants,
-// and a module with no such flag is served as it is enabled.
+// and a module with no such flag is served as it is enabled. Household settings' gates nothing
+// (settingsModule).
 func ModuleFlag(module string) string { return "module." + module }
+
+// settingsModule is household settings, the platform's own module (household.Name, whose package
+// imports this one): the one module no flag turns off. It is never disabled (FR-HA8), since nobody in
+// a household it was off for could turn it on again, and a flag would leave its owners as stuck: with
+// no level on it they read no invitation and invite nobody.
+const settingsModule = "admin"
 
 // Levels are user's effective levels on each of household's modules, whose role there is role
 // (Effective), read in tx in household's context: what a request of theirs is allowed, and what the
 // platform reads for them when it acts with no request, as a notification going out does (FR-NT5).
-// A module whose flag is off for the household (ModuleFlag) reads as one it does not enable.
+// A module whose flag is off for the household (ModuleFlag) reads as one it does not enable, but
+// household settings, whose flag gates nothing.
 func Levels(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, role access.Role) (map[string]access.Level, error) {
+	effective, _, err := levels(ctx, tx, household, user, role)
+	return effective, err
+}
+
+// levels returns user's effective levels on each of household's modules (Levels), and their levels as
+// the generated streams read them, by the household's enablement and their grant alone, whatever a
+// module's flag says (Scope.Replicated): the two differ only on a module whose flag is off.
+func levels(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, role access.Role) (effective, replicated map[string]access.Level, err error) {
 	rows, err := tx.Query(ctx, `
-		SELECT e.module, e.enabled AND coalesce(hf.enabled, f.enabled, true), coalesce(g.level::text, 'none')
+		SELECT e.module, e.enabled, coalesce(hf.enabled, f.enabled, true), coalesce(g.level::text, 'none')
 		FROM module_enablement e
 		LEFT JOIN module_grants g
 		  ON g.household_id = e.household_id AND g.module = e.module AND g.user_id = $2
@@ -397,25 +423,26 @@ func Levels(ctx context.Context, tx pgx.Tx, household, user uuid.UUID, role acce
 		LEFT JOIN household_flags hf ON hf.household_id = e.household_id AND hf.key = f.key
 		WHERE e.household_id = $1`, household, user)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var (
-		levels        = map[string]access.Level{}
 		module, level string
-		enabled       bool
+		enabled, on   bool
 	)
-	_, err = pgx.ForEachRow(rows, []any{&module, &enabled, &level}, func() error {
+	effective, replicated = map[string]access.Level{}, map[string]access.Level{}
+	_, err = pgx.ForEachRow(rows, []any{&module, &enabled, &on, &level}, func() error {
 		granted, err := access.ParseLevel(level)
 		if err != nil {
 			return err
 		}
-		levels[module] = Effective(role, module, enabled, granted)
+		replicated[module] = Effective(role, module, enabled, granted)
+		effective[module] = Effective(role, module, enabled && (on || module == settingsModule), granted)
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return levels, nil
+	return effective, replicated, nil
 }
 
 // Owners are household's owners, read in tx in its context, in the order of their ids: whom the

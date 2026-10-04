@@ -245,7 +245,7 @@ func (s *Service) actOnUser(w http.ResponseWriter, r *http.Request) {
 	logged := witness(caller(ctx), entry{action: "user." + req.Action, user: id, reason: reason})
 	// The key is the request's, marked in the transaction of the action's effect as the spine marks
 	// a mutation's.
-	record := func(ctx context.Context, tx pgx.Tx) error {
+	witnessed := func(ctx context.Context, tx pgx.Tx) error {
 		if err := logged(ctx, tx); err != nil {
 			return err
 		}
@@ -254,15 +254,15 @@ func (s *Service) actOnUser(w http.ResponseWriter, r *http.Request) {
 	accounts := s.cfg.Accounts
 	switch req.Action {
 	case actionResendVerification:
-		err = accounts.ResendVerification(ctx, id, record)
+		err = accounts.ResendVerification(ctx, id, witnessed)
 	case actionSendPasswordReset:
-		err = accounts.SendPasswordReset(ctx, id, record)
+		err = accounts.SendPasswordReset(ctx, id, witnessed)
 	case actionClearRateLimit:
-		err = accounts.ClearRateLimits(ctx, id, record)
+		err = accounts.ClearRateLimits(ctx, id, witnessed)
 	case actionUnlock:
-		err = accounts.UnlockSecondStep(ctx, id, record)
+		err = accounts.UnlockSecondStep(ctx, id, witnessed)
 	case actionDisableMFA:
-		err = accounts.DisableSecondStep(ctx, id, record)
+		err = accounts.DisableSecondStep(ctx, id, witnessed)
 	default:
 		err = invalid("/action", problem.FieldInvalid)
 	}

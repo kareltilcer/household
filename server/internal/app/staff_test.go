@@ -462,6 +462,21 @@ func TestARaisedCeilingIsTheOneTheHouseholdIsHeldTo(t *testing.T) {
 	if got := s.events(h.ID, "support.limit"); !slices.Equal(got, []string{"service:support:system"}) {
 		t.Fatalf("the household's log: %v", got)
 	}
+	// Raised to the value it has already, the ceiling stands as it was set, by whom and why, and nothing
+	// more is recorded in either log.
+	rec = admin.patch(limits, `{"key": "members", "value": 13, "reason": "again"}`, nil)
+	expect(t, rec, http.StatusOK, "")
+	var stands struct {
+		Value  *int64 `json:"value"`
+		Reason string `json:"reason"`
+	}
+	decode(t, rec, &stands)
+	if stands.Value == nil || *stands.Value != 13 || stands.Reason != "Three generations under one roof" {
+		t.Fatalf("the ceiling raised to the value it has: %+v", stands)
+	}
+	if n, logged := len(s.events(h.ID, "support.limit")), len(admin.logged("?household_id="+h.ID.String())); n != 1 || logged != 1 {
+		t.Fatalf("%d changes of the ceiling in the household's log and %d in the platform's, want the one raise in each", n, logged)
+	}
 
 	// Put back, with a null value: the ceiling is every household's again, and putting it back again
 	// changes and records nothing.
@@ -535,6 +550,36 @@ func TestAFlagIsTheHouseholdsOwnBeforeThePlatforms(t *testing.T) {
 	if !slices.Contains(flags(), key) {
 		t.Fatal("a flag that is on for the platform is off for the household")
 	}
+}
+
+// Household settings is never off (FR-HA8, D-146): the flag of its module, module.admin, gates nothing,
+// since nobody in a household it was off for could turn it on again. Off for the platform and for the
+// household, an owner still holds manage on admin, and still reads the household's invitations.
+func TestNoFlagTurnsHouseholdSettingsOff(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	jana := s.person("Jana", s.a("jana@example"))
+	h := jana.create("Tilcerovi")
+	support := s.staffer("Sára", s.a("sara@example"), staff.Support)
+	const flag = "module.admin"
+	// The flag is the platform's, and the package's tests share one database: it goes with the test.
+	t.Cleanup(func() {
+		for _, stmt := range []string{"DELETE FROM household_flags WHERE key = $1", "DELETE FROM platform.feature_flags WHERE key = $1"} {
+			if _, err := s.admin.Exec(context.Background(), stmt, flag); err != nil {
+				t.Errorf("%s: %v", stmt, err)
+			}
+		}
+	})
+	expect(t, support.put("/platform/flags/"+flag, `{"enabled": false, "reason": "a mistake"}`), http.StatusOK, "")
+	expect(t, support.put(platformPath(h.ID, "/flags/"+flag), `{"enabled": false, "reason": "another"}`), http.StatusOK, "")
+
+	rec := jana.get(householdPath(h.ID, ""))
+	expect(t, rec, http.StatusOK, "")
+	var d householdDoc
+	decode(t, rec, &d)
+	if d.MyGrants["admin"] != "manage" {
+		t.Fatalf("with its flag off, an owner holds %q on household settings, want manage", d.MyGrants["admin"])
+	}
+	expect(t, jana.get(householdPath(h.ID, "/invitations")), http.StatusOK, "")
 }
 
 // What support does for an account (PRD 02 §8, D-100): the verification and the reset link sent

@@ -89,8 +89,8 @@ GRANT EXECUTE ON FUNCTION platform.purge_audit_log() TO household_app;
 -- A feature flag (PRD 06 §7): what a feature ships dark behind, on or off for the whole platform. A
 -- household's own setting of it, below, comes first. The flag named module.<id> is its module's: a
 -- household for which it is off holds no level on the module, whatever it enables and grants, and a
--- module with no such flag is served as it is enabled (D-146). A flag is never deleted, since a
--- household's setting names it.
+-- module with no such flag is served as it is enabled (D-146), but household settings, which no flag
+-- turns off. A flag is never deleted, since a household's setting names it.
 CREATE TABLE platform.feature_flags (
   key text PRIMARY KEY CHECK (key ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$' AND char_length(key) <= 100),
   enabled boolean NOT NULL,
@@ -157,10 +157,21 @@ ALTER TABLE households
   ADD CONSTRAINT households_suspension CHECK (suspended_at IS NOT NULL OR suspension_notice IS NULL);
 
 -- Whether a notification's email carried a secret in its link, which is gone once the notification
--- settled: support cannot send such a one again (re-drive), since its link would open nothing. An
--- instance of the release before this one queues a row without saying, and its row reads as carrying
--- none; no notification queued then is re-driven before this release serves alone.
+-- settled: support cannot send such a one again (re-drive), since its link would open nothing.
+--
+-- The notifications made before this migration say so here. One still waiting holds its secret, and
+-- is told by it; one that settled has none left to tell by, so every settled one whose email carried
+-- a link reads as having carried a secret, an invoice's among them, which support sends again as the
+-- invoice (re-issue) rather than as the notification. Every household's in one statement, which
+-- row-level security would hide from the migrate role as from any other: FORCE is lifted from the
+-- table for that statement alone and put back before the migration commits, under the lock its ALTER
+-- TABLE holds (as 01020 does). What is left is a row an instance of the release before this one queues
+-- while the two serve side by side, which does not say and reads as carrying none: re-driven, should it
+-- fail, its email would go with a link that opens nothing.
 ALTER TABLE notifications ADD COLUMN sealed boolean NOT NULL DEFAULT false;
+ALTER TABLE notifications NO FORCE ROW LEVEL SECURITY;
+UPDATE notifications SET sealed = true WHERE secret IS NOT NULL OR (status <> 'queued' AND route IS NOT NULL);
+ALTER TABLE notifications FORCE ROW LEVEL SECURITY;
 
 -- What the staff role reads of the tables that exist already. On a tenant table it is admitted to
 -- every row, for reading, and granted the columns below; a global table has no policy to pass.

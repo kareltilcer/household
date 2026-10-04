@@ -94,8 +94,15 @@ flag's setting for the platform and `household_flags`, a tenant table, a househo
 middleware reads both with the ceilings in one statement and carries them in the scope
 (`Scope.Flag`, `Scope.Flags`). `tenant.Levels` joins the flag `module.<id>`: where it is off, the
 module's enablement reads as off, so its routes answer `404`, the push refuses it and a notification
-about it goes to nobody, as for a module the household does not enable. The generated streams do not
-read the flags.
+about it goes to nobody, as for a module the household does not enable. Household settings (`admin`)
+is the one module whose flag gates nothing: it is never disabled (FR-HA8, `patchModulesByModule`),
+and a flag would leave a household's owners with no level on it and nobody among them who could turn
+it on again. The generated
+streams do not read the flags, so a replica still holds the rows of a module whose flag was turned
+off: the scope carries, beside each level, the level the streams read, by enablement and grant alone
+(`Scope.Replicated`), and a replica's report is compared with that (`replica.Expected`, D-125).
+Compared with the flag's level it would disagree for as long as the flag stayed off, and the replica
+would be told to download itself again after every report.
 
 **A raised ceiling is read where it is enforced (D-147).** `household_limits`, a tenant table, holds
 a household's own value for a ceiling. `fairuse.Ceiling(ctx, tx, household, key, fallback)` reads it
@@ -145,7 +152,7 @@ the rule.
   `…invoice`, `…redrive`, `…limit`, `…flag`). Item 52 renders a `service` actor's label through the
   catalog (`activity.actor.support`).
 - A flag turned off for a household that has used its module stops the module's routes and its push;
-  the rows already on its replicas stay until the module is disabled.
+  the rows already on its replicas stay until the module is disabled, and their reports still match.
 - Every household-scoped request reads the household's ceilings and flags, one indexed statement
   more in the tenant middleware's transaction. Item 90 measures it.
 - Items 56 and 68 add `edited_at` to their reference tables and build their upserts from
