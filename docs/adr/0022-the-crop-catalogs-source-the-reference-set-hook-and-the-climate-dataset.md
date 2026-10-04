@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-04
 - **Plan item:** 22
-- **Decides for:** [11-garden](../prd/modules/11-garden.md) (the crop knowledge base, FR-GA1 to FR-GA3, FR-GA21); [01-architecture](../prd/01-architecture.md) §2.4; D-66, D-143, D-144; PL-10; [ADR 0008](0008-reference-data-pipeline.md)
+- **Decides for:** [11-garden](../prd/modules/11-garden.md) (the crop knowledge base, FR-GA1 to FR-GA3, FR-GA21); [01-architecture](../prd/01-architecture.md) §2.4; D-66, D-143, D-144, D-145; PL-10; [ADR 0008](0008-reference-data-pipeline.md)
 
 ## Context
 

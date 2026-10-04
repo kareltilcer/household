@@ -383,6 +383,26 @@
       }
     },
     {
+      "a": "climbing_bean",
+      "b": "sweetcorn",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "The classic trio: sweetcorn gives the beans support, the beans give nitrogen back to the soil.",
+          "cs": "Klasická trojice: kukuřice dá fazolím oporu, fazole vrátí půdě dusík.",
+          "sk": "Klasická trojica: kukurica dá fazuli oporu, fazuľa vráti pôde dusík.",
+          "de": "Das klassische Trio: Der Mais gibt den Bohnen Halt, die Bohnen geben dem Boden Stickstoff zurück.",
+          "pl": "Klasyczna trójka: kukurydza daje fasoli podporę, fasola oddaje glebie azot."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
       "a": "courgette",
       "b": "pot_marigold",
       "claim": {
@@ -677,26 +697,6 @@
           "sk": "Fazuľa medzi zemiakmi dodá dusík a odpudzuje pásavku zemiakovú.",
           "de": "Bohnen zwischen den Kartoffeln liefern Stickstoff und vertreiben den Kartoffelkäfer.",
           "pl": "Fasola między ziemniakami dostarcza azotu i odstrasza stonkę ziemniaczaną."
-        },
-        "source": "lwg-2104-mischkultur",
-        "drafted": true
-      }
-    },
-    {
-      "a": "french_bean",
-      "b": "sweetcorn",
-      "claim": {
-        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
-        "source": "lwg-2104-mischkultur",
-        "drafted": true
-      },
-      "reason": {
-        "value": {
-          "en": "The classic trio: sweetcorn gives the beans support, the beans give nitrogen back to the soil.",
-          "cs": "Klasická trojice: kukuřice dá fazolím oporu, fazole vrátí půdě dusík.",
-          "sk": "Klasická trojica: kukurica dá fazuli oporu, fazuľa vráti pôde dusík.",
-          "de": "Das klassische Trio: Der Mais gibt den Bohnen Halt, die Bohnen geben dem Boden Stickstoff zurück.",
-          "pl": "Klasyczna trójka: kukurydza daje fasoli podporę, fasola oddaje glebie azot."
         },
         "source": "lwg-2104-mischkultur",
         "drafted": true
