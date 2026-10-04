@@ -4,11 +4,10 @@ package privacy
 
 import (
 	"context"
-	"io"
 	"io/fs"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/module"
 )
@@ -27,19 +26,19 @@ func (contract) AuditActions() []module.AuditAction { return nil }
 
 type complete struct{ contract }
 
-func (complete) Name() string                                       { return "complete" }
-func (complete) Export(context.Context, uuid.UUID, io.Writer) error { return nil }
-func (complete) Erase(context.Context, uuid.UUID) error             { return nil }
+func (complete) Name() string                                                        { return "complete" }
+func (complete) Export(context.Context, pgx.Tx, module.Export, module.Archive) error { return nil }
+func (complete) Erase(context.Context, pgx.Tx, module.Erasure) error                 { return nil }
 
 type noExport struct{ contract }
 
-func (noExport) Name() string                           { return "no_export" }
-func (noExport) Erase(context.Context, uuid.UUID) error { return nil }
+func (noExport) Name() string                                        { return "no_export" }
+func (noExport) Erase(context.Context, pgx.Tx, module.Erasure) error { return nil }
 
 type noErase struct{ contract }
 
-func (noErase) Name() string                                       { return "no_erase" }
-func (noErase) Export(context.Context, uuid.UUID, io.Writer) error { return nil }
+func (noErase) Name() string                                                        { return "no_erase" }
+func (noErase) Export(context.Context, pgx.Tx, module.Export, module.Archive) error { return nil }
 
 type neither struct{ contract }
 

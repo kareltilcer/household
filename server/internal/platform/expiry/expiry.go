@@ -62,6 +62,9 @@ type Config struct {
 	// Invitations deletes every household's invitations that stopped working a month ago, through the
 	// mutation spine (household.Service.PurgeInvitations), and returns how many.
 	Invitations func(ctx context.Context) (int, error)
+	// Exports removes the export archives past their seven days, and the rows of the exports that
+	// ended a month ago (privacy.Service.Expire), and returns how many archives it removed.
+	Exports func(ctx context.Context) (int, error)
 }
 
 // Sweeper runs the sweeps.
@@ -71,7 +74,7 @@ type Sweeper struct {
 
 // New returns the sweeper.
 func New(cfg Config) (*Sweeper, error) {
-	if cfg.Pool == nil || cfg.Meter == nil || cfg.Log == nil || cfg.Invitations == nil {
+	if cfg.Pool == nil || cfg.Meter == nil || cfg.Log == nil || cfg.Invitations == nil || cfg.Exports == nil {
 		return nil, errors.New("expiry: the sweeper is missing a dependency")
 	}
 	return &Sweeper{cfg: cfg}, nil
@@ -95,8 +98,9 @@ type household struct {
 }
 
 // nightly are the expiry sweep's retentions (PRD 03 §5), and the accounts' that items 8, 9 and 15 keep.
-// The other rows of PRD 03 §5 are the items' that build their tables: preserved note bodies (item 43),
-// export archives and diagnostic bundles (item 20), and each module's tombstones past its undo window.
+// The other rows of PRD 03 §5 are the items' that build their tables: preserved note bodies (item 43)
+// and each module's tombstones past its undo window. An export's archive is an object, which the
+// sweep removes through privacy.Service.Expire (Config.Exports).
 var (
 	nightlyAccounts = []account{
 		// A web session that ended, revoked or expired, and with it the browser subscriptions it
@@ -112,6 +116,8 @@ var (
 		{"revoked device sign-ins", "DELETE FROM device_sessions WHERE revoked_at < now() - make_interval(secs => $1)",
 			[]any{UsedTokens.Seconds()}},
 		{"expired trusts", "DELETE FROM mfa_trusts WHERE expires_at <= now()", nil},
+		// A diagnostic bundle 30 days after its member sent it (FR-PS1).
+		{"diagnostic bundles", "DELETE FROM diagnostic_bundles WHERE expires_at <= now()", nil},
 	}
 	nightlyHouseholds = []household{
 		{"Idempotency-Keys",
@@ -164,6 +170,8 @@ func (s *Sweeper) Sweep(ctx context.Context) error {
 	failed := s.accounts(ctx, nightlyAccounts)
 	n, err := s.inAccount(ctx, func(tx pgx.Tx) (int64, error) { return ratelimit.Sweep(ctx, tx) })
 	failed = errors.Join(failed, s.report(ctx, "sign-in throttles", n, err))
+	archives, err := s.cfg.Exports(ctx)
+	failed = errors.Join(failed, s.report(ctx, "export archives", int64(archives), err))
 	for _, h := range nightlyHouseholds {
 		n, err := s.households(ctx, h)
 		failed = errors.Join(failed, s.report(ctx, h.what, n, err))

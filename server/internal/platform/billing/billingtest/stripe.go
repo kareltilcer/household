@@ -13,6 +13,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -73,6 +74,8 @@ type Stripe struct {
 	items         []object
 	credits       []url.Values
 	keyed         map[string]string
+	// deleted are the customers the server deleted (Deleted).
+	deleted       map[string]bool
 	requests      []Request
 	down, decline bool
 	// covered has a customer's credit pay the first invoice of every subscription made unpaid from now
@@ -92,9 +95,11 @@ func New(t testing.TB, now func() time.Time) *Stripe {
 	s := &Stripe{
 		t: t, now: now, account: strings.ReplaceAll(uuid.NewString(), "-", "")[:12], subscriptions: map[string]object{}, invoices: map[string]object{}, lines: map[string][]object{},
 		setups: map[string]object{}, methods: map[string]object{}, keyed: map[string]string{}, payAfter: map[string]int{},
+		deleted: map[string]bool{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/customers", s.handle(s.createCustomer))
+	mux.HandleFunc("DELETE /v1/customers/{id}", s.handle(s.deleteCustomer))
 	mux.HandleFunc("POST /v1/customers/{id}/balance_transactions", s.handle(s.credit))
 	mux.HandleFunc("POST /v1/subscriptions", s.handle(s.createSubscription))
 	mux.HandleFunc("GET /v1/subscriptions/{id}", s.handle(s.getSubscription))
@@ -232,6 +237,22 @@ func metadata(form url.Values) object {
 func (s *Stripe) createCustomer(r *http.Request, form url.Values) (any, *apiError) {
 	id := s.once(r, func() string { return s.id("cus") })
 	return object{"id": id, "object": "customer", "email": form.Get("email"), "name": form.Get("name"), "metadata": metadata(form)}, nil
+}
+
+// deleteCustomer deletes the customer, as Stripe does: every subscription it still has is cancelled
+// with it, and one deleted already is not found.
+func (s *Stripe) deleteCustomer(r *http.Request, _ url.Values) (any, *apiError) {
+	id := r.PathValue("id")
+	if s.deleted[id] {
+		return nil, notFound("customer", id)
+	}
+	s.deleted[id] = true
+	for _, sub := range s.subscriptions {
+		if sub["customer"] == id && sub["status"] != "canceled" && sub["status"] != "incomplete_expired" {
+			sub["status"] = "canceled"
+		}
+	}
+	return object{"id": id, "object": "customer", "deleted": true}, nil
 }
 
 func (s *Stripe) credit(r *http.Request, form url.Values) (any, *apiError) {
@@ -870,6 +891,13 @@ func (s *Stripe) Subscription(id string) (status string, cancelAtPeriodEnd bool,
 	status, _ = sub["status"].(string)
 	cancelAtPeriodEnd, _ = sub["cancel_at_period_end"].(bool)
 	return status, cancelAtPeriodEnd, pendingInterval
+}
+
+// Deleted are the customers the server deleted, sorted.
+func (s *Stripe) Deleted() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Sorted(maps.Keys(s.deleted))
 }
 
 // Subscriptions are the ids of the subscriptions made, in the order they were.

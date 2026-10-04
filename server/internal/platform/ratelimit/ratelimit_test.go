@@ -93,6 +93,50 @@ func TestTakeAdmitsMaxAttemptsAWindow(t *testing.T) {
 	}
 }
 
+// A take in a transaction is counted with what the transaction does: one rolled back counted nothing,
+// with no refund to make, and one committed is counted as any take is.
+func TestATakeInATransactionIsCountedWithIt(t *testing.T) {
+	c := newClock()
+	th := throttles(t, c)
+	pool := testsupport.Open(t).Pool(t, db.RoleApp)
+	limit := ratelimit.Limit{Name: "test.take_in", Max: 2, Window: time.Hour}
+	takeIn := func(commit bool) time.Duration {
+		t.Helper()
+		tx, err := pool.Begin(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(context.WithoutCancel(t.Context())) }()
+		wait, err := th.TakeIn(t.Context(), tx, count(limit, subject(t)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if commit {
+			if err := tx.Commit(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return wait
+	}
+	for range 3 {
+		if wait := takeIn(false); wait != 0 {
+			t.Fatalf("a take whose transaction was rolled back was counted: the next waits %v", wait)
+		}
+	}
+	for i := range limit.Max {
+		if wait := takeIn(true); wait != 0 {
+			t.Fatalf("take %d waits %v", i+1, wait)
+		}
+	}
+	if wait := takeIn(true); wait != time.Hour {
+		t.Fatalf("past the limit a take waits %v, want the hour its window has left", wait)
+	}
+	// The same count Take reads.
+	if wait, err := th.Take(t.Context(), count(limit, subject(t))); err != nil || wait != time.Hour {
+		t.Fatalf("a take of its own waits %v, %v", wait, err)
+	}
+}
+
 // A take one of its limits refuses is counted by none of them, and the wait is the longest: a
 // resend the hour refuses leaves the minute's count as it was.
 func TestATakeIsCountedByAllItsLimitsOrNone(t *testing.T) {

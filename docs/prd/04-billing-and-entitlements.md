@@ -90,7 +90,16 @@ the platform is not storing abandoned data indefinitely at its own cost. Resumin
 at any point in the window restores `active` and clears the countdown; the household is told the
 date on the banner from the day it enters the state, so nobody is deleted by surprise. The date is
 the day the data is deleted, 12 months and 30 days after the lapse, and the three warnings are
-emailed to every owner a month, a week and a day before it (**D-119**).
+emailed to every owner a month, a week and a day before it (**D-119**). A household being paid for
+again when that day comes, its payment still on its way at the processor as a bank debit's is for
+days (D-131), is not deleted while it is: the payment gone through, it is `active`, and failed, it
+is deleted that night (**D-140**). Nor is one whose payment the processor already has and the server
+has no word of yet: the processor is asked before a subscription the server's record says is not
+paid for is ended, one that waits to be confirmed or the household's own that could not be
+collected. Nor is one whose payment the server has recorded and whose own state has not caught up
+with that record yet. Nor is one whose own subscription the processor has not given up collecting:
+a payment may be on its way for it that the subscription's state does not show, so the household is
+kept until the processor says the subscription is over, or paid for.
 
 **FR-BI1 — `read_only` is enforced in one place.** The tenant middleware resolves the
 entitlement state and, in a non-writing state, refuses every unsafe method with `402 Payment
@@ -229,7 +238,7 @@ back below the ceiling (**D-116**).
 | **In-app purchase** | **Not used.** Household is a "multiplatform service" and the subscription is sold on the web. The apps do not offer, and must not link to, an alternative purchase flow inside the binary where store rules forbid it. See §7 |
 | **Invoices** | Issued per billing period with the base fee and metered overage as separate lines; downloadable from the app; emailed to the payer, who alone reads them (**D-135**) |
 | **Dunning** | Retried for seven days after the first failure, at 1, 3, 5 and 7 days as nearly as the processor's settings allow: the schedule is the processor's, which takes either four retries on days of its own choosing within the week or three at days 1, 4 and 7. Email to the payer at each retry that fails; in-app banner to owners from the first failure, which is not emailed (**D-134**) |
-| **Proration** | Plan changes and cancellations prorate. Metered overage is never prorated — it is measured over actual days |
+| **Proration** | Plan changes prorate. A cancellation takes effect when the period paid for ends, so it has nothing to prorate, and the subscription of a household that is deleted ends with it, nothing refunded for the days not used (**D-140**). Metered overage is never prorated — it is measured over actual days |
 
 **FR-BI5 — The payer is a member, not an abstraction.** Billing screens are visible only to the
 payer and to other owners (who see state and can take over billing, not the payment method).
@@ -239,7 +248,10 @@ Members and children never see billing at all.
 accepts and supplies a payment method. The subscription does not lapse in between. The payer is
 the owner who offers, and billing moves once the other owner's card is confirmed: their own
 subscription then starts when the period already paid for ends, so that nobody pays for the same
-days twice (**D-133**).
+days twice (**D-133**). An owner whose account is scheduled for deletion counts as none here too:
+billing is not offered to them, and a card they confirm once they have asked for the deletion moves
+nothing, since billing would land on an account that signs nobody in and end with it
+([05](05-privacy-and-compliance.md) §4, **D-137**).
 
 **Subscribing** is the payer's, once their address is verified
 ([02](02-identity-and-access.md) §3), in the processor's own payment form on the web: the household

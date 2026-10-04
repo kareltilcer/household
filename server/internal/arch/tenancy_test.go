@@ -123,6 +123,13 @@ var exemptions = map[string]exemption{
 	// Item 19's: a payer's customer at the payment processor is their account's, whichever households
 	// they pay for.
 	"public.billing_customers": {why: "PRD 04 §6: a payer's customer at the payment processor, their account's and no household's"},
+	// Item 20's: what an account asked for and consented to, and what erasure leaves, none of which is
+	// a household's. An export and a diagnostic bundle may name a household, which they go with.
+	"public.account_deletions":  {why: "FR-PR4: an account's scheduled deletion, which disables it"},
+	"public.exports":            {why: "FR-PR2: an export is its requester's, a household's among them, and goes with either"},
+	"public.diagnostic_bundles": {why: "FR-PS1: what a member chose to send, the account's, which goes with the household it was about"},
+	"public.consents":           {why: "FR-PR9: what an account consented to"},
+	"public.erasures":           {why: "FR-PR4: what erasure leaves of a household or an account, its id and when"},
 	// PRD 01 §2.4's global reference data, which the request role only reads (item 7).
 	"public.reference_datasets": {why: "the version of each reference dataset the loader has loaded"},
 	"public.country_profiles":   {why: "PRD 01 §2.4: reference data, the same for every household"},

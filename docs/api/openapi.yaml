@@ -451,7 +451,7 @@ paths:
       operationId: postAuthPasswordReset
       tags: [auth]
       summary: Request a password reset
-      description: 'Always answers `202`, whether or not the address exists; a link valid for one hour is emailed only where it does. An address may ask three times an hour, and a client''s network twenty times an hour.'
+      description: 'Always answers `202`, whether or not the address exists; a link valid for one hour is emailed only where it does. An account scheduled for deletion (`postMeDeletion`) signs nobody in whatever its password, so it is emailed the link that cancels the deletion instead (`postAuthDeletionCancel`), again, with a new token in place of the one sent before; once nothing cancels the deletion any more it is emailed nothing. An address may ask three times an hour, and a client''s network twenty times an hour.'
       security: []
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -483,6 +483,32 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '410': { description: 'The link has expired (`token_expired`) or has been used (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /auth/deletion/cancel:
+    post:
+      operationId: postAuthDeletionCancel
+      tags: [auth]
+      summary: Cancel a pending account deletion with the link its email carried
+      description: |
+        An account scheduled for deletion signs nobody in (`postMeDeletion`), so its deletion is
+        cancelled signed out, with the token of the link its email carried, which the `202` that
+        scheduled it carried too. Within the 30 days the account is as it was: it signs in with what
+        it signed in with, nothing it held was touched, and the households that were to be deleted
+        with it are no longer, their members told. Its sessions and devices were signed out when the
+        deletion was scheduled and stay so.
+
+        The email is sent once. Asking for a password reset at the account's address
+        (`postAuthPasswordReset`) sends the link again, with a new token: the one sent before is
+        then answered `404`, as a token nobody issued is.
+      security: []
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } }
+      responses:
+        '204': { description: Cancelled }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { description: 'The link has expired (`token_expired`) or has been used (`token_already_used`)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
   /auth/graduation/confirm:
     post:
@@ -926,9 +952,36 @@ paths:
       tags: [me]
       summary: Request account deletion
       description: |
-        Resolves every household the user belongs to first. Blocked when the user is the sole owner
-        of a household with other members, or is a billing payer, and the problem document names
-        which. The account is disabled immediately; execution is irreversible after 30 days.
+        Resolves every household the user belongs to first (PRD 05 §4). Blocked when the user is the
+        only owner of a household with other members and has not named it in
+        `delete_sole_owned_households`, when they are the payer of a household that goes on without
+        them, or of one with a subscription that will charge again (its own, and not cancelled at
+        its period's end with `postBillingCancel`, or one whose first payment is still on its way,
+        `payment_pending`, which renews once that goes through; a household in its trial, in `grace`
+        or lapsed has none), and the problem document names every one at once. An owner taking
+        billing over (`postBillingTransferAccept`) whose own payment for it is still on its way
+        counts as the household's payer: billing is theirs once it goes through. One who accepted
+        and has confirmed no card yet is not blocked, and a card they confirm afterwards moves
+        nothing. An owner whose own account is scheduled for deletion counts as no owner. A household
+        the user is the only member of goes with the account, unasked; one named is scheduled for
+        deletion with it, and its members are told now; in every other the membership ends when the
+        account does, what the user made staying with the household under a former member's name. A
+        named household whose deletion was scheduled five times that day already refuses the request
+        `429`, as `postDeletion` does.
+
+        `password_or_confirmation` is the account's password, checked and counted as a sign-in's is,
+        or, for an account that signs in only with a provider and has none, its own email address
+        typed out; a wrong one is `401 invalid_credentials`. A child profile is refused `403`: an
+        owner removes it instead (D-104). The `Idempotency-Key` is checked and not kept, since the
+        body carries a password (D-97).
+
+        The account is disabled at once: every session and every device's sign-in ends, this
+        request's among them, and no sign-in admits it, each failing as a wrong password does
+        (`401 invalid_credentials`). Its address is emailed a link that cancels the deletion
+        (`postAuthDeletionCancel`), and the `202` carries the link's token as `cancel_token`, the one
+        thing the client that asked still holds. The email is sent once: asking for a password reset
+        at the address (`postAuthPasswordReset`) sends the link again, with a new token that replaces
+        this one. After 30 days the deletion is executed and is irreversible.
 
         A `POST` to a sub-resource rather than a `DELETE /me` with a body: RFC 9110 gives a
         `DELETE` payload no defined semantics and intermediaries and generated clients drop it,
@@ -940,17 +993,9 @@ paths:
       responses:
         '202': { description: Scheduled, content: { application/json: { schema: { $ref: '#/components/schemas/DeletionRequest' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '409': { description: Blocked; the problem document lists the blocking households, content: { application/problem+json: { schema: { $ref: '#/components/schemas/AccountDeletionBlocked' } } } }
-        '429': { $ref: '#/components/responses/RateLimited' }
-    delete:
-      operationId: deleteMeDeletion
-      tags: [me]
-      summary: Cancel a pending account deletion
-      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
-      responses:
-        '204': { description: Cancelled }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /me/sessions:
@@ -1068,7 +1113,7 @@ paths:
       operationId: getMeConsents
       tags: [me]
       summary: Current consent state
-      description: Analytics and marketing consent. The product works identically either way.
+      description: 'Analytics and marketing consent, the account''s (FR-PR9): neither, until its user says so. The product works identically either way.'
       responses:
         '200': { description: Consents, content: { application/json: { schema: { $ref: '#/components/schemas/Consents' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1077,12 +1122,14 @@ paths:
       operationId: putMeConsents
       tags: [me]
       summary: Set consent state
+      description: 'The account''s consents become what the body says: one it leaves out is withdrawn, since consent is given by saying so and never by default. A child profile consents to nothing and is refused `403`: it is excluded from analytics entirely and is sent no marketing (PRD 05 §7).'
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/Consents' } } }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Consents' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -1091,6 +1138,7 @@ paths:
       operationId: getMeExports
       tags: [me]
       summary: List personal export jobs
+      description: 'The caller''s own exports of everything about them, the newest first, fifty at most. An export''s archive is kept seven days after it was ready, and its row 30 days after it ended: after it failed, or after its archive expired.'
       responses:
         '200': { description: Jobs, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/ExportJob' } } } } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1103,6 +1151,17 @@ paths:
         Everything about the requesting user across every household they belong to, as a ZIP with
         structured JSON per module, the original files, and human-readable derivatives
         (`.ics`, `.csv`, `.md`). Ready within 24 hours; downloadable for 7 days.
+
+        The archive holds `manifest.json`, which names every other entry with its length and its
+        SHA-256, the archive's schema version and this contract's; `account.json`, what the account
+        keeps outside any household; and under `households/{household_id}/` each household's part:
+        one `<module>.json` per module the user can see, the files those modules name under
+        `files/`, and `activity-log.csv`, the events the user caused. A household the user left
+        within the last 30 days gives what they kept privately there (PRD 05 §5), and a `suspended`
+        one nothing.
+
+        While an export waits or runs, asking again answers that one. A user may ask for five in a
+        day; past that the request is refused `429` until the oldest is a day old.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '202': { description: Queued, content: { application/json: { schema: { $ref: '#/components/schemas/ExportJob' } } } }
@@ -1211,12 +1270,20 @@ paths:
       description: |
         The only route by which any household data reaches platform staff, and the member composes
         it, sees it in full, and may redact it before sending. Expires after 30 days.
+
+        The server keeps what it is sent and reads none of it. `household_id`, when given, is a
+        household the caller belongs to, and any other is refused `422`; so are a `screen` over 200
+        characters, a `payload` over 256 KiB, and `redacted_fields` past 200 names or with a name
+        over 200 characters. A bundle sent again with the `id` it was sent with is kept once, and
+        answered as it was. An account sends twenty bundles in a day; past that a new one is refused
+        `429` until the oldest is a day old (D-142).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/DiagnosticBundle' } } }
       responses:
         '201': { description: Attached, content: { application/json: { schema: { type: object, properties: { id: { $ref: '#/components/schemas/Uuid' }, expires_at: { type: string, format: date-time } } } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -1285,8 +1352,9 @@ paths:
         every module is enabled with the creator holding `manage` on each, the household is given its
         code, and a 30-day trial begins. `units` and `first_day_of_week` default to the country's
         profile; a country Household has no profile of is refused `422` naming `/country`, and an `id`
-        another household has `422` naming `/id`. A child profile is refused `403`: it is a profile an
-        owner manages in their household, never a household's owner and payer (D-17, D-104).
+        another household has, or had before it was erased (D-140), `422` naming `/id`. A child
+        profile is refused `403`: it is a profile an owner manages in their household, never a
+        household's owner and payer (D-17, D-104).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1361,6 +1429,18 @@ paths:
       summary: Delete the household
       description: |
         Owner only, name confirmation required, all members notified, reversible for 30 days.
+        `confirm_name` is the household's name, whatever its case and the space around it, and
+        anything else is refused `422`. Every member is emailed, and the members other than the
+        caller are sent a push. Until the 30 days are over the household works as it did, so that
+        its members can take what is theirs, and its `deletion_scheduled_at` says when it goes; any
+        owner cancels it. A household whose deletion is scheduled already is answered with that
+        deletion. Its `cancel_token` is null: a household's deletion is cancelled through the
+        household.
+
+        A household's deletion is scheduled five times in a day, by an owner or with an owner's
+        account (`postMeDeletion`), and past that the request is refused `429`: scheduling one and
+        cancelling it each email every member, whatever they muted (D-138). A request that schedules
+        nothing counts for nothing.
 
         A `POST` to a sub-resource rather than a `DELETE /households/{household_id}` with a body:
         RFC 9110 gives a `DELETE` payload no defined semantics and intermediaries and generated
@@ -1381,10 +1461,12 @@ paths:
       operationId: deleteDeletion
       tags: [households]
       summary: Cancel a pending household deletion
+      description: 'Owner only. Every member is told, as they were told of the deletion. A household with no deletion pending is not found.'
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '204': { description: Cancelled }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
@@ -1824,6 +1906,7 @@ paths:
       operationId: getExports
       tags: [households]
       summary: List household export jobs
+      description: 'The caller''s own exports of this household, the newest first, fifty at most. An export is its requester''s: what it holds is what they may read, their own private items among it and no other adult''s, so nobody else lists it or is handed its link, an owner included. Its requester is handed the link while they are still an owner: made a member since, they read the job with `download_url` null. A member who asked for none reads an empty list.'
       responses:
         '200': { description: Jobs, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/ExportJob' } } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1833,7 +1916,19 @@ paths:
       operationId: postExports
       tags: [households]
       summary: Request a full household export
-      description: Owner only. Available in **every** entitlement state, including `read_only` and `canceled`.
+      description: |
+        Owner only. Available in **every** entitlement state, including `read_only` and `canceled`;
+        a `suspended` household is not found, as on every route.
+
+        The archive holds `manifest.json`, which names every other entry with its length and its
+        SHA-256; one `<module>.json` per module, a disabled module's among them, with every shared
+        row, the requester's own private items and a child profile's (D-19), never another adult's;
+        the files the modules name under `files/`; the human-readable derivatives; and
+        `activity-log.csv`, the whole log as the requester reads it, an event about a private item
+        that is not theirs redacted (FR-AU4).
+
+        While an export of the household by the caller waits or runs, asking again answers that
+        one. An owner may ask for five in a day; past that the request is refused `429`.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '202': { description: Queued, content: { application/json: { schema: { $ref: '#/components/schemas/ExportJob' } } } }
@@ -1848,6 +1943,7 @@ paths:
       operationId: getExportsByExportId
       tags: [households]
       summary: Household export job status and download link
+      description: 'One of the caller''s own exports of this household; anyone else''s is not found. It carries `download_url` while it is `ready` and the caller is still an owner of the household.'
       responses:
         '200': { description: The job, content: { application/json: { schema: { $ref: '#/components/schemas/ExportJob' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -2007,7 +2103,8 @@ paths:
         The payer offers billing to another of the household's owners, who is emailed (FR-BI6,
         FR-HH6). A two-step handshake: nothing about the subscription changes, and the payer goes on
         paying, until the other owner accepts. An offer replaces the one before it and lapses in 14
-        days. Billing moves only between owners: anyone else named is refused `422`.
+        days. Billing moves only between owners: anyone else named is refused `422`, an owner whose
+        account is scheduled for deletion (`postMeDeletion`) among them, who counts as none.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -2053,6 +2150,10 @@ paths:
         subscription reads `payment_pending`, and a debit that fails moves nothing, which the caller
         is emailed. Where the household has no subscription there is no card to supply yet:
         `confirmation` is null, and they are the payer at once.
+
+        A card confirmed once the caller's own account is scheduled for deletion (`postMeDeletion`)
+        moves nothing, and the payer goes on paying: that account signs nobody in, and counts as no
+        owner.
 
         Only an owner whose address is verified takes billing over. With no offer open to the caller
         it answers `404`. No `Idempotency-Key` is kept, since the answer may carry a secret.
@@ -9400,7 +9501,7 @@ components:
         mfa_enabled: { type: boolean }
         mfa_recovery_codes_left: { type: [integer, 'null'], minimum: 0, description: 'How many unused recovery codes the account holds; null while the second step is off.' }
         credentials: { type: array, items: { type: string, enum: [password, google, apple, child_pin] } }
-        deletion_scheduled_at: { type: [string, 'null'], format: date-time }
+        deletion_scheduled_at: { type: [string, 'null'], format: date-time, description: 'When the account is deleted, 30 days after its user asked (`postMeDeletion`); null while no deletion is pending. An account with one pending signs nobody in, so only a request already under way reads it.' }
 
     MeUpdate:
       type: object
@@ -9508,11 +9609,11 @@ components:
         requested_at: { type: string, format: date-time }
         ready_at: { type: [string, 'null'], format: date-time }
         expires_at: { type: [string, 'null'], format: date-time }
-        download_url: { type: [string, 'null'], format: uri }
+        download_url: { type: [string, 'null'], format: uri, description: 'A link to the archive, pre-signed for minutes (D-9) and renewed by each read of the job; null unless the export is `ready`, and for a household''s unless its requester is still an owner of the household.' }
         size_bytes: { type: [integer, 'null'], format: int64 }
         contents:
           type: array
-          description: 'Structured JSON per module, the original files, and human-readable derivatives — `.ics`, `.csv`, `.md`, `chat.html`.'
+          description: 'The archive''s top-level entries, a directory''s with its slash: `manifest.json`, structured JSON per module, the original files under `files/`, and human-readable derivatives — `.ics`, `.csv`, `.md`, `chat.html`. Empty until the export is ready.'
           items: { type: string }
 
     DeletionRequest:
@@ -9522,7 +9623,7 @@ components:
         scope: { type: string, enum: [user, household] }
         requested_at: { type: string, format: date-time }
         executes_at: { type: string, format: date-time, description: 30 days out. Reversible until then. }
-        cancel_token: { type: [string, 'null'] }
+        cancel_token: { type: [string, 'null'], description: 'For an account''s deletion, the token that cancels it (`postAuthDeletionCancel`), which the email''s link carries too: the account is signed out by the answer, and cancels with nothing else. A link sent again (`postAuthPasswordReset`) carries a new token, which replaces this one. Null for a household''s, which an owner cancels through the household, and for an account''s that was scheduled already.' }
 
     DiagnosticBundle:
       type: object
@@ -9535,8 +9636,8 @@ components:
         screen: { type: string }
         household_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }
         ticket_reference: { type: [string, 'null'] }
-        payload: { type: object, additionalProperties: true, description: Exactly what the member saw and approved. }
-        redacted_fields: { type: array, items: { type: string } }
+        payload: { type: object, additionalProperties: true, description: 'Exactly what the member saw and approved: the replica''s sync state, its last checkpoint, its queue depth, its checksum and digest mismatches and its last mutation outcomes with their codes, and no field values (PRD 10 §6). 256 KiB at most.' }
+        redacted_fields: { type: array, items: { type: string }, description: 'The names of the fields the member took out before sending: 200 at most, of 200 characters each.' }
         created_at: { type: string, format: date-time, readOnly: true }
         expires_at: { type: string, format: date-time, readOnly: true }
 
@@ -9561,6 +9662,7 @@ components:
             version: { type: integer, format: int64 }
             join_code: { type: string, pattern: '^[A-HJ-NP-Z2-9]{8}$', description: 'The household code, used with a profile and a PIN for child sign-in (FR-CH1). Eight characters without 0, O, 1 and I; clients may show it as two groups of four. Shown to owners only.' }
             created_at: { type: string, format: date-time }
+            deletion_scheduled_at: { type: [string, 'null'], format: date-time, description: 'When the household is deleted, 30 days after an owner scheduled it (`postDeletion`); null while no deletion is pending.' }
             entitlement: { $ref: '#/components/schemas/EntitlementSummary' }
             my_role: { $ref: '#/components/schemas/HouseholdRole' }
             my_grants: { type: object, additionalProperties: { $ref: '#/components/schemas/AccessLevel' } }

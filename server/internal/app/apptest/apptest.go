@@ -41,6 +41,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/password"
+	"github.com/kareltilcer/household/server/internal/platform/privacy"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
@@ -352,6 +353,41 @@ func Billing(t testing.TB, pool session.Pool, log *slog.Logger, notifier *notify
 	s, err := billing.New(billing.Config{
 		Pool: beginner, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Log: log, Processor: o.Processor, Prices: o.Prices,
 		PublishableKey: PublishableKey, Notify: notifier, Catalogs: catalogs, Catalog: catalog, Now: o.Now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// Privacy returns the export and erasure service for a router over pool, logging to log, on the clock
+// of o: over accounts' identity service, households and bills, with the modules of registry and the
+// platform's own, and the files pipeline of o, or one over a bucket nobody made, whose store refuses
+// every archive.
+func Privacy(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.Accounts, households *household.Service,
+	bills *billing.Service, registry *module.Registry, o Options,
+) *privacy.Service {
+	t.Helper()
+	beginner, ok := pool.(tenant.Beginner)
+	if !ok {
+		t.Fatalf("apptest: %T opens no transactions", pool)
+	}
+	catalog, err := registry.WithPlatform(household.Admin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalogs, err := i18n.Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := o.Files
+	if fs == nil {
+		fs = pipeline(t, pool, log, o, unmade(t))
+	}
+	s, err := privacy.New(privacy.Config{
+		Pool: beginner, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Log: log, Registry: catalog,
+		Accounts: accounts.Identity, Households: households, Files: fs, Billing: bills, Catalogs: catalogs,
+		APIVersion: "test", Now: o.Now,
 	})
 	if err != nil {
 		t.Fatal(err)

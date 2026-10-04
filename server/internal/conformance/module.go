@@ -19,11 +19,10 @@ package conformance
 import (
 	"context"
 	"embed"
-	"io"
 	"io/fs"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/module"
@@ -173,7 +172,8 @@ func LeakyStream() sync.Stream {
 }
 
 // Export writes nothing: the module holds only the suite's test rows.
-func (Module) Export(context.Context, uuid.UUID, io.Writer) error { return nil }
+func (Module) Export(context.Context, pgx.Tx, module.Export, module.Archive) error { return nil }
 
-// Erase deletes nothing: the module holds only the suite's test rows.
-func (Module) Erase(context.Context, uuid.UUID) error { return nil }
+// Erase deletes nothing of its own: the suite's test rows go with their household's row, and no
+// member holds a private root the suite does not delete itself.
+func (Module) Erase(context.Context, pgx.Tx, module.Erasure) error { return nil }

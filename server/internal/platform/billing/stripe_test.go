@@ -123,6 +123,9 @@ func TestStripeTakesWhatTheProcessorSends(t *testing.T) {
 	if err := p.Credit(ctx, billing.NewCredit{Customer: customer, AmountMinor: 500, Currency: "EUR", Note: "An apology"}); err != nil {
 		t.Fatalf("Credit: %v", err)
 	}
+	if err := p.DeleteCustomer(ctx, customer); err != nil {
+		t.Fatalf("DeleteCustomer: %v", err)
+	}
 }
 
 // Cancel voids the invoice the cancellation left open, and no other: whether ending a subscription

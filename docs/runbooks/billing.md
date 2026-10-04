@@ -61,9 +61,18 @@ step in the mode the environment uses.
    whichever days they fall on, and its own clock ends a day after the seventh. Set retries here and
    **not through an automation**: with one, Stripe sets an invoice's next attempt only after it has
    sent `invoice.payment_failed`, and each retry's email would say it was the last. When all retries
-   fail: **cancel the subscription**. Marking it `unpaid` instead ends in grace the same way; leaving
-   it `past_due` still ends in grace, a day late, by the hourly job. The invoice may be left open or
-   marked uncollectible: the last retry is emailed either way.
+   fail: **cancel the subscription**. Marking it `unpaid` instead ends in grace the same way. **Never
+   leave it `past_due`.** The household would still end in grace, a day late, by the hourly job, but
+   Stripe goes on issuing an invoice each period for a subscription it has not given up on, and the
+   server knows such a subscription to be paid for by its status alone, which Stripe makes `active`
+   only once a payment has succeeded. A payer who paid what was owed by bank debit in the last days
+   of a lapsed household's retention would be past due still while the debit cleared, which the
+   server cannot tell from nobody paying: so the nightly erasure ends no subscription of a lapsed
+   household that Stripe is still collecting, and with this setting a household that lapsed on a
+   failed payment would never be erased (below, step 7). With the subscription cancelled or
+   unpaid, the payer of a lapsed household subscribes again, and a debit on its way is waited for.
+   The invoice may be left open or marked
+   uncollectible: the last retry is emailed either way.
    Turn Stripe's own customer emails for failed payments and invoices **off**: the server sends its
    own, in the payer's language.
 5. **The webhook endpoint**: `https://<api>/api/v1/webhooks/stripe`, at the API version stripe-go is
@@ -115,6 +124,52 @@ failed payment only. Resend its `customer.subscription.deleted`, or any event of
    before the month ended, or one that no longer charges.
 3. A row with blocks and an invoice item is billed: the item is on the subscription's next invoice,
    or, for a yearly subscription, on the month's own.
+
+## A household or an account is erased
+
+The nightly erasure (02:30 UTC, [ADR 0021](../adr/0021-export-erasure-and-the-tombstones.md)) ends a
+deleted household's subscriptions at Stripe before its rows go, and deletes an erased account's
+customers there with their rows.
+
+1. `privacy: an erasure failed` in the API's log, with Stripe's error beside it, means Stripe could
+   not be asked: that household was not erased, or that account's own rows and customers were not,
+   whatever of its households the run had already been through, and the job tries again fifteen
+   minutes later and the next night. A household or an account keeps being due until it is erased.
+2. A subscription ended this way is cancelled at once, with no final invoice and nothing prorated.
+   Stripe then sends `customer.subscription.deleted` for a household the server no longer has, which
+   it answers `204` and makes nothing of.
+3. Stripe keeps the invoices of a deleted customer. They are the statutory record (PRD 05 §1), and
+   the server keeps none of them once the household is gone.
+4. A deleted household that is still charged was erased while Stripe held a subscription the server
+   had no row for. Cancel it in Stripe's dashboard, by the household's id in its metadata.
+5. A lapsed household past its `retained_until`, its three warnings sent, that the job leaves alone
+   is being paid for again: `billing_subscriptions` has a row of its with `standing = 'pending'` and a
+   `status` that charges, a bank debit on its way (above). It is `active` once `invoice.paid`
+   arrives, and erased the night after the debit failed. One that stays so for weeks is one whose
+   `invoice.paid` or `invoice.voided` never arrived: resend it. Or it is paid for already: a row
+   with `standing = 'current'` and the `status` `active` or `trialing`, in a household that still
+   reads lapsed, is a payment recorded whose event failed before the household's own row was
+   settled from it (`billing: a webhook failed`). Stripe delivers that event again, which settles
+   it; if it has given up, resend any event of the subscription.
+6. `privacy: an erasure failed` with `billing: the processor has a payment the household's record
+   has not` means Stripe says a subscription is paid for, or being paid, that the server had
+   recorded as still waiting to be confirmed, or as its household's own and past due: its events
+   are late or were never delivered. Nothing was ended or erased. The line before it,
+   `privacy: a household is not erased on a record older than a payment for it`, names the
+   household. The job has recorded what Stripe says by the time it logs this, and tries
+   again fifteen minutes later: a lapsed household that was paid for is `active` by then and no
+   longer due, and one whose owner scheduled its deletion is erased, its subscription ended. Seen
+   more than once a night, look at the webhook endpoint's deliveries in Stripe's dashboard: events
+   are not arriving.
+7. `privacy: an erasure failed` with `billing: the processor is still collecting a lapsed
+   household's subscription` means a household's retention ran out, its three warnings sent, while
+   Stripe has its subscription `past_due` still, a year and more after the payment failed. Nothing
+   was ended or erased, and the line repeats each night: the household is kept past its retention
+   until Stripe says the subscription is over, or paid for. Stripe gives a subscription up when its
+   retries end unless it is set to leave it past due, which "Before the first deploy", step 4,
+   rules out: put the setting right, then look at the subscription's latest invoice in Stripe's
+   dashboard. With a payment on its way, leave it: paid, the household is `active`. With none,
+   cancel the subscription there, and the household is erased the next night.
 
 ## A key leaks or is rotated
 

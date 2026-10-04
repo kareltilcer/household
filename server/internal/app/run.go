@@ -37,6 +37,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/notify"
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/password"
+	"github.com/kareltilcer/household/server/internal/platform/privacy"
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/scheduler"
@@ -99,7 +100,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	}
 	background := identity.NewBackground(log, 4, 1024, time.Minute)
 	accounts, households, notifier, closeAccounts, err := newAccounts(ctx, cfg, log, pool, meter, background, avatars,
-		household.Hooks{Lost: Retract(catalog)})
+		household.Hooks{Lost: Lost(catalog, nil), Named: privacy.Named(nil)})
 	if err != nil {
 		return err
 	}
@@ -108,7 +109,18 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 	if err != nil {
 		return err
 	}
-	jobs, err := newScheduler(log, pool, meter, registry, catalog, pipeline, avatars, households, notifier, bills)
+	catalogs, err := i18n.Default()
+	if err != nil {
+		return err
+	}
+	eraser, err := privacy.New(privacy.Config{
+		Pool: pool, Meter: meter, Log: log, Registry: catalog, Accounts: accounts.Identity, Households: households,
+		Files: pipeline, Billing: bills, Catalogs: catalogs, APIVersion: c.Version(),
+	})
+	if err != nil {
+		return err
+	}
+	jobs, err := newScheduler(log, pool, meter, registry, catalog, pipeline, avatars, households, notifier, bills, eraser)
 	if err != nil {
 		return err
 	}
@@ -131,6 +143,7 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 		Storage:      &storage.Picture{Log: log},
 		Notify:       notifier,
 		Billing:      bills,
+		Privacy:      eraser,
 	})
 	if err != nil {
 		return err
@@ -141,14 +154,16 @@ func Run(ctx context.Context, cfg *config.Config, log *slog.Logger, registry *mo
 			return err
 		}
 	}
-	// The files workers, the notification workers and the scheduler run for as long as the API
-	// serves, and release what they hold before the process ends: the jobs and the notifications
-	// claimed, and the scheduler's lead.
+	// The files workers, the notification workers, the export worker and the scheduler run for as
+	// long as the API serves, and release what they hold before the process ends: the jobs and the
+	// notifications claimed, the export being built, which goes back to the queue unbuilt, and the
+	// scheduler's lead.
 	working, stopWorking := context.WithCancel(ctx)
 	defer stopWorking()
 	var workers sync.WaitGroup
 	workers.Go(func() { pipeline.Run(working) })
 	workers.Go(func() { notifier.Run(working) })
+	workers.Go(func() { eraser.Run(working) })
 	workers.Go(func() { jobs.Run(working) })
 	defer func() {
 		stopWorking()
@@ -330,33 +345,42 @@ func newBilling(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool,
 
 // The scheduler's jobs' times (PRD 03 §5): the usage sample at 01:00 UTC, the day the sample is the
 // day of (D-109), the month's storage lines half an hour after it, which bill a month that ended from
-// samples all taken before it did (D-130), the sweeps of the objects no row records at 02:00, and the
-// expiry sweep at 03:00 UTC, once they are done.
+// samples all taken before it did (D-130), the sweeps of the objects no row records at 02:00, the
+// erasure at 02:30 UTC and the expiry sweep at 03:00 UTC, once they are done. PowerSync's compaction
+// runs at 04:00 UTC, after them all (deploy/powersync/compact.sh): a job that fails is tried again
+// fifteen minutes after it failed, four times a night at most, so the erasure's last try starts at
+// 03:15 at the earliest, and later by as long as the tries before it ran. The rows it deleted by 04:00
+// leave bucket storage the same night, and those of a try still running then the night after (D-93,
+// runbooks/compaction.md).
 const (
 	nightlySample  = localtime.Clock(1 * 60)
 	nightlyStorage = localtime.Clock(1*60 + 30)
 	nightlySweeps  = localtime.Clock(2 * 60)
+	nightlyErasure = localtime.Clock(2*60 + 30)
 	nightlyExpiry  = localtime.Clock(3 * 60)
 )
 
 // newScheduler builds the scheduler of the platform's jobs (PRD 03 §5): nightly, the usage sample
 // (FR-ST2), which warns the owners of a household nearing a fair-use ceiling (PRD 04 §5) or its storage
 // allowance (FR-BI3), the storage lines of the month that ended (item 19), and then the
-// sweeps of the objects no row records, a household's and the accounts' pictures (item 14), and the
-// expiry sweep; hourly, the expiry of single-use tokens and of the invitations that stopped working a
-// month ago (D-110), and the households' trial, dunning and grace transitions with the warnings before
-// a lapsed household's data is deleted (item 16); every fifteen minutes, Expo's receipts; and every
-// minute, PowerSync's replication lag (item 17). Each is a job of its own, so that one that fails is
-// tried again alone, not with the others that ran.
+// sweeps of the objects no row records, a household's and the accounts' pictures (item 14), the
+// erasure of what was scheduled for deletion and has come due (item 20), and the expiry sweep, the
+// exports' archives among what it removes; hourly, the expiry of single-use tokens and of the
+// invitations that stopped working a month ago (D-110), and the households' trial, dunning and grace
+// transitions with the warnings before a lapsed household's data is deleted (item 16); every fifteen
+// minutes, Expo's receipts; and every minute, PowerSync's replication lag (item 17). Each is a job of
+// its own, so that one that fails is tried again alone, not with the others that ran.
 // catalog is the module registry with admin, which the invitations' deletions and the transitions are
 // checked against.
 func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog *module.Registry, pipeline *files.Service,
 	avatars *avatar.Service, households *household.Service, notifier *notify.Service, bills *billing.Service,
+	eraser *privacy.Service,
 ) (*scheduler.Scheduler, error) {
 	sampler := &storage.Sampler{Meter: meter, Pool: pool, Modules: registry, Log: log, Notify: notifier}
-	sweeper, err := expiry.New(expiry.Config{Pool: pool, Meter: meter, Log: log, Invitations: func(ctx context.Context) (int, error) {
-		return households.PurgeInvitations(ctx, meter, catalog)
-	}})
+	sweeper, err := expiry.New(expiry.Config{Pool: pool, Meter: meter, Log: log, Exports: eraser.Expire,
+		Invitations: func(ctx context.Context) (int, error) {
+			return households.PurgeInvitations(ctx, meter, catalog)
+		}})
 	if err != nil {
 		return nil, err
 	}
@@ -372,6 +396,10 @@ func newScheduler(log *slog.Logger, pool, meter *pgxpool.Pool, registry, catalog
 		scheduler.Job{Name: "files.sweep", Cadence: scheduler.Daily(nightlySweeps), Run: pipeline.SweepAll},
 		scheduler.Job{Name: "avatars.sweep", Cadence: scheduler.Daily(nightlySweeps), Run: func(ctx context.Context) error {
 			_, err := avatars.Sweep(ctx, pool)
+			return err
+		}},
+		scheduler.Job{Name: "privacy.erase", Cadence: scheduler.Daily(nightlyErasure), Run: func(ctx context.Context) error {
+			_, err := eraser.Erase(ctx)
 			return err
 		}},
 		scheduler.Job{Name: "expiry.sweep", Cadence: scheduler.Daily(nightlyExpiry), Run: sweeper.Sweep},

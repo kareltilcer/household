@@ -46,7 +46,8 @@ type Config struct {
 	// Pool opens the transactions, connected as the request role.
 	Pool tenant.Beginner
 	Log  *slog.Logger
-	// Throttles count the invitations a household sends (PRD 02 §9).
+	// Throttles count the invitations a household sends, and how often its deletion is scheduled
+	// (PRD 02 §9).
 	Throttles *ratelimit.Throttles
 	// Notify sends what the household surface tells people (item 15): an invitation's and a
 	// graduation's email, an inviter's notice of a decline, the owners' of a locked child profile, and
@@ -125,6 +126,8 @@ func (s *Service) HouseholdRoutes(r chi.Router) {
 	r.Post(h+"/join-code", s.regenerateJoinCode)
 	r.Post(h+"/restriction", s.restrict)
 	r.Delete(h+"/restriction", s.unrestrict)
+	r.Post(h+"/deletion", s.scheduleDeletion)
+	r.Delete(h+"/deletion", s.cancelDeletion)
 	r.Get(h+"/members", s.listMembers)
 	r.Get(h+"/members/{user_id}", s.getMember)
 	r.Patch(h+"/members/{user_id}", s.updateMember)

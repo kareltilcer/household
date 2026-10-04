@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -271,6 +272,146 @@ func TestListAndDeleteKeepToAPrefix(t *testing.T) {
 	}
 	if strings.Join(keys, " ") != "h/a/notes/2/original h/b/notes/1/original" {
 		t.Fatalf("left %v", keys)
+	}
+}
+
+// An upload of unknown length is written in parts and read back whole: one shorter than a part, one
+// that ends past a part's boundary, and one with nothing in it.
+func TestUploadWritesABodyOfAnyLengthInParts(t *testing.T) {
+	s := testsupport.ObjectStore(t)
+	long := make([]byte, objectstore.PartSize+1024)
+	var b byte
+	for i := range long {
+		b += 31
+		long[i] = b
+	}
+	for name, body := range map[string][]byte{"short": []byte("an archive"), "long": long, "empty": {}} {
+		key := "u/a/exports/b/" + name
+		// A reader that yields a few bytes at a time, as an archive being built does.
+		n, err := s.Upload(t.Context(), key, iotest(bytes.NewReader(body)), "application/zip")
+		if err != nil || n != int64(len(body)) {
+			t.Fatalf("upload %s = %d, %v; want %d bytes", name, n, err, len(body))
+		}
+		got, info, err := s.Get(t.Context(), key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		read, err := io.ReadAll(got)
+		_ = got.Close()
+		if err != nil || sha256.Sum256(read) != sha256.Sum256(body) || info.ContentType != "application/zip" {
+			t.Fatalf("%s read back as %d bytes of %q, %v; want the %d uploaded as application/zip", name, len(read), info.ContentType, err, len(body))
+		}
+	}
+	if _, err := s.Upload(t.Context(), "u/a/../b", strings.NewReader("x"), "application/zip"); !errors.Is(err, objectstore.ErrInvalidKey) {
+		t.Fatalf("an upload to a key outside the form = %v, want ErrInvalidKey", err)
+	}
+}
+
+// iotest yields r's bytes in short reads.
+func iotest(r io.Reader) io.Reader { return shortReader{r} }
+
+type shortReader struct{ r io.Reader }
+
+func (s shortReader) Read(p []byte) (int, error) {
+	if len(p) > 64<<10 {
+		p = p[:64<<10]
+	}
+	return s.r.Read(p)
+}
+
+// An upload whose body fails keeps nothing at its key, whatever the body failed with: a connection
+// that dropped under whoever was writing it fails with an unexpected end, which is no end of the body.
+func TestAFailedUploadLeavesNoObject(t *testing.T) {
+	s := testsupport.ObjectStore(t)
+	for name, failure := range map[string]error{
+		"broken": errors.New("the archive could not be built"),
+		"cut":    io.ErrUnexpectedEOF,
+		"ended":  fmt.Errorf("the archive's source: %w", io.EOF),
+	} {
+		key := "u/a/exports/b/" + name
+		broken := io.MultiReader(strings.NewReader("half an archive"), failingReader{failure})
+		if _, err := s.Upload(t.Context(), key, broken, "application/zip"); !errors.Is(err, failure) {
+			t.Fatalf("an upload whose body failed with %v = %v, want it failed with that", failure, err)
+		}
+		if _, err := s.Head(t.Context(), key); !errors.Is(err, objectstore.ErrNotFound) {
+			t.Fatalf("head of %s = %v, want ErrNotFound", name, err)
+		}
+	}
+}
+
+// failingReader fails every read with err.
+type failingReader struct{ err error }
+
+func (f failingReader) Read([]byte) (int, error) { return 0, f.err }
+
+// RemoveAll removes everything under a household's or an account's prefix and nothing beside it, and
+// refuses a prefix that could name more.
+func TestRemoveAllKeepsToItsPrefix(t *testing.T) {
+	s := testsupport.ObjectStore(t)
+	for _, k := range []string{"h/a/notes/1/original", "h/a/documents/2/original", "h/ab/notes/1/original", "u/a/avatar/1/picture"} {
+		if err := put(t, s, k, []byte(k), "text/plain"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := s.RemoveAll(t.Context(), "h/a/"); err != nil || n != 2 {
+		t.Fatalf("remove all = %d, %v; want the household's 2 objects", n, err)
+	}
+	var keys []string
+	if err := s.List(t.Context(), "", func(i objectstore.Info) error {
+		keys = append(keys, i.Key)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(keys, " ") != "h/ab/notes/1/original u/a/avatar/1/picture" {
+		t.Fatalf("left %v", keys)
+	}
+	for _, p := range []string{"", "h/", "h/a", "/", "h//", "u/a/../"} {
+		if _, err := s.RemoveAll(t.Context(), p); !errors.Is(err, objectstore.ErrInvalidKey) {
+			t.Errorf("remove all %q = %v, want ErrInvalidKey", p, err)
+		}
+	}
+}
+
+// RemoveAll says how many objects it removed, not how many it listed: a store that refuses a removal
+// partway leaves the rest, and the erasure that asked counts only what went.
+func TestRemoveAllCountsWhatItRemoved(t *testing.T) {
+	keys := []string{"h/a/documents/1/original", "h/a/documents/2/original", "h/a/documents/3/original"}
+	var deletes atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		switch {
+		case r.Method == http.MethodGet:
+			listing := `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">` +
+				`<Name>refusing</Name><Prefix>h/a/</Prefix><KeyCount>3</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated>`
+			for _, k := range keys {
+				listing += `<Contents><Key>` + k + `</Key><LastModified>2026-10-01T00:00:00.000Z</LastModified><Size>1</Size></Contents>`
+			}
+			_, _ = io.WriteString(w, listing+`</ListBucketResult>`)
+		case r.Method == http.MethodDelete && deletes.Add(1) == 1:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?><Error><Code>InternalError</Code><Message>We encountered an internal error.</Message></Error>`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	endpoint, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := objectstore.New(objectstore.Config{
+		Location: objectstore.Location{Endpoint: endpoint, Bucket: "refusing", AccessKey: "tester", Secret: "refusing"},
+		Attempts: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.RemoveAll(t.Context(), "h/a/"); err == nil || n != 1 {
+		t.Fatalf("remove all = %d, %v; want the one object removed before the store refused, and the refusal", n, err)
+	}
+	if n := deletes.Load(); n != 2 {
+		t.Fatalf("the store was asked for %d removals, want it to stop at the one refused", n)
 	}
 }
 

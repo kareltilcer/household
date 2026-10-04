@@ -109,11 +109,98 @@ func (Module) SyncEntities() []sync.Entity {
 	}}
 }
 
-// Export writes nothing: export is item 20's.
-func (Module) Export(context.Context, uuid.UUID, io.Writer) error { return nil }
+// exported are the probe's items an export takes, each with the name of the file it keeps, "" for
+// none: every item no one holds privately for a household's export, with the requester's own private
+// ones and a child profile's (D-19); the items the requester made for a personal one; and the
+// requester's private ones alone for a former member's.
+func exported(ctx context.Context, tx pgx.Tx, e module.Export) ([]Item, map[uuid.UUID]string, error) {
+	filter := map[module.ExportScope]string{
+		module.ExportHousehold: `NOT coalesce(f.private, false) OR f.owner_id = $2
+			OR EXISTS (SELECT FROM memberships m WHERE m.household_id = i.household_id AND m.user_id = f.owner_id AND m.role = 'child')`,
+		module.ExportPersonal: "i.created_by = $2 OR (f.private AND f.owner_id = $2)",
+		module.ExportDeparted: "f.private AND f.owner_id = $2",
+	}[e.Scope]
+	rows, err := tx.Query(ctx, `
+		SELECT i.id, i.household_id, coalesce(f.filename, CASE WHEN f.entity_id IS NULL THEN '' ELSE i.id::text END)
+		FROM probe_items i
+		LEFT JOIN files f ON f.household_id = i.household_id AND f.module = '`+Name+`' AND f.entity_id = i.id AND f.variant = 'original'
+		WHERE i.household_id = $1 AND (`+filter+`)
+		ORDER BY i.id`, e.Household, e.Requester)
+	if err != nil {
+		return nil, nil, err
+	}
+	items, names := []Item{}, map[uuid.UUID]string{}
+	var (
+		item Item
+		name string
+	)
+	_, err = pgx.ForEachRow(rows, []any{&item.ID, &item.HouseholdID, &name}, func() error {
+		items = append(items, item)
+		if name != "" {
+			names[item.ID] = name
+		}
+		return nil
+	})
+	return items, names, err
+}
 
-// Erase deletes nothing: erasure is item 20's.
-func (Module) Erase(context.Context, uuid.UUID) error { return nil }
+// Export writes the probe's items as a module writes its rows (FR-PR2): the structured data, a
+// derivative a spreadsheet opens, and each item's file under its own name.
+func (Module) Export(ctx context.Context, tx pgx.Tx, e module.Export, a module.Archive) error {
+	items, names, err := exported(ctx, tx, e)
+	if err != nil {
+		return err
+	}
+	if err := a.JSON(map[string][]Item{"items": items}); err != nil {
+		return err
+	}
+	w, err := a.Create("probe-items.csv")
+	if err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "id\n"); err != nil {
+		return err
+	}
+	for _, item := range items {
+		if _, err := io.WriteString(w, item.ID.String()+"\n"); err != nil {
+			return err
+		}
+	}
+	for _, item := range items {
+		if name, ok := names[item.ID]; ok {
+			if err := a.File(item.ID, name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Erase deletes the items a member holds privately, with their files, as a module deletes a private
+// root (FR-PR7); a household's items go with its row.
+func (Module) Erase(ctx context.Context, tx pgx.Tx, e module.Erasure) error {
+	if e.Member == uuid.Nil {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `
+		DELETE FROM probe_items i USING files f
+		WHERE i.household_id = $1 AND f.household_id = i.household_id AND f.module = '`+Name+`' AND f.entity_id = i.id
+		  AND f.variant = 'original' AND f.private AND f.owner_id = $2
+		RETURNING i.id`, e.Household, e.Member)
+	if err != nil {
+		return err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := files.Remove(ctx, tx, Name, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // RegisterRoutes registers the probe's routes.
 func (m Module) RegisterRoutes(r chi.Router) {

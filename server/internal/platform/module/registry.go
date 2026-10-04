@@ -1,6 +1,7 @@
 package module
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -9,6 +10,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kareltilcer/household/server/internal/platform/db"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
@@ -39,11 +42,15 @@ type Registry struct {
 // are the platform's block's, and whose writes the platform makes for callers no module could
 // serve, a household's creator and an invitation's holder. It declares the audit actions its
 // mutations record and the sync entities they change, as a module does, so that the mutation spine
-// records them; it is not among All, which are the modules mounted under /<name>.
+// records them; it is not among All, which are the modules mounted under /<name>. It exports and
+// erases what it keeps as a module does (D-6), through the two functions it names, which are an
+// ExportSource's and an EraseSource's; architecture test 3 fails one that names neither.
 type PlatformModule struct {
 	Name     string
 	Actions  []AuditAction
 	Entities []sync.Entity
+	Export   func(ctx context.Context, tx pgx.Tx, e Export, a Archive) error
+	Erase    func(ctx context.Context, tx pgx.Tx, e Erasure) error
 }
 
 // WithPlatform returns a registry holding r's modules and mods, checked as NewRegistry checks a
