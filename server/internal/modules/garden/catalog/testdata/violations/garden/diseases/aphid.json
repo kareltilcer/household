@@ -1,0 +1,13 @@
+{
+  "key": "aphid",
+  "name": {
+    "value": {
+      "en": "Aphid rot (en)",
+      "cs": "Aphid rot (cs)",
+      "sk": "Aphid rot (sk)",
+      "de": "Aphid rot (de)",
+      "pl": "Aphid rot (pl)"
+    },
+    "source": "book"
+  }
+}

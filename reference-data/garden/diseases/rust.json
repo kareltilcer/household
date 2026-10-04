@@ -1,0 +1,10 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "rust",
+  "name": {
+    "value": { "en": "Rust", "cs": "Rez", "sk": "Hrdza", "de": "Rost", "pl": "Rdza" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Pucciniales", "source": "eppo-gd", "drafted": true }
+}

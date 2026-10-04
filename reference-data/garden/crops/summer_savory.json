@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "summer_savory",
+  "name": {
+    "value": {
+      "en": "Summer savory",
+      "cs": "Saturejka zahradní",
+      "sk": "Saturejka záhradná",
+      "de": "Bohnenkraut",
+      "pl": "Cząber ogrodowy"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Satureja hortensis", "source": "powo", "drafted": true },
+  "family": { "value": "lamiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 2, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0.2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 25, "plant_cm": 15 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 25, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 12, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 10, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 60, "max": 80 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -10, "to_days": 25 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 50, "to_days": 125 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 25, "per_plant": 1 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 180 }
+    ],
+    "source": "nchfp",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": [], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Sow where it is to grow once the soil has warmed and only press the seed in, as it needs light. Cut whole stems as flowering begins, when the flavour is strongest; a second sowing in early summer keeps young leaves coming.",
+      "cs": "Vysévejte přímo na stanoviště do prohřáté půdy a semena jen přitlačte, klíčí na světle. Celé stonky řežte na začátku kvetení, kdy je chuť nejsilnější; druhý výsev začátkem léta zajistí mladé listy i později.",
+      "sk": "Vysievajte priamo na stanovište do prehriatej pôdy a semená len pritlačte, klíčia na svetle. Celé stonky režte na začiatku kvitnutia, keď je chuť najsilnejšia; druhý výsev začiatkom leta zabezpečí mladé listy aj neskôr.",
+      "de": "An Ort und Stelle in erwärmten Boden säen und die Samen nur andrücken, sie sind Lichtkeimer. Ganze Triebe bei Blühbeginn schneiden, wenn das Aroma am stärksten ist; eine zweite Aussaat im Frühsommer liefert auch später junge Blätter.",
+      "pl": "Siej wprost na miejsce stałe w ogrzaną glebę i nasiona tylko dociśnij, bo kiełkują na świetle. Całe pędy ścinaj na początku kwitnienia, gdy aromat jest najsilniejszy; drugi siew wczesnym latem zapewni młode liście także później."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

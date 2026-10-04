@@ -1,0 +1,10 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "aphid",
+  "name": {
+    "value": { "en": "Aphids", "cs": "Mšice", "sk": "Vošky", "de": "Blattläuse", "pl": "Mszyce" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Aphididae", "source": "eppo-gd", "drafted": true }
+}

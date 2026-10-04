@@ -233,6 +233,15 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   `household-api staff grant`
   ([ADR 0022](docs/adr/0022-platform-staff-their-role-their-log-flags-and-ceilings.md),
   [runbook](docs/runbooks/platform-staff.md)).
+- **Reference data** is sourced JSON under `reference-data/`, one record a file: every field a value
+  with its `source`, flagged `drafted` until an expert has checked it, and every text in the five
+  languages. `reference.Read` checks it, and `household-api migrate` loads it into versioned global
+  tables, never deleting a row ([ADR 0008](docs/adr/0008-reference-data-pipeline.md)). A module's own
+  is a set, a directory named for the module with a `sources.json` of its own, declared through
+  `module.ReferenceSource`: its `Read` checks what its schemas cannot, and its `Load` writes its
+  tables. Garden's, the crop catalog and the climate profiles, is `internal/modules/garden/catalog`,
+  where a timing is days from a frost date and never a calendar date
+  ([ADR 0023](docs/adr/0023-the-crop-catalogs-source-the-reference-set-hook-and-the-climate-dataset.md)).
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`

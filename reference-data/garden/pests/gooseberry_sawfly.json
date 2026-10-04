@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "gooseberry_sawfly",
+  "name": {
+    "value": {
+      "en": "Gooseberry sawfly",
+      "cs": "Pilatka rybízová",
+      "sk": "Piliarka ríbezľová",
+      "de": "Stachelbeerblattwespe",
+      "pl": "Brzęczak porzeczkowy"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Nematus ribesii", "source": "eppo-gd", "drafted": true }
+}

@@ -1,0 +1,300 @@
+{
+  "$schema": "../../schemas/garden-climate.schema.json",
+  "country": "GB",
+  "places": [
+    {
+      "key": "gb_birmingham",
+      "name": { "value": "Birmingham", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.48, "longitude": -1.9 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 103, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-20", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-06", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 139, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_brighton",
+      "name": { "value": "Brighton", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.82, "longitude": -0.14 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 55, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-09", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-29", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 173, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_bristol",
+      "name": { "value": "Bristol", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.45, "longitude": -2.59 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 83, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-11", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-16", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 158, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_cambridge",
+      "name": { "value": "Cambridge", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.21, "longitude": 0.12 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 66, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-15", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-16", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 154, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_cardiff",
+      "name": { "value": "Cardiff", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.48, "longitude": -3.18 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 96, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "04-30", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-24", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 177, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_carlisle",
+      "name": { "value": "Carlisle", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 54.89, "longitude": -2.93 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 182, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-20", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 138, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_edinburgh",
+      "name": { "value": "Edinburgh", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 55.95, "longitude": -3.19 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 128, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-09", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 144, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_glasgow",
+      "name": { "value": "Glasgow", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 55.86, "longitude": -4.25 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 194, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-26", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-26", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 123, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_inverness",
+      "name": { "value": "Inverness", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 57.48, "longitude": -4.22 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 248, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "06-05", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-27", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 114, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_leeds",
+      "name": { "value": "Leeds", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.8, "longitude": -1.55 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 75, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 140, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_liverpool",
+      "name": { "value": "Liverpool", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.41, "longitude": -2.98 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 58, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "04-22", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-29", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 190, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_london",
+      "name": { "value": "London", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.51, "longitude": -0.13 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 73, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-16", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-15", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 152, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_manchester",
+      "name": { "value": "Manchester", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.48, "longitude": -2.24 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 127, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-15", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-16", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 154, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_newcastle_upon_tyne",
+      "name": { "value": "Newcastle upon Tyne", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 54.98, "longitude": -1.61 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 144, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-14", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 149, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_norwich",
+      "name": { "value": "Norwich", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.63, "longitude": 1.3 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 31, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-14", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-16", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 155, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_nottingham",
+      "name": { "value": "Nottingham", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.95, "longitude": -1.15 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 112, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-20", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 138, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_oxford",
+      "name": { "value": "Oxford", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.75, "longitude": -1.26 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 107, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-07", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 142, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_sheffield",
+      "name": { "value": "Sheffield", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.38, "longitude": -1.47 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 85, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 140, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_southampton",
+      "name": { "value": "Southampton", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.9, "longitude": -1.4 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 62, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-12", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-16", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 157, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_swansea",
+      "name": { "value": "Swansea", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.62, "longitude": -3.94 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 69, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "04-10", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "11-21", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "10a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 225, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "gb_york",
+      "name": { "value": "York", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.96, "longitude": -1.08 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 75, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-05", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "9a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 140, "source": "nasa-power", "drafted": true }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "common_scab",
+  "name": {
+    "value": {
+      "en": "Common scab",
+      "cs": "Obecná strupovitost bramboru",
+      "sk": "Obyčajná chrastavitosť zemiakov",
+      "de": "Kartoffelschorf",
+      "pl": "Parch zwykły ziemniaka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Streptomyces scabiei", "source": "eppo-gd", "drafted": true }
+}

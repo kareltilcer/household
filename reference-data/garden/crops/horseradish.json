@@ -1,0 +1,80 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "horseradish",
+  "name": {
+    "value": {
+      "en": "Horseradish",
+      "cs": "Křen",
+      "sk": "Chren",
+      "de": "Meerrettich",
+      "pl": "Chrzan"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Armoracia rusticana", "source": "powo", "drafted": true },
+  "family": { "value": "brassicaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 5, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 70, "plant_cm": 30 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 4.8, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -50, "to_days": -15 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": 10, "to_days": 60 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1.4, "per_plant": 0.3 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "sand", "shelf_life_days": 180 },
+      { "method": "in_ground", "shelf_life_days": 150 },
+      { "method": "fresh", "shelf_life_days": 30 },
+      { "method": "frozen", "shelf_life_days": 180 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["flea_beetle", "cabbage_white"], "source": "eppo-gd", "drafted": true },
+  "diseases": {
+    "value": ["white_blister", "verticillium_wilt"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Plant finger-thick root cuttings at a slant in spring and lift the roots once the leaves have died back. Every piece left in the soil regrows, so give it a corner of its own or grow it for one season and dig it out completely.",
+      "cs": "Na jaře sázejte šikmo kořenové řízky silné jako prst a kořeny dobývejte, až listy zatáhnou. Každý kousek ponechaný v půdě znovu obrazí, vyhraďte mu proto vlastní kout, nebo ho pěstujte jednu sezonu a vyryjte celý.",
+      "sk": "Na jar sádzajte šikmo koreňové odrezky hrubé ako prst a korene vyberajte, keď listy zatiahnu. Každý kúsok ponechaný v pôde znova vyrazí, vyhraďte mu preto vlastný kút, alebo ho pestujte jednu sezónu a vyryte celý.",
+      "de": "Im Frühjahr fingerdicke Wurzelstücke (Fechser) schräg einlegen und die Stangen ernten, wenn das Laub eingezogen ist. Jedes im Boden gebliebene Stück treibt wieder aus: ihm eine eigene Ecke geben oder einjährig ziehen und vollständig ausgraben.",
+      "pl": "Wiosną sadź ukośnie sadzonki korzeniowe grubości palca, a korzenie wykopuj, gdy liście zaschną. Każdy kawałek pozostawiony w glebie odrasta, przeznacz mu więc osobny kąt albo uprawiaj przez jeden sezon i wykop w całości."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

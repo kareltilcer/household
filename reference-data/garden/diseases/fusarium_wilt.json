@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "fusarium_wilt",
+  "name": {
+    "value": {
+      "en": "Fusarium wilt",
+      "cs": "Fuzáriové vadnutí",
+      "sk": "Fuzáriové vädnutie",
+      "de": "Fusarium-Welke",
+      "pl": "Fuzarioza"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Fusarium oxysporum", "source": "eppo-gd", "drafted": true }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "raspberry_beetle",
+  "name": {
+    "value": {
+      "en": "Raspberry beetle",
+      "cs": "Malinovník plstnatý",
+      "sk": "Malinár plstnatý",
+      "de": "Himbeerkäfer",
+      "pl": "Kistnik malinowiec"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Byturus tomentosus", "source": "eppo-gd", "drafted": true }
+}

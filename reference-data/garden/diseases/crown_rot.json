@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "crown_rot",
+  "name": {
+    "value": {
+      "en": "Crown rot",
+      "cs": "Hniloba krčku",
+      "sk": "Hniloba koreňového krčka",
+      "de": "Rhizomfäule",
+      "pl": "Zgnilizna korony"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Phytophthora cactorum", "source": "eppo-gd", "drafted": true }
+}

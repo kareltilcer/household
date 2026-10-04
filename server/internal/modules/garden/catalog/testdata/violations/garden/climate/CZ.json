@@ -1,0 +1,277 @@
+{
+  "country": "CZ",
+  "places": [
+    {
+      "key": "cz_brno",
+      "name": {
+        "value": "Brno",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.2,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "05-13",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "10-02",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 142,
+        "source": "book"
+      }
+    },
+    {
+      "key": "brno",
+      "name": {
+        "value": "Brno venkov",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.2,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "05-13",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "10-02",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 142,
+        "source": "book"
+      }
+    },
+    {
+      "key": "cz_brno",
+      "name": {
+        "value": "Brno",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.2,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "05-13",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "10-02",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 142,
+        "source": "book"
+      }
+    },
+    {
+      "key": "cz_precise",
+      "name": {
+        "value": "Precise",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.123,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "05-13",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "10-02",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 142,
+        "source": "book"
+      }
+    },
+    {
+      "key": "cz_leap",
+      "name": {
+        "value": "Leap",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.2,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "02-29",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "10-02",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 142,
+        "source": "book"
+      }
+    },
+    {
+      "key": "cz_never",
+      "name": {
+        "value": "Never",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.2,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "05-13",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "09-31",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 142,
+        "source": "book"
+      }
+    },
+    {
+      "key": "cz_backwards",
+      "name": {
+        "value": "Backwards",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.2,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "10-02",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "05-13",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 142,
+        "source": "book"
+      }
+    },
+    {
+      "key": "cz_short",
+      "name": {
+        "value": "Short",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.2,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "05-13",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "10-02",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 100,
+        "source": "book"
+      }
+    }
+  ]
+}

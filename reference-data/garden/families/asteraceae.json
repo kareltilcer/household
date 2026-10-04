@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-family.schema.json",
+  "key": "asteraceae",
+  "name": {
+    "value": {
+      "en": "Daisy family",
+      "cs": "Hvězdnicovité",
+      "sk": "Astrovité",
+      "de": "Korbblütler",
+      "pl": "Astrowate"
+    },
+    "source": "wikidata",
+    "drafted": true
+  },
+  "name_latin": { "value": "Asteraceae", "source": "powo", "drafted": true }
+}

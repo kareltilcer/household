@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "mosaic_virus",
+  "name": {
+    "value": {
+      "en": "Mosaic viruses",
+      "cs": "Virové mozaiky",
+      "sk": "Vírusové mozaiky",
+      "de": "Mosaikviren",
+      "pl": "Wirusy mozaiki"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  }
+}

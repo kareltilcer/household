@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "slug",
+  "name": {
+    "value": {
+      "en": "Slugs and snails",
+      "cs": "Slimáci a plzáci",
+      "sk": "Slimáky a slizniaky",
+      "de": "Schnecken",
+      "pl": "Ślimaki"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Gastropoda", "source": "eppo-gd", "drafted": true }
+}

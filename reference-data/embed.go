@@ -6,7 +6,8 @@ package referencedata
 
 import "embed"
 
-// FS holds sources.json, the schemas and every dataset's files, at the paths they have here.
+// FS holds sources.json, the schemas and every dataset's files, at the paths they have here: the
+// platform's own, countries and units, and each module's set in the directory named for it.
 //
-//go:embed sources.json schemas countries units
+//go:embed sources.json schemas countries units garden
 var FS embed.FS

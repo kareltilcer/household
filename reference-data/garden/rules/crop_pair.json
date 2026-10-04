@@ -1,0 +1,1286 @@
+{
+  "$schema": "../../schemas/garden-rules.schema.json",
+  "scope": "crop_pair",
+  "rules": [
+    {
+      "a": "aubergine",
+      "b": "potato",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "error" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Aubergine and potatoes are nightshades and share every disease, and the Colorado beetle too.",
+          "cs": "Lilek a brambory jsou lilkovité a mají společné všechny choroby i mandelinku.",
+          "sk": "Baklažán a zemiaky sú ľuľkovité a spájajú ich všetky choroby aj pásavka zemiaková.",
+          "de": "Aubergine und Kartoffeln sind Nachtschattengewächse und teilen alle Krankheiten samt Kartoffelkäfer.",
+          "pl": "Bakłażan i ziemniaki to psiankowate — łączą je wszystkie choroby, a także stonka ziemniaczana."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "basil",
+      "b": "sweet_pepper",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Basil beside peppers repels aphids and takes the same warmth and watering.",
+          "cs": "Bazalka u paprik odpuzuje mšice a snáší stejné teplo i zálivku.",
+          "sk": "Bazalka pri paprikách odpudzuje vošky a znáša rovnaké teplo aj zálievku.",
+          "de": "Basilikum bei Paprika vertreibt Blattläuse und verträgt dieselbe Wärme und dasselbe Gießen.",
+          "pl": "Bazylia przy papryce odstrasza mszyce i znosi to samo ciepło i podlewanie."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "basil",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Basil among tomatoes repels whitefly and aphids and gets in nobody's way — and it is picked at the same time.",
+          "cs": "Bazalka mezi rajčaty odpuzuje molice a mšice a nikomu nepřekáží — a sklízí se ve stejnou dobu.",
+          "sk": "Bazalka medzi rajčiakmi odpudzuje molice a vošky a nikomu neprekáža — a zberá sa v rovnakom čase.",
+          "de": "Basilikum zwischen den Tomaten vertreibt Weiße Fliegen und Blattläuse und ist niemandem im Weg — und geerntet wird es zur selben Zeit.",
+          "pl": "Bazylia między pomidorami odstrasza mączliki i mszyce i nikomu nie przeszkadza — a zbiera się ją w tym samym czasie."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "beetroot",
+      "b": "onion",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Beetroot and onion share a bed without competing — their roots grow at different depths.",
+          "cs": "Řepa a cibule se dělí o záhon bez konkurence — kořeny rostou v jiné hloubce.",
+          "sk": "Cvikla a cibuľa sa delia o záhon bez konkurencie — korene rastú v inej hĺbke.",
+          "de": "Rote Bete und Zwiebeln teilen sich das Beet ohne Konkurrenz — ihre Wurzeln wachsen in unterschiedlicher Tiefe.",
+          "pl": "Burak i cebula dzielą grządkę bez konkurencji — ich korzenie rosną na różnej głębokości."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "broccoli",
+      "b": "lettuce",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Lettuce fills the space between young broccoli and is harvested before it gets shaded out.",
+          "cs": "Salát vyplní místo mezi mladou brokolicí a sklidí se dřív, než ho zastíní.",
+          "sk": "Šalát vyplní miesto medzi mladou brokolicou a zozbiera sa skôr, než ho zatieni.",
+          "de": "Salat füllt den Platz zwischen jungem Brokkoli und ist geerntet, bevor dieser ihn beschattet.",
+          "pl": "Sałata wypełnia miejsce między młodymi brokułami i zostaje zebrana, zanim ją zacienią."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "broccoli",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Tomatoes are very hungry feeders and, in a shared bed, draw the nutrients away from the broccoli.",
+          "cs": "Rajčata jsou velmi náročná na živiny a brokolici je v jednom záhonu odčerpají.",
+          "sk": "Rajčiaky sú veľmi náročné na živiny a brokolici ich v jednom záhone odčerpajú.",
+          "de": "Tomaten sind sehr nährstoffhungrig und zehren dem Brokkoli im selben Beet die Nährstoffe weg.",
+          "pl": "Pomidory są bardzo żarłoczne i na wspólnej grządce zabierają brokułom składniki pokarmowe."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "celeriac",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "info" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Both are umbellifers and draw the same pest — carrot fly.",
+          "cs": "Obojí jsou miříkovité a lákají stejného škůdce — vrtuli mrkvovou.",
+          "sk": "Oboje sú mrkvovité a lákajú toho istého škodcu — vrtivku mrkvovú.",
+          "de": "Beide sind Doldenblütler und locken denselben Schädling an — die Möhrenfliege.",
+          "pl": "Oba to selerowate i wabią tego samego szkodnika — połyśnicę marchwiankę."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "dill",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Dill and carrot are related, they cross and they share carrot fly. Flowering dill also grows over the carrots.",
+          "cs": "Kopr a mrkev jsou příbuzné, kříží se a sdílejí vrtuli mrkvovou. Kvetoucí kopr navíc mrkev přerůstá.",
+          "sk": "Kôpor a mrkva sú príbuzné, krížia sa a zdieľajú vrtivku mrkvovú. Kvitnúci kôpor navyše mrkvu prerastá.",
+          "de": "Dill und Möhre sind verwandt, kreuzen sich und teilen sich die Möhrenfliege. Blühender Dill überwächst die Möhren obendrein.",
+          "pl": "Koper i marchew są spokrewnione, krzyżują się i łączy je połyśnica marchwianka. Kwitnący koper dodatkowo przerasta marchew."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "garlic",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Garlic confuses carrot fly just as onion does.",
+          "cs": "Česnek mate vrtuli mrkvovou stejně jako cibule.",
+          "sk": "Cesnak mätie vrtivku mrkvovú rovnako ako cibuľa.",
+          "de": "Knoblauch verwirrt die Möhrenfliege genauso wie die Zwiebel.",
+          "pl": "Czosnek myli połyśnicę marchwiankę tak samo jak cebula."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "leek",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Leek and carrot protect each other from their pests — it works just as it does with onion.",
+          "cs": "Pórek a mrkev se navzájem chrání před svými škůdci — funguje to stejně jako s cibulí.",
+          "sk": "Pór a mrkva sa navzájom chránia pred svojimi škodcami — funguje to rovnako ako s cibuľou.",
+          "de": "Lauch und Möhre schützen sich gegenseitig vor ihren Schädlingen — das funktioniert genauso wie mit der Zwiebel.",
+          "pl": "Por i marchew chronią się nawzajem przed swoimi szkodnikami — działa to tak samo jak z cebulą."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "lettuce",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Lettuce fills the rows until the carrots come up and keeps the soil free of weeds.",
+          "cs": "Salát vyplní řádky, než mrkev vzejde, a udrží půdu bez plevele.",
+          "sk": "Šalát vyplní riadky, kým mrkva vzíde, a udrží pôdu bez buriny.",
+          "de": "Salat füllt die Reihen, bis die Möhren auflaufen, und hält den Boden unkrautfrei.",
+          "pl": "Sałata wypełnia rzędy, zanim marchew wzejdzie, i utrzymuje glebę bez chwastów."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "onion",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "The best-known pair in the garden: the scent of onion confuses carrot fly, and the scent of carrot in turn confuses onion fly.",
+          "cs": "Nejznámější dvojice na zahradě: vůně cibule mate vrtuli mrkvovou a vůně mrkve zase květilku cibulovou.",
+          "sk": "Najznámejšia dvojica v záhrade: vôňa cibule mätie vrtivku mrkvovú a vôňa mrkvy zasa kvetárku cibuľovú.",
+          "de": "Das bekannteste Paar im Garten: Der Zwiebelduft verwirrt die Möhrenfliege, der Möhrenduft wiederum die Zwiebelfliege.",
+          "pl": "Najbardziej znana para w ogrodzie: zapach cebuli myli połyśnicę marchwiankę, a zapach marchwi z kolei śmietkę cebulankę."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "parsley",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "info" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Parsley and carrot are related, share pests and diseases and compete for the same depth of soil.",
+          "cs": "Petržel a mrkev jsou příbuzné, sdílejí škůdce i choroby a soupeří o stejnou hloubku půdy.",
+          "sk": "Petržlen a mrkva sú príbuzné, zdieľajú škodcov aj choroby a súperia o rovnakú hĺbku pôdy.",
+          "de": "Petersilie und Möhre sind verwandt, teilen sich Schädlinge und Krankheiten und konkurrieren um dieselbe Bodentiefe.",
+          "pl": "Pietruszka i marchew są spokrewnione, dzielą szkodniki i choroby oraz konkurują o tę samą głębokość gleby."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "pea",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Peas leave nitrogen in the soil, which carrots appreciate in the second half of the season.",
+          "cs": "Hrách zanechá v půdě dusík, který mrkev v druhé polovině sezóny ocení.",
+          "sk": "Hrach zanechá v pôde dusík, ktorý mrkva v druhej polovici sezóny ocení.",
+          "de": "Erbsen hinterlassen Stickstoff im Boden, den die Möhren in der zweiten Saisonhälfte zu schätzen wissen.",
+          "pl": "Groch zostawia w glebie azot, który marchew doceni w drugiej połowie sezonu."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "radish",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Radishes mark the slow-germinating row of carrots and are harvested in good time.",
+          "cs": "Ředkvička označí pomalu klíčící řádek mrkve a stihne se sklidit včas.",
+          "sk": "Reďkovka označí pomaly klíčiaci riadok mrkvy a stihne sa zozbierať včas.",
+          "de": "Radieschen markieren die langsam keimende Möhrenreihe und sind rechtzeitig abgeerntet.",
+          "pl": "Rzodkiewka zaznacza wolno kiełkujący rząd marchwi i zdąży zejść z grządki na czas."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "cauliflower",
+      "b": "strawberry",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Cauliflower shades strawberries and draws off their nutrients.",
+          "cs": "Květák jahodám stíní a odčerpává jim živiny.",
+          "sk": "Karfiol jahodám tieni a odčerpáva im živiny.",
+          "de": "Blumenkohl beschattet die Erdbeeren und entzieht ihnen Nährstoffe.",
+          "pl": "Kalafior zacienia truskawki i odbiera im składniki pokarmowe."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "celeriac",
+      "b": "leek",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Celeriac and leek have similar needs and confuse each other's pests.",
+          "cs": "Celer a pórek mají podobné nároky a navzájem si pletou škůdce.",
+          "sk": "Zeler a pór vyžadujú podobné podmienky a navzájom si mätú škodcov.",
+          "de": "Sellerie und Lauch haben ähnliche Ansprüche und verwirren gegenseitig ihre Schädlinge.",
+          "pl": "Seler i por wymagają podobnych warunków i nawzajem mylą swoje szkodniki."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "celeriac",
+      "b": "white_cabbage",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Celeriac among cabbages repels cabbage whites and makes use of the space between the heads.",
+          "cs": "Celer mezi zelím odpuzuje bělásky a využije místo mezi hlávkami.",
+          "sk": "Zeler medzi kapustou odpudzuje mlynáriky a využije miesto medzi hlávkami.",
+          "de": "Sellerie zwischen dem Kohl vertreibt Kohlweißlinge und nutzt den Platz zwischen den Köpfen.",
+          "pl": "Seler między kapustą odstrasza bielinki i wykorzystuje miejsce między główkami."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "chives",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Chives around tomatoes repel aphids and last in the bed for years.",
+          "cs": "Pažitka kolem rajčat odpuzuje mšice a vydrží v záhonu roky.",
+          "sk": "Pažítka okolo rajčiakov odpudzuje vošky a vydrží v záhone roky.",
+          "de": "Schnittlauch rund um die Tomaten vertreibt Blattläuse und hält sich jahrelang im Beet.",
+          "pl": "Szczypiorek wokół pomidorów odstrasza mszyce i wytrzyma na grządce latami."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "climbing_bean",
+      "b": "sweetcorn",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "The classic trio: sweetcorn gives the beans support, the beans give nitrogen back to the soil.",
+          "cs": "Klasická trojice: kukuřice dá fazolím oporu, fazole vrátí půdě dusík.",
+          "sk": "Klasická trojica: kukurica dá fazuli oporu, fazuľa vráti pôde dusík.",
+          "de": "Das klassische Trio: Der Mais gibt den Bohnen Halt, die Bohnen geben dem Boden Stickstoff zurück.",
+          "pl": "Klasyczna trójka: kukurydza daje fasoli podporę, fasola oddaje glebie azot."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "courgette",
+      "b": "pot_marigold",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Pot marigold beside courgettes brings in the pollinators on which the crop directly depends.",
+          "cs": "Měsíček u cuket přitáhne opylovače, na kterých úroda přímo závisí.",
+          "sk": "Nechtík pri cuketách pritiahne opeľovače, od ktorých úroda priamo závisí.",
+          "de": "Die Ringelblume bei den Zucchini zieht Bestäuber an, von denen die Ernte unmittelbar abhängt.",
+          "pl": "Nagietek przy cukiniach przyciąga zapylacze, od których plon bezpośrednio zależy."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "courgette",
+      "b": "potato",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Courgettes and potatoes share fungal diseases, and both are hungry for nutrients.",
+          "cs": "Cukety a brambory se dělí o plísně a obojí je náročné na živiny.",
+          "sk": "Cukety a zemiaky sa delia o plesne a oboje je náročné na živiny.",
+          "de": "Zucchini und Kartoffeln teilen sich Pilzkrankheiten, und beide sind nährstoffhungrig.",
+          "pl": "Cukinie i ziemniaki dzielą choroby grzybowe, a jedne i drugie są żarłoczne."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "cucumber",
+      "b": "dill",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Dill draws pollinators and beneficial insects to the cucumbers — and you pick it just when you are pickling.",
+          "cs": "Kopr láká k okurkám opylovače i užitečný hmyz — a sklidíte ho právě ve chvíli, kdy nakládáte.",
+          "sk": "Kôpor láka k uhorkám opeľovače aj užitočný hmyz — a zberáte ho práve vo chvíli, keď nakladáte.",
+          "de": "Dill lockt Bestäuber und Nützlinge zu den Gurken — und Sie ernten ihn genau dann, wenn es ans Einlegen geht.",
+          "pl": "Koper wabi do ogórków zapylacze i pożyteczne owady — a zbiera się go akurat wtedy, gdy przychodzi pora na kiszenie."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "cucumber",
+      "b": "french_bean",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Beans enrich the soil with nitrogen, which cucumbers use up in quantity.",
+          "cs": "Fazole obohatí půdu o dusík, který okurky spotřebují ve velkém.",
+          "sk": "Fazuľa obohatí pôdu o dusík, ktorý uhorky spotrebujú vo veľkom.",
+          "de": "Bohnen reichern den Boden mit Stickstoff an, den Gurken in großen Mengen verbrauchen.",
+          "pl": "Fasola wzbogaca glebę w azot, który ogórki zużywają w dużych ilościach."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "cucumber",
+      "b": "potato",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Cucumbers are especially sensitive to blight from potato haulm.",
+          "cs": "Okurky jsou na plíseň z bramborové natě obzvlášť citlivé.",
+          "sk": "Uhorky sú na pleseň zo zemiakovej vňate obzvlášť citlivé.",
+          "de": "Gurken sind für die Krautfäule vom Kartoffellaub besonders anfällig.",
+          "pl": "Ogórki są szczególnie wrażliwe na zarazę z łętów ziemniaczanych."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "cucumber",
+      "b": "sage",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "By experience, strongly aromatic sage does not agree with cucumbers.",
+          "cs": "Silně aromatická šalvěj okurkám podle zkušeností nesvědčí.",
+          "sk": "Silne aromatická šalvia uhorkám podľa skúseností nesvedčí.",
+          "de": "Stark duftender Salbei bekommt Gurken erfahrungsgemäß nicht.",
+          "pl": "Silnie aromatyczna szałwia, jak pokazuje doświadczenie, ogórkom nie służy."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "cucumber",
+      "b": "sunflower",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Sunflowers serve cucumbers as a living support and light shade.",
+          "cs": "Slunečnice poslouží okurkám jako živá opora a mírné stínění.",
+          "sk": "Slnečnica poslúži uhorkám ako živá opora a mierne tienenie.",
+          "de": "Sonnenblumen dienen den Gurken als lebende Stütze und leichte Beschattung.",
+          "pl": "Słonecznik posłuży ogórkom za żywą podporę i lekkie zacienienie."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "dill",
+      "b": "florence_fennel",
+      "claim": {
+        "value": { "relation": "cross_pollination", "basis": "agronomic", "severity": "warn" },
+        "source": "rhs-grow-your-own",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Fennel and dill cross with each other, and the seed is then good for nothing.",
+          "cs": "Fenykl a kopr se navzájem zkříží a semena pak nejsou k ničemu.",
+          "sk": "Fenikel a kôpor sa navzájom skrížia a semená potom nie sú na nič.",
+          "de": "Fenchel und Dill kreuzen sich miteinander, und das Saatgut taugt dann nichts mehr.",
+          "pl": "Koper włoski i koper ogrodowy krzyżują się ze sobą, a nasiona są potem do niczego."
+        },
+        "source": "rhs-grow-your-own",
+        "drafted": true
+      }
+    },
+    {
+      "a": "dill",
+      "b": "white_cabbage",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Dill beside cabbage attracts parasitic wasps, which kill the caterpillars of cabbage whites.",
+          "cs": "Kopr u zelí láká parazitické vosičky, které hubí housenky bělásků.",
+          "sk": "Kôpor pri kapuste láka parazitické osičky, ktoré hubia húsenice mlynárikov.",
+          "de": "Dill beim Kohl lockt Schlupfwespen an, die die Raupen der Kohlweißlinge vernichten.",
+          "pl": "Koper przy kapuście wabi pasożytnicze błonkówki, które niszczą gąsienice bielinków."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "florence_fennel",
+      "b": "french_bean",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "error" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Fennel suppresses the germination and growth of beans.",
+          "cs": "Fenykl potlačuje klíčení i růst fazolí.",
+          "sk": "Fenikel potláča klíčenie aj rast fazule.",
+          "de": "Fenchel unterdrückt Keimung und Wachstum der Bohnen.",
+          "pl": "Koper włoski hamuje zarówno kiełkowanie, jak i wzrost fasoli."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "florence_fennel",
+      "b": "sweet_pepper",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Fennel holds back the growth of peppers just as it does tomatoes.",
+          "cs": "Fenykl brzdí růst paprik stejně jako rajčat.",
+          "sk": "Fenikel brzdí rast paprík rovnako ako rajčiakov.",
+          "de": "Fenchel bremst das Wachstum von Paprika ebenso wie das von Tomaten.",
+          "pl": "Koper włoski hamuje wzrost papryki tak samo jak pomidorów."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "florence_fennel",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "error" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Fennel gives off substances that hold back the growth of most of its neighbours — tomatoes suffer most. Plant it well away from everything else.",
+          "cs": "Fenykl vylučuje látky, které brzdí růst většiny sousedů — rajčatům škodí nejvíc. Sázejte ho stranou od všeho ostatního.",
+          "sk": "Fenikel vylučuje látky, ktoré brzdia rast väčšiny susedov — rajčiakom škodí najviac. Saďte ho bokom od všetkého ostatného.",
+          "de": "Fenchel scheidet Stoffe aus, die das Wachstum der meisten Nachbarn bremsen — Tomaten schadet er am meisten. Pflanzen Sie ihn abseits von allem anderen.",
+          "pl": "Koper włoski wydziela substancje hamujące wzrost większości sąsiadów — pomidorom szkodzi najbardziej. Najlepiej sadzić go z dala od wszystkiego innego."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "french_bean",
+      "b": "garlic",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Garlic suppresses the nodule bacteria on bean roots.",
+          "cs": "Česnek tlumí hlízkové bakterie na kořenech fazolí.",
+          "sk": "Cesnak tlmí hrčkotvorné baktérie na koreňoch fazule.",
+          "de": "Knoblauch hemmt die Knöllchenbakterien an den Bohnenwurzeln.",
+          "pl": "Czosnek hamuje bakterie brodawkowe na korzeniach fasoli."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "french_bean",
+      "b": "onion",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Beans next to onions fall behind in growth.",
+          "cs": "Fazole vedle cibule zaostávají v růstu.",
+          "sk": "Fazuľa vedľa cibule zaostáva v raste.",
+          "de": "Bohnen neben Zwiebeln bleiben im Wachstum zurück.",
+          "pl": "Fasola obok cebuli słabiej rośnie."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "french_bean",
+      "b": "potato",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Beans among potatoes supply nitrogen and repel the Colorado beetle.",
+          "cs": "Fazole mezi bramborami dodají dusík a odpuzují mandelinku.",
+          "sk": "Fazuľa medzi zemiakmi dodá dusík a odpudzuje pásavku zemiakovú.",
+          "de": "Bohnen zwischen den Kartoffeln liefern Stickstoff und vertreiben den Kartoffelkäfer.",
+          "pl": "Fasola między ziemniakami dostarcza azotu i odstrasza stonkę ziemniaczaną."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "french_bean",
+      "b": "winter_squash",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Squash shades the soil and holds in moisture, the beans enrich it with nitrogen.",
+          "cs": "Dýně zastíní půdu a udrží vláhu, fazole ji obohatí o dusík.",
+          "sk": "Tekvica zatieni pôdu a udrží vlahu, fazuľa ju obohatí o dusík.",
+          "de": "Kürbis beschattet den Boden und hält die Feuchte, Bohnen reichern ihn mit Stickstoff an.",
+          "pl": "Dynia zacienia glebę i zatrzymuje wilgoć, fasola wzbogaca ją w azot."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "french_marigold",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "French marigold suppresses the eelworms to which tomatoes are sensitive.",
+          "cs": "Aksamitník potlačuje háďátka, na která jsou rajčata citlivá.",
+          "sk": "Aksamietnica potláča háďatká, na ktoré sú rajčiaky citlivé.",
+          "de": "Tagetes unterdrückt Nematoden, auf die Tomaten empfindlich reagieren.",
+          "pl": "Aksamitka zwalcza nicienie, na które pomidory są wrażliwe."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "french_marigold",
+      "b": "white_cabbage",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "French marigold suppresses eelworms in the soil and draws the attention of cabbage whites away from the cabbage.",
+          "cs": "Aksamitník potlačuje háďátka v půdě a odvádí pozornost bělásků od zelí.",
+          "sk": "Aksamietnica potláča háďatká v pôde a odvádza pozornosť mlynárikov od kapusty.",
+          "de": "Tagetes unterdrückt Nematoden im Boden und lenkt die Kohlweißlinge vom Kohl ab.",
+          "pl": "Aksamitka zwalcza nicienie w glebie i odwraca uwagę bielinków od kapusty."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "garlic",
+      "b": "pea",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Peas next to garlic grow more slowly and set pods less well.",
+          "cs": "Hrách vedle česneku roste pomaleji a hůř nasazuje lusky.",
+          "sk": "Hrach vedľa cesnaku rastie pomalšie a horšie nasadzuje struky.",
+          "de": "Erbsen neben Knoblauch wachsen langsamer und setzen schlechter Hülsen an.",
+          "pl": "Groch obok czosnku rośnie wolniej i gorzej zawiązuje strąki."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "garlic",
+      "b": "strawberry",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Garlic among strawberries curbs grey mould and repels pests.",
+          "cs": "Česnek mezi jahodami omezuje šedou hnilobu a odpuzuje škůdce.",
+          "sk": "Cesnak medzi jahodami obmedzuje sivú hnilobu a odpudzuje škodcov.",
+          "de": "Knoblauch zwischen den Erdbeeren dämmt Grauschimmel ein und vertreibt Schädlinge.",
+          "pl": "Czosnek między truskawkami ogranicza szarą pleśń i odstrasza szkodniki."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "garlic",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Garlic among tomatoes curbs fungal diseases and aphids.",
+          "cs": "Česnek mezi rajčaty omezuje plísně a mšice.",
+          "sk": "Cesnak medzi rajčiakmi obmedzuje plesne a vošky.",
+          "de": "Knoblauch zwischen Tomaten bremst Pilzkrankheiten und Blattläuse.",
+          "pl": "Czosnek między pomidorami ogranicza choroby grzybowe i mszyce."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "kohlrabi",
+      "b": "lettuce",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Kohlrabi and lettuce take the same short time to harvest and do not get in each other's way.",
+          "cs": "Kedlubny a salát mají stejně krátkou dobu do sklizně a nepřekážejí si.",
+          "sk": "Kaleráby a šalát potrebujú rovnako krátky čas do zberu a neprekážajú si.",
+          "de": "Kohlrabi und Salat brauchen gleich kurz bis zur Ernte und kommen sich nicht in die Quere.",
+          "pl": "Kalarepie i sałacie do zbioru potrzeba równie niewiele czasu i nie przeszkadzają sobie nawzajem."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "kohlrabi",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Kohlrabi next to tomatoes stays small — the tomatoes take both the nutrients and the light.",
+          "cs": "Kedluben vedle rajčat zůstává malý — rajčata si vezmou živiny i světlo.",
+          "sk": "Kaleráb vedľa rajčiakov zostáva malý — rajčiaky si vezmú živiny aj svetlo.",
+          "de": "Kohlrabi neben Tomaten bleibt klein — die Tomaten nehmen sich Nährstoffe und Licht.",
+          "pl": "Kalarepa obok pomidorów pozostaje mała — pomidory zabierają i składniki pokarmowe, i światło."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "lambs_lettuce",
+      "b": "radish",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Lamb's lettuce and radish both cope with the cold ends of the season, and together they fill a bed in spring and in autumn.",
+          "cs": "Polníček i ředkvička zvládnou chladné okraje sezóny a dohromady vyplní záhon na jaře i na podzim.",
+          "sk": "Valeriánka aj reďkovka zvládnu chladné okraje sezóny a spolu vyplnia záhon na jar aj na jeseň.",
+          "de": "Feldsalat und Radieschen kommen beide mit den kühlen Rändern der Saison zurecht und füllen zusammen ein Beet im Frühjahr wie im Herbst.",
+          "pl": "Roszponka i rzodkiewka znoszą chłodne krańce sezonu i razem wypełniają grządkę wiosną i jesienią."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "leek",
+      "b": "pea",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Leek, being an allium, checks legumes much as onion does.",
+          "cs": "Pórek jako cibulovina tlumí luskoviny podobně jako cibule.",
+          "sk": "Pór ako cibuľovina tlmí strukoviny podobne ako cibuľa.",
+          "de": "Lauch hemmt als Zwiebelgewächs Hülsenfrüchtler ähnlich wie die Zwiebel.",
+          "pl": "Por jako warzywo cebulowe hamuje rośliny strączkowe podobnie jak cebula."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "lemon_balm",
+      "b": "white_cabbage",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Aromatic lemon balm confuses cabbage whites, which find cabbage by its smell.",
+          "cs": "Aromatická meduňka mate bělásky, kteří zelí hledají po vůni.",
+          "sk": "Aromatická medovka mätie mlynáriky, ktoré kapustu hľadajú podľa vône.",
+          "de": "Die duftende Zitronenmelisse verwirrt die Kohlweißlinge, die den Kohl am Geruch finden.",
+          "pl": "Aromatyczna melisa myli bielinki, które szukają kapusty po zapachu."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "lettuce",
+      "b": "pea",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Lettuce in the half-shade of peas lasts longer and does not bolt.",
+          "cs": "Salát v polostínu hrachu déle vydrží a nevybíhá do květu.",
+          "sk": "Šalát v polotieni hrachu dlhšie vydrží a nevybieha do kvetu.",
+          "de": "Salat im Halbschatten der Erbsen hält länger und schießt nicht.",
+          "pl": "Sałata w półcieniu grochu dłużej wytrzymuje i nie wybija w pędy kwiatostanowe."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "lettuce",
+      "b": "radish",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Radishes are out of the ground before the lettuce fills out — two crops from one spot.",
+          "cs": "Ředkvička je z půdy pryč dřív, než se salát rozroste — dva výnosy z jednoho místa.",
+          "sk": "Reďkovka je z pôdy preč skôr, než sa šalát rozrastie — dve úrody z jedného miesta.",
+          "de": "Radieschen sind aus dem Boden, bevor sich der Salat ausbreitet — zwei Ernten von einem Platz.",
+          "pl": "Rzodkiewka znika z ziemi, zanim sałata się rozrośnie — dwa plony z jednego miejsca."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "onion",
+      "b": "pea",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Peas next to onions fix nitrogen less well and stay small.",
+          "cs": "Hrách vedle cibule hůř váže dusík a zůstává drobný.",
+          "sk": "Hrach vedľa cibule horšie viaže dusík a zostáva drobný.",
+          "de": "Erbsen neben Zwiebeln binden schlechter Stickstoff und bleiben klein.",
+          "pl": "Groch obok cebuli gorzej wiąże azot i pozostaje drobny."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "parsley",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Parsley under tomatoes makes use of the shade and brings in beneficial insects.",
+          "cs": "Petržel pod rajčaty využije stín a přiláká užitečný hmyz.",
+          "sk": "Petržlen pod rajčiakmi využije tieň a priláka užitočný hmyz.",
+          "de": "Petersilie unter den Tomaten nutzt den Schatten und lockt Nützlinge an.",
+          "pl": "Pietruszka pod pomidorami wykorzysta cień i przywabi pożyteczne owady."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "pea",
+      "b": "radish",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Radishes make use of the space between the rows of peas before the peas fill out.",
+          "cs": "Ředkvička využije místo mezi řádky hrachu, než se hrách rozroste.",
+          "sk": "Reďkovka využije miesto medzi riadkami hrachu, kým sa hrach rozrastie.",
+          "de": "Radieschen nutzen den Platz zwischen den Erbsenreihen, bevor die Erbsen sich ausbreiten.",
+          "pl": "Rzodkiewka wykorzystuje miejsce między rzędami grochu, zanim groch się rozrośnie."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "pot_marigold",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Pot marigold attracts hoverflies and ladybirds, which deal with the aphids on tomatoes.",
+          "cs": "Měsíček láká pestřenky a slunéčka, která si poradí s mšicemi na rajčatech.",
+          "sk": "Nechtík láka pestrice a lienky, ktoré si poradia s voškami na rajčiakoch.",
+          "de": "Die Ringelblume lockt Schwebfliegen und Marienkäfer an, die mit den Blattläusen an den Tomaten fertigwerden.",
+          "pl": "Nagietek wabi bzygi i biedronki, które poradzą sobie z mszycami na pomidorach."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "potato",
+      "b": "sunflower",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Sunflowers outgrow potatoes, shade them and take their water.",
+          "cs": "Slunečnice brambory přerůstá, stíní jim a vyčerpává jim vodu.",
+          "sk": "Slnečnica zemiaky prerastá, tieni im a odčerpáva im vodu.",
+          "de": "Die Sonnenblume überwächst die Kartoffeln, beschattet sie und nimmt ihnen das Wasser.",
+          "pl": "Słonecznik przerasta ziemniaki, zacienia je i zabiera im wodę."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "potato",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "error" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Both are nightshades, and late blight jumps from one to the other within a single wet week.",
+          "cs": "Obojí jsou lilkovité a plíseň bramborová přeskočí z jednoho na druhé během jediného vlhkého týdne.",
+          "sk": "Oboje sú ľuľkovité a pleseň zemiaková preskočí z jedného na druhé počas jediného vlhkého týždňa.",
+          "de": "Beide sind Nachtschattengewächse, und die Krautfäule springt innerhalb einer einzigen feuchten Woche von den einen auf die anderen über.",
+          "pl": "Jedne i drugie to psiankowate, a zaraza ziemniaka przeskakuje z jednych na drugie w ciągu jednego wilgotnego tygodnia."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "potato",
+      "b": "white_mustard",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Mustard after potatoes curbs eelworms and quickly covers the vacated bed.",
+          "cs": "Hořčice po bramborách omezuje háďátka a rychle zakryje uvolněný záhon.",
+          "sk": "Horčica po zemiakoch obmedzuje háďatká a rýchlo zakryje uvoľnený záhon.",
+          "de": "Senf nach Kartoffeln dämmt Nematoden ein und bedeckt das frei gewordene Beet rasch.",
+          "pl": "Gorczyca po ziemniakach ogranicza nicienie i szybko okrywa zwolnioną grządkę."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "potato",
+      "b": "winter_squash",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Squash and potatoes share fungal diseases, and both need plenty of room and nutrients.",
+          "cs": "Dýně a brambory se dělí o plísně a obojí potřebuje hodně místa i živin.",
+          "sk": "Tekvica a zemiaky sa delia o plesne a oboje potrebuje veľa miesta aj živín.",
+          "de": "Kürbis und Kartoffeln teilen sich Pilzkrankheiten, und beide brauchen viel Platz und viele Nährstoffe.",
+          "pl": "Dynia i ziemniaki dzielą choroby grzybowe, a jedno i drugie potrzebuje dużo miejsca i pokarmu."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "radish",
+      "b": "savoy_cabbage",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Radishes draw the attention of flea beetles away from young savoy cabbage.",
+          "cs": "Ředkvička odvede pozornost dřepčíků od mladé kapusty.",
+          "sk": "Reďkovka odvedie pozornosť skočiek od mladého kelu.",
+          "de": "Radieschen lenken die Erdflöhe vom jungen Wirsing ab.",
+          "pl": "Rzodkiewka odciąga uwagę pchełek od młodej kapusty włoskiej."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "radish",
+      "b": "spinach",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Both are quickly out of the ground, and together they fill the spring bed until the main crop comes along.",
+          "cs": "Obojí je z půdy rychle pryč a dohromady vyplní jarní záhon, než přijde hlavní plodina.",
+          "sk": "Oboje je z pôdy rýchlo preč a spolu vyplnia jarný záhon, kým príde hlavná plodina.",
+          "de": "Beide räumen den Boden schnell und füllen gemeinsam das Frühjahrsbeet, bis die Hauptkultur kommt.",
+          "pl": "Jedno i drugie szybko znika z ziemi, a razem wypełniają wiosenną grządkę, zanim przyjdzie uprawa główna."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "spinach",
+      "b": "strawberry",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Spinach among young strawberries shades the soil and is harvested before the strawberries claim the space.",
+          "cs": "Špenát mezi mladými jahodami zastíní půdu a sklidí se dřív, než si jahody řeknou o místo.",
+          "sk": "Špenát medzi mladými jahodami zatieni pôdu a zozbiera sa skôr, než si jahody vypýtajú miesto.",
+          "de": "Spinat zwischen jungen Erdbeeren beschattet den Boden und ist geerntet, bevor die Erdbeeren den Platz beanspruchen.",
+          "pl": "Szpinak między młodymi truskawkami zacienia glebę i schodzi z grządki, zanim truskawki upomną się o miejsce."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "spinach",
+      "b": "white_cabbage",
+      "claim": {
+        "value": { "relation": "companion", "basis": "agronomic", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Spinach covers the soil between young cabbages and is harvested before the cabbage claims the space.",
+          "cs": "Špenát zakryje půdu mezi mladým zelím a sklidí se dřív, než si zelí řekne o místo.",
+          "sk": "Špenát zakryje pôdu medzi mladou kapustou a zozbiera sa skôr, než si kapusta vypýta miesto.",
+          "de": "Spinat bedeckt den Boden zwischen jungem Kohl und ist geerntet, bevor der Kohl den Platz beansprucht.",
+          "pl": "Szpinak okrywa glebę między młodą kapustą i schodzi z grządki, zanim kapusta upomni się o miejsce."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "strawberry",
+      "b": "white_cabbage",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Cabbage outgrows strawberries and shades them; traditionally the pairing is not recommended.",
+          "cs": "Zelí jahody přerůstá a stíní jim; tradičně se nedoporučuje.",
+          "sk": "Kapusta jahody prerastá a tieni im; tradične sa neodporúča.",
+          "de": "Kohl überwächst die Erdbeeren und beschattet sie; traditionell wird davon abgeraten.",
+          "pl": "Kapusta przerasta truskawki i je zacienia; tradycyjnie się tego nie zaleca."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "sweetcorn",
+      "b": "tomato",
+      "claim": {
+        "value": { "relation": "antagonist", "basis": "agronomic", "severity": "warn" },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Sweetcorn and tomatoes feed the same caterpillar (a moth), so side by side they pass it to each other.",
+          "cs": "Kukuřice a rajčata živí stejnou housenku (můru), takže vedle sebe si ji předávají.",
+          "sk": "Kukurica a rajčiaky živia tú istú húsenicu (moru), takže vedľa seba si ju odovzdávajú.",
+          "de": "Mais und Tomaten ernähren dieselbe Raupe (einen Eulenfalter), sodass sie sie nebeneinander aneinander weitergeben.",
+          "pl": "Kukurydza i pomidory żywią tę samą gąsienicę (sówkę), więc rosnąc obok siebie, przekazują ją sobie nawzajem."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "sweetcorn",
+      "b": "winter_squash",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Squash leaves under sweetcorn work as a living mulch — fewer weeds, less watering.",
+          "cs": "Dýňové listy pod kukuřicí fungují jako živý mulč — méně plevele, méně zálivky.",
+          "sk": "Tekvicové listy pod kukuricou fungujú ako živý mulč — menej buriny, menej polievania.",
+          "de": "Kürbisblätter unter dem Mais wirken wie lebender Mulch — weniger Unkraut, weniger Gießen.",
+          "pl": "Liście dyni pod kukurydzą działają jak żywa ściółka — mniej chwastów, mniej podlewania."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    },
+    {
+      "a": "thyme",
+      "b": "white_cabbage",
+      "claim": {
+        "value": { "relation": "companion", "basis": "traditional", "severity": "info" },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Thyme beside cabbage repels caterpillars and tolerates the dry edge of the bed.",
+          "cs": "Tymián u zelí odpuzuje housenky a snese sucho na kraji záhonu.",
+          "sk": "Tymian pri kapuste odpudzuje húsenice a znesie sucho na kraji záhona.",
+          "de": "Thymian beim Kohl vertreibt Raupen und verträgt die Trockenheit am Beetrand.",
+          "pl": "Tymianek przy kapuście odstrasza gąsienice i znosi suszę na skraju grządki."
+        },
+        "source": "lwg-2104-mischkultur",
+        "drafted": true
+      }
+    }
+  ]
+}

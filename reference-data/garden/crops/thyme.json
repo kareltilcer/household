@@ -1,0 +1,84 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "thyme",
+  "name": {
+    "value": { "en": "Thyme", "cs": "Tymián", "sk": "Tymian", "de": "Thymian", "pl": "Tymianek" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Thymus vulgaris", "source": "powo", "drafted": true },
+  "family": { "value": "lamiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "low", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 8 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0.2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 30, "plant_cm": 25 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 12, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 12, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 10, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -70, "to_days": -35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -14, "to_days": 28 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 125 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["prick_out", "harden_off"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 20, "per_plant": 2 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 10 },
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "frozen", "shelf_life_days": 180 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": [], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["root_rot"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Give it lean, free-draining soil in full sun and no feed. Cut back by a third after flowering, never into bare wood, and replace the plants after four or five years, when they turn woody and open in the middle.",
+      "cs": "Dopřejte mu chudou, propustnou půdu na plném slunci a nehnojte. Po odkvětu zkraťte o třetinu, nikdy ne do holého dřeva, a po čtyřech až pěti letech rostliny obnovte, protože dřevnatějí a uprostřed vyholují.",
+      "sk": "Doprajte mu chudobnú, priepustnú pôdu na plnom slnku a nehnojte. Po odkvitnutí skráťte o tretinu, nikdy nie do holého dreva, a po štyroch až piatich rokoch rastliny obnovte, pretože drevnatejú a v strede vyholujú.",
+      "de": "Mageren, durchlässigen Boden in voller Sonne geben und nicht düngen. Nach der Blüte um ein Drittel zurückschneiden, nie ins kahle Holz, und die Pflanzen nach vier bis fünf Jahren ersetzen, wenn sie verholzen und innen verkahlen.",
+      "pl": "Zapewnij mu ubogą, przepuszczalną glebę w pełnym słońcu i nie nawoź. Po kwitnieniu przytnij o jedną trzecią, nigdy do gołego drewna, a po czterech lub pięciu latach wymień rośliny, bo drewnieją i ogałacają się w środku."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

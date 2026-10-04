@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "grape",
+  "name": {
+    "value": {
+      "en": "Grape",
+      "cs": "Réva vinná",
+      "sk": "Vinič",
+      "de": "Weinrebe",
+      "pl": "Winorośl"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Vitis vinifera", "source": "powo", "drafted": true },
+  "family": { "value": "vitaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "fruit", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "low", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 5, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 200, "plant_cm": 120 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 0.4, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -35, "to_days": 0 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": -40, "to_days": 15 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["support", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1.5, "per_plant": 4 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 14 },
+      { "method": "cool_store", "shelf_life_days": 45 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["wasp", "bird", "spotted_wing_drosophila"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["downy_mildew", "powdery_mildew", "grey_mould"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Plant against a warm, sunny wall or on wires, with the graft union a few centimetres above the soil. Prune hard in late winter, before the sap rises, and thin the leaves around the bunches in summer. Mildew-resistant varieties need hardly any spraying.",
+      "cs": "Sázejte k teplé slunné zdi nebo k drátěnce, s místem štěpování několik centimetrů nad zemí. Řežte hluboko koncem zimy, než začne proudit míza, a v létě odstraňte část listů kolem hroznů. Odrůdy odolné padlí a plísni se téměř nemusí stříkat.",
+      "sk": "Sádzajte k teplému slnečnému múru alebo k drôtenke, s miestom štepenia pár centimetrov nad zemou. Režte hlboko koncom zimy, kým nezačne prúdiť miazga, a v lete odstráňte časť listov okolo strapcov. Odrody odolné proti hubovým chorobám takmer netreba striekať.",
+      "de": "An eine warme, sonnige Wand oder an Drähte pflanzen, die Veredlungsstelle einige Zentimeter über dem Boden. Im Spätwinter vor dem Saftanstieg kräftig schneiden und im Sommer das Laub um die Trauben auslichten. Pilzfeste Sorten brauchen kaum Spritzungen.",
+      "pl": "Sadź przy ciepłej, słonecznej ścianie lub przy drutach, z miejscem szczepienia kilka centymetrów nad ziemią. Tnij mocno pod koniec zimy, zanim ruszą soki, a latem przerzedź liście wokół gron. Odmiany odporne na mączniaki prawie nie wymagają oprysków."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

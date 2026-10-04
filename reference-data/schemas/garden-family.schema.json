@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A botanical family",
+  "description": "The family a crop belongs to, which rotation and the family rules join on (PRD 11, FR-GA18 C2, C3 and C6, FR-GA21). One file per family, garden/families/<key>.json.",
+  "type": "object",
+  "required": ["key", "name", "name_latin"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "key": {
+      "description": "The family's key, its Latin name in lower case, and the file's name: the record's key, the one field without a source.",
+      "$ref": "defs.schema.json#/$defs/key"
+    },
+    "name": {
+      "description": "The family's everyday name in each language, as a gardener says it.",
+      "$ref": "defs.schema.json#/$defs/localizedField"
+    },
+    "name_latin": {
+      "description": "The family's botanical name, the same in every language.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "type": "string", "pattern": "^[A-Z][a-z]+aceae$" } }
+    }
+  },
+  "additionalProperties": false
+}

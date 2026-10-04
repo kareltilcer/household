@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-family.schema.json",
+  "key": "tropaeolaceae",
+  "name": {
+    "value": {
+      "en": "Nasturtium family",
+      "cs": "Lichořeřišnicovité",
+      "sk": "Kapucínkovité",
+      "de": "Kapuzinerkressengewächse",
+      "pl": "Nasturcjowate"
+    },
+    "source": "wikidata",
+    "drafted": true
+  },
+  "name_latin": { "value": "Tropaeolaceae", "source": "powo", "drafted": true }
+}

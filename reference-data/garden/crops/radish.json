@@ -1,0 +1,82 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "radish",
+  "name": {
+    "value": {
+      "en": "Radish",
+      "cs": "Ředkvička",
+      "sk": "Reďkovka",
+      "de": "Radieschen",
+      "pl": "Rzodkiewka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Raphanus sativus var. sativus", "source": "powo", "drafted": true },
+  "family": { "value": "brassicaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "high", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 15, "plant_cm": 4 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 167, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 4, "max": 10 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 25, "max": 40 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -60, "to_days": 0 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": -25, "to_days": 35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["pest_check"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": { "value": { "per_m2": 10 }, "source": "vt-planting-guide", "drafted": true },
+  "storage": {
+    "value": [{ "method": "fresh", "shelf_life_days": 7 }],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["flea_beetle", "cabbage_root_fly", "slug"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": { "value": ["bolting", "downy_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Sow thinly, a short row every ten days, and never let the bed dry out: thirst and crowding give hot, pithy roots. Sowings in the long days of early summer run to seed, so start again in late summer.",
+      "cs": "Vysévejte řídce, krátký řádek každých deset dní, a záhon nenechte vyschnout: v suchu a v hustém porostu jsou bulvičky pálivé a houbovité. Výsevy za dlouhých dnů začátkem léta vybíhají do květu, pokračujte proto až koncem léta.",
+      "sk": "Vysievajte riedko, krátky riadok každých desať dní, a záhon nenechajte vyschnúť: v suchu a v hustom poraste sú buľvičky štipľavé a špongiovité. Výsevy za dlhých dní začiatkom leta vybiehajú do kvetu, pokračujte preto až koncom leta.",
+      "de": "Dünn säen, alle zehn Tage eine kurze Reihe, und das Beet nie austrocknen lassen: Trockenheit und zu dichter Stand machen die Knollen scharf und pelzig. Aussaaten im Langtag des Frühsommers schossen, daher erst im Spätsommer weitersäen.",
+      "pl": "Siej rzadko, krótki rządek co dziesięć dni, i nie dopuszczaj do przesuszenia grządki: susza i zbyt gęsty siew dają ostre, sparciałe zgrubienia. Siewy przy długim dniu na początku lata wybijają w pędy kwiatostanowe, wróć więc do nich późnym latem."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

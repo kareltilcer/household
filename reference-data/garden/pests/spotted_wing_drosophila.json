@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "spotted_wing_drosophila",
+  "name": {
+    "value": {
+      "en": "Spotted wing drosophila",
+      "cs": "Octomilka japonská",
+      "sk": "Drozofila japonská",
+      "de": "Kirschessigfliege",
+      "pl": "Muszka plamoskrzydła"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Drosophila suzukii", "source": "eppo-gd", "drafted": true }
+}

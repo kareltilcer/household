@@ -1,0 +1,75 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "sorrel",
+  "name": {
+    "value": { "en": "Sorrel", "cs": "Šťovík", "sk": "Štiav", "de": "Sauerampfer", "pl": "Szczaw" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Rumex acetosa", "source": "powo", "drafted": true },
+  "family": { "value": "polygonaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "partial", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 5.5, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 30, "plant_cm": 20 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 16, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 7, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -55, "to_days": -15 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": -30, "to_days": 140 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 20, "per_plant": 1.2 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 3 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["slug", "aphid"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["downy_mildew", "rust"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Cut out the flower stems as they appear, or the leaves turn tough and the plant seeds itself everywhere. Pick young leaves; divide and replant the clumps every three or four years.",
+      "cs": "Květní lodyhy vyřezávejte hned, jak se objeví, jinak listy zhrubnou a rostlina se všude vysemení. Sklízejte mladé listy; trsy po třech až čtyřech letech rozdělte a přesaďte.",
+      "sk": "Kvetné stonky vyrezávajte hneď, ako sa objavia, inak listy zhrubnú a rastlina sa všade vysemení. Zberajte mladé listy; trsy po troch až štyroch rokoch rozdeľte a presaďte.",
+      "de": "Blütenstängel sofort herausschneiden, sonst werden die Blätter derb und die Pflanze sät sich überall aus. Junge Blätter ernten; die Horste alle drei bis vier Jahre teilen und umpflanzen.",
+      "pl": "Wycinaj pędy kwiatostanowe, gdy tylko się pojawią, inaczej liście twardnieją, a roślina wszędzie się rozsiewa. Zbieraj młode liście; kępy dziel i przesadzaj co trzy, cztery lata."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

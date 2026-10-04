@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "strawberry_blossom_weevil",
+  "name": {
+    "value": {
+      "en": "Strawberry blossom weevil",
+      "cs": "Květopas jahodníkový",
+      "sk": "Kvetovka jahodová",
+      "de": "Erdbeerblütenstecher",
+      "pl": "Kwieciak malinowiec"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Anthonomus rubi", "source": "eppo-gd", "drafted": true }
+}

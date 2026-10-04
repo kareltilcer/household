@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "cabbage_root_fly",
+  "name": {
+    "value": {
+      "en": "Cabbage root fly",
+      "cs": "Květilka zelná",
+      "sk": "Kvetárka kapustová",
+      "de": "Kleine Kohlfliege",
+      "pl": "Śmietka kapuściana"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Delia radicum", "source": "eppo-gd", "drafted": true }
+}

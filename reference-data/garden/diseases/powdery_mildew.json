@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "powdery_mildew",
+  "name": {
+    "value": {
+      "en": "Powdery mildew",
+      "cs": "Padlí",
+      "sk": "Múčnatka",
+      "de": "Echter Mehltau",
+      "pl": "Mączniak prawdziwy"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Erysiphales", "source": "eppo-gd", "drafted": true }
+}

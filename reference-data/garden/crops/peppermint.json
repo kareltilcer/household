@@ -1,0 +1,74 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "peppermint",
+  "name": {
+    "value": {
+      "en": "Peppermint",
+      "cs": "Máta peprná",
+      "sk": "Mäta pieporná",
+      "de": "Pfefferminze",
+      "pl": "Mięta pieprzowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Mentha × piperita", "source": "powo", "drafted": true },
+  "family": { "value": "lamiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "partial", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "high", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 40, "plant_cm": 30 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 8, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -30, "to_days": 15 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 10, "to_days": 130 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 30, "per_plant": 4 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "frozen", "shelf_life_days": 180 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["rust", "powdery_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "It spreads by runners, so plant it in a sunk bottomless pot or a bed of its own. It does not come true from seed: divide the roots instead. Cut to the ground after flowering or when rust shows, and it soon regrows.",
+      "cs": "Rozrůstá se oddenky, proto ji sázejte do zapuštěné nádoby bez dna nebo na vlastní záhon. Ze semen pravá máta peprná nevyroste, dělte proto trsy. Po odkvětu nebo při výskytu rzi ji seřízněte u země, rychle obrazí.",
+      "sk": "Rozrastá sa podzemkami, preto ju sádzajte do zapustenej nádoby bez dna alebo na vlastný záhon. Zo semien pravá mäta pieporná nevyrastie, deľte preto trsy. Po odkvitnutí alebo pri výskyte hrdze ju zrežte pri zemi, rýchlo obrastie.",
+      "de": "Sie wuchert durch Ausläufer, daher in einen eingesenkten Topf ohne Boden oder auf ein eigenes Beet pflanzen. Aus Samen fällt sie nicht echt, also Stöcke teilen. Nach der Blüte oder bei Rost bodennah abschneiden, sie treibt rasch wieder aus.",
+      "pl": "Rozrasta się rozłogami, dlatego sadź ją we wkopanej donicy bez dna albo na osobnej grządce. Z nasion nie powtarza cech, więc dziel kępy. Po kwitnieniu lub gdy pojawi się rdza, zetnij ją przy ziemi, szybko odrośnie."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

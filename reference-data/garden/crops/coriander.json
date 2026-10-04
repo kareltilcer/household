@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "coriander",
+  "name": {
+    "value": {
+      "en": "Coriander",
+      "cs": "Koriandr",
+      "sk": "Koriander",
+      "de": "Koriander",
+      "pl": "Kolendra"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Coriandrum sativum", "source": "powo", "drafted": true },
+  "family": { "value": "apiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "light", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "partial", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1.5, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 25, "plant_cm": 10 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 40, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 8, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 7, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 40, "max": 60 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -30, "to_days": 50 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 15, "to_days": 110 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 15, "per_plant": 0.4 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 180 },
+      { "method": "dried", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid", "slug"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["bolting", "powdery_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "It bolts quickly in heat and drought: sow thinly in place every three weeks and keep it watered. Let a few plants flower and ripen, since the seed is the spice.",
+      "cs": "V horku a suchu rychle vybíhá do květu: vysévejte řídce přímo na místo každé tři týdny a zalévejte. Několik rostlin nechte vykvést a dozrát, semena jsou kořením.",
+      "sk": "V horúčave a suchu rýchlo vybieha do kvetu: vysievajte riedko priamo na miesto každé tri týždne a polievajte. Niekoľko rastlín nechajte vykvitnúť a dozrieť, semená sú korením.",
+      "de": "Bei Hitze und Trockenheit schießt er schnell: alle drei Wochen dünn an Ort und Stelle säen und feucht halten. Einige Pflanzen blühen und ausreifen lassen, die Samen sind das Gewürz.",
+      "pl": "W upale i suszy szybko wybija w pędy kwiatostanowe: siej rzadko wprost na miejsce co trzy tygodnie i podlewaj. Kilka roślin zostaw do kwitnienia i dojrzenia, bo nasiona są przyprawą."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

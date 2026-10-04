@@ -1,0 +1,103 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "savoy_cabbage",
+  "name": {
+    "value": {
+      "en": "Savoy cabbage",
+      "cs": "Kapusta hlávková",
+      "sk": "Kel hlávkový",
+      "de": "Wirsing",
+      "pl": "Kapusta włoska"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Brassica oleracea var. sabauda", "source": "powo", "drafted": true },
+  "family": { "value": "brassicaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "high", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 50, "plant_cm": 50 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 4, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 5, "max": 10 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 85, "max": 130 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -45, "to_days": -15 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": -45, "to_days": 60 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["harden_off", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 4, "per_plant": 1.2 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 14 },
+      { "method": "cool_store", "shelf_life_days": 60 },
+      { "method": "frozen", "shelf_life_days": 300 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["cabbage_white", "cabbage_root_fly", "cabbage_aphid", "whitefly", "flea_beetle"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["clubroot", "black_rot", "downy_mildew"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "The hardiest heading cabbage: late varieties stand frost and are cut straight from the bed into early winter. That suits them better than the cellar, where the loose, crinkled heads keep for a much shorter time than white cabbage.",
+      "cs": "Nejotužilejší z hlávkových košťálovin: pozdní odrůdy snesou mráz a sklízejí se přímo ze záhonu až do začátku zimy. To jim svědčí víc než sklep, kde volnější kadeřavé hlávky vydrží mnohem kratší dobu než bílé zelí.",
+      "sk": "Najotužilejšia z hlávkových hlúbovín: neskoré odrody znesú mráz a zberajú sa priamo zo záhona až do začiatku zimy. To im svedčí viac než pivnica, kde voľnejšie kučeravé hlávky vydržia oveľa kratšie než biela kapusta.",
+      "de": "Der robusteste Kopfkohl: Späte Sorten vertragen Frost und werden bis in den Frühwinter direkt vom Beet geerntet. Das bekommt ihnen besser als der Keller, wo die lockeren, krausen Köpfe viel kürzer halten als Weißkohl.",
+      "pl": "Najodporniejsza z kapust głowiastych: późne odmiany znoszą mróz i ścina się je prosto z grządki aż do początku zimy. Służy im to lepiej niż piwnica, gdzie luźne, karbowane główki wytrzymują znacznie krócej niż kapusta biała."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "onion_fly",
+  "name": {
+    "value": {
+      "en": "Onion fly",
+      "cs": "Květilka cibulová",
+      "sk": "Kvetárka cibuľová",
+      "de": "Zwiebelfliege",
+      "pl": "Śmietka cebulanka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Delia antiqua", "source": "eppo-gd", "drafted": true }
+}

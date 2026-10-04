@@ -1,0 +1,89 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "pea",
+  "name": {
+    "value": { "en": "Pea", "cs": "Hrách", "sk": "Hrach", "de": "Erbse", "pl": "Groch" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Pisum sativum", "source": "powo", "drafted": true },
+  "family": { "value": "fabaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "fixer", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 4, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 40, "plant_cm": 5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 50, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 4, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 7, "max": 20 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 70, "max": 95 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -60, "to_days": -21 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 20, "to_days": 60 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["support"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1, "per_plant": 0.02 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 3 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["pea_moth", "pea_weevil", "aphid", "bird"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["powdery_mildew", "downy_mildew", "fusarium_wilt"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Sow as soon as the soil can be worked, since peas stop setting pods in summer heat, and put in twiggy sticks or netting at once. Pick often while the pods are young, and leave the roots in the soil when clearing the row.",
+      "cs": "Vysévejte, jakmile lze půdu zpracovat, v letním horku hrách přestává nasazovat lusky, a hned k němu dejte větvičky nebo síť. Sklízejte často, dokud jsou lusky mladé, a při klizení záhonu nechte kořeny v půdě.",
+      "sk": "Vysievajte, len čo možno pôdu obrábať, v letnej horúčave hrach prestáva nasadzovať struky, a hneď k nemu dajte vetvičky alebo sieť. Zberajte často, kým sú struky mladé, a pri vypratávaní záhona nechajte korene v pôde.",
+      "de": "Säen, sobald sich der Boden bearbeiten lässt, denn in der Sommerhitze setzen Erbsen keine Hülsen mehr an, und gleich Reisig oder ein Netz als Rankhilfe geben. Oft und jung pflücken und beim Abräumen die Wurzeln im Boden lassen.",
+      "pl": "Siej, gdy tylko da się uprawiać glebę, bo w letnim upale groch przestaje zawiązywać strąki, i od razu daj gałązki lub siatkę. Zbieraj często, póki strąki są młode, a przy sprzątaniu grządki zostaw korzenie w glebie."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

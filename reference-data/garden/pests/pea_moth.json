@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "pea_moth",
+  "name": {
+    "value": {
+      "en": "Pea moth",
+      "cs": "Obaleč hrachový",
+      "sk": "Obaľovač hrachový",
+      "de": "Erbsenwickler",
+      "pl": "Pachówka strąkóweczka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Cydia nigricana", "source": "eppo-gd", "drafted": true }
+}

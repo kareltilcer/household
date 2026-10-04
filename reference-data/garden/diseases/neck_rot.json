@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "neck_rot",
+  "name": {
+    "value": {
+      "en": "Neck rot",
+      "cs": "Krčková hniloba cibule",
+      "sk": "Hniloba krčka cibule",
+      "de": "Zwiebelhalsfäule",
+      "pl": "Zgnilizna szyjki cebuli"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Botrytis allii", "source": "eppo-gd", "drafted": true }
+}

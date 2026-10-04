@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A pest or a disease",
+  "description": "What commonly troubles a crop, named once and in every language, so that a crop lists keys rather than five translations of the same name. One file each: a pest in garden/pests/<key>.json, a disease or a disorder in garden/diseases/<key>.json.",
+  "type": "object",
+  "required": ["key", "name"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "key": {
+      "description": "The record's key and the file's name, the one field without a source.",
+      "$ref": "defs.schema.json#/$defs/key"
+    },
+    "name": {
+      "description": "The everyday name in each language.",
+      "$ref": "defs.schema.json#/$defs/localizedField"
+    },
+    "name_latin": {
+      "description": "The scientific name of the organism, or of the group of them, the same in every language. Absent for a disorder no organism causes.",
+      "$ref": "defs.schema.json#/$defs/textField"
+    }
+  },
+  "additionalProperties": false
+}

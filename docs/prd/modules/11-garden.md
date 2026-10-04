@@ -41,7 +41,10 @@ seasons; it does not delete them, and the data returns intact on the way back up
    **Device location is never read** ([05](../05-privacy-and-compliance.md) §2). This resolves the
    climate profile: last-spring-frost and first-autumn-frost dates, a hardiness zone, and a growing-
    season length, from a bundled climate dataset. All three are shown and all three are editable,
-   because a member knows their own frost pocket better than a dataset does.
+   because a member knows their own frost pocket better than a dataset does. **A frost date is
+   the one-year-in-ten date of a night at or below 2 °C** (**D-149**): a conservative date, from
+   which a tender crop may go out. The dataset is computed from NASA POWER, by town, for the five
+   countries (**D-150**), and holds the altitude its values hold at.
 3. **"What do you grow?"** — a search over the curated catalog with the region's common crops
    offered first. Chosen crops become the household's shortlist; the whole catalog stays searchable.
 4. **"Your growing space"** — for `pots`, a list of containers; for `beds` and `plot`, beds with
@@ -63,10 +66,10 @@ the timings are Czech-climate — wrong in Bavaria and absurd in Andalusia.
 |---|---|
 | **Scope at launch** | ~300 crops covering the vegetables, herbs, soft fruit and common flowers grown in Central and Northern Europe |
 | **Languages** | Every supported UI language, per crop and per variety, plus the Latin binomial as the stable identity |
-| **Timings** | Expressed **relative to the local frost dates and hardiness zone**, never as absolute calendar weeks — `sow_indoor: last_frost − 6 weeks`, `transplant: last_frost + 1 week`, `direct_sow: soil ≥ 10 °C or last_frost − 2 weeks` |
-| **Content per crop** | Family (drives rotation), hardiness class (drives frost logic), feeder class, root depth, sun, water, soil pH, rotation break years, spacing, plants per m², germination temperature and days, days to maturity, the four timing windows, harvest unit, expected yield per m² and per plant, storage methods and shelf life, common pests and diseases, companion and antagonist relationships, and care notes |
+| **Timings** | Expressed **relative to the local frost dates and hardiness zone**, never as absolute calendar weeks — `sow_indoor: last_frost − 6 weeks`, `transplant: last_frost + 1 week`, `direct_sow: soil ≥ 10 °C or last_frost − 2 weeks`. A window is a span of days from the last spring frost, the first autumn frost, or the first autumn frost of the year before the harvest, and a crop has one cropping: four windows (**D-151**). The soil a seed waits for is the crop's germination temperature |
+| **Content per crop** | Family (drives rotation), hardiness class (drives frost logic), feeder class, root depth, sun, water, soil pH, rotation break years, spacing, plants per m², germination temperature and days, days to maturity, the four timing windows, harvest unit, expected yield per m² and per plant, storage methods and shelf life, common pests and diseases, companion and antagonist relationships, and care notes. Also what it is grown as, for how long and from what (seed, or a part of the plant), and the care tasks it calls for, which are what task generation reads (FR-GA12). The source format is `reference-data/garden` ([ADR 0023](../../adr/0023-the-crop-catalogs-source-the-reference-set-hook-and-the-climate-dataset.md)) |
 | **Versioning** | The catalog is versioned. A household's data references a crop by stable id; a catalog update never silently changes a household's saved plan |
-| **Provenance** | Every field carries a source. Folklore and agronomy are distinguishable by looking, which `home` established and which matters more when the data is the platform's claim rather than the user's own |
+| **Provenance** | Every field carries a source. Folklore and agronomy are distinguishable by looking, which `home` established and which matters more when the data is the platform's claim rather than the user's own: a rule's claim is `agronomic` or `traditional`. A value drafted without an expert is flagged until one has checked it (PL-10) |
 
 **FR-GA1 — Household overrides.** A household may add its **own crops and varieties** and may
 override **any field** of a catalog crop for itself. Overrides are per household, survive catalog
@@ -226,8 +229,12 @@ deliberate answer to a garden with no signal, alongside the offline replica.
 `garden_rules`, `garden_check_dismissals`, `garden_weather_days`, `garden_crop_overrides`,
 `garden_varieties` (household-owned), `garden_photos` (document references).
 
-Global reference data: `crop_catalog`, `crop_catalog_varieties`, `crop_catalog_rules`,
-`crop_catalog_translations`, `climate_profiles`.
+Global reference data, Garden's set of `reference-data`: the crops with their varieties, the
+botanical families, the pests and diseases, the rules, and the climate profiles. A name is carried
+in every language on its own record, not in a translations table
+([ADR 0008](../../adr/0008-reference-data-pipeline.md)). The tables they load into are the
+module's (`crop_catalog`, `crop_catalog_varieties`, `crop_catalog_rules`, `climate_profiles` and
+those of the families and of the pests and diseases).
 
 ## Sync
 

@@ -1,0 +1,10 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "bird",
+  "name": {
+    "value": { "en": "Birds", "cs": "Ptáci", "sk": "Vtáky", "de": "Vögel", "pl": "Ptaki" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Aves", "source": "eppo-gd", "drafted": true }
+}

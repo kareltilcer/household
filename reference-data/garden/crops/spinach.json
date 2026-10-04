@@ -1,0 +1,75 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "spinach",
+  "name": {
+    "value": { "en": "Spinach", "cs": "Špenát", "sk": "Špenát", "de": "Spinat", "pl": "Szpinak" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Spinacia oleracea", "source": "powo", "drafted": true },
+  "family": { "value": "amaranthaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "partial", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 20, "plant_cm": 5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 100, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 4, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 6, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 40, "max": 60 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -65, "to_days": -25 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": -15, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": { "value": { "per_m2": 1.5 }, "source": "vt-planting-guide", "drafted": true },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 4 },
+      { "method": "frozen", "shelf_life_days": 300 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["slug", "aphid", "leaf_miner"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["downy_mildew", "bolting"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "A crop for the cool ends of the season: long days and heat send it to seed, so sow in early spring and again in late summer, when a late sowing overwinters under fleece. Go easy on nitrogen, which the leaves store as nitrate.",
+      "cs": "Plodina pro chladné okraje sezony: za dlouhých dnů a v horku vybíhá do květu, vysévejte proto brzy na jaře a znovu koncem léta, pozdní výsev přezimuje pod netkanou textilií. S dusíkem šetřete, listy ho ukládají jako dusičnany.",
+      "sk": "Plodina pre chladné okraje sezóny: za dlhých dní a v horúčave vybieha do kvetu, vysievajte preto skoro na jar a znova koncom leta, neskorý výsev prezimuje pod netkanou textíliou. S dusíkom šetrite, listy ho ukladajú ako dusičnany.",
+      "de": "Eine Kultur für die kühlen Ränder der Saison: Lange Tage und Hitze lassen ihn schossen, daher im zeitigen Frühjahr und wieder im Spätsommer säen; die späte Saat überwintert unter Vlies. Sparsam mit Stickstoff düngen, die Blätter speichern ihn als Nitrat.",
+      "pl": "Uprawa na chłodne krańce sezonu: długi dzień i upał powodują wybijanie w pędy kwiatostanowe, siej więc wczesną wiosną i ponownie późnym latem; późny siew zimuje pod włókniną. Oszczędnie nawoź azotem, bo liście gromadzą go jako azotany."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

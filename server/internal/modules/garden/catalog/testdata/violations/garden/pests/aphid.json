@@ -1,0 +1,17 @@
+{
+  "key": "aphid",
+  "name": {
+    "value": {
+      "en": "Aphids (en)",
+      "cs": "Aphids (cs)",
+      "sk": "Aphids (sk)",
+      "de": "Aphids (de)",
+      "pl": "Aphids (pl)"
+    },
+    "source": "book"
+  },
+  "name_latin": {
+    "value": "Aphididae",
+    "source": "book"
+  }
+}

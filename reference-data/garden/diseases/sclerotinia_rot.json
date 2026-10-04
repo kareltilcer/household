@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "sclerotinia_rot",
+  "name": {
+    "value": {
+      "en": "Sclerotinia rot",
+      "cs": "Hlízenka obecná",
+      "sk": "Biela hniloba (hľuzovka)",
+      "de": "Sklerotinia-Fäule",
+      "pl": "Zgnilizna twardzikowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Sclerotinia sclerotiorum", "source": "eppo-gd", "drafted": true }
+}

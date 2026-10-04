@@ -1,0 +1,95 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "climbing_bean",
+  "name": {
+    "value": {
+      "en": "Climbing French bean",
+      "cs": "Fazol tyčkový",
+      "sk": "Fazuľa tyčová",
+      "de": "Stangenbohne",
+      "pl": "Fasola tyczna"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Phaseolus vulgaris var. vulgaris", "source": "powo", "drafted": true },
+  "family": { "value": "fabaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "fixer", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 3, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 80, "plant_cm": 12 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 10, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 10, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 6, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 65, "max": 85 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 70, "to_days": 140 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["support"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 2.5, "per_plant": 0.25 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 5 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 },
+      { "method": "dried", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["black_bean_aphid", "bean_seed_fly", "slug", "spider_mite"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["halo_blight", "anthracnose", "rust", "mosaic_virus"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Put up poles or strings about two metres tall before sowing, and sow six to eight seeds around each pole. It crops later than dwarf beans but longer and more heavily from the same ground; keep picking so that it goes on flowering.",
+      "cs": "Před výsevem postavte tyče nebo provázky vysoké asi dva metry a ke každé tyči vysejte šest až osm semen. Plodí později než keříčkový fazol, ale déle a ze stejné plochy více; pravidelnou sklizní udržíte rostliny v květu.",
+      "sk": "Pred výsevom postavte tyče alebo povrázky vysoké asi dva metre a ku každej tyči vysejte šesť až osem semien. Rodí neskôr než kríčková fazuľa, ale dlhšie a z rovnakej plochy viac; pravidelným zberom udržíte rastliny v kvete.",
+      "de": "Vor der Aussaat etwa zwei Meter hohe Stangen oder Schnüre aufstellen und je Stange sechs bis acht Samen legen. Sie trägt später als Buschbohnen, aber länger und auf gleicher Fläche mehr; regelmäßiges Pflücken hält sie in Blüte.",
+      "pl": "Przed siewem ustaw tyczki lub sznurki o wysokości około dwóch metrów i przy każdej tyczce wysiej sześć do ośmiu nasion. Plonuje później niż fasola karłowa, ale dłużej i obficiej z tej samej powierzchni; regularny zbiór podtrzymuje kwitnienie."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

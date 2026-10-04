@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "pea_weevil",
+  "name": {
+    "value": {
+      "en": "Pea and bean weevil",
+      "cs": "Listopas čárkovaný",
+      "sk": "Listárik čiarkovaný",
+      "de": "Gestreifter Blattrandkäfer",
+      "pl": "Oprzędzik pręgowany"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Sitona lineatus", "source": "eppo-gd", "drafted": true }
+}

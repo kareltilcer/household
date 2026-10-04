@@ -1,0 +1,74 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "rhubarb",
+  "name": {
+    "value": {
+      "en": "Rhubarb",
+      "cs": "Rebarbora",
+      "sk": "Rebarbora",
+      "de": "Rhabarber",
+      "pl": "Rabarbar"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Rheum rhabarbarum", "source": "powo", "drafted": true },
+  "family": { "value": "polygonaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 5.5, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 5, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 100, "plant_cm": 100 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 1, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "transplant": {
+      "value": { "anchor": "previous_first_frost", "from_days": -15, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": -30, "to_days": 40 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["mulch"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 3, "per_plant": 3 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": [], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["crown_rot"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Plant in autumn or early spring with the buds just below the surface. Take nothing in the first year; pull the stalks rather than cut them, break out flower stems, and stop at midsummer so that the plant can recover.",
+      "cs": "Sázejte na podzim nebo časně zjara tak, aby pupeny byly těsně pod povrchem. První rok nesklízejte; řapíky vylamujte, neřežte, květní stvoly odstraňujte a kolem letního slunovratu sklizeň ukončete, aby rostlina zesílila.",
+      "sk": "Sádzajte na jeseň alebo skoro na jar tak, aby púčiky boli tesne pod povrchom. Prvý rok nezberajte; stopky vylamujte, nerežte, kvetné stonky odstraňujte a okolo letného slnovratu zber ukončite, aby rastlina zosilnela.",
+      "de": "Im Herbst oder zeitigen Frühjahr so pflanzen, dass die Knospen knapp unter der Oberfläche liegen. Im ersten Jahr nicht ernten; die Stiele herausdrehen statt schneiden, Blütenstiele ausbrechen und zur Sommersonnenwende aufhören, damit sich die Pflanze erholt.",
+      "pl": "Sadź jesienią lub wczesną wiosną tak, aby pąki były tuż pod powierzchnią. W pierwszym roku nie zbieraj; ogonki wyłamuj, a nie tnij, pędy kwiatostanowe usuwaj i zakończ zbiór około przesilenia letniego, aby roślina się wzmocniła."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

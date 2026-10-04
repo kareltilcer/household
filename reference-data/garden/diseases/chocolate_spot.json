@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "chocolate_spot",
+  "name": {
+    "value": {
+      "en": "Chocolate spot",
+      "cs": "Čokoládová skvrnitost bobu",
+      "sk": "Čokoládová škvrnitosť bôbu",
+      "de": "Schokoladenfleckenkrankheit",
+      "pl": "Czekoladowa plamistość bobu"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Botrytis fabae", "source": "eppo-gd", "drafted": true }
+}

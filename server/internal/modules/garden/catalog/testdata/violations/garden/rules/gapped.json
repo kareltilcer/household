@@ -1,0 +1,28 @@
+{
+  "scope": "family_pair",
+  "rules": [
+    {
+      "a": "apiaceae",
+      "b": "solanaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 3
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "apiaceae and solanaceae. (en)",
+          "cs": "apiaceae and solanaceae. (cs)",
+          "sk": "apiaceae and solanaceae. (sk)",
+          "de": "apiaceae and solanaceae. (de)",
+          "pl": "apiaceae and solanaceae. (pl)"
+        },
+        "source": "book"
+      }
+    }
+  ]
+}

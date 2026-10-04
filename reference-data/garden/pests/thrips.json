@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "thrips",
+  "name": {
+    "value": {
+      "en": "Thrips",
+      "cs": "Třásněnky",
+      "sk": "Strapky",
+      "de": "Thripse",
+      "pl": "Wciornastki"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Thysanoptera", "source": "eppo-gd", "drafted": true }
+}

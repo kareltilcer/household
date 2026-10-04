@@ -1,0 +1,381 @@
+{
+  "$schema": "../../schemas/garden-rules.schema.json",
+  "scope": "succession",
+  "rules": [
+    {
+      "a": "amaranthaceae",
+      "b": "amaranthaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 3
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Beet-family crops (beetroot, spinach, chard) pass leaf spot and beet cyst eelworm on to each other.",
+          "cs": "Laskavcovité (řepa, špenát, mangold) si předávají skvrnitost listů a háďátko řepné.",
+          "sk": "Láskavcovité (cvikla, špenát, mangold) si odovzdávajú škvrnitosť listov a háďatko repné.",
+          "de": "Fuchsschwanzgewächse (Rote Bete, Spinat, Mangold) geben Blattflecken und Rübenzystennematoden aneinander weiter.",
+          "pl": "Szarłatowate (burak, szpinak, boćwina) przekazują sobie plamistość liści i mątwika burakowego."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "amaryllidaceae",
+      "b": "amaryllidaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "error",
+          "min_years_gap": 3
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Alliums suffer from white rot, whose sclerotia survive in the soil for a very long time. Three years is the bare minimum.",
+          "cs": "Cibuloviny trpí bílou hnilobou, jejíž sklerocia přežívají v půdě velmi dlouho. Tři roky jsou nutné minimum.",
+          "sk": "Cibuľoviny trpia bielou hnilobou, ktorej skleróciá prežívajú v pôde veľmi dlho. Tri roky sú nutné minimum.",
+          "de": "Zwiebelgewächse leiden unter der Mehlkrankheit, deren Sklerotien sehr lange im Boden überdauern. Drei Jahre sind das unbedingte Minimum.",
+          "pl": "Warzywa cebulowe cierpią na białą zgniliznę, której sklerocja przeżywają w glebie bardzo długo. Trzy lata to niezbędne minimum."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "apiaceae",
+      "b": "apiaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 3
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Umbellifers grown after one another draw in carrot fly and powdery mildew. A three-year break is enough.",
+          "cs": "Miříkovité po sobě přitahují vrtuli mrkvovou a padlí. Tři roky pauzy stačí.",
+          "sk": "Mrkvovité po sebe priťahujú vrtivku mrkvovú a múčnatku. Tri roky prestávky stačia.",
+          "de": "Doldenblütler nach Doldenblütlern ziehen Möhrenfliege und Echten Mehltau an. Drei Jahre Pause genügen.",
+          "pl": "Selerowate uprawiane po sobie ściągają połyśnicę marchwiankę i mączniaka prawdziwego. Trzy lata przerwy wystarczą."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "asteraceae",
+      "b": "asteraceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 2
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Daisy-family crops grown after one another raise the pressure of lettuce downy mildew. A two-year break.",
+          "cs": "Hvězdnicovité po sobě zvyšují tlak plísně salátové. Dva roky pauzy.",
+          "sk": "Astrovité po sebe zvyšujú tlak plesne šalátovej. Dva roky prestávky.",
+          "de": "Korbblütler nach Korbblütlern erhöhen den Druck durch Falschen Mehltau am Salat. Zwei Jahre Pause.",
+          "pl": "Astrowate uprawiane po sobie zwiększają presję mączniaka rzekomego sałaty. Dwa lata przerwy."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "brassicaceae",
+      "b": "brassicaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "error",
+          "min_years_gap": 4
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Brassicas suffer from clubroot, which survives in the soil for years. The recommended break is four seasons.",
+          "cs": "Brukvovité trpí nádorovitostí, která v půdě vydrží roky. Doporučená pauza jsou čtyři sezóny.",
+          "sk": "Kapustovité trpia nádorovitosťou, ktorá v pôde vydrží roky. Odporúčaná prestávka sú štyri sezóny.",
+          "de": "Kreuzblütler leiden unter Kohlhernie, die sich jahrelang im Boden hält. Empfohlen ist eine Pause von vier Saisons.",
+          "pl": "Kapustowate cierpią na kiłę kapusty, która utrzymuje się w glebie latami. Zalecana przerwa to cztery sezony."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "caprifoliaceae",
+      "b": "caprifoliaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "info",
+          "min_years_gap": 2
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Lamb's lettuce, now classed with the honeysuckles in the honeysuckle family, raises downy mildew pressure when it follows itself.",
+          "cs": "Polníček, dnes řazený spolu se zimolezy mezi zimolezovité, po sobě zvyšuje tlak plísní.",
+          "sk": "Valeriánka, dnes radená spolu so zemolezmi medzi zemolezovité, po sebe zvyšuje tlak plesní.",
+          "de": "Feldsalat, heute zusammen mit den Heckenkirschen zu den Geißblattgewächsen gezählt, erhöht im Nachbau den Druck durch Falschen Mehltau.",
+          "pl": "Roszponka, dziś zaliczana wraz z wiciokrzewami do przewiertniowatych, uprawiana po sobie zwiększa presję mączniaka rzekomego."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "cucurbitaceae",
+      "b": "cucurbitaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 3
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Cucurbits grown after one another make powdery mildew and fusarium wilt worse. A three-year break.",
+          "cs": "Tykvovité po sobě zhoršují padlí a fuzáriové vadnutí. Tři roky pauzy.",
+          "sk": "Tekvicovité po sebe zhoršujú múčnatku a fuzáriové vädnutie. Tri roky prestávky.",
+          "de": "Kürbisgewächse nach Kürbisgewächsen verschlimmern Echten Mehltau und Fusarium-Welke. Drei Jahre Pause.",
+          "pl": "Dyniowate uprawiane po sobie nasilają mączniaka prawdziwego i więdnięcie fuzaryjne. Trzy lata przerwy."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "fabaceae",
+      "b": "fabaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 2
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Legumes pass fusarium on to each other, yet they also enrich the soil. A two-year break is plenty.",
+          "cs": "Bobovité si předávají fusariózu, ale půdu naopak obohacují. Dva roky pauzy jsou dost.",
+          "sk": "Bôbovité si odovzdávajú fuzariózu, ale pôdu naopak obohacujú. Dva roky prestávky stačia.",
+          "de": "Hülsenfrüchtler geben Fusarium aneinander weiter, reichern den Boden aber dafür an. Zwei Jahre Pause reichen aus.",
+          "pl": "Bobowate przekazują sobie fuzariozę, ale za to wzbogacają glebę. Dwa lata przerwy w zupełności wystarczą."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "grossulariaceae",
+      "b": "grossulariaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "info",
+          "min_years_gap": 2
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Currant-family bushes (currants, gooseberries) grow worse after one another because of replant disease.",
+          "cs": "Meruzalkovité (rybíz, angrešt) po sobě rostou hůř kvůli únavě půdy.",
+          "sk": "Egrešovité (ríbezle, egreše) po sebe rastú horšie pre únavu pôdy.",
+          "de": "Stachelbeergewächse (Johannisbeeren, Stachelbeeren) wachsen nacheinander wegen Bodenmüdigkeit schlechter.",
+          "pl": "Agrestowate (porzeczki, agrest) rosną po sobie gorzej z powodu zmęczenia gleby."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "lamiaceae",
+      "b": "lamiaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "traditional",
+          "severity": "info",
+          "min_years_gap": 2
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Herbs of the mint family put up with a shorter break too; two years is safe.",
+          "cs": "Hluchavkovité bylinky snesou i kratší pauzu, dva roky jsou bezpečné.",
+          "sk": "Hluchavkovité bylinky znesú aj kratšiu prestávku, dva roky sú bezpečné.",
+          "de": "Kräuter aus der Familie der Lippenblütler vertragen auch eine kürzere Pause, zwei Jahre sind sicher.",
+          "pl": "Zioła z rodziny jasnotowatych zniosą i krótszą przerwę, dwa lata są bezpieczne."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "poaceae",
+      "b": "poaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "info",
+          "min_years_gap": 2
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Cereals and sweetcorn grown after one another drain the nitrogen and attract corn rootworm.",
+          "cs": "Obiloviny a kukuřice po sobě vyčerpávají dusík a přitahují bázlivce.",
+          "sk": "Obilniny a kukurica po sebe vyčerpávajú dusík a priťahujú kukuričiara koreňového.",
+          "de": "Getreide und Mais nacheinander zehren den Stickstoff auf und ziehen den Maiswurzelbohrer an.",
+          "pl": "Zboża i kukurydza uprawiane po sobie wyczerpują azot i ściągają stonkę kukurydzianą."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "polygonaceae",
+      "b": "polygonaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "info",
+          "min_years_gap": 2
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Dock-family crops (sorrel, rhubarb) grown after one another exhaust the soil.",
+          "cs": "Rdesnovité (šťovík, reveň) po sobě vyčerpávají půdu.",
+          "sk": "Stavikrvovité (štiav, rebarbora) po sebe vyčerpávajú pôdu.",
+          "de": "Knöterichgewächse (Sauerampfer, Rhabarber) nacheinander laugen den Boden aus.",
+          "pl": "Rdestowate (szczaw, rabarbar) uprawiane po sobie wyczerpują glebę."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "potato",
+      "b": "tomato",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 4
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Tomatoes after potatoes meet the same soil-borne diseases and late blight, since both belong to the nightshade family.",
+          "cs": "Rajčata po bramborách narazí na stejné půdní choroby a plíseň bramborovou, protože obojí patří mezi lilkovité.",
+          "sk": "Rajčiaky po zemiakoch narazia na rovnaké pôdne choroby a pleseň zemiakovú, pretože oboje patria medzi ľuľkovité.",
+          "de": "Tomaten nach Kartoffeln treffen auf dieselben bodenbürtigen Krankheiten und die Kraut- und Braunfäule, denn beide gehören zu den Nachtschattengewächsen.",
+          "pl": "Pomidory po ziemniakach trafiają na te same choroby odglebowe i zarazę ziemniaka, bo jedne i drugie należą do psiankowatych."
+        },
+        "source": "eppo-gd",
+        "drafted": true
+      }
+    },
+    {
+      "a": "rosaceae",
+      "b": "rosaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "warn",
+          "min_years_gap": 3
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "The rose family (strawberries, fruit trees and bushes) suffers from replant disease — a new planting in the same spot is slower to establish.",
+          "cs": "Růžovité (jahody, ovocné dřeviny) trpí únavou půdy — nová výsadba na stejné místo se ujímá hůř.",
+          "sk": "Ružovité (jahody, ovocné dreviny) trpia únavou pôdy — nová výsadba na to isté miesto sa ujíma horšie.",
+          "de": "Rosengewächse (Erdbeeren, Obstgehölze) leiden unter Bodenmüdigkeit — eine Neupflanzung am selben Platz wächst schlechter an.",
+          "pl": "Różowate (truskawki, drzewa i krzewy owocowe) cierpią na zmęczenie gleby — nowe nasadzenie w tym samym miejscu przyjmuje się gorzej."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    },
+    {
+      "a": "solanaceae",
+      "b": "solanaceae",
+      "claim": {
+        "value": {
+          "relation": "succession",
+          "basis": "agronomic",
+          "severity": "error",
+          "min_years_gap": 4
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      },
+      "reason": {
+        "value": {
+          "en": "Nightshades pass late blight and eelworms on to each other through the soil. A four-year break is the minimum.",
+          "cs": "Lilkovité si v půdě předávají plíseň bramborovou a háďátka. Čtyři roky pauzy jsou minimum.",
+          "sk": "Ľuľkovité si v pôde odovzdávajú pleseň zemiakovú a háďatká. Štyri roky prestávky sú minimum.",
+          "de": "Nachtschattengewächse geben Kraut- und Knollenfäule und Nematoden über den Boden aneinander weiter. Vier Jahre Pause sind das Minimum.",
+          "pl": "Psiankowate przekazują sobie przez glebę zarazę ziemniaka i nicienie. Cztery lata przerwy to minimum."
+        },
+        "source": "rhs-crop-rotation",
+        "drafted": true
+      }
+    }
+  ]
+}

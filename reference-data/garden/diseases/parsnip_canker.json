@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "parsnip_canker",
+  "name": {
+    "value": {
+      "en": "Parsnip canker",
+      "cs": "Rakovina pastináku",
+      "sk": "Rakovina paštrnáka",
+      "de": "Pastinakenkrebs",
+      "pl": "Rak pasternaku"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Itersonilia pastinacae", "source": "eppo-gd", "drafted": true }
+}

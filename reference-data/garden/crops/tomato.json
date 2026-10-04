@@ -1,0 +1,152 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "tomato",
+  "name": {
+    "value": { "en": "Tomato", "cs": "Rajče", "sk": "Rajčiak", "de": "Tomate", "pl": "Pomidor" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Solanum lycopersicum", "source": "powo", "drafted": true },
+  "family": { "value": "solanaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "high", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 6.8 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 0.5, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 80, "plant_cm": 50 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 2.5, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 10, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 6, "max": 14 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 60, "max": 85 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -56, "to_days": -42 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 14 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 65, "to_days": 150 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["prick_out", "harden_off", "support", "mulch", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 5, "per_plant": 2.5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "canned", "shelf_life_days": 365 },
+      { "method": "dried", "shelf_life_days": 365 },
+      { "method": "frozen", "shelf_life_days": 300 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid", "whitefly", "spider_mite"], "source": "eppo-gd", "drafted": true },
+  "diseases": {
+    "value": ["late_blight", "blossom_end_rot", "grey_mould"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Pinch out the side shoots of cordon varieties and water at the base, evenly: wet leaves invite blight, and uneven watering blossom end rot.",
+      "cs": "U tyčkových odrůd vylamujte zálistky a zalévejte ke kořenům a pravidelně: mokré listy lákají plíseň a nepravidelná zálivka způsobuje suchou hnilobu špiček plodů.",
+      "sk": "Pri kolíkových odrodách vylamujte zálistky a polievajte ku koreňom a pravidelne: mokré listy lákajú pleseň a nepravidelná zálievka spôsobuje suchú hnilobu plodov.",
+      "de": "Bei Stabtomaten die Seitentriebe ausgeizen und gleichmäßig am Fuß gießen: Nasse Blätter fördern die Krautfäule, unregelmäßiges Gießen die Blütenendfäule.",
+      "pl": "U odmian palikowych usuwaj pędy boczne i podlewaj równomiernie przy korzeniach: mokre liście sprzyjają zarazie, a nierówne podlewanie suchej zgniliźnie wierzchołkowej."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "varieties": [
+    {
+      "key": "black_krim",
+      "name": { "value": "Black Krim", "source": "eu-variety-catalogue", "drafted": true },
+      "note": {
+        "value": {
+          "en": "A dark beefsteak, later and lower yielding than most.",
+          "cs": "Tmavé masité rajče, pozdnější a méně výnosné než většina odrůd.",
+          "sk": "Tmavý mäsitý rajčiak, neskorší a menej úrodný než väčšina odrôd.",
+          "de": "Dunkle Fleischtomate, später und weniger ertragreich als die meisten Sorten.",
+          "pl": "Ciemny pomidor mięsisty, późniejszy i mniej plenny niż większość odmian."
+        },
+        "source": "eu-variety-catalogue",
+        "drafted": true
+      },
+      "overrides": {
+        "days_to_maturity": {
+          "value": { "min": 80, "max": 85 },
+          "source": "eu-variety-catalogue",
+          "drafted": true
+        },
+        "yield": {
+          "value": { "per_m2": 3.8, "per_plant": 1.9 },
+          "source": "vt-planting-guide",
+          "drafted": true
+        }
+      }
+    },
+    {
+      "key": "stupicke_polni_rane",
+      "name": { "value": "Stupické polní rané", "source": "eu-variety-catalogue", "drafted": true },
+      "note": {
+        "value": {
+          "en": "Early and cold-tolerant: it goes out a week sooner than other tomatoes.",
+          "cs": "Rané a odolné chladu: ven může o týden dřív než ostatní rajčata.",
+          "sk": "Skoré a odolné voči chladu: von môže o týždeň skôr než ostatné rajčiaky.",
+          "de": "Früh und kältetolerant: Sie kann eine Woche früher ins Freiland als andere Tomaten.",
+          "pl": "Wczesna i odporna na chłód: można ją sadzić tydzień wcześniej niż inne pomidory."
+        },
+        "source": "eu-variety-catalogue",
+        "drafted": true
+      },
+      "overrides": {
+        "days_to_maturity": {
+          "value": { "min": 58, "max": 64 },
+          "source": "eu-variety-catalogue",
+          "drafted": true
+        },
+        "windows": {
+          "transplant": {
+            "value": { "anchor": "last_frost", "from_days": -7, "to_days": 7 },
+            "source": "rhs-grow-your-own",
+            "drafted": true
+          }
+        }
+      }
+    }
+  ]
+}

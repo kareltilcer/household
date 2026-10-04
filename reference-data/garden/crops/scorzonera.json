@@ -1,0 +1,83 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "scorzonera",
+  "name": {
+    "value": {
+      "en": "Scorzonera",
+      "cs": "Černý kořen",
+      "sk": "Čierny koreň",
+      "de": "Schwarzwurzel",
+      "pl": "Skorzonera"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Scorzonera hispanica", "source": "powo", "drafted": true },
+  "family": { "value": "asteraceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 30, "plant_cm": 8 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 40, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 10, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 170, "max": 210 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -60, "to_days": -20 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": 0, "to_days": 150 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": { "value": { "per_m2": 2 }, "source": "vt-planting-guide", "drafted": true },
+  "storage": {
+    "value": [
+      { "method": "in_ground", "shelf_life_days": 150 },
+      { "method": "sand", "shelf_life_days": 120 },
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "frozen", "shelf_life_days": 300 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["vole"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["powdery_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Use fresh seed, which keeps for only a year or two, and sow early into deep, stone-free soil. Lift the brittle roots carefully from a trench dug alongside the row: a broken root bleeds its milky sap and does not keep.",
+      "cs": "Používejte čerstvé osivo, klíčivost si drží jen rok až dva, a vysévejte brzy do hluboké půdy bez kamenů. Křehké kořeny dobývejte opatrně z rýhy vyhloubené podél řádku: zlomený kořen roní mléčnou šťávu a nevydrží.",
+      "sk": "Používajte čerstvé osivo, klíčivosť si drží len rok až dva, a vysievajte zavčasu do hlbokej pôdy bez kameňov. Krehké korene vyberajte opatrne z ryhy vyhĺbenej pozdĺž riadka: zlomený koreň roní mliečnu šťavu a nevydrží.",
+      "de": "Frisches Saatgut verwenden, es bleibt nur ein bis zwei Jahre keimfähig, und früh in tiefen, steinfreien Boden säen. Die brüchigen Wurzeln vorsichtig aus einem Graben neben der Reihe heben: Gebrochene Wurzeln bluten Milchsaft und halten nicht.",
+      "pl": "Używaj świeżych nasion, bo kiełkują dobrze tylko rok lub dwa, i siej wcześnie w głęboką glebę bez kamieni. Kruche korzenie wykopuj ostrożnie z rowka wykopanego wzdłuż rzędu: złamany korzeń traci sok mleczny i źle się przechowuje."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

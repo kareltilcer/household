@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "downy_mildew",
+  "name": {
+    "value": {
+      "en": "Downy mildew",
+      "cs": "Plíseň (peronospora)",
+      "sk": "Peronospóra",
+      "de": "Falscher Mehltau",
+      "pl": "Mączniak rzekomy"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Peronosporaceae", "source": "eppo-gd", "drafted": true }
+}

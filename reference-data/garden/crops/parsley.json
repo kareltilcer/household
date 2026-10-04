@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "parsley",
+  "name": {
+    "value": {
+      "en": "Parsley",
+      "cs": "Petržel naťová",
+      "sk": "Petržlen vňaťový",
+      "de": "Blattpetersilie",
+      "pl": "Pietruszka naciowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Petroselinum crispum var. crispum", "source": "powo", "drafted": true },
+  "family": { "value": "apiaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "herb", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "partial", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 25, "plant_cm": 10 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 40, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 14, "max": 28 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 70, "max": 90 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -55, "to_days": 20 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": -110, "to_days": 45 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 20, "per_plant": 0.5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "dried", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["carrot_fly", "aphid", "slug"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["powdery_mildew", "downy_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Germination is slow, up to four weeks: keep the row moist and mark it with a few radish seeds. Cut the outer leaves first and leave the heart to regrow; it overwinters and gives a last cut in spring before it flowers.",
+      "cs": "Klíčí pomalu, až čtyři týdny: řádek udržujte vlhký a označte ho několika semeny ředkvičky. Sklízejte nejdřív vnější listy a srdéčko nechte dorůstat; přezimuje a na jaře dá poslední sklizeň, než vykvete.",
+      "sk": "Klíči pomaly, až štyri týždne: riadok udržiavajte vlhký a označte ho niekoľkými semenami reďkovky. Zberajte najprv vonkajšie listy a srdiečko nechajte dorastať; prezimuje a na jar dá posledný zber, kým vykvitne.",
+      "de": "Keimt langsam, bis zu vier Wochen: die Reihe feucht halten und mit einigen Radieschensamen markieren. Zuerst die äußeren Blätter schneiden und das Herz stehen lassen; sie überwintert und liefert im Frühjahr vor der Blüte einen letzten Schnitt.",
+      "pl": "Kiełkuje powoli, nawet cztery tygodnie: utrzymuj rząd wilgotny i oznacz go kilkoma nasionami rzodkiewki. Ścinaj najpierw zewnętrzne liście, a środek zostaw do odrastania; zimuje i wiosną daje ostatni zbiór, zanim zakwitnie."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

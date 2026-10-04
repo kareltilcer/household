@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "lime_chlorosis",
+  "name": {
+    "value": {
+      "en": "Lime-induced chlorosis",
+      "cs": "Chloróza z nadbytku vápníku",
+      "sk": "Chloróza z nadbytku vápnika",
+      "de": "Kalkchlorose",
+      "pl": "Chloroza wapniowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  }
+}

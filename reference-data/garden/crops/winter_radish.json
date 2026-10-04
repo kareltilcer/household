@@ -1,0 +1,90 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "winter_radish",
+  "name": {
+    "value": {
+      "en": "Winter radish",
+      "cs": "Ředkev černá",
+      "sk": "Reďkev čierna",
+      "de": "Winterrettich",
+      "pl": "Rzodkiew czarna"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Raphanus sativus var. niger", "source": "powo", "drafted": true },
+  "family": { "value": "brassicaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 30, "plant_cm": 15 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 22, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 4, "max": 8 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 80, "max": 100 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "first_frost", "from_days": -95, "to_days": -60 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": -15, "to_days": 30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["pest_check"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 3.5, "per_plant": 0.25 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "sand", "shelf_life_days": 150 },
+      { "method": "cool_store", "shelf_life_days": 120 },
+      { "method": "fresh", "shelf_life_days": 21 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["flea_beetle", "cabbage_root_fly", "slug"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": { "value": ["bolting", "downy_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Sow after midsummer, as earlier sowings run to seed, and thin to a hand's width. Lift before hard frost, twist off the leaves and store the roots in moist sand, where they keep through the winter.",
+      "cs": "Vysévejte až po slunovratu, dřívější výsevy vybíhají do květu, a vyjednoťte na šířku dlaně. Sklízejte před silnými mrazy, listy ukruťte a kořeny uložte do vlhkého písku, kde vydrží přes zimu.",
+      "sk": "Vysievajte až po slnovrate, skoršie výsevy vybiehajú do kvetu, a vyjednoťte na šírku dlane. Zberajte pred silnými mrazmi, listy ukrúťte a korene uložte do vlhkého piesku, kde vydržia cez zimu.",
+      "de": "Erst nach der Sommersonnenwende säen, frühere Aussaaten schossen, und auf Handbreite vereinzeln. Vor starkem Frost ernten, das Laub abdrehen und die Rettiche in feuchten Sand einschlagen, wo sie über den Winter halten.",
+      "pl": "Siej dopiero po przesileniu letnim, bo wcześniejsze siewy wybijają w pędy kwiatostanowe, i przerwij na szerokość dłoni. Zbieraj przed silnym mrozem, ukręć liście i przechowuj korzenie w wilgotnym piasku, gdzie wytrzymują przez zimę."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

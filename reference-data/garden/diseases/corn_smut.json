@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "corn_smut",
+  "name": {
+    "value": {
+      "en": "Corn smut",
+      "cs": "Sněť kukuřičná",
+      "sk": "Sneť kukuričná",
+      "de": "Maisbeulenbrand",
+      "pl": "Głownia guzowata kukurydzy"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Ustilago maydis", "source": "eppo-gd", "drafted": true }
+}

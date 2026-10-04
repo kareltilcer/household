@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "colorado_beetle",
+  "name": {
+    "value": {
+      "en": "Colorado potato beetle",
+      "cs": "Mandelinka bramborová",
+      "sk": "Pásavka zemiaková",
+      "de": "Kartoffelkäfer",
+      "pl": "Stonka ziemniaczana"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Leptinotarsa decemlineata", "source": "eppo-gd", "drafted": true }
+}

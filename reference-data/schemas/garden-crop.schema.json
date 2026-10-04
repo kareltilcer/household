@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A crop of the catalog",
+  "description": "What Household knows of a crop (PRD 11, D-66): its names in every language and its Latin name, what rotation and the frost logic read, how it is sown, spaced and timed, what it yields and how that keeps, and what troubles it. One file per crop, garden/crops/<key>.json, with the catalog's varieties of it. Every measure is metric, and every timing is a number of days from one of the household's frost dates: nothing here is a calendar date.",
+  "type": "object",
+  "required": [
+    "key",
+    "name",
+    "name_latin",
+    "family",
+    "plant_type",
+    "life_cycle",
+    "propagation",
+    "hardiness",
+    "feeder_class",
+    "root_depth",
+    "sun",
+    "water_need",
+    "soil_ph",
+    "rotation_break_years",
+    "spacing",
+    "windows",
+    "care_tasks",
+    "pests",
+    "diseases",
+    "care_notes"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "key": {
+      "description": "The crop's key, and the file's name: the record's key, the one field without a source. It is the crop's identity in the catalog and never changes once shipped: the rules and a household's plantings name the crop by it.",
+      "$ref": "defs.schema.json#/$defs/key"
+    },
+    "name": {
+      "description": "The crop's everyday name in each language.",
+      "$ref": "defs.schema.json#/$defs/localizedField"
+    },
+    "name_latin": {
+      "description": "The crop's botanical name, with the variety or the cultivar group where several crops are one species: the name that is the same in every language, and no other crop's.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "type": "string", "pattern": "^[A-Z][a-z]+( [×A-Za-z.'-]+)+$" } }
+    },
+    "family": {
+      "description": "The key of the crop's botanical family, a record of garden/families: what rotation and the family rules join on.",
+      "$ref": "defs.schema.json#/$defs/keyField"
+    },
+    "plant_type": {
+      "description": "What the crop is grown as.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": {
+        "value": { "enum": ["vegetable", "herb", "fruit", "flower", "green_manure"] }
+      }
+    },
+    "life_cycle": {
+      "description": "How long the crop stands as it is grown in a garden: a year, two, or many. A perennial keeps its place for years, so it has no days to maturity.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "enum": ["annual", "biennial", "perennial"] } }
+    },
+    "propagation": {
+      "description": "What the crop is usually started from: seed, or a part of the plant (a tuber, a clove, a set, a crown, a cane, a young plant). A crop started from seed has a germination temperature, days to germinate and a sowing depth.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "enum": ["seed", "vegetative"] } }
+    },
+    "hardiness": {
+      "description": "How the crop takes frost, which the frost warning reads (FR-GA8): tender is killed by any, half_hardy takes a light one, hardy stands through winter.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "enum": ["tender", "half_hardy", "hardy"] } }
+    },
+    "feeder_class": {
+      "description": "How much the crop takes from the soil, which the feeder succession check reads (FR-GA18 C8). A fixer adds nitrogen.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "enum": ["heavy", "medium", "light", "fixer"] } }
+    },
+    "root_depth": {
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "enum": ["shallow", "medium", "deep"] } }
+    },
+    "sun": {
+      "description": "The light the crop needs: full sun, partial shade, or shade.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "enum": ["full", "partial", "shade"] } }
+    },
+    "water_need": {
+      "description": "How much water the crop needs, which a watering cadence defaults from (FR-GA7).",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "enum": ["low", "medium", "high"] } }
+    },
+    "soil_ph": {
+      "description": "The range of soil pH the crop grows well in.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": {
+        "value": {
+          "type": "object",
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "number", "minimum": 3.5, "maximum": 9 },
+            "max": { "type": "number", "minimum": 3.5, "maximum": 9 }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "rotation_break_years": {
+      "description": "The years before the crop, or another of its family, returns to the same bed: for a perennial, once it is cleared.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "type": "integer", "minimum": 1, "maximum": 10 } }
+    },
+    "sow_depth_cm": { "$ref": "#/$defs/sowDepth" },
+    "spacing": { "$ref": "#/$defs/spacing" },
+    "plants_per_m2": { "$ref": "#/$defs/plantsPerM2" },
+    "germination_temp_c": {
+      "description": "The lowest soil temperature at which the seed germinates reliably, in °C: what a member waits for before sowing outdoors.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "type": "number", "minimum": 0, "maximum": 30 } }
+    },
+    "days_to_germinate": {
+      "description": "The days from sowing to emergence, at a temperature the seed likes.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "$ref": "#/$defs/dayRange" } }
+    },
+    "days_to_maturity": { "$ref": "#/$defs/daysToMaturity" },
+    "windows": {
+      "description": "When the crop is sown under cover, sown or planted where it grows, planted out, and harvested: its main cropping. A crop has a harvest window and at least one of the others; one sown under cover is planted out. A green manure's harvest window is when it is cut down and dug in.",
+      "type": "object",
+      "required": ["harvest"],
+      "properties": {
+        "sow_indoor": { "$ref": "#/$defs/windowField" },
+        "sow_direct": { "$ref": "#/$defs/windowField" },
+        "transplant": { "$ref": "#/$defs/windowField" },
+        "harvest": { "$ref": "#/$defs/windowField" }
+      },
+      "additionalProperties": false
+    },
+    "care_tasks": {
+      "description": "The work the crop calls for besides sowing, planting and harvesting, each the one reason its kind of task is ever generated (FR-GA12). Watering and weeding are never generated.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": {
+        "value": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["prick_out", "harden_off", "support", "mulch", "pest_check"] }
+        }
+      }
+    },
+    "harvest_unit": {
+      "description": "The unit a harvest of the crop is logged in, so that the form never asks (FR-GA14): kg, the platform's unit of that key, or a count of pieces or of bunches. Every crop has one, with a yield and a storage, but a green manure, which is dug in and never harvested and has none of the three.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "enum": ["kg", "piece", "bunch"] } }
+    },
+    "yield": { "$ref": "#/$defs/yield" },
+    "storage": { "$ref": "#/$defs/storage" },
+    "pests": {
+      "description": "The keys of the crop's common pests, records of garden/pests.",
+      "$ref": "#/$defs/keysField"
+    },
+    "diseases": {
+      "description": "The keys of the crop's common diseases and disorders, records of garden/diseases.",
+      "$ref": "#/$defs/keysField"
+    },
+    "care_notes": {
+      "description": "What a grower should know that the fields do not say, in each language: a sentence or two.",
+      "$ref": "defs.schema.json#/$defs/localizedField"
+    },
+    "varieties": {
+      "description": "The catalog's varieties of the crop (FR-GA2). A household's own are its own, and not here.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/variety" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "dayRange": {
+      "type": "object",
+      "required": ["min", "max"],
+      "properties": {
+        "min": { "type": "integer", "minimum": 1, "maximum": 1500 },
+        "max": { "type": "integer", "minimum": 1, "maximum": 1500 }
+      },
+      "additionalProperties": false
+    },
+    "keysField": {
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": {
+        "value": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "defs.schema.json#/$defs/key" }
+        }
+      }
+    },
+    "sowDepth": {
+      "description": "How deep the seed is sown, or the tuber, clove or set planted, in cm. A crop with a sowing window has one, and a crop that is only planted out has none.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "type": "number", "minimum": 0, "maximum": 30 } }
+    },
+    "spacing": {
+      "description": "The distance between rows and between plants in a row, in cm.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": {
+        "value": {
+          "type": "object",
+          "required": ["row_cm", "plant_cm"],
+          "properties": {
+            "row_cm": { "type": "number", "exclusiveMinimum": 0, "maximum": 500 },
+            "plant_cm": { "type": "number", "exclusiveMinimum": 0, "maximum": 500 }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "plantsPerM2": {
+      "description": "The plants a square metre holds at the crop's spacing, as a grower counts them. Absent, it is what the spacing gives. A variety that overrides the spacing of a crop that has one overrides it too.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "type": "number", "exclusiveMinimum": 0, "maximum": 2000 } }
+    },
+    "daysToMaturity": {
+      "description": "The days to the first harvest: from planting out for a crop that is planted out, from sowing otherwise. Absent for a perennial.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "$ref": "#/$defs/dayRange" } }
+    },
+    "window": {
+      "description": "A span of days counted from one of the household's frost dates (FR-GA3): negative before it, positive after. previous_first_frost is the first autumn frost of the year before the harvest, for a crop that is sown or planted in autumn and stands the winter (FR-GA17). There is no other anchor: a window is never a calendar date or a week of the year.",
+      "type": "object",
+      "required": ["anchor", "from_days", "to_days"],
+      "properties": {
+        "anchor": { "enum": ["last_frost", "first_frost", "previous_first_frost"] },
+        "from_days": { "type": "integer", "minimum": -366, "maximum": 366 },
+        "to_days": { "type": "integer", "minimum": -366, "maximum": 366 }
+      },
+      "additionalProperties": false
+    },
+    "windowField": {
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": { "value": { "$ref": "#/$defs/window" } }
+    },
+    "yield": {
+      "description": "What the crop is expected to give in a season, in its harvest unit: for each square metre, for each plant, or both.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": {
+        "value": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "per_m2": { "type": "number", "exclusiveMinimum": 0 },
+            "per_plant": { "type": "number", "exclusiveMinimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "storage": {
+      "description": "How the harvest keeps, the usual way first, and for how many days each way: what gives a stored item, and later a pantry item, its shelf life (FR-GA20). fresh is as harvested, in a refrigerator or a cool room; cool_store is a cellar, cool and humid; dry_store is cool, dry and airy; sand is in moist sand; in_ground is left in the bed and lifted as needed.",
+      "$ref": "defs.schema.json#/$defs/field",
+      "properties": {
+        "value": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["method", "shelf_life_days"],
+            "properties": {
+              "method": {
+                "enum": [
+                  "fresh",
+                  "cool_store",
+                  "dry_store",
+                  "sand",
+                  "in_ground",
+                  "frozen",
+                  "dried",
+                  "canned",
+                  "fermented"
+                ]
+              },
+              "shelf_life_days": { "type": "integer", "minimum": 1, "maximum": 1500 }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    "variety": {
+      "description": "A variety belongs to one crop and overrides only what differs: a field it does not name is the crop's (FR-GA2).",
+      "type": "object",
+      "required": ["key", "name", "overrides"],
+      "properties": {
+        "key": {
+          "description": "The variety's key, unique among its crop's: with the crop's key, its identity.",
+          "$ref": "defs.schema.json#/$defs/key"
+        },
+        "name": {
+          "description": "The variety's name, a proper name and the same in every language.",
+          "$ref": "defs.schema.json#/$defs/textField"
+        },
+        "note": {
+          "description": "What sets the variety apart, in each language.",
+          "$ref": "defs.schema.json#/$defs/localizedField"
+        },
+        "overrides": {
+          "description": "The timing, spacing, maturity, yield and storage fields in which the variety differs from its crop. A window it does not name is the crop's. The crop with these differences is held to what a crop is: a variety sown under cover is planted out, one with a sowing window has a sowing depth, its own or its crop's, a perennial's has no days to maturity, and a green manure's no yield and no storage.",
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "sow_depth_cm": { "$ref": "#/$defs/sowDepth" },
+            "spacing": { "$ref": "#/$defs/spacing" },
+            "plants_per_m2": { "$ref": "#/$defs/plantsPerM2" },
+            "days_to_maturity": { "$ref": "#/$defs/daysToMaturity" },
+            "windows": {
+              "type": "object",
+              "minProperties": 1,
+              "properties": {
+                "sow_indoor": { "$ref": "#/$defs/windowField" },
+                "sow_direct": { "$ref": "#/$defs/windowField" },
+                "transplant": { "$ref": "#/$defs/windowField" },
+                "harvest": { "$ref": "#/$defs/windowField" }
+              },
+              "additionalProperties": false
+            },
+            "yield": { "$ref": "#/$defs/yield" },
+            "storage": { "$ref": "#/$defs/storage" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

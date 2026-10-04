@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "asparagus_beetle",
+  "name": {
+    "value": {
+      "en": "Asparagus beetle",
+      "cs": "Chřestovníček obecný",
+      "sk": "Kohútik asparágusový",
+      "de": "Spargelhähnchen",
+      "pl": "Poskrzypka szparagowa"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Crioceris asparagi", "source": "eppo-gd", "drafted": true }
+}

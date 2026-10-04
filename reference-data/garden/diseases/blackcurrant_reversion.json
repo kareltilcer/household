@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "blackcurrant_reversion",
+  "name": {
+    "value": {
+      "en": "Blackcurrant reversion",
+      "cs": "Zvrat černého rybízu",
+      "sk": "Zvrat čiernej ríbezle",
+      "de": "Brennnesselblättrigkeit",
+      "pl": "Rewersja porzeczki czarnej"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Blackcurrant reversion virus", "source": "eppo-gd", "drafted": true }
+}

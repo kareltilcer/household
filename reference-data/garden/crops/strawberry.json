@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "strawberry",
+  "name": {
+    "value": {
+      "en": "Strawberry",
+      "cs": "Jahodník",
+      "sk": "Jahoda",
+      "de": "Erdbeere",
+      "pl": "Truskawka"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Fragaria × ananassa", "source": "powo", "drafted": true },
+  "family": { "value": "rosaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "fruit", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 5.5, "max": 6.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 70, "plant_cm": 30 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 5, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "transplant": {
+      "value": { "anchor": "previous_first_frost", "from_days": -60, "to_days": -30 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 20, "to_days": 55 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["mulch", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1.5, "per_plant": 0.4 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 3 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["slug", "bird", "vine_weevil", "strawberry_blossom_weevil", "spider_mite"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["grey_mould", "powdery_mildew", "verticillium_wilt", "crown_rot"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Plant in late summer with the crown at soil level, tuck straw under the fruit, and replace the bed with runners on fresh ground after three or four years.",
+      "cs": "Sázejte koncem léta se srdéčkem v úrovni půdy, pod plody podkládejte slámu a po třech až čtyřech letech založte záhon z odnoží na novém místě.",
+      "sk": "Sádzajte koncom leta so srdiečkom na úrovni pôdy, pod plody podkladajte slamu a po troch až štyroch rokoch založte záhon z poplazov na novom mieste.",
+      "de": "Im Spätsommer mit dem Herz auf Bodenhöhe pflanzen, Stroh unter die Früchte legen und das Beet nach drei bis vier Jahren mit Ausläufern an neuer Stelle erneuern.",
+      "pl": "Sadź późnym latem z sercem na poziomie gleby, podkładaj słomę pod owoce i po trzech lub czterech latach załóż grządkę z rozłogów w nowym miejscu."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

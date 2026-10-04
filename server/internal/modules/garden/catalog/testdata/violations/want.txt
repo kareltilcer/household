@@ -1,0 +1,95 @@
+# Every problem Read must report for the garden set beside this file, in order, all at once. Each
+# file breaks what its name says: beet.json, gapped.json and succession.json what the schemas
+# refuse, the rest what only the catalog's own checks see. crops/tomato.json is sound, and is
+# reported only for sharing its names with carrot.json, which is read first. The varieties of
+# clover.json and rhubarb.json are sound alone and make of their crop one the rules refuse.
+# rules/families.json holds family pairs, and rules/family_pair.json successions. crop/onion.json
+# is in a directory the catalog does not have.
+garden/climate/CZ.json#/places/1/key: is brno: a place's key begins with its country's code, cz_
+garden/climate/CZ.json#/places/2/key: cz_brno is also the key of the place at garden/climate/CZ.json#/places/0
+garden/climate/CZ.json#/places/2/name/value: Brno is also the name of the place at /places/0
+garden/climate/CZ.json#/places/3/location/value/latitude: is 49.123: a place is given to two decimal places
+garden/climate/CZ.json#/places/4/last_spring_frost/value: 02-29 is not a day of the year
+garden/climate/CZ.json#/places/5/first_autumn_frost/value: 09-31 is not a day of the year
+garden/climate/CZ.json#/places/6/first_autumn_frost/value: 05-13 is not after the last spring frost, 10-02
+garden/climate/CZ.json#/places/7/season_length_days/value: is 100; from 05-13 to 10-02 is 142 days
+garden/climate/XX.json#/country: is SK, so the file is SK.json
+garden/climate/XX.json#/places/0/key: cz_brno is also the key of the place at garden/climate/CZ.json#/places/0
+garden/climate/XX.json#/places/0/key: is cz_brno: a place's key begins with its country's code, sk_
+garden/crop/onion.json#: is read by nothing: garden's Read does not decode it
+garden/crops/beet.json#/hardiness: missing property 'source'
+garden/crops/beet.json#/sun/drafted: value must be true
+garden/crops/beet.json#/varieties/0/overrides: minProperties: got 0, want 1
+garden/crops/beet.json#/varieties/1/note/value/sk: ' ' does not match pattern '^\\S(.*\\S)?$'
+garden/crops/beet.json#/varieties/1/note/value: additional properties 'fr' not allowed
+garden/crops/beet.json#/varieties/1/overrides: additional properties 'hardiness' not allowed
+garden/crops/beet.json#/windows/sow_indoor/value/anchor: value must be one of 'last_frost', 'first_frost', 'previous_first_frost'
+garden/crops/beet.json#/windows/transplant/value: got string, want object
+garden/crops/beet.json#: additional properties 'sow_method' not allowed
+garden/crops/carrot.json#/days_to_germinate/value: runs from 20 down to 10
+garden/crops/carrot.json#/days_to_maturity/value: runs from 120 down to 70
+garden/crops/carrot.json#/diseases/value/0: rust is not a record of garden/diseases
+garden/crops/carrot.json#/family/value: rosaceae is not a family of garden/families
+garden/crops/carrot.json#/pests/value/1: weevil is not a record of garden/pests
+garden/crops/carrot.json#/soil_ph/value: runs from 7 down to 6
+garden/crops/chard.json#: is harvested and has no harvest_unit
+garden/crops/chard.json#: is harvested and has no storage
+garden/crops/chard.json#: is harvested and has no yield
+garden/crops/clover.json#/harvest_unit: is a harvest's, and a green manure is dug in, not harvested
+garden/crops/clover.json#/storage: is a harvest's, and a green manure is dug in, not harvested
+garden/crops/clover.json#/varieties/0/overrides/storage: is a harvest's, and a green manure is dug in, not harvested
+garden/crops/clover.json#/varieties/0/overrides/yield: is a harvest's, and a green manure is dug in, not harvested
+garden/crops/clover.json#/varieties/1/overrides/windows: is sown under cover and never planted out: neither it nor its crop has a transplant window
+garden/crops/clover.json#/varieties/2/overrides: overrides spacing and not plants_per_m2, which its crop gives for the crop's own spacing
+garden/crops/clover.json#/yield: is a harvest's, and a green manure is dug in, not harvested
+garden/crops/drafts#: is not a record: garden/crops holds one <key>.json file per record
+garden/crops/fabaceae.json#/key: fabaceae is also a family: a succession could not tell them apart
+garden/crops/leek.json#/windows/harvest/value: runs from day 10 back to day 5
+garden/crops/leek.json#/windows: is sown under cover and never planted out: it has no transplant window
+garden/crops/leek.json#: has a sowing window and no sow_depth_cm
+garden/crops/leek.json#: is started from seed and has no germination_temp_c
+garden/crops/pea.json#/key: is peas, so the file is peas.json
+garden/crops/pea.json#/sow_depth_cm: is a sowing's, and the crop has no sowing window
+garden/crops/pea.json#/varieties/0/overrides/windows/harvest/value: runs from day 70 back to day 40
+garden/crops/pea.json#/varieties/1/key: tall is also the key of the variety at /varieties/0
+garden/crops/pea.json#/varieties/1/overrides/days_to_maturity/value: runs from 90 down to 80
+garden/crops/pea.json#/varieties/1/overrides/storage/value/1/method: dried is also the method at /varieties/1/overrides/storage/value/0
+garden/crops/pea.json#/windows: is started from seed and has no sowing window
+garden/crops/pea.json#: is annual and has no days_to_maturity
+garden/crops/pea.json#: is started from seed and has no days_to_germinate
+garden/crops/rhubarb.json#/days_to_germinate: is a seed's, and the crop is not started from seed
+garden/crops/rhubarb.json#/days_to_maturity: is not a perennial's, which crops year after year from where it stands
+garden/crops/rhubarb.json#/germination_temp_c: is a seed's, and the crop is not started from seed
+garden/crops/rhubarb.json#/storage/value/2/method: fresh is also the method at /storage/value/0
+garden/crops/rhubarb.json#/varieties/0/overrides/days_to_maturity: is not a perennial's, which crops year after year from where it stands
+garden/crops/rhubarb.json#/varieties/1/overrides: has a sowing window and no sow_depth_cm, and neither has its crop
+garden/crops/rhubarb.json#/varieties/2/overrides/sow_depth_cm: is a sowing's, and neither the variety nor its crop has a sowing window
+garden/crops/rhubarb.json#/windows: has no sowing or planting window: a crop is sown under cover, sown or planted where it grows, or planted out
+garden/crops/tomato.json#/name/value/cs: Tomato (cs) is also the name in cs of garden/crops/carrot.json
+garden/crops/tomato.json#/name/value/de: Tomato (de) is also the name in de of garden/crops/carrot.json
+garden/crops/tomato.json#/name/value/en: Tomato (en) is also the name in en of garden/crops/carrot.json
+garden/crops/tomato.json#/name/value/pl: Tomato (pl) is also the name in pl of garden/crops/carrot.json
+garden/crops/tomato.json#/name/value/sk: Tomato (sk) is also the name in sk of garden/crops/carrot.json
+garden/crops/tomato.json#/name_latin/value: Solanum lycopersicum is also the Latin name of garden/crops/carrot.json
+garden/diseases/aphid.json#/key: aphid is also a pest: a key is one or the other
+garden/families/apiaceae.json#/name_latin/value: is Brassicaceae, so the key is brassicaceae
+garden/families/legumes.json#/key: is fabaceae, so the file is fabaceae.json
+garden/pests/slug.json#/name/value: missing property 'pl'
+garden/rules/crop_pair.json#/rules/1: pairs tomato with carrot: a pair is two records, the lesser key first
+garden/rules/crop_pair.json#/rules/2: rules on carrot and tomato, as the rule at /rules/0 does
+garden/rules/crop_pair.json#/rules/3/b: onion is not a crop of garden/crops
+garden/rules/crop_pair.json#/rules/4: pairs leek with leek: a pair is two records, the lesser key first
+garden/rules/crop_pair.json#/rules/5/a: apiaceae is not a crop of garden/crops
+garden/rules/crop_pair.json#/rules/5/b: solanaceae is not a crop of garden/crops
+garden/rules/families.json#/rules/1/b: rosaceae is not a family of garden/families
+garden/rules/families.json#/rules/2: pairs solanaceae with fabaceae: a pair is two records, the lesser key first
+garden/rules/families.json#/rules/3/a: carrot is not a family of garden/families
+garden/rules/families.json#/rules/3/b: tomato is not a family of garden/families
+garden/rules/families.json#/scope: is family_pair, so the file is family_pair.json
+garden/rules/family_pair.json#/rules/1: names a crop and a family: a succession is between two crops or two families
+garden/rules/family_pair.json#/rules/2/a: nowhere is neither a crop of garden/crops nor a family of garden/families
+garden/rules/family_pair.json#/scope: is succession, so the file is succession.json
+garden/rules/gapped.json#/rules/0/claim/value/min_years_gap: false schema
+garden/rules/gapped.json#/rules/0/claim/value/relation: value must be one of 'companion', 'antagonist', 'cross_pollination'
+garden/rules/succession.json#/rules/0/claim/value/relation: value must be 'succession'
+garden/rules/succession.json#/rules/0/claim/value: missing property 'min_years_gap'

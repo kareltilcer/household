@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "anthracnose",
+  "name": {
+    "value": {
+      "en": "Anthracnose",
+      "cs": "Antraknóza",
+      "sk": "Antraknóza",
+      "de": "Brennfleckenkrankheit",
+      "pl": "Antraknoza"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Colletotrichum", "source": "eppo-gd", "drafted": true }
+}

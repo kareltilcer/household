@@ -1,0 +1,82 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "sweet_pea",
+  "name": {
+    "value": {
+      "en": "Sweet pea",
+      "cs": "Hrachor vonný",
+      "sk": "Hrachor voňavý",
+      "de": "Duftwicke",
+      "pl": "Groszek pachnący"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Lathyrus odoratus", "source": "powo", "drafted": true },
+  "family": { "value": "fabaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "flower", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "fixer", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "high", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6.5, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 3, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 50, "plant_cm": 15 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 12, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 10, "max": 21 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 75, "max": 95 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": -60, "to_days": -21 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 30, "to_days": 100 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["support"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "bunch", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 25, "per_plant": 2 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [{ "method": "fresh", "shelf_life_days": 5 }],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["slug", "aphid"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["powdery_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Every part is poisonous, the seeds most of all, so keep it away from edible peas. Pinch out the tip above the second pair of leaves, give it netting to climb, and cut the flowers every few days: once pods set, it stops flowering.",
+      "cs": "Celá rostlina je jedovatá, nejvíce semena, proto jej pěstujte stranou od jedlého hrachu. Vrchol zaštípněte nad druhým párem listů, dejte mu síť k popínání a květy řežte každých pár dní: jakmile nasadí lusky, přestane kvést.",
+      "sk": "Celá rastlina je jedovatá, najviac semená, preto ho pestujte bokom od jedlého hrachu. Vrchol zaštipnite nad druhým párom listov, dajte mu sieť na popínanie a kvety režte každých pár dní: len čo nasadí struky, prestane kvitnúť.",
+      "de": "Alle Teile sind giftig, die Samen am stärksten, daher getrennt von Speiseerbsen ziehen. Die Spitze über dem zweiten Blattpaar entspitzen, ein Rankgitter geben und die Blüten alle paar Tage schneiden: Sobald sie Hülsen ansetzt, hört sie auf zu blühen.",
+      "pl": "Cała roślina jest trująca, najbardziej nasiona, dlatego uprawiaj go z dala od grochu jadalnego. Uszczyknij wierzchołek nad drugą parą liści, daj mu siatkę do wspinania i ścinaj kwiaty co kilka dni: gdy zawiąże strąki, przestaje kwitnąć."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

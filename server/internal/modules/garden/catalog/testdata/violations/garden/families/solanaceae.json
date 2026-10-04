@@ -1,0 +1,17 @@
+{
+  "key": "solanaceae",
+  "name": {
+    "value": {
+      "en": "Nightshades (en)",
+      "cs": "Nightshades (cs)",
+      "sk": "Nightshades (sk)",
+      "de": "Nightshades (de)",
+      "pl": "Nightshades (pl)"
+    },
+    "source": "book"
+  },
+  "name_latin": {
+    "value": "Solanaceae",
+    "source": "book"
+  }
+}

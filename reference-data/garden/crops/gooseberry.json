@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "gooseberry",
+  "name": {
+    "value": {
+      "en": "Gooseberry",
+      "cs": "Angrešt",
+      "sk": "Egreš",
+      "de": "Stachelbeere",
+      "pl": "Agrest"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Ribes uva-crispa", "source": "powo", "drafted": true },
+  "family": { "value": "grossulariaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "fruit", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "partial", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 5, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 150, "plant_cm": 120 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 0.5, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "transplant": {
+      "value": { "anchor": "previous_first_frost", "from_days": 5, "to_days": 45 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 35, "to_days": 75 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["mulch", "pest_check"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1.5, "per_plant": 3 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 7 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["gooseberry_sawfly", "aphid", "bird"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["american_gooseberry_mildew", "currant_leaf_spot"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Choose a mildew-resistant variety and keep the centre of the bush open so that air moves through it. Check the lowest leaves from spring for sawfly larvae, which strip a bush in days. Thin the green fruit early for cooking and let the rest ripen.",
+      "cs": "Vyberte odrůdu odolnou padlí a střed keře udržujte vzdušný. Od jara kontrolujte nejspodnější listy kvůli housenicím pilatky, které keř ožerou během několika dnů. Část zelených plodů sklizte brzy na vaření a zbytek nechte dozrát.",
+      "sk": "Vyberte odrodu odolnú proti múčnatke a stred kra udržiavajte vzdušný. Od jari kontrolujte najspodnejšie listy pre pahúsenice piliarky, ktoré ker ožerú za pár dní. Časť zelených plodov zberte skoro na varenie a zvyšok nechajte dozrieť.",
+      "de": "Mehltauresistente Sorte wählen und die Strauchmitte luftig halten. Ab dem Frühjahr die untersten Blätter auf Blattwespenlarven prüfen, die den Strauch in Tagen kahl fressen. Einen Teil der grünen Früchte früh zum Kochen ernten, den Rest reifen lassen.",
+      "pl": "Wybierz odmianę odporną na mączniaka i utrzymuj środek krzewu przewiewny. Od wiosny szukaj na najniższych liściach larw brzęczaka, które ogołacają krzew w kilka dni. Część zielonych owoców zbierz wcześnie do gotowania, a resztę zostaw do dojrzenia."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

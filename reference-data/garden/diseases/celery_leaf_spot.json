@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "celery_leaf_spot",
+  "name": {
+    "value": {
+      "en": "Celery leaf spot",
+      "cs": "Septorióza celeru",
+      "sk": "Septorióza zeleru",
+      "de": "Sellerie-Blattfleckenkrankheit",
+      "pl": "Septorioza selera"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Septoria apiicola", "source": "eppo-gd", "drafted": true }
+}

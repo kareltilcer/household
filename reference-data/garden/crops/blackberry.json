@@ -1,0 +1,78 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "blackberry",
+  "name": {
+    "value": {
+      "en": "Blackberry",
+      "cs": "Ostružiník",
+      "sk": "Černica",
+      "de": "Brombeere",
+      "pl": "Jeżyna"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Rubus fruticosus", "source": "powo", "drafted": true },
+  "family": { "value": "rosaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "fruit", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "perennial", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 5.5, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 5, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 250, "plant_cm": 200 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 0.2, "source": "vt-planting-guide", "drafted": true },
+  "windows": {
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": -50, "to_days": -15 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": -62, "to_days": 0 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["support", "mulch"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1, "per_plant": 5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "fresh", "shelf_life_days": 3 },
+      { "method": "frozen", "shelf_life_days": 300 },
+      { "method": "canned", "shelf_life_days": 365 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["spotted_wing_drosophila", "raspberry_beetle", "aphid", "bird"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": { "value": ["grey_mould", "rust"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "It fruits on last year's canes: train them along wires, cut the fruited ones out at the base after harvest and tie in the new ones. Shorten the side shoots to two or three buds in late winter, and in cold areas lay the canes down and cover them.",
+      "cs": "Plodí na loňských výhonech: veďte je po drátech, odplozené po sklizni vyřízněte u země a nové vyvažte. Postranní výhony koncem zimy zkraťte na dvě až tři očka a v chladných polohách výhony na zimu položte a přikryjte.",
+      "sk": "Rodí na vlaňajších výhonkoch: veďte ich po drôtoch, odrodené po zbere vyrežte pri zemi a nové vyviažte. Bočné výhonky koncom zimy skráťte na dve až tri očká a v chladných polohách výhonky na zimu položte a prikryte.",
+      "de": "Sie trägt an den Vorjahresruten: an Drähten ziehen, abgetragene nach der Ernte bodennah herausschneiden und die neuen anbinden. Seitentriebe im Spätwinter auf zwei bis drei Knospen kürzen und die Ruten in kalten Lagen über Winter ablegen und abdecken.",
+      "pl": "Owocuje na zeszłorocznych pędach: prowadź je po drutach, po zbiorze wytnij przy ziemi te, które owocowały, i przywiąż nowe. Pędy boczne skróć pod koniec zimy do dwóch lub trzech pąków, a w chłodnych rejonach połóż pędy na zimę i okryj."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

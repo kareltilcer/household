@@ -1,0 +1,71 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "crimson_clover",
+  "name": {
+    "value": {
+      "en": "Crimson clover",
+      "cs": "Jetel inkarnát",
+      "sk": "Ďatelina purpurová",
+      "de": "Inkarnatklee",
+      "pl": "Koniczyna krwistoczerwona"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Trifolium incarnatum", "source": "powo", "drafted": true },
+  "family": { "value": "fabaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "green_manure", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "fixer", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 5.5, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 15, "plant_cm": 1 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 600, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 5, "max": 12 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 230, "max": 270 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "previous_first_frost", "from_days": -60, "to_days": -20 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": -30, "to_days": 5 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "pests": { "value": ["slug", "pea_weevil"], "source": "eppo-gd", "drafted": true },
+  "diseases": { "value": ["powdery_mildew"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Sown in late summer on a cleared bed, it covers the soil over winter; cut it down in spring, at the latest as it starts to flower, and dig it in shallowly three weeks before the next crop. A hard frost without snow can kill it; it can also be sown in spring.",
+      "cs": "Vysetý koncem léta na uvolněný záhon kryje půdu přes zimu; na jaře ho posečte, nejpozději na začátku květu, a mělce zapravte tři týdny před další plodinou. Silný holomráz ho může zničit; lze ho vysévat i na jaře.",
+      "sk": "Vysiata koncom leta na uvoľnený záhon kryje pôdu cez zimu; na jar ju pokoste, najneskôr na začiatku kvitnutia, a plytko zapravte tri týždne pred ďalšou plodinou. Silný holomráz ju môže zničiť; možno ju vysievať aj na jar.",
+      "de": "Im Spätsommer auf ein geräumtes Beet gesät, bedeckt er den Boden über Winter; im Frühjahr spätestens zu Blühbeginn abmähen und drei Wochen vor der Folgekultur flach einarbeiten. Starker Kahlfrost kann ihn vernichten; auch eine Frühjahrssaat ist möglich.",
+      "pl": "Wysiana późnym latem na zwolnioną grządkę okrywa glebę przez zimę; wiosną skoś ją najpóźniej na początku kwitnienia i płytko przekop trzy tygodnie przed następną uprawą. Silny mróz bez śniegu może ją zniszczyć; można ją siać także wiosną."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

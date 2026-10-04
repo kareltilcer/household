@@ -1,0 +1,20 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "black_rot",
+  "name": {
+    "value": {
+      "en": "Black rot",
+      "cs": "Černá žilkovitost košťálovin",
+      "sk": "Čierna žilkovitosť hlúbovín",
+      "de": "Adernschwärze",
+      "pl": "Czarna zgnilizna kapustnych"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": {
+    "value": "Xanthomonas campestris pv. campestris",
+    "source": "eppo-gd",
+    "drafted": true
+  }
+}

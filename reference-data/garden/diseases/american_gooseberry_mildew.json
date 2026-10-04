@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "american_gooseberry_mildew",
+  "name": {
+    "value": {
+      "en": "American gooseberry mildew",
+      "cs": "Americké padlí angreštové",
+      "sk": "Americká múčnatka egrešová",
+      "de": "Amerikanischer Stachelbeermehltau",
+      "pl": "Amerykański mączniak agrestu"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Podosphaera mors-uvae", "source": "eppo-gd", "drafted": true }
+}

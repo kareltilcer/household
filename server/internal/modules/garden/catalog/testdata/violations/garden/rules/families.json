@@ -1,0 +1,93 @@
+{
+  "scope": "family_pair",
+  "rules": [
+    {
+      "a": "apiaceae",
+      "b": "solanaceae",
+      "claim": {
+        "value": {
+          "relation": "companion",
+          "basis": "traditional",
+          "severity": "info"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "apiaceae and solanaceae. (en)",
+          "cs": "apiaceae and solanaceae. (cs)",
+          "sk": "apiaceae and solanaceae. (sk)",
+          "de": "apiaceae and solanaceae. (de)",
+          "pl": "apiaceae and solanaceae. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "apiaceae",
+      "b": "rosaceae",
+      "claim": {
+        "value": {
+          "relation": "companion",
+          "basis": "traditional",
+          "severity": "info"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "apiaceae and rosaceae. (en)",
+          "cs": "apiaceae and rosaceae. (cs)",
+          "sk": "apiaceae and rosaceae. (sk)",
+          "de": "apiaceae and rosaceae. (de)",
+          "pl": "apiaceae and rosaceae. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "solanaceae",
+      "b": "fabaceae",
+      "claim": {
+        "value": {
+          "relation": "antagonist",
+          "basis": "agronomic",
+          "severity": "warn"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "solanaceae and fabaceae. (en)",
+          "cs": "solanaceae and fabaceae. (cs)",
+          "sk": "solanaceae and fabaceae. (sk)",
+          "de": "solanaceae and fabaceae. (de)",
+          "pl": "solanaceae and fabaceae. (pl)"
+        },
+        "source": "book"
+      }
+    },
+    {
+      "a": "carrot",
+      "b": "tomato",
+      "claim": {
+        "value": {
+          "relation": "companion",
+          "basis": "traditional",
+          "severity": "info"
+        },
+        "source": "book"
+      },
+      "reason": {
+        "value": {
+          "en": "carrot and tomato. (en)",
+          "cs": "carrot and tomato. (cs)",
+          "sk": "carrot and tomato. (sk)",
+          "de": "carrot and tomato. (de)",
+          "pl": "carrot and tomato. (pl)"
+        },
+        "source": "book"
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "grey_mould",
+  "name": {
+    "value": {
+      "en": "Grey mould",
+      "cs": "Plíseň šedá",
+      "sk": "Pleseň sivá",
+      "de": "Grauschimmel",
+      "pl": "Szara pleśń"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Botrytis cinerea", "source": "eppo-gd", "drafted": true }
+}

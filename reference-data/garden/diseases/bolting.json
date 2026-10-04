@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "bolting",
+  "name": {
+    "value": {
+      "en": "Bolting",
+      "cs": "Vybíhání do květu",
+      "sk": "Vybiehanie do kvetu",
+      "de": "Schossen",
+      "pl": "Wybijanie w pędy kwiatostanowe"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  }
+}

@@ -1,0 +1,370 @@
+{
+  "$schema": "../../schemas/garden-climate.schema.json",
+  "country": "PL",
+  "places": [
+    {
+      "key": "pl_bialystok",
+      "name": { "value": "Białystok", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.13, "longitude": 23.16 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 142, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-24", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-21", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 120, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_bydgoszcz",
+      "name": { "value": "Bydgoszcz", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.12, "longitude": 18.01 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 84, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-22", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-19", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 120, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_czestochowa",
+      "name": { "value": "Częstochowa", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.81, "longitude": 19.12 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 229, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-13", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-29", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 139, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_elblag",
+      "name": { "value": "Elbląg", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 54.16, "longitude": 19.4 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 64, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-22", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-25", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 126, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_gdansk",
+      "name": { "value": "Gdańsk", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 54.35, "longitude": 18.65 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 49, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-02", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-21", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "8a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 172, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_gorzow_wielkopolski",
+      "name": { "value": "Gorzów Wielkopolski", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.73, "longitude": 15.24 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 60, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-14", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-02", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 141, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_jelenia_gora",
+      "name": { "value": "Jelenia Góra", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.9, "longitude": 15.73 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 360, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-18", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-20", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 125, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_katowice",
+      "name": { "value": "Katowice", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.26, "longitude": 19.02 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 255, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-13", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-27", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 137, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_kielce",
+      "name": { "value": "Kielce", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.87, "longitude": 20.63 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 257, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-15", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-26", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 134, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_koszalin",
+      "name": { "value": "Koszalin", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 54.19, "longitude": 16.17 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 81, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-17", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-30", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 136, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_krakow",
+      "name": { "value": "Kraków", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.06, "longitude": 19.94 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 307, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-16", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-24", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 131, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_lodz",
+      "name": { "value": "Łódź", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.76, "longitude": 19.46 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 129, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-17", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-29", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 135, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_lublin",
+      "name": { "value": "Lublin", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.25, "longitude": 22.57 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 165, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-14", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-26", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 135, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_nowy_sacz",
+      "name": { "value": "Nowy Sącz", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.62, "longitude": 20.7 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 608, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-25", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-18", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 116, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_olsztyn",
+      "name": { "value": "Olsztyn", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.78, "longitude": 20.48 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 110, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-25", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-23", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 121, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_opole",
+      "name": { "value": "Opole", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.67, "longitude": 17.93 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 207, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-13", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-30", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 140, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_poznan",
+      "name": { "value": "Poznań", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.41, "longitude": 16.93 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 86, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-22", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-30", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 131, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_przemysl",
+      "name": { "value": "Przemyśl", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.78, "longitude": 22.77 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 252, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-13", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-26", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 136, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_rzeszow",
+      "name": { "value": "Rzeszów", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 50.04, "longitude": 22 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 266, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-13", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-26", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 136, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_suwalki",
+      "name": { "value": "Suwałki", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 54.1, "longitude": 22.93 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 150, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-26", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-19", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 116, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_szczecin",
+      "name": { "value": "Szczecin", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.43, "longitude": 14.55 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 34, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-09", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-02", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 146, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_torun",
+      "name": { "value": "Toruń", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 53.01, "longitude": 18.6 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 86, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-22", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-19", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 120, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_warszawa",
+      "name": { "value": "Warszawa", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 52.23, "longitude": 21.01 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 125, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-14", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-26", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 135, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_wroclaw",
+      "name": { "value": "Wrocław", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.11, "longitude": 17.03 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 206, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-13", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-30", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7a", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 140, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_zakopane",
+      "name": { "value": "Zakopane", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 49.3, "longitude": 19.95 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 713, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-26", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "09-12", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "6b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 109, "source": "nasa-power", "drafted": true }
+    },
+    {
+      "key": "pl_zielona_gora",
+      "name": { "value": "Zielona Góra", "source": "geonames", "drafted": true },
+      "location": {
+        "value": { "latitude": 51.94, "longitude": 15.51 },
+        "source": "geonames",
+        "drafted": true
+      },
+      "altitude_m": { "value": 81, "source": "nasa-power", "drafted": true },
+      "last_spring_frost": { "value": "05-10", "source": "nasa-power", "drafted": true },
+      "first_autumn_frost": { "value": "10-02", "source": "nasa-power", "drafted": true },
+      "hardiness_zone": { "value": "7b", "source": "nasa-power", "drafted": true },
+      "season_length_days": { "value": 145, "source": "nasa-power", "drafted": true }
+    }
+  ]
+}

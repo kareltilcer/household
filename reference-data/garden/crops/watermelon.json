@@ -1,0 +1,95 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "watermelon",
+  "name": {
+    "value": {
+      "en": "Watermelon",
+      "cs": "Meloun vodní",
+      "sk": "Dyňa červená",
+      "de": "Wassermelone",
+      "pl": "Arbuz"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Citrullus lanatus", "source": "powo", "drafted": true },
+  "family": { "value": "cucurbitaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "tender", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "heavy", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "deep", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 2, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 150, "plant_cm": 80 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 0.8, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 16, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 5, "max": 12 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 80, "max": 100 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_indoor": {
+      "value": { "anchor": "last_frost", "from_days": -35, "to_days": -21 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "transplant": {
+      "value": { "anchor": "last_frost", "from_days": 10, "to_days": 24 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 95, "to_days": 135 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": {
+    "value": ["harden_off", "mulch"],
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "harvest_unit": { "value": "piece", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 2, "per_plant": 2.5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [{ "method": "fresh", "shelf_life_days": 14 }],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": { "value": ["aphid", "spider_mite", "slug"], "source": "eppo-gd", "drafted": true },
+  "diseases": {
+    "value": ["fusarium_wilt", "anthracnose", "powdery_mildew"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Needs a long, hot summer: choose an early, small-fruited variety and plant it through black mulch in the warmest spot. It is ripe when the tendril next to the fruit stalk has dried and the patch resting on the ground has turned yellow.",
+      "cs": "Potřebuje dlouhé horké léto: zvolte ranou odrůdu s malými plody a vysaďte ji do černé mulčovací fólie na nejteplejší místo. Zralý je, když úponek u stopky plodu zaschne a skvrna, na které plod leží, zežloutne.",
+      "sk": "Potrebuje dlhé horúce leto: zvoľte skorú odrodu s malými plodmi a vysaďte ju do čiernej mulčovacej fólie na najteplejšie miesto. Zrelá je, keď úponok pri stopke plodu zaschne a škvrna, na ktorej plod leží, zožltne.",
+      "de": "Braucht einen langen, heißen Sommer: eine frühe, kleinfrüchtige Sorte wählen und am wärmsten Platz in schwarze Mulchfolie pflanzen. Reif ist sie, wenn die Ranke am Fruchtstiel eingetrocknet ist und die Auflagestelle gelb geworden ist.",
+      "pl": "Potrzebuje długiego, gorącego lata: wybierz wczesną odmianę o małych owocach i posadź w czarną folię w najcieplejszym miejscu. Jest dojrzały, gdy wąs czepny przy szypułce owocu zaschnie, a plama, na której owoc leży, zżółknie."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

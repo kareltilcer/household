@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-family.schema.json",
+  "key": "amaranthaceae",
+  "name": {
+    "value": {
+      "en": "Beet family",
+      "cs": "Laskavcovité",
+      "sk": "Láskavcovité",
+      "de": "Fuchsschwanzgewächse",
+      "pl": "Szarłatowate"
+    },
+    "source": "wikidata",
+    "drafted": true
+  },
+  "name_latin": { "value": "Amaranthaceae", "source": "powo", "drafted": true }
+}

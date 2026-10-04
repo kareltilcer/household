@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "damping_off",
+  "name": {
+    "value": {
+      "en": "Damping off",
+      "cs": "Padání klíčních rostlin",
+      "sk": "Padanie klíčnych rastlín",
+      "de": "Umfallkrankheit",
+      "pl": "Zgorzel siewek"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Pythium", "source": "eppo-gd", "drafted": true }
+}

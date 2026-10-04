@@ -1,0 +1,73 @@
+{
+  "country": "SK",
+  "places": [
+    {
+      "key": "cz_brno",
+      "name": {
+        "value": "Bratislava",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.2,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "05-13",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "10-02",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 142,
+        "source": "book"
+      }
+    },
+    {
+      "key": "sk_kosice",
+      "name": {
+        "value": "Košice",
+        "source": "book"
+      },
+      "location": {
+        "value": {
+          "latitude": 49.2,
+          "longitude": 16.61
+        },
+        "source": "book"
+      },
+      "altitude_m": {
+        "value": 244,
+        "source": "book"
+      },
+      "last_spring_frost": {
+        "value": "05-13",
+        "source": "book"
+      },
+      "first_autumn_frost": {
+        "value": "10-02",
+        "source": "book"
+      },
+      "hardiness_zone": {
+        "value": "7a",
+        "source": "book"
+      },
+      "season_length_days": {
+        "value": 142,
+        "source": "book"
+      }
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "swede",
+  "name": {
+    "value": { "en": "Swede", "cs": "Tuřín", "sk": "Kvaka", "de": "Steckrübe", "pl": "Brukiew" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Brassica napus subsp. rapifera", "source": "powo", "drafted": true },
+  "family": { "value": "brassicaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "seed", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "half_hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "medium", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7.5 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 1.5, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 40, "plant_cm": 25 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 10, "source": "vt-planting-guide", "drafted": true },
+  "germination_temp_c": { "value": 5, "source": "harrington-germination", "drafted": true },
+  "days_to_germinate": {
+    "value": { "min": 5, "max": 10 },
+    "source": "harrington-germination",
+    "drafted": true
+  },
+  "days_to_maturity": {
+    "value": { "min": 120, "max": 160 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "last_frost", "from_days": 0, "to_days": 35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "first_frost", "from_days": -10, "to_days": 50 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": ["pest_check"], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 4, "per_plant": 0.5 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "cool_store", "shelf_life_days": 150 },
+      { "method": "sand", "shelf_life_days": 150 },
+      { "method": "fresh", "shelf_life_days": 21 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["flea_beetle", "cabbage_root_fly", "cabbage_aphid", "slug"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": {
+    "value": ["clubroot", "powdery_mildew", "downy_mildew"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "care_notes": {
+    "value": {
+      "en": "Needs a long season and steady moisture: dry spells give woody, cracked roots and powdery mildew. Thin early, lime acid soil against clubroot, and lift before hard frost for the cellar.",
+      "cs": "Potřebuje dlouhou sezonu a stálou vláhu: v suchu bulvy dřevnatějí a praskají a listy napadá padlí. Včas vyjednoťte, kyselou půdu proti nádorovitosti vápněte a před silnými mrazy sklizeň uložte do sklepa.",
+      "sk": "Potrebuje dlhú sezónu a stálu vlahu: v suchu buľvy drevnatejú a praskajú a listy napáda múčnatka. Včas vyjednoťte, kyslú pôdu proti nádorovitosti vápnite a pred silnými mrazmi úrodu uložte do pivnice.",
+      "de": "Braucht eine lange Saison und gleichmäßige Feuchte: Bei Trockenheit werden die Rüben holzig und rissig, und Mehltau tritt auf. Früh vereinzeln, sauren Boden gegen Kohlhernie kalken und vor starkem Frost für den Keller ernten.",
+      "pl": "Potrzebuje długiego sezonu i stałej wilgoci: w suszy korzenie drewnieją i pękają, a liście poraża mączniak. Wcześnie przerwij, kwaśną glebę wapnuj przeciw kile i zbierz przed silnym mrozem do piwnicy."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

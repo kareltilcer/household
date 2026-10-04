@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "verticillium_wilt",
+  "name": {
+    "value": {
+      "en": "Verticillium wilt",
+      "cs": "Verticiliové vadnutí",
+      "sk": "Verticíliové vädnutie",
+      "de": "Verticillium-Welke",
+      "pl": "Werticilioza"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Verticillium", "source": "eppo-gd", "drafted": true }
+}

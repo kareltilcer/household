@@ -1,0 +1,77 @@
+{
+  "$schema": "../../schemas/garden-crop.schema.json",
+  "key": "garlic",
+  "name": {
+    "value": { "en": "Garlic", "cs": "Česnek", "sk": "Cesnak", "de": "Knoblauch", "pl": "Czosnek" },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Allium sativum", "source": "powo", "drafted": true },
+  "family": { "value": "amaryllidaceae", "source": "powo", "drafted": true },
+  "plant_type": { "value": "vegetable", "source": "rhs-grow-your-own", "drafted": true },
+  "life_cycle": { "value": "annual", "source": "rhs-grow-your-own", "drafted": true },
+  "propagation": { "value": "vegetative", "source": "rhs-grow-your-own", "drafted": true },
+  "hardiness": { "value": "hardy", "source": "rhs-hardiness", "drafted": true },
+  "feeder_class": { "value": "medium", "source": "rhs-crop-rotation", "drafted": true },
+  "root_depth": { "value": "shallow", "source": "rhs-grow-your-own", "drafted": true },
+  "sun": { "value": "full", "source": "rhs-grow-your-own", "drafted": true },
+  "water_need": { "value": "low", "source": "rhs-grow-your-own", "drafted": true },
+  "soil_ph": { "value": { "min": 6, "max": 7 }, "source": "rutgers-soil-ph", "drafted": true },
+  "rotation_break_years": { "value": 4, "source": "lwg-2111-fruchtfolge", "drafted": true },
+  "sow_depth_cm": { "value": 5, "source": "rhs-grow-your-own", "drafted": true },
+  "spacing": {
+    "value": { "row_cm": 25, "plant_cm": 10 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "plants_per_m2": { "value": 40, "source": "vt-planting-guide", "drafted": true },
+  "days_to_maturity": {
+    "value": { "min": 240, "max": 280 },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  },
+  "windows": {
+    "sow_direct": {
+      "value": { "anchor": "previous_first_frost", "from_days": 5, "to_days": 35 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    },
+    "harvest": {
+      "value": { "anchor": "last_frost", "from_days": 50, "to_days": 80 },
+      "source": "rhs-grow-your-own",
+      "drafted": true
+    }
+  },
+  "care_tasks": { "value": [], "source": "rhs-grow-your-own", "drafted": true },
+  "harvest_unit": { "value": "kg", "source": "rhs-grow-your-own", "drafted": true },
+  "yield": {
+    "value": { "per_m2": 1.2, "per_plant": 0.04 },
+    "source": "vt-planting-guide",
+    "drafted": true
+  },
+  "storage": {
+    "value": [
+      { "method": "dry_store", "shelf_life_days": 210 },
+      { "method": "fresh", "shelf_life_days": 14 }
+    ],
+    "source": "usda-handbook-66",
+    "drafted": true
+  },
+  "pests": {
+    "value": ["leek_moth", "allium_leaf_miner", "onion_fly"],
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "diseases": { "value": ["white_rot", "rust", "neck_rot"], "source": "eppo-gd", "drafted": true },
+  "care_notes": {
+    "value": {
+      "en": "Plant the cloves in autumn, tips up; stop watering three weeks before lifting, and lift once a third of the leaves have yellowed.",
+      "cs": "Stroužky sázejte na podzim špičkou vzhůru; tři týdny před sklizní přestaňte zalévat a sklízejte, když zežloutne třetina listů.",
+      "sk": "Strúčiky sádzajte na jeseň špičkou nahor; tri týždne pred zberom prestaňte polievať a zberajte, keď zožltne tretina listov.",
+      "de": "Die Zehen im Herbst mit der Spitze nach oben stecken; drei Wochen vor der Ernte nicht mehr gießen und ernten, wenn ein Drittel des Laubs vergilbt ist.",
+      "pl": "Ząbki sadź jesienią wierzchołkiem do góry; trzy tygodnie przed zbiorem przestań podlewać i zbieraj, gdy zżółknie jedna trzecia liści."
+    },
+    "source": "rhs-grow-your-own",
+    "drafted": true
+  }
+}

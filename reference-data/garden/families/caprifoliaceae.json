@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-family.schema.json",
+  "key": "caprifoliaceae",
+  "name": {
+    "value": {
+      "en": "Honeysuckle family",
+      "cs": "Zimolezovité",
+      "sk": "Zemolezovité",
+      "de": "Geißblattgewächse",
+      "pl": "Przewiertniowate"
+    },
+    "source": "wikidata",
+    "drafted": true
+  },
+  "name_latin": { "value": "Caprifoliaceae", "source": "powo", "drafted": true }
+}

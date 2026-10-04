@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "white_rot",
+  "name": {
+    "value": {
+      "en": "Onion white rot",
+      "cs": "Bílá hniloba cibulovin",
+      "sk": "Biela hniloba cibuľovín",
+      "de": "Mehlkrankheit der Zwiebel",
+      "pl": "Biała zgnilizna cebuli"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Stromatinia cepivora", "source": "eppo-gd", "drafted": true }
+}

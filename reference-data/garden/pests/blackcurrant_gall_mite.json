@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/garden-problem.schema.json",
+  "key": "blackcurrant_gall_mite",
+  "name": {
+    "value": {
+      "en": "Blackcurrant gall mite",
+      "cs": "Vlnovník rybízový",
+      "sk": "Vlnovník ríbezľový",
+      "de": "Johannisbeergallmilbe",
+      "pl": "Wielkopąkowiec porzeczkowy"
+    },
+    "source": "eppo-gd",
+    "drafted": true
+  },
+  "name_latin": { "value": "Cecidophyopsis ribis", "source": "eppo-gd", "drafted": true }
+}
