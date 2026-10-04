@@ -238,9 +238,15 @@ func (t *Throttles) Refund(ctx context.Context, l Limit, subject string) error {
 // Clear forgets subject's attempts under l, after it succeeded.
 func (t *Throttles) Clear(ctx context.Context, l Limit, subject string) error {
 	return pgx.BeginTxFunc(ctx, t.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, "DELETE FROM auth_throttles WHERE key = $1", key(l, subject))
-		return err
+		return ClearIn(ctx, tx, l, subject)
 	})
+}
+
+// ClearIn is Clear in tx, a transaction outside any household: what support forgets of an account
+// in the transaction that records it did (plan item 21).
+func ClearIn(ctx context.Context, tx pgx.Tx, l Limit, subject string) error {
+	_, err := tx.Exec(ctx, "DELETE FROM auth_throttles WHERE key = $1", key(l, subject))
+	return err
 }
 
 // update applies step to each of counts' rows, under a row lock, in one transaction, and writes

@@ -45,6 +45,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/ratelimit"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/staff"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 	"github.com/kareltilcer/household/server/internal/platform/token"
@@ -388,6 +389,31 @@ func Privacy(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.Acc
 		Pool: beginner, Meter: testsupport.Open(t).Pool(t, db.RoleMeter), Log: log, Registry: catalog,
 		Accounts: accounts.Identity, Households: households, Files: fs, Billing: bills, Catalogs: catalogs,
 		APIVersion: "test", Now: o.Now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// Staff returns the platform staff API for a router over pool, logging to log, on the clock of o:
+// over accounts' identity service, households, bills and notifier, with the modules of registry and
+// the platform's own, reading what staff see as the staff role.
+func Staff(t testing.TB, pool session.Pool, log *slog.Logger, accounts app.Accounts, households *household.Service,
+	bills *billing.Service, notifier *notify.Service, registry *module.Registry, o Options,
+) *staff.Service {
+	t.Helper()
+	beginner, ok := pool.(tenant.Beginner)
+	if !ok {
+		t.Fatalf("apptest: %T opens no transactions", pool)
+	}
+	catalog, err := registry.WithPlatform(household.Admin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := staff.New(staff.Config{
+		Pool: beginner, Staff: testsupport.Open(t).Pool(t, db.RoleStaff), Log: log, Catalog: catalog,
+		Accounts: accounts.Identity, Households: households, Billing: bills, Notify: notifier, Now: o.Now,
 	})
 	if err != nil {
 		t.Fatal(err)

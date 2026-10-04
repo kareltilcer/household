@@ -332,17 +332,53 @@ func (s *Service) Queue(ctx context.Context, tx pgx.Tx, ns ...Notification) erro
 		// without going (fold).
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO notifications (household_id, id, user_id, address, locale, category, message, args, route, secret,
-			                           module, owner_id, link, coalesce_key, email, replace_key, run_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $17,
+			                           module, owner_id, link, coalesce_key, email, replace_key, sealed, run_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $17, $18,
 			        coalesce((SELECT max(coalesce(settled_at, now())) + make_interval(secs => $16) FROM notifications
 			                  WHERE household_id = $1 AND user_id = $3 AND coalesce_key = $14
 			                    AND ((status = 'sent' AND settled_at > now() - make_interval(secs => $16))
 			                         OR (status = 'queued' AND claim IS NOT NULL))), now()))`,
 			household, id, nullableID(n.To), nullable(n.Address), nullable(n.Locale), string(n.Category), n.Message, args,
 			nullable(n.Route), secret, nullable(n.Module), nullableID(n.Owner), nullable(n.Link), nullable(n.Coalesce),
-			n.Email, Window.Seconds(), nullable(n.Replaces)); err != nil {
+			n.Email, Window.Seconds(), nullable(n.Replaces), secret != nil); err != nil {
 			return fmt.Errorf("notify: queue: %w", err)
 		}
+	}
+	return nil
+}
+
+// What Redrive refuses.
+var (
+	// ErrNoNotification is Redrive's refusal of a notification the household does not have.
+	ErrNoNotification = errors.New("notify: no such notification")
+	// ErrNotRedrivable is Redrive's refusal of a notification that cannot go again: one that did not
+	// fail, one whose arguments are gone, seven days after it settled, one to an address with no
+	// account, which was forgotten as it settled, and one whose link carried a secret, which was too.
+	ErrNotRedrivable = errors.New("notify: the notification cannot be sent again")
+)
+
+// Redrive queues household's notification id again, in tx in its context: one that failed, sent as
+// it was queued, to the same member, with its tries starting over (PRD 02 §8, plan item 21). Whether
+// it reaches them is decided again as it goes out, by their grants, their mutes and their quiet
+// hours as they are then (FR-NT5). The caller calls Nudge once tx has committed.
+func (s *Service) Redrive(ctx context.Context, tx pgx.Tx, household, id uuid.UUID) error {
+	var redrivable bool
+	err := tx.QueryRow(ctx, `
+		SELECT status = 'failed' AND NOT sealed AND user_id IS NOT NULL AND args_expires_at > now()
+		FROM notifications WHERE household_id = $1 AND id = $2 FOR UPDATE`, household, id).Scan(&redrivable)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return ErrNoNotification
+	case err != nil:
+		return fmt.Errorf("notify: redrive: %w", err)
+	case !redrivable:
+		return ErrNotRedrivable
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE notifications SET status = 'queued', reason = NULL, settled_at = NULL, args_expires_at = NULL,
+		  attempts = 0, claim = NULL, run_at = now()
+		WHERE household_id = $1 AND id = $2`, household, id); err != nil {
+		return fmt.Errorf("notify: redrive: %w", err)
 	}
 	return nil
 }

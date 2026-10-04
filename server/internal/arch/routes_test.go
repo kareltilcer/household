@@ -54,6 +54,7 @@ func TestRoutesMatchTheContract(t *testing.T) {
 		Households: households,
 		Notify:     notifier,
 		Privacy:    apptest.Privacy(t, pool, log, accounts, households, bills, mods, apptest.Options{}),
+		Staff:      apptest.Staff(t, pool, log, accounts, households, bills, notifier, mods, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 		Billing:    bills,

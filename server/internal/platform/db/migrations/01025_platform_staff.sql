@@ -224,3 +224,12 @@ GRANT SELECT (user_id, activated_at, locked_at) ON mfa_totp TO household_staff;
 -- which is the only thing of a household that reaches staff.
 GRANT SELECT (id, user_id, household_id, screen, ticket_reference, payload, redacted_fields, created_at, expires_at)
   ON diagnostic_bundles TO household_staff;
+
+-- A reference row an administrator edited (D-148, ADR 0022): edited_at is when, NULL for a row as
+-- the files in reference-data/ have it. The loader, which writes these tables on every deploy (ADR
+-- 0008), leaves an edited row as its administrator left it, and reports it, until the files hold the
+-- same values: then the row is the files' again. Every reference table carries the column, and the
+-- items that add one, the crop catalog and the tariff presets, add it with theirs.
+ALTER TABLE country_profiles ADD COLUMN edited_at timestamptz;
+ALTER TABLE unit_dimensions ADD COLUMN edited_at timestamptz;
+ALTER TABLE units ADD COLUMN edited_at timestamptz;

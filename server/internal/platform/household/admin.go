@@ -78,6 +78,8 @@ func Admin() module.PlatformModule {
 		actionChildCreate, actionChildPIN, actionChildLock, actionChildUnlock, actionChildAvatar, actionGraduate,
 		actionRestrict, actionUnrestrict, actionEntitlement, actionRetentionWarning, actionPayer,
 		actionDeleteSchedule, actionDeleteCancel, actionMemberErase, actionMemberSucceed,
+		// What the platform's staff did to the household (FR-AL7, D-75; support.go).
+		actionSupportSuspend, actionSupportUnsuspend, SupportCredit, SupportInvoice, SupportRedrive, SupportLimit, SupportFlag,
 	}
 	p := module.PlatformModule{Name: Name, Export: export, Erase: erase}
 	for _, a := range actions {

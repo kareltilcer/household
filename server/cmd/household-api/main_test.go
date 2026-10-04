@@ -41,6 +41,7 @@ func env(t *testing.T) config.Getenv {
 		config.DatabaseURLVar:        d.URL(db.RoleApp),
 		config.MigrateDatabaseURLVar: d.URL(db.RoleMigrate),
 		config.MeterDatabaseURLVar:   d.URL(db.RoleMeter),
+		config.StaffDatabaseURLVar:   d.URL(db.RoleStaff),
 		config.AdminDatabaseURLVar:   testsupport.AdminURL(),
 		// PowerSync's replication role; its bucket storage, unnamed outside development, is left be.
 		config.ReplicationDatabaseURLVar: d.URL(db.RolePowerSync),

@@ -67,10 +67,13 @@ const (
 	Migrate Command = "migrate"
 	// Bootstrap creates the four roles and prepares the database, as an administrator.
 	Bootstrap Command = "bootstrap"
+	// Staff makes an account one of the platform's staff, or takes it out of them, as the request
+	// role: how an operator makes the first platform_admin (runbooks/platform-staff.md).
+	Staff Command = "staff"
 )
 
 // Commands lists the commands.
-var Commands = []Command{Serve, Migrate, Bootstrap}
+var Commands = []Command{Serve, Migrate, Bootstrap, Staff}
 
 // The variables the server reads.
 const (
@@ -338,6 +341,8 @@ func Load(command Command, getenv Getenv) (*Config, error) {
 		l.billing(c)
 	case Migrate:
 		c.MigrateDatabaseURL = url(MigrateDatabaseURLVar, devMigrateDatabaseURL, db.RoleMigrate)
+	case Staff:
+		c.DatabaseURL = url(DatabaseURLVar, devDatabaseURL, db.RoleApp)
 	case Bootstrap:
 		// Bootstrap sets each role's password to the one its connection string carries, so
 		// the strings the other commands use are the only place a password is written down.

@@ -84,6 +84,7 @@ func newWorld(t *testing.T, options ...func(*app.Deps)) *world {
 		Households: households,
 		Notify:     notifier,
 		Privacy:    apptest.Privacy(t, pool, log, accounts, households, bills, registry, apptest.Options{}),
+		Staff:      apptest.Staff(t, pool, log, accounts, households, bills, notifier, registry, apptest.Options{}),
 		Sync:       apptest.Sync(t, log, apptest.Options{}),
 		Storage:    &storage.Picture{Log: log},
 		Billing:    bills,

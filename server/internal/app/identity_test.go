@@ -134,6 +134,9 @@ func newSite(t *testing.T, o apptest.Options, options ...func(*app.Deps)) *site 
 	if deps.Privacy == nil {
 		deps.Privacy = apptest.Privacy(t, pool, log, accounts, households, deps.Billing, deps.Modules, o)
 	}
+	if deps.Staff == nil {
+		deps.Staff = apptest.Staff(t, pool, log, accounts, households, deps.Billing, notifier, deps.Modules, o)
+	}
 	r, err := app.NewRouter(deps)
 	if err != nil {
 		t.Fatal(err)

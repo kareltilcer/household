@@ -37,6 +37,7 @@ import (
 	"github.com/kareltilcer/household/server/internal/platform/reference"
 	"github.com/kareltilcer/household/server/internal/platform/replica"
 	"github.com/kareltilcer/household/server/internal/platform/session"
+	"github.com/kareltilcer/household/server/internal/platform/staff"
 	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/sync"
 	"github.com/kareltilcer/household/server/internal/platform/tenant"
@@ -96,6 +97,9 @@ type Deps struct {
 	// Privacy is the export and erasure service (item 20): the caller's exports and a household's,
 	// their consents, the diagnostic bundle they send, and their account's deletion.
 	Privacy *privacy.Service
+	// Staff is the platform staff API (item 21): what support and platform_admin see of an account
+	// and a household, which is metadata, and what they do to one.
+	Staff *staff.Service
 }
 
 // Sync is the sync surfaces (item 13, ADR 0014): the credentials a client's replica connects to
@@ -172,7 +176,9 @@ func Lost(catalog *module.Registry, now func() time.Time) func(context.Context, 
 //
 // The reference reads under /reference answer any authenticated caller, with no household, and the
 // caller's own push subscriptions and notification preferences (item 15) are the account's routes, as
-// are their consents, their exports and the diagnostic bundle they send (item 20). Asking for the
+// are their consents, their exports and the diagnostic bundle they send (item 20). So are the
+// platform's staff's, under /platform (item 21), whose keys are their accounts': each admits the
+// staff whose role reaches it, and answers anyone else 404. Asking for the
 // account's deletion carries its password and keeps no key (D-97); cancelling one is reached signed
 // out, with the link its email carried, since the account signs nobody in.
 //
@@ -234,6 +240,9 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	}
 	if d.Privacy == nil {
 		return nil, errors.New("app: the router needs the export and erasure service")
+	}
+	if d.Staff == nil {
+		return nil, errors.New("app: the router needs the platform staff API")
 	}
 	// The picture labels the largest items by the modules the router serves, unless it was given
 	// others: without them it would name each by its file, whatever its module calls it.
@@ -318,6 +327,7 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 				keyed.With(catalog).Group(d.Households.AccountRoutes)
 				keyed.Group(d.Notify.AccountRoutes)
 				keyed.Group(d.Privacy.AccountRoutes)
+				keyed.Group(d.Staff.Routes)
 			})
 		})
 		// Leaving keeps its key on the account, found before the membership it ended is looked for,
