@@ -834,7 +834,7 @@ Content · after 7 · size L
   - The validator is green.
   - 100 crops exist in all five languages.
   - Every drafted field is on the review ledger.
-- **PR:** —
+- **PR:** [#26](https://github.com/kareltilcer/household/pull/26)
 
 ### 23 · Tokens, icons and the illustration kit · `planned`
 
