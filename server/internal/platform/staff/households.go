@@ -512,9 +512,9 @@ func (s *Service) extendTrial(w http.ResponseWriter, r *http.Request) {
 	s.answerHousehold(w, r, id)
 }
 
-// creditNote is what a credit says on the payment processor's record, which its customer may read:
+// balanceNote is what a credit says on the payment processor's record, which its customer may read:
 // never the reason staff gave, which is the platform's log's alone.
-const creditNote = "Credit from Household support"
+const balanceNote = "Credit from Household support"
 
 // credit is postPlatformHouseholdsByHouseholdIdCredit: a credit to the balance of the customer who
 // pays the household's subscription, at the payment processor, in the currency it is charged in,
@@ -559,7 +559,7 @@ func (s *Service) credit(w http.ResponseWriter, r *http.Request) {
 		}
 		// Last, so that the processor is asked only once everything that records the credit is
 		// written, and none of it is kept when the processor refuses.
-		return s.cfg.Billing.Credit(ctx, id, req.Amount, creditNote)
+		return s.cfg.Billing.Credit(ctx, id, req.Amount, balanceNote)
 	})
 	switch {
 	case errors.Is(err, billing.ErrNoSubscription):

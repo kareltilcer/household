@@ -2,6 +2,7 @@ package household
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -127,4 +128,48 @@ func (s *Service) tellOwners(ctx context.Context, tx pgx.Tx, household uuid.UUID
 		ns = append(ns, notify.Notification{To: o, Category: notify.Direct, Message: string(t), Email: true, Args: args})
 	}
 	return s.Notify.Queue(ctx, tx, ns...)
+}
+
+// flagSetting is a household's own setting of a feature flag, and raisedLimit a fair-use ceiling
+// raised for it, as an owner's export of the household carries them: what was set and when. Why, and
+// by whom, is the platform's own log's (D-145).
+type flagSetting struct {
+	Key     string    `json:"key"`
+	Enabled bool      `json:"enabled"`
+	SetAt   time.Time `json:"set_at"`
+}
+
+type raisedLimit struct {
+	Key   string    `json:"key"`
+	Value int64     `json:"value"`
+	SetAt time.Time `json:"set_at"`
+}
+
+// staffSet reads, in tx in household's context, what the platform's staff set for it.
+func staffSet(ctx context.Context, tx pgx.Tx, household uuid.UUID) ([]flagSetting, []raisedLimit, error) {
+	rows, err := tx.Query(ctx, "SELECT key, enabled, set_at FROM household_flags WHERE household_id = $1 ORDER BY key", household)
+	if err != nil {
+		return nil, nil, err
+	}
+	flags := []flagSetting{}
+	var f flagSetting
+	if _, err := pgx.ForEachRow(rows, []any{&f.Key, &f.Enabled, &f.SetAt}, func() error {
+		f.SetAt = f.SetAt.UTC()
+		flags = append(flags, f)
+		return nil
+	}); err != nil {
+		return nil, nil, err
+	}
+	rows, err = tx.Query(ctx, "SELECT key, value, set_at FROM household_limits WHERE household_id = $1 ORDER BY key", household)
+	if err != nil {
+		return nil, nil, err
+	}
+	limits := []raisedLimit{}
+	var l raisedLimit
+	_, err = pgx.ForEachRow(rows, []any{&l.Key, &l.Value, &l.SetAt}, func() error {
+		l.SetAt = l.SetAt.UTC()
+		limits = append(limits, l)
+		return nil
+	})
+	return flags, limits, err
 }

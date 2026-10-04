@@ -101,15 +101,19 @@ type staffChange struct {
 
 // parseStaffChange reads the staff command's arguments, or returns nil for ones it cannot read.
 func parseStaffChange(args []string) *staffChange {
-	switch {
-	case len(args) == 3 && args[0] == "grant":
-		role, err := staff.ParseRole(args[2])
-		if err != nil {
-			return nil
+	switch len(args) {
+	case 3:
+		if grant := [3]string(args); grant[0] == "grant" {
+			role, err := staff.ParseRole(grant[2])
+			if err != nil {
+				return nil
+			}
+			return &staffChange{email: grant[1], role: role}
 		}
-		return &staffChange{email: args[1], role: role}
-	case len(args) == 2 && args[0] == "revoke":
-		return &staffChange{email: args[1]}
+	case 2:
+		if revoke := [2]string(args); revoke[0] == "revoke" {
+			return &staffChange{email: revoke[1]}
+		}
 	}
 	return nil
 }

@@ -10559,6 +10559,7 @@ components:
               target_user_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }
               reason: { type: [string, 'null'] }
               meta: { type: object, additionalProperties: true, description: 'What else the action says of itself: a ceiling''s key and value, a flag''s, and the id of the event it wrote in the household''s own log.' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
 
     SyncCredentials:
       type: object

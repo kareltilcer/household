@@ -12,6 +12,7 @@ someone who is doing it for the first time, under pressure.
 | [PowerSync's compaction](compaction.md) | When bucket storage keeps growing, when the nightly compaction failed, and after an erasure that must leave bucket storage the same night |
 | [Object storage and the converter](object-storage.md) | Before an environment's first deploy, when uploads fail with `502`, when previews stop appearing, when an export fails or an erasure's objects stay, and when storage figures look wrong |
 | [Notifications: keys, push services and the scheduler](notifications.md) | Before an environment's first deploy, when a notification key is rotated or leaks, when a browser's push service is refused, when notifications do not arrive, and when a nightly job did not run |
+| [Platform staff: the staff role, the first `platform_admin`, and the platform's log](platform-staff.md) | Before an environment's first deploy, when the first administrator is made, when a staff member leaves or is locked out of their second step, and when a staff request fails |
 | [Billing: Stripe's account, keys, prices and webhook](billing.md) | Before an environment's first deploy, when a price changes or a currency is added, when a Stripe key is rotated or leaks, when a payment went through and the household is not `active`, and when a month's storage was not billed |
 
 The gate G-C acceptance protocol, `gate-g-c.md`, follows with plan item 34. Incident response,

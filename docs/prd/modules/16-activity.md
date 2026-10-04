@@ -41,7 +41,10 @@ from `home` D188.
 `platform_admin` acting on a legal request, an automated retention deletion — each writes an event
 into the household's own log with `actor_type: service` and a clear summary. **A household can see
 everything the platform did to it.** This is the transparency half of the no-content-access
-guarantee, and it is what makes the guarantee checkable rather than merely stated. **D-75.**
+guarantee, and it is what makes the guarantee checkable rather than merely stated. **D-75.** The
+actor of what staff did is the service `support`, which a client renders as *Household support*:
+never the staff member's name, and never the reason they gave, which are the platform's own log's
+([02](../02-identity-and-access.md) FR-PS2, **D-145**).
 
 **FR-AL8 — Provenance.** Every event records `meta.via`: `web`, `mobile`, `sync`, `import`,
 `system`. "Did I do this on my phone or did the importer?" is answerable.
