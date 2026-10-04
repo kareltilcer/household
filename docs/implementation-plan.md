@@ -868,7 +868,7 @@ Phase 0 · after 1 · size L
   - The contrast test is green in both themes.
   - Icon snapshots pass.
   - The illustration compositions render the same on web and RN.
-- **PR:** —
+- **PR:** [#28](https://github.com/kareltilcer/household/pull/28)
 
 ### 24 · Web foundation — app, primitives, twelve-state harness, quality gates · `planned`
 
