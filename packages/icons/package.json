@@ -33,7 +33,6 @@
     "@types/react-dom": "19.3.0",
     "eslint": "catalog:",
     "lucide-static": "1.48.0",
-    "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-native": "catalog:",

@@ -69,6 +69,38 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
     ['a named colour in a prop', 'export const a = <Path stroke="black" />'],
     ['a named colour in a shorthand', "export const a = { border: '1px solid black' }"],
     ['a named colour in a tint', 'export const a = <Icon tintColor="rebeccapurple" />'],
+    // A colour chosen or built is the value of its property as one written out is.
+    ['a named colour behind a condition', "export const a = { color: n > 1 ? 'red' : 'black' }"],
+    [
+      'a named colour behind a condition in a prop',
+      "export const a = <Text color={n > 1 ? 'red' : 'black'} />",
+    ],
+    ['a named colour as a fallback', "export const a = { backgroundColor: n.tone ?? 'white' }"],
+    ['a named colour after a guard', "export const a = { backgroundColor: n > 1 && 'white' }"],
+    [
+      'a named colour interpolated',
+      'export const a = { border: `1px solid ${n > 1 ? "black" : ""}` }',
+    ],
+    ['a named colour concatenated', "export const a = { border: String(n) + 'px solid black' }"],
+    ['named colours in an array prop', "export const a = <Gradient colors={['white', 'black']} />"],
+    [
+      'a named colour for one state of a prop',
+      "export const a = <Switch trackColor={{ false: 'grey', true: 'green' }} />",
+    ],
+    ['a named colour as a prop’s default', "export const A = ({ color = 'black' }) => color"],
+    ['a named colour under a hyphenated name', "export const a = { 'background-color': 'white' }"],
+    ['a named colour in a custom property', "export const a = { '--row-rule': 'white' }"],
+    [
+      'named colours in a gradient',
+      "export const a = { backgroundImage: 'linear-gradient(white, black)' }",
+    ],
+    ['a named colour on a logical side', "export const a = { borderBlockEnd: '1px solid black' }"],
+    ['a named colour in a decoration', "export const a = { textDecoration: 'underline red' }"],
+    // `to`, `name` and `key` name or link in an element, and anything at all in an object.
+    ['a hex colour an object calls `to`', "export const a = { to: '#fff' }"],
+    ['a hex colour an object calls `name`', "export const a = { name: '#1a1b22' }"],
+    ['a hex colour an object calls `key`', "export const a = { key: '#abc' }"],
+    ['a hex colour beside an element’s reference', "export const a = 'url(#fade) #fff'"],
   ])('fails %s as a raw colour', async (_, code) => {
     expect(await script(app, `const n = 1\n${code}`)).toContain('raw')
   })
@@ -105,7 +137,24 @@ describe.each(['web', 'mobile'])('apps/%s', (app) => {
       'export const a = <i id="cafe" aria-controls="#face" />',
     ],
     ['a test id', 'export const a = <View testID="#beef" />'],
+    ['a fragment chosen by a condition', "export const a = <Link to={n > 1 ? '#add' : '#bad'} />"],
+    ['a location’s fragment', "export const a = <Link to={{ pathname: '/x', hash: '#add' }} />"],
+    ['a link’s address in an object', "export const a = { href: '#facade', label: n }"],
+    [
+      'an element drawn by reference',
+      'export const a = <Path fill="url(#fade)" clipPath="url(\'#c0de\')" />',
+    ],
+    ['a mask drawn by reference', "export const a = { mask: 'url( #add )' }"],
     ['a word that is a colour’s name where no colour goes', "export const a = { variant: 'tan' }"],
+    [
+      'such a word behind a condition',
+      "export const a = { variant: n > 1 ? 'tan' : 'plum', filter: 'gold' }",
+    ],
+    [
+      'a colour’s name a condition tests',
+      "export const a = { color: n === 'red' ? cssVar('danger') : cssVar('accent') }",
+    ],
+    ['a colour’s name in a computed key’s value', "export const a = { [n]: 'red' }"],
     ['a named colour in text', "export const a = t('status.red')"],
     ['a number sign before two digits', "export const a = '#12'"],
     ['a number sign before seven', "export const a = '#1234567'"],

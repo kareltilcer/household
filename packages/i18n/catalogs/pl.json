@@ -19,7 +19,7 @@
   "a11y.control.theme": "Wygląd: {theme}",
   "a11y.status.blocked": "Wstrzymane",
   "a11y.status.conflict": "Dwie wersje",
-  "a11y.status.estimated": "Szacunek",
+  "a11y.status.estimated": "Szacunkowe",
   "a11y.status.locked": "Zablokowane",
   "a11y.status.no_history": "Jeszcze bez historii",
   "a11y.status.offline": "Offline",

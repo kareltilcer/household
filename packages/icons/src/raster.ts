@@ -14,7 +14,10 @@ const token = /([MLHVCSAZ])|(-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)/gi
 /** How many numbers each command takes at a time. */
 const arity: Readonly<Record<string, number>> = { M: 2, L: 2, H: 1, V: 1, C: 6, S: 4, A: 7, Z: 0 }
 
-/** The pieces a curve is cut into. An arc of the glyphs' radii is within 0.01 of its chords. */
+/**
+ * The pieces a curve is cut into. An arc of the glyphs' and the parts' is within 0.05 of its
+ * chords: the longest, Chores' ring of radius 7.2 over 309°, is 0.045 from them.
+ */
 const pieces = 24
 
 function cubic(p0: Point, p1: Point, p2: Point, p3: Point): Point[] {
@@ -91,9 +94,15 @@ export function flatten(d: string): Segment[] {
     let first = true
     // A command repeats while numbers follow it; a move's repeats are lines.
     do {
-      const n: number[] = tokens.slice(at, at + takes).map(Number)
+      const words = tokens.slice(at, at + takes)
+      const n: number[] = words.map(Number)
       if (n.length !== takes || n.some(Number.isNaN)) {
         throw new Error(`raster: "${d}" ends inside a ${letter}`)
+      }
+      // An arc's two flags are a digit each. Run together, or into the number after them
+      // (`0 01`, `0 0 12`), they would be read as one number and the arc as another.
+      if (command === 'A' && !words.slice(3, 5).every((flag) => flag === '0' || flag === '1')) {
+        throw new Error(`raster: "${d}" has an arc whose flags are not each 0 or 1`)
       }
       at += takes
       const [ox, oy] = relative ? current : [0, 0]

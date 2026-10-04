@@ -146,6 +146,9 @@ describe('the raster', () => {
   it('refuses a command it does not read', () => {
     expect(() => flatten('M0 0Q1 1 2 0')).toThrow('does not read')
     expect(() => flatten('M0 0L1')).toThrow('ends inside')
+    // An arc's flags written without a space between them, as a minifier leaves them.
+    expect(() => flatten('M0 0a2 2 0 01 2 2 9')).toThrow('flags')
+    expect(() => flatten('M0 0a2 2 0 012 2')).toThrow()
   })
 
   it('marks the pixels a stroke covers, and measures how two marks differ', () => {

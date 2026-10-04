@@ -16,6 +16,7 @@
  *   2000 ms hold is the only feedback that the gesture is working (01-foundations §7).
  */
 import type { Theme } from './color.ts'
+import { entries } from './entries.ts'
 import { fonts } from './fonts.ts'
 import { colorNames, resolve, type ColorName } from './names.ts'
 import {
@@ -68,11 +69,6 @@ export interface Rule {
   readonly media?: string
   readonly selector: string
   readonly declarations: readonly Declaration[]
-}
-
-/** An object's entries, with its keys as it declares them. */
-function entries<Key extends string, Value>(of: Readonly<Record<Key, Value>>): [Key, Value][] {
-  return Object.entries(of) as [Key, Value][]
 }
 
 function px(value: number | string): string {

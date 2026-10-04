@@ -358,9 +358,6 @@ importers:
       lucide-static:
         specifier: 1.48.0
         version: 1.48.0
-      prettier:
-        specifier: 'catalog:'
-        version: 3.9.9
       react:
         specifier: 'catalog:'
         version: 19.3.0

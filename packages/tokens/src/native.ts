@@ -8,8 +8,9 @@
  * imports nothing of React Native's: it is data a `StyleSheet` reads.
  */
 import { themes, type Theme } from './color.ts'
+import { entries } from './entries.ts'
 import { fonts } from './fonts.ts'
-import { colorNames, resolve, type ColorName } from './names.ts'
+import { resolve, themeColors, type ColorName } from './names.ts'
 import {
   density,
   durations,
@@ -76,10 +77,6 @@ function round(value: number): number {
   return Math.round(value * 1000) / 1000
 }
 
-function entries<Key extends string, Value>(of: Readonly<Record<Key, Value>>): [Key, Value][] {
-  return Object.entries(of) as [Key, Value][]
-}
-
 function mapped<Key extends string, From, To>(
   of: Readonly<Record<Key, From>>,
   to: (value: From, key: Key) => To,
@@ -110,10 +107,7 @@ const type = mapped(typeScale, (step): NativeTypeStep => {
 function nativeTheme(theme: Theme): NativeTheme {
   const { comfortable } = density
   return {
-    color: Object.fromEntries(colorNames.map((name) => [name, resolve(name, theme)])) as Record<
-      ColorName,
-      string
-    >,
+    color: themeColors(theme),
     space,
     // Half its box, whatever the box: any radius past half the shorter side is a full round.
     radii: mapped(radii, (value) => (typeof value === 'number' ? value : 9999)),

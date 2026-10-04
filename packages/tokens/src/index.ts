@@ -14,9 +14,8 @@
  * ramps, which application code may not import (D-152).
  */
 import { moduleFamilies } from './accent.ts'
-import type { Theme } from './color.ts'
 import { fonts } from './fonts.ts'
-import { colorNames, resolve, type ColorName } from './names.ts'
+import { themeColors } from './names.ts'
 import {
   density,
   durations,
@@ -72,19 +71,12 @@ export {
 } from './scale.ts'
 export { statuses, type StatusToken } from './status.ts'
 
-function themed(theme: Theme): Readonly<Record<ColorName, string>> {
-  return Object.fromEntries(colorNames.map((name) => [name, resolve(name, theme)])) as Record<
-    ColorName,
-    string
-  >
-}
-
 /**
  * The tokens as an object: every colour name resolved in each theme, and the scales as scale.ts
  * states them, px and ms as numbers and type sizes in rem.
  */
 export const tokens = {
-  color: { light: themed('light'), dark: themed('dark') },
+  color: { light: themeColors('light'), dark: themeColors('dark') },
   moduleFamilies,
   space,
   radii,

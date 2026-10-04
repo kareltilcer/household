@@ -55,10 +55,21 @@ describe('the colour tokens', () => {
 
   it('are each in a declared pair, drawn as a token that is, or exempt with a reason', () => {
     const paired = new Set<string>(pairs.flatMap((pair) => [tokenOf(pair.fg), pair.bg]))
-    const covered = new Set([...paired, ...Object.keys(sameAs), ...Object.keys(drawnAs)])
+    // Another token's pairs cover the one that takes its value only if it has some. A token
+    // that takes an exempt one's value, as hold-track takes border-subtle's, is in no pair and
+    // needs a reason of its own.
+    const aliased = Object.entries(sameAs)
+      .filter(([, same]) => paired.has(same))
+      .map(([token]) => token)
+    const drawn = Object.entries(drawnAs)
+      .filter(([, surface]) => themes.every((theme) => paired.has(surface[theme])))
+      .map(([token]) => token)
+    const covered = new Set([...paired, ...aliased, ...drawn])
     expect(colorTokens.filter((token) => !covered.has(token)).sort()).toEqual(
       Object.keys(exempt).sort(),
     )
+    expect(Object.keys(sameAs).filter((token) => !aliased.includes(token))).toEqual(['hold-track'])
+    expect(drawn).toEqual(Object.keys(drawnAs))
     // An exempt token is in no pair, or the exemption says nothing.
     expect(Object.keys(exempt).filter((token) => paired.has(token))).toEqual([])
   })

@@ -45,3 +45,11 @@ export const colorNames: readonly ColorName[] = [
   ...(Object.keys(statuses) as StatusToken[]),
   ...moduleIds.map(accentToken).filter((name) => !isColorToken(name)),
 ]
+
+/** Every colour name's value in a theme: what the object and the React Native theme both hold. */
+export function themeColors(theme: Theme): Readonly<Record<ColorName, string>> {
+  return Object.fromEntries(colorNames.map((name) => [name, resolve(name, theme)])) as Record<
+    ColorName,
+    string
+  >
+}

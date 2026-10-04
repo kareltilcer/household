@@ -5,7 +5,7 @@ import eslint from '@eslint/js'
 import { defineConfig, globalIgnores } from 'eslint/config'
 import tseslint from 'typescript-eslint'
 // The lists the stylesheets' check reads too (tooling/src/stylesheets.ts).
-import { colourFunctions, namedColours, primitive } from './tooling/colours.js'
+import { colourFunctions, hexDigits, namedColours, primitive } from './tooling/colours.js'
 
 // 06-clients §8: "zero suppressions without a linked issue". A suppression cites the issue
 // that removes it as `#123` or an `…/issues/123` link.
@@ -254,12 +254,22 @@ const noLiteralStrings = {
  * - a raw colour in a string or a template: a hex colour, or a colour function (`rgb()`,
  *   `hsl()`, `oklch()`, …). `color-mix()` over tokens is no raw colour;
  * - a named colour (`white`, `red`) as the value of a property or a prop that takes a colour,
- *   alone or inside a shorthand (`border: '1px solid black'`);
+ *   alone or inside a shorthand (`border: '1px solid black'`). It is that value wherever the
+ *   value is chosen or built: a branch of a conditional, an operand of `&&`, `||`, `??` or a
+ *   concatenation, an interpolation, an element of an array (`colors={['white', 'black']}`), a
+ *   property of an object the prop takes (`trackColor={{ false: 'grey' }}`), a destructured
+ *   prop's default, or under a type assertion;
  * - a primitive: an import of `@household/tokens/primitives`, or a ramp's custom property
  *   (`--neutral-200`) in a string.
  *
- * A `#` in an attribute that names or links, not paints (`href="#add"`), starts no colour. The
- * space, radius, type and motion scales are spent by name and are not this rule's.
+ * A `#` in an attribute that names or links, not paints (`href="#add"`, a location's `hash`),
+ * starts no colour, and neither does what a `url()` holds, which refers to an element
+ * (`fill="url(#fade)"`). Anywhere else a string of a hex colour's shape is taken for one: a
+ * selector or a number that spells one (`'#add'`, `'#123'`) is not told from a colour handed to
+ * a function, which is the commoner of the two in a client. A named colour is looked for only
+ * where a colour goes, since its word is a word everywhere else, so one held in a variable and
+ * spent by that name passes: the reviews' to catch. The space, radius, type and motion scales
+ * are spent by name and are not this rule's.
  * @type {import('eslint').Rule.RuleModule}
  */
 const semanticTokens = {
@@ -279,36 +289,88 @@ const semanticTokens = {
     },
   },
   create(context) {
-    const hex = /(?<![\w&#/-])#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})(?![\w-])/i
+    // A hex colour inside a text: not where the `#` is part of a word, an entity or an address,
+    // and not what a `url()` holds, which is a fragment.
+    const hex = new RegExp(String.raw`(?<![\w&#/-])(?<!url\(\s*["']?)#${hexDigits}(?![\w-])`, 'i')
     const colourFunction = new RegExp(
       String.raw`(?<![\w-])(?:${[...colourFunctions].join('|')})\(`,
       'i',
     )
     const primitives = '@household/tokens/primitives'
-    // Props and properties whose value is a colour, or a shorthand that holds one.
+    // Props and properties whose value is a colour, or a shorthand that holds one, under the
+    // name a style object gives them, and every custom property, as the stylesheets' check has
+    // it. `filter` is not among them: in an object it names too much else for its
+    // `drop-shadow()` to be read for a colour's name.
     const takesColour =
-      /^(?:color|fill|stroke|background|outline|border(?:Top|Right|Bottom|Left|Block|Inline)?|boxShadow|textShadow|.*Color)$/
+      /^(?:--.+|color|fill|stroke|background(?:Image)?|outline|border(?:Top|Right|Bottom|Left|(?:Block|Inline)(?:Start|End)?|Image)?|columnRule|boxShadow|textShadow|textDecoration|WebkitTextStroke|.*[Cc]olors?)$/
     // Attributes that name or link: a `#` in one starts a fragment or an id, never a colour.
     const names =
       /^(?:href|to|id|htmlFor|key|name|testID|xlinkHref|data-.+|aria-(?:controls|labelledby|describedby|owns|activedescendant))$/
+    // The properties of an object that do: a link's `href` and a location's `hash`. `to`,
+    // `name`, `key` and `id` name anything in an object: `{ from: '#000', to: '#fff' }`.
+    const nameProperties = /^(?:href|xlinkHref|hash)$/
+
+    /**
+     * @param {string} name A prop's or a property's name
+     * @returns {string} It as a style object spells it: `background-color` as `backgroundColor`
+     */
+    function camelCased(name) {
+      if (name.startsWith('--')) return name
+      return name.replace(/-([a-z])/g, (_, letter) => String(letter).toUpperCase())
+    }
 
     /**
      * @param {any} node A string or a template element
-     * @returns {string | undefined} The prop or the property it is the value of, if it is one's
+     * @returns {{ attribute: boolean, name: string }[]} The props and the properties it is the
+     *   value of, the nearest first: its own, and each one whose value it is a part of
      */
-    function valueOf(node) {
-      const value = node.parent.type === 'TemplateLiteral' ? node.parent : node
-      const holder =
-        value.parent.type === 'JSXExpressionContainer' ? value.parent.parent : value.parent
-      if (holder.type === 'JSXAttribute') {
-        return holder.name.type === 'JSXNamespacedName'
-          ? `${holder.name.namespace.name}:${holder.name.name.name}`
-          : holder.name.name
+    function places(node) {
+      const found = []
+      let value = node
+      for (let parent = node.parent; parent; value = parent, parent = parent.parent) {
+        switch (parent.type) {
+          // What a value passes through on its way to the prop or the property that takes it.
+          case 'TemplateLiteral':
+          case 'JSXExpressionContainer':
+          case 'ArrayExpression':
+          case 'ObjectExpression':
+          case 'LogicalExpression':
+          case 'TSAsExpression':
+          case 'TSSatisfiesExpression':
+          case 'TSNonNullExpression':
+            break
+          case 'ConditionalExpression':
+            // Its branches are what it gives; its test is not.
+            if (parent.test === value) return found
+            break
+          case 'BinaryExpression':
+            if (parent.operator !== '+') return found
+            break
+          case 'AssignmentPattern':
+            // A destructured prop's default, `{ color = 'black' }`, is that prop's value.
+            if (parent.right !== value) return found
+            break
+          case 'Property':
+            if (parent.value !== value || parent.computed) return found
+            found.push({
+              attribute: false,
+              name: parent.key.type === 'Identifier' ? parent.key.name : String(parent.key.value),
+            })
+            break
+          case 'JSXAttribute':
+            found.push({
+              attribute: true,
+              name:
+                parent.name.type === 'JSXNamespacedName'
+                  ? `${parent.name.namespace.name}:${parent.name.name.name}`
+                  : parent.name.name,
+            })
+            return found
+          default:
+            return found
+        }
       }
-      if (holder.type === 'Property' && holder.value === value && !holder.computed) {
-        return holder.key.type === 'Identifier' ? holder.key.name : String(holder.key.value)
-      }
-      return undefined
+      return found
     }
 
     /**
@@ -320,11 +382,11 @@ const semanticTokens = {
         context.report({ node, messageId: 'primitive' })
         return
       }
-      const place = valueOf(node)
-      if (place !== undefined && names.test(place)) return
+      const held = places(node)
+      const [nearest] = held
+      if (nearest && (nearest.attribute ? names : nameProperties).test(nearest.name)) return
       const named =
-        place !== undefined &&
-        takesColour.test(place) &&
+        held.some((place) => takesColour.test(camelCased(place.name))) &&
         text.split(/[\s,()]+/).some((word) => namedColours.has(word.toLowerCase()))
       if (hex.test(text) || colourFunction.test(text) || named) {
         context.report({ node, messageId: 'raw' })

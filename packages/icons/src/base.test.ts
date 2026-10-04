@@ -41,11 +41,15 @@ describe('the base set', () => {
         expect(['path', 'circle', 'rect', 'line'], id).toContain(shape.tag)
         // No colour of its own, and no fill: a base glyph is one stroke in the current colour.
         expect(Object.keys(shape).filter((key) => /fill|stroke|color/i.test(key))).toEqual([])
-        if (shape.tag === 'path') expect(shape.d, id).toMatch(/^[a-zA-Z0-9 .,-]+$/)
+        if (shape.tag !== 'path') continue
+        expect(shape.d, id).toMatch(/^[a-zA-Z0-9 .,-]+$/)
+        // The raster reads the in-house sets' commands, and every path of Lucide's is drawn
+        // in them: a release that brings another fails here, with the glyph's name.
+        expect(() => flatten(shape.d), id).not.toThrow()
+        expect(flatten(shape.d).length, id).toBeGreaterThan(0)
       }
     }
-    // The raster reads the in-house sets' commands; Lucide's lines and arcs are among them.
-    expect(() => flatten('M18 6 6 18')).not.toThrow()
+    expect(baseIds.some((id) => baseGlyphs[id].some((shape) => shape.tag === 'path'))).toBe(true)
   })
 
   it('stands for no status and no module: those are drawn in-house', () => {

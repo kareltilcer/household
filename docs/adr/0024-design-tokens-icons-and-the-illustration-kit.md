@@ -40,8 +40,10 @@ light and its dark value, and the trail in its comment says where the value came
 are `@household/tokens/primitives`: reference data that no stylesheet declares and application
 code may not import (D-152). Seven tokens are another's value under their own name (`sameAs`), two
 component backgrounds are a tested surface's value in each theme (`drawnAs`), and a test holds each
-to that, so that one moving alone is a decision. Every colour token is in a declared pair, is one
-of those, or is exempt with its reason: a test fails a token that is none of the three.
+to that, so that one moving alone is a decision. Every colour token is in a declared pair, takes
+the value of one that is, or is exempt with its reason: a test fails a token that is none of the
+three. `hold-track` is the one exemption the design did not list: its value is `border-subtle`'s,
+which is in no pair, so it carries a reason of its own.
 
 **One source, three outputs.**
 
@@ -98,8 +100,12 @@ same two components, and it is spent with the icons.
 holds `apps/**`'s TypeScript, and `tooling/src/stylesheets.ts` holds `apps/**/*.css`: it parses
 a stylesheet with PostCSS, which Vite already brings, and each value with postcss-value-parser,
 and reports a raw colour or a primitive (`pnpm run lint:css`, which `pnpm run lint` and CI run).
-Both read one list of ramps and of colour names (`tooling/colours.js`), and
-`tooling/src/token-lint.test.ts` holds both to their cases and the list to the package's ramps.
+Both read one list of ramps, of colour names and of a hex colour's digits (`tooling/colours.js`),
+and `tooling/src/token-lint.test.ts` holds both to their cases and the list to the package's ramps.
+A stylesheet's value is a colour's wherever a name of one stands in it; a string of TypeScript is
+looked at for a colour's name only where it is the value of a prop or a property that takes a
+colour, however that value is chosen or built, so a colour's name held in a variable is a review's
+to catch.
 
 ## Alternatives rejected
 

@@ -77,7 +77,8 @@ export const pairs: readonly Pair[] = declare()
 /**
  * The tokens that are deliberately in no declared pair, each with its reason. A colour token is
  * in a pair, is drawn as one that is (`sameAs`, `drawnAs`), or is here: a test fails one that is
- * none of the three.
+ * none of the three. A token that takes the value of an exempt one is in no pair either, and has
+ * a reason of its own here.
  */
 export const exempt = {
   'text-disabled':
@@ -92,6 +93,8 @@ export const exempt = {
   'focus-ring-offset':
     'The gap, not the ink. It is tested implicitly by the focus pair on each surface.',
   'skeleton-bg': 'A loading shape with no text on it.',
+  'hold-track':
+    'The unfilled part of the hold, border-subtle by value: a ground with no text on it. The fill that crosses it is the accent, which is tested.',
 } as const satisfies Partial<Record<ColorToken, string>>
 
 /**

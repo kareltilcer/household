@@ -24,8 +24,15 @@ export const ramps = [
 /** A ramp's custom property, wherever in a text it is named. */
 export const primitive = new RegExp(String.raw`--(?:${ramps.join('|')})-\d`)
 
-/** A colour in hexadecimal: three, four, six or eight digits. */
-export const hexColour = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+/**
+ * A hexadecimal colour's digits, three, four, six or eight of them, as the source of a pattern:
+ * the stylesheets' check reads a value word by word and the ESLint rule finds one inside a text,
+ * so each puts its own edges round the same digits.
+ */
+export const hexDigits = '(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})'
+
+/** A colour in hexadecimal, as a word of a value. */
+export const hexColour = new RegExp(`^#${hexDigits}$`, 'i')
 
 /** The functions that state a colour by its coordinates. `color-mix()` over tokens states none. */
 export const colourFunctions = new Set([
