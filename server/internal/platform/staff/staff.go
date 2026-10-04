@@ -321,7 +321,8 @@ func invalid(field, code string) *problem.Problem {
 }
 
 // inapplicable is the 409 for an action that does not apply to what it names as it stands: an
-// address verified already, a second step that is not locked, an invoice that is not paid.
+// address verified already, a second step that is not locked, an invoice that is not paid, an account
+// whose deletion no link cancels any more.
 func inapplicable() *problem.Problem {
 	return problem.New(http.StatusConflict, problem.CodeNotApplicable)
 }

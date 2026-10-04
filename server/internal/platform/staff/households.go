@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -326,7 +325,7 @@ func (s *Service) details(ctx context.Context, tx pgx.Tx, d *householdDetail) er
 	if d.LimitOverrides, err = limits(ctx, tx, d.ID); err != nil {
 		return err
 	}
-	if d.Flags, err = householdFlags(ctx, tx, d.ID); err != nil {
+	if d.Flags, err = householdFlags(ctx, tx, d.ID, ""); err != nil {
 		return err
 	}
 
@@ -410,13 +409,15 @@ func overridden(key string, value int64, reason string, by *uuid.UUID, label str
 }
 
 // householdFlags reads, in tx, every feature flag as it stands for household id, in the order of
-// their keys: its own setting of each, before the platform's.
-func householdFlags(ctx context.Context, tx pgx.Tx, id uuid.UUID) ([]flagDoc, error) {
+// their keys: its own setting of each, before the platform's. With a key, it reads that flag alone,
+// and nothing for one the platform does not have.
+func householdFlags(ctx context.Context, tx pgx.Tx, id uuid.UUID, key string) ([]flagDoc, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT f.key, coalesce(hf.enabled, f.enabled), hf.enabled IS NOT NULL
 		FROM platform.feature_flags f
 		LEFT JOIN household_flags hf ON hf.household_id = $1 AND hf.key = f.key
-		ORDER BY f.key`, id)
+		WHERE $2 = '' OR f.key = $2
+		ORDER BY f.key`, id, key)
 	if err != nil {
 		return nil, err
 	}
@@ -905,19 +906,19 @@ func (s *Service) setHouseholdFlag(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// The flag as it stands for the household now, as the staff role reads it.
 	var flags []flagDoc
 	if err := s.read(ctx, func(tx pgx.Tx) error {
 		var err error
-		flags, err = householdFlags(ctx, tx, id)
+		flags, err = householdFlags(ctx, tx, id, key)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	i := slices.IndexFunc(flags, func(f flagDoc) bool { return f.Key == key })
-	if i < 0 {
+	if len(flags) != 1 {
 		s.fail(w, r, problem.NotFound())
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, flags[i])
+	httpx.WriteJSON(w, http.StatusOK, flags[0])
 }

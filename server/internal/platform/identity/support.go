@@ -41,6 +41,10 @@ var (
 	ErrNoSecondStep = errors.New("identity: the account has no second step")
 	// ErrNotLocked is UnlockSecondStep's refusal of a second step that is not locked.
 	ErrNotLocked = errors.New("identity: the second step is not locked")
+	// ErrNoWayBack is SendPasswordReset's refusal of an account scheduled for deletion that no link
+	// cancels any more, used, past its time or ended as the deletion's execution began: there is
+	// nothing to send it, and an action that sent nothing is recorded nowhere (D-145).
+	ErrNoWayBack = errors.New("identity: no link cancels the account's deletion any more")
 )
 
 // supported is an account a support action reaches.
@@ -101,7 +105,9 @@ func (s *Service) ResendVerification(ctx context.Context, user uuid.UUID, witnes
 
 // SendPasswordReset sends user's address a link that sets a new password, as asking for one does
 // (postAuthPasswordReset): an account scheduled for deletion, which no password signs in to, is sent
-// the link that cancels the deletion in its place (D-136), and nothing once no link cancels it.
+// the link that cancels the deletion in its place (D-136). Once no link cancels it, it is refused,
+// ErrNoWayBack, where asking for one answers as ever and sends nothing: whoever asks for a reset is
+// told nothing of the account, and support, who reads it, is told that nothing went.
 func (s *Service) SendPasswordReset(ctx context.Context, user uuid.UUID, witness Witness) error {
 	var (
 		a     supported
@@ -114,7 +120,9 @@ func (s *Service) SendPasswordReset(ctx context.Context, user uuid.UUID, witness
 			return err
 		}
 		if a.leaving {
-			token, days, err = s.renewCancelLink(ctx, tx, user)
+			if token, days, err = s.renewCancelLink(ctx, tx, user); err == nil && token == "" {
+				err = ErrNoWayBack
+			}
 		} else {
 			token, err = issueToken(ctx, tx, user, resetLink.purpose, a.address, resetLink.ttl, s.Sessions.Now())
 		}
@@ -126,8 +134,7 @@ func (s *Service) SendPasswordReset(ctx context.Context, user uuid.UUID, witness
 	switch {
 	case err != nil:
 		return err
-	case token == "":
-	case days > 0:
+	case a.leaving:
 		s.email(ctx, a.address, a.language, emailAccountDeletion, s.link(routeCancelDeletion, token), i18n.Args{"days": days})
 	default:
 		s.email(ctx, a.address, a.language, resetLink.template, s.link(resetLink.route, token))

@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"net/http"
@@ -582,6 +583,134 @@ func TestNoFlagTurnsHouseholdSettingsOff(t *testing.T) {
 	expect(t, jana.get(householdPath(h.ID, "/invitations")), http.StatusOK, "")
 }
 
+// A household is answered with its flags where no request resolved them (D-146): the one made while a
+// module ships dark names its creator's level on that module as none, and the flags that are on, as
+// their next request reads it; and enabling the module answers the level its owner is left with, none
+// until its flag is on for the household.
+func TestAHouseholdMadeOrChangedIsAnsweredByItsFlags(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	support := s.staffer("Sára", s.a("sara@example"), staff.Support)
+	const dark = "module.garden"
+	// The flag is the platform's, and the package's tests share one database: it goes with the test.
+	t.Cleanup(func() {
+		for _, stmt := range []string{"DELETE FROM household_flags WHERE key = $1", "DELETE FROM platform.feature_flags WHERE key = $1"} {
+			if _, err := s.admin.Exec(context.Background(), stmt, dark); err != nil {
+				t.Errorf("%s: %v", stmt, err)
+			}
+		}
+	})
+	launched := "made_" + strings.ReplaceAll(s.domain, ".", "_") + ".flag"
+	expect(t, support.put("/platform/flags/"+dark, `{"enabled": false, "reason": "ships dark"}`), http.StatusOK, "")
+	expect(t, support.put("/platform/flags/"+launched, `{"enabled": true, "reason": "launch"}`), http.StatusOK, "")
+
+	type household struct {
+		ID       uuid.UUID         `json:"id"`
+		MyGrants map[string]string `json:"my_grants"`
+		Flags    []string          `json:"flags"`
+	}
+	jana := s.person("Jana", s.a("jana@example"))
+	rec := jana.post("/households", jsonBody(t, map[string]any{
+		"id": idgen.New(), "name": "Tilcerovi", "country": "CZ", "timezone": "Europe/Prague", "base_currency": "CZK", "locale": "cs",
+	}))
+	expect(t, rec, http.StatusCreated, "")
+	var made, read household
+	decode(t, rec, &made)
+	if made.MyGrants["garden"] != "none" || made.MyGrants["tasks"] != "manage" || made.MyGrants["admin"] != "manage" ||
+		!slices.Contains(made.Flags, launched) || slices.Contains(made.Flags, dark) {
+		t.Fatalf("the household as it was made: %+v", made)
+	}
+	rec = jana.get(householdPath(made.ID, ""))
+	expect(t, rec, http.StatusOK, "")
+	decode(t, rec, &read)
+	if !maps.Equal(made.MyGrants, read.MyGrants) || !slices.Equal(made.Flags, read.Flags) {
+		t.Fatalf("made as %+v, and read as %+v", made, read)
+	}
+
+	// Enabled while its flag is off, the module is still none of its owner's.
+	garden := householdPath(made.ID, "/modules/garden")
+	enable := func() string {
+		t.Helper()
+		expect(t, jana.patch(garden, `{"enabled":false}`, nil), http.StatusOK, "")
+		rec := jana.patch(garden, `{"enabled":true}`, nil)
+		expect(t, rec, http.StatusOK, "")
+		var state struct {
+			Enabled bool   `json:"enabled"`
+			MyLevel string `json:"my_level"`
+		}
+		decode(t, rec, &state)
+		if !state.Enabled {
+			t.Fatalf("the module enabled: %+v", state)
+		}
+		return state.MyLevel
+	}
+	if level := enable(); level != "none" {
+		t.Fatalf("enabling a module whose flag is off answers the level %q, want none", level)
+	}
+	// On for this household, it is its owner's to manage once enabled.
+	expect(t, support.put(platformPath(made.ID, "/flags/"+dark), `{"enabled": true, "reason": "they try it first"}`), http.StatusOK, "")
+	if level := enable(); level != "manage" {
+		t.Fatalf("enabling a module whose flag is on for the household answers the level %q, want manage", level)
+	}
+}
+
+// What the platform's staff did to a household is in its owner's export of it (FR-PR2, FR-AL7): the
+// flag they set for it and the ceiling they raised, as what was set and never why or by whom, which
+// are the platform's own log's (D-145); and each action in its activity log, done by the platform's
+// support, named as a client names it and never by the service's own label.
+func TestAnOwnersExportCarriesWhatStaffDid(t *testing.T) {
+	p := newPrivacySite(t)
+	jana := p.person("Jana", p.a("jana@tilcerovi.cz"))
+	h := jana.create("Tilcerovi")
+	admin := p.staffer("Karel", p.a("karel@example"), staff.Admin)
+	// A flag of this test's own: the package's tests share one database.
+	key := "exported_" + strings.ReplaceAll(p.domain, ".", "_") + ".flag"
+	expect(t, admin.put("/platform/flags/"+key, `{"enabled": false, "reason": "ship it dark"}`), http.StatusOK, "")
+	expect(t, admin.put(platformPath(h.ID, "/flags/"+key), `{"enabled": true, "reason": "ticket 4411: they asked to try it"}`), http.StatusOK, "")
+	expect(t, admin.patch(platformPath(h.ID, "/limits"), `{"key": "members", "value": 20, "reason": "ticket 4411: three generations"}`, nil),
+		http.StatusOK, "")
+
+	path := householdPath(h.ID, "/exports")
+	queued := exportOf(t, jana.post(path, ""), http.StatusAccepted)
+	p.work()
+	ready := exportOf(t, jana.get(path+"/"+queued.ID.String()), http.StatusOK)
+	if ready.Status != "ready" || ready.DownloadURL == nil {
+		t.Fatalf("the export: %+v", ready)
+	}
+	entries, _ := archive(t, *ready.DownloadURL)
+	var set struct {
+		Flags []struct {
+			Key     string `json:"key"`
+			Enabled bool   `json:"enabled"`
+		} `json:"flags"`
+		Limits []struct {
+			Key   string `json:"key"`
+			Value int64  `json:"value"`
+		} `json:"limits"`
+	}
+	if err := json.Unmarshal([]byte(entries["admin.json"]), &set); err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Flags) != 1 || set.Flags[0].Key != key || !set.Flags[0].Enabled ||
+		len(set.Limits) != 1 || set.Limits[0].Key != "members" || set.Limits[0].Value != 20 {
+		t.Errorf("admin.json holds what staff set as %+v", set)
+	}
+	log := entries["activity-log.csv"]
+	for _, want := range []string{
+		",Household support,admin,support.flag,,,Turned the feature " + key + " on for the household\r\n",
+		",Household support,admin,support.limit,,,Raised the household’s limit on members\r\n",
+	} {
+		if !strings.Contains(log, want) {
+			t.Errorf("the activity log lacks %q:\n%s", want, log)
+		}
+	}
+	// Neither who it was nor why, and never the label the service's events are kept under.
+	for name, entry := range map[string]string{"admin.json": entries["admin.json"], "activity-log.csv": log} {
+		if strings.Contains(entry, "4411") || strings.Contains(entry, p.a("karel@example")) || strings.Contains(entry, ",support,") {
+			t.Errorf("%s names the staff member, their reason or the service's label:\n%s", name, entry)
+		}
+	}
+}
+
 // What support does for an account (PRD 02 §8, D-100): the verification and the reset link sent
 // again, what is counted against it forgotten, and a second step unlocked or turned off, each in the
 // platform's log and in no household's.
@@ -677,6 +806,26 @@ func TestSupportActOnAnAccount(t *testing.T) {
 	jana := s.person("Jana", s.a("jana@example"))
 	child := jana.child(jana.create("Tilcerovi").ID, "Adam", "1234", nil)
 	expect(t, act(child.UserID, "send_password_reset"), http.StatusNotFound, problem.CodeNotFound)
+
+	// An account scheduled for deletion, which no password signs in to, is sent the link that cancels
+	// the deletion in a reset's place (D-136). Once no link cancels it there is nothing to send: the
+	// action is refused, and recorded nowhere.
+	leaving := s.a("odchazi@example")
+	gone := s.person("Odcházející", leaving)
+	goneID := gone.me().ID
+	expect(t, gone.deleteAccount(passphrase), http.StatusAccepted, "")
+	sent = len(s.outbox.To(leaving))
+	expect(t, act(goneID, "send_password_reset"), http.StatusAccepted, "")
+	if mail := s.outbox.To(leaving); len(mail) != sent+1 || !strings.Contains(mail[len(mail)-1].Subject, "will be deleted") {
+		t.Fatalf("%d messages to an account scheduled for deletion, want %d, the last the link that cancels it", len(mail), sent+1)
+	}
+	if _, err := s.admin.Exec(t.Context(), "UPDATE email_tokens SET used_at = now() WHERE user_id = $1 AND purpose = 'cancel_deletion'", goneID); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, act(goneID, "send_password_reset"), http.StatusConflict, problem.CodeNotApplicable)
+	if n, logged := len(s.outbox.To(leaving)), s.count("SELECT count(*) FROM platform.audit_log WHERE target_user_id = $1", goneID); n != sent+1 || logged != 1 {
+		t.Fatalf("%d messages and %d entries once no link cancels the deletion, want %d and the one that was sent", n, logged, sent+1)
+	}
 }
 
 // The staff are managed by platform_admin: an account with a verified address is made staff, is
@@ -840,8 +989,8 @@ func TestTheLastPlatformAdminKeepsTheRole(t *testing.T) {
 	s := newSite(t, apptest.Options{})
 	admin := s.staffer("Karel", s.a("karel@example"), staff.Admin)
 	karel := admin.me().ID
-	// The package's tests share one database: the others' platform_admins are taken out of the way,
-	// in a transaction of this test's own, so that this one is the last.
+	// The package's tests share one database: the others' platform_admins are taken out of the staff,
+	// for good, so that this one is the last. No other test misses them: each makes its own staff.
 	if _, err := s.admin.Exec(t.Context(), "DELETE FROM platform.staff WHERE role = 'platform_admin' AND user_id <> $1", karel); err != nil {
 		t.Fatal(err)
 	}

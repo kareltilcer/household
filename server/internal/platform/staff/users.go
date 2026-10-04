@@ -269,7 +269,8 @@ func (s *Service) actOnUser(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, identity.ErrNoAccount):
 		err = problem.NotFound()
-	case errors.Is(err, identity.ErrVerified), errors.Is(err, identity.ErrNoSecondStep), errors.Is(err, identity.ErrNotLocked):
+	case errors.Is(err, identity.ErrVerified), errors.Is(err, identity.ErrNoSecondStep), errors.Is(err, identity.ErrNotLocked),
+		errors.Is(err, identity.ErrNoWayBack):
 		err = inapplicable()
 	}
 	if err != nil {

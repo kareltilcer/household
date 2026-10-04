@@ -124,6 +124,17 @@ func (s *Scope) Flags() []string {
 	return out
 }
 
+// Dark reports whether module ships dark for the household (D-146): its flag (ModuleFlag) is one
+// somebody made and is off for it, so that nobody in it holds a level on the module, whatever it
+// enables and grants. Household settings is never dark, whose flag gates nothing, nor is any module in
+// a scope the middleware did not resolve (Assume), which knows no flag. What a request may do is
+// Level's to say; this is for an answer that says what a change of the household's enablement leaves
+// its caller with, which the scope's levels, read before the change, do not.
+func (s *Scope) Dark(module string) bool {
+	on, made := s.flags[ModuleFlag(module)]
+	return made && !on && module != settingsModule
+}
+
 // Assume returns ctx carrying the scope of household for user, whose role there is role, without
 // the membership check the middleware makes: the scope through which the platform reads and
 // writes a household the caller holds no membership in, or none yet, once something else has
@@ -386,6 +397,17 @@ func (s *Scope) settings(ctx context.Context, tx pgx.Tx) error {
 		return nil
 	})
 	return err
+}
+
+// Flags are the feature flags that are on for household, read in tx in its context, in the order of
+// their keys, as Scope.Flags names them: what the household's representation says where no request
+// resolved its scope, the answer to the request that creates it.
+func Flags(ctx context.Context, tx pgx.Tx, household uuid.UUID) ([]string, error) {
+	s := &Scope{householdID: household}
+	if err := s.settings(ctx, tx); err != nil {
+		return nil, err
+	}
+	return s.Flags(), nil
 }
 
 // ModuleFlag is the feature flag a module ships dark behind (PRD 06 §7, D-146): "module." and its

@@ -1354,7 +1354,9 @@ paths:
         profile; a country Household has no profile of is refused `422` naming `/country`, and an `id`
         another household has, or had before it was erased (D-140), `422` naming `/id`. A child
         profile is refused `403`: it is a profile an owner manages in their household, never a
-        household's owner and payer (D-17, D-104).
+        household's owner and payer (D-17, D-104). The household is answered as its creator's next
+        read finds it: `flags` names the feature flags that are on for it, and `my_grants` no level
+        on a module whose flag is off for the platform, which enabling does not serve (D-146).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1887,7 +1889,9 @@ paths:
       description: |
         Owner only. Disabling makes the module's routes `404`, removes its widgets, stops and retracts
         its sync entities, and **retains its data**. Re-enabling restores everything. `admin`, the
-        household's settings, is never disabled (`403`).
+        household's settings, is never disabled (`403`). `my_level` is the owner's level as their next
+        request finds it: `none` on a module whose feature flag is off for the household, which
+        enabling does not serve (D-146).
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -8772,7 +8776,8 @@ paths:
         - `resend_verification` sends the address a new verification link, whatever the resend's own
           limits say. An address verified already has none to be sent (`409`, `not_applicable`).
         - `send_password_reset` sends a link that sets a new password; an account scheduled for
-          deletion is sent the link that cancels the deletion in its place (D-136).
+          deletion is sent the link that cancels the deletion in its place (D-136), and one whose
+          deletion no link cancels any more has nothing to be sent (`409`, `not_applicable`).
         - `clear_rate_limit` forgets what is counted against the account on the sign-in surfaces
           (PRD 02 §9): the attempts at its address and the wrong second-step codes.
         - `unlock` unlocks an authenticator ten wrong codes locked (D-100), as a recovery code does.
@@ -9221,8 +9226,9 @@ components:
       description: |
         The action does not apply to what it names as it stands (`not_applicable`): a household with
         no trial to extend, an invoice that is not paid, a notification that cannot go again, an
-        address verified already, a second step that is not on or not locked, or the last
-        `platform_admin`'s role. Nothing was done, and nothing is recorded.
+        address verified already, an account whose deletion no link cancels any more, a second step
+        that is not on or not locked, or the last `platform_admin`'s role. Nothing was done, and
+        nothing is recorded.
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     Unprocessable:
       description: Validation failed. `errors` names each offending field.

@@ -97,7 +97,10 @@ module's enablement reads as off, so its routes answer `404`, the push refuses i
 about it goes to nobody, as for a module the household does not enable. Household settings (`admin`)
 is the one module whose flag gates nothing: it is never disabled (FR-HA8, `patchModulesByModule`),
 and a flag would leave a household's owners with no level on it and nobody among them who could turn
-it on again. The generated
+it on again. An answer that no resolved scope stands behind says the same as the next request will:
+the household just created reads its creator's levels and its flags in the transaction that made it
+(`tenant.Levels`, `tenant.Flags`), and enabling a module answers the level its flag leaves its owner
+with (`Scope.Dark`). The generated
 streams do not read the flags, so a replica still holds the rows of a module whose flag was turned
 off: the scope carries, beside each level, the level the streams read, by enablement and grant alone
 (`Scope.Replicated`), and a replica's report is compared with that (`replica.Expected`, D-125).
@@ -149,8 +152,9 @@ the rule.
   mutation, a transaction: the staff package supplies both. `billing.Service.ResendInvoice` changed
   shape for it, and `Credit` takes the name of its request and renders its own note.
 - The household's log now holds events with no sync change beside them (`admin.support.credit`,
-  `…invoice`, `…redrive`, `…limit`, `…flag`). Item 52 renders a `service` actor's label through the
-  catalog (`activity.actor.support`).
+  `…invoice`, `…redrive`, `…limit`, `…flag`). A `service` actor's label is rendered through the
+  catalog (`activity.actor.support`, *Household support*): by an export's activity log now, and by
+  item 52's screen.
 - A flag turned off for a household that has used its module stops the module's routes and its push;
   the rows already on its replicas stay until the module is disabled, and their reports still match.
 - Every household-scoped request reads the household's ceilings and flags, one indexed statement
