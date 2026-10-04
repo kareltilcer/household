@@ -4,6 +4,8 @@
 import eslint from '@eslint/js'
 import { defineConfig, globalIgnores } from 'eslint/config'
 import tseslint from 'typescript-eslint'
+// The lists the stylesheets' check reads too (tooling/src/stylesheets.ts).
+import { colourFunctions, namedColours, primitive } from './tooling/colours.js'
 
 // 06-clients §8: "zero suppressions without a linked issue". A suppression cites the issue
 // that removes it as `#123` or an `…/issues/123` link.
@@ -244,6 +246,139 @@ const noLiteralStrings = {
   },
 }
 
+/**
+ * 06-clients §3 and §8 (D-152): application code spends colour through @household/tokens'
+ * semantic and component tokens, so that a screen follows its theme and every combination it
+ * draws is a declared contrast pair. In client code it reports:
+ *
+ * - a raw colour in a string or a template: a hex colour, or a colour function (`rgb()`,
+ *   `hsl()`, `oklch()`, …). `color-mix()` over tokens is no raw colour;
+ * - a named colour (`white`, `red`) as the value of a property or a prop that takes a colour,
+ *   alone or inside a shorthand (`border: '1px solid black'`);
+ * - a primitive: an import of `@household/tokens/primitives`, or a ramp's custom property
+ *   (`--neutral-200`) in a string.
+ *
+ * A `#` in an attribute that names or links, not paints (`href="#add"`), starts no colour. The
+ * space, radius, type and motion scales are spent by name and are not this rule's.
+ * @type {import('eslint').Rule.RuleModule}
+ */
+const semanticTokens = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Forbid raw colours and primitive tokens in client code (06-clients §3, D-152)',
+    },
+    schema: [],
+    messages: {
+      raw:
+        'A raw colour is not a token (06-clients §3): name a semantic or a component token of ' +
+        '@household/tokens, whose value follows the theme.',
+      primitive:
+        'A primitive is the semantic layer’s alone (06-clients §3, D-152): name a semantic or a ' +
+        'component token of @household/tokens.',
+    },
+  },
+  create(context) {
+    const hex = /(?<![\w&#/-])#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})(?![\w-])/i
+    const colourFunction = new RegExp(
+      String.raw`(?<![\w-])(?:${[...colourFunctions].join('|')})\(`,
+      'i',
+    )
+    const primitives = '@household/tokens/primitives'
+    // Props and properties whose value is a colour, or a shorthand that holds one.
+    const takesColour =
+      /^(?:color|fill|stroke|background|outline|border(?:Top|Right|Bottom|Left|Block|Inline)?|boxShadow|textShadow|.*Color)$/
+    // Attributes that name or link: a `#` in one starts a fragment or an id, never a colour.
+    const names =
+      /^(?:href|to|id|htmlFor|key|name|testID|xlinkHref|data-.+|aria-(?:controls|labelledby|describedby|owns|activedescendant))$/
+
+    /**
+     * @param {any} node A string or a template element
+     * @returns {string | undefined} The prop or the property it is the value of, if it is one's
+     */
+    function valueOf(node) {
+      const value = node.parent.type === 'TemplateLiteral' ? node.parent : node
+      const holder =
+        value.parent.type === 'JSXExpressionContainer' ? value.parent.parent : value.parent
+      if (holder.type === 'JSXAttribute') {
+        return holder.name.type === 'JSXNamespacedName'
+          ? `${holder.name.namespace.name}:${holder.name.name.name}`
+          : holder.name.name
+      }
+      if (holder.type === 'Property' && holder.value === value && !holder.computed) {
+        return holder.key.type === 'Identifier' ? holder.key.name : String(holder.key.value)
+      }
+      return undefined
+    }
+
+    /**
+     * @param {any} node A string or a template element
+     * @param {string} text What it says
+     */
+    function check(node, text) {
+      if (primitive.test(text)) {
+        context.report({ node, messageId: 'primitive' })
+        return
+      }
+      const place = valueOf(node)
+      if (place !== undefined && names.test(place)) return
+      const named =
+        place !== undefined &&
+        takesColour.test(place) &&
+        text.split(/[\s,()]+/).some((word) => namedColours.has(word.toLowerCase()))
+      if (hex.test(text) || colourFunction.test(text) || named) {
+        context.report({ node, messageId: 'raw' })
+      }
+    }
+
+    /** @param {any} source An import's or an export's source, which may be the primitives */
+    function checkSource(source) {
+      const value = source?.type === 'Literal' ? source.value : undefined
+      if (
+        typeof value === 'string' &&
+        (value === primitives || value.startsWith(`${primitives}/`))
+      ) {
+        context.report({ node: source, messageId: 'primitive' })
+      }
+    }
+
+    return {
+      /** @param {any} node */
+      Literal(node) {
+        // A module's name is no colour, whatever it spells: the sources are checked below.
+        if (typeof node.value !== 'string' || /^(Import|Export)/.test(node.parent.type)) return
+        check(node, node.value)
+      },
+      /** @param {any} node */
+      TemplateElement(node) {
+        check(node, node.value.cooked ?? node.value.raw)
+      },
+      /** @param {any} node */
+      ImportDeclaration(node) {
+        checkSource(node.source)
+      },
+      /** @param {any} node */
+      ImportExpression(node) {
+        checkSource(node.source)
+      },
+      /** @param {any} node */
+      ExportNamedDeclaration(node) {
+        checkSource(node.source)
+      },
+      /** @param {any} node */
+      ExportAllDeclaration(node) {
+        checkSource(node.source)
+      },
+      /** @param {any} node */
+      CallExpression(node) {
+        if (node.callee.type === 'Identifier' && node.callee.name === 'require') {
+          checkSource(node.arguments[0])
+        }
+      },
+    }
+  },
+}
+
 export default defineConfig(
   // design/ holds the clickable ES5 prototype, a reference that never ships; Prettier and
   // CodeQL skip it too. An editor that lints it with this file would flag every script.
@@ -271,6 +406,7 @@ export default defineConfig(
         rules: {
           'linked-suppressions': linkedSuppressions,
           'no-literal-strings': noLiteralStrings,
+          'semantic-tokens': semanticTokens,
         },
       },
     },
@@ -294,9 +430,10 @@ export default defineConfig(
     },
   },
   {
-    // Architecture test 7: the clients render words from the catalogs, never literals.
+    // Architecture test 7: the clients render words from the catalogs, never literals. And
+    // 06-clients §3: they spend colour through the semantic tokens, never raw or by a primitive.
     files: ['apps/**'],
-    rules: { 'household/no-literal-strings': 'error' },
+    rules: { 'household/no-literal-strings': 'error', 'household/semantic-tokens': 'error' },
   },
   {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs', '**/*.jsx'],

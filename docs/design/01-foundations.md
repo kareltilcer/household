@@ -6,14 +6,17 @@ a value that exists only in a design file does not exist.
 
 ## 1. The three layers
 
-**Primitives → semantic → component.** Only semantic and component tokens may appear in
-application code; a primitive used directly is a lint error ([06-clients §3](../prd/06-clients.md)).
+**Primitives → semantic → component**, for colour. Only semantic and component tokens may appear
+in application code; a primitive used directly, or a raw colour, is a lint error
+([06-clients §3](../prd/06-clients.md)). The scales beside them are spent by name
+([D-152](../prd/09-decisions.md)).
 
 | Layer | Contains | Named like | Who may use it |
 |---|---|---|---|
-| **Primitive** | Raw ramps: colour scales, the type scale, the 8-point space scale, radii, elevation, motion durations and easings | `color-slate-600`, `space-4`, `dur-fast` | Only the semantic layer |
+| **Primitive** | The raw colour ramps | `neutral-200`, `indigo-600` | Only the semantic layer |
 | **Semantic** | Role-named values that survive a rebrand | `surface`, `text-primary`, `danger` | Application code |
 | **Component** | Per-component overrides where a semantic value is genuinely wrong for one component | `button-primary-bg` | That component only |
+| **Scale** | The type scale, the 8-point space scale, radii, elevation, motion durations and easings | `space-2`, `radius-card`, `dur-fast` | Application code, by name |
 
 ### The semantic set the PRD names
 
@@ -163,7 +166,7 @@ having to find a setting first.
 
 ## 7. Motion
 
-- Durations and easings are primitives. Three durations (`fast` / `base` / `slow`) plus one
+- Durations and easings are a scale. Three durations (`fast` / `base` / `slow`) plus one
   entrance and one exit easing is enough.
 - **`prefers-reduced-motion` is respected**, and **no essential information is conveyed by motion
   alone** ([06-clients §4](../prd/06-clients.md)). Under reduced motion, transitions become
@@ -232,7 +235,9 @@ must name what is missing.
 
 ## 10. What the token file must emit
 
-- Every primitive, semantic and component token, in both themes.
+- Every semantic and component token, in both themes, as a resolved value. The primitives are
+  reference data that no stylesheet declares
+  ([ADR 0024](../adr/0024-design-tokens-icons-and-the-illustration-kit.md)).
 - The **declared contrast pairs** CI tests.
 - The per-module accent map, keyed by the module's stable id (`garden`, `utilities`, …) — these
   ids never change and are the same keys used in routes, audit keys and translation keys.

@@ -319,14 +319,19 @@ describe.each(packages)('%s', (dir) => {
   })
 })
 
-// Architecture test 7 (PRD 01 §10): the clients render no user-visible literal. The rule's
-// cases are in literal-strings.test.ts; this holds every file shape of both apps to it.
+// Architecture test 7 (PRD 01 §10): the clients render no user-visible literal. And 06-clients
+// §3: they spend no raw colour and no primitive token. Each rule's cases are in a test of its
+// own, literal-strings.test.ts and token-lint.test.ts; this holds every file shape of both apps
+// to both.
 describe.each(packages.filter((dir) => dir.startsWith('apps/')))('%s', (dir) => {
-  it('lints user-visible string literals as errors, in tests too', async () => {
+  it.each([
+    ['user-visible string literals', 'household/no-literal-strings'],
+    ['raw colours and primitive tokens', 'household/semantic-tokens'],
+  ])('lints %s as errors, in tests too', async (_, rule) => {
     const settings = await Promise.all(
       lintProbes.map(async (probe) => {
         const config: unknown = await eslint.calculateConfigForFile(join(root, dir, probe))
-        return [probe, field(config, 'rules', 'household/no-literal-strings')] as const
+        return [probe, field(config, 'rules', rule)] as const
       }),
     )
     expect(Object.fromEntries(settings)).toEqual(

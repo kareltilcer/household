@@ -33,9 +33,9 @@ pnpm run up:convert   # build and start the converter sidecar (LibreOffice, popp
 pnpm run up:stripe    # Stripe's own mock server, which the test of what billing sends Stripe runs against
 pnpm run dev:api      # serve the API on 127.0.0.1:8080 (/api/v1/healthz, /api/v1/readyz)
 pnpm test             # Vitest through turbo, then go test against the compose Postgres
-pnpm run lint         # ESLint, golangci-lint, Redocly and Prettier
+pnpm run lint         # ESLint, the stylesheets' check, golangci-lint, Redocly and Prettier
 pnpm typecheck        # tsc in every package
-pnpm run gen          # code generation (turbo run gen + go generate + the client registries, which need Postgres)
+pnpm run gen          # code generation (turbo run gen + the tokens' stylesheet and the vendored icons + go generate + the client registries, which need Postgres)
 pnpm run format       # Prettier and gofmt/goimports, rewriting files
 pnpm run down         # stop the services; volumes are kept
 pnpm --filter @household/sync conformance:up   # the sync conformance stack: PostgreSQL with logical replication, PowerSync
@@ -74,6 +74,10 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   so it needs PostgreSQL up, and that test fails a committed one that is not what they generate. A
   column the server sets is written by a client as `local`, shown by its replica and never sent
   ([ADR 0019](docs/adr/0019-the-sync-client-library.md)).
+- **The tokens' stylesheet and the base icons are generated and committed**: `pnpm run gen` writes
+  `packages/tokens/tokens.css` from `packages/tokens/src` and `packages/icons/src/lucide.json` from the
+  pinned `lucide-static`, and each package's test fails a committed one that is not what they give
+  ([ADR 0024](docs/adr/0024-design-tokens-icons-and-the-illustration-kit.md)).
 - **Generated, never committed:** `packages/api/src/generated/` (the typed client, from
   `openapi.yaml`) and `packages/i18n/src/generated/` (message keys and arguments, from
   `catalogs/en.json`). turbo writes them before every typecheck, lint and test; after a
@@ -117,6 +121,15 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   (an ESLint rule on `apps/**`) fails a literal. A drafted translation is listed in
   `packages/i18n/review/<locale>.json` with the English it translates. Messages use the ICU
   subset both renderers share ([ADR 0007](docs/adr/0007-shared-packages-client-catalogs-and-vectors.md)).
+- **Colour is spent through tokens.** `@household/tokens` holds every colour in both themes, the
+  declared contrast pairs, which its test holds to their minimums, and the scales; application code
+  names a semantic or a component token, never a raw colour or a ramp's primitive, which ESLint
+  (`household/semantic-tokens`) and the stylesheets' check (`pnpm run lint:css`) fail in `apps/**`,
+  and spends the type, space, radius and motion scales by name ([D-152](docs/prd/09-decisions.md)). A new colour token is in a declared
+  pair or exempt with its reason. A glyph or an illustration is a drawing in `@household/icons`,
+  which each client draws with its own component; an icon-only control takes its label from the
+  register (`controls`), and a status is its colour, its glyph and its word together
+  ([ADR 0024](docs/adr/0024-design-tokens-icons-and-the-illustration-kit.md)).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).

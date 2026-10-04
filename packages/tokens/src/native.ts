@@ -34,8 +34,11 @@ export interface NativeTypeStep {
   readonly lineHeight: number
   readonly letterSpacing: number
   readonly textTransform: 'none' | 'uppercase'
-  /** Tabular, lining figures for the mono steps, so that a column of money aligns. */
-  readonly fontVariant: readonly ('tabular-nums' | 'lining-nums')[]
+  /**
+   * Tabular, lining figures for the mono steps, so that a column of money aligns. An array of
+   * its own, as React Native's text style takes one.
+   */
+  readonly fontVariant: ('tabular-nums' | 'lining-nums')[]
 }
 
 /** One layer of a shadow, as React Native's `boxShadow` takes it. */
@@ -100,7 +103,7 @@ const type = mapped(typeScale, (step): NativeTypeStep => {
     lineHeight: round(fontSize * step.line),
     letterSpacing: round(fontSize * step.tracking),
     textTransform: step.uppercase ? 'uppercase' : 'none',
-    fontVariant: step.face === 'mono' ? tabularFigures : [],
+    fontVariant: step.face === 'mono' ? [...tabularFigures] : [],
   }
 })
 

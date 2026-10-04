@@ -1,6 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalDependencies": ["tsconfig.base.json", "eslint.config.js"],
+  "globalDependencies": ["tsconfig.base.json", "eslint.config.js", "tooling/colours.js"],
   "tasks": {
     // `gen` also serves as the transit task below. It depends on `^gen`, which recurses, and
     // typecheck, lint and test depend on their own package's `gen`, so their hashes cover the
@@ -31,6 +31,11 @@
     },
     // The catalogs' test holds the module names to the contract's ModuleKeyValue.
     "@household/i18n#test": {
+      "dependsOn": ["gen"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/api/openapi.yaml"]
+    },
+    // The tokens' test holds the accent map's module ids to the contract's ModuleKeyValue.
+    "@household/tokens#test": {
       "dependsOn": ["gen"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/api/openapi.yaml"]
     },

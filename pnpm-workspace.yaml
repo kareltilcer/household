@@ -33,7 +33,6 @@ catalog:
   react: 19.3.0
   react-dom: 19.3.0
   react-native: 0.87.1
-  stylelint: 17.16.0
   # typescript-eslint 8 supports TypeScript <6.1, so TypeScript 7 waits for it.
   typescript: ~6.0.3
   typescript-eslint: ^8.70.1

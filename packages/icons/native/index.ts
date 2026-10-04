@@ -4,7 +4,7 @@
  * glyph to take its colour from, so a glyph is given one, a theme's value of a token, and an
  * illustration is given the theme its two tones are resolved in.
  */
-import { resolve, type Theme } from '@household/tokens'
+import { resolve, type ColorName, type Theme } from '@household/tokens'
 import { createElement, type ReactElement } from 'react'
 import { Circle, G, Line, Path, Rect, Svg } from 'react-native-svg'
 import {
@@ -109,6 +109,6 @@ export interface IllustrationProps {
 
 /** A composition. Decoration: the sentence beside it says what it shows. */
 export function Illustration(props: IllustrationProps): ReactElement {
-  const paint = (name: Parameters<typeof resolve>[0]) => resolve(name, props.theme)
+  const paint = (name: ColorName) => resolve(name, props.theme)
   return draw(illustration(props.composition, paint, props.width), undefined)
 }

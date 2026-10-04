@@ -5,7 +5,7 @@
 // every element, every attribute and every value. What the stand-in does not prove, that
 // react-native-svg takes each attribute under that name and type, the type check of this
 // directory does, against react-native-svg's own types.
-import { resolve } from '@household/tokens'
+import { resolve, type ColorName } from '@household/tokens'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -84,7 +84,7 @@ describe('the compositions on React Native', () => {
         // The web names a tone as a custom property, which its theme resolves; native is handed
         // the theme, and draws the value that property has in it.
         const resolved = onWeb.replace(/var\(--([a-z-]+)\)/g, (_, name: string) =>
-          resolve(name as Parameters<typeof resolve>[0], theme),
+          resolve(name as ColorName, theme),
         )
         expect(onNative).toBe(resolved)
         expect(onNative).toContain('<svg viewBox="0 0 200 140" width="200" height="140">')

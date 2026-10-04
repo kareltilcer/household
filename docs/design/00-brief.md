@@ -101,7 +101,7 @@ open for a redesign to trade away.
 | N1 | **WCAG 2.1 AA**, enforced in CI: token contrast pairs, axe on every route in both themes, 44×44 pt targets, 200 % dynamic type, `prefers-reduced-motion`, forms labelled and errors in words | [06-clients §4](../prd/06-clients.md) |
 | N2 | **Colour is never the sole carrier of meaning.** Status is always colour **and** icon **and** text | ibid |
 | N3 | **Light and dark are both first-class**, light is the default, and every screen is reviewed in both | [06-clients §3](../prd/06-clients.md) |
-| N4 | **Only semantic tokens appear in application code.** A primitive used directly is a lint error | ibid |
+| N4 | **Only semantic tokens appear in application code.** A colour primitive used directly, or a raw colour, is a lint error; the scales are spent by name ([D-152](../prd/09-decisions.md)) | ibid |
 | N5 | **The 2000 ms press-and-hold gesture** keeps its visible progress indicator **and** its mandatory immediate keyboard and screen-reader path | ibid |
 | N6 | **`none` means absent, not hidden.** A module a member lacks is missing from all nine surfaces FR-AC2 names — including the sync feed, where entities already on the device are **retracted** — plus navigation. The full list is [03-patterns §2](03-patterns.md) | [FR-AC2](../prd/02-identity-and-access.md) |
 | N7 | **Every offline-capable row shows its state**, and `strict_version` conflicts are **always asked**, never auto-merged | [D-39](../prd/06-clients.md) |
