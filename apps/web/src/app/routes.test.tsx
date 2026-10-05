@@ -1,12 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { buildMeta } from '../update/build.ts'
 import { Providers } from './App.tsx'
 import { paths, routeIds } from './paths.ts'
-import { Root } from './Root.tsx'
-import { RouteError } from './RouteError.tsx'
-import { routes, served } from './routes.tsx'
+import { inRoot, routes, served } from './routes.tsx'
 
 function open(address: string, table: RouteObject[] = routes) {
   const router = createMemoryRouter(table, { initialEntries: [address] })
@@ -17,12 +16,16 @@ function open(address: string, table: RouteObject[] = routes) {
   )
 }
 
+/** The screens of a table: what is drawn inside Root, under the boundary a failed one stops at. */
+function screens(table: RouteObject[]): RouteObject[] {
+  return table.flatMap((root) => root.children ?? []).flatMap((inner) => inner.children ?? [])
+}
+
 describe('the routes', () => {
   // The end-to-end suite walks paths.ts with axe in both themes (06-clients §8): a route the
   // router had and that list had not would be a route nothing checks.
   it('are exactly the paths of paths.ts', () => {
-    const routed = routes.flatMap((route) => route.children ?? []).map((route) => route.path)
-    expect(routed).toEqual(routeIds.map((id) => paths[id].path))
+    expect(screens(routes).map((route) => route.path)).toEqual(routeIds.map((id) => paths[id].path))
     expect(served).toEqual(routeIds)
   })
 
@@ -39,6 +42,10 @@ describe('the routes', () => {
 })
 
 describe('the app', () => {
+  afterEach(() => {
+    document.head.querySelector(`meta[name="${buildMeta}"]`)?.remove()
+  })
+
   it('opens on its name, inside the page’s one main landmark', async () => {
     open(paths.home.example)
     expect(await screen.findByRole('heading', { level: 1, name: 'Household' })).toBeInTheDocument()
@@ -55,22 +62,61 @@ describe('the app', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Household' })).toBeInTheDocument()
   })
 
+  const Broken = () => {
+    throw new Error('broken')
+  }
+
   it('names a route that failed to draw in words, with an action, and not a blank page', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const Broken = () => {
-      throw new Error('broken')
-    }
-    open('/broken', [
-      {
-        Component: Root,
-        ErrorBoundary: RouteError,
-        children: [{ path: '/broken', Component: Broken }],
-      },
-    ])
+    open('/broken', inRoot([{ path: '/broken', Component: Broken }]))
     expect(
       await screen.findByRole('heading', { level: 1, name: 'This page could not be shown' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
+    // In the route's place, inside what every route is drawn in: the one landmark is Root's.
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', { level: 1 }))
+  })
+
+  it('names a route that could not be loaded as one that could not be drawn', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    // What a page meets when a newer build has taken a file of its own away.
+    const lazy = () => Promise.reject(new TypeError('Failed to fetch dynamically imported module'))
+    open('/gone', inRoot([{ path: '/gone', lazy }]))
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'This page could not be shown' }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+  })
+
+  it('still says a newer build is live over a route that failed, which is when it most often is', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const meta = document.createElement('meta')
+    meta.name = buildMeta
+    meta.content = 'own'
+    document.head.append(meta)
+    vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ id: 'next' })))
+    open('/broken', inRoot([{ path: '/broken', Component: Broken }]))
+    await screen.findByRole('heading', { level: 1, name: 'This page could not be shown' })
+    // The page could not load a file of its own build, and asks which build is live: Root, and
+    // the watch it keeps, were not taken down with the route.
+    act(() => {
+      window.dispatchEvent(new Event('vite:preloadError'))
+    })
+    expect(await screen.findByText('A new version of Household is ready.')).toBeVisible()
+    expect(screen.getAllByRole('button', { name: 'Reload' })).toHaveLength(2)
+  })
+
+  it('names a failure of what every route is drawn in for the whole page, with its own landmark', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const table = inRoot([{ path: '/', Component: () => null }])
+    open(
+      '/',
+      table.map((root) => ({ ...root, Component: Broken })),
+    )
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'This page could not be shown' }),
+    ).toBeInTheDocument()
     expect(screen.getAllByRole('main')).toHaveLength(1)
   })
 

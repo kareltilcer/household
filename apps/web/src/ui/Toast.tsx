@@ -1,7 +1,9 @@
 // Toast, with undo (02-components §1, 03-patterns §5): what just happened, in a sentence, and a
 // real window in which to take it back. Undo is a button, never a gesture, and it stays for the
 // whole dwell (the tokens' `toast-dwell`). Over Radix's toast for what a toast has to do: be
-// announced, pause while it is pointed at or focused, and be reached by a key.
+// announced, pause while it is pointed at or focused, and be reached by a key. Escape puts a toast
+// away from among the toasts, and on a page with nothing else open; pressed elsewhere under a
+// modal it is the modal's, and the toast keeps its dwell.
 import { controls } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { thresholds } from '@household/tokens'
@@ -57,6 +59,8 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
   const focused = useRef(false)
   /** Whether the last thing done to a toast was a press of a pointer on it, and not a key. */
   const pressed = useRef(false)
+  /** The last Escape Radix asked a toast to close by: it says so before it asks. */
+  const escape = useRef<KeyboardEvent | null>(null)
 
   const show = useCallback<ShowToast>((toast) => {
     const id = nextId.current
@@ -124,6 +128,9 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
         {run.toasts.map((toast) => (
           <RadixToast.Root
             key={toast.id}
+            // Open for as long as it is listed: Radix asks for it to be closed, and whether it
+            // is is decided below.
+            open
             className={styles.toast}
             onPointerDown={() => {
               pressed.current = true
@@ -131,8 +138,30 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
             onKeyDown={() => {
               pressed.current = false
             }}
+            onEscapeKeyDown={(event) => {
+              escape.current = event
+            }}
             onOpenChange={(open) => {
-              if (!open) remove(toast.id)
+              if (open) return
+              // One Escape does one thing. Radix closes the newest toast for the key wherever
+              // the focus is, and tells the platform nothing of it, so the dialog the toasts
+              // are drawn in is asked to close by the same key: left to the two of them, a
+              // panel closed by Escape would take an Undo with it, and Escape on a toast would
+              // close the editor around it.
+              const key = escape.current
+              // Still on its way through the page: this close is that key's doing.
+              if (key !== null && key.eventPhase !== Event.NONE) {
+                if (list.current?.contains(document.activeElement) === true) {
+                  // Pressed among the toasts, it puts the toast away and is spent there: the
+                  // platform is not left the key to ask the dialog with.
+                  key.preventDefault()
+                } else if (modal !== null) {
+                  // Pressed elsewhere under a modal, it is the modal's, which the platform
+                  // asks: the toast stays for its dwell, on the page again if the modal goes.
+                  return
+                }
+              }
+              remove(toast.id)
             }}
           >
             <RadixToast.Description className={styles.message}>

@@ -2,6 +2,7 @@
 // The build's own parts, held without a build: the policy, the script that sets the display modes
 // before the first paint, and the build's id. What a build actually wrote is check.ts's, and what
 // a browser does under the policy is the end-to-end suite's.
+import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -16,7 +17,9 @@ import {
 } from '../src/display/modes.ts'
 import { bootScript } from './boot.ts'
 import { directives, headerOnly, headerPolicy, metaPolicy, unsafeSources } from './csp.ts'
-import { buildId, devOnly } from './plugin.ts'
+import { devPagesMode } from '../src/app/paths.ts'
+import { buildFile, buildMeta, buildPlaceholder } from '../src/update/build.ts'
+import { buildId, devOnly, head, rootBase } from './plugin.ts'
 
 describe('the policy', () => {
   it('admits nothing inline and nothing evaluated', () => {
@@ -133,6 +136,46 @@ describe("a build's id", () => {
   })
 })
 
+describe("the page's head", () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+  const source = readFileSync(join(root, 'index.html'), 'utf8')
+
+  it('opens on the encoding, then the policy, then the script that sets the display modes', () => {
+    const { html, tags } = head(source, 'assets/display-1.js')
+    // In the order they are written, each before what index.html already holds.
+    expect(tags.map((tag) => [tag.tag, tag.attrs, tag.injectTo])).toEqual([
+      ['meta', { charset: 'utf-8' }, 'head-prepend'],
+      ['meta', { 'http-equiv': 'Content-Security-Policy', content: metaPolicy }, 'head-prepend'],
+      ['script', { src: '/assets/display-1.js' }, 'head-prepend'],
+    ])
+    // The encoding is said once: where index.html had it, after the policy, it is gone.
+    expect(source).toContain('charset')
+    expect(html).not.toContain('charset')
+    expect(html).toContain(`<meta name="${buildMeta}" content="${buildPlaceholder}" />`)
+  })
+
+  it('refuses a page with no encoding to put first', () => {
+    expect(() => head(source.replace(/<meta charset[^>]*>/, ''), 'assets/display-1.js')).toThrow(
+      /no <meta charset="utf-8" \/>/,
+    )
+  })
+})
+
+describe("the build's base", () => {
+  it('is the origin’s root, and no other: the page asks for build.json and the API from there', () => {
+    expect(() => {
+      rootBase('/')
+    }).not.toThrow()
+    for (const base of ['/app/', './', '', 'https://cdn.example/']) {
+      expect(() => {
+        rootBase(base)
+      }, base).toThrow(/served from its origin's root/)
+    }
+    // What the page asks for is a path from the root, which is where the build writes it.
+    expect(buildFile).toBe('/build.json')
+  })
+})
+
 describe('the dev-only pages', () => {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
   const file = (path: string) => join(root, path)
@@ -157,5 +200,13 @@ describe('the dev-only pages', () => {
     ]
     expect(devOnly([...shipped, ...dev], root)).toEqual(dev)
     expect(devOnly(shipped, root)).toEqual([])
+  })
+
+  it('are named by the router for the one mode the build has them in', () => {
+    // The router writes the mode out, since the bundler drops the pages' branch only for a
+    // constant it reads there. The build's configuration and its plugin read `devPagesMode`:
+    // the two are the same word, or the end-to-end build is written without its pages.
+    const router = readFileSync(file('src/app/routes.tsx'), 'utf8')
+    expect(router).toContain(`import.meta.env.MODE === '${devPagesMode}'`)
   })
 })

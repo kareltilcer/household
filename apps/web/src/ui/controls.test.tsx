@@ -349,6 +349,44 @@ describe('a stepper', () => {
     expect(onChange.mock.calls.flat().every((value) => Number.isInteger(value))).toBe(true)
   })
 
+  it('is settled before Enter submits its form: what is sent is what the field shows', async () => {
+    // Enter in a field submits its form, and the field has not been left: what was typed over a
+    // bound, or between two whole numbers, has been given to nobody yet.
+    const sent: number[] = []
+    function Form() {
+      const [value, setValue] = useState(2)
+      return (
+        <form
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault()
+            sent.push(value)
+          }}
+        >
+          <Stepper label={words.members} value={value} onChange={setValue} min={1} max={12} />
+          <Button type="submit">{words.save}</Button>
+        </form>
+      )
+    }
+    draw(<Form />)
+    const input = screen.getByRole('spinbutton')
+    await userEvent.clear(input)
+    await userEvent.type(input, '20{Enter}')
+    expect(input).toHaveValue(12)
+    expect(sent).toEqual([12])
+
+    await userEvent.clear(input)
+    await userEvent.type(input, '2.5{Enter}')
+    expect(input).toHaveValue(3)
+    expect(sent).toEqual([12, 3])
+
+    // Emptied, it is what it was, and that is what is sent.
+    await userEvent.clear(input)
+    await userEvent.type(input, '{Enter}')
+    expect(input).toHaveValue(3)
+    expect(sent).toEqual([12, 3, 3])
+  })
+
   it('keeps the focus on a button that has stepped to its bound, which then does nothing', async () => {
     draw(<Count start={2} min={1} max={3} />)
     const decrease = screen.getByRole('button', { name: 'Decrease Members' })

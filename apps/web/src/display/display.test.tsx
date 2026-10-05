@@ -67,6 +67,13 @@ function Probe() {
           window.addEventListener('release', release, { once: true })
         }}
       />
+      <Press
+        name="hold dark"
+        onPress={() => {
+          const release = hold({ theme: 'dark' })
+          window.addEventListener('release dark', release, { once: true })
+        }}
+      />
     </div>
   )
 }
@@ -109,6 +116,25 @@ describe('the display provider', () => {
     })
     expect(document.documentElement).not.toHaveAttribute('data-scale')
     expect(shown()).toMatchObject({ scale: '100', textScale: 1 })
+  })
+
+  it('holds for two holders at once, each until it lets go itself', async () => {
+    draw(<Probe />)
+    await userEvent.click(screen.getByRole('button', { name: 'hold' }))
+    await userEvent.click(screen.getByRole('button', { name: 'hold dark' }))
+    // The second holds beside the first, and not in its place.
+    expect(shown()).toMatchObject({ scale: '200', theme: 'dark' })
+    act(() => {
+      window.dispatchEvent(new Event('release dark'))
+    })
+    // The first has not let go: what it holds is held still.
+    expect(shown()).toMatchObject({ scale: '200', theme: 'light' })
+    expect(document.documentElement).toHaveAttribute('data-scale', '200')
+    act(() => {
+      window.dispatchEvent(new Event('release'))
+    })
+    expect(shown()).toMatchObject({ scale: '100', theme: 'light' })
+    expect(window.localStorage.getItem(storageKey)).toBeNull()
   })
 
   it('follows a change made in another tab', () => {

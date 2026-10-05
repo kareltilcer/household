@@ -154,6 +154,36 @@ describe('watching for a newer build', () => {
     expect(live).toHaveBeenCalledTimes(2)
   })
 
+  it('tells nobody of an answer that comes once it has stopped', async () => {
+    const onUpdate = vi.fn()
+    let answer: (id: string) => void = () => undefined
+    const live = () =>
+      new Promise<string | undefined>((resolve) => {
+        answer = resolve
+      })
+    const watch = watchForUpdate('own', onUpdate, live)
+    lookAgain()
+    // Stopped while build.json was on its way: its owner is gone, or watches by another reader.
+    watch.stop()
+    answer('next')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
+
+  it('takes a reader that fails for not knowing', async () => {
+    const onUpdate = vi.fn()
+    const live = vi.fn(() => Promise.reject<string | undefined>(new Error('unreadable')))
+    const watch = watchForUpdate('own', onUpdate, live)
+    lookAgain()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onUpdate).not.toHaveBeenCalled()
+    // And asks again the next time, as after any answer that was no news.
+    lookAgain()
+    expect(live).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(0)
+    watch.stop()
+  })
+
   it('watches nothing on a page no build made', async () => {
     const live = vi.fn(() => Promise.resolve<string | undefined>('next'))
     const watch = watchForUpdate(undefined, vi.fn(), live)

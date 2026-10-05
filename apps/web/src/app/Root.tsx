@@ -1,6 +1,6 @@
 // What every route is drawn inside. Item 24 gives it the page's one landmark and the prompt that
 // a newer build is live; the shell (the sidebar, the app bar, the household switcher) is item
-// 25's, and takes this place.
+// 25's, and takes this place. A route that fails is named inside it (RouteError), so it stays.
 import { useEffect } from 'react'
 import { Outlet } from 'react-router'
 import { useTranslate } from '../i18n/I18nProvider.tsx'

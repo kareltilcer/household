@@ -20,11 +20,15 @@ afterAll(() => {
 
 const id = '008f0f94379a5b41'
 
+/** The page's statement of its encoding, as the build writes it: first in the head. */
+const encoding = '<meta charset="utf-8">'
+
 /** index.html as the build writes it, with `head` in its head after the policy. */
 function page(head = '', policy = metaPolicy.replaceAll("'", '&#39;')): string {
   return `<!doctype html>
 <html lang="en">
   <head>
+    ${encoding}
     <meta http-equiv="Content-Security-Policy" content="${policy}">
     <script src="/assets/display-1.js"></script>
     <meta name="household-build" content="${id}" />
@@ -132,6 +136,26 @@ describe('the check of a build', () => {
       'a later script over the budget',
       { 'assets/Garden-1.js': randomBytes(budgets.lazy + 1000) },
       'is over the lazy budget',
+    ],
+    [
+      'no encoding declared',
+      { 'index.html': page().replace(encoding, '') },
+      'does not declare its encoding',
+    ],
+    [
+      'its encoding declared past what a browser reads for it',
+      // As a policy widened for many origins would push it, were it written after the policy.
+      { 'index.html': page().replace(encoding, `<!--${'-'.repeat(1024)}-->${encoding}`) },
+      'past the 1024 a browser reads',
+    ],
+    [
+      'its encoding declared after a script',
+      {
+        'index.html': page()
+          .replace(encoding, '')
+          .replace('<meta name="household-build"', `${encoding}<meta name="household-build"`),
+      },
+      'a script before it declares its encoding',
     ],
     [
       'no policy',

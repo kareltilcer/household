@@ -1,3 +1,4 @@
+import { dehydrate } from '@tanstack/react-query'
 import type { PersistedClient } from '@tanstack/react-query-persist-client'
 import type { UseStore } from 'idb-keyval'
 import { describe, expect, it, vi } from 'vitest'
@@ -281,11 +282,29 @@ describe('the cache kept in this browser', () => {
 
   it('is for a day and for one build: a newer build drops what an older one kept', () => {
     const persister = createPersister(memoryStore().store)
-    expect(persistOptions(persister, 'build-a')).toEqual({
+    expect(persistOptions(persister, 'build-a')).toMatchObject({
       persister,
       maxAge: 24 * 60 * 60 * 1000,
       buster: 'build-a',
     })
     expect(persistOptions(persister, undefined).buster).toBe('')
+  })
+
+  it('holds every answer but a failed one, and one whose query says it is not to be kept', async () => {
+    const client = createQueryClient()
+    const answer = () => Promise.resolve('an answer')
+    await client.query({ queryKey: ['readings'], queryFn: answer })
+    // What nobody reads again, or what is of no use later: a search as it is typed, a link to
+    // a file that is good for minutes.
+    await client.query({ queryKey: ['search', 'ce'], queryFn: answer, meta: { persist: false } })
+    await client
+      .query({ queryKey: ['failed'], queryFn: () => Promise.reject(new Error('refused')) })
+      .catch(() => undefined)
+    const { dehydrateOptions } = persistOptions(createPersister(memoryStore().store), 'build-a')
+    expect(dehydrate(client, dehydrateOptions).queries.map((query) => query.queryKey)).toEqual([
+      ['readings'],
+    ])
+    // Kept out of what is stored, and not out of the cache the screen reads from.
+    expect(client.getQueryData(['search', 'ce'])).toBe('an answer')
   })
 })

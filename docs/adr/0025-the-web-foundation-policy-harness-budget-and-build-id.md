@@ -63,7 +63,12 @@ while none is to the last one's leaving, is its provider afresh: a toast closed 
 holds nothing of the next one. Radix also hands the focus of a toast that closes to the toasts'
 region, and holds every dwell while the focus is there: closed by a key, the focus stays where
 Radix put it, and closed by a pointer's press it is let go, so that the toasts beside it, and one
-its own Undo raised, go once the pointer has left them. A toast is read out after the one word
+its own Undo raised, go once the pointer has left them. One Escape does one thing. Radix closes
+the newest toast for the key wherever the focus is and tells the platform nothing of it, so the
+dialog the toasts are drawn in would be asked to close by the same key: pressed among the toasts,
+Escape puts the toast away and is spent there, and pressed elsewhere under a modal it is the
+modal's, the toast keeping its dwell and its Undo, on the page again once the modal has gone. A
+toast is read out after the one word
 *Notification*; the region's name, with the key that reaches it, is the viewport's. A banner that
 is announced politely is drawn before its words, which are put into it two frames later: what is
 put into a polite region already in the document is said, and a region that arrives with its
@@ -76,7 +81,11 @@ header adds `frame-ancestors 'none'`, which a `<meta>` cannot carry. The build i
 (`assetsInlineLimit: 0`), since a `data:` URL is a source the policy does not name. A directive
 is widened in the pull request that needs it, for the origin it needs. React writes a `style` prop
 through the CSSOM, which the policy does not govern, so a width or a custom property set from a
-component is not inline style.
+component is not inline style. The build writes the page's encoding first in its head, ahead of
+the policy: a browser looks for it in a page's first 1024 bytes alone, and the policy grows with
+every origin it is widened for (`build/check.ts` holds a build to it). And the app is its origin's
+root: the page asks for `build.json` and for the API by their paths from the root, and the build
+refuses any other base, under which the reload prompt would never show and nothing would say so.
 
 **A classic script in the head sets the display modes before anything is painted.** The build
 emits it as a file (`build/boot.ts`), generated from the app's own statement of the modes
@@ -91,7 +100,10 @@ the default whatever the device prefers (06-clients §3); `system` is a choice.
 build with the dev-only routes in. The routes are named only for that mode and for the development
 server (`import.meta.env.MODE`, `import.meta.env.DEV`), constants of each build, so in `dist/www`,
 and in a build of any other mode, the branch that imports them is dead and their files are not
-written. The end-to-end suite runs against `dist/e2e` served by `vite preview` with the policy as
+written. The mode is named once, beside the routes (`src/app/paths.ts`), where the router, the
+build's configuration and its plugin read it, and a route marked dev-only there is served by no
+other build, whatever names a page for it. The end-to-end suite runs against `dist/e2e` served by
+`vite preview` with the policy as
 a header, and every test fails on a `securitypolicyviolation` and on a console error. `dist/www`
 is written without source maps, which would hand the app's sources to whoever asked a deployment
 for them; `dist/e2e` has them. The build's own plugin refuses to write a build of any mode but
@@ -102,7 +114,10 @@ its page names.
 
 **The twelve states are a table, and a frame applies it.** `src/ui/states.ts` is the port of
 `components.js`'s treatments: each state replaces the body, wraps it, or marks a row of it, and
-says whether the affordances that write are drawn. `StateFrame` applies one to any body. The
+says whether the affordances that write are drawn. `StateFrame` applies one to any body, and
+announces the sentence of a state it comes to while it is drawn, a load that failed, a write
+refused, a row withdrawn: a failure at once, anything else politely. The state it was first drawn
+in was there when the screen opened, and is read in its place. The
 harness is nine bodies through that frame, each state drawn in a light and a dark scope side by
 side (ADR 0024 made a theme a scope for this page), with the root held at 200 % text for as long as
 the page is open. `/dev/primitives` draws the components that carry no household data.
@@ -128,7 +143,9 @@ plugin writes it into index.html's `<meta name="household-build">` and into `bui
 it. A page asks for `build.json` past every cache when it is looked at again and every fifteen
 minutes, and when Vite reports that it could not load one of its own files, which a newer build
 causes and a dropped connection causes too. A different id shows a prompt; the page never reloads
-by itself, and not knowing is never a newer build. The persisted query cache is kept under the
+by itself, and not knowing is never a newer build. A route that could not be loaded or drawn is
+named in its own place, inside what every route is drawn in, so the watch and its prompt stand
+over the very failure a newer build most often causes. The persisted query cache is kept under the
 same id, so a newer build drops what an older one kept.
 
 **Hold-to-complete is two controls.** The ring a pointer holds is hidden from assistive
@@ -137,7 +154,9 @@ completes on any activation: Enter, Space, a switch, a screen reader's double ta
 the focus the button has. The fill is timed by the tokens' `hold-to-complete`, which reduced motion
 does not shorten, and steps ten times under it. A release before the time is up says to keep
 holding for as long as a toast stays, and the control is then idle again; and what completes is
-what its owner asks at the end of the hold, not what it asked two seconds before.
+what its owner asks at the end of the hold, not what it asked two seconds before. Completed, it
+stays so for as long as it is drawn: a row to be completed again, after an undo or a write the
+server refused, draws a control of its own for it, by a `key`.
 
 **Component tests run in jsdom, and a browser holds the rest.** jsdom lays nothing out and has no
 modal dialog, so what the platform does, a dialog's focus, a menu under the keyboard, a 44 pt
@@ -150,7 +169,9 @@ the readable CSRF cookie's value with each unsafe request, and throws a problem 
 `ApiProblemError` typed by its code. TanStack Query asks again only for a problem the server
 stated that may yet clear, its own failure or a first attempt still running: a request that got no
 answer is the transport's to resend, and is resent there alone. Its cache is persisted to
-IndexedDB as one structured clone, written at most once a second, for a day.
+IndexedDB as one structured clone, written at most once a second, for a day. A query keeps its
+answer out of what is stored by saying so (`meta: { persist: false }`): a search as it is typed, a
+link to a file that is good for minutes.
 
 ## Alternatives rejected
 
@@ -161,6 +182,7 @@ IndexedDB as one structured clone, written at most once a second, for a day.
 | A dialog's content mounted once the dialog is open, so that a field's `autoFocus` is honoured | The platform's own first focus, the safe choice of a confirmation, would fall on the empty dialog and have to be rebuilt by hand. An owner that wants another control names it |
 | A dialog the platform closed left closed, with its owner told and no more | An owner that keeps it open would hold a panel that is open by its state and drawn nowhere, what was typed still in it, and no way to open it again; one that answers by asking a question would ask it inside a panel nobody sees, over a page it makes inert |
 | The toasts' dwell timed by the app, or Radix told by a made-up event that the pointer has left | The first is what Radix's toast is used for. The second steers a library by its internals, where a provider mounted afresh holds nothing by construction |
+| Escape under a modal left to Radix and the platform both, or given to the toast first | The first closes the panel and takes the Undo with it. The second leaves the panel open after the key that should have closed it, and loses the Undo all the same: a toast is no layer a member opened |
 | The focus Radix puts on the toasts' region left there after a pointer's press | The toasts beside the one closed, and one its own Undo raised, would stay until the member pressed somewhere else. The region gives up a focus of its own, which is no event made up for Radix: the browser tells it the focus has left |
 | The table's column of sync marks timed by the table | A second clock to keep in step with each mark's own. A rule of the stylesheet draws the column while a mark is drawn in it, and has nothing to keep in step |
 | The policy as a header alone | Nothing serves the app yet, and the PRD has the app set it. A page that carries its policy is under it wherever it is opened |
@@ -172,6 +194,9 @@ IndexedDB as one structured clone, written at most once a second, for a day.
 | A budget on the whole build, or measured in a browser per route | The first grows with every module whether or not a first visit loads it. The second needs a profile of a network to mean anything, and a file's compressed size does not |
 | `size-limit` or a bundler's analyser as the gate | A dependency for sixty lines that read index.html and gzip what it names |
 | The build id from the commit, or from the clock | A deploy that changed nothing would prompt every open page to reload |
+| The reload prompt drawn outside the router, where no failed route can take it down | The shell item 25 puts in `Root`'s place would still go with any screen that failed. A boundary under `Root` keeps both |
+| `build.json` asked for under Vite's `base` | The router and the API's paths are from the root too. A base the app cannot be served under is refused, not half supported |
+| Hold-to-complete told by a prop what is complete | A control with two sources of what is so, designed before the first screen that has a completion to undo. Its owner's `key` gives a fresh one, and that screen says whether it is enough |
 | A service worker to learn of a new build | PL-4 names none, and a worker caches the very files a new build replaces |
 | A file the page cannot load taken for a newer build | A page with no connection cannot load one either, and would be told to reload into nothing |
 | Source maps in the build a deployment serves | Whoever serves `dist/www` serves every file in it. Maps for crash reports are uploaded to where the reports go, which is item 89's |
@@ -183,12 +208,24 @@ IndexedDB as one structured clone, written at most once a second, for a day.
 
 - A route is a line of `src/app/paths.ts`: the router is built from it, and axe in both themes and
   the pseudo-locale pass walk it. A test fails a router with a route the list has not.
+- What a component draws over a page, a dialog, a side panel, a menu, a toast, a banner that
+  arrives, is on no route as it opens: `e2e/overlays.spec.ts` opens each from the page of
+  primitives and holds it to the same two gates. A new one is opened there.
+- A screen is a child of the boundary `inRoot` puts under `Root` (`src/app/routes.tsx`): one that
+  fails to load or to draw is named in its place, and the shell around it stays.
 - A screen spends the twelve states through `StateFrame`, and its own sentences through its texts:
   the two that stand in a body's place, an error's and a withdrawn row's, are required of it, so a
   failed load is never a blank screen.
 - Item 25 takes `Root`'s place with the shell, reads the language and the display modes from the
   member's account where it has them, clears the persisted cache when a member signs out, and
   widens the policy for the sync service. Item 27 widens it for the payment processor's frame.
+- Hold-to-complete knows what it did, and not what became of it. The first screen with a
+  completion to undo, Tasks' or Chores', says whether a fresh control by `key` is enough, or the
+  control takes its owner's word for what is complete.
+- A button that is busy or has nothing to do hands on no handler of a press: neither the click nor
+  what comes before it, the pointer going down and the key, which is what a menu opens on.
+- A stepper in a form is settled by Enter as it is by being left, so the form sends the number
+  the field shows. A number typed over a bound is held to it, and not refused with an error.
 - A test's markup is held to the literal-string lint as the app's is, so a test names its words in
   a constant and passes them as values.
 - A row whose owner knows when its write began to sync says so (`syncingSince`, a mark's `since`):

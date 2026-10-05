@@ -37,6 +37,19 @@ function refuse(event: MouseEvent<HTMLButtonElement>) {
   event.preventDefault()
 }
 
+/**
+ * What a press is heard by before the click it ends in. A button that takes no press hands none
+ * of them on: what opens on the press itself or on a key, as the menu a trigger opens does
+ * (Radix listens for the pointer going down and for the key, and for no click), would open from
+ * a button drawn and said to be busy.
+ */
+const unheard = {
+  onPointerDown: undefined,
+  onMouseDown: undefined,
+  onTouchStart: undefined,
+  onKeyDown: undefined,
+} as const satisfies Partial<Shared>
+
 function pressable({
   loading = false,
   'aria-disabled': idle = false,
@@ -47,6 +60,7 @@ function pressable({
   const held = loading || idle
   return {
     ...rest,
+    ...(held ? unheard : {}),
     type,
     'aria-busy': loading || undefined,
     // Not `disabled`: a disabled button drops out of the tab order, and the focus with it.

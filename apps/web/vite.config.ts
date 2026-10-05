@@ -12,18 +12,19 @@ import { defineConfig } from 'vite'
 import { headerPolicy } from './build/csp.ts'
 import { preview } from './build/preview.ts'
 import { household } from './build/plugin.ts'
+import { devPagesMode } from './src/app/paths.ts'
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), household()],
   build: {
-    outDir: mode === 'e2e' ? 'dist/e2e' : 'dist/www',
+    outDir: mode === devPagesMode ? 'dist/e2e' : 'dist/www',
     emptyOutDir: true,
     // A file inlined as a data: URL is one the policy refuses: every font and image stays a file.
     assetsInlineLimit: 0,
     // Source maps for the build the end-to-end suite runs, which a failing test is debugged in,
     // and none for the build a deployment serves: a map beside its script hands the app's
     // sources to whoever asks for it (build/check.ts fails a build that holds one).
-    sourcemap: mode === 'e2e',
+    sourcemap: mode === devPagesMode,
   },
   server: {
     // The API, same-origin as in production: its session cookie is `__Host-`, and its CSRF check

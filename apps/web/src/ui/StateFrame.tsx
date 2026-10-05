@@ -2,8 +2,9 @@
 // to whatever body it is given. It draws the skeleton, the teaching empty state or the message
 // that stands in the body's place, the strip above a rejected or a read-only body, and nothing at
 // all for a member who may not see it. The body is told which row mark it carries and whether the
-// affordances that write are drawn: where they are not, they are absent, never disabled.
-import type { ReactNode } from 'react'
+// affordances that write are drawn: where they are not, they are absent, never disabled. A
+// sentence of a state the frame comes to while it is drawn is announced; one it opened on is not.
+import { useState, type ReactNode } from 'react'
 import { Banner } from './Banner.tsx'
 import styles from './StateFrame.module.css'
 import type { SyncState } from './StatusMark.tsx'
@@ -61,10 +62,26 @@ function hasStrip(state: DataState): state is StripState {
 }
 
 export function StateFrame({ state, skeleton, empty, texts, children }: StateFrameProps) {
+  // The state the frame was first drawn in was there when the screen opened, and its sentence is
+  // read in its place. A state it comes to later arrived while the member was here, and nothing
+  // moved the focus to it: its sentence is announced (Banner), or a member who does not see the
+  // screen is not told that a load failed, a write was refused or a row was taken back.
+  const [opened, setOpened] = useState<DataState | null>(state)
+  if (opened !== null && opened !== state) setOpened(null)
+  const arrived = opened !== state
+
   if (standsInPlace(state)) {
     const { title, text, actions } = texts[state]
     return (
-      <Banner tone={treatments[state].message} title={title} actions={actions}>
+      // Each state's sentence is a banner of its own, so that one which takes another's place is
+      // announced as one that arrives is, and not as a change to what was there.
+      <Banner
+        key={state}
+        tone={treatments[state].message}
+        title={title}
+        actions={actions}
+        announce={arrived}
+      >
         {text}
       </Banner>
     )
@@ -83,7 +100,13 @@ export function StateFrame({ state, skeleton, empty, texts, children }: StateFra
       return (
         <div className={styles.frame}>
           {treatment.banner === undefined || strip === undefined ? null : (
-            <Banner tone={treatment.banner} title={strip.title} actions={strip.actions}>
+            <Banner
+              key={state}
+              tone={treatment.banner}
+              title={strip.title}
+              actions={strip.actions}
+              announce={arrived}
+            >
               {strip.text}
             </Banner>
           )}

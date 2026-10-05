@@ -1,5 +1,5 @@
 // The twelve states (02-components §0) and the frame that applies one to a body.
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { draw } from '../test/render.tsx'
 import { Button } from './Button.tsx'
@@ -156,6 +156,42 @@ describe('the state frame', () => {
     expect(screen.queryByRole('button', { name: words.open })).not.toBeInTheDocument()
     expect(document.querySelector(':disabled, [aria-disabled="true"]')).toBeNull()
   })
+
+  it('announces a failure that arrives while the member is here, at once', () => {
+    // A screen opens on its skeleton, and the load fails: nothing moved the focus, so the
+    // sentence is said as it arrives, or a member who does not see the screen is told nothing.
+    const { rerender } = draw(<Framed state="loading" />)
+    rerender(<Framed state="error" />)
+    expect(screen.getByRole('alert')).toHaveTextContent(words.error)
+    // A write refused under a body that was there: its reason, above the body.
+    rerender(<Framed state="populated" />)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    rerender(<Framed state="rejected" />)
+    expect(screen.getByRole('alert')).toHaveTextContent(words.rejected)
+  })
+
+  it('announces what is no failure politely: a row withdrawn, a body gone read-only', async () => {
+    const { rerender } = draw(<Framed state="populated" />)
+    rerender(<Framed state="withdrawn" />)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(words.withdrawn)
+    })
+    rerender(<Framed state="populated" />)
+    rerender(<Framed state="readonly" />)
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(words.readonly)
+    })
+  })
+
+  it.each(['error', 'rejected', 'withdrawn', 'readonly'] as const)(
+    'announces no %s sentence that was there when the screen opened: it is read in its place',
+    (state) => {
+      draw(<Framed state={state} />)
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    },
+  )
 
   it.each([
     ['populated', 'none'],

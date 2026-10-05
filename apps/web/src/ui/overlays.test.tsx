@@ -344,6 +344,29 @@ describe('a menu', () => {
     expect(focused).toEqual([screen.getByRole('button', { name: words.more })])
   })
 
+  it.each([
+    ['is busy', { loading: true }],
+    ['has nothing to do', { 'aria-disabled': true }],
+  ] as const)('does not open from a trigger that %s, by a press or by a key', async (_, held) => {
+    draw(
+      <Menu
+        trigger={<IconButton label={words.more} icon={<svg aria-hidden="true" />} {...held} />}
+        items={items(() => undefined)}
+      />,
+    )
+    const button = screen.getByRole('button', { name: words.more })
+    // Radix opens a menu on the press itself and on a key, before any click.
+    await userEvent.click(button)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    // It keeps the focus, and takes no key either.
+    expect(button).toHaveFocus()
+    await userEvent.keyboard('{Enter}')
+    await userEvent.keyboard(' ')
+    await userEvent.keyboard('{ArrowDown}')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+  })
+
   it('is drawn inside the dialog it is opened from, since the page outside one is inert', async () => {
     draw(
       <Sheet open onClose={() => undefined} title={words.meter}>
@@ -614,6 +637,65 @@ describe('a toast', () => {
     expect(await screen.findByText(words.cleared)).toBeVisible()
     expect(panel).not.toContainElement(screen.getByRole('region', { name: 'Notifications (F8)' }))
     expect(screen.getByRole('button', { name: 'Undo' })).toBeVisible()
+  })
+
+  /** Presses Escape where the focus is, and says whether the key was left for the platform. */
+  function escape(): boolean {
+    return fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+  }
+
+  it('stays through an Escape pressed elsewhere in the dialog it is drawn in, which is the dialog’s', async () => {
+    draw(<Editing undo={() => undefined} />)
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    const clear = within(panel).getByRole('button', { name: 'clear' })
+    await userEvent.click(clear)
+    await within(panel).findByText(words.cleared)
+    expect(clear).toHaveFocus()
+    // The key is left for the platform, which asks the dialog to close with it: one Escape does
+    // not close the panel and take the Undo away with it as well.
+    expect(escape()).toBe(true)
+    expect(within(panel).getByText(words.cleared)).toBeVisible()
+    expect(within(panel).getByRole('button', { name: 'Undo' })).toBeVisible()
+  })
+
+  it('is put away by Escape while the focus is on it, and the key is spent there', async () => {
+    draw(<Editing undo={() => undefined} />)
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    await userEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+    const undo = await within(panel).findByRole('button', { name: 'Undo' })
+    act(() => {
+      undo.focus()
+    })
+    // Spent on the toast: the platform is not left the key to ask the dialog around it with.
+    expect(escape()).toBe(false)
+    expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: words.meter })).toBeInTheDocument()
+    // The member is among the toasts still, as after any toast closed by a key.
+    expect(region().contains(document.activeElement)).toBe(true)
+  })
+
+  it('is put away by Escape on a page with no dialog open, wherever the focus is', async () => {
+    draw(<Clear undo={() => undefined} />)
+    await userEvent.click(screen.getByRole('button', { name: 'clear' }))
+    await screen.findByText(words.cleared)
+    escape()
+    expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+  })
+
+  it('goes when its dwell is over, after an Escape that was its dialog’s', () => {
+    vi.useFakeTimers()
+    draw(<Editing undo={() => undefined} />)
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    fireEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+    escape()
+    expect(screen.getByText(words.cleared)).toBeVisible()
+    act(() => {
+      vi.advanceTimersByTime(3000)
+    })
+    expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
   })
 
   it('shows each of several, apart', async () => {

@@ -2,6 +2,8 @@
 // the files `vite build` wrote to dist/www (06-clients §8, PRD 07 §4). It exits 1 when the build
 //
 // - is over its bundle budget (budget.ts);
+// - does not declare its encoding where a browser looks for it, in index.html's first 1024 bytes
+//   and before any script;
 // - is not clean under the policy (csp.ts): index.html does not carry it, or holds a script, a
 //   style or a handler inline, or names a file of another origin, or a stylesheet holds a `data:`
 //   URL. What a browser refuses at run time the end-to-end suite hears; this is what can be read;
@@ -83,6 +85,21 @@ console.log(
 )
 
 for (const path of unwritten) fail(`index.html names ${path}, which the build did not write`)
+
+// The encoding: a browser looks for it in a page's first 1024 bytes alone, and before it runs a
+// script. The build writes it first (plugin.ts), ahead of a policy that grows with each origin.
+const encoding = /<meta\s+charset\s*=\s*"utf-8"[^>]*>/i.exec(html)
+if (encoding === null) fail('index.html does not declare its encoding')
+else {
+  const end = Buffer.byteLength(html.slice(0, encoding.index + encoding[0].length))
+  if (end > 1024) {
+    fail(`index.html declares its encoding ${String(end)} bytes in, past the 1024 a browser reads`)
+  }
+  const script = html.search(/<script\b/i)
+  if (script !== -1 && script < encoding.index) {
+    fail('index.html names a script before it declares its encoding')
+  }
+}
 
 // The policy, as far as a build's files say.
 const entities: Readonly<Record<string, string>> = { '&#39;': "'", '&quot;': '"', '&amp;': '&' }

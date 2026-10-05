@@ -176,7 +176,8 @@ export interface StepperProps extends FieldProps {
  * A whole number with a button either side of it, each named for what it does to what. A whole
  * number typed in is given to `onChange` as soon as it is within the bounds. A fraction is no
  * value of it and is given to nobody: when the field is left, what it holds is made the nearest
- * whole number and held to the bounds.
+ * whole number and held to the bounds. Enter settles it as leaving it does, before the form it
+ * stands in is submitted, so what is sent is what the field shows.
  */
 export function Stepper({
   label,
@@ -201,6 +202,15 @@ export function Stepper({
   const stepTo = (next: number) => {
     setTyped(undefined)
     onChange(held(next))
+  }
+  // What the field holds is made a value of it. Between two whole numbers, it is the nearer;
+  // outside its bounds, it is held to them. Empty, it is what it was.
+  const settle = (field: HTMLInputElement) => {
+    const next = field.valueAsNumber
+    setTyped(undefined)
+    if (!Number.isFinite(next)) return
+    const whole = held(Math.round(next))
+    if (whole !== value) onChange(whole)
   }
   return (
     <Field label={label} help={help} error={error} required={required}>
@@ -238,13 +248,14 @@ export function Stepper({
               if (Number.isInteger(next) && next >= low && next <= high) onChange(next)
             }}
             onBlur={(event) => {
-              // Left between two whole numbers, it is the nearer; left outside its bounds, it
-              // is held to them. Left empty, it is what it was.
-              const next = event.currentTarget.valueAsNumber
-              setTyped(undefined)
-              if (!Number.isFinite(next)) return
-              const whole = held(Math.round(next))
-              if (whole !== value) onChange(whole)
+              settle(event.currentTarget)
+            }}
+            onKeyDown={(event) => {
+              // Enter submits the form the field stands in, and the field has not been left:
+              // what was typed over a bound or between two whole numbers has been given to
+              // nobody, and the form would send the number before it while the field showed
+              // another. Settled first, what is sent is what the field shows.
+              if (event.key === 'Enter') settle(event.currentTarget)
             }}
           />
           <IconButton

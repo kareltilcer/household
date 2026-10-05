@@ -34,6 +34,11 @@ export interface Display {
   readonly hold: (modes: Partial<DisplayPreferences>) => () => void
 }
 
+/** One holder's modes, for as long as it holds them. */
+interface Hold {
+  readonly modes: Partial<DisplayPreferences>
+}
+
 const DisplayContext = createContext<Display | null>(null)
 
 const reducedMotionQuery = '(prefers-reduced-motion: reduce)'
@@ -52,8 +57,13 @@ function deviceReducesMotion(): boolean {
 
 export function DisplayProvider({ children }: { readonly children: ReactNode }) {
   const [stored, setStored] = useState(readPreferences)
-  const [held, setHeld] = useState<Partial<DisplayPreferences> | null>(null)
-  const preferences = useMemo(() => ({ ...stored, ...held }), [stored, held])
+  // Every hold that has not been let go, in the order they were taken: a later one is over an
+  // earlier one where both hold the same mode.
+  const [holds, setHolds] = useState<readonly Hold[]>([])
+  const preferences = useMemo(
+    () => holds.reduce<DisplayPreferences>((over, held) => ({ ...over, ...held.modes }), stored),
+    [stored, holds],
+  )
   const deviceReduced = useSyncExternalStore(subscribeToMotion, deviceReducesMotion)
   const [textScale, setTextScale] = useState(() => measureTextScale(document.documentElement))
 
@@ -93,9 +103,11 @@ export function DisplayProvider({ children }: { readonly children: ReactNode }) 
   }, [stored])
 
   const hold = useCallback((modes: Partial<DisplayPreferences>) => {
-    setHeld(modes)
+    // Its own entry, so that letting go ends this hold and no other, whatever the two hold.
+    const taken: Hold = { modes }
+    setHolds((current) => [...current, taken])
     return () => {
-      setHeld((current) => (current === modes ? null : current))
+      setHolds((current) => current.filter((held) => held !== taken))
     }
   }, [])
 

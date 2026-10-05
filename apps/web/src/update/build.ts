@@ -57,13 +57,20 @@ export function watchForUpdate(
 ): UpdateWatch {
   if (own === undefined) return { stop: () => undefined }
   let told = false
+  let stopped = false
   const ask = () => {
     if (told) return
-    void live().then((id) => {
-      if (told || id === undefined || id === own) return
-      told = true
-      onUpdate()
-    })
+    void live().then(
+      (id) => {
+        // An answer that comes once the watch has stopped is told to nobody: its owner is gone.
+        if (stopped || told || id === undefined || id === own) return
+        told = true
+        onUpdate()
+      },
+      () => {
+        // A reader that failed did not read the live build: not knowing is never a newer one.
+      },
+    )
   }
   const check = () => {
     if (document.visibilityState === 'visible') ask()
@@ -76,6 +83,7 @@ export function watchForUpdate(
   window.addEventListener('vite:preloadError', ask)
   return {
     stop: () => {
+      stopped = true
       clearInterval(timer)
       document.removeEventListener('visibilitychange', check)
       window.removeEventListener('vite:preloadError', ask)

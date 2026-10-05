@@ -161,6 +161,22 @@ describe('holding', () => {
     fireEvent.click(screen.getByRole('button', { name: label }))
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
+
+  it('is idle again, and completes again, where its owner draws one of its own for what was undone', () => {
+    // It stays completed for as long as it is drawn. A row whose completion was undone, or
+    // refused by the server, draws its control afresh, by a key that changes with it.
+    const onComplete = vi.fn()
+    const { rerender } = draw(<HoldToComplete key={1} label={label} onComplete={onComplete} />)
+    fireEvent.pointerDown(ring())
+    advance(2000)
+    expect(phase()).toBe('completed')
+    rerender(<HoldToComplete key={2} label={label} onComplete={onComplete} />)
+    expect(phase()).toBe('idle')
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    fireEvent.pointerDown(ring())
+    advance(2000)
+    expect(onComplete).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('the keyboard and assistive technology', () => {

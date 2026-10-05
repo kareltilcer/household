@@ -278,6 +278,44 @@ test.describe('inside a side panel, which makes the page outside it inert', () =
     await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
   })
 
+  test('a toast stays, its undo with it, when Escape closes the panel under it', async ({
+    page,
+  }) => {
+    const panel = await openPanel(page)
+    await panel.getByRole('button', { name: serial }).click()
+    await panel.getByRole('menuitem', { name: 'Clear the serial number' }).click()
+    await expect(panel.locator('[data-third-party] li')).toBeVisible()
+    // One Escape, pressed in the panel, is the panel's: Radix would put the newest toast away
+    // for it as well, and the Undo would be gone before its dwell was.
+    await expect(panel.getByRole('button', { name: serial })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+    const toast = page.locator('[data-third-party] li').filter({ hasText: 'Serial number cleared' })
+    await expect(toast).toBeVisible()
+    await toast.getByRole('button', { name: 'Undo' }).click()
+    await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
+  })
+
+  test('Escape on a toast puts the toast away, and the panel it is drawn in stays', async ({
+    page,
+  }) => {
+    const panel = await openPanel(page)
+    await panel.getByRole('button', { name: serial }).click()
+    await panel.getByRole('menuitem', { name: 'Clear the serial number' }).click()
+    const toast = panel
+      .locator('[data-third-party] li')
+      .filter({ hasText: 'Serial number cleared' })
+    await toast.getByRole('button', { name: 'Undo' }).focus()
+    await page.keyboard.press('Escape')
+    await expect(toast).toBeHidden()
+    // The key was spent on the toast: the editor around it was not asked to close by it too.
+    await expect(panel).toBeVisible()
+    await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '0')
+    // The next one is the panel's.
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+  })
+
   test('a toast pointed at while the panel closes under it goes once the pointer has left it', async ({
     page,
   }) => {

@@ -11,6 +11,12 @@
 // A release before the time is up does nothing and says so, for as long as a toast would stay,
 // and the control is then idle again, as it was. A press that is not a hold never reaches the row
 // the control sits in.
+//
+// Completed, it stays so for as long as it is drawn, and takes no second completion: what it
+// knows is what it did, and not what became of it. A row that is to be completed again, after an
+// undo or a write the server refused, draws a control of its own for it, by a `key` that changes
+// with what is to be completed. Whether the control should take its owner's word for what is
+// complete is its first screen's to say (ADR 0025).
 import { BaseIcon } from '@household/icons/web'
 import { reducedMotion, thresholds } from '@household/tokens'
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react'

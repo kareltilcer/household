@@ -3,14 +3,22 @@
 // that is not here is a route nothing checks, and a test fails a router that has one. This file
 // is data, with nothing of React's: the suite reads it on Node.
 
+/**
+ * The mode of the one build that has the dev-only pages, beside the development server: the build
+ * the end-to-end suite runs against, `vite build --mode e2e`. The build's configuration reads it
+ * here (vite.config.ts), and its plugin, which refuses a dev-only page to a build of any other
+ * mode (build/plugin.ts). The router writes it out, as the bundler needs it (routes.tsx).
+ */
+export const devPagesMode = 'e2e'
+
 export interface RoutePath {
   /** The path as the router matches it. */
   readonly path: string
   /** An address that reaches it, for the routes whose path is a pattern. */
   readonly example: string
   /**
-   * Dev-only: in the development server and in the build the end-to-end suite runs against, and
-   * in no build a deployment serves (vite.config.ts).
+   * Dev-only: served by the development server and by the build of `devPagesMode`, and by no
+   * build a deployment serves. The router serves a route marked so nowhere else (routes.tsx).
    */
   readonly dev: boolean
 }

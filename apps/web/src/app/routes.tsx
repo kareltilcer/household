@@ -9,14 +9,22 @@ import { Home } from './Home.tsx'
 import { NotFound } from './NotFound.tsx'
 import { paths, routeIds, type RouteId } from './paths.ts'
 import { Root } from './Root.tsx'
-import { RouteError } from './RouteError.tsx'
+import { RootError, RouteError } from './RouteError.tsx'
 
 type Page = Omit<RouteObject, 'path' | 'children' | 'index'>
+
+/**
+ * Whether this build has the dev-only pages. The mode is paths.ts's `devPagesMode`, written out
+ * here: the bundler drops the branch below only where it reads a constant in this very
+ * expression, and one imported from another module is none to it. A test of the build holds the
+ * two together (build/build.test.ts), and the build's plugin refuses a build that kept the pages.
+ */
+const devPages = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
 
 const pages: Partial<Record<RouteId, Page>> = {
   home: { Component: Home },
   notFound: { Component: NotFound },
-  ...(import.meta.env.DEV || import.meta.env.MODE === 'e2e'
+  ...(devPages
     ? {
         harness: {
           lazy: async () => ({ Component: (await import('../dev/harness/Harness.tsx')).Harness }),
@@ -30,14 +38,28 @@ const pages: Partial<Record<RouteId, Page>> = {
 
 /**
  * The routes this build serves, by the id paths.ts gives each: all of them in development and in
- * the end-to-end build, and all but the dev-only ones in any other.
+ * the end-to-end build, and all but the dev-only ones in any other. A route paths.ts marks
+ * dev-only is served by no other build, whatever names a page for it above.
  */
-export const served: readonly RouteId[] = routeIds.filter((id) => pages[id] !== undefined)
+export const served: readonly RouteId[] = routeIds.filter(
+  (id) => pages[id] !== undefined && (devPages || !paths[id].dev),
+)
 
-export const routes: RouteObject[] = [
-  {
-    Component: Root,
-    ErrorBoundary: RouteError,
-    children: served.map((id) => ({ path: paths[id].path, ...pages[id] })),
-  },
-]
+/**
+ * The router's table for `screens`: each drawn inside Root, and a screen that fails to load or to
+ * draw named in its own place there (RouteError), so that Root stays, the prompt of a newer build
+ * with it. The second boundary is for Root's own failure, which leaves nothing to draw inside.
+ */
+export function inRoot(screens: RouteObject[]): RouteObject[] {
+  return [
+    {
+      Component: Root,
+      ErrorBoundary: RootError,
+      children: [{ ErrorBoundary: RouteError, children: screens }],
+    },
+  ]
+}
+
+export const routes: RouteObject[] = inRoot(
+  served.map((id) => ({ path: paths[id].path, ...pages[id] })),
+)

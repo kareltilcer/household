@@ -1,7 +1,13 @@
 // The web app's data layer (06-clients, PL-4): TanStack Query, its cache persisted to IndexedDB so
 // that a member who opens the app with no connection reads what they last read. A browser is not
 // the offline-first surface: a cold cache is a loading state, and what is kept is kept for a day.
-import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
+import {
+  defaultShouldDehydrateQuery,
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  type Query,
+} from '@tanstack/react-query'
 import type {
   PersistedClient,
   Persister,
@@ -105,13 +111,40 @@ export function createPersister(
   }
 }
 
+/** What a query may say of itself, beside its key (TanStack's `meta`). */
+export interface QueryNotes extends Record<string, unknown> {
+  /**
+   * `false` keeps its answer out of this browser's stored cache: what nobody reads again, a
+   * search as it is typed, or what is of no use later, a link to a file that is good for minutes.
+   * Such a query names its own `gcTime` too, where it should not stay in memory for the day.
+   */
+  readonly persist?: boolean
+}
+
+declare module '@tanstack/react-query' {
+  interface Register {
+    queryMeta: QueryNotes
+  }
+}
+
+/** Whether a query's answer is written to this browser: one that succeeded, unless it says no. */
+export function isKept(query: Query): boolean {
+  return defaultShouldDehydrateQuery(query) && query.meta?.persist !== false
+}
+
 /**
  * How the cache is persisted: for a day, and for one build. A new build may read the contract
- * differently, so what an older one kept is dropped rather than shown.
+ * differently, so what an older one kept is dropped rather than shown. A query keeps its answer
+ * out of it by saying so (`QueryNotes`).
  */
 export function persistOptions(
   persister: Persister,
   build: string | undefined,
 ): Omit<PersistQueryClientOptions, 'queryClient'> {
-  return { persister, maxAge: cacheMaxAge, buster: build ?? '' }
+  return {
+    persister,
+    maxAge: cacheMaxAge,
+    buster: build ?? '',
+    dehydrateOptions: { shouldDehydrateQuery: isKept },
+  }
 }
