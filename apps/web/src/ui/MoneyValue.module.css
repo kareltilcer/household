@@ -1,0 +1,44 @@
+.money {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+.line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: baseline;
+}
+
+.amount {
+  composes: num from '../styles/type.module.css';
+  /* One amount is one word: its digits, its separators and its sign stay together. */
+  white-space: nowrap;
+}
+
+.amountLarge {
+  composes: numLg from '../styles/type.module.css';
+  white-space: nowrap;
+}
+
+/* The code is the amount's label, in the label's face. */
+.currency {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+}
+
+.out {
+  composes: caption from '../styles/type.module.css';
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+}
+
+.conversion {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}

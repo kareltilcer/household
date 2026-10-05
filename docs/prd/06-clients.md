@@ -156,7 +156,7 @@ line is whether a wrong answer costs anything.
 | | |
 |---|---|
 | **Mobile** | EAS Build; **EAS Update** for JavaScript-only fixes, store submission for native changes. An update never changes the API version the client speaks |
-| **Web** | Continuous deployment; the SPA checks its build id and prompts a reload when a new one is live |
+| **Web** | Continuous deployment; the SPA checks its build id and prompts a reload when a new one is live. A build's id is a digest of its files, which its page carries and `build.json` beside it names; an open page asks for that file when it is looked at again and every fifteen minutes, and never reloads by itself ([ADR 0025](../adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)) |
 | **API compatibility** | The server supports the current and the previous minor for **at least 6 months**. Clients send a version header, `Household-Client: mobile/1.4.2` or `web/…`; a client below the minimum supported version for its type, set per deployment, gets a blocking, translated *"please update"* screen and nothing else. The server answers such a client's every request `400 update_required`, naming the oldest version it serves, before it checks anything else, so an old client is never refused for a request the contract has since changed. A request naming no client is held to no minimum ([ADR 0010](../adr/0010-mobile-tokens-second-step-providers-and-client-versions.md)) |
 | **Feature flags** | Per household and per platform, so a module can ship dark and be enabled progressively. A flag is on or off for the platform, and a household's own setting of it comes first; the flag `module.<id>` is its module's, and a household for which it is off holds no level on the module, as for one it does not enable; household settings alone has no flag that gates it. A household's representation names the flags that are on for it, which a client shows what ships dark by (**D-146**) |
 | **Beta** | TestFlight and Play internal testing, opt-in from settings |
@@ -172,6 +172,10 @@ Both clients, in CI, on every pull request:
 - Component tests for every stateful component.
 - **End-to-end tests on the critical paths**: register → create household → invite → accept;
   offline capture → reconnect → converge; subscribe → lapse → read-only → export.
-- Accessibility: axe on every route, both themes.
+- Accessibility: axe on every route, both themes. On the web the routes are one list the router is
+  built from, which the suite walks, and the twelve-state harness is among them: a dev-only page,
+  in no build a deployment serves, whose words are fixtures (**D-154**).
 - Pseudolocalisation pass, to catch layouts that only survive English.
-- Bundle-size budget per platform, enforced.
+- Bundle-size budget per platform, enforced. The web's is what a first visit downloads before the
+  app can draw: 200 kB of script and 20 kB of stylesheet, compressed, and 150 kB for any one script
+  loaded later (**D-153**).

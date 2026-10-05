@@ -1,0 +1,67 @@
+.chip {
+  composes: caption from '../styles/type.module.css';
+  display: inline-flex;
+  gap: var(--space-05);
+  align-items: center;
+  max-width: 100%;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--chip-accent);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.chipGlyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--chip-accent);
+}
+
+/* Initials in the page's ink on a sunken ground, inside a ring of the member's colour: a series
+   colour is tested against that ground, and carries no text. */
+.avatar {
+  composes: caption from '../styles/type.module.css';
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  background: var(--surface-sunken);
+  border: 2px solid var(--avatar-ring);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.tone1 {
+  --avatar-ring: var(--chart-1);
+}
+
+.tone2 {
+  --avatar-ring: var(--chart-2);
+}
+
+.tone3 {
+  --avatar-ring: var(--chart-3);
+}
+
+.tone4 {
+  --avatar-ring: var(--chart-4);
+}
+
+.tone5 {
+  --avatar-ring: var(--chart-5);
+}
+
+.tone6 {
+  --avatar-ring: var(--chart-6);
+}
+
+.tone7 {
+  --avatar-ring: var(--chart-7);
+}
+
+.tone8 {
+  --avatar-ring: var(--chart-8);
+}

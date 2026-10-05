@@ -1,0 +1,26 @@
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+  padding: var(--dens-pad-y) 0;
+  overflow-wrap: anywhere;
+}
+
+.kind,
+.meta {
+  composes: caption from '../styles/type.module.css';
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-15);
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.title {
+  font-weight: 500;
+}
+
+.snippet {
+  color: var(--text-muted);
+}

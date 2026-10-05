@@ -1,0 +1,101 @@
+.hold {
+  position: relative;
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+.target {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--dens-row-min);
+  height: var(--dens-row-min);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  cursor: pointer;
+  /* A hold is not a scroll, a selection or a callout. */
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* The button the keyboard and assistive technology meet is drawn nowhere, so the ring shows
+   where the focus is. */
+.hold:has(button:focus-visible) .target {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* The fill starts at the top and runs clockwise. */
+  transform: rotate(-90deg);
+}
+
+.track,
+.fill {
+  fill: none;
+  stroke-width: 3;
+}
+
+.track {
+  stroke: var(--hold-track);
+}
+
+.fill {
+  stroke: var(--hold-fill);
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  stroke-linecap: round;
+}
+
+/* The whole hold, by the threshold's own token, which reduced motion does not shorten: it is
+   then stepped (the component sets the timing), not removed. */
+[data-phase='holding'] .fill {
+  animation: fill var(--hold-to-complete) linear forwards;
+}
+
+[data-phase='completing'] .fill,
+[data-phase='completed'] .fill {
+  stroke-dashoffset: 0;
+}
+
+[data-phase='completed'] .target {
+  color: var(--positive);
+}
+
+[data-phase='failed'] .target {
+  color: var(--danger);
+}
+
+[data-phase='completing'] .target,
+[data-phase='completed'] .target {
+  cursor: default;
+}
+
+@keyframes fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.check {
+  position: relative;
+}
+
+.word {
+  composes: caption from '../styles/type.module.css';
+  min-width: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.word:empty {
+  display: none;
+}

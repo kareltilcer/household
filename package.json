@@ -18,6 +18,7 @@
     "down": "docker compose down",
     "db:setup": "cd server && go run ./cmd/household-api bootstrap && go run ./cmd/household-api migrate",
     "dev:api": "cd server && go run ./cmd/household-api serve",
+    "dev:web": "pnpm --filter @household/web run dev",
     "gen": "turbo run gen && pnpm run gen:design && pnpm run gen:go",
     "gen:design": "pnpm --filter @household/tokens run css && pnpm --filter @household/icons run vendor",
     "gen:go": "cd server && go generate ./... && go test -count=1 -run TestTheClientRegistriesAreTheGeneratedOnes ./internal/syncconfig -args -write",

@@ -24,9 +24,13 @@ overrides:
 # or linters and disagree about what the same source means.
 catalog:
   '@eslint/js': ^10.0.1
+  # One Playwright, and so one Chromium, for the web app's end-to-end suite (item 24) and the web
+  # replica's smoke test (@household/sync, through @vitest/browser-playwright).
+  '@playwright/test': 1.63.0
   '@redocly/cli': 2.54.3
   '@types/node': ^24.0.0
   eslint: ^10.11.0
+  playwright: 1.63.0
   prettier: 3.9.9
   # One React across the workspace: @household/sync's React Native build, @household/icons'
   # components and, from items 24 and 28, both apps. react-dom is react's own version.

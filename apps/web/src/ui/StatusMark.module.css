@@ -1,0 +1,34 @@
+.mark,
+.control {
+  composes: caption from '../styles/type.module.css';
+  display: inline-flex;
+  gap: var(--space-05);
+  align-items: center;
+  min-width: 0;
+  color: var(--text-primary);
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+}
+
+.word {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.control {
+  justify-content: center;
+  min-width: var(--dens-row-min);
+  min-height: var(--dens-row-min);
+  padding: var(--space-05) var(--space-1);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.control:hover {
+  background: var(--surface-sunken);
+}

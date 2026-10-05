@@ -1,0 +1,43 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-15);
+  align-items: center;
+  min-height: var(--dens-row-min);
+  padding: var(--dens-pad-y) var(--dens-pad-x);
+  border-block-end: 1px solid var(--dens-rule);
+}
+
+.row:last-child {
+  border-block-end: 0;
+}
+
+.text {
+  display: flex;
+  /* The words take the room and wrap inside it; the mark and the action keep their size. */
+  flex: 1 1 10rem;
+  flex-direction: column;
+  gap: var(--space-05);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.title {
+  overflow-wrap: anywhere;
+}
+
+.secondary {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+[data-density='compact'] .secondary {
+  display: none;
+}

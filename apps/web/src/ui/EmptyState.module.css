@@ -1,0 +1,36 @@
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* The kit's one frame, 200 × 140: it never sets its own height, and gives way before the text. */
+.illustration {
+  width: 100%;
+  max-width: 12.5rem;
+  height: auto;
+}
+
+.sentence {
+  composes: bodyLg from '../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+.example {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  width: 100%;
+  padding: var(--space-15);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.tag {
+  composes: overline from '../styles/type.module.css';
+  color: var(--text-muted);
+}

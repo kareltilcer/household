@@ -1,0 +1,73 @@
+.banner {
+  display: flex;
+  gap: var(--space-15);
+  align-items: flex-start;
+  padding: var(--space-15) var(--space-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-inline-start: 4px solid var(--banner-tone);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+}
+
+.neutral {
+  --banner-tone: var(--border-strong);
+}
+
+.info {
+  --banner-tone: var(--info);
+}
+
+.warning {
+  --banner-tone: var(--warning);
+}
+
+.danger {
+  --banner-tone: var(--danger);
+}
+
+.glyph {
+  flex: none;
+  margin-block-start: var(--space-05);
+  color: var(--banner-tone);
+}
+
+.neutral .glyph {
+  color: var(--text-muted);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.offline {
+  composes: caption from '../styles/type.module.css';
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+}
+
+.offlineGlyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--status-offline);
+}

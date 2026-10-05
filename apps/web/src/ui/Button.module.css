@@ -1,0 +1,98 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  /* 44 pt in both densities: compact cannot buy a target (01-foundations §6). */
+  min-width: var(--dens-row-min);
+  min-height: var(--dens-row-min);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-entrance),
+    border-color var(--dur-fast) var(--ease-entrance);
+}
+
+.words {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.iconOnly {
+  padding: var(--space-1);
+}
+
+.primary {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-fg);
+}
+
+.primary:hover {
+  background: color-mix(in srgb, var(--button-primary-bg) 88%, var(--text-primary));
+}
+
+.primary:active {
+  background: color-mix(in srgb, var(--button-primary-bg) 76%, var(--text-primary));
+}
+
+.secondary {
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.secondary:hover,
+.ghost:hover {
+  background: var(--surface-sunken);
+}
+
+.secondary:active,
+.ghost:active {
+  background: color-mix(in srgb, var(--surface-sunken) 88%, var(--text-primary));
+}
+
+.danger {
+  background: var(--button-danger-bg);
+  color: var(--text-on-danger);
+}
+
+.danger:hover {
+  background: color-mix(in srgb, var(--button-danger-bg) 88%, var(--text-primary));
+}
+
+.danger:active {
+  background: color-mix(in srgb, var(--button-danger-bg) 76%, var(--text-primary));
+}
+
+.button:disabled,
+.button:disabled:hover {
+  background: var(--surface-sunken);
+  border-color: var(--border-subtle);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.button[aria-busy='true'] {
+  cursor: progress;
+}
+
+/* One turn every 1.6 s, counted in the slow duration: reduced motion makes that 0 ms and the
+   glyph stands still, which the button's `aria-busy` and its place say as well. */
+.busy {
+  animation: turn calc(var(--dur-slow) * 5) linear infinite;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(1turn);
+  }
+}

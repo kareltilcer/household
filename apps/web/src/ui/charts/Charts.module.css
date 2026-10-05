@@ -1,0 +1,206 @@
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  /* A chart is drawn on a raised ground: the series colours are tested against it. */
+  padding: var(--space-15);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  container-type: inline-size;
+}
+
+.caption {
+  composes: caption from '../../styles/type.module.css';
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-15);
+  align-items: center;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.note {
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+}
+
+.figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: var(--figures-tabular);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.series1 {
+  --series: var(--chart-1);
+}
+
+.series2 {
+  --series: var(--chart-2);
+}
+
+.series3 {
+  --series: var(--chart-3);
+}
+
+.series4 {
+  --series: var(--chart-4);
+}
+
+.series5 {
+  --series: var(--chart-5);
+}
+
+.series6 {
+  --series: var(--chart-6);
+}
+
+.series7 {
+  --series: var(--chart-7);
+}
+
+.series8 {
+  --series: var(--chart-8);
+}
+
+/* Time series */
+
+.columns {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-end;
+  border-block-end: 1px solid var(--chart-axis);
+}
+
+.column {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-05);
+  align-items: center;
+  min-width: 0;
+}
+
+.plot {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  height: var(--space-10);
+}
+
+.bar {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  background: var(--chart-1);
+  border-start-start-radius: var(--radius-control);
+  border-start-end-radius: var(--radius-control);
+}
+
+/* An estimated point is an outline with nothing in it: a shape a measured one never has. */
+.estimated {
+  background: transparent;
+  border: 2px dashed var(--chart-1);
+  border-block-end: 0;
+}
+
+.tick {
+  composes: caption from '../../styles/type.module.css';
+  color: var(--text-muted);
+}
+
+/* Composition */
+
+.whole {
+  display: flex;
+  gap: 2px;
+  height: var(--space-3);
+  overflow: hidden;
+  border-radius: var(--radius-control);
+}
+
+.segment {
+  display: block;
+  min-width: 2px;
+  background: var(--series);
+}
+
+.legend,
+.nodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+}
+
+.entry,
+.node {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-15);
+  align-items: baseline;
+}
+
+.swatch {
+  flex: none;
+  align-self: center;
+  width: var(--space-15);
+  height: var(--space-15);
+  background: var(--series);
+  border-radius: var(--radius-control);
+}
+
+.entryLabel {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Flow */
+
+.flow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.side {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+.sideLabel {
+  composes: overline from '../../styles/type.module.css';
+  color: var(--text-muted);
+}
+
+.node {
+  padding: var(--space-1) var(--space-15);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+}
+
+.towards {
+  flex: none;
+  color: var(--text-muted);
+}
+
+/* Where the two sides no longer fit beside each other, at 200 % text or on a narrow pane, the
+   second goes under the first and the arrow points down. */
+@container (max-width: 28rem) {
+  .flow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .towards {
+    align-self: center;
+    transform: rotate(90deg);
+  }
+}

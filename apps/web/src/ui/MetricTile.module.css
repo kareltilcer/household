@@ -1,0 +1,57 @@
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+  padding: var(--space-15);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.label {
+  composes: overline from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.figure {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05);
+  align-items: baseline;
+}
+
+.value {
+  composes: numLg from '../styles/type.module.css';
+}
+
+.unit {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+}
+
+.none {
+  display: flex;
+  gap: var(--space-05);
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--status-no-history);
+}
+
+.foot {
+  composes: caption from '../styles/type.module.css';
+  display: flex;
+  gap: var(--space-05);
+  align-items: center;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.arrow {
+  flex: none;
+}

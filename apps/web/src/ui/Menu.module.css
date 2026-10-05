@@ -1,0 +1,39 @@
+.menu {
+  min-width: 12rem;
+  max-width: min(24rem, calc(100vw - var(--space-2)));
+  padding: var(--space-05);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-2);
+  color: var(--text-primary);
+  animation: arrive var(--dur-fast) var(--ease-entrance);
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+  }
+}
+
+.item {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-height: var(--dens-row-min);
+  padding: var(--space-1) var(--space-15);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+/* Radix moves the focus to the item under the pointer or the arrow keys, and marks it. */
+.item[data-highlighted] {
+  background: var(--surface-sunken);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.danger {
+  color: var(--danger);
+}

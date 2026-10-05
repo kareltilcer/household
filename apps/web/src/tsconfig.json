@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    // The app runs in a browser: the DOM's types and Vite's (import.meta.env, a stylesheet as a
+    // module), and no Node's. Its component tests run in jsdom and import the same.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "jsx": "react-jsx"
+  },
+  "include": ["."]
+}

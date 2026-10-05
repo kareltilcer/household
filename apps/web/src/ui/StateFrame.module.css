@@ -1,0 +1,6 @@
+.frame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-15);
+  min-width: 0;
+}
