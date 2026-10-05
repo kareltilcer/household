@@ -139,7 +139,9 @@ pnpm --filter @household/web e2e        # Playwright against it: axe in both the
 - **The web app** (`apps/web`) is a static build under a strict Content-Security-Policy
   (`build/csp.ts`): nothing inline, every file its own origin's, and a directive widened only in the
   pull request that needs it. A modal is the platform's `<dialog>`, and a library that injects a
-  style is not used. A component names its words by key (`useTranslate`) and formats through
+  style is not used; what a component draws apart from where it stands, a menu's list or the
+  toasts, is drawn inside the open modal (`ui/topLayer.ts`), since the page outside one is inert.
+  A component names its words by key (`useTranslate`) and formats through
   `useFormat`: `Intl`, money from whole minor units, an instant in the timezone its caller names. A
   screen spends the twelve states through `ui/states.ts` and `StateFrame`. A route is a line of
   `src/app/paths.ts`, which the end-to-end suite walks with axe in both themes and in the
