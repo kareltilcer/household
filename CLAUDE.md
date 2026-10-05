@@ -44,8 +44,7 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
 pnpm --filter @household/sync conformance:web  # @household/sync's web replica in Chromium against it (Playwright)
 pnpm --filter @household/web build      # the web build a deployment serves (dist/www)
 pnpm --filter @household/web check      # that build held to its bundle budget, the policy and its own id
-pnpm --filter @household/web build:e2e  # the same build with the dev-only routes, the twelve-state harness among them
-pnpm --filter @household/web e2e        # Playwright against it: axe in both themes, the pseudo-locale pass, the policy
+pnpm --filter @household/web e2e        # builds it again with the dev-only routes (build:e2e), then Playwright: axe, the pseudo-locale pass, the policy
 ```
 
 - **`pnpm run up`, never `pnpm up`.** `pnpm up` is pnpm's own `update` command and rewrites
