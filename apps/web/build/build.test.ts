@@ -2,6 +2,8 @@
 // The build's own parts, held without a build: the policy, the script that sets the display modes
 // before the first paint, and the build's id. What a build actually wrote is check.ts's, and what
 // a browser does under the policy is the end-to-end suite's.
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   attributesOf,
@@ -14,7 +16,7 @@ import {
 } from '../src/display/modes.ts'
 import { bootScript } from './boot.ts'
 import { directives, headerOnly, headerPolicy, metaPolicy, unsafeSources } from './csp.ts'
-import { buildId } from './plugin.ts'
+import { buildId, devOnly } from './plugin.ts'
 
 describe('the policy', () => {
   it('admits nothing inline and nothing evaluated', () => {
@@ -128,5 +130,32 @@ describe("a build's id", () => {
     expect(buildId({ ...rest, 'assets/c.js': script })).not.toBe(buildId(files))
     // A name and a content are told apart: `a` + `bc` is not `ab` + `c`.
     expect(buildId({ a: 'bc' })).not.toBe(buildId({ ab: 'c' }))
+  })
+})
+
+describe('the dev-only pages', () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+  const file = (path: string) => join(root, path)
+
+  it('are known by where they are kept: every file under src/dev, and none beside it', () => {
+    const shipped = [
+      file('src/app/Home.tsx'),
+      file('src/ui/Button.module.css'),
+      file('src/developer.ts'),
+      resolve(root, '..', '..', 'packages', 'i18n', 'src', 'dev', 'index.ts'),
+      '\0vite/preload-helper.js',
+    ]
+    const dev = [
+      file('src/dev/Primitives.tsx'),
+      file('src/dev/sample.ts'),
+      file('src/dev/harness/Harness.tsx'),
+      // As a bundler names a stylesheet it made a module of, and a module a plugin made up.
+      `${file('src/dev/Primitives.module.css')}?used`,
+      `\0${file('src/dev/harness/model.ts')}`,
+      // As Vite writes a path on every platform.
+      file('src/dev/DevToolbar.tsx').split('\\').join('/'),
+    ]
+    expect(devOnly([...shipped, ...dev], root)).toEqual(dev)
+    expect(devOnly(shipped, root)).toEqual([])
   })
 })

@@ -47,6 +47,8 @@ export interface DataTableProps<Row> {
   readonly onOpenMark?: (row: Row) => void
   /** A row's name, which a conflict's control says: "Two versions of {name}". */
   readonly rowName?: (row: Row) => string
+  /** When a row's write began to sync, as `Date.now()` counts, where the table's owner knows. */
+  readonly syncingSince?: (row: Row) => number | undefined
   /** Fetches the rows after the last one. With it the table ends in a control that asks for them. */
   readonly onMore?: () => void
   /** The density this table is drawn in while the member has chosen none. Compact, as a table is. */
@@ -63,11 +65,14 @@ export function DataTable<Row>({
   mark,
   onOpenMark,
   rowName,
+  syncingSince,
   onMore,
   density = 'compact',
 }: DataTableProps<Row>) {
   const t = useTranslate()
   const { preferences } = useDisplay()
+  // The column a row's sync state stands in. It is drawn while a mark is drawn in it, which the
+  // stylesheet sees to: a row that has been syncing for less than a moment has none yet.
   const marked = mark !== undefined && rows.some((row) => mark(row) !== undefined)
 
   return (
@@ -126,7 +131,7 @@ export function DataTable<Row>({
                 )
               })}
               {marked ? (
-                <th scope="col" className={styles.head}>
+                <th scope="col" className={cx(styles.head, styles.stateHead)}>
                   <span className={a11y.visuallyHidden}>{t('ui.table.state')}</span>
                 </th>
               ) : null}
@@ -146,19 +151,20 @@ export function DataTable<Row>({
                     </td>
                   ))}
                   {marked ? (
-                    <td className={styles.cell}>
+                    <td className={cx(styles.cell, styles.state)}>
                       {state === undefined ? null : (
                         <SyncMark
                           state={state}
-                          {...(rowName === undefined ? {} : { name: rowName(row) })}
-                          {...(onOpenMark !== undefined &&
-                          (state === 'conflict' || state === 'rejected')
-                            ? {
-                                onOpen: () => {
+                          since={syncingSince?.(row)}
+                          // Whether its state has anything to open is the mark's to say.
+                          onOpen={
+                            onOpenMark === undefined
+                              ? undefined
+                              : () => {
                                   onOpenMark(row)
-                                },
-                              }
-                            : {})}
+                                }
+                          }
+                          {...(rowName === undefined ? {} : { name: rowName(row) })}
                         />
                       )}
                     </td>

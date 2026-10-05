@@ -130,10 +130,20 @@ export function Select({
   placeholder,
   ...rest
 }: SelectProps) {
+  // Where nothing says what is chosen, nothing is, and the placeholder is what it reads. Left to
+  // the platform, which cannot choose an option that is disabled, the first real option would be
+  // chosen without a word, and a required field would pass on a choice nobody made.
+  const unchosen =
+    placeholder !== undefined && rest.value === undefined && rest.defaultValue === undefined
   return (
     <Field label={label} help={help} error={error} required={required}>
       {(wiring) => (
-        <select {...rest} {...wiring} className={styles.control}>
+        <select
+          {...(unchosen ? { defaultValue: '' } : {})}
+          {...rest}
+          {...wiring}
+          className={styles.control}
+        >
           {placeholder === undefined ? null : (
             <option value="" disabled>
               {placeholder}
@@ -153,6 +163,7 @@ export function Select({
 export interface StepperProps extends FieldProps {
   readonly value: number
   readonly onChange: (value: number) => void
+  /** The least and the most it holds, and how far a button moves it: whole numbers, as it is. */
   readonly min?: number
   readonly max?: number
   readonly step?: number
@@ -161,9 +172,10 @@ export interface StepperProps extends FieldProps {
 }
 
 /**
- * A whole number with a button either side of it, each named for what it does to what. A value
- * typed in is given to `onChange` as soon as it is within the bounds, and held to them when the
- * field is left.
+ * A whole number with a button either side of it, each named for what it does to what. A whole
+ * number typed in is given to `onChange` as soon as it is within the bounds. A fraction is no
+ * value of it and is given to nobody: when the field is left, what it holds is made the nearest
+ * whole number and held to the bounds.
  */
 export function Stepper({
   label,
@@ -219,16 +231,19 @@ export function Stepper({
             onChange={(event) => {
               // Kept as typed until the field is left. The "1" of "12" is under a least of 5,
               // and an emptied field is on its way to any value: held to the bounds at each
-              // key, neither could be typed.
+              // key, neither could be typed. A fraction is no value of it, and is not given.
               setTyped(event.currentTarget.value)
               const next = event.currentTarget.valueAsNumber
-              if (Number.isFinite(next) && next >= low && next <= high) onChange(next)
+              if (Number.isInteger(next) && next >= low && next <= high) onChange(next)
             }}
             onBlur={(event) => {
-              // Left outside its bounds, it is held to them. Left empty, it is what it was.
+              // Left between two whole numbers, it is the nearer; left outside its bounds, it
+              // is held to them. Left empty, it is what it was.
               const next = event.currentTarget.valueAsNumber
               setTyped(undefined)
-              if (Number.isFinite(next) && next !== value) onChange(held(next))
+              if (!Number.isFinite(next)) return
+              const whole = held(Math.round(next))
+              if (whole !== value) onChange(whole)
             }}
           />
           <IconButton

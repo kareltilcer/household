@@ -61,6 +61,15 @@ test.describe('a dialog', () => {
     await expect(opener).toBeFocused()
   })
 
+  test('as a side panel opens on the field its owner names, not on what closes it', async ({
+    page,
+  }) => {
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Edit the cellar meter' }).click()
+    const panel = page.getByRole('dialog', { name: 'Cellar meter' })
+    await expect(panel.getByRole('textbox', { name: 'Name', exact: true })).toBeFocused()
+  })
+
   test('closes on a press on the ground behind it', async ({ page }) => {
     await open(page, primitives)
     await page.getByRole('button', { name: 'Delete Weekly shop' }).click()
@@ -100,6 +109,62 @@ test('a menu opens, moves and chooses by the keyboard, and gives the focus back'
   await page.keyboard.press('Escape')
   await expect(menu).toBeHidden()
   await expect(trigger).toBeFocused()
+})
+
+test('a confirmation opened from a menu gives the focus back to the menu’s trigger', async ({
+  page,
+}) => {
+  await open(page, primitives)
+  const trigger = page.getByRole('button', { name: 'More actions for Cellar meter' })
+  const menu = page.getByRole('menu')
+  const remove = menu.getByRole('menuitem', { name: 'Delete the cellar meter' })
+  const dialog = page.getByRole('dialog', { name: 'Delete the cellar meter?' })
+
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  await expect(menu.getByRole('menuitem', { name: 'Rename' })).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(remove).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(dialog).toBeVisible()
+  await expect(menu).toBeHidden()
+  // The safe choice is the first, and the one the focus is on.
+  await expect(dialog.getByRole('button', { name: 'Keep the meter' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  // The item that opened it is gone with its menu: the focus is where the menu was opened.
+  await expect(trigger).toBeFocused()
+
+  // By a pointer as by the keyboard.
+  await trigger.click()
+  await remove.click()
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Keep the meter' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(trigger).toBeFocused()
+})
+
+test('a select reads its placeholder while nothing is chosen, and no first option', async ({
+  page,
+}) => {
+  await open(page, primitives)
+  const register = page.getByRole('combobox', { name: 'Register' })
+  await expect(register).toHaveValue('')
+  expect(
+    await register.evaluate((select: HTMLSelectElement) => select.selectedOptions[0]?.textContent),
+  ).toBe('Choose')
+  await register.selectOption('night')
+  await expect(register).toHaveValue('night')
+})
+
+test('a stepper holds a whole number: a fraction typed in is the nearest one once it is left', async ({
+  page,
+}) => {
+  await open(page, primitives)
+  const members = page.getByRole('spinbutton', { name: 'Members' })
+  await members.fill('2.5')
+  await members.blur()
+  await expect(members).toHaveValue('3')
 })
 
 test.describe('inside a side panel, which makes the page outside it inert', () => {
@@ -160,6 +225,28 @@ test.describe('inside a side panel, which makes the page outside it inert', () =
     await toast.getByRole('button', { name: 'Undo' }).click()
     await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
   })
+
+  test('a toast pointed at while the panel closes under it goes once the pointer has left it', async ({
+    page,
+  }) => {
+    await holdTheClock(page)
+    const panel = await openPanel(page)
+    await panel.getByRole('button', { name: serial }).click()
+    await panel.getByRole('menuitem', { name: 'Clear the serial number' }).click()
+    const toast = page.locator('[data-third-party] li').filter({ hasText: 'Serial number cleared' })
+    await expect(toast).toBeVisible()
+    await toast.hover()
+    // Closed from the keyboard, so the pointer stays where it is: on the toast, which is drawn
+    // in the same place on the page as it was in the panel.
+    await panel.getByRole('button', { name: 'Close' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(panel).toBeHidden()
+    await page.clock.runFor(6000)
+    await expect(toast).toBeVisible()
+    await page.mouse.move(4, 4)
+    await page.clock.runFor(5100)
+    await expect(toast).toBeHidden()
+  })
 })
 
 test.describe('a toast', () => {
@@ -189,6 +276,44 @@ test.describe('a toast', () => {
     await page.clock.runFor(200)
     await expect(toast).toBeHidden()
   })
+
+  /** The two toasts of the page, the second raised once the first has been closed. */
+  const cleared = (page: Page) =>
+    page.locator('[data-third-party] li').filter({ hasText: '7 checked items cleared' })
+  const saved = (page: Page) =>
+    page.locator('[data-third-party] li').filter({ hasText: 'Saved on this device' })
+
+  test('goes after its dwell though the one before it was closed by a press on its Undo', async ({
+    page,
+  }) => {
+    await holdTheClock(page)
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Clear checked items' }).click()
+    // Pointed at, a toast's dwell is held; closed there, it is gone before the pointer leaves.
+    await cleared(page).getByRole('button', { name: 'Undo' }).click()
+    await expect(cleared(page)).toBeHidden()
+    await page.getByRole('button', { name: 'Save offline' }).click()
+    await expect(saved(page)).toBeVisible()
+    await page.clock.runFor(5100)
+    await expect(saved(page)).toBeHidden()
+  })
+
+  test('goes after its dwell though the one before it was closed from the keyboard', async ({
+    page,
+  }) => {
+    await holdTheClock(page)
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Clear checked items' }).focus()
+    await page.keyboard.press('Enter')
+    await cleared(page).getByRole('button', { name: 'Undo' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(cleared(page)).toBeHidden()
+    await page.getByRole('button', { name: 'Save offline' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(saved(page)).toBeVisible()
+    await page.clock.runFor(5100)
+    await expect(saved(page)).toBeHidden()
+  })
 })
 
 test.describe('hold-to-complete', () => {
@@ -211,16 +336,22 @@ test.describe('hold-to-complete', () => {
     await page.mouse.up()
   })
 
-  test('does nothing when it is let go early, and says to keep holding', async ({ page }) => {
+  test('does nothing when it is let go early, says to keep holding, and is then as it was', async ({
+    page,
+  }) => {
     await holdTheClock(page)
     await open(page, primitives)
     await ring(page, bins).hover()
     await page.mouse.down()
     await page.clock.runFor(900)
     await page.mouse.up()
-    await page.clock.runFor(5000)
-    await expect(done(page)).toHaveAttribute('data-completions', '0')
     await expect(page.getByText('Keep holding to complete')).toBeVisible()
+    await page.clock.runFor(4900)
+    await expect(page.getByText('Keep holding to complete')).toBeVisible()
+    // The word stays as long as a toast would, and the row is not left saying it.
+    await page.clock.runFor(200)
+    await expect(page.getByText('Keep holding to complete')).toBeHidden()
+    await expect(done(page)).toHaveAttribute('data-completions', '0')
   })
 
   test('completes at once from the keyboard, with no hold', async ({ page }) => {

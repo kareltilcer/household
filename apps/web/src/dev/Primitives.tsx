@@ -2,11 +2,12 @@
 // dev-only page: buttons, inputs, dialogs and sheets, menus, toasts, banners, the sync marks and
 // hold-to-complete. The twelve states are not theirs; they have their own, and the end-to-end
 // suite drives them here: the focus a dialog traps and gives back, a menu under the arrow keys, a
-// toast's undo, a menu and a toast raised from inside a side panel, a hold released early and a
-// hold kept. Its words are fixtures, as the harness's are (harness/model.ts).
+// confirmation opened from a menu, a toast's undo, a menu and a toast raised from inside a side
+// panel, a hold released early and a hold kept. Its words are fixtures, as the harness's are
+// (harness/model.ts).
 import { controls, statusGlyphs, type StatusId } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner, OfflineBar } from '../ui/Banner.tsx'
 import { Button, IconButton, type ButtonVariant } from '../ui/Button.tsx'
@@ -39,8 +40,9 @@ export function Primitives() {
   const toast = useToast()
   const [confirm, setConfirm] = useState(false)
   const [editor, setEditor] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const meterName = useRef<HTMLInputElement>(null)
   const [reading, setReading] = useState('18 402,4')
-  const [register, setRegister] = useState('')
   const [count, setCount] = useState(2)
   const [repeat, setRepeat] = useState<string>('month')
   const [chosen, setChosen] = useState<string>(sample('Nothing chosen yet'))
@@ -118,6 +120,7 @@ export function Primitives() {
             help={sample('Choose a register first.')}
           />
           <TextArea label={sample('Note')} help={sample('Optional.')} />
+          {/* Nothing says what is chosen, so nothing is: it reads its placeholder. */}
           <Select
             label={sample('Register')}
             placeholder={sample('Choose')}
@@ -125,10 +128,6 @@ export function Primitives() {
               { value: 'day', label: sample('Day tariff') },
               { value: 'night', label: sample('Night tariff') },
             ]}
-            value={register}
-            onChange={(event) => {
-              setRegister(event.currentTarget.value)
-            }}
           />
           <Stepper label={sample('Members')} value={count} onChange={setCount} min={1} max={12} />
         </div>
@@ -202,6 +201,8 @@ export function Primitives() {
             setEditor(false)
           }}
           title={sample('Cellar meter')}
+          // An editor opens on its first field, and not on the control that closes it.
+          initialFocus={meterName}
           actions={
             <Button
               variant="primary"
@@ -213,7 +214,7 @@ export function Primitives() {
             </Button>
           }
         >
-          <TextField label={sample('Name')} defaultValue={sample('Cellar meter')} />
+          <TextField label={sample('Name')} defaultValue={sample('Cellar meter')} ref={meterName} />
           <TextField
             label={sample('Serial number')}
             numeric
@@ -283,8 +284,11 @@ export function Primitives() {
                 id: 'delete',
                 label: sample('Delete the cellar meter'),
                 danger: true,
+                // A confirmation opened from a menu: closed, it gives the focus back to the
+                // menu's trigger, the item that opened it being gone.
                 onSelect: () => {
                   setChosen(sample('Delete the cellar meter'))
+                  setRemoving(true)
                 },
               },
             ]}
@@ -293,6 +297,35 @@ export function Primitives() {
             {chosen}
           </p>
         </div>
+        <Dialog
+          open={removing}
+          onClose={() => {
+            setRemoving(false)
+          }}
+          title={sample('Delete the cellar meter?')}
+          description={sample(
+            'The meter and its 38 readings are deleted for everyone in the household. Bills already settled stay in Finance.',
+          )}
+          actions={
+            <>
+              <Button
+                onClick={() => {
+                  setRemoving(false)
+                }}
+              >
+                {sample('Keep the meter')}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setRemoving(false)
+                }}
+              >
+                {sample('Delete the cellar meter')}
+              </Button>
+            </>
+          }
+        />
       </Section>
 
       <Section name="Toasts">

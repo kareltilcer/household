@@ -45,6 +45,16 @@ A modal makes everything outside itself inert, so a menu's list, which Radix dra
 the page, and the toasts, which stand at the app's root, are drawn inside the modal that is open
 for as long as one is (`ui/topLayer.ts`), and a toast is announced from inside it: a menu opened
 from a sheet can be chosen from, and an Undo raised over one can be pressed.
+What the platform and Radix leave to the app, the components do themselves. A dialog's owner
+names what takes the focus as it opens (`initialFocus`), where that is not its first control: a
+field's `autoFocus` cannot, since React focuses such a field as it mounts, before the dialog is
+open, and writes no attribute the platform could read. A dialog is asked to close by its own
+`cancel` alone, which React hands up its tree from a dialog drawn inside it and the platform lets
+rise from a file input. A menu hands the focus back to its trigger before the chosen item acts, so
+that a confirmation the item opens gives the focus back there, and not to an item that is gone.
+And Radix holds every toast's dwell while one is pointed at, letting go only while a toast is
+shown, so each run of toasts, from the first shown while none is to the last one's leaving, is
+its provider afresh: a toast closed under the pointer holds nothing of the next one.
 
 **The policy is one constant (`apps/web/build/csp.ts`), written into index.html as a `<meta>` by
 the build and sent as a header by whoever serves it.** `default-src 'none'`, and `'self'` for
@@ -71,9 +81,11 @@ and in a build of any other mode, the branch that imports them is dead and their
 written. The end-to-end suite runs against `dist/e2e` served by `vite preview` with the policy as
 a header, and every test fails on a `securitypolicyviolation` and on a console error. `dist/www`
 is written without source maps, which would hand the app's sources to whoever asked a deployment
-for them; `dist/e2e` has them. `build/check.ts` reads `dist/www` and fails a build that is over
-budget, that holds anything inline or of another origin, that carries the harness's marker, that
-holds a source map, or whose `build.json` does not name the id its page names.
+for them; `dist/e2e` has them. The build's own plugin refuses to write a build of any mode but
+`e2e` that holds a module of `src/dev`, whatever imported it. `build/check.ts` reads `dist/www`
+and fails a build that is over budget, that holds anything inline or of another origin, that
+carries the harness's marker, that holds a source map, or whose `build.json` does not name the id
+its page names.
 
 **The twelve states are a table, and a frame applies it.** `src/ui/states.ts` is the port of
 `components.js`'s treatments: each state replaces the body, wraps it, or marks a row of it, and
@@ -110,7 +122,9 @@ same id, so a newer build drops what an older one kept.
 technology. Beside it is a plain button, drawn nowhere and named for what it completes, which
 completes on any activation: Enter, Space, a switch, a screen reader's double tap. The ring shows
 the focus the button has. The fill is timed by the tokens' `hold-to-complete`, which reduced motion
-does not shorten, and steps ten times under it.
+does not shorten, and steps ten times under it. A release before the time is up says to keep
+holding for as long as a toast stays, and the control is then idle again; and what completes is
+what its owner asks at the end of the hold, not what it asked two seconds before.
 
 **Component tests run in jsdom, and a browser holds the rest.** jsdom lays nothing out and has no
 modal dialog, so what the platform does, a dialog's focus, a menu under the keyboard, a 44 pt
@@ -120,8 +134,10 @@ the empty state's illustration is not drawn from 200 %.
 
 **The API client is `@household/api`'s, same-origin.** It names itself in `Household-Client`, sends
 the readable CSRF cookie's value with each unsafe request, and throws a problem document as an
-`ApiProblemError` typed by its code. TanStack Query asks again only for what may yet succeed; its
-cache is persisted to IndexedDB as one structured clone, written at most once a second, for a day.
+`ApiProblemError` typed by its code. TanStack Query asks again only for a problem the server
+stated that may yet clear, its own failure or a first attempt still running: a request that got no
+answer is the transport's to resend, and is resent there alone. Its cache is persisted to
+IndexedDB as one structured clone, written at most once a second, for a day.
 
 ## Alternatives rejected
 
@@ -129,6 +145,9 @@ cache is persisted to IndexedDB as one structured clone, written at most once a 
 |---|---|
 | Radix Dialog with a nonce for its injected style | A nonce is minted per response by a server. The app is static files, and a nonce in a file is a constant any injected markup can read |
 | `'unsafe-inline'` for `style-src`, or a hash for the injected style | The first is what PRD 07 §4 forbids. The style's text holds the scrollbar's width, so it has no one hash |
+| A dialog's content mounted once the dialog is open, so that a field's `autoFocus` is honoured | The platform's own first focus, the safe choice of a confirmation, would fall on the empty dialog and have to be rebuilt by hand. An owner that wants another control names it |
+| The toasts' dwell timed by the app, or Radix told by a made-up event that the pointer has left | The first is what Radix's toast is used for. The second steers a library by its internals, where a provider mounted afresh holds nothing by construction |
+| The table's column of sync marks timed by the table | A second clock to keep in step with each mark's own. A rule of the stylesheet draws the column while a mark is drawn in it, and has nothing to keep in step |
 | The policy as a header alone | Nothing serves the app yet, and the PRD has the app set it. A page that carries its policy is under it wherever it is opened |
 | The display modes set by an inline script with its hash in the policy | The hash would be a second copy of the script, kept in step by hand. A file is fetched once and cached, from the page's own origin |
 | No script in the head: the app sets the modes when it starts | A member who chose dark on a light device would see a light page on every load until the module had run |
@@ -157,6 +176,11 @@ cache is persisted to IndexedDB as one structured clone, written at most once a 
   widens the policy for the sync service. Item 27 widens it for the payment processor's frame.
 - A test's markup is held to the literal-string lint as the app's is, so a test names its words in
   a constant and passes them as values.
+- A row whose owner knows when its write began to sync says so (`syncingSince`, a mark's `since`):
+  the moment a sync is given before it is shown is counted from then, and without it from when the
+  row was drawn, which a row drawn again in the middle of a long sync waits out a second time.
+- A sync mark is a control only for a conflict and a rejection, which have something to open,
+  whatever a list or a table hands it: the rule is the mark's own.
 - The bundle holds all five catalogs, the texts of emails among them, since `@household/i18n`
   imports them together. Splitting them by language is the first thing to do when the budget is
   near.

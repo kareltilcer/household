@@ -27,8 +27,13 @@ export interface ListRowProps {
   readonly chip?: ReactNode
   /** The state of the row's own write, where it is not in sync. */
   readonly mark?: SyncState | undefined
-  /** Opens what the mark is about: the comparison, the reason. */
+  /**
+   * Opens what the mark is about: the comparison for a conflict, the reason for a rejection. A
+   * row that is pending or syncing has nothing to open, and its mark stays words.
+   */
   readonly onOpenMark?: (() => void) | undefined
+  /** When the row's write began to sync, as `Date.now()` counts, where its owner knows. */
+  readonly syncingSince?: number | undefined
   /**
    * What can be done to the row. A member who may not write is given none: it is absent, not
    * disabled (03-patterns §2).
@@ -43,6 +48,7 @@ export function ListRow({
   chip,
   mark,
   onOpenMark,
+  syncingSince,
   trailing,
 }: ListRowProps) {
   return (
@@ -54,11 +60,7 @@ export function ListRow({
         {chip === undefined ? null : <span>{chip}</span>}
       </div>
       {mark === undefined ? null : (
-        <SyncMark
-          state={mark}
-          name={title}
-          {...(onOpenMark === undefined ? {} : { onOpen: onOpenMark })}
-        />
+        <SyncMark state={mark} name={title} onOpen={onOpenMark} since={syncingSince} />
       )}
       {trailing}
     </li>

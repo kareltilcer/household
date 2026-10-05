@@ -89,10 +89,42 @@ describe('the sync mark', () => {
     expect(container.querySelector('[data-status="syncing"]')).toBeNull()
   })
 
+  it('measures the moment from when the sync began, where it is told when', () => {
+    vi.useFakeTimers()
+    // A row drawn again in the middle of a long sync shows its mark at once: it waits no second
+    // time.
+    const { container, unmount } = draw(<SyncMark state="syncing" since={Date.now() - 5000} />)
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+    unmount()
+
+    const later = draw(<SyncMark state="syncing" since={Date.now() - 300} />)
+    act(() => {
+      vi.advanceTimersByTime(499)
+    })
+    expect(later.container.querySelector('[data-status]')).toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(later.container.querySelector('[data-status="syncing"]')).not.toBeNull()
+  })
+
   it('shows every other state at once', () => {
     draw(<SyncMark state="pending" />)
     expect(screen.getByText('Not sent yet')).toBeInTheDocument()
   })
+
+  it.each(['pending', 'syncing'] as const)(
+    'is words where there is nothing to open, whatever way it is given: %s',
+    (state) => {
+      vi.useFakeTimers()
+      draw(<SyncMark state={state} onOpen={() => undefined} />)
+      act(() => {
+        vi.advanceTimersByTime(800)
+      })
+      expect(document.querySelector(`[data-status="${state}"]`)).not.toBeNull()
+      expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    },
+  )
 
   it('is a control, named for what opening it does, where a state can be opened', async () => {
     const onOpen = vi.fn()

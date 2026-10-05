@@ -3,7 +3,7 @@
 // Escape and hand the focus back. It is opened non-modally: Radix's modal menu locks the page's
 // scroll by injecting a style, which the policy refuses (ADR 0025).
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import type { ReactElement, ReactNode } from 'react'
+import { useRef, type ReactElement, type ReactNode } from 'react'
 import styles from './Menu.module.css'
 import { cx } from './cx.ts'
 import { useTopModal } from './topLayer.ts'
@@ -28,9 +28,12 @@ export function Menu({ trigger, items }: MenuProps) {
   // Inside the open modal, where one is open: the page outside it is inert, and a menu drawn
   // there, as Radix draws it by itself, could be opened from a dialog and never chosen from.
   const modal = useTopModal()
+  const opener = useRef<HTMLButtonElement>(null)
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild ref={opener}>
+        {trigger}
+      </DropdownMenu.Trigger>
       <DropdownMenu.Portal container={modal}>
         <DropdownMenu.Content
           className={styles.menu}
@@ -43,7 +46,15 @@ export function Menu({ trigger, items }: MenuProps) {
             <DropdownMenu.Item
               key={item.id}
               className={cx(styles.item, item.danger === true && styles.danger)}
-              onSelect={item.onSelect}
+              onSelect={() => {
+                // The focus is handed back before the item acts, and not after, as Radix
+                // hands it by itself. What the item opens, a confirmation, takes whatever
+                // holds the focus then for what opened it and gives the focus back there when
+                // it closes: left on the item, which is gone by then, it would be given to
+                // nothing.
+                opener.current?.focus()
+                item.onSelect()
+              }}
             >
               {item.icon}
               <span>{item.label}</span>

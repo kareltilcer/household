@@ -36,9 +36,13 @@ export function createQueryClient({ onProblem }: QueryClientOptions = {}): Query
     defaultOptions: {
       queries: {
         gcTime: cacheMaxAge,
-        // The transport already resends a request whose response was lost (retryingFetch). A
-        // problem the server stated is its answer: only what may yet succeed is asked again.
-        retry: (failures, error) => failures < 2 && isRetryable(error),
+        // A problem the server stated is its answer, and only one that may yet clear is asked
+        // again: its own failure, and a first attempt still running. A request that got no
+        // answer is not: the transport has already resent it twice (retryingFetch), and asked
+        // twice more from here it would be nine requests, and several seconds, before a member
+        // is told the server cannot be reached. Nor is an error that is no answer at all.
+        retry: (failures, error) =>
+          failures < 2 && problemIn(error) !== undefined && isRetryable(error),
       },
       // An unsafe request is resent by the transport alone, with the key it left with.
       mutations: { retry: false },

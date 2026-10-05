@@ -217,6 +217,41 @@ describe('a text area and a select', () => {
     expect(onChange).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('combobox')).toHaveDisplayValue('Night tariff')
   })
+
+  it('has nothing chosen where nothing says what is: no first option taken without a word', async () => {
+    draw(<Select label={words.register} placeholder={words.choose} required options={tariffs} />)
+    const select = screen.getByRole('combobox', { name: /Register/ })
+    expect(select).toHaveDisplayValue(words.choose)
+    expect(select).toHaveValue('')
+    // A required field with nothing chosen does not pass as filled.
+    expect(select).toBeInvalid()
+    await userEvent.selectOptions(select, 'night')
+    expect(select).toHaveDisplayValue('Night tariff')
+    expect(select).toBeValid()
+  })
+
+  it('starts on what its caller says is chosen, placeholder or not', () => {
+    const { rerender } = draw(
+      <Select
+        label={words.register}
+        placeholder={words.choose}
+        defaultValue="night"
+        options={tariffs}
+      />,
+    )
+    expect(screen.getByRole('combobox')).toHaveDisplayValue('Night tariff')
+    rerender(
+      <Select
+        key="held"
+        label={words.register}
+        placeholder={words.choose}
+        value="day"
+        onChange={() => undefined}
+        options={tariffs}
+      />,
+    )
+    expect(screen.getByRole('combobox')).toHaveDisplayValue('Day tariff')
+  })
 })
 
 function Count({
@@ -292,6 +327,26 @@ describe('a stepper', () => {
     await userEvent.tab()
     expect(input).toHaveValue(12)
     expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds a whole number alone: a fraction typed in is no value, and is the nearest one once left', async () => {
+    const onChange = vi.fn()
+    draw(<Count start={2} min={1} max={12} onChange={onChange} />)
+    const input = screen.getByRole('spinbutton')
+    await userEvent.clear(input)
+    await userEvent.type(input, '2.5')
+    // The "2" on the way is a whole number; "2.5" is not, and is given to nobody.
+    expect(onChange.mock.calls).toEqual([[2]])
+    await userEvent.tab()
+    expect(onChange.mock.calls).toEqual([[2], [3]])
+    expect(input).toHaveValue(3)
+
+    // Rounded first and held to the bounds after: 12.6 is no 13 over a most of 12.
+    await userEvent.clear(input)
+    await userEvent.type(input, '12.6')
+    await userEvent.tab()
+    expect(input).toHaveValue(12)
+    expect(onChange.mock.calls.flat().every((value) => Number.isInteger(value))).toBe(true)
   })
 
   it('keeps the focus on a button that has stepped to its bound, which then does nothing', async () => {

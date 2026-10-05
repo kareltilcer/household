@@ -103,6 +103,32 @@ describe('dates and numbers', () => {
     expect(createFormatters('de').number(148320)).toBe('148.320')
     expect(en.percent(0.44)).toBe('44%')
   })
+
+  it('makes a formatter once for each way it is asked to format, however many rows ask', () => {
+    const dates = vi.spyOn(Intl, 'DateTimeFormat')
+    const numbers = vi.spyOn(Intl, 'NumberFormat')
+    const format = createFormatters('en-GB')
+    // The percent's, which every set of formatters starts with.
+    numbers.mockClear()
+    const at = '2026-03-04T23:30:00Z'
+    for (const day of ['2026-03-01', '2026-03-02', '2026-03-03']) {
+      format.day(day)
+      format.instant(at, 'Europe/Prague')
+      format.dayOf(at, 'Europe/Prague')
+      format.number(148320)
+      format.number(1.8, { style: 'unit', unit: 'gigabyte' })
+      format.decimal('25.5200')
+    }
+    // A calendar day, an instant and the day of one: three ways, whatever the count of rows.
+    expect(dates).toHaveBeenCalledTimes(3)
+    expect(numbers).toHaveBeenCalledTimes(3)
+    // Another style, another zone and other options are other ways, and still right.
+    expect(format.day('2026-03-01', 'long')).toBe('1 March 2026')
+    expect(format.instant(at, 'America/New_York')).toBe('4 Mar 2026, 18:30')
+    expect(format.number(0.5, { maximumFractionDigits: 0 })).toBe('1')
+    expect(format.number(0.5)).toBe('0.5')
+    expect(dates).toHaveBeenCalledTimes(5)
+  })
 })
 
 describe('the formatting locale', () => {

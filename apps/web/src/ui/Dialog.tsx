@@ -5,7 +5,7 @@
 // style, which the policy would refuse (ADR 0025).
 import { controls } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { IconButton } from './Button.tsx'
 import styles from './Dialog.module.css'
@@ -23,6 +23,12 @@ export interface DialogProps {
   readonly children?: ReactNode
   /** The choices, the safe one first. */
   readonly actions?: ReactNode
+  /**
+   * What takes the focus as it opens, where that is not its first control: an editor's first
+   * field. A field's own `autoFocus` cannot say it. React focuses such a field as it mounts,
+   * which is before the dialog is open, and writes no attribute for the platform to read.
+   */
+  readonly initialFocus?: RefObject<HTMLElement | null>
 }
 
 function Surface({
@@ -32,6 +38,7 @@ function Surface({
   description,
   children,
   actions,
+  initialFocus,
   panel,
 }: DialogProps & { readonly panel: boolean }) {
   const t = useTranslate()
@@ -43,7 +50,11 @@ function Surface({
   useEffect(() => {
     const element = dialog.current
     if (element === null || !open) return undefined
-    if (!element.open) element.showModal()
+    if (!element.open) {
+      // The platform puts the focus on the first control; its owner may name another.
+      element.showModal()
+      initialFocus?.current?.focus()
+    }
     // A menu and the toasts are drawn inside it while it is open: outside it they are inert.
     const leave = enterTopLayer(element)
     return () => {
@@ -51,6 +62,7 @@ function Surface({
       // Closed by its owner, or with the screen that held it, so the page is not left inert.
       if (element.open) element.close()
     }
+    // What takes the focus is asked as it opens, and not again while it stays open.
   }, [open])
 
   return (
@@ -60,6 +72,11 @@ function Surface({
       aria-labelledby={titleId}
       aria-describedby={description === undefined ? undefined : descriptionId}
       onCancel={(event) => {
+        // Its own alone. React hands a `cancel` up its tree, as the platform does not: a
+        // confirmation drawn inside a side panel is asked to close by Escape, and the panel
+        // around it is not. And the platform itself lets a file input's `cancel` rise, for a
+        // picker put away, which asks nothing of the dialog the input stands in.
+        if (event.target !== event.currentTarget) return
         // Escape asks; the owner decides, and closes it by its `open`.
         event.preventDefault()
         onClose()
@@ -68,8 +85,8 @@ function Surface({
         // The platform closed it behind its owner's back, and the owner is told. A close this
         // component asked for itself is none of that: its event comes later, when `open` is
         // false, or when the dialog is open again, as it is between the two runs of an effect
-        // that React's strict mode makes of one.
-        if (open && !event.currentTarget.open) onClose()
+        // that React's strict mode makes of one. Nor is the close of a dialog drawn inside it.
+        if (event.target === event.currentTarget && open && !event.currentTarget.open) onClose()
       }}
       onPointerDown={(event) => {
         pressedGround.current = event.target === event.currentTarget

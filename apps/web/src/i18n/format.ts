@@ -59,7 +59,32 @@ const plainDecimal = /^-?\d+(?:\.(\d+))?$/
 /** The most fraction digits every `Intl` takes: past them a decimal is rounded. */
 const mostFractionDigits = 20
 
+/**
+ * `make`, asked once for each set of options: making a formatter is what `Intl` costs, and a
+ * table makes the same one for every row it draws.
+ */
+function once<Options extends object, Format>(
+  make: (options: Options) => Format,
+): (options: Options) => Format {
+  const made = new Map<string, Format>()
+  return (options) => {
+    const key = JSON.stringify(options)
+    let format = made.get(key)
+    if (format === undefined) {
+      format = make(options)
+      made.set(key, format)
+    }
+    return format
+  }
+}
+
 export function createFormatters(locale: string): Formatters {
+  const numbers = once(
+    (options: Intl.NumberFormatOptions) => new Intl.NumberFormat(locale, options),
+  )
+  const dates = once(
+    (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale, options),
+  )
   const currencies = new Map<string, Intl.NumberFormat>()
   const currency = (code: string) => {
     let format = currencies.get(code)
@@ -87,14 +112,14 @@ export function createFormatters(locale: string): Formatters {
 
   return {
     locale,
-    number: (value, options) => new Intl.NumberFormat(locale, options).format(value),
+    number: (value, options = {}) => numbers(options).format(value),
     decimal: (value, options) => {
       const match = plainDecimal.exec(value)
       if (match === null) throw new RangeError(`${JSON.stringify(value)} is no decimal`)
       // `Intl` by itself keeps three fraction digits and rounds the rest away.
       const written = Math.min(match[1]?.length ?? 0, mostFractionDigits)
       const most = Math.max(written, options?.minimumFractionDigits ?? 0)
-      return new Intl.NumberFormat(locale, { maximumFractionDigits: most, ...options }).format(
+      return numbers({ maximumFractionDigits: most, ...options }).format(
         value as Intl.StringNumericLiteral,
       )
     },
@@ -116,15 +141,13 @@ export function createFormatters(locale: string): Formatters {
       if (match === null) throw new RangeError(`${JSON.stringify(day)} is not a calendar day`)
       const [, year, month, date] = match
       // Formatted in UTC from a UTC midnight, so the day shown is the day written.
-      return new Intl.DateTimeFormat(locale, { dateStyle: style, timeZone: 'UTC' }).format(
+      return dates({ dateStyle: style, timeZone: 'UTC' }).format(
         Date.UTC(Number(year), Number(month) - 1, Number(date)),
       )
     },
     instant: (at, timeZone, style = 'medium') =>
-      new Intl.DateTimeFormat(locale, { dateStyle: style, timeStyle: 'short', timeZone }).format(
-        instantOf(at),
-      ),
+      dates({ dateStyle: style, timeStyle: 'short', timeZone }).format(instantOf(at)),
     dayOf: (at, timeZone, style = 'medium') =>
-      new Intl.DateTimeFormat(locale, { dateStyle: style, timeZone }).format(instantOf(at)),
+      dates({ dateStyle: style, timeZone }).format(instantOf(at)),
   }
 }

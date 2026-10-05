@@ -40,21 +40,41 @@ export const syncStates = ['pending', 'syncing', 'conflict', 'rejected'] as cons
 export type SyncState = (typeof syncStates)[number]
 
 /**
+ * The states whose mark opens something: a conflict its comparison, a rejection its reason. A
+ * write that is pending or syncing has nothing to open (02-components §0).
+ */
+const opens: ReadonlySet<SyncState> = new Set(['conflict', 'rejected'])
+
+/**
+ * How long until a sync that began at `since` has taken longer than a moment, the tokens'
+ * threshold: nothing or less once it has. One that nothing dates begins now.
+ */
+function untilShown(since: number | undefined): number {
+  return since === undefined
+    ? thresholds['sync-indicate-after']
+    : since + thresholds['sync-indicate-after'] - Date.now()
+}
+
+/**
  * Whether `syncing` has gone on long enough to be shown: past the tokens' threshold, and not
  * before (06-clients §5: a progress indication only when it takes longer than a moment).
  */
-function useLongEnough(active: boolean): boolean {
-  const [elapsed, setElapsed] = useState(false)
+function useLongEnough(active: boolean, since: number | undefined): boolean {
+  // Drawn in the middle of a sync that is already long, it is long enough from the first.
+  const [elapsed, setElapsed] = useState(() => active && untilShown(since) <= 0)
   useEffect(() => {
     if (!active) return undefined
-    const timer = setTimeout(() => {
-      setElapsed(true)
-    }, thresholds['sync-indicate-after'])
+    const timer = setTimeout(
+      () => {
+        setElapsed(true)
+      },
+      Math.max(0, untilShown(since)),
+    )
     return () => {
       clearTimeout(timer)
       setElapsed(false)
     }
-  }, [active])
+  }, [active, since])
   return active && elapsed
 }
 
@@ -63,18 +83,28 @@ export interface SyncMarkProps {
   readonly words?: 'inline' | 'hidden'
   /**
    * Opens what the state is about: the comparison for a conflict, the reason for a rejection.
-   * With it the mark is a control, named for what opening it does.
+   * With it the mark of such a state is a control, named for what opening it does. The mark of
+   * a write that is pending or syncing stays words, whatever it is given: there is nothing of
+   * it to open.
    */
-  readonly onOpen?: () => void
+  readonly onOpen?: (() => void) | undefined
   /** The row's name, which a conflict's control says: "Two versions of {name}". */
   readonly name?: string
+  /**
+   * When the write began to sync, as `Date.now()` counts: the moment a sync is given before it
+   * is shown is measured from then. Where nothing says, it is measured from when this mark
+   * first drew the state, and a row drawn again in the middle of a long sync waits it out again.
+   */
+  readonly since?: number | undefined
 }
 
-export function SyncMark({ state, words = 'inline', onOpen, name }: SyncMarkProps) {
+export function SyncMark({ state, words = 'inline', onOpen, name, since }: SyncMarkProps) {
   const t = useTranslate()
-  const shown = useLongEnough(state === 'syncing')
+  const shown = useLongEnough(state === 'syncing', since)
   if (state === 'syncing' && !shown) return null
-  if (onOpen === undefined) return <StatusMark status={state} words={words} />
+  if (onOpen === undefined || !opens.has(state)) {
+    return <StatusMark status={state} words={words} />
+  }
   const word = t(statusGlyphs[state].labelKey)
   const label =
     state === 'conflict' && name !== undefined

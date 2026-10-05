@@ -138,6 +138,25 @@ test.describe('the harness', () => {
     await expect(syncing.locator('[data-status="syncing"]')).toContainText('Sending')
   })
 
+  test('gives the table no column of sync marks until a row has one to draw in it', async ({
+    page,
+  }) => {
+    await holdTheClock(page)
+    await open(page, `${harness}?body=table`)
+    const heads = (state: DataState) => cell(page, 'table', state).getByRole('columnheader')
+    await expect(heads('populated')).toHaveCount(3)
+    // A row that waits to be sent is marked at once, and the column its mark stands in is there.
+    await expect(heads('pending')).toHaveCount(4)
+    // One that is syncing has no mark for a moment, and until then no column either: a write
+    // that is over within the moment moves nothing in the table.
+    await page.clock.runFor(799)
+    await expect(heads('syncing')).toHaveCount(3)
+    await expect(cell(page, 'table', 'syncing').locator('[data-status]')).toHaveCount(0)
+    await page.clock.runFor(1)
+    await expect(heads('syncing')).toHaveCount(4)
+    await expect(cell(page, 'table', 'syncing').locator('[data-status="syncing"]')).toBeVisible()
+  })
+
   test('draws the illustration at 100 % text and gives its room to the sentence at 200 %', async ({
     page,
   }) => {

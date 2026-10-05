@@ -159,14 +159,17 @@ describe('asking again', () => {
 })
 
 describe('the query client', () => {
-  it('asks again only for what may yet succeed, twice at most, and never resends a mutation', () => {
+  it('asks again only for a stated problem that may yet clear, twice at most, and never resends a mutation', () => {
     const client = createQueryClient()
     const { retry } = client.getDefaultOptions().queries ?? {}
     if (typeof retry !== 'function') throw new Error('the queries’ retry is a function')
-    expect(retry(0, new TypeError('network'))).toBe(true)
-    expect(retry(1, thrown(500, 'internal'))).toBe(true)
-    expect(retry(2, new TypeError('network'))).toBe(false)
+    expect(retry(0, thrown(500, 'internal'))).toBe(true)
+    expect(retry(1, thrown(409, 'idempotency_in_progress'))).toBe(true)
+    expect(retry(2, thrown(500, 'internal'))).toBe(false)
     expect(retry(0, thrown(404, 'not_found'))).toBe(false)
+    // A request with no answer was resent by the transport already, and is not multiplied
+    // here; and an error that is no answer at all, a bug, is not asked again either.
+    expect(retry(0, new TypeError('network'))).toBe(false)
     expect(client.getDefaultOptions().mutations?.retry).toBe(false)
     expect(client.getDefaultOptions().queries?.gcTime).toBe(cacheMaxAge)
   })

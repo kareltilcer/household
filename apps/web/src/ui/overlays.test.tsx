@@ -3,11 +3,12 @@
 // modal dialog and a menu under the keyboard is the end-to-end suite's (e2e/primitives.spec.ts).
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { draw, Press } from '../test/render.tsx'
 import { Button, IconButton } from './Button.tsx'
 import { Dialog, Sheet } from './Dialog.tsx'
+import { TextField } from './Field.tsx'
 import { Menu, type MenuItem } from './Menu.tsx'
 import { useToast } from './Toast.tsx'
 
@@ -18,6 +19,9 @@ const words = {
   meter: 'Cellar meter',
   more: 'More actions for Cellar meter',
   cleared: '7 checked items cleared from Weekly shop',
+  scan: 'Scan of the meter',
+  discard: 'Discard the changes?',
+  name: 'Name',
 } as const
 
 function Confirm({ onClose, panel = false }: { onClose: () => void; panel?: boolean }) {
@@ -120,6 +124,54 @@ describe('a dialog', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.queryByText(words.title)).not.toBeInTheDocument()
   })
+
+  it('is asked to close by its own Escape alone, not by a file picker put away inside it', () => {
+    const onClose = vi.fn()
+    draw(
+      <Sheet open onClose={onClose} title={words.meter}>
+        <input type="file" aria-label={words.scan} />
+      </Sheet>,
+    )
+    // The platform lets a file input's `cancel` rise, and it reaches the dialog around it.
+    const cancel = new Event('cancel', { bubbles: true, cancelable: true })
+    act(() => {
+      screen.getByLabelText(words.scan).dispatchEvent(cancel)
+    })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(cancel.defaultPrevented).toBe(false)
+  })
+
+  it('stays open when Escape closes a confirmation drawn inside it', () => {
+    const onClose = vi.fn()
+    const onDiscard = vi.fn()
+    draw(
+      <Sheet open onClose={onClose} title={words.meter}>
+        <Dialog open onClose={onDiscard} title={words.discard} />
+      </Sheet>,
+    )
+    // A dialog's own `cancel` does not rise on the platform. React hands it up its tree all the
+    // same.
+    act(() => {
+      screen
+        .getByRole('dialog', { name: words.discard })
+        .dispatchEvent(new Event('cancel', { cancelable: true }))
+    })
+    expect(onDiscard).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('gives the focus to what its owner names as it opens, an editor’s first field', () => {
+    function Editor() {
+      const first = useRef<HTMLInputElement>(null)
+      return (
+        <Sheet open onClose={() => undefined} title={words.meter} initialFocus={first}>
+          <TextField label={words.name} ref={first} />
+        </Sheet>
+      )
+    }
+    draw(<Editor />)
+    expect(screen.getByRole('textbox', { name: words.name })).toHaveFocus()
+  })
 })
 
 describe('a side panel', () => {
@@ -186,6 +238,25 @@ describe('a menu', () => {
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     expect(onSelect).toHaveBeenCalledTimes(1)
+  })
+
+  it('has given the focus back to its trigger by the time the chosen item acts', async () => {
+    // What the item opens, a confirmation, takes whatever holds the focus then for what opened
+    // it, and gives the focus back there when it closes.
+    const focused: (Element | null)[] = []
+    draw(
+      <Menu
+        trigger={trigger}
+        items={items(() => {
+          focused.push(document.activeElement)
+        })}
+      />,
+    )
+    await userEvent.tab()
+    await userEvent.keyboard('{Enter}')
+    expect(await screen.findByRole('menuitem', { name: 'Rename' })).toHaveFocus()
+    await userEvent.keyboard('{Enter}')
+    expect(focused).toEqual([screen.getByRole('button', { name: words.more })])
   })
 
   it('is drawn inside the dialog it is opened from, since the page outside one is inert', async () => {
@@ -278,6 +349,41 @@ describe('a toast', () => {
       vi.advanceTimersByTime(1)
     })
     expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+  })
+
+  it('goes when its dwell is over though the one before it was put away from under the pointer', () => {
+    vi.useFakeTimers()
+    draw(<Clear />)
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    // Pointed at, a toast's dwell is held; put away there, it is gone before the pointer leaves.
+    fireEvent.pointerMove(screen.getByText(words.cleared))
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    expect(screen.getByText(words.cleared)).toBeVisible()
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+  })
+
+  it('leaves the focus in its region when the next one comes after it was put away by a key', async () => {
+    draw(<Clear />)
+    await userEvent.click(screen.getByRole('button', { name: 'clear' }))
+    const dismiss = await screen.findByRole('button', { name: 'Dismiss' })
+    dismiss.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+    // Radix puts the focus on the region a toast was closed in, and the member is there still.
+    const held = () =>
+      screen.getByRole('region', { name: 'Notifications (F8)' }).contains(document.activeElement)
+    expect(held()).toBe(true)
+
+    // The next toast comes by itself, with the focus where it was: it is not dropped.
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    expect(await screen.findByText(words.cleared)).toBeVisible()
+    expect(held()).toBe(true)
   })
 
   function Editing({ undo }: { undo: () => void }) {

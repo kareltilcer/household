@@ -52,6 +52,13 @@
   border-block-end: 0;
 }
 
+/* The column of the rows' sync state is there while a mark is drawn in it. A row that has been
+   syncing for less than a moment draws none yet (StatusMark), and the column that would hold it
+   is not drawn either: a write that is over within the moment moves nothing on the screen. */
+.grid:not(:has(.state > *)) :is(.stateHead, .state) {
+  display: none;
+}
+
 .numeric {
   font-family: var(--font-mono);
   font-variant-numeric: var(--figures-tabular);

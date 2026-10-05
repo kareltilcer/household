@@ -84,6 +84,25 @@ describe('a list row', () => {
     expect(onOpenMark).toHaveBeenCalledTimes(1)
   })
 
+  it('has nothing to open on a row that is waiting to be sent, as a table’s row has not', () => {
+    draw(
+      <List label={words.meters}>
+        <ListRow title={words.electricity} mark="pending" onOpenMark={() => undefined} />
+      </List>,
+    )
+    expect(screen.getByText('Not sent yet')).toBeVisible()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('draws at once the mark of a row that began to sync more than a moment ago', () => {
+    const { container } = draw(
+      <List label={words.meters}>
+        <ListRow title={words.electricity} mark="syncing" syncingSince={Date.now() - 5000} />
+      </List>,
+    )
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+  })
+
   it('draws its chip, its avatar and its trailing action, and none that it was not given', () => {
     const { rerender } = draw(
       <List label={words.meters}>
@@ -148,10 +167,12 @@ function Ledger({
   onMore,
   mark,
   onOpenMark,
+  syncingSince,
 }: {
   onMore?: () => void
   mark?: (row: Row) => SyncState | undefined
   onOpenMark?: (row: Row) => void
+  syncingSince?: (row: Row) => number | undefined
 }) {
   const [sort, setSort] = useState<Sort | undefined>(undefined)
   return (
@@ -165,6 +186,7 @@ function Ledger({
       {...(onMore === undefined ? {} : { onMore })}
       {...(mark === undefined ? {} : { mark })}
       {...(onOpenMark === undefined ? {} : { onOpenMark, rowName: (row: Row) => row.description })}
+      {...(syncingSince === undefined ? {} : { syncingSince })}
     />
   )
 }
@@ -207,6 +229,16 @@ describe('a data table', () => {
     rerender(<Ledger mark={(row) => (row.id === 'a' ? 'pending' : undefined)} />)
     expect(screen.getByRole('columnheader', { name: 'Sync state' })).toBeInTheDocument()
     expect(screen.getAllByText('Not sent yet')).toHaveLength(1)
+  })
+
+  it('draws at once the mark of a row that began to sync more than a moment ago', () => {
+    draw(
+      <Ledger
+        mark={(row) => (row.id === 'a' ? 'syncing' : undefined)}
+        syncingSince={() => Date.now() - 5000}
+      />,
+    )
+    expect(screen.getAllByText('Sending')).toHaveLength(1)
   })
 
   it('opens what a row’s conflict or rejection is about from its mark, which names the row', async () => {

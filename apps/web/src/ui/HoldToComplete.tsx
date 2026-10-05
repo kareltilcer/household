@@ -8,11 +8,12 @@
 //   at once. The ring a pointer holds is hidden from them: a gesture that is the only way to do
 //   something is an accessibility failure.
 //
-// A release before the time is up does nothing and says so. A press that is not a hold never
-// reaches the row the control sits in.
+// A release before the time is up does nothing and says so, for as long as a toast would stay,
+// and the control is then idle again, as it was. A press that is not a hold never reaches the row
+// the control sits in.
 import { BaseIcon } from '@household/icons/web'
 import { reducedMotion, thresholds } from '@household/tokens'
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 import { useDisplay } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import a11y from './a11y.module.css'
@@ -36,8 +37,16 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
   const t = useTranslate()
   const display = useDisplay()
   const [phase, setPhase] = useState<HoldPhase>('idle')
+  // The one timer the control has: the hold's while it is held, and the word's after a release.
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const mounted = useRef(true)
+  // What completes it, as its owner last said. The hold's timer is set two seconds before it
+  // fires, and a row drawn again in between, by a sync that brought it a newer version, has
+  // handed down another: the completion is the one asked at the end of the hold.
+  const latest = useRef(onComplete)
+  useLayoutEffect(() => {
+    latest.current = onComplete
+  })
 
   useEffect(() => {
     mounted.current = true
@@ -49,7 +58,7 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
 
   const settled = phase === 'completing' || phase === 'completed'
 
-  const complete = useCallback(() => {
+  const complete = () => {
     clearTimeout(timer.current)
     setPhase('completing')
     const finish = (next: HoldPhase) => {
@@ -57,7 +66,7 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
     }
     let result: unknown
     try {
-      result = onComplete()
+      result = latest.current()
     } catch {
       finish('failed')
       return
@@ -74,7 +83,7 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
     } else {
       finish('completed')
     }
-  }, [onComplete])
+  }
 
   const press = (event: PointerEvent) => {
     // The press is the control's own: the row it sits in does not open under it.
@@ -88,6 +97,12 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
     if (phase !== 'holding') return
     clearTimeout(timer.current)
     setPhase('released')
+    // It says to keep holding for as long as a toast would say it, and is then as it was
+    // (02-components §4.1: released early, it returns to idle). A row touched once is not left
+    // saying it.
+    timer.current = setTimeout(() => {
+      setPhase('idle')
+    }, thresholds['toast-dwell'])
   }
 
   const word =

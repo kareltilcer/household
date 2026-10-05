@@ -52,16 +52,36 @@ describe('holding', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Completed')
   })
 
-  it('does not complete on a short press, and says to keep holding', () => {
+  it('does not complete on a short press, says to keep holding, and is then as it was', () => {
     const onComplete = vi.fn()
     draw(<Hold onComplete={onComplete} />)
     fireEvent.pointerDown(ring())
     advance(500)
     fireEvent.pointerUp(ring())
-    advance(5000)
-    expect(onComplete).not.toHaveBeenCalled()
     expect(phase()).toBe('released')
     expect(screen.getByRole('status')).toHaveTextContent('Keep holding to complete')
+    // The word stays as long as a toast would, and no longer: a row touched once is not left
+    // saying it (02-components §4.1: released early, it returns to idle).
+    advance(4999)
+    expect(phase()).toBe('released')
+    advance(1)
+    expect(phase()).toBe('idle')
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('completes with what its owner asks at the end of the hold, not at its start', () => {
+    const stale = vi.fn()
+    const current = vi.fn()
+    const { rerender } = draw(<Hold onComplete={stale} />)
+    fireEvent.pointerDown(ring())
+    advance(1000)
+    // The row was drawn again under the hold: a sync brought it a newer version to complete.
+    rerender(<Hold onComplete={current} />)
+    expect(phase()).toBe('holding')
+    advance(1000)
+    expect(current).toHaveBeenCalledTimes(1)
+    expect(stale).not.toHaveBeenCalled()
   })
 
   it.each(['pointerLeave', 'pointerCancel'] as const)(
@@ -88,6 +108,22 @@ describe('holding', () => {
     expect(onComplete).not.toHaveBeenCalled()
     advance(1)
     expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('is not taken back to idle under a second hold by the word of the first', () => {
+    const onComplete = vi.fn()
+    draw(<Hold onComplete={onComplete} />)
+    fireEvent.pointerDown(ring())
+    advance(500)
+    fireEvent.pointerUp(ring())
+    // Held again just before the first release's word would have gone.
+    advance(4500)
+    fireEvent.pointerDown(ring())
+    advance(1000)
+    expect(phase()).toBe('holding')
+    advance(1000)
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    expect(phase()).toBe('completed')
   })
 
   it('is held by the primary button alone', () => {
