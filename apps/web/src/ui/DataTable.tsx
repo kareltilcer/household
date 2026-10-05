@@ -177,7 +177,12 @@ export function DataTable<Row>({
       </div>
       {onMore === undefined ? null : (
         <div>
-          <Button variant="ghost" onClick={onMore}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              onMore()
+            }}
+          >
             {t('ui.table.more')}
           </Button>
         </div>

@@ -28,9 +28,11 @@ function problem(status: number, code: string, more: Record<string, unknown> = {
 }
 
 describe('a cookie’s value', () => {
-  it('is read from the page’s cookies by its whole name', () => {
+  it('is read from the page’s cookies by its whole name, as it is written there', () => {
     const cookies = `theme=dark; ${csrfCookie}=t0k%3Dn; other__Host-hh_csrf=wrong`
-    expect(cookieValue(cookies, csrfCookie)).toBe('t0k=n')
+    // Not decoded: the server holds the header to the cookie character for character.
+    expect(cookieValue(cookies, csrfCookie)).toBe('t0k%3Dn')
+    expect(cookieValue(`${csrfCookie}=50%`, csrfCookie)).toBe('50%')
     expect(cookieValue('', csrfCookie)).toBeUndefined()
     expect(cookieValue('__Host-hh_csrfx=1', csrfCookie)).toBeUndefined()
   })

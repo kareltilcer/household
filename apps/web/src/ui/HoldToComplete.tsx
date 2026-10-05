@@ -105,6 +105,13 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
     // The press is the control's own: the row it sits in does not open under it.
     event.stopPropagation()
     if (settled(now.current) || event.button !== 0) return
+    // A touch is held by what it first lands on, which is then told of no leaving for as long as
+    // the finger is down: a finger slid off the ring to call the hold off would complete it all
+    // the same. Let go of, the touch is the page's to follow, and leaves the ring as a mouse does.
+    const landed = event.target
+    if (landed instanceof Element && landed.hasPointerCapture(event.pointerId)) {
+      landed.releasePointerCapture(event.pointerId)
+    }
     clearTimeout(timer.current)
     turn('holding')
     timer.current = setTimeout(complete, thresholds['hold-to-complete'])

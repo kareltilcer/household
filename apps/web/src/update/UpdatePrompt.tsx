@@ -37,12 +37,10 @@ export function UpdatePrompt({ reload, live }: UpdatePromptProps) {
         actions={
           <Button
             variant="primary"
-            onClick={
-              reload ??
-              (() => {
-                window.location.reload()
-              })
-            }
+            onClick={() => {
+              if (reload === undefined) window.location.reload()
+              else reload()
+            }}
           >
             {t('ui.reload')}
           </Button>

@@ -133,6 +133,11 @@ function Surface({
       onPointerDown={(event) => {
         pressedGround.current = event.target === event.currentTarget
       }}
+      onPointerUp={(event) => {
+        // Let go inside, a press that began on the ground did not land there either: its click
+        // is still the dialog's, the one element that holds both of its ends.
+        if (event.target !== event.currentTarget) pressedGround.current = false
+      }}
       onClick={(event) => {
         // The dialog's own box is all padding-free content: a press that lands on the element
         // itself landed on the ground behind it. One that began inside, a selection dragged
@@ -151,7 +156,9 @@ function Surface({
               <IconButton
                 label={t(controls.close_sheet.labelKey)}
                 icon={<BaseIcon name={controls.close_sheet.glyph.id} />}
-                onClick={onClose}
+                onClick={() => {
+                  onClose()
+                }}
               />
             ) : null}
           </header>

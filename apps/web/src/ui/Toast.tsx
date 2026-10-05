@@ -1,9 +1,10 @@
 // Toast, with undo (02-components §1, 03-patterns §5): what just happened, in a sentence, and a
 // real window in which to take it back. Undo is a button, never a gesture, and it stays for the
-// whole dwell (the tokens' `toast-dwell`). Over Radix's toast for what a toast has to do: be
-// announced, pause while it is pointed at or focused, and be reached by a key. Escape puts a toast
-// away from among the toasts, and from nowhere else: pressed anywhere else the key is for what the
-// focus is in, a menu, a modal or a field of the page, and the toast keeps its dwell.
+// whole dwell (the tokens' `toast-dwell`): no swipe puts a toast away. Over Radix's toast for what
+// a toast has to do: be announced, pause while it is pointed at or focused, and be reached by a
+// key. Escape puts a toast away from among the toasts, and from nowhere else: pressed anywhere
+// else the key is for what the focus is in, a menu, a modal or a field of the page, and the toast
+// keeps its dwell.
 import { controls } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { thresholds } from '@household/tokens'
@@ -153,7 +154,7 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
         label={t('ui.toast.label')}
         {...(modal === null ? {} : { announcerContainer: modal })}
       >
-        {run.toasts.map((toast) => (
+        {run.toasts.map(({ undo, ...toast }) => (
           <RadixToast.Root
             key={toast.id}
             // Open for as long as it is listed: Radix asks for it to be closed, and whether it
@@ -165,6 +166,15 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
             }}
             onKeyDown={() => {
               pressed.current = false
+            }}
+            onPointerMove={(event) => {
+              // No gesture puts a toast away: its own control does, its dwell, and Escape
+              // among the toasts. Radix takes a pointer moved across a toast for a swipe, of
+              // which nothing is drawn here, and a press on Undo that drifted two pixels for a
+              // swipe called off: it keeps such a press's click from closing the toast and
+              // not from the undo, so the toast would stay, its Undo there to be pressed
+              // again. A move that is spent before Radix reads it begins no swipe.
+              event.preventDefault()
             }}
             onEscapeKeyDown={(event) => {
               escape.current = event
@@ -197,11 +207,13 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
             <RadixToast.Description className={styles.message}>
               {toast.message}
             </RadixToast.Description>
-            {toast.undo === undefined ? null : (
+            {undo === undefined ? null : (
               <RadixToast.Action
                 className={styles.action}
                 altText={t('ui.toast.undo')}
-                onClick={toast.undo}
+                onClick={() => {
+                  undo()
+                }}
               >
                 {t('ui.toast.undo')}
               </RadixToast.Action>

@@ -66,7 +66,13 @@ while none is to the last one's leaving, is its provider afresh: a toast closed 
 holds nothing of the next one. Radix also hands the focus of a toast that closes to the toasts'
 region, and holds every dwell while the focus is there: closed by a key, the focus stays where
 Radix put it, and closed by a pointer's press it is let go, so that the toasts beside it, and one
-its own Undo raised, go once the pointer has left them. One Escape does one thing. Radix closes
+its own Undo raised, go once the pointer has left them. No gesture puts a toast away. Radix takes
+a pointer moved across a toast for a swipe, and a press that drifted two pixels for a swipe
+called off, whose click it keeps from closing the toast and not from its Undo: the undo would
+run and the toast stay, to run it again. A pointer's move over a toast is spent before Radix
+reads it, so no swipe begins, and a toast goes by its own control, by its dwell, or by Escape
+among the toasts. One
+Escape does one thing. Radix closes
 the newest toast for the key wherever the focus is and tells the platform nothing of it, so the
 dialog the toasts are drawn in would be asked to close by the same key, and an Escape meant for
 a field of the page would take an Undo with it: pressed among the toasts, which a member reaches
@@ -121,7 +127,8 @@ pages' branch only for a constant it reads in that very expression, and a test h
 one word. A route marked dev-only there is served by no other build, whatever names a page for
 it. The end-to-end suite runs against `dist/e2e` served by
 `vite preview` with the policy as
-a header, and every test fails on a `securitypolicyviolation` and on a console error. `dist/www`
+a header, and every test fails on a `securitypolicyviolation` and on a console error. Its script
+writes that build before it runs, so that no run is of an older build's files. `dist/www`
 is written without source maps, which would hand the app's sources to whoever asked a deployment
 for them; `dist/e2e` has them. The build's own plugin refuses to write a build of any mode but
 `e2e` that holds a module of `src/dev`, whatever imported it. `build/check.ts` reads `dist/www`
@@ -173,7 +180,9 @@ does not shorten, and steps ten times under it. A release before the time is up 
 holding for as long as a toast stays, and the control is then idle again; a pointer let go in the
 instant the time is up, before the control has been drawn again, has let go of a hold that is
 over, and is no early release; and what completes is what its owner asks at the end of the hold,
-not what it asked two seconds before. Completed, it
+not what it asked two seconds before. A pointer that leaves the ring gives the hold up, a finger
+as a mouse: the platform holds a touch to what it landed on, which is then told of no leaving,
+so the ring lets go of the touch as the hold begins. Completed, it
 stays so for as long as it is drawn: a row to be completed again, after an undo or a write the
 server refused, draws a control of its own for it, by a `key`.
 
@@ -184,8 +193,9 @@ root's computed font size against 16 px, so the browser's own setting counts as 
 the empty state's illustration is not drawn from 200 %.
 
 **The API client is `@household/api`'s, same-origin.** It names itself in `Household-Client`, sends
-the readable CSRF cookie's value with each unsafe request, and throws a problem document as an
-`ApiProblemError` typed by its code. TanStack Query asks again only for a problem the server
+the readable CSRF cookie's value with each unsafe request, as it is written and not decoded, since
+the server holds the header to the cookie character for character, and throws a problem document
+as an `ApiProblemError` typed by its code. TanStack Query asks again only for a problem the server
 stated that may yet clear, its own failure or a first attempt still running: a request that got no
 answer is the transport's to resend, and is resent there alone. Its cache is persisted to
 IndexedDB as one structured clone, written at most once a second, for a day. A query keeps its
@@ -222,6 +232,8 @@ waits in the page, and is sent from there when the connection is back.
 | A budget on the whole build, or measured in a browser per route | The first grows with every module whether or not a first visit loads it. The second needs a profile of a network to mean anything, and a file's compressed size does not |
 | `size-limit` or a bundler's analyser as the gate | A dependency for sixty lines that read index.html and gzip what it names |
 | The build id from the commit, or from the clock | A deploy that changed nothing would prompt every open page to reload |
+| A prompt only for a later build, or one a member can put away | A digest has no order, and what has one is the commit or the clock (above). A page that reads another build's id while a deployment serves two at once, in the middle of a rollout or from a cache it should not have, is told what is so: the prompt stands in the page's flow and covers nothing, and a reload gives whichever build the deployment gives, until it has settled. Whether a member may put the prompt away is the product's to say, and 06-clients §7 says it prompts |
+| Radix's swipe kept on a toast, and drawn | A press that drifts would still be a swipe called off, its click kept from closing the toast and not from its Undo, so the toast would have to close itself beside Radix's own close: two paths to one end, and the focus Radix hands on let go by whichever came first. A toast has a control that puts it away, and nothing in the design asks the web for a gesture |
 | The reload prompt drawn outside the router, where no failed route can take it down | The shell item 25 puts in `Root`'s place would still go with any screen that failed. A boundary under `Root` keeps both |
 | `build.json` asked for under Vite's `base` | The router and the API's paths are from the root too. A base the app cannot be served under is refused, not half supported |
 | Hold-to-complete told by a prop what is complete | A control with two sources of what is so, designed before the first screen that has a completion to undo. Its owner's `key` gives a fresh one, and that screen says whether it is enough |
@@ -231,7 +243,7 @@ waits in the page, and is sent from there when the connection is back.
 | TanStack's async-storage persister for the cache | Its throttled write cannot be dropped, so a cache removed at sign-out would be written back by the write that was waiting, and its restore rejects in a browser that refuses storage |
 | A write that waits for a connection kept in the stored cache, to be sent by the next page | It is stored with what it was to send, in the clear, and the page that loads it has no function to send it with: it fails there without a word. A write that must outlive its page is the replica's (item 25) |
 | A time limit on reading the stored cache | No browser the PRD names leaves an open of IndexedDB unanswered: the hang on record is WebKit's of 2021, in Safari 14.1, and the store is opened with no version, which no other tab can block. A refusal rejects, and is answered with nothing. A clock would drop a good cache on a slow disk |
-| The stored cache written as the page is hidden | What the throttle can lose is a second's reads, each fetched again on the next visit, from a cache that is a convenience (06-clients: a browser is not the offline-first surface), and TanStack's own persister throttles the same way. A write begun as a tab closes is one the browser need not finish, so a listener would hold only for a tab put aside within that second and then discarded |
+| The stored cache written as the page is hidden | What the throttle can lose is a second's reads, each fetched again on the next visit, from a cache that is a convenience (06-clients: a browser is not the offline-first surface), and TanStack's own persister throttles the same way. A write begun as a tab closes is one the browser need not finish, so a listener would hold only for a tab put aside within that second and then discarded. The persister's `flush` is its tests' own, which settle a write by it without a clock, and nothing in the app calls it |
 | A formatter that shows what it cannot format as it was given, or an instant in another zone | What it refuses is what the contract rules out, a day no calendar has, a decimal with an exponent, an instant that is no RFC 3339, and the server's own tests hold every response to the contract. A zone this browser does not know has no right answer: another zone's time would be shown as the household's. The boundary under `Root` names a screen that cannot be drawn, and a screen whose rows are worth saving one by one draws a boundary of its own, as the dashboard's widgets must (02-components §4.8) |
 | A label's weight spent as a type step's weight token | The scale's weights are each a step's, and a button's label, a banner's title or a member's initials is none of those steps: it is body set at 500 or 600, as the prototype sets it. Named by a title's token it would change with a title it has nothing to do with. A weight of its own in the scale is design's to add (01-foundations §1) |
 | One control for the hold, completing on a click with no pointer before it | A screen reader on a touch screen sends a tap, which is a short press. Telling the two apart is a guess per browser |
@@ -257,6 +269,16 @@ waits in the page, and is sent from there when the connection is back.
   control takes its owner's word for what is complete.
 - A button that is busy or has nothing to do hands on no handler of a press: neither the click nor
   what comes before it, the pointer going down and the key, which is what a menu opens on.
+- A component calls what its owner handed it with what its type says and nothing more. The press
+  that asks a panel to close, takes a toast back, puts a banner away or opens a sync mark is the
+  control's own: no event of it reaches an `onClose`, an `undo`, an `onDismiss` or an `onOpen`,
+  which an owner may hand a function that reads its first argument.
+- A press on the ground behind a dialog asks it to close where it began there and ended there.
+  One dragged out of a field asks nothing, and nor does one that began outside and was let go
+  inside, though the click of each is the dialog's own.
+- The router is made once, in the entry, outside React. One made in a state's initializer is made
+  twice under strict mode in development, and the one thrown away goes on listening to the
+  browser's history.
 - A stepper in a form is settled by Enter as it is by being left, so the form sends the number
   the field shows. A number typed over a bound is held to it, and not refused with an error. Its
   step is how far a button moves it, and no grid the platform holds a typed number to: any whole
@@ -288,8 +310,10 @@ waits in the page, and is sent from there when the connection is back.
   settled here, and until it is `HOUSEHOLD_MIN_WEB_VERSION` stays unset
   ([runbook](../runbooks/sign-in-keys-and-providers.md)).
 - The bundle holds all five catalogs, the texts of emails among them, since `@household/i18n`
-  imports them together. Splitting them by language is the first thing to do when the budget is
-  near.
+  imports them together: 27 kB of the 174, of which one language is 6 or 7. Splitting them by
+  language is the first thing to do when the budget is near, and not before: a language loaded by
+  itself is a file the first word waits for, and `build/check.ts` fails the build that goes over,
+  so none is served over the budget unnoticed.
 - A modal's page behind it is inert by the platform's own rule, so the Tab key reaches the
   browser's own controls after the dialog's last: the focus is then on no element of the page.
 - `build.json` and index.html are the two files a deployment must not cache; every other file's

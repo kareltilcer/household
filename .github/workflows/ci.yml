@@ -148,12 +148,11 @@ jobs:
         run: pnpm --filter @household/web run build
       - name: Bundle budget and a policy-clean build
         run: pnpm --filter @household/web run check
-      # The same build with the dev-only routes in, the twelve-state harness among them, served
-      # under the policy to Playwright's Chromium, at the version the workspace pins: axe on every
-      # route in both themes, the pseudo-locale pass, the harness's measurements, and every test
-      # failing on a violation of the policy.
-      - name: Build with the dev-only routes
-        run: pnpm --filter @household/web run build:e2e
+      # The same build with the dev-only routes in, the twelve-state harness among them, which
+      # the suite's own script writes before it runs, served under the policy to Playwright's
+      # Chromium, at the version the workspace pins: axe on every route in both themes, the
+      # pseudo-locale pass, the harness's measurements, and every test failing on a violation of
+      # the policy.
       - name: Chromium
         run: pnpm --filter @household/web exec playwright install --with-deps chromium
       - name: End-to-end

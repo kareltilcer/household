@@ -213,7 +213,7 @@ describe('the reload prompt', () => {
     expect(screen.getByRole('status')).toHaveTextContent('A new version of Household is ready.')
     expect(reload).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Reload' }))
-    expect(reload).toHaveBeenCalledTimes(1)
+    expect(reload).toHaveBeenCalledExactlyOnceWith()
   })
 
   it('stops watching with the screen that held it', async () => {

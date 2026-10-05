@@ -139,7 +139,14 @@ export function SyncMark({ state, words = 'inline', onOpen, name, since }: SyncM
       ? t(controls.conflict.labelKey, { name })
       : t(controls.sync_state.labelKey, { state: word })
   return (
-    <button type="button" className={styles.control} aria-label={label} onClick={onOpen}>
+    <button
+      type="button"
+      className={styles.control}
+      aria-label={label}
+      onClick={() => {
+        onOpen()
+      }}
+    >
       <span className={styles.glyph} style={{ color: cssVar(statusGlyphs[state].token) }}>
         <StatusIcon status={state} />
       </span>

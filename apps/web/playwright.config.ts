@@ -1,7 +1,8 @@
 // The end-to-end suite (PL-3, 06-clients §8): Playwright's Chromium against a production build of
 // the app, served as a deployment would serve it, under the policy of build/csp.ts. The build is
-// `vite build --mode e2e`, which has the dev-only routes, the twelve-state harness among them:
-// run `pnpm run build:e2e` before `pnpm run e2e`, as CI does.
+// `vite build --mode e2e`, which has the dev-only routes, the twelve-state harness among them.
+// `pnpm run e2e` writes it and then runs the suite, so that no run is of an older build's files:
+// the server below serves whatever `dist/e2e` holds, and is one already running where there is one.
 import { defineConfig, devices } from '@playwright/test'
 import { previewOrigin } from './build/preview.ts'
 

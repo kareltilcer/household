@@ -4,7 +4,7 @@
 // for the whole dwell; and hold-to-complete takes two seconds of a pointer and none of a keyboard.
 import type { Locator, Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
-import { expect, holdTheClock, open, smallTargets, test } from './fixtures.ts'
+import { expect, frames, holdTheClock, open, smallTargets, test } from './fixtures.ts'
 
 const primitives = paths.primitives.example
 
@@ -89,6 +89,26 @@ test.describe('a dialog', () => {
     await open(page, primitives)
     await page.getByRole('button', { name: 'Delete Weekly shop' }).click()
     const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await page.mouse.click(4, 4)
+    await expect(dialog).toBeHidden()
+  })
+
+  test('stays when a press that began on the ground behind it is let go inside it', async ({
+    page,
+  }) => {
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Delete Weekly shop' }).click()
+    const dialog = page.getByRole('dialog')
+    const title = await dialog.getByRole('heading').boundingBox()
+    if (title === null) throw new Error('the dialog draws no title')
+    // The click of such a press is the dialog's own, as the click of one on the ground is:
+    // where the pointer was let go tells the two apart.
+    await page.mouse.move(4, 4)
+    await page.mouse.down()
+    await page.mouse.move(title.x + 4, title.y + 4, { steps: 4 })
+    await page.mouse.up()
+    await frames(page)
     await expect(dialog).toBeVisible()
     await page.mouse.click(4, 4)
     await expect(dialog).toBeHidden()
@@ -441,6 +461,44 @@ test.describe('a toast', () => {
   const saved = (page: Page) =>
     page.locator('[data-third-party] li').filter({ hasText: 'Saved on this device' })
 
+  test('takes it back once and goes, though the pointer drifted as it pressed Undo', async ({
+    page,
+  }) => {
+    await holdTheClock(page)
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Clear checked items' }).click()
+    const undo = await cleared(page).getByRole('button', { name: 'Undo' }).boundingBox()
+    if (undo === null) throw new Error('the toast draws no Undo')
+    // A press is seldom still. Radix takes one that moves two pixels for a swipe called off,
+    // and lets its click take back but not close: the toast would stay, to undo a second time.
+    const [x, y] = [undo.x + undo.width / 2, undo.y + undo.height / 2]
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + 4, y, { steps: 4 })
+    await page.mouse.up()
+    await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
+    await expect(cleared(page)).toBeHidden()
+  })
+
+  test('stays, its Undo with it, when a pointer is dragged across it', async ({ page }) => {
+    await holdTheClock(page)
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Clear checked items' }).click()
+    const words = await cleared(page).getByText('7 checked items cleared').boundingBox()
+    if (words === null) throw new Error('the toast draws no words')
+    // No gesture puts a toast away: Radix's swipe, of which nothing would be drawn, is not on.
+    const y = words.y + words.height / 2
+    await page.mouse.move(words.x + 4, y)
+    await page.mouse.down()
+    await page.mouse.move(words.x + 84, y, { steps: 8 })
+    await page.mouse.up()
+    await expect(cleared(page).getByRole('button', { name: 'Undo' })).toBeVisible()
+    await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '0')
+    await cleared(page).getByRole('button', { name: 'Undo' }).click()
+    await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
+    await expect(cleared(page)).toBeHidden()
+  })
+
   test('goes after its dwell though the one before it was closed by a press on its Undo', async ({
     page,
   }) => {
@@ -613,6 +671,67 @@ test.describe('hold-to-complete', () => {
     await expect(page.getByText('Not completed. Try again')).toBeVisible()
     await page.keyboard.press('Enter')
     await expect(page.getByText('Not completed. Try again')).toBeVisible()
+  })
+
+  test.describe('under a finger', () => {
+    test.use({ hasTouch: true })
+
+    /** A finger on the screen, which Playwright's own touch screen only taps with. */
+    async function finger(page: Page) {
+      const session = await page.context().newCDPSession(page)
+      const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', at: [number, number][]) =>
+        session.send('Input.dispatchTouchEvent', {
+          type,
+          touchPoints: at.map(([x, y]) => ({ x, y })),
+        })
+      return {
+        down: (x: number, y: number) => touch('touchStart', [[x, y]]),
+        move: (x: number, y: number) => touch('touchMove', [[x, y]]),
+        up: () => touch('touchEnd', []),
+      }
+    }
+
+    /** The middle of the ring, brought into the window. */
+    async function middle(target: Locator): Promise<[number, number]> {
+      await target.scrollIntoViewIfNeeded()
+      const box = await target.boundingBox()
+      if (box === null) throw new Error('the control draws no ring')
+      return [box.x + box.width / 2, box.y + box.height / 2]
+    }
+
+    test('completes after two seconds of a finger kept on the ring', async ({ page }) => {
+      await holdTheClock(page)
+      await open(page, primitives)
+      const [x, y] = await middle(ring(page, bins))
+      const touch = await finger(page)
+      await touch.down(x, y)
+      // A finger is never quite still: it moves, and stays on the ring.
+      await touch.move(x + 4, y + 3)
+      await page.clock.runFor(1999)
+      await expect(done(page)).toHaveAttribute('data-completions', '0')
+      await page.clock.runFor(1)
+      await expect(done(page)).toHaveAttribute('data-completions', '1')
+      await touch.up()
+    })
+
+    test('is given up by a finger that slides off the ring, though it stays down', async ({
+      page,
+    }) => {
+      await holdTheClock(page)
+      await open(page, primitives)
+      const [x, y] = await middle(ring(page, bins))
+      const touch = await finger(page)
+      await touch.down(x, y)
+      await page.clock.runFor(500)
+      // A touch is held by what it lands on, which is told of no leaving while the finger is
+      // down: the ring lets go of it, and hears that the finger has left as it hears of a mouse.
+      await touch.move(x + 60, y)
+      await touch.move(x + 120, y)
+      await expect(page.getByText('Keep holding to complete')).toBeVisible()
+      await page.clock.runFor(2000)
+      await expect(done(page)).toHaveAttribute('data-completions', '0')
+      await touch.up()
+    })
   })
 
   test('fills in steps, not in a sweep, under reduced motion', async ({ page }) => {

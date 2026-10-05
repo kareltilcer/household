@@ -93,7 +93,9 @@ export function Banner({
         <IconButton
           label={t(controls.dismiss.labelKey)}
           icon={<BaseIcon name={controls.dismiss.glyph.id} />}
-          onClick={onDismiss}
+          onClick={() => {
+            onDismiss()
+          }}
         />
       )}
     </div>

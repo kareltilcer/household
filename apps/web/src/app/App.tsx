@@ -4,7 +4,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { useState, type ReactNode } from 'react'
-import { createBrowserRouter, RouterProvider } from 'react-router'
+import { RouterProvider, type RouterProviderProps } from 'react-router'
 import { ApiProvider } from '../api/ApiProvider.tsx'
 import { createWebClient } from '../api/client.ts'
 import { createPersister, createQueryClient, persistOptions } from '../api/query.ts'
@@ -12,7 +12,6 @@ import { DisplayProvider } from '../display/DisplayProvider.tsx'
 import { I18nProvider } from '../i18n/I18nProvider.tsx'
 import { ToastProvider } from '../ui/Toast.tsx'
 import { ownBuild } from '../update/build.ts'
-import { routes } from './routes.tsx'
 
 export interface ProvidersProps {
   readonly children: ReactNode
@@ -50,8 +49,13 @@ export function Providers({ children, persist = true }: ProvidersProps) {
   )
 }
 
-export function App() {
-  const [router] = useState(() => createBrowserRouter(routes))
+/**
+ * The app around its router, which whoever draws it makes, once and outside React (main.tsx). A
+ * router listens to the browser's history from the moment it is made, and React's strict mode
+ * runs a state's initializer twice in development: made in one, the router thrown away would go
+ * on listening.
+ */
+export function App({ router }: Pick<RouterProviderProps, 'router'>) {
   return (
     <Providers>
       <RouterProvider router={router} />

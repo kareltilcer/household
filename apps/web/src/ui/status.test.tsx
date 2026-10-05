@@ -193,7 +193,8 @@ describe('the sync mark', () => {
     const onOpen = vi.fn()
     draw(<SyncMark state="rejected" onOpen={onOpen} />)
     await userEvent.click(screen.getByRole('button', { name: 'Not accepted. Open for details' }))
-    expect(onOpen).toHaveBeenCalledTimes(1)
+    // With nothing: the press is the control's own, and no event of it is its owner's.
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith()
   })
 
   it('names the row whose two versions a conflict’s control opens', () => {
@@ -289,7 +290,7 @@ describe('a banner', () => {
       </Banner>,
     )
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
-    expect(onDismiss).toHaveBeenCalledTimes(1)
+    expect(onDismiss).toHaveBeenCalledExactlyOnceWith()
   })
 })
 

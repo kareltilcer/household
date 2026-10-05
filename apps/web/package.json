@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:e2e": "vite build --mode e2e",
     "check": "node build/check.ts",
-    "e2e": "playwright test",
+    "e2e": "vite build --mode e2e && playwright test",
     "typecheck": "tsc --noEmit && tsc --noEmit --project src",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run"

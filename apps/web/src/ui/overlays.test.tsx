@@ -85,6 +85,22 @@ describe('a dialog', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+  it('stays open when a press that began on the ground is let go inside it', () => {
+    const onClose = vi.fn()
+    draw(<Confirm onClose={onClose} />)
+    const dialog = screen.getByRole('dialog')
+    fireEvent.pointerDown(dialog)
+    fireEvent.pointerUp(within(dialog).getByRole('heading'))
+    // The click of such a press is the dialog's own: the one element that holds both its ends.
+    fireEvent.click(dialog)
+    expect(onClose).not.toHaveBeenCalled()
+    // The next press, begun and ended on the ground, is one on the ground.
+    fireEvent.pointerDown(dialog)
+    fireEvent.pointerUp(dialog)
+    fireEvent.click(dialog)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('is closed with the screen that held it, so the page is not left inert', async () => {
     const onClose = vi.fn()
     const close = vi.spyOn(HTMLDialogElement.prototype, 'close')
@@ -267,6 +283,13 @@ describe('a side panel', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('asks to close with nothing: the press is the control’s own, and no event of it its owner’s', async () => {
+    const onClose = vi.fn()
+    draw(<Sheet open onClose={onClose} title={words.meter} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalledExactlyOnceWith()
+  })
+
   it('is the only one of the two with that control: a modal is closed by its choices', () => {
     draw(<Confirm onClose={() => undefined} />)
     expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([words.keep])
@@ -447,7 +470,7 @@ describe('a toast', () => {
     draw(<Clear undo={undo} />)
     await userEvent.click(screen.getByRole('button', { name: 'clear' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Undo' }))
-    expect(undo).toHaveBeenCalledTimes(1)
+    expect(undo).toHaveBeenCalledExactlyOnceWith()
     expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
   })
 

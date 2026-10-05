@@ -6,7 +6,9 @@ import '@household/tokens/tokens.css'
 import './styles/base.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { createBrowserRouter } from 'react-router'
 import { App } from './app/App.tsx'
+import { routes } from './app/routes.tsx'
 import { applyPreferences, readPreferences } from './display/store.ts'
 
 applyPreferences(document.documentElement, readPreferences())
@@ -14,8 +16,10 @@ applyPreferences(document.documentElement, readPreferences())
 const root = document.getElementById('root')
 if (root === null) throw new Error('index.html has no #root to draw the app in')
 
+const router = createBrowserRouter(routes)
+
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <App router={router} />
   </StrictMode>,
 )

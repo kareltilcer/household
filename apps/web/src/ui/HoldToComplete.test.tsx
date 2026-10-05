@@ -97,6 +97,17 @@ describe('holding', () => {
     },
   )
 
+  it('lets go of a touch as the hold begins, so that a finger slid off the ring is told to it', () => {
+    // A touch is held by what it lands on, which hears of no leaving while the finger is down.
+    const held = vi.spyOn(Element.prototype, 'hasPointerCapture').mockReturnValue(true)
+    const letGo = vi.spyOn(Element.prototype, 'releasePointerCapture')
+    draw(<Hold onComplete={() => undefined} />)
+    fireEvent.pointerDown(ring(), { pointerId: 7 })
+    expect(held).toHaveBeenCalledExactlyOnceWith(7)
+    expect(letGo).toHaveBeenCalledExactlyOnceWith(7)
+    expect(letGo.mock.contexts).toEqual([ring()])
+  })
+
   it('starts over on a second hold: time held before does not count', () => {
     const onComplete = vi.fn()
     draw(<Hold onComplete={onComplete} />)

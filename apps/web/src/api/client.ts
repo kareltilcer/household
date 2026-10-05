@@ -26,12 +26,16 @@ export const csrfCookie = '__Host-hh_csrf'
  */
 export const clientName = `web/${version}`
 
-/** The value of the cookie `name` in a `document.cookie` string, or undefined when it has none. */
+/**
+ * The value of the cookie `name` in a `document.cookie` string, or undefined when it has none: as
+ * it is written there, and not decoded. The server sets the token as it is and holds the header
+ * to the cookie it was sent beside, character for character.
+ */
 export function cookieValue(cookies: string, name: string): string | undefined {
   for (const pair of cookies.split(';')) {
     const separator = pair.indexOf('=')
     if (separator >= 0 && pair.slice(0, separator).trim() === name) {
-      return decodeURIComponent(pair.slice(separator + 1).trim())
+      return pair.slice(separator + 1).trim()
     }
   }
   return undefined

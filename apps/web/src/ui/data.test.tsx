@@ -270,7 +270,7 @@ describe('a data table', () => {
     expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument()
     rerender(<Ledger onMore={onMore} />)
     await userEvent.click(screen.getByRole('button', { name: 'Show more' }))
-    expect(onMore).toHaveBeenCalledTimes(1)
+    expect(onMore).toHaveBeenCalledExactlyOnceWith()
   })
 
   it('is compact by itself, and follows the member’s own density when they chose one', () => {

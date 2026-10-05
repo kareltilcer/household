@@ -67,6 +67,9 @@ const database = { name: 'household-web', store: 'query-cache', key: 'client' } 
  * removal drops the write that was waiting, where TanStack's throttle would write a cache back
  * after it was removed, as at a sign-out; and a storage that refuses is answered with nothing,
  * where TanStack's restore and removal reject.
+ *
+ * `flush` writes what is waiting, now. The app never asks for it, since the cache is not written
+ * as the page is hidden (ADR 0025): it is how the persister's tests settle a write without a clock.
  */
 export function createPersister(
   store: UseStore = createStore(database.name, database.store),
