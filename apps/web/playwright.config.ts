@@ -16,6 +16,12 @@ export default defineConfig({
   outputDir: 'dist/test-results',
   fullyParallel: true,
   forbidOnly: ci,
+  // Patience, not leniency: no test asserts less for it. The harness is 216 cells under axe, and a
+  // CI runner, or a developer's machine with other work on it, runs the suite at a third of the
+  // speed of an idle one: at Playwright's own 30 s and 5 s, two tests ran out of time there with
+  // nothing wrong on the page. A test that calls `test.slow()` has three times this.
+  timeout: 90_000,
+  expect: { timeout: 15_000 },
   reporter: [['list']],
   use: {
     baseURL: previewOrigin,
