@@ -6,8 +6,17 @@
   color: var(--text-primary);
 }
 
+/* The page behind is dimmed, in both themes: under a veil of the theme's darkest surface, which is
+   the inverse one in the light theme and the sunken one in the dark. The inverse one is light in
+   the dark theme, and would light the page up behind a dialog darker than it. The room a
+   scrollbar keeps at the window's edge is under no backdrop, and the root dims it by the same
+   veil (styles/base.css). */
 .dialog::backdrop {
-  background: color-mix(in srgb, var(--surface-inverse) 45%, transparent);
+  background: color-mix(
+    in srgb,
+    light-dark(var(--surface-inverse), var(--surface-sunken)) 45%,
+    transparent
+  );
 }
 
 .dialog[open] {
@@ -50,7 +59,9 @@
 /* A side panel keeps its actions at its foot, which is where the toasts are drawn, over the foot
    of the window (ui/Toast). While a toast is shown inside the panel it is told how much room the
    toasts take, and keeps its own foot above them: under a toast, a press meant for Save would
-   land on the toast's Undo. The panel's own, and not that of a confirmation drawn inside it. */
+   land on the toast's Undo. The room is the end of what the panel scrolls, so a panel its content
+   fills has its actions above the toasts at its foot, where the toasts bring one that was near
+   it (ui/Toast). The panel's own, and not that of a confirmation drawn inside it. */
 .panel > .content {
   padding-block-end: max(var(--space-3), var(--toasts-room, 0px));
 }

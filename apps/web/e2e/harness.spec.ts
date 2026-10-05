@@ -3,7 +3,7 @@
 // exactly one treatment, no body is wider than the box it is given, and every target is 44 pt,
 // compact density included. The measurements are taken on live rectangles, not on declared
 // minimums. Axe on the page, in both themes, is routes.spec.ts's.
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
 import {
   bodies,
@@ -49,27 +49,34 @@ test.describe('the harness', () => {
     await expect(page.locator('[data-harness-variant]')).toHaveCount(variantIds.length * 2)
   })
 
-  test('gives no body more room than its box, and the page none sideways', async ({ page }) => {
-    test.slow()
-    await open(page, harness)
-    const overflowing = await page
-      .locator('[data-harness-cell], [data-harness-variant]')
-      .evaluateAll((cells) =>
-        cells
-          .filter((element) => element.scrollWidth - element.clientWidth > 1)
-          .map(
-            (element) =>
-              element.getAttribute('data-harness-cell') ??
-              element.getAttribute('data-harness-variant'),
-          ),
-      )
-    expect(overflowing).toEqual([])
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      ),
-    ).toBeLessThanOrEqual(1)
-  })
+  // At a desktop's width, and at a phone's, where a line at 200 % text holds a few words or one
+  // figure: a table scrolls in its own box there, and nothing else is wider than its own.
+  for (const width of [1280, 375]) {
+    test(`gives no body more room than its box, and the page none sideways, at ${String(width)} px`, async ({
+      page,
+    }) => {
+      test.slow()
+      await page.setViewportSize({ width, height: 812 })
+      await open(page, harness)
+      const overflowing = await page
+        .locator('[data-harness-cell], [data-harness-variant]')
+        .evaluateAll((cells) =>
+          cells
+            .filter((element) => element.scrollWidth - element.clientWidth > 1)
+            .map(
+              (element) =>
+                element.getAttribute('data-harness-cell') ??
+                element.getAttribute('data-harness-variant'),
+            ),
+        )
+      expect(overflowing).toEqual([])
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        ),
+      ).toBeLessThanOrEqual(1)
+    })
+  }
 
   for (const density of ['comfortable', 'compact'] as const) {
     test(`keeps every target at 44 pt under ${density} density`, async ({ page }) => {
@@ -175,6 +182,44 @@ test.describe('the harness', () => {
       ),
       'the page scrolls sideways',
     ).toBeLessThanOrEqual(1)
+  })
+
+  test('sets what a rule says beside the step of the type scale it composes, whichever was written last', async ({
+    page,
+  }) => {
+    await open(page, `${harness}?body=list&scale=100`)
+    const face = (part: Locator) =>
+      part.evaluate((element) => {
+        const style = window.getComputedStyle(element)
+        return { size: style.fontSize, weight: style.fontWeight }
+      })
+    const initials = cell(page, 'list', 'populated')
+      .locator('[aria-hidden="true"]')
+      .filter({ hasText: /^P$/ })
+      .first()
+    const secondary = cell(page, 'list', 'populated').getByText('read 3 March by Petr').first()
+    // A member's initials are a caption set heavier: the weight is the avatar's own rule, and
+    // the build writes the caption's after it, in this route's stylesheet and in every other.
+    const caption = await face(secondary)
+    expect(await face(initials)).toEqual({ size: caption.size, weight: '600' })
+    // A sync mark that opens is a button, and a caption as the mark that only says is: the
+    // step gives way to a rule beside it, and not to the page's reset of a button's face.
+    const opens = cell(page, 'list', 'conflicted').getByRole('button', {
+      name: 'Two versions of Electricity, cellar meter. Open to resolve',
+    })
+    expect(await face(opens)).toEqual(caption)
+
+    // Another route's stylesheet, loaded after this one, writes the scale again.
+    const go = (to: string) =>
+      page.evaluate((address) => {
+        window.history.pushState(null, '', address)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }, to)
+    await go(paths.primitives.example)
+    await expect(page.getByRole('heading', { level: 1, name: 'Primitives' })).toBeVisible()
+    await go(`${harness}?body=list&scale=100`)
+    await expect(initials).toBeVisible()
+    expect(await face(initials)).toEqual({ size: caption.size, weight: '600' })
   })
 
   test('draws the illustration at 100 % text and gives its room to the sentence at 200 %', async ({

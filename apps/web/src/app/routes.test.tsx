@@ -1,5 +1,6 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildMeta } from '../update/build.ts'
@@ -105,6 +106,53 @@ describe('the app', () => {
     })
     expect(await screen.findByText('A new version of Household is ready.')).toBeVisible()
     expect(screen.getAllByRole('button', { name: 'Reload' })).toHaveLength(2)
+  })
+
+  it('draws what every route is drawn in while the route the app opened at is still loading', async () => {
+    const title = 'Slow'
+    let loaded: (page: { Component: () => ReactNode }) => void = () => undefined
+    const lazy = () =>
+      new Promise<{ Component: () => ReactNode }>((resolve) => {
+        loaded = resolve
+      })
+    open('/slow', inRoot([{ path: '/slow', lazy }]))
+    // The landmark is Root's, and is there before the route: its place is empty until it loads.
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toBeEmptyDOMElement()
+    await act(async () => {
+      loaded({ Component: () => <h1>{title}</h1> })
+      await Promise.resolve()
+    })
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument()
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+  })
+
+  it('is watching for a newer build before the route it opened at has loaded, or failed to', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const meta = document.createElement('meta')
+    meta.name = buildMeta
+    meta.content = 'own'
+    document.head.append(meta)
+    vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ id: 'next' })))
+    let fail: (reason: Error) => void = () => undefined
+    const lazy = () =>
+      new Promise<never>((_, reject) => {
+        fail = reject
+      })
+    open('/gone', inRoot([{ path: '/gone', lazy }]))
+    // Vite says it could not load the route's file, and then the import of it fails: the watch
+    // is Root's, which is drawn already, and hears the first.
+    act(() => {
+      window.dispatchEvent(new Event('vite:preloadError'))
+    })
+    await act(async () => {
+      fail(new TypeError('Failed to fetch dynamically imported module'))
+      await Promise.resolve()
+    })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'This page could not be shown' }),
+    ).toBeInTheDocument()
+    expect(await screen.findByText('A new version of Household is ready.')).toBeVisible()
   })
 
   it('names a failure of what every route is drawn in for the whole page, with its own landmark', async () => {

@@ -1,8 +1,14 @@
 /* The type scale as classes a component composes (`composes: caption from '…/type.module.css'`):
    each step is five custom properties of @household/tokens, spent together and by name. A mono
-   step also takes the tabular figures every table and money value is set in (01-foundations §4). */
+   step also takes the tabular figures every table and money value is set in (01-foundations §4).
 
-.display {
+   A step weighs nothing in the cascade (`:where`). What a rule says beside the step it composes,
+   a member's initials set heavier than a caption, holds wherever the step's own rule is written,
+   and the build writes it into every stylesheet whose rules compose it, a route's loaded later
+   among them, after rules that are on the page already. Only the page's reset of a form control's
+   face gives way to a step, and it weighs nothing either: it is written first (base.css). */
+
+:where(.display) {
   font-family: var(--type-display-family);
   font-size: var(--type-display-size);
   font-weight: var(--type-display-weight);
@@ -10,7 +16,7 @@
   letter-spacing: var(--type-display-tracking);
 }
 
-.title1 {
+:where(.title1) {
   font-family: var(--type-title-1-family);
   font-size: var(--type-title-1-size);
   font-weight: var(--type-title-1-weight);
@@ -18,7 +24,7 @@
   letter-spacing: var(--type-title-1-tracking);
 }
 
-.title2 {
+:where(.title2) {
   font-family: var(--type-title-2-family);
   font-size: var(--type-title-2-size);
   font-weight: var(--type-title-2-weight);
@@ -26,7 +32,7 @@
   letter-spacing: var(--type-title-2-tracking);
 }
 
-.title3 {
+:where(.title3) {
   font-family: var(--type-title-3-family);
   font-size: var(--type-title-3-size);
   font-weight: var(--type-title-3-weight);
@@ -34,7 +40,7 @@
   letter-spacing: var(--type-title-3-tracking);
 }
 
-.bodyLg {
+:where(.bodyLg) {
   font-family: var(--type-body-lg-family);
   font-size: var(--type-body-lg-size);
   font-weight: var(--type-body-lg-weight);
@@ -42,7 +48,7 @@
   letter-spacing: var(--type-body-lg-tracking);
 }
 
-.body {
+:where(.body) {
   font-family: var(--type-body-family);
   font-size: var(--type-body-size);
   font-weight: var(--type-body-weight);
@@ -50,7 +56,7 @@
   letter-spacing: var(--type-body-tracking);
 }
 
-.caption {
+:where(.caption) {
   font-family: var(--type-caption-family);
   font-size: var(--type-caption-size);
   font-weight: var(--type-caption-weight);
@@ -58,7 +64,7 @@
   letter-spacing: var(--type-caption-tracking);
 }
 
-.overline {
+:where(.overline) {
   font-family: var(--type-overline-family);
   font-size: var(--type-overline-size);
   font-weight: var(--type-overline-weight);
@@ -67,7 +73,7 @@
   text-transform: var(--type-overline-transform);
 }
 
-.numLg {
+:where(.numLg) {
   font-family: var(--type-num-lg-family);
   font-size: var(--type-num-lg-size);
   font-weight: var(--type-num-lg-weight);
@@ -76,7 +82,7 @@
   font-variant-numeric: var(--figures-tabular);
 }
 
-.num {
+:where(.num) {
   font-family: var(--type-num-family);
   font-size: var(--type-num-size);
   font-weight: var(--type-num-weight);
@@ -85,7 +91,7 @@
   font-variant-numeric: var(--figures-tabular);
 }
 
-.numSm {
+:where(.numSm) {
   font-family: var(--type-num-sm-family);
   font-size: var(--type-num-sm-size);
   font-weight: var(--type-num-sm-weight);

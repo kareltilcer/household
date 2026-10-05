@@ -33,7 +33,8 @@ export interface HoldToCompleteProps {
   readonly label: string
   /**
    * Completes it. A promise it returns is waited for: the control says it is completing, then
-   * how it went. Anything else it returns is not read.
+   * how it went. Anything else it returns is not read. What it throws is thrown on, once the
+   * control has said that it failed.
    */
   readonly onComplete: () => unknown
   readonly className?: string | undefined
@@ -96,9 +97,13 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
     let result: unknown
     try {
       result = latest.current()
-    } catch {
+    } catch (error) {
+      // The control is not left saying that it is completing. And what was thrown is thrown on:
+      // a promise refused is a write that did not go through, which its owner hears of, and a
+      // throw is its owner's fault, which the page reports as it does any other, where the
+      // console and whatever collects the page's errors find it.
       finish('failed')
-      return
+      throw error
     }
     if (isThenable(result)) {
       Promise.resolve(result).then(

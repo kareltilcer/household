@@ -54,6 +54,26 @@ export function frames(page: Page, count = 3): Promise<void> {
   )
 }
 
+/**
+ * What `colours` come to, drawn one over another in that order: the red, green and blue of the
+ * result, each 0 to 255. A colour is whatever the browser computed, in whatever notation, a veil
+ * that lets what is under it through among them.
+ */
+export function drawn(page: Page, colours: readonly string[]): Promise<number[]> {
+  return page.evaluate((layers) => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    const context = canvas.getContext('2d')
+    if (context === null) throw new Error('no canvas to draw a colour on')
+    for (const layer of layers) {
+      context.fillStyle = layer
+      context.fillRect(0, 0, 1, 1)
+    }
+    return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3)
+  }, colours)
+}
+
 /** WCAG 2.1 at levels A and AA: the release gate (06-clients §4). */
 const wcag = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
 

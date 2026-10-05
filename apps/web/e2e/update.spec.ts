@@ -66,6 +66,31 @@ test('a newer build is offered, and the page reloads only when the member says s
   await expect(page.getByRole('button', { name: 'Reload' })).toHaveCount(0)
 })
 
+test('a page opened at a route whose file a newer build took away says a newer build is live', async ({
+  page,
+  faults,
+}) => {
+  await page.route('**/build.json', (route) => route.fulfill({ json: { id: 'a-newer-build' } }))
+  await page.route('**/assets/Primitives-*.js', async (route) => {
+    // No file is refused sooner than a page can draw: the answer is given once what every
+    // route is drawn in is on the page, as it is long before any network has answered.
+    await expect(page.getByRole('main')).toBeAttached()
+    await frames(page)
+    await route.fulfill({ status: 404, body: 'gone' })
+  })
+  await page.goto(paths.primitives.example, { waitUntil: 'commit' })
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'This page could not be shown' }),
+  ).toBeVisible()
+  // The watch for a newer build was listening when the file failed, though the page opened at
+  // the very route that needed it: it asked which build is live, and says so over the failure.
+  await expect(page.getByText('A new version of Household is ready.')).toBeVisible()
+  // The browser says the file it was refused on its console, and the router the route that
+  // failed for it: the ones this test asked for.
+  expect(faults).toContainEqual(expect.stringContaining('404'))
+  faults.length = 0
+})
+
 test('a server that cannot say which build is live is not taken for a newer one', async ({
   page,
   faults,

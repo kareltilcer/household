@@ -1,5 +1,7 @@
 .menu {
-  min-width: 12rem;
+  /* Never wider than the window, less the room Radix keeps either side of it: the least width
+     grows with the text, and a least width is held to over a greatest one. */
+  min-width: min(12rem, calc(100vw - var(--space-2)));
   max-width: min(24rem, calc(100vw - var(--space-2)));
   padding: var(--space-05);
   background: var(--surface-overlay);

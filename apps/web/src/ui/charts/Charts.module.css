@@ -35,6 +35,12 @@
   white-space: nowrap;
 }
 
+/* A chart's total is a sentence of figures, "73 000 in · 73 000 out", and wraps where a sentence
+   does: held to one line it is wider than a phone's window at 200 % text, and the page with it. */
+.caption .figure {
+  white-space: normal;
+}
+
 .series1 {
   --series: var(--chart-1);
 }

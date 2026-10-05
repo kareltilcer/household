@@ -22,6 +22,29 @@ test('a page says what language it is in, and what it is', async ({ page }) => {
   await expect(page).toHaveTitle('Household')
 })
 
+test('a page opened at a route whose file is still on its way has its landmark already', async ({
+  page,
+}) => {
+  // The route's own script, held back for as long as the test says.
+  let send: () => void = () => undefined
+  const held = new Promise<void>((resolve) => {
+    send = resolve
+  })
+  await page.route('**/assets/Primitives-*.js', async (route) => {
+    await held
+    await route.continue()
+  })
+  await page.goto(paths.primitives.example, { waitUntil: 'commit' })
+  // What every route is drawn in is drawn, the place of this one empty in it: not a page with
+  // nothing on it, and nothing listening, until the file has come or failed to.
+  const main = page.getByRole('main')
+  await expect(main).toBeAttached()
+  await expect(main).toBeEmpty()
+  send()
+  await expect(main.getByRole('heading', { level: 1, name: 'Primitives' })).toBeVisible()
+  await expect(page.getByRole('main')).toHaveCount(1)
+})
+
 /** The page's ground, as the browser resolved it. */
 function ground(page: Page): Promise<string> {
   return page.evaluate(() => window.getComputedStyle(document.body).backgroundColor)

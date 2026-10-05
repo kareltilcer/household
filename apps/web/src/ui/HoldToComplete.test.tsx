@@ -309,16 +309,51 @@ describe('a completion that takes a while', () => {
     expect(await screen.findByText('Not completed. Try again')).toBeVisible()
     expect(phase()).toBe('failed')
   })
+})
 
-  it('says a completion that threw failed, as one that was refused did', async () => {
-    draw(
-      <Hold
-        onComplete={() => {
-          throw new Error('refused')
-        }}
-      />,
-    )
+describe('a completion that threw', () => {
+  // A throw is its owner's fault, and no write refused: the control says it failed, and the
+  // page hears of the error as of any other that nothing caught.
+  const thrown = new Error('no row to complete')
+  const fails = () => {
+    throw thrown
+  }
+  const reported: unknown[] = []
+  const report = (event: ErrorEvent) => {
+    reported.push(event.error)
+    event.preventDefault()
+  }
+  beforeEach(() => {
+    reported.length = 0
+    window.addEventListener('error', report)
+  })
+  afterEach(() => {
+    window.removeEventListener('error', report)
+    vi.useRealTimers()
+  })
+
+  it('says it failed, as one that was refused did, and is reported to the page', async () => {
+    draw(<Hold onComplete={fails} />)
     await userEvent.click(screen.getByRole('button', { name: label }))
+    expect(phase()).toBe('failed')
+    expect(reported).toEqual([thrown])
+  })
+
+  it('says it failed at the end of a hold too, and throws on what was thrown', () => {
+    vi.useFakeTimers()
+    draw(<Hold onComplete={fails} />)
+    fireEvent.pointerDown(ring())
+    // The hold's timer is a task of the page's own: what is thrown in it nothing catches, and
+    // the page reports. Here the clock is the test's, and what its task throws comes to it.
+    let uncaught: unknown
+    act(() => {
+      try {
+        vi.advanceTimersByTime(2000)
+      } catch (error) {
+        uncaught = error
+      }
+    })
+    expect(uncaught).toBe(thrown)
     expect(phase()).toBe('failed')
   })
 })

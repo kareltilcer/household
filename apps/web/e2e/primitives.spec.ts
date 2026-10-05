@@ -4,7 +4,7 @@
 // for the whole dwell; and hold-to-complete takes two seconds of a pointer and none of a keyboard.
 import type { Locator, Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
-import { expect, frames, holdTheClock, open, smallTargets, test } from './fixtures.ts'
+import { drawn, expect, frames, holdTheClock, open, smallTargets, test } from './fixtures.ts'
 
 const primitives = paths.primitives.example
 
@@ -52,6 +52,25 @@ test.describe('a dialog', () => {
     await expect(dialog).toBeHidden()
     await expect(opener).toBeFocused()
   })
+
+  for (const theme of ['light', 'dark'] as const) {
+    test(`dims the page behind it in the ${theme} theme`, async ({ page }) => {
+      await open(page, primitives, { theme })
+      await page.getByRole('button', { name: 'Delete Weekly shop' }).click()
+      const dialog = page.getByRole('dialog', { name: 'Delete Weekly shop?' })
+      await expect(dialog).toBeVisible()
+      const { ground, veil } = await dialog.evaluate((element) => ({
+        ground: window.getComputedStyle(document.body).backgroundColor,
+        veil: window.getComputedStyle(element, '::backdrop').backgroundColor,
+      }))
+      // Darker under the veil than without it, in a theme whose ground is dark already too: a
+      // veil of a light colour would light the page up behind the dialog.
+      const light = (channels: number[]) => channels.reduce((sum, channel) => sum + channel, 0)
+      expect(light(await drawn(page, [ground, veil]))).toBeLessThan(
+        light(await drawn(page, [ground])),
+      )
+    })
+  }
 
   test('names what it destroys on the button that destroys it, and keeps on the other', async ({
     page,
@@ -230,6 +249,27 @@ test('a menu opens, moves and chooses by the keyboard, and gives the focus back'
   await expect(trigger).toBeFocused()
 })
 
+test('a menu is no wider than a narrow window, at 200 % text too', async ({ page }) => {
+  const width = 320
+  await page.setViewportSize({ width, height: 700 })
+  await open(page, primitives, { scale: '200' })
+  await page.getByRole('button', { name: 'More actions for Cellar meter' }).click()
+  const menu = page.getByRole('menu')
+  await expect(menu).toBeVisible()
+  // Its least width grows with the text, and it is placed by Radix over the page, where nothing
+  // scrolls it into the window: what is past the window's edge cannot be read.
+  const edges = await menu.evaluate((element) =>
+    [element, ...element.querySelectorAll('[role="menuitem"] span')].map((part) => {
+      const box = part.getBoundingClientRect()
+      return [Math.floor(box.left), Math.ceil(box.right)]
+    }),
+  )
+  for (const [left, right] of edges) {
+    expect(left).toBeGreaterThanOrEqual(0)
+    expect(right).toBeLessThanOrEqual(width)
+  }
+})
+
 test('a confirmation opened from a menu gives the focus back to the menu’s trigger', async ({
   page,
 }) => {
@@ -284,6 +324,21 @@ test('a stepper holds a whole number: a fraction typed in is the nearest one onc
   await members.fill('2.5')
   await members.blur()
   await expect(members).toHaveValue('3')
+})
+
+test('a stepper reads the number it holds once it is left, however that number was typed', async ({
+  page,
+}) => {
+  await open(page, primitives)
+  const members = page.getByRole('spinbutton', { name: 'Members' })
+  // The number 7, which the page holds already as the field is left: the field is written all
+  // the same, and does not keep what was typed for being the same number.
+  for (const typed of ['007', '7e0']) {
+    await members.fill(typed)
+    await expect(members).toHaveValue(typed)
+    await members.blur()
+    await expect(members).toHaveValue('7')
+  }
 })
 
 test.describe('inside a side panel, which makes the page outside it inert', () => {
@@ -434,6 +489,63 @@ test.describe('inside a side panel, which makes the page outside it inert', () =
     await toast.getByRole('button', { name: 'Dismiss' }).click()
     await expect(toast).toBeHidden()
     await expect.poll(async () => (await save.boundingBox())?.y).toBe(rest?.y)
+  })
+
+  test('a toast leaves the actions clear in a panel its content fills, scrolled to its actions', async ({
+    page,
+  }) => {
+    // A window shorter than the editor: the panel scrolls, and Save is the last thing in it.
+    await page.setViewportSize({ width: 375, height: 320 })
+    const panel = await openPanel(page)
+    const save = panel.getByRole('button', { name: 'Save', exact: true })
+    const foot = () =>
+      panel.evaluate((box) => box.scrollHeight - box.clientHeight - Math.round(box.scrollTop))
+    // Scrolled until Save is in view, which is a little short of the panel's very foot.
+    await panel.evaluate((box) => {
+      box.scrollTop = box.scrollHeight - box.clientHeight - 10
+    })
+    expect(await foot()).toBe(10)
+    await expect(save).toBeInViewport({ ratio: 1 })
+
+    await arrive(page)
+    const toast = panel.locator('[data-third-party] li').filter({ hasText: 'Saved on this device' })
+    await expect(toast).toBeVisible()
+    // The room the panel makes is the end of what it scrolls: left where it was, Save would be
+    // where it was too, under the toast. The panel is brought to its foot, and Save is above.
+    await expect
+      .poll(async () => {
+        const [button, over] = await Promise.all([save.boundingBox(), toast.boundingBox()])
+        return button !== null && over !== null && button.y + button.height <= over.y
+      })
+      .toBe(true)
+    expect(await foot()).toBeLessThanOrEqual(1)
+    // The room goes with the toast, and the panel is at the foot it had before.
+    await toast.getByRole('button', { name: 'Dismiss' }).click()
+    await expect(toast).toBeHidden()
+    await expect
+      .poll(() => panel.evaluate((box) => box.style.getPropertyValue('--toasts-room')))
+      .toBe('')
+    expect(await foot()).toBeLessThanOrEqual(1)
+    await expect(save).toBeInViewport({ ratio: 1 })
+  })
+
+  test('a toast leaves a panel that is nowhere near its foot where the member scrolled it', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 240 })
+    const panel = await openPanel(page)
+    await panel.evaluate((box) => {
+      box.scrollTop = 0
+    })
+    await arrive(page)
+    await expect(
+      panel.locator('[data-third-party] li').filter({ hasText: 'Saved on this device' }),
+    ).toBeVisible()
+    // The room is there to scroll to, and the panel has not moved under the member.
+    await expect
+      .poll(() => panel.evaluate((box) => box.style.getPropertyValue('--toasts-room')))
+      .not.toBe('')
+    expect(await panel.evaluate((box) => box.scrollTop)).toBe(0)
   })
 
   test('a toast pointed at while the panel closes under it goes once the pointer has left it', async ({

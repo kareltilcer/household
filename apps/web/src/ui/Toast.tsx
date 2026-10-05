@@ -118,7 +118,16 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
     // A toast is as tall as its words, which wrap as the window narrows and as toasts come and
     // go: the room is measured whenever it changes, and first as the watch begins.
     const measured = new ResizeObserver(() => {
-      modal.style.setProperty(toastsRoom, `${String(viewport.offsetHeight)}px`)
+      const room = viewport.offsetHeight
+      // The room is made at the end of what the panel scrolls. One its content fills is made no
+      // taller by it, only longer to scroll, and its actions would stay where they were, under
+      // the toasts. So a panel the room made longer, whose foot was no further off than the
+      // toasts are tall, is brought to its foot. One scrolled anywhere else stays where its
+      // member put it, and a modal that makes no room is not moved at all.
+      const length = modal.scrollHeight
+      const short = length - modal.clientHeight - modal.scrollTop
+      modal.style.setProperty(toastsRoom, `${String(room)}px`)
+      if (short < room && modal.scrollHeight > length) modal.scrollTop = modal.scrollHeight
     })
     measured.observe(viewport)
     return () => {

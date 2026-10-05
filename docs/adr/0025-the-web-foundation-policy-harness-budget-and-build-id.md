@@ -40,7 +40,12 @@ focus in, closes on Escape and gives the focus back, and one rule of the app's o
 `html:has(dialog:modal)`, keeps the page from scrolling under it. The root keeps a scrollbar's
 room whether or not one is drawn (`scrollbar-gutter`), so where a scrollbar takes room the page
 behind a modal keeps its width: what Radix's lock did by measuring the scrollbar and padding the
-page in the style it injects, the platform does with none. `Menu` is Radix's dropdown menu
+page in the style it injects, the platform does with none. The page behind is dimmed in both
+themes, under a veil of the theme's darkest surface: the inverse one in the light theme and the
+sunken one in the dark, where the inverse one is light and would light the page up behind a
+dialog darker than it (`light-dark()`). The scrollbar's room is the root's own ground, which no
+dialog's backdrop covers, so the root draws it as the ground is under that veil, and no strip of
+the page is left undimmed at the window's edge. `Menu` is Radix's dropdown menu
 opened non-modally, which takes no scroll lock; `Toast` is Radix's toast. Select is the platform's
 own. Sheets and menus stand on `surface-overlay`, so `@household/tokens` declares the three pairs
 they spend there and its test counts them: the strong border, the focus ring and `danger`.
@@ -91,7 +96,11 @@ asked as well. The toasts stand over the foot of the window, on the page and ins
 alike, so that a pointer on a toast is on it still when the modal goes. That is where a side
 panel keeps its actions, so while a toast is shown inside a panel the panel is told how much
 room the toasts take and keeps its own foot above them: under a toast, a press meant for Save
-would land on the toast's Undo. A
+would land on the toast's Undo. The room is the end of what the panel scrolls, and a panel its
+content fills is made no taller by it, only longer to scroll: one whose foot is no further off
+than the toasts are tall as the room is made is brought to its foot, its actions above the
+toasts, and one a member has scrolled anywhere else is left there, the room at its end to scroll
+to. A
 toast is read out after the one word
 *Notification*; the region's name, with the key that reaches it, is the viewport's. A banner that
 is announced politely is drawn before its words, which are put into it two frames later, and so
@@ -175,8 +184,11 @@ minutes, and when Vite reports that it could not load one of its own files, whic
 causes and a dropped connection causes too. A different id shows a prompt; the page never reloads
 by itself, and not knowing is never a newer build. A route that could not be loaded or drawn is
 named in its own place, inside what every route is drawn in, so the watch and its prompt stand
-over the very failure a newer build most often causes. The persisted query cache is kept under the
-same id, so a newer build drops what an older one kept.
+over the very failure a newer build most often causes. And what every route is drawn in is drawn
+before a route whose file is still loading, on the visit that opens the app at it: the router is
+given a place for what is loading, an empty one, without which it draws nothing at all until the
+file has come or failed to, and the watch would begin after the failure it listens for. The
+persisted query cache is kept under the same id, so a newer build drops what an older one kept.
 
 **Hold-to-complete is two controls.** The ring a pointer holds is hidden from assistive
 technology. Beside it is a plain button, drawn nowhere and named for what it completes, which
@@ -190,7 +202,9 @@ not what it asked two seconds before. A pointer that leaves the ring gives the h
 as a mouse: the platform holds a touch to what it landed on, which is then told of no leaving,
 so the ring lets go of the touch as the hold begins. Completed, it
 stays so for as long as it is drawn: a row to be completed again, after an undo or a write the
-server refused, draws a control of its own for it, by a `key`.
+server refused, draws a control of its own for it, by a `key`. A completion that throws is said
+to have failed, as one that was refused is, and what it threw is thrown on: a write refused is
+its owner's to hear of, and a throw is its owner's fault, which the page reports as any other.
 
 **Component tests run in jsdom, and a browser holds the rest.** jsdom lays nothing out and has no
 modal dialog, so what the platform does, a dialog's focus, a menu under the keyboard, a 44 pt
@@ -256,6 +270,9 @@ waits in the page, and is sent from there when the connection is back.
 | A time limit on reading the stored cache | No browser the PRD names leaves an open of IndexedDB unanswered: the hang on record is WebKit's of 2021, in Safari 14.1, and the store is opened with no version, which no other tab can block. A refusal rejects, and is answered with nothing. A clock would drop a good cache on a slow disk |
 | The stored cache written as the page is hidden | What the throttle can lose is a second's reads, each fetched again on the next visit, from a cache that is a convenience (06-clients: a browser is not the offline-first surface), and TanStack's own persister throttles the same way. A write begun as a tab closes is one the browser need not finish, so a listener would hold only for a tab put aside within that second and then discarded. The persister's `flush` is its tests' own, which settle a write by it without a clock, and nothing in the app calls it |
 | A formatter that shows what it cannot format as it was given, or an instant in another zone | What it refuses is what the contract rules out, a day no calendar has, a decimal with an exponent, an instant that is no RFC 3339, and the server's own tests hold every response to the contract. A zone this browser does not know has no right answer: another zone's time would be shown as the household's. The boundary under `Root` names a screen that cannot be drawn, and a screen whose rows are worth saving one by one draws a boundary of its own, as the dashboard's widgets must (02-components §4.8) |
+| A colour of its own among the tokens for the veil behind a modal | The design names none: design/v1 writes its scrim out as a raw colour, the same in both themes, and the tokens are its foundations ported. The token system is design's to own (01-foundations §1), and a token invented where it is first wanted is how five modules end up with five greys. Until design adds one, the veil is the darkest surface each theme has |
+| A cascade layer under the type scale, or the scale written once as classes of the page's own | A layer puts the scale under every rule outside it, the page's reset of a form control's face among them, which would then need a layer of its own under that one: two layers and their order, where `:where` takes the weight off the two rules as they stand. Classes of the page's own are named by hand in every component, and a step a rule composes is one the build checks. The copy a route's stylesheet carries is 0.4 kB compressed, and where it is written no longer matters |
+| A side panel whose body scrolls between a head and a foot held in place, so that the room it makes for the toasts is never part of what scrolls | At 200 % text in a short window the head, the foot and the toasts' room leave the body next to no height for as long as a toast is shown, where a panel that scrolls as one can still be read; and a field's focus ring is cut at the edge of the box that scrolls it. The panel scrolls as one, and is brought to its foot where it was near it |
 | A label's weight spent as a type step's weight token | The scale's weights are each a step's, and a button's label, a banner's title or a member's initials is none of those steps: it is body set at 500 or 600, as the prototype sets it. Named by a title's token it would change with a title it has nothing to do with. A weight of its own in the scale is design's to add (01-foundations §1) |
 | One control for the hold, completing on a click with no pointer before it | A screen reader on a touch screen sends a tap, which is a short press. Telling the two apart is a guess per browser |
 | Vitest's browser mode for component tests | Chromium in the job that typechecks every package, to hold what the end-to-end job already holds on the built app |
@@ -293,7 +310,9 @@ waits in the page, and is sent from there when the connection is back.
 - A stepper in a form is settled by Enter as it is by being left, so the form sends the number
   the field shows. A number typed over a bound is held to it, and not refused with an error. Its
   step is how far a button moves it, and no grid the platform holds a typed number to: any whole
-  number within the bounds is a value of it.
+  number within the bounds is a value of it. Left, it reads the number it holds however that
+  number was typed: its value is handed to React as text, which writes a number field only where
+  what it holds is another number, and "007" is the number 7.
 - A list is one by its role as well as by its element: every list is drawn without markers, and
   WebKit takes such a list for layout and tells assistive technology of none.
 - The root keeps a scrollbar's room at the window's edge on every page, where a scrollbar takes
@@ -310,7 +329,14 @@ waits in the page, and is sent from there when the connection is back.
   buttons.
 - A time series stands on its axis: a point at or under zero has no column, and is said in its
   words, as a segment that is none of a composition has no part of its bar. A series that goes
-  under zero, Finance's burn-down when a budget is overspent, is its own screen's to draw.
+  under zero, Finance's burn-down when a budget is overspent, is its own screen's to draw. A
+  figure is kept on one line, and a chart's total, a sentence of two, wraps as a sentence does.
+- A step of the type scale weighs nothing in the cascade (`:where`), and nor does the page's reset
+  of a form control's face, which is written before it: what a rule says beside the step it
+  composes holds, whichever stylesheet the build wrote the step into last. It writes the scale
+  into every stylesheet whose rules compose it, a route's loaded later among them.
+- What is placed over the page is held to the window at any text size: a menu's least width is
+  its own or the window's, whichever is less, since a least width is kept over a greatest one.
 - A calendar day is shown as it is written or not at all: a day no calendar has, the
   thirty-first of February, is refused as a malformed one is, and a year is read as written.
 - A table scrolls in its own box at any width, a marked row's too: the box is what a word drawn

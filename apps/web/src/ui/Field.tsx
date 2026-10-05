@@ -233,7 +233,9 @@ export function Stepper({
             type="number"
             inputMode="numeric"
             className={cx(styles.control, styles.numeric, styles.count)}
-            value={typed ?? value}
+            // As text. React writes a number field only where what it holds is another number
+            // than its value, and "007" is the number 7: left with it, the field would keep it.
+            value={typed ?? String(value)}
             // The bounds are the field's own too, and `step` is not: the platform would take it
             // for the grid a value must lie on, and refuse a form over a whole number typed
             // between two steps of the buttons, which is a value of this field all the same.

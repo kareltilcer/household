@@ -46,16 +46,27 @@ export const served: readonly RouteId[] = routeIds.filter(
 )
 
 /**
+ * What stands in a screen's place while its file loads, on the visit that opens the app at it:
+ * nothing. It is there for what it leaves the router free to draw around it. With no such place
+ * named, the router draws nothing at all until the file has loaded or failed to, Root neither.
+ */
+function Loading() {
+  return null
+}
+
+/**
  * The router's table for `screens`: each drawn inside Root, and a screen that fails to load or to
  * draw named in its own place there (RouteError), so that Root stays, the prompt of a newer build
- * with it. The second boundary is for Root's own failure, which leaves nothing to draw inside.
+ * with it. Root is drawn before a screen that is still loading, too, its landmark on the page and
+ * its watch listening by the time the screen's file fails. The second boundary is for Root's own
+ * failure, which leaves nothing to draw inside.
  */
 export function inRoot(screens: RouteObject[]): RouteObject[] {
   return [
     {
       Component: Root,
       ErrorBoundary: RootError,
-      children: [{ ErrorBoundary: RouteError, children: screens }],
+      children: [{ ErrorBoundary: RouteError, HydrateFallback: Loading, children: screens }],
     },
   ]
 }
