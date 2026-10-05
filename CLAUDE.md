@@ -145,7 +145,8 @@ pnpm --filter @household/web e2e        # Playwright against it: axe in both the
   `useFormat`: `Intl`, money from whole minor units, an instant in the timezone its caller names. A
   screen spends the twelve states through `ui/states.ts` and `StateFrame`. A route is a line of
   `src/app/paths.ts`, which the end-to-end suite walks with axe in both themes and in the
-  pseudo-locale, every test failing on a violation of the policy. A dev-only page (`src/dev`) writes
+  pseudo-locale, every test failing on a violation of the policy; what a route opens, a dialog, a
+  menu or a toast, is opened under the same two in `e2e/overlays.spec.ts`. A dev-only page (`src/dev`) writes
   its words as fixtures and is in no build a deployment serves ([D-154](docs/prd/09-decisions.md));
   a test's markup is held to the literal-string lint as the app's is. The bundle budget is
   `build/budget.ts` ([D-153](docs/prd/09-decisions.md),
