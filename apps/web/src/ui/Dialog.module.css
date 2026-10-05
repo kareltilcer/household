@@ -46,6 +46,14 @@
   padding: var(--space-3);
 }
 
+/* A side panel keeps its actions at its foot, which is where the toasts are drawn, over the foot
+   of the window (ui/Toast). While a toast is shown inside the panel it is told how much room the
+   toasts take, and keeps its own foot above them: under a toast, a press meant for Save would
+   land on the toast's Undo. The panel's own, and not that of a confirmation drawn inside it. */
+.panel > .content {
+  padding-block-end: max(var(--space-3), var(--toasts-room, 0px));
+}
+
 .header {
   display: flex;
   gap: var(--space-2);

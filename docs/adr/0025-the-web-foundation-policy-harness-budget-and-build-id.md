@@ -67,12 +67,21 @@ its own Undo raised, go once the pointer has left them. One Escape does one thin
 the newest toast for the key wherever the focus is and tells the platform nothing of it, so the
 dialog the toasts are drawn in would be asked to close by the same key: pressed among the toasts,
 Escape puts the toast away and is spent there, and pressed elsewhere under a modal it is the
-modal's, the toast keeping its dwell and its Undo, on the page again once the modal has gone. A
+modal's, the toast keeping its dwell and its Undo, on the page again once the modal has gone.
+Pressed in a menu it is the menu's. Radix hands the key to whatever it layered last, which is a
+toast raised while the menu was open, and the menu would never hear of it: the toast leaves the
+key alone, and the menu closes by it and spends it, so the dialog the menu is drawn in is not
+asked as well. The toasts stand over the foot of the window, on the page and inside a modal
+alike, so that a pointer on a toast is on it still when the modal goes. That is where a side
+panel keeps its actions, so while a toast is shown inside a panel the panel is told how much
+room the toasts take and keeps its own foot above them: under a toast, a press meant for Save
+would land on the toast's Undo. A
 toast is read out after the one word
 *Notification*; the region's name, with the key that reaches it, is the viewport's. A banner that
-is announced politely is drawn before its words, which are put into it two frames later: what is
-put into a polite region already in the document is said, and a region that arrives with its
-words in it need not be.
+is announced politely is drawn before its words, which are put into it two frames later, and so
+is the offline bar: what is put into a polite region already in the document is said, and a
+region that arrives with its words in it need not be. The region a hold says its word in is on
+the page, empty, from the first.
 
 **The policy is one constant (`apps/web/build/csp.ts`), written into index.html as a `<meta>` by
 the build and sent as a header by whoever serves it.** `default-src 'none'`, and `'self'` for
@@ -100,9 +109,11 @@ the default whatever the device prefers (06-clients §3); `system` is a choice.
 build with the dev-only routes in. The routes are named only for that mode and for the development
 server (`import.meta.env.MODE`, `import.meta.env.DEV`), constants of each build, so in `dist/www`,
 and in a build of any other mode, the branch that imports them is dead and their files are not
-written. The mode is named once, beside the routes (`src/app/paths.ts`), where the router, the
-build's configuration and its plugin read it, and a route marked dev-only there is served by no
-other build, whatever names a page for it. The end-to-end suite runs against `dist/e2e` served by
+written. The mode is named once, beside the routes (`src/app/paths.ts`), where the build's
+configuration and its plugin read it. The router writes it out, since the bundler drops the
+pages' branch only for a constant it reads in that very expression, and a test holds the two to
+one word. A route marked dev-only there is served by no other build, whatever names a page for
+it. The end-to-end suite runs against `dist/e2e` served by
 `vite preview` with the policy as
 a header, and every test fails on a `securitypolicyviolation` and on a console error. `dist/www`
 is written without source maps, which would hand the app's sources to whoever asked a deployment
@@ -153,8 +164,10 @@ technology. Beside it is a plain button, drawn nowhere and named for what it com
 completes on any activation: Enter, Space, a switch, a screen reader's double tap. The ring shows
 the focus the button has. The fill is timed by the tokens' `hold-to-complete`, which reduced motion
 does not shorten, and steps ten times under it. A release before the time is up says to keep
-holding for as long as a toast stays, and the control is then idle again; and what completes is
-what its owner asks at the end of the hold, not what it asked two seconds before. Completed, it
+holding for as long as a toast stays, and the control is then idle again; a pointer let go in the
+instant the time is up, before the control has been drawn again, has let go of a hold that is
+over, and is no early release; and what completes is what its owner asks at the end of the hold,
+not what it asked two seconds before. Completed, it
 stays so for as long as it is drawn: a row to be completed again, after an undo or a write the
 server refused, draws a control of its own for it, by a `key`.
 
@@ -183,6 +196,9 @@ link to a file that is good for minutes.
 | A dialog the platform closed left closed, with its owner told and no more | An owner that keeps it open would hold a panel that is open by its state and drawn nowhere, what was typed still in it, and no way to open it again; one that answers by asking a question would ask it inside a panel nobody sees, over a page it makes inert |
 | The toasts' dwell timed by the app, or Radix told by a made-up event that the pointer has left | The first is what Radix's toast is used for. The second steers a library by its internals, where a provider mounted afresh holds nothing by construction |
 | Escape under a modal left to Radix and the platform both, or given to the toast first | The first closes the panel and takes the Undo with it. The second leaves the panel open after the key that should have closed it, and loses the Undo all the same: a toast is no layer a member opened |
+| The toasts drawn at a side panel's own foot, in its flow, where they would cover nothing | A toast would move as the panel closed, out from under a pointer that holds its dwell, and Radix would hold every dwell after it. Their place is one, and the panel makes room |
+| A menu's Escape left to Radix's layers alone | A toast raised while a menu is open is the last layer: the key would close the panel the menu is drawn in, with what was typed there, or put away a toast the member did not mean |
+| The mode of the dev pages given to the router as a constant the build defines | It would be told to Vite, to Vitest's own configuration and to TypeScript, three places kept in step by nothing. The literal is held to `devPagesMode` by one test, which fails before a build would, and the plugin refuses a build that kept the pages |
 | The focus Radix puts on the toasts' region left there after a pointer's press | The toasts beside the one closed, and one its own Undo raised, would stay until the member pressed somewhere else. The region gives up a focus of its own, which is no event made up for Radix: the browser tells it the focus has left |
 | The table's column of sync marks timed by the table | A second clock to keep in step with each mark's own. A rule of the stylesheet draws the column while a mark is drawn in it, and has nothing to keep in step |
 | The policy as a header alone | Nothing serves the app yet, and the PRD has the app set it. A page that carries its policy is under it wherever it is opened |
@@ -236,9 +252,13 @@ link to a file that is good for minutes.
 - An icon-only control a primitive draws itself is in the register beside the design's twenty
   (`@household/icons`' `controls`): what puts a banner or a toast away, and a stepper's two
   buttons.
-- A time series stands on its axis: a point under zero is drawn as no column, and said in its
-  words. A series that goes under zero, Finance's burn-down when a budget is overspent, is its own
-  screen's to draw.
+- A time series stands on its axis: a point at or under zero has no column, and is said in its
+  words, as a segment that is none of a composition has no part of its bar. A series that goes
+  under zero, Finance's burn-down when a budget is overspent, is its own screen's to draw.
+- A calendar day is shown as it is written or not at all: a day no calendar has, the
+  thirty-first of February, is refused as a malformed one is, and a year is read as written.
+- A table scrolls in its own box at any width, a marked row's too: the box is what a word drawn
+  nowhere inside it is placed against.
 - `Household-Client` names the web app by its package's version, `0.0.0` until a release raises
   it, so the server's web minimum cannot yet tell one build from another: set above the version
   the newest build names, it refuses every web client. How a release numbers a build is not

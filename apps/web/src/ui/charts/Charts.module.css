@@ -95,6 +95,8 @@
 .bar {
   display: block;
   width: 100%;
+  /* A small reading beside a large one is still a column that can be seen. A point at or under
+     zero is given no column to keep one for (Charts.tsx). */
   min-height: 2px;
   background: var(--chart-1);
   border-start-start-radius: var(--radius-control);

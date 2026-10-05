@@ -1,7 +1,6 @@
 .hold {
   position: relative;
   display: inline-flex;
-  gap: var(--space-1);
   align-items: center;
   min-width: 0;
 }
@@ -96,6 +95,10 @@
   overflow-wrap: anywhere;
 }
 
-.word:empty {
-  display: none;
+/* The region the word is said in is on the page from the first, while it has no word: what is
+   put into a region already there is said, and a region that arrives with its word in it need
+   not be (Banner). So it is not taken away while it is empty. It takes no room then, and the
+   space between the ring and the word is the word's own. */
+.word:not(:empty) {
+  margin-inline-start: var(--space-1);
 }

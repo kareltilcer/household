@@ -3,14 +3,14 @@
 // modal dialog and a menu under the keyboard is the end-to-end suite's (e2e/primitives.spec.ts).
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { draw, Press } from '../test/render.tsx'
 import { Button, IconButton } from './Button.tsx'
 import { Dialog, Sheet } from './Dialog.tsx'
 import { TextField } from './Field.tsx'
 import { Menu, type MenuItem } from './Menu.tsx'
-import { useToast } from './Toast.tsx'
+import { useToast, type ShowToast } from './Toast.tsx'
 
 const words = {
   title: 'Delete Weekly shop?',
@@ -599,6 +599,15 @@ describe('a toast', () => {
     expect(held()).toBe(true)
   })
 
+  /** Hands a test the way to raise a toast by itself, with no press that would move the focus. */
+  function Arrives({ hand }: { hand: (raise: ShowToast) => void }) {
+    const toast = useToast()
+    useEffect(() => {
+      hand(toast)
+    }, [hand, toast])
+    return null
+  }
+
   function Editing({ undo }: { undo: () => void }) {
     const [open, setOpen] = useState(true)
     return (
@@ -656,6 +665,42 @@ describe('a toast', () => {
     expect(escape()).toBe(true)
     expect(within(panel).getByText(words.cleared)).toBeVisible()
     expect(within(panel).getByRole('button', { name: 'Undo' })).toBeVisible()
+  })
+
+  it('stays through an Escape pressed in a menu, which the key closes and is spent on', async () => {
+    // A toast that arrives by itself while a menu is open: raised by no press, so the focus is
+    // in the menu still, and Radix has layered the toast over it.
+    let show: ShowToast | undefined
+    const onClose = vi.fn()
+    draw(
+      <Sheet open onClose={onClose} title={words.meter}>
+        <Menu
+          trigger={<IconButton label={words.more} icon={<svg aria-hidden="true" />} />}
+          items={[{ id: 'rename', label: words.name, onSelect: () => undefined }]}
+        />
+        <Arrives
+          hand={(raise) => {
+            show = raise
+          }}
+        />
+      </Sheet>,
+    )
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    await userEvent.click(within(panel).getByRole('button', { name: words.more }))
+    expect((await screen.findByRole('menu')).contains(document.activeElement)).toBe(true)
+    act(() => {
+      show?.({ message: words.cleared })
+    })
+    await within(panel).findByText(words.cleared)
+    // Radix hands the key to the toast, its last layer. The menu closes by it all the same, and
+    // spends it: the platform is not left the key to ask the panel to close with.
+    expect(escape()).toBe(false)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(within(panel).getByText(words.cleared)).toBeVisible()
+    expect(onClose).not.toHaveBeenCalled()
+    // The next one, with no menu open, is the panel's, and the toast stays through it too.
+    expect(escape()).toBe(true)
+    expect(within(panel).getByText(words.cleared)).toBeVisible()
   })
 
   it('is put away by Escape while the focus is on it, and the key is spent there', async () => {

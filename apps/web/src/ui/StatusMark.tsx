@@ -62,7 +62,11 @@ interface Watch {
  * moment is counted from `since`, and from when the mark first drew the state where nothing
  * dates it.
  */
-function useLongEnough(active: boolean, since: number | undefined): boolean {
+function useLongEnough(active: boolean, began: number | undefined): boolean {
+  // A time that is no time dates nothing: what a date that did not parse comes to. It is equal
+  // to no number, itself included, so taken as it is it would look like something new at every
+  // draw, be asked about again at every draw, and take the screen down with the mark.
+  const since = began !== undefined && Number.isFinite(began) ? began : undefined
   const [watch, setWatch] = useState<Watch>(() => {
     const now = Date.now()
     return { active, since, drawn: active ? now : undefined, reached: now }

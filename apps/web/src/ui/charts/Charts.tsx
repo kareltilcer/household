@@ -25,9 +25,9 @@ export interface SeriesPoint {
   /** The period: a month's letter, a date. */
   readonly label: string
   /**
-   * What its column is drawn to, against the tallest. The columns stand on the axis: a value
-   * under zero is drawn as none and said in `text`, and a series that goes under it is its own
-   * screen's to draw.
+   * What its column is drawn to, against the tallest. The columns stand on the axis: a value at
+   * or under zero has no column and is said in `text`, and a series that goes under it is its
+   * own screen's to draw.
    */
   readonly value: number
   /** The value as it is read, with its unit: "412 kWh". */
@@ -50,9 +50,6 @@ export interface TimeSeriesProps {
 export function TimeSeries({ caption, points, approximate = false }: TimeSeriesProps) {
   const t = useTranslate()
   const top = Math.max(0, ...points.map((point) => point.value))
-  // A share of the tallest column, and never less than none: a size under zero is no size, and
-  // the browser would drop it and draw whatever the stylesheet says a column is without one.
-  const height = (value: number) => (top === 0 ? 0 : (Math.max(0, value) / top) * 100)
   const estimated = points.some((point) => point.estimated === true)
   return (
     <figure className={styles.chart}>
@@ -61,10 +58,16 @@ export function TimeSeries({ caption, points, approximate = false }: TimeSeriesP
           // A point is its place in the series: a label is a month's letter, and J comes thrice.
           <li key={index} className={styles.column}>
             <span className={styles.plot} aria-hidden="true">
-              <span
-                className={cx(styles.bar, point.estimated === true && styles.estimated)}
-                style={{ blockSize: `${String(height(point.value))}%` }}
-              />
+              {/* A share of the tallest column. A point at or under zero has no column, and
+                  not one of no height: the stylesheet gives every column a height that can be
+                  seen, so that a small reading is not lost beside a large one, and a reading
+                  of nothing would stand on the axis as a small one. */}
+              {point.value > 0 ? (
+                <span
+                  className={cx(styles.bar, point.estimated === true && styles.estimated)}
+                  style={{ blockSize: `${String((point.value / top) * 100)}%` }}
+                />
+              ) : null}
             </span>
             <span className={styles.tick} aria-hidden="true">
               {point.label}
@@ -107,14 +110,19 @@ export function Composition({ caption, segments, total }: CompositionProps) {
   return (
     <figure className={styles.chart}>
       <div className={styles.whole} aria-hidden="true">
-        {segments.map((segment, index) => (
-          <span
-            // A segment is its place in the bar, as a point is its place in a series.
-            key={index}
-            className={cx(styles.segment, series[index % series.length])}
-            style={{ inlineSize: `${String(segment.share * 100)}%` }}
-          />
-        ))}
+        {segments.map((segment, index) =>
+          // A segment that is none of the whole has no part of the bar, as a point of nothing
+          // has no column: the stylesheet gives every part a width that can be seen. Its row of
+          // the legend says it, with the colour of its place there.
+          segment.share > 0 ? (
+            <span
+              // A segment is its place in the bar, as a point is its place in a series.
+              key={index}
+              className={cx(styles.segment, series[index % series.length])}
+              style={{ inlineSize: `${String(segment.share * 100)}%` }}
+            />
+          ) : null,
+        )}
       </div>
       {/* The legend names every segment with its figure, in the bar's order: the bar is read
           from it, and a colour is only how the eye finds a row again. */}

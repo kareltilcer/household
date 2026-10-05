@@ -157,6 +157,26 @@ test.describe('the harness', () => {
     await expect(cell(page, 'table', 'syncing').locator('[data-status="syncing"]')).toBeVisible()
   })
 
+  test('keeps a table wider than a narrow window scrolling in its own box, a marked row’s too', async ({
+    page,
+  }) => {
+    // A phone's width at 200 % text: the table is wider than the window it is drawn in.
+    await page.setViewportSize({ width: 375, height: 812 })
+    await open(page, `${harness}?body=table`)
+    const pending = cell(page, 'table', 'pending')
+    const region = pending.getByRole('region', { name: 'Ledger, March' })
+    expect(await region.evaluate((box) => box.scrollWidth - box.clientWidth)).toBeGreaterThan(1)
+    // The column of sync marks is the table's last, past the box's edge, and its name is drawn
+    // nowhere: taken out of the flow, it is placed against the box, and not against the page.
+    await expect(pending.getByRole('columnheader', { name: 'Sync state' })).toHaveCount(1)
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+      'the page scrolls sideways',
+    ).toBeLessThanOrEqual(1)
+  })
+
   test('draws the illustration at 100 % text and gives its room to the sentence at 200 %', async ({
     page,
   }) => {

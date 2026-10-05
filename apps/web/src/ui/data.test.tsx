@@ -468,21 +468,31 @@ describe('a time series', () => {
     expect(complained).not.toHaveBeenCalled()
   })
 
-  it('draws nothing tall where every point is zero, and divides by nothing', () => {
+  /** Each point's column, by its size, and null where the point has none. */
+  function columns(container: HTMLElement): (string | null)[] {
+    return [...container.querySelectorAll<HTMLElement>('li > span:first-child')].map(
+      (plot) => plot.querySelector<HTMLElement>('span')?.style.blockSize ?? null,
+    )
+  }
+
+  it('draws no column where every point is zero, and divides by nothing', () => {
     const { container } = draw(<TimeSeries caption={words.perMonth} points={flat} />)
-    expect(container.querySelector<HTMLElement>('li > span > span')?.style.blockSize).toBe('0%')
+    // No column, and not one of no height: the stylesheet gives every column a height that can
+    // be seen, so that a small reading is not lost beside a large one.
+    expect(columns(container)).toEqual([null])
+    expect(screen.getByRole('listitem')).toHaveTextContent('Jan: 0 kWh')
   })
 
-  it('draws a point under zero as no column, with a size the browser takes, and says its value', () => {
+  it('draws a point at or under zero as no column, estimated or not, and says its value', () => {
     const under = [
       { label: 'Jan', value: 40, text: '40 kWh' },
       { label: 'Feb', value: -10, text: '−10 kWh' },
+      { label: 'Mar', value: 0, text: '0 kWh', estimated: true },
     ]
     const { container } = draw(<TimeSeries caption={words.perMonth} points={under} />)
-    const bars = [...container.querySelectorAll<HTMLElement>('li > span:first-child > span')]
-    // A size under zero is no size: the declaration would be dropped.
-    expect(bars.map((bar) => bar.style.blockSize)).toEqual(['100%', '0%'])
+    expect(columns(container)).toEqual(['100%', null, null])
     expect(screen.getAllByRole('listitem')[1]).toHaveTextContent('Feb: −10 kWh')
+    expect(screen.getAllByRole('listitem')[2]).toHaveTextContent('Mar: 0 kWh, estimated')
   })
 })
 
@@ -511,6 +521,29 @@ describe('a composition', () => {
     expect(
       [...(bar?.children ?? [])].map((part) => (part as HTMLElement).style.inlineSize),
     ).toEqual(['44%', '24%', '32%'])
+  })
+
+  it('draws no part of the bar for a segment that is none of the whole, and lists it all the same', () => {
+    const some = [
+      { label: 'Documents', share: 0.68, text: '1.8 GB' },
+      { label: 'Chat', share: 0, text: '0 MB' },
+      { label: 'Overhead (derived)', share: 0.32, text: '1.3 GB' },
+    ]
+    const { container } = draw(
+      <Composition caption={words.storage} segments={some} total={words.used} />,
+    )
+    const parts = [...(container.querySelector('[aria-hidden="true"]')?.children ?? [])]
+    expect(parts.map((part) => (part as HTMLElement).style.inlineSize)).toEqual(['68%', '32%'])
+    // A segment keeps the colour of its place in the legend, whatever is not drawn before it.
+    expect(parts.map((part) => /series\d/.exec(part.className)?.[0])).toEqual([
+      'series1',
+      'series3',
+    ])
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Documents1.8 GB68%',
+      'Chat0 MB0%',
+      'Overhead (derived)1.3 GB32%',
+    ])
   })
 })
 

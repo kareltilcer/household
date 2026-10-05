@@ -2,8 +2,8 @@
 // real window in which to take it back. Undo is a button, never a gesture, and it stays for the
 // whole dwell (the tokens' `toast-dwell`). Over Radix's toast for what a toast has to do: be
 // announced, pause while it is pointed at or focused, and be reached by a key. Escape puts a toast
-// away from among the toasts, and on a page with nothing else open; pressed elsewhere under a
-// modal it is the modal's, and the toast keeps its dwell.
+// away from among the toasts, and on a page with nothing else open; pressed in a menu it is the
+// menu's, and pressed elsewhere under a modal it is the modal's, and the toast keeps its dwell.
 import { controls } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { thresholds } from '@household/tokens'
@@ -49,6 +49,15 @@ interface Run {
 
 /** The key that moves the focus to the toasts, as Radix reads it and as the region's name says it. */
 const hotkey = 'F8'
+
+/**
+ * The custom property a modal is told the toasts' room by: how much of the foot of the window
+ * they take while one is shown inside it. A side panel reads it (Dialog.module.css).
+ */
+const toastsRoom = '--toasts-room'
+
+/** What a menu is to assistive technology, and so how the toasts know the focus is in one. */
+const inMenu = '[role="menu"]'
 
 export function ToastProvider({ children }: { readonly children: ReactNode }) {
   const t = useTranslate()
@@ -98,6 +107,28 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
   // While a modal is open the toasts are drawn inside it, and announced from inside it: the page
   // outside it is inert, where an Undo could not be pressed and a toast would not be read out.
   const modal = useTopModal()
+
+  // They are drawn over the foot of the window there as on the page, in the same place, so that
+  // a pointer on a toast is on it still when the modal goes. A side panel keeps its actions at
+  // its foot: under a toast, a press meant for Save would land on the toast's Undo. So the modal
+  // is told how much room the toasts take for as long as one is shown, and keeps its own foot
+  // above them.
+  const shown = run.toasts.length > 0
+  useLayoutEffect(() => {
+    const viewport = list.current
+    if (modal === null || viewport === null || !shown) return undefined
+    // A toast is as tall as its words, which wrap as the window narrows and as toasts come and
+    // go: the room is measured whenever it changes, and first as the watch begins.
+    const measured = new ResizeObserver(() => {
+      modal.style.setProperty(toastsRoom, `${String(viewport.offsetHeight)}px`)
+    })
+    measured.observe(viewport)
+    return () => {
+      measured.disconnect()
+      modal.style.removeProperty(toastsRoom)
+    }
+    // Each modal, and each run of toasts, has a region of its own to measure.
+  }, [modal, run.number, shown])
   const viewport = (
     <RadixToast.Viewport
       ref={list}
@@ -151,10 +182,17 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
               const key = escape.current
               // Still on its way through the page: this close is that key's doing.
               if (key !== null && key.eventPhase !== Event.NONE) {
-                if (list.current?.contains(document.activeElement) === true) {
+                const focused = document.activeElement
+                if (list.current?.contains(focused) === true) {
                   // Pressed among the toasts, it puts the toast away and is spent there: the
                   // platform is not left the key to ask the dialog with.
                   key.preventDefault()
+                } else if ((focused?.closest(inMenu) ?? null) !== null) {
+                  // Pressed in a menu, it is the menu's. Radix hands the key to whatever it
+                  // layered last, which is a toast raised while the menu was open, and the menu
+                  // never hears of it: the toast stays, and the menu closes by the key itself,
+                  // and spends it (Menu).
+                  return
                 } else if (modal !== null) {
                   // Pressed elsewhere under a modal, it is the modal's, which the platform
                   // asks: the toast stays for its dwell, on the page again if the modal goes.

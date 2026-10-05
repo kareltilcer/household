@@ -156,6 +156,21 @@ describe('the sync mark', () => {
     expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
   })
 
+  it('counts the moment from when it was drawn where the time it is told is no time', () => {
+    vi.useFakeTimers()
+    // What a date that does not parse comes to: no number is equal to it, itself included.
+    const { container } = draw(<SyncMark state="syncing" since={Number.NaN} />)
+    expect(container.querySelector('[data-status]')).toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(799)
+    })
+    expect(container.querySelector('[data-status]')).toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+  })
+
   it('shows every other state at once', () => {
     draw(<SyncMark state="pending" />)
     expect(screen.getByText('Not sent yet')).toBeInTheDocument()
@@ -279,12 +294,19 @@ describe('a banner', () => {
 })
 
 describe('the offline bar', () => {
-  it('says the product’s own sentence, with the offline glyph beside it', () => {
+  it('says the product’s own sentence, with the offline glyph beside it', async () => {
     const { container } = draw(<OfflineBar />)
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Offline — changes are saved and will sync',
-    )
+    expect(await screen.findByText('Offline — changes are saved and will sync')).toBeVisible()
     expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('is in the document before its sentence, so that it is said when the connection goes', async () => {
+    draw(<OfflineBar />)
+    const region = screen.getByRole('status')
+    expect(region).toHaveTextContent('')
+    await waitFor(() => {
+      expect(region).toHaveTextContent('Offline — changes are saved and will sync')
+    })
   })
 })
 

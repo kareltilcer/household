@@ -20,6 +20,21 @@ function focusEscaped(scope: Locator): Promise<boolean> {
   })
 }
 
+/**
+ * A toast arrives by itself, as one does for something that took a while: raised by no press of
+ * the member's, whose focus stays where it was. The button that raises one is pressed by the
+ * page's own script, which reaches it under a modal too, where the page is inert to a member.
+ */
+function arrive(page: Page): Promise<void> {
+  return page.evaluate((name) => {
+    const raises = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent === name,
+    )
+    if (raises === undefined) throw new Error(`no button named ${name}`)
+    raises.click()
+  }, 'Save offline')
+}
+
 test.describe('a dialog', () => {
   test('traps the focus, closes on Escape and gives the focus back', async ({ page }) => {
     await open(page, primitives)
@@ -316,6 +331,59 @@ test.describe('inside a side panel, which makes the page outside it inert', () =
     await expect(panel).toBeHidden()
   })
 
+  test('Escape in a menu closes the menu alone, though a toast arrived while it was open', async ({
+    page,
+  }) => {
+    const panel = await openPanel(page)
+    const trigger = panel.getByRole('button', { name: serial })
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+    const menu = panel.getByRole('menu')
+    await expect(menu.getByRole('menuitem').first()).toBeFocused()
+    await arrive(page)
+    const toast = panel.locator('[data-third-party] li').filter({ hasText: 'Saved on this device' })
+    await expect(toast).toBeVisible()
+    // Radix hands the key to what it layered last, which is the toast. The menu closes by it all
+    // the same, the toast keeps its dwell, and the panel is not asked to close by a key the menu
+    // has spent: what was typed in it is still there.
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    await expect(panel).toBeVisible()
+    await expect(toast).toBeVisible()
+    await expect(trigger).toBeFocused()
+    // The next one is the panel's.
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+  })
+
+  test('a toast leaves the panel’s own actions clear on a narrow window, for as long as it is shown', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 })
+    const panel = await openPanel(page)
+    const save = panel.getByRole('button', { name: 'Save', exact: true })
+    const rest = await save.boundingBox()
+    await panel.getByRole('button', { name: serial }).click()
+    await panel.getByRole('menuitem', { name: 'Clear the serial number' }).click()
+    const toast = panel
+      .locator('[data-third-party] li')
+      .filter({ hasText: 'Serial number cleared' })
+    await expect(toast).toBeVisible()
+    // The toasts are over the foot of the window, which is where the panel keeps Save: the
+    // panel's foot stands above them, or a press meant for Save would land on the toast's Undo.
+    await expect
+      .poll(async () => {
+        const [button, over] = await Promise.all([save.boundingBox(), toast.boundingBox()])
+        return button !== null && over !== null && button.y + button.height <= over.y
+      })
+      .toBe(true)
+    await save.click({ trial: true })
+    // And is where it was once the toast has gone.
+    await toast.getByRole('button', { name: 'Dismiss' }).click()
+    await expect(toast).toBeHidden()
+    await expect.poll(async () => (await save.boundingBox())?.y).toBe(rest?.y)
+  })
+
   test('a toast pointed at while the panel closes under it goes once the pointer has left it', async ({
     page,
   }) => {
@@ -408,6 +476,27 @@ test.describe('a toast', () => {
     await expect(saved(page)).toBeHidden()
   })
 
+  test('is left alone by Escape pressed in a menu, which closes, though it arrived after the menu opened', async ({
+    page,
+  }) => {
+    await open(page, primitives)
+    const trigger = page.getByRole('button', { name: 'More actions for Cellar meter' })
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+    const menu = page.getByRole('menu')
+    await expect(menu.getByRole('menuitem').first()).toBeFocused()
+    await arrive(page)
+    await expect(saved(page)).toBeVisible()
+    // One Escape does one thing, and in a menu it closes the menu.
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    await expect(saved(page)).toBeVisible()
+    await expect(trigger).toBeFocused()
+    // With nothing else open, the next one puts the toast away.
+    await page.keyboard.press('Escape')
+    await expect(saved(page)).toBeHidden()
+  })
+
   test('goes after its dwell though the one before it was closed from the keyboard', async ({
     page,
   }) => {
@@ -474,6 +563,20 @@ test.describe('hold-to-complete', () => {
     await expect
       .poll(() => ring(page, bins).evaluate((element) => getComputedStyle(element).outlineStyle))
       .toBe('solid')
+  })
+
+  test('has the region its word is said in on the page before any word, taking no room', async ({
+    page,
+  }) => {
+    await open(page, primitives)
+    const target = ring(page, bins)
+    const hold = target.locator('xpath=..')
+    // There for assistive technology while it is empty: what is put into a region already on
+    // the page is said, and a region that arrives with its word in it need not be.
+    await expect(hold.getByRole('status')).toHaveCount(1)
+    await expect(hold.getByRole('status')).toBeEmpty()
+    const [whole, held] = await Promise.all([hold.boundingBox(), target.boundingBox()])
+    expect(whole?.width).toBe(held?.width)
   })
 
   test('says so when the completion fails, and can be tried again', async ({ page }) => {

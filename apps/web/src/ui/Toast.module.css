@@ -1,3 +1,6 @@
+/* Over the foot of the window, on the page and inside an open modal alike: a toast is in one
+   place whatever opens or closes under it. A side panel, whose actions stand there, keeps its
+   foot above the toasts while one is shown inside it (Dialog.module.css). */
 .viewport {
   position: fixed;
   inset-block-end: 0;

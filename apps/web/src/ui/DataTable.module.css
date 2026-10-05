@@ -5,8 +5,12 @@
   min-width: 0;
 }
 
-/* The table scrolls inside its own box, and the page beside it does not. */
+/* The table scrolls inside its own box, and the page beside it does not. The box is what its
+   contents are placed against: a word drawn nowhere, the name of the column of sync marks or a
+   mark's own, is taken out of the flow, and would otherwise be placed against the page, past
+   this box's edge, and scroll the page sideways from inside a table that scrolls by itself. */
 .scroll {
+  position: relative;
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--dens-rule);

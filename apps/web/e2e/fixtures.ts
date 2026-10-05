@@ -29,15 +29,42 @@ export async function open(page: Page, path: string, opening: Opening = {}): Pro
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 }
 
+/**
+ * Waits for the page to draw `count` more frames. What is announced politely as it arrives, a
+ * banner or the offline bar, is drawn before its words, which are put into it two frames later
+ * (ui/Banner): a gate that looked at the page sooner would pass over them, and a test that
+ * expects nothing to be drawn would find nothing whatever the page went on to do. Not for a
+ * page whose clock a test holds, where no frame comes by itself.
+ */
+export function frames(page: Page, count = 3): Promise<void> {
+  return page.evaluate(
+    (wanted) =>
+      new Promise<void>((resolve) => {
+        const next = (left: number) => {
+          if (left === 0) resolve()
+          else {
+            requestAnimationFrame(() => {
+              next(left - 1)
+            })
+          }
+        }
+        next(wanted)
+      }),
+    count,
+  )
+}
+
 /** WCAG 2.1 at levels A and AA: the release gate (06-clients §4). */
 const wcag = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
 
 /**
  * Fails on any axe violation of the page as it stands, naming the rule and each element. What is
- * still arriving is waited for first: axe reads a colour as it is drawn, and one read half-way
- * through a dialog's fade is no colour of the design's.
+ * still arriving is waited for first: the words of a region that is drawn before them, and what
+ * fades in, since axe reads a colour as it is drawn, and one read half-way through a dialog's
+ * fade is no colour of the design's.
  */
 export async function expectAccessible(page: Page): Promise<void> {
+  await frames(page)
   await page.evaluate(() =>
     Promise.all(
       document
@@ -85,9 +112,11 @@ export interface Finding {
 
 /**
  * The pseudo-locale pass over the page as it stands (PRD 03 §9, 06-clients §8), in `en-XA`: every
- * text that is drawn, in a dialog, a menu or a toast as on the page beneath them.
+ * text that is drawn, in a dialog, a menu or a toast as on the page beneath them, the words of a
+ * region drawn before them among it.
  */
-export function inspect(page: Page): Promise<Finding> {
+export async function inspect(page: Page): Promise<Finding> {
+  await frames(page)
   return page.evaluate(
     ([shortest, allowed]) => {
       const plain = new RegExp(`[A-Za-z]{${String(shortest)},}`, 'g')

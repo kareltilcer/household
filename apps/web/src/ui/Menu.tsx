@@ -3,7 +3,7 @@
 // Escape and hand the focus back. It is opened non-modally: Radix's modal menu locks the page's
 // scroll by injecting a style, which the policy refuses (ADR 0025).
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { useRef, type ReactElement, type ReactNode } from 'react'
+import { useRef, useState, type ReactElement, type ReactNode } from 'react'
 import styles from './Menu.module.css'
 import { cx } from './cx.ts'
 import { useTopModal } from './topLayer.ts'
@@ -29,8 +29,9 @@ export function Menu({ trigger, items }: MenuProps) {
   // there, as Radix draws it by itself, could be opened from a dialog and never chosen from.
   const modal = useTopModal()
   const opener = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
   return (
-    <DropdownMenu.Root modal={false}>
+    <DropdownMenu.Root modal={false} open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger asChild ref={opener}>
         {trigger}
       </DropdownMenu.Trigger>
@@ -41,6 +42,17 @@ export function Menu({ trigger, items }: MenuProps) {
           sideOffset={4}
           collisionPadding={8}
           data-third-party=""
+          onKeyDown={(event) => {
+            // Escape closes the menu, and Radix sees to it for whatever it layered last. A
+            // toast raised while the menu is open is layered after it: Radix hands the key to
+            // the toast, which leaves it alone (Toast), and the menu would never hear of it.
+            // So a key nothing has spent closes the menu here and is spent, and the dialog
+            // the menu is drawn in is not asked to close by it too.
+            if (event.key === 'Escape' && !event.defaultPrevented) {
+              event.preventDefault()
+              setOpen(false)
+            }
+          }}
         >
           {items.map((item) => (
             <DropdownMenu.Item

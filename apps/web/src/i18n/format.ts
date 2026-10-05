@@ -139,11 +139,17 @@ export function createFormatters(locale: string): Formatters {
     day: (day, style = 'medium') => {
       const match = calendarDay.exec(day)
       if (match === null) throw new RangeError(`${JSON.stringify(day)} is not a calendar day`)
-      const [, year, month, date] = match
-      // Formatted in UTC from a UTC midnight, so the day shown is the day written.
-      return dates({ dateStyle: style, timeZone: 'UTC' }).format(
-        Date.UTC(Number(year), Number(month) - 1, Number(date)),
-      )
+      const [year, month, date] = [Number(match[1]), Number(match[2]), Number(match[3])]
+      // A UTC midnight, formatted in UTC, so the day shown is the day written. The year is set
+      // as it is written: `Date.UTC` reads one under a hundred as a year of the 1900s.
+      const midnight = new Date(0)
+      midnight.setUTCFullYear(year, month - 1, date)
+      // A day no calendar has, the thirty-first of February, is no day: `Date` would roll it
+      // over into the month after, and the day shown would not be the day written.
+      if (midnight.getUTCMonth() !== month - 1 || midnight.getUTCDate() !== date) {
+        throw new RangeError(`${JSON.stringify(day)} is not a calendar day`)
+      }
+      return dates({ dateStyle: style, timeZone: 'UTC' }).format(midnight)
     },
     instant: (at, timeZone, style = 'medium') =>
       dates({ dateStyle: style, timeStyle: 'short', timeZone }).format(instantOf(at)),

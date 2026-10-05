@@ -43,6 +43,15 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
   const t = useTranslate()
   const display = useDisplay()
   const [phase, setPhase] = useState<HoldPhase>('idle')
+  // The phase as it is now, which is what a pointer's handler asks. The hold's timer fires
+  // between two draws, and a pointer let go in that instant, as the ring fills, would be told by
+  // the last draw that it is held still: the release would be taken for an early one, its word
+  // put over a completion that has run, and the control made idle again to complete it twice.
+  const now = useRef<HoldPhase>('idle')
+  const turn = (next: HoldPhase) => {
+    now.current = next
+    setPhase(next)
+  }
   // The one timer the control has: the hold's while it is held, and the word's after a release.
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const mounted = useRef(true)
@@ -62,13 +71,14 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
     }
   }, [])
 
-  const settled = phase === 'completing' || phase === 'completed'
+  /** Whether a phase is one that takes no hold and no second completion. */
+  const settled = (at: HoldPhase) => at === 'completing' || at === 'completed'
 
   const complete = () => {
     clearTimeout(timer.current)
-    setPhase('completing')
+    turn('completing')
     const finish = (next: HoldPhase) => {
-      if (mounted.current) setPhase(next)
+      if (mounted.current) turn(next)
     }
     let result: unknown
     try {
@@ -94,20 +104,22 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
   const press = (event: PointerEvent) => {
     // The press is the control's own: the row it sits in does not open under it.
     event.stopPropagation()
-    if (settled || event.button !== 0) return
+    if (settled(now.current) || event.button !== 0) return
     clearTimeout(timer.current)
-    setPhase('holding')
+    turn('holding')
     timer.current = setTimeout(complete, thresholds['hold-to-complete'])
   }
   const release = () => {
-    if (phase !== 'holding') return
+    // Let go of a hold, and of nothing else: once the time is up the hold is over, and the
+    // pointer's going is no early release, whether or not the control has been drawn since.
+    if (now.current !== 'holding') return
     clearTimeout(timer.current)
-    setPhase('released')
+    turn('released')
     // It says to keep holding for as long as a toast would say it, and is then as it was
     // (02-components §4.1: released early, it returns to idle). A row touched once is not left
     // saying it.
     timer.current = setTimeout(() => {
-      setPhase('idle')
+      turn('idle')
     }, thresholds['toast-dwell'])
   }
 
@@ -159,10 +171,10 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
       <button
         type="button"
         className={a11y.visuallyHidden}
-        aria-disabled={settled || undefined}
+        aria-disabled={settled(phase) || undefined}
         onClick={(event) => {
           event.stopPropagation()
-          if (!settled) complete()
+          if (!settled(now.current)) complete()
         }}
       >
         {label}

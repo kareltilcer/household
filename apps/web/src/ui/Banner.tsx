@@ -102,16 +102,19 @@ export function Banner({
 
 /**
  * The offline bar (02-components §2, 06-clients §5): persistent, unobtrusive, and never in the
- * way of what it sits above. A read looks the same with it as without.
+ * way of what it sits above. A read looks the same with it as without. It is drawn when the
+ * connection goes and is said politely then, so it is drawn before its sentence, as a banner
+ * that is announced is.
  */
 export function OfflineBar() {
   const t = useTranslate()
+  const worded = useDrawnFirst(true)
   return (
     <div className={styles.offline} role="status">
       <span className={styles.offlineGlyph}>
         <StatusIcon status="offline" />
       </span>
-      <span>{t('ui.offline.bar')}</span>
+      {worded ? <span>{t('ui.offline.bar')}</span> : null}
     </div>
   )
 }

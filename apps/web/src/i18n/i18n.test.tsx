@@ -70,6 +70,18 @@ describe('dates and numbers', () => {
     expect(() => en.day('2026-03-01T00:00:00Z')).toThrow(RangeError)
   })
 
+  it('refuses a day no calendar has, and never shows the one it would roll over to', () => {
+    for (const day of ['2026-02-31', '2026-02-29', '2026-13-01', '2026-00-10', '2026-04-00']) {
+      expect(() => en.day(day), day).toThrow(RangeError)
+    }
+    expect(en.day('2024-02-29', 'long')).toBe('29 February 2024')
+  })
+
+  it('reads a year as it is written, the first hundred among them', () => {
+    expect(en.day('0099-12-31', 'long')).toBe('31 December 99')
+    expect(en.day('0001-01-01', 'long')).toBe('1 January 1')
+  })
+
   it('shows an instant in the zone its caller names, and assumes none', () => {
     const at = '2026-03-28T23:30:00Z'
     expect(en.instant(at, 'Europe/Prague')).toBe('29 Mar 2026, 00:30')

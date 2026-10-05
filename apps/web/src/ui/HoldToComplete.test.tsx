@@ -162,6 +162,51 @@ describe('holding', () => {
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
 
+  it('stays completed when the pointer is let go in the instant the hold ends', () => {
+    const onComplete = vi.fn()
+    draw(<Hold onComplete={onComplete} />)
+    fireEvent.pointerDown(ring())
+    // The hold's timer and the release in one turn, with nothing drawn between them: what the
+    // control last drew still says it is held.
+    act(() => {
+      vi.advanceTimersByTime(2000)
+      fireEvent.pointerUp(ring())
+    })
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    expect(phase()).toBe('completed')
+    expect(screen.getByRole('status')).toHaveTextContent('Completed')
+    // And it is not taken back to idle by the word of a release that was none.
+    advance(5000)
+    expect(phase()).toBe('completed')
+    fireEvent.pointerDown(ring())
+    advance(2000)
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays completing, then completed, when the pointer is let go as a slow completion begins', async () => {
+    let finish: () => void = () => undefined
+    const onComplete = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+    )
+    draw(<Hold onComplete={onComplete} />)
+    fireEvent.pointerDown(ring())
+    act(() => {
+      vi.advanceTimersByTime(2000)
+      fireEvent.pointerLeave(ring())
+    })
+    expect(phase()).toBe('completing')
+    await act(async () => {
+      finish()
+      await Promise.resolve()
+    })
+    expect(phase()).toBe('completed')
+    advance(5000)
+    expect(phase()).toBe('completed')
+  })
+
   it('is idle again, and completes again, where its owner draws one of its own for what was undone', () => {
     // It stays completed for as long as it is drawn. A row whose completion was undone, or
     // refused by the server, draws its control afresh, by a key that changes with it.
