@@ -120,6 +120,9 @@ jobs:
           require-lockfile: true
       - name: Typecheck, lint and test
         run: pnpm exec turbo run typecheck lint test
+      # The clients' stylesheets: no raw colour and no primitive token (06-clients §3).
+      - name: Stylesheets
+        run: pnpm run lint:css
       - name: Format (Prettier)
         run: pnpm run format:check
 

@@ -4,6 +4,8 @@
 import eslint from '@eslint/js'
 import { defineConfig, globalIgnores } from 'eslint/config'
 import tseslint from 'typescript-eslint'
+// The lists the stylesheets' check reads too (tooling/src/stylesheets.ts).
+import { colourFunctions, hexDigits, namedColours, primitive } from './tooling/colours.js'
 
 // 06-clients §8: "zero suppressions without a linked issue". A suppression cites the issue
 // that removes it as `#123` or an `…/issues/123` link.
@@ -244,6 +246,233 @@ const noLiteralStrings = {
   },
 }
 
+/**
+ * 06-clients §3 and §8 (D-152): application code spends colour through @household/tokens'
+ * semantic and component tokens, so that a screen follows its theme and every combination it
+ * draws is a declared contrast pair. In client code it reports:
+ *
+ * - a raw colour in a string or a template: a hex colour, or a colour function (`rgb()`,
+ *   `hsl()`, `oklch()`, …). `color-mix()` over tokens is no raw colour;
+ * - a named colour (`white`, `red`) as the value of a property or a prop that takes a colour,
+ *   alone or inside a shorthand (`border: '1px solid black'`). It is that value wherever the
+ *   value is chosen or built: a branch of a conditional, an operand of `&&`, `||`, `??` or a
+ *   concatenation, an interpolation, an element of an array (`colors={['white', 'black']}`), a
+ *   property of an object the prop takes (`trackColor={{ false: 'grey' }}`), a destructured
+ *   prop's default, or under a type assertion. A member it is assigned to is such a property
+ *   (`node.style.color = 'red'`), and so is a class's own;
+ * - a primitive: an import of `@household/tokens/primitives`, or a ramp's custom property
+ *   (`--neutral-200`) in a string.
+ *
+ * A `#` in an attribute or a property that names or links, not paints (`href="#add"`, a
+ * location's `hash`, written out or assigned), starts no colour, and neither does what a `url()`
+ * holds, which refers to an element (`fill="url(#fade)"`). Anywhere else a string of a hex
+ * colour's shape is taken for one: a selector or a number that spells one (`'#add'`, `'#123'`)
+ * is not told from a colour handed to a function, which is the commoner of the two in a client.
+ * A named colour is looked for only where a colour goes, since its word is a word everywhere
+ * else, so one held in a variable and spent by that name passes: the reviews' to catch. A
+ * relative colour (`rgb(from var(--accent) r g b)`) is a colour function as any other, since its
+ * channels may be written out: a tint is a `color-mix()`. The space, radius, type and motion
+ * scales are spent by name and are not this rule's.
+ * @type {import('eslint').Rule.RuleModule}
+ */
+const semanticTokens = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Forbid raw colours and primitive tokens in client code (06-clients §3, D-152)',
+    },
+    schema: [],
+    messages: {
+      raw:
+        'A raw colour is not a token (06-clients §3): name a semantic or a component token of ' +
+        '@household/tokens, whose value follows the theme.',
+      primitive:
+        'A primitive is the semantic layer’s alone (06-clients §3, D-152): name a semantic or a ' +
+        'component token of @household/tokens.',
+    },
+  },
+  create(context) {
+    // A hex colour inside a text: not where the `#` is part of a word, an entity or an address,
+    // and not what a `url()` holds, which is a fragment.
+    const hex = new RegExp(String.raw`(?<![\w&#/-])(?<!url\(\s*["']?)#${hexDigits}(?![\w-])`, 'i')
+    const colourFunction = new RegExp(
+      String.raw`(?<![\w-])(?:${[...colourFunctions].join('|')})\(`,
+      'i',
+    )
+    const primitives = '@household/tokens/primitives'
+    // Props and properties whose value is a colour, or a shorthand that holds one, under the
+    // name a style object gives them, and every custom property, as the stylesheets' check has
+    // it. `filter` is not among them: in an object it names too much else for its
+    // `drop-shadow()` to be read for a colour's name.
+    const takesColour =
+      /^(?:--.+|color|fill|stroke|background(?:Image)?|outline|border(?:Top|Right|Bottom|Left|(?:Block|Inline)(?:Start|End)?|Image)?|columnRule|boxShadow|textShadow|textDecoration|WebkitTextStroke|.*[Cc]olors?)$/
+    // Attributes that name or link: a `#` in one starts a fragment or an id, never a colour.
+    const names =
+      /^(?:href|to|id|htmlFor|key|name|testID|xlinkHref|xlink:href|data-.+|aria-(?:controls|labelledby|describedby|owns|activedescendant))$/
+    // The properties of an object that do: a link's `href` and a location's `hash`. `to`,
+    // `name`, `key` and `id` name anything in an object: `{ from: '#000', to: '#fff' }`.
+    const nameProperties = /^(?:href|xlinkHref|hash)$/
+
+    /**
+     * @param {string} name A prop's or a property's name
+     * @returns {string} It as a style object spells it: `background-color` as `backgroundColor`
+     */
+    function camelCased(name) {
+      if (name.startsWith('--')) return name
+      return name.replace(/-([a-z])/g, (_, letter) => String(letter).toUpperCase())
+    }
+
+    /**
+     * @param {any} node A string or a template element
+     * @returns {{ attribute: boolean, name: string }[]} The props and the properties it is the
+     *   value of, the nearest first: its own, and each one whose value it is a part of
+     */
+    function places(node) {
+      const found = []
+      let value = node
+      for (let parent = node.parent; parent; value = parent, parent = parent.parent) {
+        switch (parent.type) {
+          // What a value passes through on its way to the prop or the property that takes it.
+          case 'TemplateLiteral':
+          case 'JSXExpressionContainer':
+          case 'ArrayExpression':
+          case 'ObjectExpression':
+          case 'LogicalExpression':
+          case 'TSAsExpression':
+          case 'TSSatisfiesExpression':
+          case 'TSNonNullExpression':
+            break
+          case 'ConditionalExpression':
+            // Its branches are what it gives; its test is not.
+            if (parent.test === value) return found
+            break
+          case 'BinaryExpression':
+            if (parent.operator !== '+') return found
+            break
+          case 'AssignmentPattern':
+            // A destructured prop's default, `{ color = 'black' }`, is that prop's value.
+            if (parent.right !== value) return found
+            break
+          case 'Property':
+            if (parent.value !== value || parent.computed) return found
+            found.push({
+              attribute: false,
+              name: parent.key.type === 'Identifier' ? parent.key.name : String(parent.key.value),
+            })
+            break
+          case 'PropertyDefinition':
+            // A class's property, `color = 'red'`, is one as an object's is.
+            if (parent.value === value && !parent.computed) {
+              found.push({
+                attribute: false,
+                name: parent.key.type === 'Literal' ? String(parent.key.value) : parent.key.name,
+              })
+            }
+            return found
+          case 'AssignmentExpression': {
+            // And so is the member a value is assigned to: `node.style.color = 'red'`,
+            // `location.hash = '#add'`. A member under a computed name is one where the name
+            // is written out, `style['color']`.
+            const { left } = parent
+            if (parent.right !== value || left.type !== 'MemberExpression') return found
+            if (!left.computed) found.push({ attribute: false, name: left.property.name })
+            else if (left.property.type === 'Literal' && typeof left.property.value === 'string') {
+              found.push({ attribute: false, name: left.property.value })
+            }
+            return found
+          }
+          case 'JSXAttribute':
+            found.push({
+              attribute: true,
+              name:
+                parent.name.type === 'JSXNamespacedName'
+                  ? `${parent.name.namespace.name}:${parent.name.name.name}`
+                  : parent.name.name,
+            })
+            return found
+          default:
+            return found
+        }
+      }
+      return found
+    }
+
+    /**
+     * @param {any} node A string or a template element
+     * @param {string} text What it says
+     */
+    function check(node, text) {
+      if (primitive.test(text)) {
+        context.report({ node, messageId: 'primitive' })
+        return
+      }
+      const held = places(node)
+      const [nearest] = held
+      if (nearest && (nearest.attribute ? names : nameProperties).test(nearest.name)) return
+      const named =
+        held.some((place) => takesColour.test(camelCased(place.name))) &&
+        text.split(/[\s,()]+/).some((word) => namedColours.has(word.toLowerCase()))
+      if (hex.test(text) || colourFunction.test(text) || named) {
+        context.report({ node, messageId: 'raw' })
+      }
+    }
+
+    /**
+     * @param {any} source An import's or an export's source, which may be the primitives: a
+     *   string, or a template that is one, with nothing interpolated
+     */
+    function checkSource(source) {
+      const value =
+        source?.type === 'Literal'
+          ? source.value
+          : source?.type === 'TemplateLiteral' && source.expressions.length === 0
+            ? source.quasis[0]?.value.cooked
+            : undefined
+      if (
+        typeof value === 'string' &&
+        (value === primitives || value.startsWith(`${primitives}/`))
+      ) {
+        context.report({ node: source, messageId: 'primitive' })
+      }
+    }
+
+    return {
+      /** @param {any} node */
+      Literal(node) {
+        // A module's name is no colour, whatever it spells: the sources are checked below.
+        if (typeof node.value !== 'string' || node.parent.source === node) return
+        check(node, node.value)
+      },
+      /** @param {any} node */
+      TemplateElement(node) {
+        check(node, node.value.cooked ?? node.value.raw)
+      },
+      /** @param {any} node */
+      ImportDeclaration(node) {
+        checkSource(node.source)
+      },
+      /** @param {any} node */
+      ImportExpression(node) {
+        checkSource(node.source)
+      },
+      /** @param {any} node */
+      ExportNamedDeclaration(node) {
+        checkSource(node.source)
+      },
+      /** @param {any} node */
+      ExportAllDeclaration(node) {
+        checkSource(node.source)
+      },
+      /** @param {any} node */
+      CallExpression(node) {
+        if (node.callee.type === 'Identifier' && node.callee.name === 'require') {
+          checkSource(node.arguments[0])
+        }
+      },
+    }
+  },
+}
+
 export default defineConfig(
   // design/ holds the clickable ES5 prototype, a reference that never ships; Prettier and
   // CodeQL skip it too. An editor that lints it with this file would flag every script.
@@ -271,6 +500,7 @@ export default defineConfig(
         rules: {
           'linked-suppressions': linkedSuppressions,
           'no-literal-strings': noLiteralStrings,
+          'semantic-tokens': semanticTokens,
         },
       },
     },
@@ -294,9 +524,10 @@ export default defineConfig(
     },
   },
   {
-    // Architecture test 7: the clients render words from the catalogs, never literals.
+    // Architecture test 7: the clients render words from the catalogs, never literals. And
+    // 06-clients §3: they spend colour through the semantic tokens, never raw or by a primitive.
     files: ['apps/**'],
-    rules: { 'household/no-literal-strings': 'error' },
+    rules: { 'household/no-literal-strings': 'error', 'household/semantic-tokens': 'error' },
   },
   {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs', '**/*.jsx'],

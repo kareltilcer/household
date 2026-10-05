@@ -4,14 +4,41 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./web": "./web/index.ts",
+    "./native": "./native/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings=0"
+    "vendor": "node scripts/vendor.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit --project web && tsc --noEmit --project native",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@household/i18n": "workspace:*",
+    "@household/tokens": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-native-svg": "15.15.5"
+  },
+  "peerDependenciesMeta": {
+    "react-native-svg": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "lucide-static": "1.48.0",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-native": "catalog:",
+    "react-native-svg": "15.15.5",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

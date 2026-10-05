@@ -9,8 +9,11 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@household/tokens": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
+    "postcss": "8.5.28",
+    "postcss-value-parser": "4.2.0",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",

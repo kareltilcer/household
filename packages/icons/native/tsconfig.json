@@ -1,0 +1,9 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    // The native components draw with react-native-svg on React Native: its own globals, from
+    // react-native's types, and neither the DOM's nor Node's.
+    "types": ["react-native"]
+  },
+  "include": ["."]
+}

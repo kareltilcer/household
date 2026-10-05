@@ -81,11 +81,12 @@ needs all of those and a light default.
 
 ### Tokens
 
-One token set, three layers: **primitives** (raw scales — colour ramps, a type scale, an 8-point
-space scale, radii, elevation, motion durations) → **semantic** (`surface`, `surface-raised`,
-`text-primary`, `text-muted`, `accent`, `danger`, `warning`, `positive`, `border`, `focus`) →
-**component**. Only semantic tokens appear in application code; a primitive used directly is a
-lint error.
+One token set, three layers of colour: **primitives** (the raw colour ramps) → **semantic**
+(`surface`, `surface-raised`, `text-primary`, `text-muted`, `accent`, `danger`, `warning`,
+`positive`, `border`, `focus`) → **component**. Application code spends colour only through
+semantic and component tokens; a primitive used directly, or a raw colour, is a lint error. Beside
+them are the **scales** (a type scale, an 8-point space scale, radii, elevation, motion durations),
+whose steps application code spends by name (**D-152**).
 
 **Themes**: light (default), dark, and system. Both themes are first-class and every screen is
 reviewed in both. Per-module accent hues distinguish modules without ever being the only carrier
@@ -165,8 +166,8 @@ line is whether a wrong answer costs anything.
 Both clients, in CI, on every pull request:
 
 - Type check with the strict configuration; zero errors, zero suppressions without a linked issue.
-- Lint, including the custom rules: no literal user-facing strings, no primitive design tokens in
-  application code, no `any`, no float money.
+- Lint, including the custom rules: no literal user-facing strings, no primitive design tokens and
+  no raw colours in application code, no `any`, no float money.
 - Unit tests, including the shared domain test vectors.
 - Component tests for every stateful component.
 - **End-to-end tests on the critical paths**: register → create household → invite → accept;

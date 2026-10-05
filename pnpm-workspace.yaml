@@ -28,6 +28,11 @@ catalog:
   '@types/node': ^24.0.0
   eslint: ^10.11.0
   prettier: 3.9.9
+  # One React across the workspace: @household/sync's React Native build, @household/icons'
+  # components and, from items 24 and 28, both apps. react-dom is react's own version.
+  react: 19.3.0
+  react-dom: 19.3.0
+  react-native: 0.87.1
   # typescript-eslint 8 supports TypeScript <6.1, so TypeScript 7 waits for it.
   typescript: ~6.0.3
   typescript-eslint: ^8.70.1

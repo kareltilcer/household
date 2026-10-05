@@ -1,5 +1,8 @@
-# Generated or vendored.
+# Generated or vendored. The tokens' stylesheet and the Lucide glyphs are committed, and a test
+# holds each of the two to what generates it.
 pnpm-lock.yaml
+packages/tokens/tokens.css
+packages/icons/src/lucide.json
 **/dist/
 **/coverage/
 **/.turbo/

@@ -1,7 +1,10 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    // colours.js is JavaScript because eslint.config.js imports it too: checked as the rest is.
+    "allowJs": true,
+    "checkJs": true
   },
-  "include": ["src"]
+  "include": ["src", "colours.js"]
 }
