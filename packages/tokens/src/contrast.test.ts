@@ -32,15 +32,19 @@ describe.each(themes)('the declared pairs in %s', (theme) => {
 })
 
 describe('the declared pairs', () => {
-  // The design's 111, and the Household family's accent under its own name, which the design
-  // tests as `accent`: on the three grounds, and under its ink. Counted, because a pair that
-  // leaves the list while each of its tokens stays in another fails no other test.
-  it('are 115', () => {
+  // The design's 111; the Household family's accent under its own name, which the design tests
+  // as `accent`: on the three grounds, and under its ink; and the three the web's sheets and menus
+  // spend on the overlay (plan item 24). Counted, because a pair that leaves the list while each
+  // of its tokens stays in another fails no other test.
+  it('are 118', () => {
     // The two texts on four surfaces; on each ground the link, seven accents, four statuses,
-    // the strong border and the focus ring; the inks on seven accents, danger and the inverse
-    // surface; eight series on two surfaces and the axis; thirteen statuses on three grounds.
-    expect(pairs).toHaveLength(2 * 4 + 3 * (1 + 7 + 4 + 1 + 1) + (7 + 1 + 1) + (8 * 2 + 1) + 13 * 3)
-    expect(pairs).toHaveLength(115)
+    // the strong border and the focus ring; on the overlay the strong border, the focus ring and
+    // danger; the inks on seven accents, danger and the inverse surface; eight series on two
+    // surfaces and the axis; thirteen statuses on three grounds.
+    expect(pairs).toHaveLength(
+      2 * 4 + 3 * (1 + 7 + 4 + 1 + 1) + 3 + (7 + 1 + 1) + (8 * 2 + 1) + 13 * 3,
+    )
+    expect(pairs).toHaveLength(118)
   })
 
   it('name no pair twice', () => {
