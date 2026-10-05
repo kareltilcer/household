@@ -155,6 +155,8 @@ describe('asking again', () => {
       [404, 'not_found'],
       [409, 'version_conflict'],
       [422, 'validation_failed'],
+      // Until its Retry-After has passed: asked again at once, it is refused and counted again.
+      [429, 'rate_limited'],
     ] as const) {
       expect(isRetryable(thrown(status, code)), code).toBe(false)
     }

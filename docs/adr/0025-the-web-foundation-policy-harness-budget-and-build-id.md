@@ -58,7 +58,11 @@ closes the dialog whatever the page says: its owner is told, as it is when Escap
 that keeps it open, a save under way or an editor that asks before it discards, has it shown
 again. A dialog drawn inside another, a confirmation inside a side panel, opens after it: the
 platform stacks modals in the order they open, and React runs a child's effect before its
-parent's, so two that become open together would be opened inside out. A menu hands the focus
+parent's, so two that become open together would be opened inside out. A dialog taken away while
+it is open, with the screen that drew it or by an owner that draws it only while it is open, is
+closed before React takes it out of the document, and a dialog open inside it before it: the
+platform gives the focus back only from a dialog that is in the document still, and to nothing
+another modal holds inert. A menu hands the focus
 back to its trigger before the chosen item acts, so that a confirmation the item opens gives the
 focus back there, and not to an item that is gone. And Radix holds every toast's dwell while one
 is pointed at, letting go only while a toast is shown, so each run of toasts, from the first shown
@@ -128,7 +132,9 @@ one word. A route marked dev-only there is served by no other build, whatever na
 it. The end-to-end suite runs against `dist/e2e` served by
 `vite preview` with the policy as
 a header, and every test fails on a `securitypolicyviolation` and on a console error. Its script
-writes that build before it runs, so that no run is of an older build's files. `dist/www`
+writes that build before it runs, so that no run is of an older build's files, and the server is
+the suite's own, started for the run: one found listening there already is refused, since nothing
+says which build it serves. `dist/www`
 is written without source maps, which would hand the app's sources to whoever asked a deployment
 for them; `dist/e2e` has them. The build's own plugin refuses to write a build of any mode but
 `e2e` that holds a module of `src/dev`, whatever imported it. `build/check.ts` reads `dist/www`
@@ -190,7 +196,9 @@ server refused, draws a control of its own for it, by a `key`.
 modal dialog, so what the platform does, a dialog's focus, a menu under the keyboard, a 44 pt
 target, a contained overflow, is Playwright's, measured on live rectangles. The text scale is the
 root's computed font size against 16 px, so the browser's own setting counts as `data-scale` does;
-the empty state's illustration is not drawn from 200 %.
+a browser tells a page nothing of that setting changing, no resize either, so the size is measured
+again when the page is looked at again, a member having changed it away from the page; the empty
+state's illustration is not drawn from 200 %.
 
 **The API client is `@household/api`'s, same-origin.** It names itself in `Household-Client`, sends
 the readable CSRF cookie's value with each unsafe request, as it is written and not decoded, since
@@ -223,6 +231,9 @@ waits in the page, and is sent from there when the connection is back.
 | The mode of the dev pages given to the router as a constant the build defines | It would be told to Vite, to Vitest's own configuration and to TypeScript, three places kept in step by nothing. The literal is held to `devPagesMode` by one test, which fails before a build would, and the plugin refuses a build that kept the pages |
 | The focus Radix puts on the toasts' region left there after a pointer's press | The toasts beside the one closed, and one its own Undo raised, would stay until the member pressed somewhere else. The region gives up a focus of its own, which is no event made up for Radix: the browser tells it the focus has left |
 | The table's column of sync marks timed by the table | A second clock to keep in step with each mark's own. A rule of the stylesheet draws the column while a mark is drawn in it, and has nothing to keep in step |
+| The mark of a write that waited kept through the moment its sync is given, so that it does not go and come back where the sync runs long | Every write waits before it is sent, one made with a connection for an instant (ADR 0019). Kept, *Not sent yet* would be drawn for the length of every ordinary write, of which 06-clients §5 shows nothing. Telling a write that waited from one that did not is a clock on how long each has waited, for a mark that is away for less than a second |
+| An element one rem wide, observed, to follow the browser's text size as it changes | It would follow a setting changed with the page in view, in a window beside it, for the one thing the measure decides: whether an empty state draws its illustration. Changed in the browser's settings or the device's, the page is looked at again afterwards, and is measured then |
+| A `429` asked again by the query client | It asks again after one second and after two, whatever time `Retry-After` names: a request sent before that time is refused, and counted against the limit that refused the first. Waiting it out is the screen's that met it |
 | The policy as a header alone | Nothing serves the app yet, and the PRD has the app set it. A page that carries its policy is under it wherever it is opened |
 | The display modes set by an inline script with its hash in the policy | The hash would be a second copy of the script, kept in step by hand. A file is fetched once and cached, from the page's own origin |
 | No script in the head: the app sets the modes when it starts | A member who chose dark on a light device would see a light page on every load until the module had run |

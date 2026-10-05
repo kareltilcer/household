@@ -154,6 +154,38 @@ test.describe('a dialog', () => {
     await expect(panel).toBeHidden()
     await expect(page.getByRole('button', { name: 'Add a note' })).toBeFocused()
   })
+
+  test('as a side panel drawn only while it is open, gives the focus back when it is taken away, its question with it', async ({
+    page,
+  }) => {
+    await open(page, primitives)
+    const opener = page.getByRole('button', { name: 'Rename the cellar meter' })
+    const panel = page.getByRole('dialog', { name: 'Rename the cellar meter' })
+    const question = page.getByRole('dialog', { name: 'Discard the name?' })
+
+    // Its owner draws it for as long as it is open, and saved it is gone from the page. The
+    // platform gives the focus back from a dialog that is in the document still, and from one
+    // taken out of it gives none: the focus would be the page's, at its top.
+    await opener.click()
+    await expect(panel).toBeVisible()
+    await panel.getByRole('button', { name: 'Save the name' }).click()
+    await expect(panel).toHaveCount(0)
+    await expect(opener).toBeFocused()
+
+    // Taken away with its question open over it, the two at once: the question holds the page
+    // inert until it is closed, the opener with it, so it is closed before the panel is.
+    await page.keyboard.press('Enter')
+    await expect(panel).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(question.getByRole('button', { name: 'Keep renaming' })).toBeFocused()
+    await question.getByRole('button', { name: 'Discard the name' }).click()
+    await expect(panel).toHaveCount(0)
+    await expect(opener).toBeFocused()
+
+    // Nothing is left holding the page inert: it opens again.
+    await page.keyboard.press('Enter')
+    await expect(panel).toBeVisible()
+  })
 })
 
 test('a checkbox that is neither on nor off is neither still after a press, where its owner says so', async ({

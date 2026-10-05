@@ -112,6 +112,30 @@ describe('a dialog', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+  it('is closed while it is in the document still, and a dialog open inside it before it', () => {
+    // What the platform asks before it gives the focus back: a dialog taken out of the document
+    // is no modal any more, and one closed while a modal inside it is open gives the focus to a
+    // page that modal holds inert. The focus itself is the browser's (e2e/primitives.spec.ts).
+    const closed: { readonly title: string | undefined; readonly inDocument: boolean }[] = []
+    vi.spyOn(HTMLDialogElement.prototype, 'close').mockImplementation(function close(
+      this: HTMLDialogElement,
+    ) {
+      if (!this.hasAttribute('open')) return
+      closed.push({ title: this.querySelector('h2')?.textContent, inDocument: this.isConnected })
+      this.removeAttribute('open')
+    })
+    const { unmount } = draw(
+      <Sheet open onClose={() => undefined} title={words.meter}>
+        <Dialog open onClose={() => undefined} title={words.discard} />
+      </Sheet>,
+    )
+    unmount()
+    expect(closed).toEqual([
+      { title: words.discard, inDocument: true },
+      { title: words.meter, inDocument: true },
+    ])
+  })
+
   it('tells its owner when the platform closes it behind its back', async () => {
     const onClose = vi.fn()
     draw(<Confirm onClose={onClose} />)

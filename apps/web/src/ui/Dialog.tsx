@@ -8,8 +8,8 @@ import { BaseIcon } from '@household/icons/web'
 import {
   createContext,
   use,
-  useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -74,7 +74,7 @@ function Surface({
   /** How many times the platform has closed it behind its owner's back. */
   const [closedBehind, setClosedBehind] = useState(0)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = dialog.current
     if (element === null || !open || !aroundShown) return undefined
     if (!element.open) {
@@ -89,6 +89,13 @@ function Surface({
       leave()
       setShown(false)
       // Closed by its owner, or with the screen that held it, so the page is not left inert.
+      // This is a layout effect for the second of those: React undoes one before it takes the
+      // dialog out of the document, and the platform gives the focus back to what opened a
+      // dialog only from one that is in it still. A dialog open inside this one goes first.
+      // Taken away with it, React would close it after, and until it is closed it holds what
+      // opened this one inert, where no focus can be given.
+      const inside = element.querySelectorAll<HTMLDialogElement>('dialog[open]')
+      for (const nested of [...inside].reverse()) nested.close()
       if (element.open) element.close()
     }
     // What takes the focus is asked as it opens, and not again while it stays open. Closed by

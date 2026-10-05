@@ -73,18 +73,19 @@ export function DisplayProvider({ children }: { readonly children: ReactNode }) 
   }, [preferences])
 
   useEffect(() => {
-    // The browser's own text size changes the root's font size with no event of its own: a
-    // resize is what a member's change of it, or of the window, raises.
+    // The browser's own text size changes the root's font size and tells the page nothing: no
+    // event of its own, and no resize. A member changes it in the browser's settings or the
+    // device's, away from this page, so it is measured again when the page is looked at again.
     const measure = () => {
       setTextScale(measureTextScale(document.documentElement))
     }
     const follow = (event: StorageEvent) => {
       if (event.key === storageKey || event.key === null) setStored(readPreferences())
     }
-    window.addEventListener('resize', measure)
+    document.addEventListener('visibilitychange', measure)
     window.addEventListener('storage', follow)
     return () => {
-      window.removeEventListener('resize', measure)
+      document.removeEventListener('visibilitychange', measure)
       window.removeEventListener('storage', follow)
     }
   }, [])

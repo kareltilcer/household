@@ -43,6 +43,8 @@ export function Primitives() {
   const [removing, setRemoving] = useState(false)
   const [noting, setNoting] = useState(false)
   const [discarding, setDiscarding] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [abandoning, setAbandoning] = useState(false)
   const meterName = useRef<HTMLInputElement>(null)
   const noteText = useRef<HTMLTextAreaElement>(null)
   const [reading, setReading] = useState('18 402,4')
@@ -174,6 +176,13 @@ export function Primitives() {
             }}
           >
             {sample('Add a note')}
+          </Button>
+          <Button
+            onClick={() => {
+              setRenaming(true)
+            }}
+          >
+            {sample('Rename the cellar meter')}
           </Button>
         </div>
         <Dialog
@@ -315,6 +324,59 @@ export function Primitives() {
             }
           />
         </Sheet>
+        {/* A panel drawn only while it is open, as a screen draws the editor of the row it has
+            chosen, and its question only while it is asked. Taken away open, the two at once,
+            they give the focus back as the ones above do, which are closed by their `open`. */}
+        {renaming ? (
+          <Sheet
+            open
+            onClose={() => {
+              setAbandoning(true)
+            }}
+            title={sample('Rename the cellar meter')}
+            actions={
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setRenaming(false)
+                }}
+              >
+                {sample('Save the name')}
+              </Button>
+            }
+          >
+            <TextField label={sample('New name')} />
+            {abandoning ? (
+              <Dialog
+                open
+                onClose={() => {
+                  setAbandoning(false)
+                }}
+                title={sample('Discard the name?')}
+                actions={
+                  <>
+                    <Button
+                      onClick={() => {
+                        setAbandoning(false)
+                      }}
+                    >
+                      {sample('Keep renaming')}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => {
+                        setAbandoning(false)
+                        setRenaming(false)
+                      }}
+                    >
+                      {sample('Discard the name')}
+                    </Button>
+                  </>
+                }
+              />
+            ) : null}
+          </Sheet>
+        ) : null}
       </Section>
 
       <Section name="Menus">

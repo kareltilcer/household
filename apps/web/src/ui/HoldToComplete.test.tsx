@@ -292,6 +292,24 @@ describe('a completion that takes a while', () => {
     expect(onComplete).toHaveBeenCalledTimes(2)
   })
 
+  it('waits for a promise that is not this page’s own, as for one that is', async () => {
+    let refuse: (reason: Error) => void = () => undefined
+    const waited = new Promise<void>((_, reject) => {
+      refuse = reject
+    })
+    // What a library's own promise, or another window's, is to this page: a `then`, and no
+    // instance of its Promise.
+    const onComplete = () => ({ then: waited.then.bind(waited) })
+    draw(<Hold onComplete={onComplete} />)
+    await userEvent.click(screen.getByRole('button', { name: label }))
+    expect(phase()).toBe('completing')
+    act(() => {
+      refuse(new Error('offline'))
+    })
+    expect(await screen.findByText('Not completed. Try again')).toBeVisible()
+    expect(phase()).toBe('failed')
+  })
+
   it('says a completion that threw failed, as one that was refused did', async () => {
     draw(
       <Hold

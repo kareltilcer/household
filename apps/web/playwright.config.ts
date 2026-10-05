@@ -2,7 +2,9 @@
 // the app, served as a deployment would serve it, under the policy of build/csp.ts. The build is
 // `vite build --mode e2e`, which has the dev-only routes, the twelve-state harness among them.
 // `pnpm run e2e` writes it and then runs the suite, so that no run is of an older build's files:
-// the server below serves whatever `dist/e2e` holds, and is one already running where there is one.
+// the server below serves whatever `dist/e2e` holds. It is the suite's own, started for the run
+// and stopped after it: a server found listening there already is refused and not used, since
+// nothing says which build it serves.
 import { defineConfig, devices } from '@playwright/test'
 import { previewOrigin } from './build/preview.ts'
 
@@ -23,7 +25,7 @@ export default defineConfig({
   webServer: {
     command: 'vite preview --outDir dist/e2e',
     url: previewOrigin,
-    reuseExistingServer: !ci,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 })

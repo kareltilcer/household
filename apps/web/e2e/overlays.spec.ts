@@ -93,9 +93,9 @@ test.describe('under the pseudo-locale, where no control has a name a test can s
 
   test('a confirmation and a side panel, its menu and a toast in it, survive', async ({ page }) => {
     await open(page, primitives, { locale: 'en-XA' })
-    // While none of its dialogs is open, the section's buttons are the three that open one.
+    // While none of its dialogs is open, the section's buttons are the four that open one.
     const openers = section(page, 'dialogs').getByRole('button')
-    await expect(openers).toHaveCount(3)
+    await expect(openers).toHaveCount(4)
 
     await openers.nth(0).click()
     const confirmation = page.getByRole('dialog')

@@ -118,6 +118,20 @@ describe('the display provider', () => {
     expect(shown()).toMatchObject({ scale: '100', textScale: 1 })
   })
 
+  it('measures the text again when the page is looked at again, since nothing tells it of the browser’s own size', () => {
+    rootFollowsScale()
+    draw(<Probe />)
+    expect(shown()).toMatchObject({ scale: '100', textScale: 1 })
+    // The root's font size doubled behind the provider's back, as the browser's own setting
+    // doubles it: changed in its settings, away from this page, with no event here.
+    document.documentElement.setAttribute('data-scale', '200')
+    expect(shown()).toMatchObject({ textScale: 1 })
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(shown()).toMatchObject({ scale: '100', textScale: 2 })
+  })
+
   it('holds for two holders at once, each until it lets go itself', async () => {
     draw(<Probe />)
     await userEvent.click(screen.getByRole('button', { name: 'hold' }))

@@ -41,11 +41,13 @@ export function problemIn(error: unknown): ApiProblem | UnreadableProblem | unde
 }
 
 /**
- * Whether asking again could help. A problem the server stated will be stated again, but for a
- * `5xx`, which is the server's own failure, and a `409 idempotency_in_progress`, which says the
- * first attempt is still running. A request that got no answer at all may get one: that is a
- * member's to ask again, since the transport has already resent it and the query client does
- * not (query.ts).
+ * Whether asking again now could help. A problem the server stated will be stated again, but for
+ * a `5xx`, which is the server's own failure, and a `409 idempotency_in_progress`, which says the
+ * first attempt is still running. A `429` is one that will: it clears when the time its
+ * `Retry-After` names has come, and a request sent before then is refused again and counted
+ * against the limit it met. A request that got no answer at all may get one: that is a member's
+ * to ask again, since the transport has already resent it and the query client does not
+ * (query.ts).
  */
 export function isRetryable(error: unknown): boolean {
   const problem = problemIn(error)

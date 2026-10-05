@@ -39,6 +39,19 @@ export interface HoldToCompleteProps {
   readonly className?: string | undefined
 }
 
+/**
+ * Whether a completion returned something to wait for. A promise is told by its `then`, as the
+ * platform tells one: a library's own, or another window's, is no instance of this page's.
+ */
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof value.then === 'function'
+  )
+}
+
 export function HoldToComplete({ label, onComplete, className }: HoldToCompleteProps) {
   const t = useTranslate()
   const display = useDisplay()
@@ -87,8 +100,8 @@ export function HoldToComplete({ label, onComplete, className }: HoldToCompleteP
       finish('failed')
       return
     }
-    if (result instanceof Promise) {
-      result.then(
+    if (isThenable(result)) {
+      Promise.resolve(result).then(
         () => {
           finish('completed')
         },
