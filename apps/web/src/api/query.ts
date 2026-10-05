@@ -136,6 +136,10 @@ export function isKept(query: Query): boolean {
  * How the cache is persisted: for a day, and for one build. A new build may read the contract
  * differently, so what an older one kept is dropped rather than shown. A query keeps its answer
  * out of it by saying so (`QueryNotes`).
+ *
+ * What is kept is what was read, and no write. Left to itself TanStack stores a mutation that
+ * waits for a connection, with everything it was to send, a password typed at sign-in among it,
+ * and a page that loads it back cannot send it: it has the variables and not the function.
  */
 export function persistOptions(
   persister: Persister,
@@ -145,6 +149,6 @@ export function persistOptions(
     persister,
     maxAge: cacheMaxAge,
     buster: build ?? '',
-    dehydrateOptions: { shouldDehydrateQuery: isKept },
+    dehydrateOptions: { shouldDehydrateQuery: isKept, shouldDehydrateMutation: () => false },
   }
 }

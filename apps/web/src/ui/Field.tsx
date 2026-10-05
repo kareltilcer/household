@@ -234,9 +234,11 @@ export function Stepper({
             inputMode="numeric"
             className={cx(styles.control, styles.numeric, styles.count)}
             value={typed ?? value}
+            // The bounds are the field's own too, and `step` is not: the platform would take it
+            // for the grid a value must lie on, and refuse a form over a whole number typed
+            // between two steps of the buttons, which is a value of this field all the same.
             min={min}
             max={max}
-            step={step}
             disabled={disabled}
             readOnly={readOnly}
             onChange={(event) => {

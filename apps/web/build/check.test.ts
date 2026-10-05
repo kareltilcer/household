@@ -120,6 +120,14 @@ describe('the check of a build', () => {
     expect(passed).toBe(true)
   })
 
+  it('finds no script before the policy of a page that names none', () => {
+    const bare = page().replace(/\s*<(script|link)\b[^>]*>(<\/script>)?/g, '')
+    expect(bare).not.toMatch(/<(script|link)\b/)
+    const { passed, said } = check(build({ 'index.html': bare }))
+    expect(said).not.toContain('before its policy')
+    expect(passed).toBe(true)
+  })
+
   it.each([
     [
       'an initial script over the budget',

@@ -719,12 +719,53 @@ describe('a toast', () => {
     expect(region().contains(document.activeElement)).toBe(true)
   })
 
-  it('is put away by Escape on a page with no dialog open, wherever the focus is', async () => {
+  /** The list the toasts are drawn in, which is what the key that reaches them puts the focus on. */
+  function toasts(): HTMLElement {
+    const list = region().querySelector('ol')
+    if (list === null) throw new Error('the toasts have no list')
+    return list
+  }
+
+  it('stays through an Escape pressed on a page with nothing open, where the focus is not among the toasts', async () => {
+    draw(<Clear undo={() => undefined} />)
+    const clear = screen.getByRole('button', { name: 'clear' })
+    await userEvent.click(clear)
+    await screen.findByText(words.cleared)
+    expect(clear).toHaveFocus()
+    // The key is for what the focus is in, a field that takes it back or a search that clears:
+    // a toast is no layer the member opened, and its Undo is not put away with their Escape.
+    expect(escape()).toBe(true)
+    expect(screen.getByText(words.cleared)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeVisible()
+  })
+
+  it('is put away by Escape from the toasts’ own region, reached by its key', async () => {
     draw(<Clear undo={() => undefined} />)
     await userEvent.click(screen.getByRole('button', { name: 'clear' }))
     await screen.findByText(words.cleared)
-    escape()
+    fireEvent.keyDown(document.body, { key: 'F8', code: 'F8' })
+    expect(toasts()).toHaveFocus()
+    expect(escape()).toBe(false)
     expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+  })
+
+  it('keeps the focus in its region for a member who put it away by Escape, whatever a pointer pressed before', async () => {
+    draw(<Clear />)
+    await userEvent.click(screen.getByRole('button', { name: 'clear' }))
+    await userEvent.click(screen.getByRole('button', { name: 'clear' }))
+    const [first] = await screen.findAllByText(words.cleared)
+    if (first === undefined) throw new Error('no toast is shown')
+    // A press on a toast's words closes nothing, and the pointer goes elsewhere.
+    fireEvent.pointerDown(first)
+    fireEvent.pointerUp(first)
+    // Then the keyboard: the key that reaches the toasts, and Escape there.
+    fireEvent.keyDown(document.body, { key: 'F8', code: 'F8' })
+    expect(toasts()).toHaveFocus()
+    escape()
+    expect(screen.getAllByText(words.cleared)).toHaveLength(1)
+    // Closed by a key: the member is among the toasts still, and is not dropped out of them
+    // for a press that closed nothing.
+    expect(region().contains(document.activeElement)).toBe(true)
   })
 
   it('goes when its dwell is over, after an Escape that was its dialog’s', () => {

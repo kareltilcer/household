@@ -2,8 +2,8 @@
 // real window in which to take it back. Undo is a button, never a gesture, and it stays for the
 // whole dwell (the tokens' `toast-dwell`). Over Radix's toast for what a toast has to do: be
 // announced, pause while it is pointed at or focused, and be reached by a key. Escape puts a toast
-// away from among the toasts, and on a page with nothing else open; pressed in a menu it is the
-// menu's, and pressed elsewhere under a modal it is the modal's, and the toast keeps its dwell.
+// away from among the toasts, and from nowhere else: pressed anywhere else the key is for what the
+// focus is in, a menu, a modal or a field of the page, and the toast keeps its dwell.
 import { controls } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { thresholds } from '@household/tokens'
@@ -55,9 +55,6 @@ const hotkey = 'F8'
  * they take while one is shown inside it. A side panel reads it (Dialog.module.css).
  */
 const toastsRoom = '--toasts-room'
-
-/** What a menu is to assistive technology, and so how the toasts know the focus is in one. */
-const inMenu = '[role="menu"]'
 
 export function ToastProvider({ children }: { readonly children: ReactNode }) {
   const t = useTranslate()
@@ -182,22 +179,17 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
               const key = escape.current
               // Still on its way through the page: this close is that key's doing.
               if (key !== null && key.eventPhase !== Event.NONE) {
-                const focused = document.activeElement
-                if (list.current?.contains(focused) === true) {
-                  // Pressed among the toasts, it puts the toast away and is spent there: the
-                  // platform is not left the key to ask the dialog with.
-                  key.preventDefault()
-                } else if ((focused?.closest(inMenu) ?? null) !== null) {
-                  // Pressed in a menu, it is the menu's. Radix hands the key to whatever it
-                  // layered last, which is a toast raised while the menu was open, and the menu
-                  // never hears of it: the toast stays, and the menu closes by the key itself,
-                  // and spends it (Menu).
-                  return
-                } else if (modal !== null) {
-                  // Pressed elsewhere under a modal, it is the modal's, which the platform
-                  // asks: the toast stays for its dwell, on the page again if the modal goes.
-                  return
-                }
+                // Pressed anywhere but among the toasts, it is not theirs, and a toast is no
+                // layer a member opened: the key is for what the focus is in. A menu closes by
+                // it and spends it (Menu), though Radix handed it to a toast it layered later;
+                // under a modal the platform asks the modal with it; in a field of the page it
+                // is the field's. The toast stays for its dwell, its Undo with it.
+                if (list.current?.contains(document.activeElement) !== true) return
+                // Pressed among the toasts, it puts the toast away and is spent there: the
+                // platform is not left the key to ask the dialog with. And it is a key that
+                // closes this toast, whatever a pointer pressed on one before it.
+                key.preventDefault()
+                pressed.current = false
               }
               remove(toast.id)
             }}

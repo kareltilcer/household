@@ -14,7 +14,9 @@ export interface ListProps {
 
 export function List({ label, children }: ListProps) {
   return (
-    <ul className={styles.list} aria-label={label}>
+    // Said to be a list, though it is one already: drawn without markers, as every list here is
+    // (styles/base.css), WebKit takes a list for layout and tells assistive technology of none.
+    <ul className={styles.list} role="list" aria-label={label}>
       {children}
     </ul>
   )

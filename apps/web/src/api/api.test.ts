@@ -1,4 +1,4 @@
-import { dehydrate } from '@tanstack/react-query'
+import { dehydrate, MutationObserver, onlineManager } from '@tanstack/react-query'
 import type { PersistedClient } from '@tanstack/react-query-persist-client'
 import type { UseStore } from 'idb-keyval'
 import { describe, expect, it, vi } from 'vitest'
@@ -306,5 +306,32 @@ describe('the cache kept in this browser', () => {
     ])
     // Kept out of what is stored, and not out of the cache the screen reads from.
     expect(client.getQueryData(['search', 'ce'])).toBe('an answer')
+  })
+
+  it('holds no write: one that waits for a connection is stored nowhere, with what it was to send', async () => {
+    const client = createQueryClient()
+    const sent = vi.fn((credentials: { readonly password: string }) => Promise.resolve(credentials))
+    // As the app's provider mounts it: a client that hears the connection come and go.
+    client.mount()
+    onlineManager.setOnline(false)
+    try {
+      const signIn = new MutationObserver(client, { mutationFn: sent })
+      void signIn.mutate({ password: 'correct horse battery staple' })
+      await vi.waitFor(() => {
+        expect(signIn.getCurrentResult().isPaused).toBe(true)
+      })
+      // TanStack's own rule would store it, variables and all, for a page that could not send it.
+      expect(dehydrate(client).mutations).toHaveLength(1)
+      const { dehydrateOptions } = persistOptions(createPersister(memoryStore().store), 'build-a')
+      expect(dehydrate(client, dehydrateOptions).mutations).toEqual([])
+      // It waits in the page, and is sent once there is a connection again.
+      onlineManager.setOnline(true)
+      await vi.waitFor(() => {
+        expect(sent).toHaveBeenCalledTimes(1)
+      })
+    } finally {
+      onlineManager.setOnline(true)
+      client.unmount()
+    }
   })
 })

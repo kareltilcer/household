@@ -26,9 +26,10 @@
   border-radius: var(--radius-sheet);
 }
 
-/* Docked to the inline end, the height of the window: a place to edit beside the page. */
+/* Docked to the inline end, the height of the window: a place to edit beside the page. As wide
+   as the page at most, which is narrower than the window where a scrollbar keeps its room. */
 .panel {
-  width: min(30rem, 100vw);
+  width: min(30rem, 100%);
   max-width: none;
   height: 100dvh;
   max-height: none;

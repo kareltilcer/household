@@ -37,7 +37,10 @@ the gates 06-clients §8 lists. The stack and the inventory were settled. These 
 **A modal is the platform's `<dialog>`; Radix is kept where it injects nothing.** `Dialog` and
 `Sheet` (the side panel) call `showModal()`: the browser makes the page behind inert, keeps the
 focus in, closes on Escape and gives the focus back, and one rule of the app's own stylesheet,
-`html:has(dialog:modal)`, keeps the page from scrolling under it. `Menu` is Radix's dropdown menu
+`html:has(dialog:modal)`, keeps the page from scrolling under it. The root keeps a scrollbar's
+room whether or not one is drawn (`scrollbar-gutter`), so where a scrollbar takes room the page
+behind a modal keeps its width: what Radix's lock did by measuring the scrollbar and padding the
+page in the style it injects, the platform does with none. `Menu` is Radix's dropdown menu
 opened non-modally, which takes no scroll lock; `Toast` is Radix's toast. Select is the platform's
 own. Sheets and menus stand on `surface-overlay`, so `@household/tokens` declares the three pairs
 they spend there and its test counts them: the strong border, the focus ring and `danger`.
@@ -65,9 +68,12 @@ region, and holds every dwell while the focus is there: closed by a key, the foc
 Radix put it, and closed by a pointer's press it is let go, so that the toasts beside it, and one
 its own Undo raised, go once the pointer has left them. One Escape does one thing. Radix closes
 the newest toast for the key wherever the focus is and tells the platform nothing of it, so the
-dialog the toasts are drawn in would be asked to close by the same key: pressed among the toasts,
-Escape puts the toast away and is spent there, and pressed elsewhere under a modal it is the
-modal's, the toast keeping its dwell and its Undo, on the page again once the modal has gone.
+dialog the toasts are drawn in would be asked to close by the same key, and an Escape meant for
+a field of the page would take an Undo with it: pressed among the toasts, which a member reaches
+by their key, Escape puts the toast away and is spent there, and the toast is one closed by a
+key, whatever a pointer pressed on a toast before it, so the focus stays among them; pressed
+anywhere else it is not the toasts', and the toast keeps its dwell and its Undo. Under a modal
+the key is the modal's, and the toast is on the page again once the modal has gone.
 Pressed in a menu it is the menu's. Radix hands the key to whatever it layered last, which is a
 toast raised while the menu was open, and the menu would never hear of it: the toast leaves the
 key alone, and the menu closes by it and spends it, so the dialog the menu is drawn in is not
@@ -184,7 +190,10 @@ stated that may yet clear, its own failure or a first attempt still running: a r
 answer is the transport's to resend, and is resent there alone. Its cache is persisted to
 IndexedDB as one structured clone, written at most once a second, for a day. A query keeps its
 answer out of what is stored by saying so (`meta: { persist: false }`): a search as it is typed, a
-link to a file that is good for minutes.
+link to a file that is good for minutes. What is stored is what was read, and no write: TanStack
+by itself stores a mutation that waits for a connection, with all it was to send, a password
+typed at sign-in among it, for a page that could not send it once loaded again. Such a write
+waits in the page, and is sent from there when the connection is back.
 
 ## Alternatives rejected
 
@@ -198,6 +207,9 @@ link to a file that is good for minutes.
 | Escape under a modal left to Radix and the platform both, or given to the toast first | The first closes the panel and takes the Undo with it. The second leaves the panel open after the key that should have closed it, and loses the Undo all the same: a toast is no layer a member opened |
 | The toasts drawn at a side panel's own foot, in its flow, where they would cover nothing | A toast would move as the panel closed, out from under a pointer that holds its dwell, and Radix would hold every dwell after it. Their place is one, and the panel makes room |
 | A menu's Escape left to Radix's layers alone | A toast raised while a menu is open is the last layer: the key would close the panel the menu is drawn in, with what was typed there, or put away a toast the member did not mean |
+| Escape left to put the newest toast away on a page with nothing else open, as Radix has it | Whatever a screen gives the key to, a rename taken back or a search cleared, would put an Undo away with it, and the toasts would have to be told of each. The key is theirs only among them, where their own key takes a member |
+| A confirmation that makes room for the toasts, as a side panel does | A panel's foot is the window's, always under the toasts. A confirmation is centred and reaches them only at 200 % text in a phone's width, or in a window no taller than a phone held sideways. Room taken by the panel's property would move every confirmation by half a toast whenever one came or went, Keep and Delete under a press; a transform would make the dialog what its fixed toasts are placed against; and one that gives way only where it reaches them is the dialog rebuilt as a ground with its card inside. The toast is plainly over the buttons, goes with its dwell, and has its own control to put it away |
+| A scrollbar's room kept only while a modal is open, or measured and padded by script | The first gives a page too short to scroll the room as the modal opens, and moves it the other way. The second is Radix's lock again, written by hand |
 | The mode of the dev pages given to the router as a constant the build defines | It would be told to Vite, to Vitest's own configuration and to TypeScript, three places kept in step by nothing. The literal is held to `devPagesMode` by one test, which fails before a build would, and the plugin refuses a build that kept the pages |
 | The focus Radix puts on the toasts' region left there after a pointer's press | The toasts beside the one closed, and one its own Undo raised, would stay until the member pressed somewhere else. The region gives up a focus of its own, which is no event made up for Radix: the browser tells it the focus has left |
 | The table's column of sync marks timed by the table | A second clock to keep in step with each mark's own. A rule of the stylesheet draws the column while a mark is drawn in it, and has nothing to keep in step |
@@ -217,6 +229,11 @@ link to a file that is good for minutes.
 | A file the page cannot load taken for a newer build | A page with no connection cannot load one either, and would be told to reload into nothing |
 | Source maps in the build a deployment serves | Whoever serves `dist/www` serves every file in it. Maps for crash reports are uploaded to where the reports go, which is item 89's |
 | TanStack's async-storage persister for the cache | Its throttled write cannot be dropped, so a cache removed at sign-out would be written back by the write that was waiting, and its restore rejects in a browser that refuses storage |
+| A write that waits for a connection kept in the stored cache, to be sent by the next page | It is stored with what it was to send, in the clear, and the page that loads it has no function to send it with: it fails there without a word. A write that must outlive its page is the replica's (item 25) |
+| A time limit on reading the stored cache | No browser the PRD names leaves an open of IndexedDB unanswered: the hang on record is WebKit's of 2021, in Safari 14.1, and the store is opened with no version, which no other tab can block. A refusal rejects, and is answered with nothing. A clock would drop a good cache on a slow disk |
+| The stored cache written as the page is hidden | What the throttle can lose is a second's reads, each fetched again on the next visit, from a cache that is a convenience (06-clients: a browser is not the offline-first surface), and TanStack's own persister throttles the same way. A write begun as a tab closes is one the browser need not finish, so a listener would hold only for a tab put aside within that second and then discarded |
+| A formatter that shows what it cannot format as it was given, or an instant in another zone | What it refuses is what the contract rules out, a day no calendar has, a decimal with an exponent, an instant that is no RFC 3339, and the server's own tests hold every response to the contract. A zone this browser does not know has no right answer: another zone's time would be shown as the household's. The boundary under `Root` names a screen that cannot be drawn, and a screen whose rows are worth saving one by one draws a boundary of its own, as the dashboard's widgets must (02-components §4.8) |
+| A label's weight spent as a type step's weight token | The scale's weights are each a step's, and a button's label, a banner's title or a member's initials is none of those steps: it is body set at 500 or 600, as the prototype sets it. Named by a title's token it would change with a title it has nothing to do with. A weight of its own in the scale is design's to add (01-foundations §1) |
 | One control for the hold, completing on a click with no pointer before it | A screen reader on a touch screen sends a tap, which is a short press. Telling the two apart is a guess per browser |
 | Vitest's browser mode for component tests | Chromium in the job that typechecks every package, to hold what the end-to-end job already holds on the built app |
 
@@ -241,7 +258,13 @@ link to a file that is good for minutes.
 - A button that is busy or has nothing to do hands on no handler of a press: neither the click nor
   what comes before it, the pointer going down and the key, which is what a menu opens on.
 - A stepper in a form is settled by Enter as it is by being left, so the form sends the number
-  the field shows. A number typed over a bound is held to it, and not refused with an error.
+  the field shows. A number typed over a bound is held to it, and not refused with an error. Its
+  step is how far a button moves it, and no grid the platform holds a typed number to: any whole
+  number within the bounds is a value of it.
+- A list is one by its role as well as by its element: every list is drawn without markers, and
+  WebKit takes such a list for layout and tells assistive technology of none.
+- The root keeps a scrollbar's room at the window's edge on every page, where a scrollbar takes
+  room at all. A side panel is docked to the page's edge, beside that room.
 - A test's markup is held to the literal-string lint as the app's is, so a test names its words in
   a constant and passes them as values.
 - A row whose owner knows when its write began to sync says so (`syncingSince`, a mark's `since`):

@@ -109,7 +109,8 @@ const policy = /<meta http-equiv="Content-Security-Policy" content="([^"]*)"/.ex
 if (policy === undefined) fail('index.html carries no Content-Security-Policy')
 else if (decoded(policy) !== metaPolicy)
   fail(`index.html's policy is not csp.ts's: ${decoded(policy)}`)
-if (html.indexOf('http-equiv="Content-Security-Policy"') > html.search(/<(script|link)\b/)) {
+const firstNamed = html.search(/<(script|link)\b/)
+if (firstNamed !== -1 && html.indexOf('http-equiv="Content-Security-Policy"') > firstNamed) {
   fail(
     'index.html names a script or a stylesheet before its policy, which the policy does not hold',
   )

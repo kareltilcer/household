@@ -492,9 +492,36 @@ test.describe('a toast', () => {
     await expect(menu).toBeHidden()
     await expect(saved(page)).toBeVisible()
     await expect(trigger).toBeFocused()
-    // With nothing else open, the next one puts the toast away.
+    // Nor is the next one the toast's, with nothing else open: the focus is on the page, and
+    // the key is for what it is in. A toast is no layer the member opened.
+    await page.keyboard.press('Escape')
+    await expect(saved(page)).toBeVisible()
+    // From among the toasts, reached by their key, it puts the toast away.
+    await page.keyboard.press('F8')
+    await expect(page.locator('ol[data-third-party]')).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(saved(page)).toBeHidden()
+  })
+
+  test('keeps the focus among the toasts when Escape there puts one away, whatever was pressed before', async ({
+    page,
+  }) => {
+    await holdTheClock(page)
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Clear checked items' }).click()
+    await page.getByRole('button', { name: 'Save offline' }).click()
+    await expect(saved(page)).toBeVisible()
+    // A press on a toast's words, which closes nothing, and a press on the page after it.
+    await cleared(page).getByText('7 checked items cleared').click()
+    await page.getByRole('heading', { level: 1 }).click()
+    await page.keyboard.press('F8')
+    const region = page.locator('ol[data-third-party]')
+    await expect(region).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(saved(page)).toBeHidden()
+    // Closed by a key: the member is among the toasts still, and the one that remains waits.
+    await expect(region).toBeFocused()
+    await expect(cleared(page)).toBeVisible()
   })
 
   test('goes after its dwell though the one before it was closed from the keyboard', async ({

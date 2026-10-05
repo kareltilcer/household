@@ -52,6 +52,8 @@ describe('a list row', () => {
     const list = screen.getByRole('list', { name: words.meters })
     expect(within(list).getByRole('listitem')).toHaveTextContent(words.electricity)
     expect(screen.getByText(words.read)).toBeVisible()
+    // By its role as by its element: WebKit tells of no list where one is drawn without markers.
+    expect(list).toHaveAttribute('role', 'list')
   })
 
   it('carries no mark while it is in sync, and the state of its own write when it is not', () => {
@@ -481,6 +483,8 @@ describe('a time series', () => {
     // be seen, so that a small reading is not lost beside a large one.
     expect(columns(container)).toEqual([null])
     expect(screen.getByRole('listitem')).toHaveTextContent('Jan: 0 kWh')
+    // A list by its role as by its element, as every list of a chart is (ui/ListRow).
+    expect(within(screen.getByRole('figure')).getByRole('list')).toHaveAttribute('role', 'list')
   })
 
   it('draws a point at or under zero as no column, estimated or not, and says its value', () => {
@@ -511,6 +515,7 @@ describe('a composition', () => {
       'Overhead (derived)1.3 GB32%',
     ])
     expect(screen.getByText(words.used)).toBeVisible()
+    expect(within(screen.getByRole('figure')).getByRole('list')).toHaveAttribute('role', 'list')
   })
 
   it('draws the bar from the shares, as decoration the legend explains', () => {
@@ -571,6 +576,8 @@ describe('a flow', () => {
     const [incoming, outgoing] = screen.getAllByRole('list')
     expect(incoming).toHaveTextContent('Jana, salary42 000Petr, salary31 000')
     expect(outgoing).toHaveTextContent('Household account48 000Savings25 000')
+    expect(incoming).toHaveAttribute('role', 'list')
+    expect(outgoing).toHaveAttribute('role', 'list')
     expect(screen.getByText(words.income)).toBeVisible()
     expect(screen.getByText(words.accounts)).toBeVisible()
     expect(screen.getByText(words.agree)).toBeVisible()

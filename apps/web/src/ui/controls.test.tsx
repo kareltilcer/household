@@ -387,6 +387,30 @@ describe('a stepper', () => {
     expect(sent).toEqual([12, 3, 3])
   })
 
+  it('moves by its step under a button, and takes any whole number typed between two steps', async () => {
+    function Minutes() {
+      const [value, setValue] = useState(5)
+      return (
+        <form>
+          <Stepper label={words.members} value={value} onChange={setValue} min={0} step={5} />
+        </form>
+      )
+    }
+    draw(<Minutes />)
+    const input = screen.getByRole<HTMLInputElement>('spinbutton')
+    await userEvent.click(screen.getByRole('button', { name: 'Increase Members' }))
+    expect(input).toHaveValue(10)
+    await userEvent.clear(input)
+    await userEvent.type(input, '7')
+    await userEvent.tab()
+    expect(input).toHaveValue(7)
+    // A value of the field, and so of its form: the platform holds it to no grid of the step's.
+    expect(input).toBeValid()
+    expect(input.form?.checkValidity()).toBe(true)
+    await userEvent.click(screen.getByRole('button', { name: 'Increase Members' }))
+    expect(input).toHaveValue(12)
+  })
+
   it('keeps the focus on a button that has stepped to its bound, which then does nothing', async () => {
     draw(<Count start={2} min={1} max={3} />)
     const decrease = screen.getByRole('button', { name: 'Decrease Members' })

@@ -53,7 +53,8 @@ export function TimeSeries({ caption, points, approximate = false }: TimeSeriesP
   const estimated = points.some((point) => point.estimated === true)
   return (
     <figure className={styles.chart}>
-      <ol className={styles.columns}>
+      {/* A list by its role too, here and below: one drawn without markers is none to WebKit. */}
+      <ol className={styles.columns} role="list">
         {points.map((point, index) => (
           // A point is its place in the series: a label is a month's letter, and J comes thrice.
           <li key={index} className={styles.column}>
@@ -126,7 +127,7 @@ export function Composition({ caption, segments, total }: CompositionProps) {
       </div>
       {/* The legend names every segment with its figure, in the bar's order: the bar is read
           from it, and a colour is only how the eye finds a row again. */}
-      <ol className={styles.legend}>
+      <ol className={styles.legend} role="list">
         {segments.map((segment, index) => (
           <li key={index} className={styles.entry}>
             <span className={cx(styles.swatch, series[index % series.length])} aria-hidden="true" />
@@ -171,7 +172,7 @@ export function Flow({ caption, sourcesLabel, sources, targetsLabel, targets, to
   const side = (label: string, nodes: readonly FlowNode[]) => (
     <div className={styles.side}>
       <p className={styles.sideLabel}>{label}</p>
-      <ul className={styles.nodes}>
+      <ul className={styles.nodes} role="list">
         {nodes.map((node, index) => (
           // In the order given, and no other: two accounts may carry one name.
           <li key={index} className={styles.node}>

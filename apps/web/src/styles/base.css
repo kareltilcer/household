@@ -12,6 +12,10 @@
   color-scheme: light;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Where a scrollbar takes room, its room is the page's edge whether or not one is drawn: a
+     page does not move sideways when a modal takes its scrollbar away (below), or when a list
+     grows past the window. */
+  scrollbar-gutter: stable;
 }
 
 /* A theme is set on the root, or on any element inside a page of the other one (ADR 0024): a
@@ -57,6 +61,8 @@ figure {
   margin: 0;
 }
 
+/* No list draws markers. One that is a list to assistive technology says so by its role as well:
+   WebKit takes a list without markers for layout, and tells of no list (ui/ListRow). */
 ul,
 ol {
   margin: 0;
@@ -84,7 +90,8 @@ a {
   outline-offset: 2px;
 }
 
-/* A modal dialog leaves the page behind it where it was (ui/Dialog). */
+/* A modal dialog leaves the page behind it where it was (ui/Dialog): it does not scroll, and it
+   keeps the width it had, the scrollbar's room staying where the scrollbar was (above). */
 html:has(dialog:modal) {
   overflow: hidden;
 }
