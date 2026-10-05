@@ -898,7 +898,7 @@ Phase 0 · after 23, 6 · size L
   - Design: [02-components](design/02-components.md), [03-patterns](design/03-patterns.md), [06-accessibility](design/06-accessibility-and-i18n.md); `components.js`, `Components and States.dc.html`, `ledger.js` (the twelve states)
   - home: the frontend (Radix, TanStack persistence, the Playwright + axe setup)
 - **Done when** the harness is axe-clean in both themes and every gate runs in CI.
-- **PR:** —
+- **PR:** [#29](https://github.com/kareltilcer/household/pull/29)
 
 ### 25 · Web shell, sync UI, auth and account · `planned`
 
