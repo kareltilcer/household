@@ -10,6 +10,7 @@ export {
   entityTag,
   idempotencyMiddleware,
   ifMatchMiddleware,
+  isUnsafeMethod,
   retryingFetch,
   versionOf,
   type RetryOptions,

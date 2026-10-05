@@ -24,6 +24,11 @@ const series = [
 export interface SeriesPoint {
   /** The period: a month's letter, a date. */
   readonly label: string
+  /**
+   * What its column is drawn to, against the tallest. The columns stand on the axis: a value
+   * under zero is drawn as none and said in `text`, and a series that goes under it is its own
+   * screen's to draw.
+   */
   readonly value: number
   /** The value as it is read, with its unit: "412 kWh". */
   readonly text: string
@@ -45,6 +50,9 @@ export interface TimeSeriesProps {
 export function TimeSeries({ caption, points, approximate = false }: TimeSeriesProps) {
   const t = useTranslate()
   const top = Math.max(0, ...points.map((point) => point.value))
+  // A share of the tallest column, and never less than none: a size under zero is no size, and
+  // the browser would drop it and draw whatever the stylesheet says a column is without one.
+  const height = (value: number) => (top === 0 ? 0 : (Math.max(0, value) / top) * 100)
   const estimated = points.some((point) => point.estimated === true)
   return (
     <figure className={styles.chart}>
@@ -55,7 +63,7 @@ export function TimeSeries({ caption, points, approximate = false }: TimeSeriesP
             <span className={styles.plot} aria-hidden="true">
               <span
                 className={cx(styles.bar, point.estimated === true && styles.estimated)}
-                style={{ blockSize: `${String(top === 0 ? 0 : (point.value / top) * 100)}%` }}
+                style={{ blockSize: `${String(height(point.value))}%` }}
               />
             </span>
             <span className={styles.tick} aria-hidden="true">

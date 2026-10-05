@@ -178,9 +178,9 @@ describe('the reload prompt', () => {
     const reload = vi.fn()
     draw(<UpdatePrompt live={live} reload={reload} />)
     lookAgain()
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'A new version of Household is ready.',
-    )
+    // Said politely: its region is there a moment before the words put into it (ui/Banner).
+    expect(await screen.findByText('A new version of Household is ready.')).toBeVisible()
+    expect(screen.getByRole('status')).toHaveTextContent('A new version of Household is ready.')
     expect(reload).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Reload' }))
     expect(reload).toHaveBeenCalledTimes(1)

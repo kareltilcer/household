@@ -45,37 +45,61 @@ export type SyncState = (typeof syncStates)[number]
  */
 const opens: ReadonlySet<SyncState> = new Set(['conflict', 'rejected'])
 
-/**
- * How long until a sync that began at `since` has taken longer than a moment, the tokens'
- * threshold: nothing or less once it has. One that nothing dates begins now.
- */
-function untilShown(since: number | undefined): number {
-  return since === undefined
-    ? thresholds['sync-indicate-after']
-    : since + thresholds['sync-indicate-after'] - Date.now()
+/** What a mark keeps of the time, to say when a sync has gone on for longer than a moment. */
+interface Watch {
+  /** What it was last told: whether the state is `syncing`, and when the write began. */
+  readonly active: boolean
+  readonly since: number | undefined
+  /** When it first drew the state, and nothing while it draws another. */
+  readonly drawn: number | undefined
+  /** The latest time it knows has come: what the clock last read, or the time it waited for. */
+  readonly reached: number
 }
 
 /**
  * Whether `syncing` has gone on long enough to be shown: past the tokens' threshold, and not
- * before (06-clients §5: a progress indication only when it takes longer than a moment).
+ * before (06-clients §5: a progress indication only when it takes longer than a moment). The
+ * moment is counted from `since`, and from when the mark first drew the state where nothing
+ * dates it.
  */
 function useLongEnough(active: boolean, since: number | undefined): boolean {
-  // Drawn in the middle of a sync that is already long, it is long enough from the first.
-  const [elapsed, setElapsed] = useState(() => active && untilShown(since) <= 0)
+  const [watch, setWatch] = useState<Watch>(() => {
+    const now = Date.now()
+    return { active, since, drawn: active ? now : undefined, reached: now }
+  })
+  // Told something else, it reads the clock again as it is drawn, and so knows at once whether
+  // a sync it is now told of is long already.
+  if (watch.active !== active || watch.since !== since) {
+    const now = Date.now()
+    setWatch({
+      active,
+      since,
+      drawn: active ? (watch.drawn ?? now) : undefined,
+      reached: Math.max(watch.reached, now),
+    })
+  }
+  // When the sync has taken longer than a moment.
+  const due =
+    watch.drawn === undefined
+      ? undefined
+      : (watch.since ?? watch.drawn) + thresholds['sync-indicate-after']
   useEffect(() => {
-    if (!active) return undefined
+    if (due === undefined || due <= watch.reached) return undefined
     const timer = setTimeout(
       () => {
-        setElapsed(true)
+        setWatch((was) => ({ ...was, reached: Math.max(was.reached, due) }))
       },
-      Math.max(0, untilShown(since)),
+      Math.max(0, due - Date.now()),
     )
     return () => {
       clearTimeout(timer)
-      setElapsed(false)
     }
-  }, [active, since])
-  return active && elapsed
+  }, [due, watch.reached])
+  // Shown once the time it is due at has come, and that is all that is asked: no flag is put
+  // down and raised again when what the mark is told changes. So a mark that is shown stays
+  // shown when its owner learns when the write began, and one drawn in the middle of a long sync
+  // is shown from the first, under React's strict mode too.
+  return due !== undefined && due <= watch.reached
 }
 
 export interface SyncMarkProps {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createApiClient } from './client.ts'
-import { entityTag, retryingFetch, versionOf } from './concurrency.ts'
+import { entityTag, isUnsafeMethod, retryingFetch, versionOf } from './concurrency.ts'
 import { isUuid } from './ids.ts'
 
 const household = '0190f3a2-4c1b-7c3e-9a5f-2b6d8e4f1a90'
@@ -172,6 +172,12 @@ describe('the transport', () => {
 })
 
 describe('a safe request', () => {
+  it('is told from an unsafe one by its method, which a client’s own middleware asks too', () => {
+    // One list: the web client sends its CSRF token with exactly the methods that carry a key.
+    expect(['POST', 'PUT', 'PATCH', 'DELETE'].every(isUnsafeMethod)).toBe(true)
+    expect(['GET', 'HEAD', 'OPTIONS'].some(isUnsafeMethod)).toBe(false)
+  })
+
   it('carries no Idempotency-Key', async () => {
     const { sent, fetch } = transport(json(200, { items: [] }))
     const api = createApiClient({ baseUrl: 'https://h.test/api/v1', fetch, retry: noWait })

@@ -12,7 +12,7 @@ export interface CheckboxProps extends Native {
   readonly indeterminate?: boolean
 }
 
-export function Checkbox({ label, indeterminate = false, ref, ...rest }: CheckboxProps) {
+export function Checkbox({ label, indeterminate = false, ref, onChange, ...rest }: CheckboxProps) {
   const input = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
     if (input.current !== null) input.current.indeterminate = indeterminate
@@ -30,7 +30,20 @@ export function Checkbox({ label, indeterminate = false, ref, ...rest }: Checkbo
   )
   return (
     <label className={styles.choice}>
-      <input {...rest} ref={attach} type="checkbox" className={styles.input} />
+      <input
+        {...rest}
+        ref={attach}
+        type="checkbox"
+        className={styles.input}
+        onChange={(event) => {
+          onChange?.(event)
+          // The platform makes a box that is pressed plainly on or off, whatever it stood for.
+          // It stands for what its owner says: one that is still neither after the press, some
+          // of its rows chosen and some not, is drawn as neither. An owner that now says
+          // otherwise is drawn again, and the effect above follows it.
+          event.currentTarget.indeterminate = indeterminate
+        }}
+      />
       <span>{label}</span>
     </label>
   )

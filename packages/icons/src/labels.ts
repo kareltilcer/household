@@ -7,6 +7,9 @@
  * A status or a module glyph that stands alone is labelled by its own key (glyphs.ts). The sync
  * mark and the conflict flag are controls, so they take sentences of their own here, which say
  * what opening them does: the prototype gave them their status's key with a different English.
+ *
+ * After the design's twenty come the controls a primitive draws itself, which the prototype's
+ * register has none of: what puts a banner or a toast away, and the two buttons of a stepper.
  */
 import type { MessageKey } from '@household/i18n'
 import type { NavigationId, StatusId } from './glyphs.ts'
@@ -62,6 +65,12 @@ export const controls = {
   conflict: { glyph: { set: 'status', id: 'conflict' }, labelKey: 'a11y.control.conflict' },
   /** `{name}`: what is printed. */
   print: { glyph: { set: 'base', id: 'printer' }, labelKey: 'a11y.control.print' },
+  /** Puts a banner or a toast away. The same glyph closes a sheet, under another word. */
+  dismiss: { glyph: { set: 'base', id: 'x' }, labelKey: 'ui.dismiss' },
+  /** `{name}`: the stepper's field, whose number its button takes a step from. */
+  decrease: { glyph: { set: 'base', id: 'minus' }, labelKey: 'ui.stepper.decrease' },
+  /** `{name}`: the stepper's field, whose number its button adds a step to. */
+  increase: { glyph: { set: 'base', id: 'plus' }, labelKey: 'ui.stepper.increase' },
 } as const satisfies Record<string, Control>
 
 export type ControlId = keyof typeof controls

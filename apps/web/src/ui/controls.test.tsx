@@ -396,6 +396,37 @@ describe('a checkbox, a switch and a radio group', () => {
     expect(screen.getByRole('checkbox')).not.toBePartiallyChecked()
   })
 
+  it('is still neither after a press where its owner still says so, and tells its owner of the press', async () => {
+    // The platform makes a pressed box plainly on or off. A box that stands for many rows is
+    // what its owner says of them, and an owner whose rows are still some and not all says so.
+    const onChange = vi.fn()
+    draw(<Checkbox label={words.remind} indeterminate onChange={onChange} />)
+    await userEvent.click(screen.getByRole('checkbox'))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('checkbox')).toBePartiallyChecked()
+  })
+
+  it('is on or off after a press where its owner then says it is', async () => {
+    function All() {
+      const [all, setAll] = useState(false)
+      return (
+        <Checkbox
+          label={words.remind}
+          checked={all}
+          indeterminate={!all}
+          onChange={() => {
+            setAll(true)
+          }}
+        />
+      )
+    }
+    draw(<All />)
+    expect(screen.getByRole('checkbox')).toBePartiallyChecked()
+    await userEvent.click(screen.getByRole('checkbox'))
+    expect(screen.getByRole('checkbox')).not.toBePartiallyChecked()
+    expect(screen.getByRole('checkbox')).toBeChecked()
+  })
+
   it('hands their input to a caller that asks for it by a ref', () => {
     const checkbox = createRef<HTMLInputElement>()
     const told = vi.fn()

@@ -55,7 +55,11 @@ and on again, which seals a new secret and makes new codes under the new key.
 `HOUSEHOLD_MIN_MOBILE_VERSION` and `HOUSEHOLD_MIN_WEB_VERSION` each hold a version, `1.6.0`; a
 client below it gets *please update* on every request (PRD 06 §7). Unset, every version is served.
 Raise the mobile minimum only once the version it names is live in both stores, and the server has
-served the previous minor for six months.
+served the previous minor for six months. The web app names itself by the version in
+`apps/web/package.json`, which is `0.0.0` until a release raises it: leave the web minimum unset
+until the build that is live names the version it would be raised to, or every web client is
+refused, the newest with the rest
+([ADR 0025](../adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)).
 
 ## Google
 

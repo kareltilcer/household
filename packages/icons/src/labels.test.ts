@@ -12,8 +12,9 @@ function takes(control: Control): string[] {
 }
 
 describe('the icon-only control register', () => {
-  it('holds the twenty controls the design registers', () => {
-    expect(register).toHaveLength(20)
+  it('holds the twenty controls the design registers, and the three a primitive draws itself', () => {
+    expect(register).toHaveLength(23)
+    expect(register.slice(20).map(([id]) => id)).toEqual(['dismiss', 'decrease', 'increase'])
   })
 
   it.each(register)('%s is drawn as a glyph of its set', (_, control) => {
@@ -51,6 +52,8 @@ describe('the icon-only control register', () => {
       sync_state: ['state'],
       conflict: ['name'],
       print: ['name'],
+      decrease: ['name'],
+      increase: ['name'],
     })
   })
 

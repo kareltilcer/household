@@ -50,11 +50,24 @@ names what takes the focus as it opens (`initialFocus`), where that is not its f
 field's `autoFocus` cannot, since React focuses such a field as it mounts, before the dialog is
 open, and writes no attribute the platform could read. A dialog is asked to close by its own
 `cancel` alone, which React hands up its tree from a dialog drawn inside it and the platform lets
-rise from a file input. A menu hands the focus back to its trigger before the chosen item acts, so
-that a confirmation the item opens gives the focus back there, and not to an item that is gone.
-And Radix holds every toast's dwell while one is pointed at, letting go only while a toast is
-shown, so each run of toasts, from the first shown while none is to the last one's leaving, is
-its provider afresh: a toast closed under the pointer holds nothing of the next one.
+rise from a file input. A browser lets a page refuse Escape only so many times in a row, and then
+closes the dialog whatever the page says: its owner is told, as it is when Escape asks, and one
+that keeps it open, a save under way or an editor that asks before it discards, has it shown
+again. A dialog drawn inside another, a confirmation inside a side panel, opens after it: the
+platform stacks modals in the order they open, and React runs a child's effect before its
+parent's, so two that become open together would be opened inside out. A menu hands the focus
+back to its trigger before the chosen item acts, so that a confirmation the item opens gives the
+focus back there, and not to an item that is gone. And Radix holds every toast's dwell while one
+is pointed at, letting go only while a toast is shown, so each run of toasts, from the first shown
+while none is to the last one's leaving, is its provider afresh: a toast closed under the pointer
+holds nothing of the next one. Radix also hands the focus of a toast that closes to the toasts'
+region, and holds every dwell while the focus is there: closed by a key, the focus stays where
+Radix put it, and closed by a pointer's press it is let go, so that the toasts beside it, and one
+its own Undo raised, go once the pointer has left them. A toast is read out after the one word
+*Notification*; the region's name, with the key that reaches it, is the viewport's. A banner that
+is announced politely is drawn before its words, which are put into it two frames later: what is
+put into a polite region already in the document is said, and a region that arrives with its
+words in it need not be.
 
 **The policy is one constant (`apps/web/build/csp.ts`), written into index.html as a `<meta>` by
 the build and sent as a header by whoever serves it.** `default-src 'none'`, and `'self'` for
@@ -107,7 +120,7 @@ test plants a literal and expects the pass to find it.
 
 **The budget is what a first visit downloads before the app can draw** (D-153): the scripts
 index.html names and preloads, 200 kB, and its stylesheets, 20 kB, gzip, and 150 kB for any one
-script loaded later. Item 24's build is 173 kB and 5 kB. The fonts are fetched by script and range
+script loaded later. Item 24's build is 174 kB and 5 kB. The fonts are fetched by script and range
 and are not counted.
 
 **A build's id is a digest of every file it wrote**, by name and content, sixteen hex digits. The
@@ -146,7 +159,9 @@ IndexedDB as one structured clone, written at most once a second, for a day.
 | Radix Dialog with a nonce for its injected style | A nonce is minted per response by a server. The app is static files, and a nonce in a file is a constant any injected markup can read |
 | `'unsafe-inline'` for `style-src`, or a hash for the injected style | The first is what PRD 07 §4 forbids. The style's text holds the scrollbar's width, so it has no one hash |
 | A dialog's content mounted once the dialog is open, so that a field's `autoFocus` is honoured | The platform's own first focus, the safe choice of a confirmation, would fall on the empty dialog and have to be rebuilt by hand. An owner that wants another control names it |
+| A dialog the platform closed left closed, with its owner told and no more | An owner that keeps it open would hold a panel that is open by its state and drawn nowhere, what was typed still in it, and no way to open it again; one that answers by asking a question would ask it inside a panel nobody sees, over a page it makes inert |
 | The toasts' dwell timed by the app, or Radix told by a made-up event that the pointer has left | The first is what Radix's toast is used for. The second steers a library by its internals, where a provider mounted afresh holds nothing by construction |
+| The focus Radix puts on the toasts' region left there after a pointer's press | The toasts beside the one closed, and one its own Undo raised, would stay until the member pressed somewhere else. The region gives up a focus of its own, which is no event made up for Radix: the browser tells it the focus has left |
 | The table's column of sync marks timed by the table | A second clock to keep in step with each mark's own. A rule of the stylesheet draws the column while a mark is drawn in it, and has nothing to keep in step |
 | The policy as a header alone | Nothing serves the app yet, and the PRD has the app set it. A page that carries its policy is under it wherever it is opened |
 | The display modes set by an inline script with its hash in the policy | The hash would be a second copy of the script, kept in step by hand. A file is fetched once and cached, from the page's own origin |
@@ -181,6 +196,17 @@ IndexedDB as one structured clone, written at most once a second, for a day.
   row was drawn, which a row drawn again in the middle of a long sync waits out a second time.
 - A sync mark is a control only for a conflict and a rejection, which have something to open,
   whatever a list or a table hands it: the rule is the mark's own.
+- An icon-only control a primitive draws itself is in the register beside the design's twenty
+  (`@household/icons`' `controls`): what puts a banner or a toast away, and a stepper's two
+  buttons.
+- A time series stands on its axis: a point under zero is drawn as no column, and said in its
+  words. A series that goes under zero, Finance's burn-down when a budget is overspent, is its own
+  screen's to draw.
+- `Household-Client` names the web app by its package's version, `0.0.0` until a release raises
+  it, so the server's web minimum cannot yet tell one build from another: set above the version
+  the newest build names, it refuses every web client. How a release numbers a build is not
+  settled here, and until it is `HOUSEHOLD_MIN_WEB_VERSION` stays unset
+  ([runbook](../runbooks/sign-in-keys-and-providers.md)).
 - The bundle holds all five catalogs, the texts of emails among them, since `@household/i18n`
   imports them together. Splitting them by language is the first thing to do when the budget is
   near.

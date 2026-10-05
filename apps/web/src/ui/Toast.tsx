@@ -2,6 +2,7 @@
 // real window in which to take it back. Undo is a button, never a gesture, and it stays for the
 // whole dwell (the tokens' `toast-dwell`). Over Radix's toast for what a toast has to do: be
 // announced, pause while it is pointed at or focused, and be reached by a key.
+import { controls } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { thresholds } from '@household/tokens'
 import * as RadixToast from '@radix-ui/react-toast'
@@ -54,6 +55,8 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
   const list = useRef<HTMLOListElement>(null)
   /** Whether the toasts' region held the focus when the last toast was asked for. */
   const focused = useRef(false)
+  /** Whether the last thing done to a toast was a press of a pointer on it, and not a key. */
+  const pressed = useRef(false)
 
   const show = useCallback<ShowToast>((toast) => {
     const id = nextId.current
@@ -69,6 +72,14 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
       number: current.number,
       toasts: current.toasts.filter((toast) => toast.id !== id),
     }))
+    // Radix hands the focus of a toast that closes to the region, so that a member who closed
+    // it by a key is not dropped out of the toasts, and holds every toast's dwell for as long as
+    // the focus is there. A member who closed it by a press of the pointer is not there at all:
+    // left in the region, the focus would hold the toasts that remain, and one raised by the
+    // very Undo that was pressed, until the next press somewhere else. It is let go, and their
+    // dwell runs on once the pointer has left them.
+    if (pressed.current && document.activeElement === list.current) list.current?.blur()
+    pressed.current = false
   }, [])
   const region = useMemo(() => t('ui.toast.region', { hotkey }), [t])
 
@@ -105,13 +116,21 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
       <RadixToast.Provider
         key={run.number}
         duration={thresholds['toast-dwell']}
-        label={region}
+        // What Radix says before each toast as it reads it out: the one word, and not the
+        // region's name, which the viewport carries.
+        label={t('ui.toast.label')}
         {...(modal === null ? {} : { announcerContainer: modal })}
       >
         {run.toasts.map((toast) => (
           <RadixToast.Root
             key={toast.id}
             className={styles.toast}
+            onPointerDown={() => {
+              pressed.current = true
+            }}
+            onKeyDown={() => {
+              pressed.current = false
+            }}
             onOpenChange={(open) => {
               if (!open) remove(toast.id)
             }}
@@ -128,8 +147,8 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
                 {t('ui.toast.undo')}
               </RadixToast.Action>
             )}
-            <RadixToast.Close className={styles.close} aria-label={t('ui.dismiss')}>
-              <BaseIcon name="x" />
+            <RadixToast.Close className={styles.close} aria-label={t(controls.dismiss.labelKey)}>
+              <BaseIcon name={controls.dismiss.glyph.id} />
             </RadixToast.Close>
           </RadixToast.Root>
         ))}

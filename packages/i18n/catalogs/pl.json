@@ -188,6 +188,7 @@
   "ui.stepper.increase": "Zwiększ: {name}",
   "ui.table.more": "Pokaż więcej",
   "ui.table.state": "Stan synchronizacji",
+  "ui.toast.label": "Powiadomienie",
   "ui.toast.region": "Powiadomienia ({hotkey})",
   "ui.toast.undo": "Cofnij",
   "ui.update.available": "Nowa wersja aplikacji Household jest gotowa."

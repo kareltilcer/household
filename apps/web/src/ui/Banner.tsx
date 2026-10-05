@@ -3,8 +3,9 @@
 // the sentence itself; nothing here is told by the colour alone. The same shape carries a screen's
 // error, a rejected write's reason, a withdrawn row's sentence and the read-only notice; which
 // entitlement states have a banner is billing's to say (item 27).
+import { controls } from '@household/icons'
 import { BaseIcon, StatusIcon } from '@household/icons/web'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import styles from './Banner.module.css'
 import { IconButton } from './Button.tsx'
@@ -31,9 +32,35 @@ export interface BannerProps {
   readonly onDismiss?: () => void
   /**
    * Whether it is announced when it appears: a state that arrived while the member was here.
-   * One that was there when the screen opened is read in its place and is not announced.
+   * One that was there when the screen opened is read in its place and is not announced. A
+   * failure is announced at once, as an alert; any other tone politely, its words drawn a moment
+   * after the banner itself.
    */
   readonly announce?: boolean
+}
+
+/**
+ * Whether a region that is announced politely may hold its words yet. Assistive technology says
+ * what is put into a polite region that is in the document already, and need not say a region
+ * that arrives with its words in it; an alert it says as it arrives. So such a region is drawn
+ * first and its words once it has been, two frames later, which is how Radix has a toast said.
+ */
+function useDrawnFirst(waits: boolean): boolean {
+  const [drawn, setDrawn] = useState(!waits)
+  useEffect(() => {
+    if (!waits) return undefined
+    let second = 0
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        setDrawn(true)
+      })
+    })
+    return () => {
+      cancelAnimationFrame(first)
+      cancelAnimationFrame(second)
+    }
+  }, [waits])
+  return drawn || !waits
 }
 
 export function Banner({
@@ -45,19 +72,29 @@ export function Banner({
   announce = false,
 }: BannerProps) {
   const t = useTranslate()
+  const urgent = tone === 'danger'
+  const worded = useDrawnFirst(announce && !urgent)
   return (
     <div
       className={cx(styles.banner, styles[tone])}
-      role={announce ? (tone === 'danger' ? 'alert' : 'status') : undefined}
+      role={announce ? (urgent ? 'alert' : 'status') : undefined}
     >
       <BaseIcon name={glyphs[tone]} className={styles.glyph} />
       <div className={styles.text}>
-        {title === undefined ? null : <p className={styles.title}>{title}</p>}
-        <div>{children}</div>
-        {actions === undefined ? null : <div className={styles.actions}>{actions}</div>}
+        {worded ? (
+          <>
+            {title === undefined ? null : <p className={styles.title}>{title}</p>}
+            <div>{children}</div>
+            {actions === undefined ? null : <div className={styles.actions}>{actions}</div>}
+          </>
+        ) : null}
       </div>
       {onDismiss === undefined ? null : (
-        <IconButton label={t('ui.dismiss')} icon={<BaseIcon name="x" />} onClick={onDismiss} />
+        <IconButton
+          label={t(controls.dismiss.labelKey)}
+          icon={<BaseIcon name={controls.dismiss.glyph.id} />}
+          onClick={onDismiss}
+        />
       )}
     </div>
   )

@@ -8,19 +8,28 @@ import { cx } from './cx.ts'
 
 export interface Pair {
   readonly key: string
-  /** Left out, or null: nothing is recorded, which the block says in a word. */
+  /**
+   * Left out, or anything that would be drawn as nothing, null, an empty string or `false`:
+   * nothing is recorded, which the block says in a word.
+   */
   readonly value?: ReactNode
   readonly numeric?: boolean
+}
+
+/** Whether React would draw nothing for `value`: the empty cell the block never shows. */
+function drawsNothing(value: ReactNode): boolean {
+  return value === undefined || value === null || value === '' || typeof value === 'boolean'
 }
 
 export function KeyValue({ pairs }: { readonly pairs: readonly Pair[] }) {
   const t = useTranslate()
   return (
     <dl className={styles.block}>
-      {pairs.map((pair) => {
-        const missing = pair.value === undefined || pair.value === null
+      {pairs.map((pair, index) => {
+        const missing = drawsNothing(pair.value)
         return (
-          <div key={pair.key} className={styles.pair}>
+          // A pair is its place in the block: two may carry one label, two phones or two owners.
+          <div key={index} className={styles.pair}>
             <dt className={styles.key}>{pair.key}</dt>
             <dd
               className={cx(

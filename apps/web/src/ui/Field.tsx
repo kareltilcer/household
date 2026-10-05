@@ -1,6 +1,7 @@
 // Input, textarea, select and stepper (02-components §1), at default, focus, filled, error,
 // disabled and read-only. Every one is labelled, and an error is stated in words beside the field
 // and tied to it for assistive technology, never carried by a red border alone (06-clients §4).
+import { controls } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { useId, useState, type ComponentProps, type ReactNode } from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -207,8 +208,8 @@ export function Stepper({
         <div className={styles.stepper}>
           <IconButton
             variant="secondary"
-            label={t('ui.stepper.decrease', { name: label })}
-            icon={<BaseIcon name="minus" />}
+            label={t(controls.decrease.labelKey, { name: label })}
+            icon={<BaseIcon name={controls.decrease.glyph.id} />}
             disabled={fixed}
             // At its bound it has nothing to do, and stays where the focus is: a member who
             // steps down to the least by the keyboard is not dropped out of the control.
@@ -248,8 +249,8 @@ export function Stepper({
           />
           <IconButton
             variant="secondary"
-            label={t('ui.stepper.increase', { name: label })}
-            icon={<BaseIcon name="plus" />}
+            label={t(controls.increase.labelKey, { name: label })}
+            icon={<BaseIcon name={controls.increase.glyph.id} />}
             disabled={fixed}
             aria-disabled={value >= high}
             onClick={() => {

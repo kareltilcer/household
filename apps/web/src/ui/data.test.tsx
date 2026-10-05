@@ -307,6 +307,37 @@ describe('a key–value block', () => {
     const missing = screen.getAllByRole('definition').slice(2)
     expect(missing.map((value) => value.textContent)).toEqual(['— Not recorded', '— Not recorded'])
   })
+
+  it('says the same of a value that would be drawn as nothing: an empty string, a false', () => {
+    const blank = [
+      { key: 'Chassis number', value: '' },
+      { key: 'Insurer', value: false },
+      { key: 'Seats', value: 0, numeric: true },
+    ]
+    draw(<KeyValue pairs={blank} />)
+    expect(screen.getAllByRole('definition').map((value) => value.textContent)).toEqual([
+      '— Not recorded',
+      '— Not recorded',
+      // A zero is a value.
+      '0',
+    ])
+  })
+
+  it('draws two pairs of one label apart, each in its place', () => {
+    const complained = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const phones = (first: string, second: string) => [
+      { key: 'Phone', value: first },
+      { key: 'Phone', value: second },
+    ]
+    const { rerender } = draw(<KeyValue pairs={phones('602 111 222', '603 333 444')} />)
+    rerender(<KeyValue pairs={phones('602 111 222', '604 555 666')} />)
+    expect(screen.getAllByRole('definition').map((value) => value.textContent)).toEqual([
+      '602 111 222',
+      '604 555 666',
+    ])
+    // React says so, on the console, where two of a list's elements share a key.
+    expect(complained).not.toHaveBeenCalled()
+  })
 })
 
 describe('a money value', () => {
@@ -440,6 +471,18 @@ describe('a time series', () => {
   it('draws nothing tall where every point is zero, and divides by nothing', () => {
     const { container } = draw(<TimeSeries caption={words.perMonth} points={flat} />)
     expect(container.querySelector<HTMLElement>('li > span > span')?.style.blockSize).toBe('0%')
+  })
+
+  it('draws a point under zero as no column, with a size the browser takes, and says its value', () => {
+    const under = [
+      { label: 'Jan', value: 40, text: '40 kWh' },
+      { label: 'Feb', value: -10, text: '−10 kWh' },
+    ]
+    const { container } = draw(<TimeSeries caption={words.perMonth} points={under} />)
+    const bars = [...container.querySelectorAll<HTMLElement>('li > span:first-child > span')]
+    // A size under zero is no size: the declaration would be dropped.
+    expect(bars.map((bar) => bar.style.blockSize)).toEqual(['100%', '0%'])
+    expect(screen.getAllByRole('listitem')[1]).toHaveTextContent('Feb: −10 kWh')
   })
 })
 

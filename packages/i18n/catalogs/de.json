@@ -188,6 +188,7 @@
   "ui.stepper.increase": "{name} erhöhen",
   "ui.table.more": "Mehr anzeigen",
   "ui.table.state": "Synchronisierungsstatus",
+  "ui.toast.label": "Benachrichtigung",
   "ui.toast.region": "Benachrichtigungen ({hotkey})",
   "ui.toast.undo": "Rückgängig",
   "ui.update.available": "Eine neue Version von Household ist bereit."

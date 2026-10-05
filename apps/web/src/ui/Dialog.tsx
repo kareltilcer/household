@@ -5,16 +5,38 @@
 // style, which the policy would refuse (ADR 0025).
 import { controls } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
+import {
+  createContext,
+  use,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { IconButton } from './Button.tsx'
 import styles from './Dialog.module.css'
 import { cx } from './cx.ts'
 import { enterTopLayer } from './topLayer.ts'
 
+/**
+ * Whether the dialog a component is drawn inside is shown: true where it is drawn inside none. A
+ * dialog drawn inside another, a confirmation inside a side panel, opens after the one around it.
+ * The platform stacks modals in the order they open, and React runs a child's effect before its
+ * parent's, so two that become open together would be opened inside out, the panel over its own
+ * confirmation.
+ */
+const AroundShown = createContext(true)
+
 export interface DialogProps {
   readonly open: boolean
-  /** Asked to close: Escape, the ground behind it, or the panel's close control. */
+  /**
+   * Asked to close: Escape, the ground behind it, or the panel's close control. Its owner decides,
+   * and closes it by `open`. One that keeps it open has it open, a save under way or an editor
+   * that asks before it discards: closed by the platform all the same, it is shown again.
+   */
   readonly onClose: () => void
   /** Its name. A destructive confirmation's names the object it destroys (06-clients §3). */
   readonly title: string
@@ -46,10 +68,15 @@ function Surface({
   const pressedGround = useRef(false)
   const titleId = useId()
   const descriptionId = useId()
+  const aroundShown = use(AroundShown)
+  /** Whether it is shown, which is what a dialog drawn inside it waits for. */
+  const [shown, setShown] = useState(false)
+  /** How many times the platform has closed it behind its owner's back. */
+  const [closedBehind, setClosedBehind] = useState(0)
 
   useEffect(() => {
     const element = dialog.current
-    if (element === null || !open) return undefined
+    if (element === null || !open || !aroundShown) return undefined
     if (!element.open) {
       // The platform puts the focus on the first control; its owner may name another.
       element.showModal()
@@ -57,13 +84,16 @@ function Surface({
     }
     // A menu and the toasts are drawn inside it while it is open: outside it they are inert.
     const leave = enterTopLayer(element)
+    setShown(true)
     return () => {
       leave()
+      setShown(false)
       // Closed by its owner, or with the screen that held it, so the page is not left inert.
       if (element.open) element.close()
     }
-    // What takes the focus is asked as it opens, and not again while it stays open.
-  }, [open])
+    // What takes the focus is asked as it opens, and not again while it stays open. Closed by
+    // the platform and kept open by its owner, it opens again.
+  }, [open, aroundShown, closedBehind])
 
   return (
     <dialog
@@ -77,16 +107,28 @@ function Surface({
         // around it is not. And the platform itself lets a file input's `cancel` rise, for a
         // picker put away, which asks nothing of the dialog the input stands in.
         if (event.target !== event.currentTarget) return
+        // One the page may not refuse is followed by the dialog's close, whatever is done here.
+        // The owner is asked then, below, and once: asked here as well, an owner that answers
+        // with a question would open it inside a dialog the platform is about to close.
+        if (!event.cancelable) return
         // Escape asks; the owner decides, and closes it by its `open`.
         event.preventDefault()
         onClose()
       }}
       onClose={(event) => {
-        // The platform closed it behind its owner's back, and the owner is told. A close this
-        // component asked for itself is none of that: its event comes later, when `open` is
-        // false, or when the dialog is open again, as it is between the two runs of an effect
-        // that React's strict mode makes of one. Nor is the close of a dialog drawn inside it.
-        if (event.target === event.currentTarget && open && !event.currentTarget.open) onClose()
+        // A close this component asked for itself is nothing to tell of: its event comes later,
+        // when `open` is false, or when the dialog is open again, as it is between the two runs
+        // of an effect that React's strict mode makes of one. Nor is the close of a dialog drawn
+        // inside it.
+        if (event.target !== event.currentTarget || !open || event.currentTarget.open) return
+        // The platform closed it behind its owner's back: a browser lets a page refuse Escape
+        // only so many times in a row, and then closes the dialog whatever the page says. The
+        // owner is told, and decides as it does when Escape asks. One that keeps it open, a
+        // save still under way or an editor that asks before it discards, has it open: it is
+        // shown again, and what is drawn inside it after it.
+        setShown(false)
+        setClosedBehind((times) => times + 1)
+        onClose()
       }}
       onPointerDown={(event) => {
         pressedGround.current = event.target === event.currentTarget
@@ -118,8 +160,10 @@ function Surface({
               {description}
             </p>
           )}
-          {children === undefined ? null : <div className={styles.body}>{children}</div>}
-          {actions === undefined ? null : <footer className={styles.actions}>{actions}</footer>}
+          <AroundShown value={shown}>
+            {children === undefined ? null : <div className={styles.body}>{children}</div>}
+            {actions === undefined ? null : <footer className={styles.actions}>{actions}</footer>}
+          </AroundShown>
         </div>
       ) : null}
     </dialog>

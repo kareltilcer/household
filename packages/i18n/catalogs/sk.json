@@ -188,6 +188,7 @@
   "ui.stepper.increase": "Zvýšiť: {name}",
   "ui.table.more": "Zobraziť ďalšie",
   "ui.table.state": "Stav synchronizácie",
+  "ui.toast.label": "Oznámenie",
   "ui.toast.region": "Oznámenia ({hotkey})",
   "ui.toast.undo": "Vrátiť späť",
   "ui.update.available": "Je pripravená nová verzia aplikácie Household."

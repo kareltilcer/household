@@ -1,7 +1,7 @@
 // What says a state: the status and sync marks, banners, the offline bar, skeletons and the
 // teaching empty state (02-components §0, §2 and §4.2).
 import { statusGlyphs, type StatusId } from '@household/icons'
-import { act, screen } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { storageKey } from '../display/modes.ts'
@@ -108,6 +108,54 @@ describe('the sync mark', () => {
     expect(later.container.querySelector('[data-status="syncing"]')).not.toBeNull()
   })
 
+  it('stays shown when its owner learns when the write began, with no moment withdrawn', () => {
+    vi.useFakeTimers()
+    const { container, rerender } = draw(<SyncMark state="syncing" />)
+    act(() => {
+      vi.advanceTimersByTime(800)
+    })
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+    // No timer has run since: withdrawn and drawn again a moment later, it would be gone here,
+    // and a table's column of marks with it.
+    rerender(<SyncMark state="syncing" since={Date.now() - 800} />)
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+    rerender(<SyncMark state="syncing" />)
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+  })
+
+  it('waits again when its owner says a write began just now', () => {
+    vi.useFakeTimers()
+    const { container, rerender } = draw(<SyncMark state="syncing" since={Date.now() - 5000} />)
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    rerender(<SyncMark state="syncing" since={Date.now()} />)
+    expect(container.querySelector('[data-status]')).toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(800)
+    })
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+  })
+
+  it('draws at once the mark of a row that turns to a sync begun more than a moment ago', () => {
+    vi.useFakeTimers()
+    const { container, rerender } = draw(<SyncMark state="pending" />)
+    act(() => {
+      vi.advanceTimersByTime(10_000)
+    })
+    rerender(<SyncMark state="syncing" since={Date.now() - 1000} />)
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+  })
+
+  it('draws at once in strict mode the mark of a sync that is already long', () => {
+    vi.useFakeTimers()
+    const { container } = draw(<SyncMark state="syncing" since={Date.now() - 5000} />, 'en', {
+      strict: true,
+    })
+    expect(container.querySelector('[data-status="syncing"]')).not.toBeNull()
+  })
+
   it('shows every other state at once', () => {
     draw(<SyncMark state="pending" />)
     expect(screen.getByText('Not sent yet')).toBeInTheDocument()
@@ -172,19 +220,48 @@ describe('a banner', () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
-  it('is announced when it arrives while the member is here: urgently only for a failure', () => {
-    const { rerender } = draw(
+  it('is announced when it arrives while the member is here: urgently only for a failure', async () => {
+    const { unmount } = draw(
       <Banner tone="danger" announce>
         {words.reason}
       </Banner>,
     )
+    // An alert is said as it arrives, words and all.
     expect(screen.getByRole('alert')).toHaveTextContent(words.reason)
-    rerender(
+    unmount()
+    draw(
       <Banner tone="info" announce>
         {words.reason}
       </Banner>,
     )
+    expect(await screen.findByText(words.reason)).toBeVisible()
     expect(screen.getByRole('status')).toHaveTextContent(words.reason)
+  })
+
+  it('is in the document before its words where it is announced politely, so that they are said', async () => {
+    // What is put into a polite region already there is said; a region that arrives with its
+    // words in it need not be.
+    draw(
+      <Banner
+        tone="info"
+        title={words.readonly}
+        actions={<Button>{words.retry}</Button>}
+        onDismiss={() => undefined}
+        announce
+      >
+        {words.reason}
+      </Banner>,
+    )
+    const region = screen.getByRole('status')
+    expect(region).toHaveTextContent('')
+    await waitFor(() => {
+      expect(region).toHaveTextContent(`${words.readonly}${words.reason}${words.retry}`)
+    })
+  })
+
+  it('draws its words at once where nothing announces it', () => {
+    const { container } = draw(<Banner tone="info">{words.reason}</Banner>)
+    expect(container).toHaveTextContent(words.reason)
   })
 
   it('can be put away only where it is given a way', async () => {

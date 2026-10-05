@@ -4,7 +4,12 @@
 // request is the app's own by sending back the readable `__Host-hh_csrf` cookie's value in
 // `X-CSRF-Token` (ADR 0009). An error is the contract's problem document, typed by its code and
 // thrown as an ApiProblemError, which the query client and a screen switch on (problem.ts).
-import { createApiClient, type ApiClient, type ApiClientOptions } from '@household/api'
+import {
+  createApiClient,
+  isUnsafeMethod,
+  type ApiClient,
+  type ApiClientOptions,
+} from '@household/api'
 import { version } from '../../package.json'
 
 /** Where the API is served: this origin's own `/api/v1`, in production and behind the dev proxy. */
@@ -13,7 +18,12 @@ export const apiPath = '/api/v1'
 /** The cookie the server sets beside the session's, readable so that a script can send it back. */
 export const csrfCookie = '__Host-hh_csrf'
 
-/** The app as `Household-Client` names it, which the server holds to its minimum version (ADR 0010). */
+/**
+ * The app as `Household-Client` names it, which the server holds to its minimum version
+ * (ADR 0010). The version is this package's own, which a release raises: until one has, every
+ * build is `0.0.0`, and a deployment's web minimum set above the version its newest build names
+ * would refuse that build with every other (ADR 0025).
+ */
 export const clientName = `web/${version}`
 
 /** The value of the cookie `name` in a `document.cookie` string, or undefined when it has none. */
@@ -30,18 +40,17 @@ export function cookieValue(cookies: string, name: string): string | undefined {
 /** What a client takes through `use`: openapi-fetch's own, which this package does not import. */
 type Middleware = Parameters<ApiClient['use']>[number]
 
-/** Methods that change state, which the server checks the token on (RFC 9110 §9.2.1). */
-const unsafe = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
-
 /**
- * Sends the CSRF cookie's value with every unsafe request. Read as each request leaves, since a
- * sign-in in another tab replaces it. A request made with no cookie carries no header, and the
- * server answers a signed-in one `403 csrf_failed`.
+ * Sends the CSRF cookie's value with every unsafe request, a method that changes state, which
+ * the server checks the token on: the methods @household/api gives an `Idempotency-Key`, by its
+ * own list of them. Read as each request leaves, since a sign-in in another tab replaces it. A
+ * request made with no cookie carries no header, and the server answers a signed-in one
+ * `403 csrf_failed`.
  */
 export function csrfMiddleware(cookies: () => string): Middleware {
   return {
     onRequest({ request }) {
-      if (!unsafe.has(request.method)) return undefined
+      if (!isUnsafeMethod(request.method)) return undefined
       const token = cookieValue(cookies(), csrfCookie)
       if (token === undefined || token === '') return undefined
       const headers = new Headers(request.headers)

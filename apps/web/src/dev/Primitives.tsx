@@ -3,8 +3,8 @@
 // hold-to-complete. The twelve states are not theirs; they have their own, and the end-to-end
 // suite drives them here: the focus a dialog traps and gives back, a menu under the arrow keys, a
 // confirmation opened from a menu, a toast's undo, a menu and a toast raised from inside a side
-// panel, a hold released early and a hold kept. Its words are fixtures, as the harness's are
-// (harness/model.ts).
+// panel, a side panel that asks before it closes, a hold released early and a hold kept. Its
+// words are fixtures, as the harness's are (harness/model.ts).
 import { controls, statusGlyphs, type StatusId } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { useRef, useState, type ReactNode } from 'react'
@@ -41,7 +41,10 @@ export function Primitives() {
   const [confirm, setConfirm] = useState(false)
   const [editor, setEditor] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const [noting, setNoting] = useState(false)
+  const [discarding, setDiscarding] = useState(false)
   const meterName = useRef<HTMLInputElement>(null)
+  const noteText = useRef<HTMLTextAreaElement>(null)
   const [reading, setReading] = useState('18 402,4')
   const [count, setCount] = useState(2)
   const [repeat, setRepeat] = useState<string>('month')
@@ -165,6 +168,13 @@ export function Primitives() {
           >
             {sample('Edit the cellar meter')}
           </Button>
+          <Button
+            onClick={() => {
+              setNoting(true)
+            }}
+          >
+            {sample('Add a note')}
+          </Button>
         </div>
         <Dialog
           open={confirm}
@@ -252,6 +262,58 @@ export function Primitives() {
               ]}
             />
           </div>
+        </Sheet>
+        {/* An editor that asks before it discards: asked to close, it stays, and opens a
+            confirmation inside itself. A browser lets a page refuse Escape only so many times
+            in a row and then closes the dialog whatever the page says: the panel is shown
+            again, what was typed still in it, and its question over it. */}
+        <Sheet
+          open={noting}
+          onClose={() => {
+            setDiscarding(true)
+          }}
+          title={sample('Note on the cellar meter')}
+          initialFocus={noteText}
+          actions={
+            <Button
+              variant="primary"
+              onClick={() => {
+                setNoting(false)
+              }}
+            >
+              {sample('Save the note')}
+            </Button>
+          }
+        >
+          <TextArea label={sample('What to remember')} ref={noteText} />
+          <Dialog
+            open={discarding}
+            onClose={() => {
+              setDiscarding(false)
+            }}
+            title={sample('Discard the note?')}
+            description={sample('What you typed is saved nowhere yet, and is lost.')}
+            actions={
+              <>
+                <Button
+                  onClick={() => {
+                    setDiscarding(false)
+                  }}
+                >
+                  {sample('Keep writing')}
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    setDiscarding(false)
+                    setNoting(false)
+                  }}
+                >
+                  {sample('Discard the note')}
+                </Button>
+              </>
+            }
+          />
         </Sheet>
       </Section>
 

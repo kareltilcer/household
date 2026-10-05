@@ -78,6 +78,58 @@ test.describe('a dialog', () => {
     await page.mouse.click(4, 4)
     await expect(dialog).toBeHidden()
   })
+
+  test('as a side panel that asks before it closes, is there through every Escape, its question over it', async ({
+    page,
+  }) => {
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Add a note' }).click()
+    const panel = page.getByRole('dialog', { name: 'Note on the cellar meter' })
+    const question = page.getByRole('dialog', { name: 'Discard the note?' })
+    const note = panel.getByRole('textbox', { name: 'What to remember' })
+    await expect(note).toBeFocused()
+    await note.fill('Read it on the first of the month')
+
+    // Escape asks the panel, which asks its question and stays; Escape again answers the
+    // question, to keep writing. A browser lets a page refuse Escape only so many times in a
+    // row, and then closes the dialog whatever the page says: the panel is there all the same,
+    // shown again, and its question opened after it and so over it.
+    for (let press = 1; press <= 8; press++) {
+      await page.keyboard.press('Escape')
+      await expect(panel).toBeVisible()
+      if (press % 2 === 1) {
+        await expect(question).toBeVisible()
+        // The safe choice is the first, and the one the focus is on.
+        await expect(question.getByRole('button', { name: 'Keep writing' })).toBeFocused()
+      } else {
+        await expect(question).toBeHidden()
+      }
+    }
+    await expect(note).toHaveValue('Read it on the first of the month')
+
+    // Over the panel, where a pointer reaches it: under it, the press would land on the panel.
+    await page.keyboard.press('Escape')
+    await question.getByRole('button', { name: 'Keep writing' }).click()
+    await expect(question).toBeHidden()
+    await expect(panel).toBeVisible()
+    await expect(note).toHaveValue('Read it on the first of the month')
+
+    await panel.getByRole('button', { name: 'Close' }).click()
+    await question.getByRole('button', { name: 'Discard the note' }).click()
+    await expect(panel).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Add a note' })).toBeFocused()
+  })
+})
+
+test('a checkbox that is neither on nor off is neither still after a press, where its owner says so', async ({
+  page,
+}) => {
+  await open(page, primitives)
+  const some = page.getByRole('checkbox', { name: 'Some of these lists' })
+  await expect(some).toHaveJSProperty('indeterminate', true)
+  // The platform makes a pressed box plainly on or off; this one stands for what its owner says.
+  await some.click()
+  await expect(some).toHaveJSProperty('indeterminate', true)
 })
 
 test('a menu opens, moves and chooses by the keyboard, and gives the focus back', async ({
@@ -294,6 +346,26 @@ test.describe('a toast', () => {
     await expect(cleared(page)).toBeHidden()
     await page.getByRole('button', { name: 'Save offline' }).click()
     await expect(saved(page)).toBeVisible()
+    await page.clock.runFor(5100)
+    await expect(saved(page)).toBeHidden()
+  })
+
+  test('goes after its dwell though another beside it was closed by a press on its Undo', async ({
+    page,
+  }) => {
+    await holdTheClock(page)
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Clear checked items' }).click()
+    await page.getByRole('button', { name: 'Save offline' }).click()
+    await expect(saved(page)).toBeVisible()
+    // Radix hands the focus of a toast that closes to the toasts' region, and holds every dwell
+    // while the focus is there, where a member who pressed with a pointer is not.
+    await cleared(page).getByRole('button', { name: 'Undo' }).click()
+    await expect(cleared(page)).toBeHidden()
+    await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
+    await expect(saved(page)).toBeVisible()
+    // The pointer leaves the toasts, with no press anywhere else.
+    await page.mouse.move(4, 4)
     await page.clock.runFor(5100)
     await expect(saved(page)).toBeHidden()
   })

@@ -1,7 +1,7 @@
 // Dialogs and sheets, menus and toasts (02-components §1), as far as jsdom can hold them: what
 // each asks of the platform and what it does with the answer. What the browser itself does with a
 // modal dialog and a menu under the keyboard is the end-to-end suite's (e2e/primitives.spec.ts).
-import { act, fireEvent, screen, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -21,6 +21,7 @@ const words = {
   cleared: '7 checked items cleared from Weekly shop',
   scan: 'Scan of the meter',
   discard: 'Discard the changes?',
+  restored: 'Weekly shop has its 7 items again',
   name: 'Name',
 } as const
 
@@ -105,6 +106,90 @@ describe('a dialog', () => {
     })
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('is shown again when the platform closes it and its owner keeps it open', async () => {
+    // A browser lets a page refuse Escape only so many times in a row, and then closes the
+    // dialog whatever the page says: an owner in the middle of a save keeps it all the same.
+    const onClose = vi.fn()
+    draw(
+      <Sheet open onClose={onClose} title={words.meter}>
+        <TextField label={words.name} />
+      </Sheet>,
+    )
+    const panel = screen.getByRole<HTMLDialogElement>('dialog')
+    await userEvent.type(screen.getByRole('textbox', { name: words.name }), words.scan)
+    await act(async () => {
+      // As the platform does it: a `cancel` the page may not refuse, and then the close.
+      panel.dispatchEvent(new Event('cancel'))
+      panel.close()
+      await Promise.resolve()
+    })
+    // Asked once, and not for the `cancel` and the close both.
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(panel.open).toBe(true)
+    // What was typed into it is where it was.
+    expect(screen.getByRole('textbox', { name: words.name })).toHaveValue(words.scan)
+  })
+
+  /** Which of the two each call of `showModal` opened, in the order they were opened. */
+  function opened(
+    showModal: { readonly mock: { readonly contexts: readonly unknown[] } },
+    panel: HTMLElement,
+  ): string[] {
+    return showModal.mock.contexts.map((dialog) => (dialog === panel ? 'panel' : 'question'))
+  }
+
+  it('opens after the panel it is drawn inside, where the two open at once', () => {
+    const showModal = vi.spyOn(HTMLDialogElement.prototype, 'showModal')
+    draw(
+      <Sheet open onClose={() => undefined} title={words.meter}>
+        <Dialog open onClose={() => undefined} title={words.discard} />
+      </Sheet>,
+    )
+    // The platform stacks modals in the order they open, the last over the rest: opened first,
+    // the confirmation would be under the panel it is drawn inside.
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    expect(opened(showModal, panel)).toEqual(['panel', 'question'])
+    expect(screen.getByRole<HTMLDialogElement>('dialog', { name: words.discard }).open).toBe(true)
+  })
+
+  it('is shown again under the question its owner asks, when the platform closes it', async () => {
+    // An editor that asks before it discards: asked to close, it opens a confirmation.
+    function Asking() {
+      const [asking, setAsking] = useState(false)
+      return (
+        <Sheet
+          open
+          onClose={() => {
+            setAsking(true)
+          }}
+          title={words.meter}
+        >
+          <Dialog
+            open={asking}
+            onClose={() => {
+              setAsking(false)
+            }}
+            title={words.discard}
+          />
+        </Sheet>
+      )
+    }
+    const showModal = vi.spyOn(HTMLDialogElement.prototype, 'showModal')
+    draw(<Asking />)
+    const panel = screen.getByRole<HTMLDialogElement>('dialog', { name: words.meter })
+    showModal.mockClear()
+    await act(async () => {
+      panel.dispatchEvent(new Event('cancel'))
+      panel.close()
+      await Promise.resolve()
+    })
+    expect(panel.open).toBe(true)
+    expect(screen.getByRole<HTMLDialogElement>('dialog', { name: words.discard }).open).toBe(true)
+    // The panel, and then its question: asked at the `cancel` too, the question would have
+    // been opened inside a panel about to close, and under it once it was shown again.
+    expect(opened(showModal, panel)).toEqual(['panel', 'question'])
   })
 
   it('stays open where it is mounted open in strict mode, which closes and reopens it once', async () => {
@@ -270,6 +355,19 @@ describe('a menu', () => {
     expect(panel).toContainElement(screen.getByRole('menu'))
   })
 
+  it('is drawn inside the inner of two dialogs that opened at once, which is the one on top', async () => {
+    draw(
+      <Sheet open onClose={() => undefined} title={words.meter}>
+        <Dialog open onClose={() => undefined} title={words.discard}>
+          <Menu trigger={trigger} items={items(() => undefined)} />
+        </Dialog>
+      </Sheet>,
+    )
+    const question = screen.getByRole('dialog', { name: words.discard })
+    await userEvent.click(within(question).getByRole('button', { name: words.more }))
+    expect(question).toContainElement(screen.getByRole('menu'))
+  })
+
   it('is drawn on the page where no dialog is open', async () => {
     draw(
       <>
@@ -366,6 +464,98 @@ describe('a toast', () => {
       vi.advanceTimersByTime(5000)
     })
     expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+  })
+
+  /** The control that puts away the first toast on the screen. */
+  function firstDismiss(): HTMLElement {
+    const [first] = screen.getAllByRole('button', { name: 'Dismiss' })
+    if (first === undefined) throw new Error('no toast is shown')
+    return first
+  }
+  const region = () => screen.getByRole('region', { name: 'Notifications (F8)' })
+
+  it('goes when its dwell is over though another beside it was put away by a press on it', () => {
+    vi.useFakeTimers()
+    draw(<Clear />)
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    // A pointer's press: it is on the toast, its control takes the focus, and the toast closes.
+    // Radix hands the focus of a toast that closes to the region, and holds every toast's dwell
+    // while the focus is there, where a member who pressed with a pointer is not.
+    const dismiss = firstDismiss()
+    fireEvent.pointerMove(dismiss)
+    fireEvent.pointerDown(dismiss)
+    act(() => {
+      dismiss.focus()
+    })
+    fireEvent.click(dismiss)
+    expect(screen.getAllByText(words.cleared)).toHaveLength(1)
+    expect(region().contains(document.activeElement)).toBe(false)
+
+    fireEvent.pointerLeave(region())
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+  })
+
+  it('goes when its dwell is over though it was raised by a press on another one’s Undo', () => {
+    function Restoring() {
+      const toast = useToast()
+      return (
+        <Press
+          name="clear"
+          onPress={() => {
+            toast({
+              message: words.cleared,
+              undo: () => {
+                toast({ message: words.restored })
+              },
+            })
+          }}
+        />
+      )
+    }
+    vi.useFakeTimers()
+    draw(<Restoring />)
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    const undo = screen.getByRole('button', { name: 'Undo' })
+    fireEvent.pointerMove(undo)
+    fireEvent.pointerDown(undo)
+    act(() => {
+      undo.focus()
+    })
+    fireEvent.click(undo)
+    expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+    expect(screen.getByText(words.restored)).toBeVisible()
+
+    fireEvent.pointerLeave(region())
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(screen.queryByText(words.restored)).not.toBeInTheDocument()
+  })
+
+  it('keeps the focus in its region for a member who put another beside it away by a key', async () => {
+    draw(<Clear />)
+    await userEvent.click(screen.getByRole('button', { name: 'clear' }))
+    await userEvent.click(screen.getByRole('button', { name: 'clear' }))
+    await screen.findAllByText(words.cleared)
+    firstDismiss().focus()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getAllByText(words.cleared)).toHaveLength(1)
+    // They are among the toasts still, and the one that remains waits for them.
+    expect(region().contains(document.activeElement)).toBe(true)
+  })
+
+  it('is read out as a notification, by that one word and not by its region’s name', async () => {
+    draw(<Clear />)
+    await userEvent.click(screen.getByRole('button', { name: 'clear' }))
+    // What Radix has assistive technology say, for a moment, beside the toast it draws.
+    const said = () => document.querySelector('[role="status"][aria-live="assertive"]')
+    await waitFor(() => {
+      expect(said()).toHaveTextContent(/^Notification 7 checked items cleared from Weekly shop$/)
+    })
   })
 
   it('leaves the focus in its region when the next one comes after it was put away by a key', async () => {
