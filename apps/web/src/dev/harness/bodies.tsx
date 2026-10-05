@@ -115,6 +115,8 @@ function TableBody({ mark, sample }: BodyProps) {
       sort={sort}
       onSort={setSort}
       mark={(row) => (row.id === 'a' ? mark : undefined)}
+      onOpenMark={() => undefined}
+      rowName={(row) => sample(row.description)}
       onMore={() => undefined}
     />
   )
@@ -269,7 +271,8 @@ function SearchBody({ mark, sample, variant }: BodyProps) {
             : sample('…policy number CZ-448 201, renewal 1 June, notice period six weeks…')
         }
         path={variant === 'search-unfiled' ? null : sample('Documents / House / Insurance')}
-        updated="2026-03-04"
+        updatedAt="2026-03-04T09:12:00+01:00"
+        timeZone="Europe/Prague"
       />
     </Marked>
   )

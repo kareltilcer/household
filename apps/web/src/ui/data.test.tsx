@@ -17,6 +17,7 @@ import { List, ListRow } from './ListRow.tsx'
 import { MetricTile } from './MetricTile.tsx'
 import { MoneyValue } from './MoneyValue.tsx'
 import { SearchResultRow } from './SearchResultRow.tsx'
+import type { SyncState } from './StatusMark.tsx'
 
 const words = {
   meters: 'Meters',
@@ -146,9 +147,11 @@ const columns: readonly Column<Row>[] = [
 function Ledger({
   onMore,
   mark,
+  onOpenMark,
 }: {
   onMore?: () => void
-  mark?: (row: Row) => 'pending' | undefined
+  mark?: (row: Row) => SyncState | undefined
+  onOpenMark?: (row: Row) => void
 }) {
   const [sort, setSort] = useState<Sort | undefined>(undefined)
   return (
@@ -161,6 +164,7 @@ function Ledger({
       {...(sort === undefined ? {} : { sort })}
       {...(onMore === undefined ? {} : { onMore })}
       {...(mark === undefined ? {} : { mark })}
+      {...(onOpenMark === undefined ? {} : { onOpenMark, rowName: (row: Row) => row.description })}
     />
   )
 }
@@ -203,6 +207,27 @@ describe('a data table', () => {
     rerender(<Ledger mark={(row) => (row.id === 'a' ? 'pending' : undefined)} />)
     expect(screen.getByRole('columnheader', { name: 'Sync state' })).toBeInTheDocument()
     expect(screen.getAllByText('Not sent yet')).toHaveLength(1)
+  })
+
+  it('opens what a row’s conflict or rejection is about from its mark, which names the row', async () => {
+    const onOpenMark = vi.fn()
+    const { rerender } = draw(
+      <Ledger mark={(row) => (row.id === 'a' ? 'conflict' : 'rejected')} onOpenMark={onOpenMark} />,
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Two versions of Lidl, weekly shop. Open to resolve' }),
+    )
+    expect(onOpenMark).toHaveBeenCalledExactlyOnceWith(rows[0])
+    await userEvent.click(screen.getByRole('button', { name: 'Not accepted. Open for details' }))
+    expect(onOpenMark).toHaveBeenLastCalledWith(rows[1])
+
+    // A row that is waiting to be sent has nothing to open, and one given no way to open is words.
+    rerender(<Ledger mark={() => 'pending'} onOpenMark={onOpenMark} />)
+    expect(screen.getAllByText('Not sent yet')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: /Open/ })).not.toBeInTheDocument()
+    rerender(<Ledger mark={() => 'conflict'} />)
+    expect(screen.getAllByText('Two versions')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: /Open/ })).not.toBeInTheDocument()
   })
 
   it('asks for the rows after the last by a control, and has none where there are none', async () => {
@@ -275,6 +300,16 @@ describe('a money value', () => {
       />,
     )
     expect(screen.getByText('EUR 48.60 at a rate of 25.52, stored 3/2/26')).toBeVisible()
+  })
+
+  it('shows the stored rate with every digit it has, however small it is', () => {
+    draw(
+      <MoneyValue
+        amount={money(36500, 'EUR')}
+        conversion={{ original: money(10000000, 'VND'), rate: '0.0000365', day: '2026-03-02' }}
+      />,
+    )
+    expect(screen.getByText('VND 10,000,000 at a rate of 0.0000365, stored 3/2/26')).toBeVisible()
   })
 
   it('draws a zero as a zero, with no word', () => {
@@ -351,6 +386,25 @@ describe('a time series', () => {
     expect(screen.queryByText('Approximate')).not.toBeInTheDocument()
   })
 
+  it('draws a year by its months’ letters, three of which are J, each column in its place', () => {
+    const complained = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const letters = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
+    const year = (first: number) =>
+      letters.map((label, month) => ({
+        label,
+        value: first + month,
+        text: `${String(first + month)} kWh`,
+      }))
+    const { rerender } = draw(<TimeSeries caption={words.perMonth} points={year(1)} />)
+    // The next year's figures, under the same letters.
+    rerender(<TimeSeries caption={words.perMonth} points={year(20)} />)
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(
+      year(20).map((point) => `${point.label}${point.label}: ${point.text}`),
+    )
+    // React says so, on the console, where two of a list's elements share a key.
+    expect(complained).not.toHaveBeenCalled()
+  })
+
   it('draws nothing tall where every point is zero, and divides by nothing', () => {
     const { container } = draw(<TimeSeries caption={words.perMonth} points={flat} />)
     expect(container.querySelector<HTMLElement>('li > span > span')?.style.blockSize).toBe('0%')
@@ -413,6 +467,33 @@ describe('a flow', () => {
     expect(screen.getByText(words.accounts)).toBeVisible()
     expect(screen.getByText(words.agree)).toBeVisible()
   })
+
+  it('lists two of one name apart, as it lists two segments of one name', () => {
+    const complained = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const twice = [
+      { label: 'Savings', text: '15 000' },
+      { label: 'Savings', text: '10 000' },
+    ]
+    draw(
+      <>
+        <Flow
+          caption={words.march}
+          total={words.agree}
+          sourcesLabel={words.income}
+          sources={sources}
+          targetsLabel={words.accounts}
+          targets={twice}
+        />
+        <Composition
+          caption={words.storage}
+          total={words.used}
+          segments={twice.map((node) => ({ ...node, share: 0.5 }))}
+        />
+      </>,
+    )
+    expect(screen.getAllByText('Savings')).toHaveLength(4)
+    expect(complained).not.toHaveBeenCalled()
+  })
 })
 
 describe('a search result row', () => {
@@ -420,7 +501,9 @@ describe('a search result row', () => {
     module: 'documents',
     entityType: words.document,
     title: words.insurance,
-    updated: '2026-03-04',
+    // As the contract's SearchHit carries it: an instant, late on the 4th in UTC.
+    updatedAt: '2026-03-04T23:30:00Z',
+    timeZone: 'Europe/Prague',
   } as const
 
   it('shows the module, the kind of thing, the title, the snippet, the path and the day', () => {
@@ -430,6 +513,12 @@ describe('a search result row', () => {
     expect(screen.getByText(words.insurance)).toBeVisible()
     expect(screen.getByText(words.snippet)).toBeVisible()
     expect(screen.getByText(words.path)).toBeVisible()
+    // The day it was in the household's zone, where it was already the 5th.
+    expect(screen.getByText('Updated Mar 5, 2026')).toBeVisible()
+  })
+
+  it('tells the day in the zone it is given, and assumes none', () => {
+    draw(<SearchResultRow {...result} timeZone="America/New_York" />)
     expect(screen.getByText('Updated Mar 4, 2026')).toBeVisible()
   })
 
@@ -444,6 +533,6 @@ describe('a search result row', () => {
 
   it('says the day in the member’s language', () => {
     draw(<SearchResultRow {...result} />, 'de')
-    expect(screen.getByText('Geändert am 04.03.2026')).toBeVisible()
+    expect(screen.getByText('Geändert am 05.03.2026')).toBeVisible()
   })
 })

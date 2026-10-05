@@ -2,7 +2,7 @@
 // default, hover, focus-visible, pressed, loading and disabled, never under 44 × 44 pt. An icon
 // button has a label, with no exception for an obvious glyph: its type has no way to leave one out.
 import { StatusIcon } from '@household/icons/web'
-import type { ComponentProps, ReactNode } from 'react'
+import type { ComponentProps, MouseEvent, ReactNode } from 'react'
 import styles from './Button.module.css'
 import { cx } from './cx.ts'
 
@@ -15,6 +15,12 @@ interface Shared extends Omit<ComponentProps<'button'>, 'children' | 'aria-label
    * busy, and takes no second press.
    */
   readonly loading?: boolean
+  /**
+   * There is nothing for it to do just now, and it stays where the focus is: a stepper's button
+   * at its bound. Drawn as disabled, said as disabled, and takes no press. `disabled` is for a
+   * control that is out of its form altogether, and drops out of the tab order.
+   */
+  readonly 'aria-disabled'?: boolean | undefined
 }
 
 export interface ButtonProps extends Shared {
@@ -23,14 +29,29 @@ export interface ButtonProps extends Shared {
   readonly children: ReactNode
 }
 
-function pressable({ loading = false, onClick, type = 'button', ...rest }: Shared) {
+/**
+ * A press that does nothing, its default action included: a submit button's press is its form's
+ * submission, and Enter in one of the form's fields presses it too.
+ */
+function refuse(event: MouseEvent<HTMLButtonElement>) {
+  event.preventDefault()
+}
+
+function pressable({
+  loading = false,
+  'aria-disabled': idle = false,
+  onClick,
+  type = 'button',
+  ...rest
+}: Shared) {
+  const held = loading || idle
   return {
     ...rest,
     type,
     'aria-busy': loading || undefined,
     // Not `disabled`: a disabled button drops out of the tab order, and the focus with it.
-    'aria-disabled': loading || undefined,
-    onClick: loading ? undefined : onClick,
+    'aria-disabled': held || undefined,
+    onClick: held ? refuse : onClick,
   }
 }
 

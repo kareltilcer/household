@@ -10,6 +10,7 @@ import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { IconButton } from './Button.tsx'
 import styles from './Dialog.module.css'
 import { cx } from './cx.ts'
+import { enterTopLayer } from './topLayer.ts'
 
 export interface DialogProps {
   readonly open: boolean
@@ -41,11 +42,13 @@ function Surface({
 
   useEffect(() => {
     const element = dialog.current
-    if (element === null) return undefined
-    if (open && !element.open) element.showModal()
-    if (!open && element.open) element.close()
+    if (element === null || !open) return undefined
+    if (!element.open) element.showModal()
+    // A menu and the toasts are drawn inside it while it is open: outside it they are inert.
+    const leave = enterTopLayer(element)
     return () => {
-      // Closed with the screen that held it, so the page is not left inert.
+      leave()
+      // Closed by its owner, or with the screen that held it, so the page is not left inert.
       if (element.open) element.close()
     }
   }, [open])
@@ -61,8 +64,12 @@ function Surface({
         event.preventDefault()
         onClose()
       }}
-      onClose={() => {
-        if (open) onClose()
+      onClose={(event) => {
+        // The platform closed it behind its owner's back, and the owner is told. A close this
+        // component asked for itself is none of that: its event comes later, when `open` is
+        // false, or when the dialog is open again, as it is between the two runs of an effect
+        // that React's strict mode makes of one.
+        if (open && !event.currentTarget.open) onClose()
       }}
       onPointerDown={(event) => {
         pressedGround.current = event.target === event.currentTarget

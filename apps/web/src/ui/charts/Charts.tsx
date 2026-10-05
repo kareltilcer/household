@@ -49,8 +49,9 @@ export function TimeSeries({ caption, points, approximate = false }: TimeSeriesP
   return (
     <figure className={styles.chart}>
       <ol className={styles.columns}>
-        {points.map((point) => (
-          <li key={point.label} className={styles.column}>
+        {points.map((point, index) => (
+          // A point is its place in the series: a label is a month's letter, and J comes thrice.
+          <li key={index} className={styles.column}>
             <span className={styles.plot} aria-hidden="true">
               <span
                 className={cx(styles.bar, point.estimated === true && styles.estimated)}
@@ -100,7 +101,8 @@ export function Composition({ caption, segments, total }: CompositionProps) {
       <div className={styles.whole} aria-hidden="true">
         {segments.map((segment, index) => (
           <span
-            key={segment.label}
+            // A segment is its place in the bar, as a point is its place in a series.
+            key={index}
             className={cx(styles.segment, series[index % series.length])}
             style={{ inlineSize: `${String(segment.share * 100)}%` }}
           />
@@ -110,7 +112,7 @@ export function Composition({ caption, segments, total }: CompositionProps) {
           from it, and a colour is only how the eye finds a row again. */}
       <ol className={styles.legend}>
         {segments.map((segment, index) => (
-          <li key={segment.label} className={styles.entry}>
+          <li key={index} className={styles.entry}>
             <span className={cx(styles.swatch, series[index % series.length])} aria-hidden="true" />
             <span className={styles.entryLabel}>{segment.label}</span>
             <span className={styles.figure}>{segment.text}</span>
@@ -154,8 +156,9 @@ export function Flow({ caption, sourcesLabel, sources, targetsLabel, targets, to
     <div className={styles.side}>
       <p className={styles.sideLabel}>{label}</p>
       <ul className={styles.nodes}>
-        {nodes.map((node) => (
-          <li key={node.label} className={styles.node}>
+        {nodes.map((node, index) => (
+          // In the order given, and no other: two accounts may carry one name.
+          <li key={index} className={styles.node}>
             <span className={styles.entryLabel}>{node.label}</span>
             <span className={styles.figure}>{node.text}</span>
           </li>

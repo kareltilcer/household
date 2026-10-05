@@ -2,7 +2,7 @@
 // disabled and read-only. Every one is labelled, and an error is stated in words beside the field
 // and tied to it for assistive technology, never carried by a red border alone (06-clients §4).
 import { BaseIcon } from '@household/icons/web'
-import { useId, type ComponentProps, type ReactNode } from 'react'
+import { useId, useState, type ComponentProps, type ReactNode } from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { IconButton } from './Button.tsx'
 import styles from './Field.module.css'
@@ -160,7 +160,11 @@ export interface StepperProps extends FieldProps {
   readonly readOnly?: boolean
 }
 
-/** A whole number with a button either side of it, each named for what it does to what. */
+/**
+ * A whole number with a button either side of it, each named for what it does to what. A value
+ * typed in is given to `onChange` as soon as it is within the bounds, and held to them when the
+ * field is left.
+ */
 export function Stepper({
   label,
   help,
@@ -175,11 +179,15 @@ export function Stepper({
   readOnly = false,
 }: StepperProps) {
   const t = useTranslate()
+  // What the field holds while it is typed in, until it is left.
+  const [typed, setTyped] = useState<string | undefined>(undefined)
   const fixed = disabled || readOnly
   const low = min ?? Number.NEGATIVE_INFINITY
   const high = max ?? Number.POSITIVE_INFINITY
-  const set = (next: number) => {
-    onChange(Math.min(high, Math.max(low, next)))
+  const held = (next: number) => Math.min(high, Math.max(low, next))
+  const stepTo = (next: number) => {
+    setTyped(undefined)
+    onChange(held(next))
   }
   return (
     <Field label={label} help={help} error={error} required={required}>
@@ -189,9 +197,12 @@ export function Stepper({
             variant="secondary"
             label={t('ui.stepper.decrease', { name: label })}
             icon={<BaseIcon name="minus" />}
-            disabled={fixed || value <= low}
+            disabled={fixed}
+            // At its bound it has nothing to do, and stays where the focus is: a member who
+            // steps down to the least by the keyboard is not dropped out of the control.
+            aria-disabled={value <= low}
             onClick={() => {
-              set(value - step)
+              stepTo(value - step)
             }}
           />
           <input
@@ -199,24 +210,35 @@ export function Stepper({
             type="number"
             inputMode="numeric"
             className={cx(styles.control, styles.numeric, styles.count)}
-            value={value}
+            value={typed ?? value}
             min={min}
             max={max}
             step={step}
             disabled={disabled}
             readOnly={readOnly}
             onChange={(event) => {
+              // Kept as typed until the field is left. The "1" of "12" is under a least of 5,
+              // and an emptied field is on its way to any value: held to the bounds at each
+              // key, neither could be typed.
+              setTyped(event.currentTarget.value)
               const next = event.currentTarget.valueAsNumber
-              if (Number.isFinite(next)) set(next)
+              if (Number.isFinite(next) && next >= low && next <= high) onChange(next)
+            }}
+            onBlur={(event) => {
+              // Left outside its bounds, it is held to them. Left empty, it is what it was.
+              const next = event.currentTarget.valueAsNumber
+              setTyped(undefined)
+              if (Number.isFinite(next) && next !== value) onChange(held(next))
             }}
           />
           <IconButton
             variant="secondary"
             label={t('ui.stepper.increase', { name: label })}
             icon={<BaseIcon name="plus" />}
-            disabled={fixed || value >= high}
+            disabled={fixed}
+            aria-disabled={value >= high}
             onClick={() => {
-              set(value + step)
+              stepTo(value + step)
             }}
           />
         </div>

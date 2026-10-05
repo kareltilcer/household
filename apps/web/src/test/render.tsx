@@ -8,7 +8,15 @@ import { DisplayProvider } from '../display/DisplayProvider.tsx'
 import { I18nProvider } from '../i18n/I18nProvider.tsx'
 import { ToastProvider } from '../ui/Toast.tsx'
 
-export function draw(ui: ReactNode, locale: DisplayLocale = 'en'): RenderResult {
+export function draw(
+  ui: ReactNode,
+  locale: DisplayLocale = 'en',
+  /**
+   * `strict` draws it under React's strict mode, as main.tsx draws the app: every effect of a
+   * component that mounts is run, undone and run again.
+   */
+  { strict = false }: { readonly strict?: boolean } = {},
+): RenderResult {
   // As a wrapper, so that a test's `rerender` draws its new subject inside the same providers.
   function Around({ children }: { readonly children: ReactNode }) {
     return (
@@ -19,7 +27,7 @@ export function draw(ui: ReactNode, locale: DisplayLocale = 'en'): RenderResult 
       </I18nProvider>
     )
   }
-  return render(ui, { wrapper: Around })
+  return render(ui, { wrapper: Around, reactStrictMode: strict })
 }
 
 /**

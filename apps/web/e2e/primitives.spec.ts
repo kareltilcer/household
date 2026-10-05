@@ -85,7 +85,11 @@ test('a menu opens, moves and chooses by the keyboard, and gives the focus back'
     'Archive',
     'Delete the cellar meter',
   ])
+  // Radix moves the focus a moment after the key that asks for it, on a timer of its own: the
+  // next key is pressed once the focus is where that one put it, as a member's is.
+  await expect(menu.getByRole('menuitem', { name: 'Rename' })).toBeFocused()
   await page.keyboard.press('ArrowDown')
+  await expect(menu.getByRole('menuitem', { name: 'Archive' })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(menu).toBeHidden()
   await expect(page.locator('[data-chosen]')).toHaveText('Archive')
@@ -96,6 +100,66 @@ test('a menu opens, moves and chooses by the keyboard, and gives the focus back'
   await page.keyboard.press('Escape')
   await expect(menu).toBeHidden()
   await expect(trigger).toBeFocused()
+})
+
+test.describe('inside a side panel, which makes the page outside it inert', () => {
+  const serial = 'More actions for Serial number'
+
+  async function openPanel(page: Page): Promise<Locator> {
+    await open(page, primitives)
+    await page.getByRole('button', { name: 'Edit the cellar meter' }).click()
+    const panel = page.getByRole('dialog', { name: 'Cellar meter' })
+    await expect(panel).toBeVisible()
+    return panel
+  }
+
+  test('a menu is the panel’s own: it opens, chooses, and closes alone on Escape', async ({
+    page,
+  }) => {
+    const panel = await openPanel(page)
+    const trigger = panel.getByRole('button', { name: serial })
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+    const menu = panel.getByRole('menu')
+    await expect(menu).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    // Escape closed the menu, and the panel it was opened from is where it was.
+    await expect(panel).toBeVisible()
+    await expect(trigger).toBeFocused()
+
+    await trigger.click()
+    await menu.getByRole('menuitem', { name: 'Copy the serial number' }).click()
+    await expect(menu).toBeHidden()
+    await expect(panel).toBeVisible()
+  })
+
+  test('a toast is drawn in the panel, and its undo can be pressed there', async ({ page }) => {
+    const panel = await openPanel(page)
+    await panel.getByRole('button', { name: serial }).click()
+    await panel.getByRole('menuitem', { name: 'Clear the serial number' }).click()
+    const toast = panel
+      .locator('[data-third-party] li')
+      .filter({ hasText: 'Serial number cleared' })
+    await expect(toast).toBeVisible()
+    await toast.getByRole('button', { name: 'Undo' }).click()
+    await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
+    await expect(toast).toBeHidden()
+    await expect(panel).toBeVisible()
+  })
+
+  test('a toast stays, on the page again, when the panel closes under it', async ({ page }) => {
+    const panel = await openPanel(page)
+    await panel.getByRole('button', { name: serial }).click()
+    await panel.getByRole('menuitem', { name: 'Clear the serial number' }).click()
+    await expect(panel.locator('[data-third-party] li')).toBeVisible()
+    await panel.getByRole('button', { name: 'Close' }).click()
+    await expect(panel).toBeHidden()
+    const toast = page.locator('[data-third-party] li').filter({ hasText: 'Serial number cleared' })
+    await expect(toast).toBeVisible()
+    await toast.getByRole('button', { name: 'Undo' }).click()
+    await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
+  })
 })
 
 test.describe('a toast', () => {

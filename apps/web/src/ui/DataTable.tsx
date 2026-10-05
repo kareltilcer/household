@@ -39,6 +39,14 @@ export interface DataTableProps<Row> {
   readonly onSort?: (sort: Sort) => void
   /** The state of a row's own write, where it is not in sync. */
   readonly mark?: (row: Row) => SyncState | undefined
+  /**
+   * Opens what a row's mark is about: the comparison for a conflict, the reason for a rejection.
+   * With it the mark of such a row is a control. A row that is pending or syncing has nothing to
+   * open, and its mark stays words.
+   */
+  readonly onOpenMark?: (row: Row) => void
+  /** A row's name, which a conflict's control says: "Two versions of {name}". */
+  readonly rowName?: (row: Row) => string
   /** Fetches the rows after the last one. With it the table ends in a control that asks for them. */
   readonly onMore?: () => void
   /** The density this table is drawn in while the member has chosen none. Compact, as a table is. */
@@ -53,6 +61,8 @@ export function DataTable<Row>({
   sort,
   onSort,
   mark,
+  onOpenMark,
+  rowName,
   onMore,
   density = 'compact',
 }: DataTableProps<Row>) {
@@ -137,7 +147,20 @@ export function DataTable<Row>({
                   ))}
                   {marked ? (
                     <td className={styles.cell}>
-                      {state === undefined ? null : <SyncMark state={state} />}
+                      {state === undefined ? null : (
+                        <SyncMark
+                          state={state}
+                          {...(rowName === undefined ? {} : { name: rowName(row) })}
+                          {...(onOpenMark !== undefined &&
+                          (state === 'conflict' || state === 'rejected')
+                            ? {
+                                onOpen: () => {
+                                  onOpenMark(row)
+                                },
+                              }
+                            : {})}
+                        />
+                      )}
                     </td>
                   ) : null}
                 </tr>

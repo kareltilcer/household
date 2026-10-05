@@ -185,6 +185,11 @@ describe('the check of a build', () => {
       'carries the dev-only harness',
     ],
     [
+      'a source map',
+      { 'assets/index-1.js.map': '{"version":3,"sources":["../../src/main.tsx"]}' },
+      'is a source map',
+    ],
+    [
       'a file the build did not write',
       { 'assets/vendor-1.js': null },
       'which the build did not write',

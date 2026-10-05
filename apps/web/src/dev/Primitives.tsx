@@ -2,8 +2,8 @@
 // dev-only page: buttons, inputs, dialogs and sheets, menus, toasts, banners, the sync marks and
 // hold-to-complete. The twelve states are not theirs; they have their own, and the end-to-end
 // suite drives them here: the focus a dialog traps and gives back, a menu under the arrow keys, a
-// toast's undo, a hold released early and a hold kept. Its words are fixtures, as the harness's
-// are (harness/model.ts).
+// toast's undo, a menu and a toast raised from inside a side panel, a hold released early and a
+// hold kept. Its words are fixtures, as the harness's are (harness/model.ts).
 import { controls, statusGlyphs, type StatusId } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { useState, type ReactNode } from 'react'
@@ -220,6 +220,37 @@ export function Primitives() {
             error={sample('A serial number has no spaces.')}
             defaultValue="44 81 20"
           />
+          {/* A menu and a toast raised from inside a modal, which makes the page outside it
+              inert: both are drawn inside the panel, or neither could be reached. */}
+          <div className={styles.row}>
+            <Menu
+              trigger={
+                <IconButton
+                  label={t(controls.more_actions.labelKey, { name: sample('Serial number') })}
+                  icon={<BaseIcon name={controls.more_actions.glyph.id} />}
+                />
+              }
+              items={[
+                {
+                  id: 'clear',
+                  label: sample('Clear the serial number'),
+                  onSelect: () => {
+                    toast({
+                      message: sample('Serial number cleared from Cellar meter'),
+                      undo: () => {
+                        setUndone((current) => current + 1)
+                      },
+                    })
+                  },
+                },
+                {
+                  id: 'copy',
+                  label: sample('Copy the serial number'),
+                  onSelect: () => undefined,
+                },
+              ]}
+            />
+          </div>
         </Sheet>
       </Section>
 

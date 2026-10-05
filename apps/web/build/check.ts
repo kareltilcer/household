@@ -6,6 +6,7 @@
 //   style or a handler inline, or names a file of another origin, or a stylesheet holds a `data:`
 //   URL. What a browser refuses at run time the end-to-end suite hears; this is what can be read;
 // - carries a dev-only page: the twelve-state harness is in no build a member is served;
+// - holds a source map: whoever serves the build would serve the app's sources with it;
 // - does not name its own id in build.json, by which a page learns a newer build is live.
 //
 // An argument names another directory to read than dist/www, which this script's test uses.
@@ -116,6 +117,11 @@ for (const file of files.filter((name) => name.endsWith('.css'))) {
 // No dev-only page.
 for (const file of files.filter((name) => /\.(js|css|html)$/.test(name))) {
   if (read(file).includes(devMarker)) fail(`${file} carries the dev-only harness`)
+}
+
+// No source map.
+for (const file of files.filter((name) => name.endsWith('.map'))) {
+  fail(`${file} is a source map, which would publish the app's sources`)
 }
 
 // The build's id.

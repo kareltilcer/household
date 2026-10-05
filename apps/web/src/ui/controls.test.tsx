@@ -1,7 +1,7 @@
 // Buttons and inputs (02-components §1): each in the states it has.
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
+import { createRef, useState, type SyntheticEvent } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { draw } from '../test/render.tsx'
 import { Button, IconButton, type ButtonVariant } from './Button.tsx'
@@ -69,6 +69,48 @@ describe('a button', () => {
     await userEvent.tab()
     expect(button).toHaveFocus()
     await userEvent.click(button)
+    await userEvent.keyboard('{Enter}')
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
+  it('submits its form once: no second time while loading, by a press or by Enter in a field', async () => {
+    const onSubmit = vi.fn((event: SyntheticEvent) => {
+      event.preventDefault()
+    })
+    const form = (loading: boolean) => (
+      <form onSubmit={onSubmit}>
+        <TextField label={words.value} />
+        <Button type="submit" loading={loading}>
+          {words.save}
+        </Button>
+      </form>
+    )
+    const { rerender } = draw(form(false))
+    await userEvent.click(screen.getByRole('button', { name: words.save }))
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+
+    rerender(form(true))
+    await userEvent.click(screen.getByRole('button', { name: words.save }))
+    await userEvent.type(screen.getByRole('textbox', { name: words.value }), '18{Enter}')
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+
+    rerender(form(false))
+    await userEvent.type(screen.getByRole('textbox', { name: words.value }), '{Enter}')
+    expect(onSubmit).toHaveBeenCalledTimes(2)
+  })
+
+  it('takes no press, and keeps the focus, where it is said to have nothing to do', async () => {
+    const onClick = vi.fn()
+    draw(
+      <Button aria-disabled onClick={onClick}>
+        {words.save}
+      </Button>,
+    )
+    const button = screen.getByRole('button', { name: words.save })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).not.toHaveAttribute('aria-busy')
+    await userEvent.tab()
+    expect(button).toHaveFocus()
     await userEvent.keyboard('{Enter}')
     expect(onClick).not.toHaveBeenCalled()
   })
@@ -177,13 +219,26 @@ describe('a text area and a select', () => {
   })
 })
 
-function Count({ start, min, max }: { start: number; min?: number; max?: number }) {
+function Count({
+  start,
+  min,
+  max,
+  onChange,
+}: {
+  start: number
+  min?: number
+  max?: number
+  onChange?: (value: number) => void
+}) {
   const [value, setValue] = useState(start)
   return (
     <Stepper
       label={words.members}
       value={value}
-      onChange={setValue}
+      onChange={(next) => {
+        onChange?.(next)
+        setValue(next)
+      }}
       {...(min === undefined ? {} : { min })}
       {...(max === undefined ? {} : { max })}
     />
@@ -201,14 +256,62 @@ describe('a stepper', () => {
     expect(input).toHaveValue(3)
   })
 
-  it('stops at its bounds, and holds a typed value to them', async () => {
+  it('stops at its bounds, and holds a typed value to them once the field is left', async () => {
     draw(<Count start={1} min={1} max={3} />)
-    expect(screen.getByRole('button', { name: 'Decrease Members' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Decrease Members' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
     const input = screen.getByRole('spinbutton')
     await userEvent.clear(input)
     await userEvent.type(input, '9')
+    expect(input).toHaveValue(9)
+    await userEvent.tab()
     expect(input).toHaveValue(3)
+    expect(screen.getByRole('button', { name: 'Increase Members' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+  })
+
+  it('takes a value typed key by key under its least, and an emptied field on the way', async () => {
+    const onChange = vi.fn()
+    draw(<Count start={5} min={5} max={50} onChange={onChange} />)
+    const input = screen.getByRole('spinbutton')
+    await userEvent.clear(input)
+    expect(input).toHaveValue(null)
+    await userEvent.type(input, '12')
+    expect(input).toHaveValue(12)
+    // The "1" on the way was under the least, and was no value yet.
+    expect(onChange.mock.calls).toEqual([[12]])
+    await userEvent.tab()
+    expect(input).toHaveValue(12)
+
+    // Left empty, it is what it was.
+    await userEvent.clear(input)
+    await userEvent.tab()
+    expect(input).toHaveValue(12)
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the focus on a button that has stepped to its bound, which then does nothing', async () => {
+    draw(<Count start={2} min={1} max={3} />)
+    const decrease = screen.getByRole('button', { name: 'Decrease Members' })
+    await userEvent.click(decrease)
+    expect(screen.getByRole('spinbutton')).toHaveValue(1)
+    expect(decrease).toHaveFocus()
+    // Not disabled: a disabled button would drop the focus it holds.
+    expect(decrease).toBeEnabled()
+    expect(decrease).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByRole('spinbutton')).toHaveValue(1)
+  })
+
+  it('takes no step and no typing where it is disabled', () => {
+    draw(<Stepper label={words.members} value={2} onChange={() => undefined} disabled />)
+    expect(screen.getByRole('button', { name: 'Decrease Members' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Increase Members' })).toBeDisabled()
+    expect(screen.getByRole('spinbutton')).toBeDisabled()
   })
 
   it('names its buttons in the member’s language', () => {
@@ -236,6 +339,26 @@ describe('a checkbox, a switch and a radio group', () => {
     expect(screen.getByRole('checkbox')).toBePartiallyChecked()
     rerender(<Checkbox label={words.remind} />)
     expect(screen.getByRole('checkbox')).not.toBePartiallyChecked()
+  })
+
+  it('hands their input to a caller that asks for it by a ref', () => {
+    const checkbox = createRef<HTMLInputElement>()
+    const told = vi.fn()
+    const toggle = createRef<HTMLInputElement>()
+    const { rerender } = draw(
+      <>
+        <Checkbox label={words.remind} ref={checkbox} indeterminate />
+        <Switch label={words.share} ref={toggle} />
+      </>,
+    )
+    expect(checkbox.current).toBe(screen.getByRole('checkbox', { name: words.remind }))
+    expect(toggle.current).toBe(screen.getByRole('switch', { name: words.share }))
+    // The component still reaches it itself, for what has no attribute.
+    expect(checkbox.current).toBePartiallyChecked()
+
+    rerender(<Checkbox label={words.remind} ref={told} />)
+    expect(told).toHaveBeenCalledWith(screen.getByRole('checkbox', { name: words.remind }))
+    expect(checkbox.current).toBeNull()
   })
 
   it('chooses one of a named group, and leaves a disabled one alone', async () => {

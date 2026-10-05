@@ -6,6 +6,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import type { ReactElement, ReactNode } from 'react'
 import styles from './Menu.module.css'
 import { cx } from './cx.ts'
+import { useTopModal } from './topLayer.ts'
 
 export interface MenuItem {
   readonly id: string
@@ -24,10 +25,13 @@ export interface MenuProps {
 }
 
 export function Menu({ trigger, items }: MenuProps) {
+  // Inside the open modal, where one is open: the page outside it is inert, and a menu drawn
+  // there, as Radix draws it by itself, could be opened from a dialog and never chosen from.
+  const modal = useTopModal()
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
+      <DropdownMenu.Portal container={modal}>
         <DropdownMenu.Content
           className={styles.menu}
           align="end"

@@ -22,7 +22,8 @@ export interface Formatters {
   readonly number: (value: number, options?: Intl.NumberFormatOptions) => string
   /**
    * A decimal the contract carries as a string, an exchange rate or a quantity, read exactly:
-   * `"25.5200"` never passes through a float.
+   * `"25.5200"` never passes through a float, and every digit it was written with is shown
+   * unless `options` says how many are.
    */
   readonly decimal: (value: string, options?: Intl.NumberFormatOptions) => string
   /** `fraction` as a percentage: 0.44 is 44 %. */
@@ -34,6 +35,8 @@ export interface Formatters {
   readonly day: (day: string, style?: DateStyle) => string
   /** An instant, in the zone `timeZone` names: the household's, or the member's own. */
   readonly instant: (at: Date | string, timeZone: string, style?: DateStyle) => string
+  /** The calendar day an instant falls on in the zone `timeZone` names, with no time of day. */
+  readonly dayOf: (at: Date | string, timeZone: string, style?: DateStyle) => string
 }
 
 /** `amountMinor` of a currency with `digits` decimal places, as an exact decimal: 123456 → 1234.56. */
@@ -51,23 +54,33 @@ function decimal(amountMinor: number, digits: number): Intl.StringNumericLiteral
 }
 
 const calendarDay = /^(\d{4})-(\d{2})-(\d{2})$/
-const plainDecimal = /^-?\d+(\.\d+)?$/
+const plainDecimal = /^-?\d+(?:\.(\d+))?$/
+
+/** The most fraction digits every `Intl` takes: past them a decimal is rounded. */
+const mostFractionDigits = 20
 
 export function createFormatters(locale: string): Formatters {
   const currencies = new Map<string, Intl.NumberFormat>()
   const currency = (code: string) => {
     let format = currencies.get(code)
     if (format === undefined) {
+      // The currency's minor unit is ISO 4217's, which the amount is counted in. `Intl` has a
+      // table of its own, which shows some currencies with fewer places than they have (the
+      // forint and the Iraqi dinar among them) and would round their minor units away.
+      const digits = exponent(code)
       // The ISO code, not a symbol: a household may hold kr of three countries, and $ of more.
       format = new Intl.NumberFormat(locale, {
         style: 'currency',
         currency: code,
         currencyDisplay: 'code',
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
       })
       currencies.set(code, format)
     }
     return format
   }
+  const instantOf = (at: Date | string) => (typeof at === 'string' ? new Date(at) : at)
   const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 })
   const partsOf = (amount: Money) =>
     currency(amount.currency).formatToParts(decimal(amount.amount_minor, exponent(amount.currency)))
@@ -76,8 +89,14 @@ export function createFormatters(locale: string): Formatters {
     locale,
     number: (value, options) => new Intl.NumberFormat(locale, options).format(value),
     decimal: (value, options) => {
-      if (!plainDecimal.test(value)) throw new RangeError(`${JSON.stringify(value)} is no decimal`)
-      return new Intl.NumberFormat(locale, options).format(value as Intl.StringNumericLiteral)
+      const match = plainDecimal.exec(value)
+      if (match === null) throw new RangeError(`${JSON.stringify(value)} is no decimal`)
+      // `Intl` by itself keeps three fraction digits and rounds the rest away.
+      const written = Math.min(match[1]?.length ?? 0, mostFractionDigits)
+      const most = Math.max(written, options?.minimumFractionDigits ?? 0)
+      return new Intl.NumberFormat(locale, { maximumFractionDigits: most, ...options }).format(
+        value as Intl.StringNumericLiteral,
+      )
     },
     percent: (fraction) => percent.format(fraction),
     money: (amount) =>
@@ -103,7 +122,9 @@ export function createFormatters(locale: string): Formatters {
     },
     instant: (at, timeZone, style = 'medium') =>
       new Intl.DateTimeFormat(locale, { dateStyle: style, timeStyle: 'short', timeZone }).format(
-        typeof at === 'string' ? new Date(at) : at,
+        instantOf(at),
       ),
+    dayOf: (at, timeZone, style = 'medium') =>
+      new Intl.DateTimeFormat(locale, { dateStyle: style, timeZone }).format(instantOf(at)),
   }
 }

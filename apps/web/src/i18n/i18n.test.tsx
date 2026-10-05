@@ -1,4 +1,4 @@
-import { money } from '@household/domain'
+import { currencyCodes, exponent, money } from '@household/domain'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -17,6 +17,20 @@ describe('money', () => {
     expect(en.money(money(1240, 'BHD'))).toBe('BHD 1.240')
     expect(en.money(money(5, 'EUR'))).toBe('EUR 0.05')
     expect(en.money(money(0, 'EUR'))).toBe('EUR 0.00')
+  })
+
+  it('shows every currency’s minor units, where `Intl`’s own table would round them away', () => {
+    expect(en.money(money(12345, 'HUF'))).toBe('HUF 123.45')
+    expect(cs.money(money(150, 'HUF'))).toBe('1,50 HUF')
+    expect(en.money(money(1250, 'IQD'))).toBe('IQD 1.250')
+    for (const code of currencyCodes) {
+      const fraction = en
+        .moneyParts(money(1, code))
+        .map((part) => part.value)
+        .join('')
+        .split('.')[1]
+      expect(fraction?.length ?? 0, code).toBe(exponent(code))
+    }
   })
 
   it('never passes through a float: the largest amount keeps its last minor unit', () => {
@@ -64,10 +78,25 @@ describe('dates and numbers', () => {
   })
 
   it('reads a decimal the contract carries as a string exactly', () => {
-    expect(en.decimal('25.5200', { maximumFractionDigits: 6 })).toBe('25.52')
-    expect(en.decimal('0.1234567', { maximumFractionDigits: 6 })).toBe('0.123457')
+    expect(en.decimal('25.5200')).toBe('25.52')
+    // Every digit it was written with: a rate of a small currency is not rounded to three.
+    expect(en.decimal('0.0000365')).toBe('0.0000365')
+    expect(en.decimal('1234567.123456789')).toBe('1,234,567.123456789')
+    expect(en.decimal('12')).toBe('12')
     expect(() => en.decimal('1e3')).toThrow(RangeError)
     expect(() => en.decimal('twelve')).toThrow(RangeError)
+  })
+
+  it('rounds a decimal only where its caller says how many digits to show', () => {
+    expect(en.decimal('0.1234567', { maximumFractionDigits: 6 })).toBe('0.123457')
+    expect(en.decimal('25.5', { minimumFractionDigits: 2 })).toBe('25.50')
+  })
+
+  it('shows the day an instant falls on in the zone its caller names', () => {
+    const at = '2026-03-04T23:30:00Z'
+    expect(en.dayOf(at, 'Europe/Prague')).toBe('5 Mar 2026')
+    expect(en.dayOf(at, 'America/New_York', 'long')).toBe('4 March 2026')
+    expect(en.dayOf(new Date(at), 'UTC')).toBe('4 Mar 2026')
   })
 
   it('formats a number and a share in the locale', () => {

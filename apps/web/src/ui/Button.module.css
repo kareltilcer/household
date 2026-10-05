@@ -73,8 +73,12 @@
   background: color-mix(in srgb, var(--button-danger-bg) 76%, var(--text-primary));
 }
 
+/* Disabled, or with nothing to do just now and still where the focus is (`aria-disabled`). A busy
+   button says so by `aria-disabled` too, and keeps its own look. */
 .button:disabled,
-.button:disabled:hover {
+.button:disabled:hover,
+.button[aria-disabled='true']:not([aria-busy='true']),
+.button[aria-disabled='true']:not([aria-busy='true']):hover {
   background: var(--surface-sunken);
   border-color: var(--border-subtle);
   color: var(--text-disabled);

@@ -6,8 +6,10 @@ import { BaseIcon } from '@household/icons/web'
 import { thresholds } from '@household/tokens'
 import * as RadixToast from '@radix-ui/react-toast'
 import { createContext, use, useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import styles from './Toast.module.css'
+import { useTopModal } from './topLayer.ts'
 
 export interface ToastOptions {
   /** What happened, naming what it happened to: "7 checked items cleared from Weekly shop". */
@@ -42,9 +44,25 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
   }, [])
   const region = useMemo(() => t('ui.toast.region', { hotkey }), [t])
 
+  // While a modal is open the toasts are drawn inside it, and announced from inside it: the page
+  // outside it is inert, where an Undo could not be pressed and a toast would not be read out.
+  const modal = useTopModal()
+  const viewport = (
+    <RadixToast.Viewport
+      className={styles.viewport}
+      hotkey={[hotkey]}
+      label={region}
+      data-third-party=""
+    />
+  )
+
   return (
     <ToastContext value={show}>
-      <RadixToast.Provider duration={thresholds['toast-dwell']} label={region}>
+      <RadixToast.Provider
+        duration={thresholds['toast-dwell']}
+        label={region}
+        {...(modal === null ? {} : { announcerContainer: modal })}
+      >
         {children}
         {shown.map((toast) => (
           <RadixToast.Root
@@ -71,12 +89,7 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
             </RadixToast.Close>
           </RadixToast.Root>
         ))}
-        <RadixToast.Viewport
-          className={styles.viewport}
-          hotkey={[hotkey]}
-          label={region}
-          data-third-party=""
-        />
+        {modal === null ? viewport : createPortal(viewport, modal)}
       </RadixToast.Provider>
     </ToastContext>
   )

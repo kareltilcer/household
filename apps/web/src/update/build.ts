@@ -57,26 +57,28 @@ export function watchForUpdate(
 ): UpdateWatch {
   if (own === undefined) return { stop: () => undefined }
   let told = false
-  const tell = () => {
+  const ask = () => {
     if (told) return
-    told = true
-    onUpdate()
+    void live().then((id) => {
+      if (told || id === undefined || id === own) return
+      told = true
+      onUpdate()
+    })
   }
   const check = () => {
-    if (told || document.visibilityState !== 'visible') return
-    void live().then((id) => {
-      if (id !== undefined && id !== own) tell()
-    })
+    if (document.visibilityState === 'visible') ask()
   }
   const timer = setInterval(check, checkEvery)
   document.addEventListener('visibilitychange', check)
-  // Vite raises this when a lazily loaded file of the page's build is no longer served.
-  window.addEventListener('vite:preloadError', tell)
+  // Vite raises this when the page could not load a file of its own build. A newer build that
+  // replaced the file is one cause, and a connection that dropped is another, so the page asks
+  // which build is live, as at any other time, and does not take the failure for the answer.
+  window.addEventListener('vite:preloadError', ask)
   return {
     stop: () => {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', check)
-      window.removeEventListener('vite:preloadError', tell)
+      window.removeEventListener('vite:preloadError', ask)
     },
   }
 }

@@ -80,11 +80,39 @@ describe('a dialog', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('is closed with the screen that held it, so the page is not left inert', () => {
+  it('is closed with the screen that held it, so the page is not left inert', async () => {
+    const onClose = vi.fn()
     const close = vi.spyOn(HTMLDialogElement.prototype, 'close')
-    const { unmount } = draw(<Confirm onClose={() => undefined} />)
+    const { unmount } = draw(<Confirm onClose={onClose} />)
     unmount()
     expect(close).toHaveBeenCalled()
+    // Its own close asks nothing of an owner that is gone.
+    await act(() => Promise.resolve())
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('tells its owner when the platform closes it behind its back', async () => {
+    const onClose = vi.fn()
+    draw(<Confirm onClose={onClose} />)
+    const dialog = screen.getByRole<HTMLDialogElement>('dialog')
+    await act(async () => {
+      dialog.close()
+      await Promise.resolve()
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('stays open where it is mounted open in strict mode, which closes and reopens it once', async () => {
+    const onClose = vi.fn()
+    const close = vi.spyOn(HTMLDialogElement.prototype, 'close')
+    draw(<Confirm onClose={onClose} />, 'en', { strict: true })
+    // Strict mode ran the effect, undid it and ran it again: the dialog was closed in between,
+    // and the `close` of that reaches a dialog that is open.
+    expect(close).toHaveBeenCalledTimes(1)
+    await act(() => Promise.resolve())
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: words.title })).toBeInTheDocument()
   })
 
   it('draws nothing while it is closed', () => {
@@ -160,6 +188,28 @@ describe('a menu', () => {
     expect(onSelect).toHaveBeenCalledTimes(1)
   })
 
+  it('is drawn inside the dialog it is opened from, since the page outside one is inert', async () => {
+    draw(
+      <Sheet open onClose={() => undefined} title={words.meter}>
+        <Menu trigger={trigger} items={items(() => undefined)} />
+      </Sheet>,
+    )
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    await userEvent.click(within(panel).getByRole('button', { name: words.more }))
+    expect(panel).toContainElement(screen.getByRole('menu'))
+  })
+
+  it('is drawn on the page where no dialog is open', async () => {
+    draw(
+      <>
+        <Dialog open={false} onClose={() => undefined} title={words.title} />
+        <Menu trigger={trigger} items={items(() => undefined)} />
+      </>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: words.more }))
+    expect(screen.getByRole('menu').closest('dialog')).toBeNull()
+  })
+
   it('leaves the page behind it alone: it locks no scroll and hides nothing', async () => {
     draw(
       <>
@@ -228,6 +278,46 @@ describe('a toast', () => {
       vi.advanceTimersByTime(1)
     })
     expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+  })
+
+  function Editing({ undo }: { undo: () => void }) {
+    const [open, setOpen] = useState(true)
+    return (
+      <Sheet
+        open={open}
+        onClose={() => {
+          setOpen(false)
+        }}
+        title={words.meter}
+      >
+        <Clear undo={undo} />
+      </Sheet>
+    )
+  }
+
+  it('is drawn and announced inside an open dialog, where its undo can be reached', async () => {
+    const undo = vi.fn()
+    draw(<Editing undo={undo} />)
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    await userEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+    expect(await within(panel).findByText(words.cleared)).toBeVisible()
+    expect(panel).toContainElement(screen.getByRole('region', { name: 'Notifications (F8)' }))
+    // What reads it out is inside the dialog too: outside it, nothing is read.
+    expect(panel.querySelector('[role="status"][aria-live="assertive"]')).not.toBeNull()
+    await userEvent.click(within(panel).getByRole('button', { name: 'Undo' }))
+    expect(undo).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays, on the page again, when the dialog it was raised in closes', async () => {
+    draw(<Editing undo={() => undefined} />)
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    await userEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+    await within(panel).findByText(words.cleared)
+    await userEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await screen.findByText(words.cleared)).toBeVisible()
+    expect(panel).not.toContainElement(screen.getByRole('region', { name: 'Notifications (F8)' }))
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeVisible()
   })
 
   it('shows each of several, apart', async () => {

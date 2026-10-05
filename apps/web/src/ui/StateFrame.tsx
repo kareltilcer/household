@@ -25,27 +25,52 @@ export interface BodyContext {
   readonly writes: boolean
 }
 
+/** The states whose message stands in the body's place: `error` and `withdrawn`, by the table. */
+type MessageState = {
+  [State in DataState]: (typeof treatments)[State]['kind'] extends 'message' ? State : never
+}[DataState]
+
+/** The states that put a strip above the body: `rejected` and `readonly`, by the table. */
+type StripState = {
+  [State in DataState]: (typeof treatments)[State] extends { readonly banner: string }
+    ? State
+    : never
+}[DataState]
+
 export interface StateFrameProps {
   readonly state: DataState
   /** The body's own shape, for `loading`. */
   readonly skeleton: ReactNode
   /** The body's own teaching empty state, for `empty`. */
   readonly empty: ReactNode
-  /** The sentences of the states that have one. A state whose sentence is left out draws its body bare. */
-  readonly texts: Partial<Record<'error' | 'rejected' | 'withdrawn' | 'readonly', StateText>>
+  /**
+   * The sentences of the states that have one. The two that stand in the body's place are always
+   * given: with no sentence there would be nothing where the body was, and a failed load would
+   * be a blank screen. A strip's may be left out, and its body is then drawn bare.
+   */
+  readonly texts: Readonly<Record<MessageState, StateText>> & Partial<Record<StripState, StateText>>
   readonly children: (context: BodyContext) => ReactNode
 }
 
-function textOf(state: DataState, texts: StateFrameProps['texts']): StateText | undefined {
-  return state === 'error' || state === 'rejected' || state === 'withdrawn' || state === 'readonly'
-    ? texts[state]
-    : undefined
+function standsInPlace(state: DataState): state is MessageState {
+  return treatments[state].kind === 'message'
+}
+
+function hasStrip(state: DataState): state is StripState {
+  return 'banner' in treatments[state]
 }
 
 export function StateFrame({ state, skeleton, empty, texts, children }: StateFrameProps) {
+  if (standsInPlace(state)) {
+    const { title, text, actions } = texts[state]
+    return (
+      <Banner tone={treatments[state].message} title={title} actions={actions}>
+        {text}
+      </Banner>
+    )
+  }
   const treatment: Treatment = treatments[state]
-  const text = textOf(state, texts)
-  switch (treatment.kind) {
+  switch (treatments[state].kind) {
     case 'absent':
       // Gone: no label, no placeholder, nothing that says something would have been here.
       return null
@@ -53,22 +78,18 @@ export function StateFrame({ state, skeleton, empty, texts, children }: StateFra
       return skeleton
     case 'teach':
       return empty
-    case 'message':
-      return text === undefined ? null : (
-        <Banner tone={treatment.message ?? 'neutral'} title={text.title} actions={text.actions}>
-          {text.text}
-        </Banner>
-      )
-    case 'body':
+    case 'body': {
+      const strip = hasStrip(state) ? texts[state] : undefined
       return (
         <div className={styles.frame}>
-          {treatment.banner === undefined || text === undefined ? null : (
-            <Banner tone={treatment.banner} title={text.title} actions={text.actions}>
-              {text.text}
+          {treatment.banner === undefined || strip === undefined ? null : (
+            <Banner tone={treatment.banner} title={strip.title} actions={strip.actions}>
+              {strip.text}
             </Banner>
           )}
           {children({ mark: treatment.mark, writes: treatment.writes })}
         </div>
       )
+    }
   }
 }

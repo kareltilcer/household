@@ -20,7 +20,10 @@ export default defineConfig(({ mode }) => ({
     emptyOutDir: true,
     // A file inlined as a data: URL is one the policy refuses: every font and image stays a file.
     assetsInlineLimit: 0,
-    sourcemap: true,
+    // Source maps for the build the end-to-end suite runs, which a failing test is debugged in,
+    // and none for the build a deployment serves: a map beside its script hands the app's
+    // sources to whoever asks for it (build/check.ts fails a build that holds one).
+    sourcemap: mode === 'e2e',
   },
   server: {
     // The API, same-origin as in production: its session cookie is `__Host-`, and its CSRF check

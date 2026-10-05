@@ -171,12 +171,34 @@ describe('the state frame', () => {
     expect(container.querySelectorAll('svg')).toHaveLength(0)
   })
 
-  it('draws a body bare where a state’s sentence was left out', () => {
+  // The two sentences that stand in a body's place are not a frame's to leave out: its type asks
+  // for both, so a failed load is never a blank screen. A strip's may be, and its body is bare.
+  const inPlace = { error: { text: words.error }, withdrawn: { text: words.withdrawn } }
+
+  it.each(['readonly', 'rejected'] as const)(
+    'draws a %s body bare where its strip’s sentence was left out',
+    (state) => {
+      const { container } = draw(
+        <StateFrame state={state} skeleton={null} empty={null} texts={inPlace}>
+          {() => <p>{words.body}</p>}
+        </StateFrame>,
+      )
+      expect(screen.getByText(words.body)).toBeVisible()
+      expect(container.querySelectorAll('svg')).toHaveLength(0)
+    },
+  )
+
+  it.each([
+    ['error', words.error],
+    ['withdrawn', words.withdrawn],
+  ] as const)('says a %s body’s sentence with no title and no action given', (state, sentence) => {
     draw(
-      <StateFrame state="readonly" skeleton={null} empty={null} texts={{}}>
+      <StateFrame state={state} skeleton={null} empty={null} texts={inPlace}>
         {() => <p>{words.body}</p>}
       </StateFrame>,
     )
-    expect(screen.getByText(words.body)).toBeVisible()
+    expect(screen.getByText(sentence)).toBeVisible()
+    expect(screen.queryByText(words.body)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })

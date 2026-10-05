@@ -52,6 +52,11 @@ const database = { name: 'household-web', store: 'query-cache', key: 'client' } 
 /**
  * The cache in IndexedDB, as one structured clone under one key. A browser that refuses storage,
  * in a private window or under a policy, keeps nothing and the app works from the network.
+ *
+ * Its own, and not TanStack's async-storage persister, for two things that one does not do: a
+ * removal drops the write that was waiting, where TanStack's throttle would write a cache back
+ * after it was removed, as at a sign-out; and a storage that refuses is answered with nothing,
+ * where TanStack's restore and removal reject.
  */
 export function createPersister(
   store: UseStore = createStore(database.name, database.store),

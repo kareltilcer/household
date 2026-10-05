@@ -15,8 +15,10 @@ export interface SearchResultRowProps {
   readonly snippet?: string | null | undefined
   /** Where it is kept: "Documents / House / Insurance". */
   readonly path?: string | null | undefined
-  /** The calendar day it was last changed, `YYYY-MM-DD`. */
-  readonly updated: string
+  /** When it was last changed: the instant the contract's `updated_at` carries. */
+  readonly updatedAt: string
+  /** The zone the day of that instant is told in: the household's. */
+  readonly timeZone: string
 }
 
 export function SearchResultRow({
@@ -25,7 +27,8 @@ export function SearchResultRow({
   title,
   snippet,
   path,
-  updated,
+  updatedAt,
+  timeZone,
 }: SearchResultRowProps) {
   const t = useTranslate()
   const format = useFormat()
@@ -41,7 +44,7 @@ export function SearchResultRow({
       )}
       <p className={styles.meta}>
         {path === undefined || path === null ? null : <span>{path}</span>}
-        <span>{t('ui.search.updated', { day: format.day(updated) })}</span>
+        <span>{t('ui.search.updated', { day: format.dayOf(updatedAt, timeZone) })}</span>
       </p>
     </div>
   )

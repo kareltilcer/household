@@ -34,8 +34,13 @@ if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
     this.setAttribute('open', '')
   }
   HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    if (!this.hasAttribute('open')) return
     this.removeAttribute('open')
-    this.dispatchEvent(new Event('close'))
+    // The platform queues the event, and so tells of a close after whatever closed it is done:
+    // a dialog opened again by then is open when its `close` arrives.
+    queueMicrotask(() => {
+      this.dispatchEvent(new Event('close'))
+    })
   }
 }
 

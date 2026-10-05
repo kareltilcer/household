@@ -121,12 +121,37 @@ describe('watching for a newer build', () => {
     watch.stop()
   })
 
-  it('tells at once when the page can no longer load one of its own files', () => {
-    const onUpdate = vi.fn()
-    const watch = watchForUpdate('own', onUpdate, () => Promise.resolve('own'))
+  /** The page could not load a file of its own build. */
+  function missAFile(): void {
     window.dispatchEvent(new Event('vite:preloadError'))
+  }
+
+  it('asks at once when the page cannot load one of its own files, looked at or not', async () => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    const onUpdate = vi.fn()
+    const live = vi.fn(() => Promise.resolve<string | undefined>('next'))
+    const watch = watchForUpdate('own', onUpdate, live)
+    missAFile()
+    expect(live).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(0)
     expect(onUpdate).toHaveBeenCalledTimes(1)
     watch.stop()
+  })
+
+  it('does not take a file it cannot load for a newer build: no connection is no news', async () => {
+    const onUpdate = vi.fn()
+    const live = vi.fn(() => Promise.resolve<string | undefined>(undefined))
+    const watch = watchForUpdate('own', onUpdate, live)
+    missAFile()
+    await vi.advanceTimersByTimeAsync(0)
+    live.mockResolvedValue('own')
+    missAFile()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(live).toHaveBeenCalledTimes(2)
+    expect(onUpdate).not.toHaveBeenCalled()
+    watch.stop()
+    missAFile()
+    expect(live).toHaveBeenCalledTimes(2)
   })
 
   it('watches nothing on a page no build made', async () => {

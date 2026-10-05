@@ -42,7 +42,9 @@ export function MoneyValue({ amount, conversion, large = false }: MoneyValueProp
         <span className={styles.conversion}>
           {t('ui.money.converted', {
             original: format.money(conversion.original),
-            rate: format.decimal(conversion.rate, { maximumFractionDigits: 6 }),
+            // Every digit it was stored with: a rate rounded here would not give the amount
+            // shown beside it.
+            rate: format.decimal(conversion.rate),
             day: format.day(conversion.day, 'short'),
           })}
         </span>

@@ -1,7 +1,7 @@
 // Checkbox, radio and switch (02-components §1): the platform's own inputs, each inside its label,
 // so the whole 44 pt row is the target and the words are the name. A switch says what turning it
 // on does in its label, not in a caption beside it.
-import { useEffect, useId, useRef, type ComponentProps } from 'react'
+import { useCallback, useEffect, useId, useRef, type ComponentProps } from 'react'
 import styles from './Choice.module.css'
 
 type Native = Omit<ComponentProps<'input'>, 'type' | 'role' | 'className' | 'children'>
@@ -12,14 +12,25 @@ export interface CheckboxProps extends Native {
   readonly indeterminate?: boolean
 }
 
-export function Checkbox({ label, indeterminate = false, ...rest }: CheckboxProps) {
-  const input = useRef<HTMLInputElement>(null)
+export function Checkbox({ label, indeterminate = false, ref, ...rest }: CheckboxProps) {
+  const input = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
     if (input.current !== null) input.current.indeterminate = indeterminate
   }, [indeterminate])
+  // The input is this component's, to set what has no attribute, and its caller's too: a form
+  // that moves the focus to its first invalid control asks for it by a ref.
+  const attach = useCallback(
+    (element: HTMLInputElement | null) => {
+      input.current = element
+      if (typeof ref === 'function') return ref(element)
+      if (ref !== undefined && ref !== null) ref.current = element
+      return undefined
+    },
+    [ref],
+  )
   return (
     <label className={styles.choice}>
-      <input {...rest} ref={input} type="checkbox" className={styles.input} />
+      <input {...rest} ref={attach} type="checkbox" className={styles.input} />
       <span>{label}</span>
     </label>
   )

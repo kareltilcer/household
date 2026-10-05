@@ -1,7 +1,9 @@
 // The router's routes, one for each path of paths.ts. The dev-only pages are loaded lazily and
-// are named only where the build has them: `import.meta.env.MODE` is a constant of each build, so
-// in a production build the branch that imports them is dead code, and neither they nor the files
-// they would load are written (a test of the build holds that).
+// are named only where a build is told to have them: the development server, and the build the
+// end-to-end suite runs against (`vite build --mode e2e`). Both conditions are constants of each
+// build, so in every other one, whatever mode it is built in, the branch that imports the pages
+// is dead code, and neither they nor the files they would load are written (build/check.ts
+// holds the build a deployment serves to that).
 import type { RouteObject } from 'react-router'
 import { Home } from './Home.tsx'
 import { NotFound } from './NotFound.tsx'
@@ -14,19 +16,22 @@ type Page = Omit<RouteObject, 'path' | 'children' | 'index'>
 const pages: Partial<Record<RouteId, Page>> = {
   home: { Component: Home },
   notFound: { Component: NotFound },
-  ...(import.meta.env.MODE === 'production'
-    ? {}
-    : {
+  ...(import.meta.env.DEV || import.meta.env.MODE === 'e2e'
+    ? {
         harness: {
           lazy: async () => ({ Component: (await import('../dev/harness/Harness.tsx')).Harness }),
         },
         primitives: {
           lazy: async () => ({ Component: (await import('../dev/Primitives.tsx')).Primitives }),
         },
-      }),
+      }
+    : {}),
 }
 
-/** The routes this build serves, by the id paths.ts gives each: all of them but in production. */
+/**
+ * The routes this build serves, by the id paths.ts gives each: all of them in development and in
+ * the end-to-end build, and all but the dev-only ones in any other.
+ */
 export const served: readonly RouteId[] = routeIds.filter((id) => pages[id] !== undefined)
 
 export const routes: RouteObject[] = [

@@ -41,6 +41,10 @@ focus in, closes on Escape and gives the focus back, and one rule of the app's o
 opened non-modally, which takes no scroll lock; `Toast` is Radix's toast. Select is the platform's
 own. Sheets and menus stand on `surface-overlay`, so `@household/tokens` declares the three pairs
 they spend there and its test counts them: the strong border, the focus ring and `danger`.
+A modal makes everything outside itself inert, so a menu's list, which Radix draws at the end of
+the page, and the toasts, which stand at the app's root, are drawn inside the modal that is open
+for as long as one is (`ui/topLayer.ts`), and a toast is announced from inside it: a menu opened
+from a sheet can be chosen from, and an Undo raised over one can be pressed.
 
 **The policy is one constant (`apps/web/build/csp.ts`), written into index.html as a `<meta>` by
 the build and sent as a header by whoever serves it.** `default-src 'none'`, and `'self'` for
@@ -59,14 +63,17 @@ only where it is not the default. A test runs the script against every combinati
 what storage may hold that the app never wrote, and holds it to what the app itself sets. Light is
 the default whatever the device prefers (06-clients §3); `system` is a choice.
 
-**The harness is in every build but a deployment's.** `vite build` writes `dist/www`, and
-`vite build --mode e2e` writes `dist/e2e`, the same production build with the dev-only routes in.
-The routes are named behind `import.meta.env.MODE`, a constant of each build, so in `dist/www` the
-branch that imports them is dead and their files are not written. The end-to-end suite runs
-against `dist/e2e` served by `vite preview` with the policy as a header, and every test fails on a
-`securitypolicyviolation` and on a console error. `build/check.ts` reads `dist/www` and fails a
-build that is over budget, that holds anything inline or of another origin, that carries the
-harness's marker, or whose `build.json` does not name the id its page names.
+**The harness is in a build of its own and on the development server, and in no other build.**
+`vite build` writes `dist/www`, and `vite build --mode e2e` writes `dist/e2e`, the same production
+build with the dev-only routes in. The routes are named only for that mode and for the development
+server (`import.meta.env.MODE`, `import.meta.env.DEV`), constants of each build, so in `dist/www`,
+and in a build of any other mode, the branch that imports them is dead and their files are not
+written. The end-to-end suite runs against `dist/e2e` served by `vite preview` with the policy as
+a header, and every test fails on a `securitypolicyviolation` and on a console error. `dist/www`
+is written without source maps, which would hand the app's sources to whoever asked a deployment
+for them; `dist/e2e` has them. `build/check.ts` reads `dist/www` and fails a build that is over
+budget, that holds anything inline or of another origin, that carries the harness's marker, that
+holds a source map, or whose `build.json` does not name the id its page names.
 
 **The twelve states are a table, and a frame applies it.** `src/ui/states.ts` is the port of
 `components.js`'s treatments: each state replaces the body, wraps it, or marks a row of it, and
@@ -94,9 +101,10 @@ and are not counted.
 **A build's id is a digest of every file it wrote**, by name and content, sixteen hex digits. The
 plugin writes it into index.html's `<meta name="household-build">` and into `build.json` beside
 it. A page asks for `build.json` past every cache when it is looked at again and every fifteen
-minutes, and when Vite reports that one of its own files is gone. A different id shows a prompt;
-the page never reloads by itself, and not knowing is never a newer build. The persisted query
-cache is kept under the same id, so a newer build drops what an older one kept.
+minutes, and when Vite reports that it could not load one of its own files, which a newer build
+causes and a dropped connection causes too. A different id shows a prompt; the page never reloads
+by itself, and not knowing is never a newer build. The persisted query cache is kept under the
+same id, so a newer build drops what an older one kept.
 
 **Hold-to-complete is two controls.** The ring a pointer holds is hidden from assistive
 technology. Beside it is a plain button, drawn nowhere and named for what it completes, which
@@ -131,6 +139,9 @@ cache is persisted to IndexedDB as one structured clone, written at most once a 
 | `size-limit` or a bundler's analyser as the gate | A dependency for sixty lines that read index.html and gzip what it names |
 | The build id from the commit, or from the clock | A deploy that changed nothing would prompt every open page to reload |
 | A service worker to learn of a new build | PL-4 names none, and a worker caches the very files a new build replaces |
+| A file the page cannot load taken for a newer build | A page with no connection cannot load one either, and would be told to reload into nothing |
+| Source maps in the build a deployment serves | Whoever serves `dist/www` serves every file in it. Maps for crash reports are uploaded to where the reports go, which is item 89's |
+| TanStack's async-storage persister for the cache | Its throttled write cannot be dropped, so a cache removed at sign-out would be written back by the write that was waiting, and its restore rejects in a browser that refuses storage |
 | One control for the hold, completing on a click with no pointer before it | A screen reader on a touch screen sends a tap, which is a short press. Telling the two apart is a guess per browser |
 | Vitest's browser mode for component tests | Chromium in the job that typechecks every package, to hold what the end-to-end job already holds on the built app |
 
@@ -138,7 +149,9 @@ cache is persisted to IndexedDB as one structured clone, written at most once a 
 
 - A route is a line of `src/app/paths.ts`: the router is built from it, and axe in both themes and
   the pseudo-locale pass walk it. A test fails a router with a route the list has not.
-- A screen spends the twelve states through `StateFrame`, and its own sentences through its texts.
+- A screen spends the twelve states through `StateFrame`, and its own sentences through its texts:
+  the two that stand in a body's place, an error's and a withdrawn row's, are required of it, so a
+  failed load is never a blank screen.
 - Item 25 takes `Root`'s place with the shell, reads the language and the display modes from the
   member's account where it has them, clears the persisted cache when a member signs out, and
   widens the policy for the sync service. Item 27 widens it for the payment processor's frame.
