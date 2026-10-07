@@ -190,7 +190,10 @@ export type EasingToken = keyof typeof easings
 export const thresholds = {
   /** Below this a sync shows nothing at all (06-clients §5). */
   'sync-indicate-after': 800,
-  /** Fixed by 02-components. The pointer and the keyboard path show the same progress. */
+  /**
+   * Fixed by 02-components, and a pointer's alone: it holds for all of it, with its progress
+   * shown. The keyboard and assistive technology complete at once, with no hold (06-clients §3).
+   */
   'hold-to-complete': 2000,
   /** The undo affordance stays for the whole dwell. */
   'toast-dwell': 5000,

@@ -663,7 +663,10 @@ source file — the architecture test enforces it.
 - **Reference data is translated as data, not as strings**: the crop catalog, tariff presets,
   document types and unit names carry per-language fields in the database.
 - **Pseudolocalisation** is a build target, and the E2E suite runs one pass in it, because a layout
-  that only works in English is a layout that breaks in German.
+  that only works in English is a layout that breaks in German. On the web it is a language of the
+  running app, `en-XA`, and the pass fails a page that shows a run of plain letters, which the
+  pseudo-locale leaves none of: a word nobody translated
+  ([ADR 0025](../adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)).
 
 ## 10. The asset engine
 

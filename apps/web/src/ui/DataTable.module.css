@@ -1,0 +1,80 @@
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The table scrolls inside its own box, and the page beside it does not. The box is what its
+   contents are placed against: a word drawn nowhere, the name of the column of sync marks or a
+   mark's own, is taken out of the flow, and would otherwise be placed against the page, past
+   this box's edge, and scroll the page sideways from inside a table that scrolls by itself. */
+.scroll {
+  position: relative;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--dens-rule);
+  border-radius: var(--radius-control);
+}
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.head {
+  composes: overline from '../styles/type.module.css';
+  padding: var(--dens-pad-y) var(--dens-pad-x);
+  background: var(--table-header-bg);
+  border-block-end: 1px solid var(--dens-rule);
+  color: var(--text-muted);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.sort {
+  display: inline-flex;
+  gap: var(--space-05);
+  align-items: center;
+  min-height: var(--dens-row-min);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.cell {
+  padding: var(--dens-pad-y) var(--dens-pad-x);
+  border-block-end: 1px solid var(--dens-rule);
+  vertical-align: baseline;
+}
+
+.row:last-child .cell {
+  border-block-end: 0;
+}
+
+/* The column of the rows' sync state is there while a mark is drawn in it. A row that has been
+   syncing for less than a moment draws none yet (StatusMark), and the column that would hold it
+   is not drawn either: a write that is over within the moment moves nothing on the screen. */
+.grid:not(:has(.state > *)) :is(.stateHead, .state) {
+  display: none;
+}
+
+.numeric {
+  font-family: var(--font-mono);
+  font-variant-numeric: var(--figures-tabular);
+  text-align: end;
+  white-space: nowrap;
+}
+
+.head.numeric {
+  /* A column head is the label, in the label's face, over the figures' edge. */
+  font-family: var(--type-overline-family);
+}
+
+.numeric .sort {
+  flex-direction: row-reverse;
+}

@@ -1,0 +1,41 @@
+.block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Side by side while both fit, and one above the other when they do not: at 200 % text a label
+   and its value each take the line they need. */
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--dens-pad-y) 0;
+  border-block-end: 1px solid var(--dens-rule);
+}
+
+.pair:last-child {
+  border-block-end: 0;
+}
+
+.key {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.numeric {
+  font-family: var(--font-mono);
+  font-variant-numeric: var(--figures-tabular);
+}
+
+.missing {
+  color: var(--text-muted);
+}

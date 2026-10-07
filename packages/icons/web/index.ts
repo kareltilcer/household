@@ -28,7 +28,8 @@ export interface IconProps {
    * exception (06-clients §4). Without one the glyph is decoration beside its word, and hidden.
    */
   readonly label?: string
-  readonly className?: string
+  /** A class of the screen's own. A stylesheet imported as a module names one that may not exist. */
+  readonly className?: string | undefined
 }
 
 // Each of a drawing's attributes is one React's SVG elements take, under the same name: the
@@ -80,7 +81,7 @@ export interface IllustrationProps {
   readonly composition: CompositionId
   /** In px. With none the illustration fills the width it is given, and never sets its height. */
   readonly width?: number
-  readonly className?: string
+  readonly className?: string | undefined
 }
 
 /** A composition. Decoration: the sentence beside it says what it shows. */

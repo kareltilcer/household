@@ -1,0 +1,92 @@
+// The build a page is, and the build that is live (06-clients §7): the web app is deployed
+// continuously, and a page left open keeps running the build it loaded. index.html names its
+// build in a <meta>, the build writes the same id to build.json beside it (build/plugin.ts), and
+// a page that reads a different id there knows a newer build is live.
+
+/** The `<meta name>` index.html carries its build's id under: build/plugin.ts writes it. */
+export const buildMeta = 'household-build'
+
+/** What the meta holds where no build wrote one: the development server's page. */
+export const buildPlaceholder = 'development'
+
+/** The file that names the live build, beside index.html. */
+export const buildFile = '/build.json'
+
+/** This page's build, or undefined for a page no build made. */
+export function ownBuild(page: Document = document): string | undefined {
+  const id = page.querySelector(`meta[name="${buildMeta}"]`)?.getAttribute('content')
+  return id === null || id === undefined || id === '' || id === buildPlaceholder ? undefined : id
+}
+
+/**
+ * The build that is live, or undefined when it cannot be read: no connection, a server that is
+ * mid-deploy, a file that is not what the build writes. Not knowing is never a newer build.
+ */
+export async function liveBuild(
+  fetch: (url: string, init: RequestInit) => Promise<Response> = (url, init) =>
+    globalThis.fetch(url, init),
+): Promise<string | undefined> {
+  try {
+    const response = await fetch(buildFile, { cache: 'no-store', credentials: 'omit' })
+    if (!response.ok) return undefined
+    const body: unknown = await response.json()
+    const id = typeof body === 'object' && body !== null && 'id' in body ? body.id : null
+    return typeof id === 'string' && id !== '' ? id : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** How often an open page asks, in ms. It also asks when it is looked at again. */
+export const checkEvery = 15 * 60 * 1000
+
+export interface UpdateWatch {
+  /** Stops asking. */
+  readonly stop: () => void
+}
+
+/**
+ * Tells `onUpdate`, once, when a build other than `own` is live. It asks when the page becomes
+ * visible and every `checkEvery` while it stays so, and at once when the page fails to load one
+ * of its own files, which is what a page meets first after its build's files are gone.
+ */
+export function watchForUpdate(
+  own: string | undefined,
+  onUpdate: () => void,
+  live: () => Promise<string | undefined> = liveBuild,
+): UpdateWatch {
+  if (own === undefined) return { stop: () => undefined }
+  let told = false
+  let stopped = false
+  const ask = () => {
+    if (told) return
+    void live().then(
+      (id) => {
+        // An answer that comes once the watch has stopped is told to nobody: its owner is gone.
+        if (stopped || told || id === undefined || id === own) return
+        told = true
+        onUpdate()
+      },
+      () => {
+        // A reader that failed did not read the live build: not knowing is never a newer one.
+      },
+    )
+  }
+  const check = () => {
+    if (document.visibilityState === 'visible') ask()
+  }
+  const timer = setInterval(check, checkEvery)
+  document.addEventListener('visibilitychange', check)
+  // Vite raises this when the page could not load a file of its own build. A newer build that
+  // replaced the file is one cause, and a connection that dropped is another, so the page asks
+  // which build is live, as at any other time, and does not take the failure for the answer.
+  window.addEventListener('vite:preloadError', ask)
+  return {
+    stop: () => {
+      stopped = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', check)
+      window.removeEventListener('vite:preloadError', ask)
+    },
+  }
+}

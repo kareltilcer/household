@@ -126,6 +126,45 @@ jobs:
       - name: Format (Prettier)
         run: pnpm run format:check
 
+  web:
+    name: Web — bundle budget, policy, axe and the pseudo-locale pass
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          cache: true
+          require-lockfile: true
+      # The typed client and the message keys, which the app's sources import.
+      - name: Generate
+        run: pnpm exec turbo run gen
+      # The build a deployment serves, held to what can be read off its files: the bundle budget,
+      # the policy in its page with nothing inline beside it, no dev-only page, and its own id in
+      # build.json (apps/web/build/check.ts).
+      - name: Build
+        run: pnpm --filter @household/web run build
+      - name: Bundle budget and a policy-clean build
+        run: pnpm --filter @household/web run check
+      # The same build with the dev-only routes in, the twelve-state harness among them, which
+      # the suite's own script writes before it runs, served under the policy to Playwright's
+      # Chromium, at the version the workspace pins: axe on every route in both themes, the
+      # pseudo-locale pass, the harness's measurements, and every test failing on a violation of
+      # the policy.
+      - name: Chromium
+        run: pnpm --filter @household/web exec playwright install --with-deps chromium
+      - name: End-to-end
+        run: pnpm --filter @household/web run e2e
+      - name: Keep the traces of what failed
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: web-e2e-traces
+          path: apps/web/dist/test-results
+          retention-days: 7
+
   conformance:
     name: Sync conformance — PowerSync clients against the stack
     runs-on: ubuntu-latest

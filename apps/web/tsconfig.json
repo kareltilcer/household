@@ -1,4 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"]
+  "compilerOptions": {
+    // What runs on Node: the build and its plugins, the bundle budget, and the end-to-end suite,
+    // whose specs hand functions to the page, so the DOM's types are here beside Node's. The app
+    // itself (src/) is typechecked against the browser's alone, in a project of its own.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["*.ts", "build", "e2e"]
 }

@@ -55,6 +55,16 @@ function declare(): Pair[] {
     pair('border-strong', bg, 3, 'Input and table boundary')
     pair('focus', bg, 3, 'Focus ring')
   }
+  // On the overlay, where the web's sheets hold a form and its menus an action that destroys
+  // (plan item 24): a field's boundary, its error in words, and the ring of what is focused there.
+  pair('border-strong', 'surface-overlay', 3, 'Input and button boundary on a sheet')
+  pair('focus', 'surface-overlay', 3, 'Focus ring on a sheet, a dialog and a menu')
+  pair(
+    'danger',
+    'surface-overlay',
+    4.5,
+    'A field’s error on a sheet, a destroying action in a menu',
+  )
   for (const accent of accents) pair('text-on-accent', accent, 4.5, 'Ink on an accent fill')
   pair('text-on-danger', 'danger', 4.5, 'Ink on a danger fill')
   pair('text-inverse', 'surface-inverse', 4.5, 'Tooltip and inverse chip')

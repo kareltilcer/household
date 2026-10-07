@@ -1,0 +1,21 @@
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* A breath every 1.6 s, counted in the slow duration: reduced motion makes it 0 ms, and the
+   shape stands still. */
+.bar {
+  display: block;
+  background: var(--skeleton-bg);
+  border-radius: var(--radius-control);
+  animation: breathe calc(var(--dur-slow) * 5) var(--ease-exit) infinite alternate;
+}
+
+@keyframes breathe {
+  to {
+    opacity: 0.55;
+  }
+}

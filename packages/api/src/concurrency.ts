@@ -29,8 +29,17 @@ export function versionOf(etag: string | null | undefined): number | undefined {
   return Number.isSafeInteger(version) ? version : undefined
 }
 
-/** Methods that change state, which carry an `Idempotency-Key` (RFC 9110 §9.2.1). */
+/** Methods that change state (RFC 9110 §9.2.1). */
 const unsafe = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/**
+ * Whether a request by `method` is unsafe: one that changes state, which carries an
+ * `Idempotency-Key`, and from a browser's session the token that proves it the app's own. One
+ * list, so that no method carries the one and not the other.
+ */
+export function isUnsafeMethod(method: string): boolean {
+  return unsafe.has(method)
+}
 
 /**
  * Holds an outgoing `If-Match` to the contract's entity-tag. A bare version (`42`, from

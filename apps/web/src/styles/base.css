@@ -1,0 +1,126 @@
+/* The ground every screen stands on. It names tokens and nothing else (06-clients §3, D-152):
+   @household/tokens' stylesheet declares them, and the attributes on the root choose their values
+   (src/display). */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Where a scrollbar takes room, its room is the page's edge whether or not one is drawn: a
+     page does not move sideways when a modal takes its scrollbar away (below), or when a list
+     grows past the window. */
+  scrollbar-gutter: stable;
+}
+
+/* A theme is set on the root, or on any element inside a page of the other one (ADR 0024): a
+   scope paints its own ground and ink, and tells the browser which scheme its own controls and
+   scrollbars are drawn in. */
+[data-theme='light'] {
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+[data-theme='system'] {
+  color-scheme: light dark;
+}
+
+body,
+[data-theme] {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-family: var(--type-body-family);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-line);
+  letter-spacing: var(--type-body-tracking);
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+/* No list draws markers. One that is a list to assistive technology says so by its role as well:
+   WebKit takes a list without markers for layout, and tells of no list (ui/ListRow). */
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A form control is set in the face of what it stands in, and not in the browser's own. The
+   rule weighs nothing (`:where`), as a step of the type scale weighs nothing (type.module.css):
+   a control that composes a step, a sync mark that opens, is set in it, the step's rule being
+   written after this one. */
+:where(button, input, select, textarea) {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--text-link);
+}
+
+/* One focus ring, on every surface in both themes (02-components §1): the ring, and a gap in
+   the offset colour between it and the control. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* A modal dialog leaves the page behind it where it was (ui/Dialog): it does not scroll, and it
+   keeps the width it had, the scrollbar's room staying where the scrollbar was (above). That room
+   is the root's own ground, which no dialog's backdrop covers: it is the ground as it is under
+   the backdrop's veil (ui/Dialog.module.css), and not a strip of the page left undimmed beside
+   the rest. */
+html:has(dialog:modal) {
+  overflow: hidden;
+  background: color-mix(
+    in srgb,
+    light-dark(var(--surface-inverse), var(--surface-sunken)) 45%,
+    var(--surface)
+  );
+}
+
+/* The tokens make their own durations instant under reduced motion, and everything the app draws
+   animates by them. A third party's part does not read them, so what one animates by itself is
+   made instant here, on the element the app mounts it in (06-clients §4). The 2000 ms hold is the
+   app's own and is no part of this: it keeps its progress, in steps (ui/HoldToComplete). */
+@media (prefers-reduced-motion: reduce) {
+  [data-third-party],
+  [data-third-party] * {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+[data-motion='reduced'] [data-third-party],
+[data-motion='reduced'] [data-third-party] * {
+  animation-duration: 0ms !important;
+  transition-duration: 0ms !important;
+  scroll-behavior: auto !important;
+}

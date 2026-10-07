@@ -1,0 +1,41 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A page of words: a title, a sentence, an action. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-3);
+}
+
+.title {
+  composes: title1 from '../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+.lead {
+  composes: bodyLg from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--dens-row-min);
+}

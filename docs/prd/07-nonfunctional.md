@@ -106,7 +106,7 @@ then download again each bucket whose checksum changed, and no queued mutation i
 | Tenant isolation | Application scoping **and** RLS with `FORCE`. Tested in CI. Under D-93 the replicated path has the generated stream definitions alone, held by a read-path isolation test ([01](01-architecture.md) §2.3) |
 | Input | Every request body validated against the OpenAPI schema at the edge |
 | Uploads | Type sniffed from bytes; size capped; active types download-only; `nosniff` everywhere |
-| Output | The web app sets a strict CSP with no `unsafe-inline`; user content is rendered through sanitising renderers only |
+| Output | The web app sets a strict CSP with no `unsafe-inline`: its page carries it, whoever serves the page sends it as a header with `frame-ancestors 'none'`, and its build and its end-to-end suite fail on anything inline ([ADR 0025](../adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)); user content is rendered through sanitising renderers only |
 | Rate limiting | Per user **and** per household, so one tenant cannot degrade another |
 | Secrets | Managed secret store; none in images, none in the repository; rotation documented |
 | Dependencies | SBOM per release; automated alerts; a published patch SLA (critical ≤ 72 h) |

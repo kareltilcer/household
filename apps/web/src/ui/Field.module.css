@@ -1,0 +1,85 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+.label {
+  composes: caption from '../styles/type.module.css';
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  color: var(--text-muted);
+}
+
+.required {
+  color: var(--text-primary);
+}
+
+.control {
+  width: 100%;
+  min-height: var(--dens-row-min);
+  padding: var(--space-1) var(--space-15);
+  background: var(--input-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+}
+
+.control[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.control:read-only:not(select),
+.control:disabled {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+}
+
+.control:disabled {
+  border-color: var(--border-subtle);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.numeric {
+  font-family: var(--font-mono);
+  font-variant-numeric: var(--figures-tabular);
+}
+
+.area {
+  resize: vertical;
+}
+
+.help {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+}
+
+.error {
+  composes: caption from '../styles/type.module.css';
+  display: flex;
+  gap: var(--space-05);
+  align-items: flex-start;
+  color: var(--danger);
+}
+
+.errorIcon {
+  flex: none;
+  /* The glyph follows the text it sits beside, at any text scale. */
+  width: 1.25em;
+  height: 1.25em;
+}
+
+.stepper {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.count {
+  flex: 1 1 4rem;
+  min-width: 4rem;
+  text-align: center;
+}

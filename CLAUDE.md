@@ -32,6 +32,7 @@ pnpm run up:sync      # PowerSync, once db:setup has made its role, its publicat
 pnpm run up:convert   # build and start the converter sidecar (LibreOffice, poppler): office and PDF previews
 pnpm run up:stripe    # Stripe's own mock server, which the test of what billing sends Stripe runs against
 pnpm run dev:api      # serve the API on 127.0.0.1:8080 (/api/v1/healthz, /api/v1/readyz)
+pnpm run dev:web      # the web app on Vite's dev server, /api proxied to dev:api
 pnpm test             # Vitest through turbo, then go test against the compose Postgres
 pnpm run lint         # ESLint, the stylesheets' check, golangci-lint, Redocly and Prettier
 pnpm typecheck        # tsc in every package
@@ -41,6 +42,9 @@ pnpm run down         # stop the services; volumes are kept
 pnpm --filter @household/sync conformance:up   # the sync conformance stack: PostgreSQL with logical replication, PowerSync
 pnpm --filter @household/sync conformance      # the conformance suite against it (packages/sync/conformance)
 pnpm --filter @household/sync conformance:web  # @household/sync's web replica in Chromium against it (Playwright)
+pnpm --filter @household/web build      # the web build a deployment serves (dist/www)
+pnpm --filter @household/web check      # that build held to its bundle budget, the policy and its own id
+pnpm --filter @household/web e2e        # builds it again with the dev-only routes (build:e2e), then Playwright: axe, the pseudo-locale pass, the policy
 ```
 
 - **`pnpm run up`, never `pnpm up`.** `pnpm up` is pnpm's own `update` command and rewrites
@@ -86,7 +90,7 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   `packages/domain/src/iso4217.json`, and a test fails until it is regenerated.
 - CI ([`.github/workflows/`](.github/workflows/)) runs the checks above (typecheck, lint,
   format check and test), plus openapi-spec-validator, govulncheck, pnpm audit, gitleaks
-  and CodeQL. Typecheck, lint and test depend on each package's `gen` in turbo, so CI
+  and CodeQL, and the web app's build, its check and its end-to-end suite. Typecheck, lint and test depend on each package's `gen` in turbo, so CI
   runs every package's `gen` script too; it does not run `go generate`. It also runs the
   sync conformance suite against its own stack, with a short fuzz run; a nightly workflow
   runs a long one ([ADR 0013](docs/adr/0013-conformance-suite-stand-ins-and-the-oracle.md)).
@@ -131,6 +135,21 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
   with its own component; an icon-only control takes its label from the register (`controls`), and
   a status is its colour, its glyph and its word together
   ([ADR 0024](docs/adr/0024-design-tokens-icons-and-the-illustration-kit.md)).
+- **The web app** (`apps/web`) is a static build under a strict Content-Security-Policy
+  (`build/csp.ts`): nothing inline, every file its own origin's, and a directive widened only in the
+  pull request that needs it. A modal is the platform's `<dialog>`, and a library that injects a
+  style is not used; what a component draws apart from where it stands, a menu's list or the
+  toasts, is drawn inside the open modal (`ui/topLayer.ts`), since the page outside one is inert.
+  A component names its words by key (`useTranslate`) and formats through
+  `useFormat`: `Intl`, money from whole minor units, an instant in the timezone its caller names. A
+  screen spends the twelve states through `ui/states.ts` and `StateFrame`. A route is a line of
+  `src/app/paths.ts`, which the end-to-end suite walks with axe in both themes and in the
+  pseudo-locale, every test failing on a violation of the policy; what a route opens, a dialog, a
+  menu or a toast, is opened under the same two in `e2e/overlays.spec.ts`. A dev-only page (`src/dev`) writes
+  its words as fixtures and is in no build a deployment serves ([D-154](docs/prd/09-decisions.md));
+  a test's markup is held to the literal-string lint as the app's is. The bundle budget is
+  `build/budget.ts` ([D-153](docs/prd/09-decisions.md),
+  [ADR 0025](docs/adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).

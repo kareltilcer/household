@@ -1,0 +1,101 @@
+/* The type scale as classes a component composes (`composes: caption from '…/type.module.css'`):
+   each step is five custom properties of @household/tokens, spent together and by name. A mono
+   step also takes the tabular figures every table and money value is set in (01-foundations §4).
+
+   A step weighs nothing in the cascade (`:where`). What a rule says beside the step it composes,
+   a member's initials set heavier than a caption, holds wherever the step's own rule is written,
+   and the build writes it into every stylesheet whose rules compose it, a route's loaded later
+   among them, after rules that are on the page already. Only the page's reset of a form control's
+   face gives way to a step, and it weighs nothing either: it is written first (base.css). */
+
+:where(.display) {
+  font-family: var(--type-display-family);
+  font-size: var(--type-display-size);
+  font-weight: var(--type-display-weight);
+  line-height: var(--type-display-line);
+  letter-spacing: var(--type-display-tracking);
+}
+
+:where(.title1) {
+  font-family: var(--type-title-1-family);
+  font-size: var(--type-title-1-size);
+  font-weight: var(--type-title-1-weight);
+  line-height: var(--type-title-1-line);
+  letter-spacing: var(--type-title-1-tracking);
+}
+
+:where(.title2) {
+  font-family: var(--type-title-2-family);
+  font-size: var(--type-title-2-size);
+  font-weight: var(--type-title-2-weight);
+  line-height: var(--type-title-2-line);
+  letter-spacing: var(--type-title-2-tracking);
+}
+
+:where(.title3) {
+  font-family: var(--type-title-3-family);
+  font-size: var(--type-title-3-size);
+  font-weight: var(--type-title-3-weight);
+  line-height: var(--type-title-3-line);
+  letter-spacing: var(--type-title-3-tracking);
+}
+
+:where(.bodyLg) {
+  font-family: var(--type-body-lg-family);
+  font-size: var(--type-body-lg-size);
+  font-weight: var(--type-body-lg-weight);
+  line-height: var(--type-body-lg-line);
+  letter-spacing: var(--type-body-lg-tracking);
+}
+
+:where(.body) {
+  font-family: var(--type-body-family);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-line);
+  letter-spacing: var(--type-body-tracking);
+}
+
+:where(.caption) {
+  font-family: var(--type-caption-family);
+  font-size: var(--type-caption-size);
+  font-weight: var(--type-caption-weight);
+  line-height: var(--type-caption-line);
+  letter-spacing: var(--type-caption-tracking);
+}
+
+:where(.overline) {
+  font-family: var(--type-overline-family);
+  font-size: var(--type-overline-size);
+  font-weight: var(--type-overline-weight);
+  line-height: var(--type-overline-line);
+  letter-spacing: var(--type-overline-tracking);
+  text-transform: var(--type-overline-transform);
+}
+
+:where(.numLg) {
+  font-family: var(--type-num-lg-family);
+  font-size: var(--type-num-lg-size);
+  font-weight: var(--type-num-lg-weight);
+  line-height: var(--type-num-lg-line);
+  letter-spacing: var(--type-num-lg-tracking);
+  font-variant-numeric: var(--figures-tabular);
+}
+
+:where(.num) {
+  font-family: var(--type-num-family);
+  font-size: var(--type-num-size);
+  font-weight: var(--type-num-weight);
+  line-height: var(--type-num-line);
+  letter-spacing: var(--type-num-tracking);
+  font-variant-numeric: var(--figures-tabular);
+}
+
+:where(.numSm) {
+  font-family: var(--type-num-sm-family);
+  font-size: var(--type-num-sm-size);
+  font-weight: var(--type-num-sm-weight);
+  line-height: var(--type-num-sm-line);
+  letter-spacing: var(--type-num-sm-tracking);
+  font-variant-numeric: var(--figures-tabular);
+}
