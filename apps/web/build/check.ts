@@ -115,8 +115,11 @@ if (firstNamed !== -1 && html.indexOf('http-equiv="Content-Security-Policy"') > 
     'index.html names a script or a stylesheet before its policy, which the policy does not hold',
   )
 }
+// Every script the page holds, read as a browser reads one: its end tag is `</script` and
+// whatever follows up to the `>`, in any case, and a script that is never closed runs to the end
+// of the page. One with no `src`, or with anything between its tags, is inline.
 for (const [, attributes = '', body = ''] of html.matchAll(
-  /<script\b([^>]*)>([\s\S]*?)<\/script>/gi,
+  /<script\b([^>]*)>([\s\S]*?)(?:<\/script\b[^>]*>|$)/gi,
 )) {
   if (!/\bsrc\s*=/.test(attributes) || body.trim() !== '') fail('index.html holds an inline script')
 }

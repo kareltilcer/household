@@ -23,18 +23,25 @@ const id = '008f0f94379a5b41'
 /** The page's statement of its encoding, as the build writes it: first in the head. */
 const encoding = '<meta charset="utf-8">'
 
-/** index.html as the build writes it, with `head` in its head after the policy. */
-function page(head = '', policy = metaPolicy.replaceAll("'", '&#39;')): string {
+/**
+ * index.html as the build writes it, with `head` in its head after the policy. A page that
+ * `names` nothing is written with no script and no stylesheet at all.
+ */
+function page(head = '', policy = metaPolicy.replaceAll("'", '&#39;'), names = true): string {
+  const boot = names ? '<script src="/assets/display-1.js"></script>' : ''
+  const files = names
+    ? `<script type="module" crossorigin src="/assets/index-1.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-1.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-1.css">`
+    : ''
   return `<!doctype html>
 <html lang="en">
   <head>
     ${encoding}
     <meta http-equiv="Content-Security-Policy" content="${policy}">
-    <script src="/assets/display-1.js"></script>
+    ${boot}
     <meta name="household-build" content="${id}" />
-    <script type="module" crossorigin src="/assets/index-1.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/vendor-1.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-1.css">
+    ${files}
     ${head}
   </head>
   <body><div id="root"></div></body>
@@ -121,8 +128,10 @@ describe('the check of a build', () => {
   })
 
   it('finds no script before the policy of a page that names none', () => {
-    const bare = page().replace(/\s*<(script|link)\b[^>]*>(<\/script>)?/g, '')
-    expect(bare).not.toMatch(/<(script|link)\b/)
+    // Written without them, not with them taken out: a page is no text to strip tags from.
+    const bare = page('', undefined, false)
+    expect(bare).not.toContain('<script')
+    expect(bare).not.toContain('<link')
     const { passed, said } = check(build({ 'index.html': bare }))
     expect(said).not.toContain('before its policy')
     expect(passed).toBe(true)
@@ -183,6 +192,21 @@ describe('the check of a build', () => {
     [
       'an inline script',
       { 'index.html': page('<script>document.title = 1</script>') },
+      'holds an inline script',
+    ],
+    [
+      'an inline script whose end tag is written loosely',
+      { 'index.html': page('<script src="/assets/index-1.js">document.title = 1</script >') },
+      'holds an inline script',
+    ],
+    [
+      'an inline script in capitals, with an attribute on its end tag',
+      { 'index.html': page('<SCRIPT>document.title = 1</SCRIPT data-x="1">') },
+      'holds an inline script',
+    ],
+    [
+      'an inline script that is never closed',
+      { 'index.html': page().replace('</body>', '<script>document.title = 1</body>') },
       'holds an inline script',
     ],
     ['an inline style', { 'index.html': page('<style>body{}</style>') }, 'holds an inline <style>'],
