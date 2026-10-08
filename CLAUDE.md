@@ -163,6 +163,11 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   A request asked outside a query or a mutation tells the problem hub itself, but for the one a
   sign-out follows at once, whose own refusal is told (`push/worker.ts`), and a write that
   changes what `GET /me` answers reads the account again (`meKey`) before it leads anywhere.
+  A write of a screen before sign-in or of a member's own account is asked at once, connection
+  or none (`askedNow`, `api/query.ts`, which a test holds every such mutation to): left to the
+  query client it would wait unseen and be sent whenever the connection returned
+  ([D-164](docs/prd/09-decisions.md)). A read that is paused, asked with the browser offline, is
+  drawn as could not be read and never as a skeleton.
   What a browser keeps is its member's and for no longer than their session, whether or not a
   page knew them when it ended: a browser with no session keeps no replica, and a page that finds
   another member signed in under it removes what it kept and reloads
@@ -190,8 +195,9 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   services, each test a network of its own (`e2e/stack.ts`), and a member's routes are walked
   signed in; what the suite names a person or a household holds no run of four plain letters,
   which the pseudo-locale pass takes for a word nobody translated. Every test starts in a browser
-  that kept nothing, with every service answering: what a screen draws on a second visit, or with
-  a service away, is walked only by a test that reloads or takes the service away.
+  that kept nothing, with a connection and every service answering: what a screen draws on a
+  second visit, offline or with a service away is walked only by a test that reloads, or takes
+  the connection or the service away.
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
