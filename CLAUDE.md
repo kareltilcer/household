@@ -167,9 +167,10 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   by a Web Lock, opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
   imported for its types alone outside `sync/open.ts`, which is what keeps the library and its SDK
   out of a page until a replica is opened, and a run-time value a screen needs of it is added to
-  `Opened` there. The policy's two sources beside its own origin are the replica's:
-  `'wasm-unsafe-eval'`, and the sync service's origin, which a build is told
-  (`HOUSEHOLD_WEB_SYNC_ORIGIN`). The end-to-end suite starts the API itself on the development
+  `Opened` there. The policy admits three sources beside its own origin: for the replica,
+  `'wasm-unsafe-eval'` and the sync service's origin in `connect-src`, and for a picture the
+  object store's origin in `img-src`, both origins told to a build (`HOUSEHOLD_WEB_SYNC_ORIGIN`,
+  `HOUSEHOLD_WEB_FILES_ORIGIN`). The end-to-end suite starts the API itself on the development
   services, each test a network of its own (`e2e/stack.ts`), and a member's routes are walked
   signed in; what the suite names a person or a household holds no run of four plain letters,
   which the pseudo-locale pass takes for a word nobody translated.

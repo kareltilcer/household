@@ -1,7 +1,8 @@
 // Web Push against stand-ins for `navigator.serviceWorker`, the Push API and `Notification`
 // (testing.ts): what is read, asked, registered and removed, and what the shell's two calls and
 // the worker's message do.
-import { act, render, renderHook, waitFor } from '@testing-library/react'
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -9,6 +10,8 @@ import { pushOpenMessage } from '../../build/pushWorker.ts'
 import { createWebClient } from '../api/client.ts'
 import { ApiProblemError } from '../api/problem.ts'
 import { Providers } from '../app/App.tsx'
+import { paths } from '../app/paths.ts'
+import { routes } from '../app/routes.tsx'
 import { PushLinks } from './PushLinks.tsx'
 import {
   endpoint,
@@ -310,6 +313,71 @@ describe('a message from the worker', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/households/h1')
     })
+  })
+})
+
+describe('the app, wherever it is open', () => {
+  const me = {
+    id: '01900000-0000-7000-8000-00000000d0e5',
+    email: 'jana@example.test',
+    email_verified: true,
+    display_name: 'Jana',
+    locale: 'en',
+  }
+
+  /** The app at a member's own account, over a server that keeps the order it was asked in. */
+  function app() {
+    const asked: string[] = []
+    const client = createWebClient({
+      origin,
+      cookies: () => '__Host-hh_csrf=t',
+      retry: { delays: [] },
+      fetch: (request) => {
+        const path = new URL(request.url).pathname.replace('/api/v1', '')
+        asked.push(`${request.method} ${path}`)
+        if (path === '/push/vapid-key') return Promise.resolve(Response.json({ key: serverKey }))
+        if (path === '/me') return Promise.resolve(Response.json(me))
+        if (request.method === 'GET') return Promise.resolve(Response.json({ items: [] }))
+        return Promise.resolve(new Response(null, { status: 204 }))
+      },
+    })
+    const router = createMemoryRouter(routes, { initialEntries: [paths.account.path] })
+    render(
+      <Providers persist={false} client={client} cookies={() => '__Host-hh_csrf=t'}>
+        <RouterProvider router={router} />
+      </Providers>,
+    )
+    return { asked, router }
+  }
+
+  it('registers a browser that allows notifications again for the member who is here', async () => {
+    const { notification } = withPush({ permission: 'granted' })
+    const { asked } = app()
+    await waitFor(() => {
+      expect(asked).toContain('POST /push/subscriptions')
+    })
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+
+  it('asks a browser that was never asked nothing, and the server nothing of it', async () => {
+    const { notification, register } = withPush({ permission: 'default' })
+    const { asked } = app()
+    await screen.findByRole('button', { name: 'Sign out' })
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+    expect(register).not.toHaveBeenCalled()
+    expect(asked.filter((request) => request.includes('/push/'))).toEqual([])
+  })
+
+  it('removes the browser’s subscription before a sign-out ends the session', async () => {
+    withPush({ permission: 'granted', subscribedUnder: bytesOf(serverKey) })
+    const { asked, router } = app()
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.signIn.path)
+    })
+    const removed = asked.indexOf('DELETE /push/subscriptions')
+    expect(removed).toBeGreaterThan(-1)
+    expect(removed).toBeLessThan(asked.indexOf('POST /auth/logout'))
   })
 })
 

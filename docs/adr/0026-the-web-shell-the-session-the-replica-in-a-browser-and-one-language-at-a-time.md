@@ -74,12 +74,15 @@ leaves the screen. Nothing of the sync library or its SDK is in a page until a r
 opened: every other file imports the library for its types alone, and what a screen needs of it
 at run time is handed over with the open replica (`sync/open.ts`).
 
-**The policy is widened by two sources and nothing else.** `script-src` gains
+**The policy is widened by three sources and nothing else.** `script-src` gains
 `'wasm-unsafe-eval'`, which lets a page compile WebAssembly and evaluates no string as script;
 the SDK's workers are files of the page's own origin and need no source of their own.
 `connect-src` gains the sync service's origin and its WebSocket twin, which a build is told by
-`HOUSEHOLD_WEB_SYNC_ORIGIN`: unset, the service is behind the page's own origin and nothing is
-added. Anything that is not one origin is refused as the build starts.
+`HOUSEHOLD_WEB_SYNC_ORIGIN`. `img-src` gains the object store's origin, told by
+`HOUSEHOLD_WEB_FILES_ORIGIN`: a member's picture is a link the API pre-signs there (D-9), which
+`'self'` alone refused, and the profile is the first screen to draw one. Unset, a service is
+behind the page's own origin and nothing is added. Anything that is not one origin is refused as
+the build starts.
 
 **Apple's form is received by the API and sent on in a fragment.** The web client's redirect URI
 for Apple is `POST /auth/oauth/apple/return`, which reads the form and answers `303` to the web
@@ -106,7 +109,9 @@ at the origin's root (`build/pushWorker.ts`), part of the build's id: it handles
 build. A press on a notification hands its address to a page that is open, which goes there by
 its own router, or opens one. Permission is asked by a member's press on the screen that shows
 the permission and the preferences together, and never on load; a browser whose permission was
-already given registers its subscription again after a sign-in, asking nothing.
+already given registers its subscription again for the member who is there, at a sign-in and
+when the app starts with them signed in (`push/Push.tsx`), asking nothing; a sign-out removes it
+first, while the session can still tell the server.
 
 **The app holds one language at a time** (D-159). `@household/i18n/lazy` is the package's entry
 with no catalog in it; the app fetches the catalog of the language it starts in before it draws
@@ -140,6 +145,7 @@ every other console error still fails its test.
 | `'unsafe-eval'`, or the SDK built without WebAssembly | The first is what PRD 07 §4 forbids. There is no SQLite for the browser that is not WebAssembly |
 | The sync service's origin as a wildcard, or `connect-src *` | A policy is widened for one origin. A page that could connect anywhere could send what it reads anywhere |
 | The sync origin read at run time from the API's answer | The policy is in the page before any script runs: a script cannot widen it |
+| A picture fetched by the app and drawn from a `blob:`, or served through the API, to keep `img-src 'self'` | The first admits `blob:` to `img-src`, a wider source than one origin, and fetching needs the store in `connect-src` besides. The second puts every picture's bytes through the API, which D-9's pre-signed links exist to avoid |
 | Apple's JS in popup mode | A third party's script under a policy whose rule is that every script is the page's own origin's, and the providers a build offers would become a build's setting |
 | The whole policy relaxed for Apple's form, or the return route outside the origin check | The origin check is what stops another site's page posting as a member. One origin is admitted to one route that reads no session |
 | The providers a build offers as a build-time setting | A deployment that configures a provider would rebuild its web client to show it, and the two would disagree in between |
@@ -167,7 +173,8 @@ every other console error still fails its test.
   `shell/SearchSlot.tsx` and the dashboard in Home's place.
 - **Items 28 and 29** show A-11 on the device whose sign-in ended (D-157).
 - **Items 30 and 88** serve the app: `index.html`, `build.json` and `push-worker.js` are the
-  three files a deployment must not cache; the build is given `HOUSEHOLD_WEB_SYNC_ORIGIN`; the
+  three files a deployment must not cache; the build is given `HOUSEHOLD_WEB_SYNC_ORIGIN` and
+  `HOUSEHOLD_WEB_FILES_ORIGIN`, the second the origin of `HOUSEHOLD_OBJECT_STORE_PUBLIC_URL`; the
   API and the web client are one origin; and Apple's return route and Google's
   `sign-in/google` are registered with the providers and in `HOUSEHOLD_OAUTH_REDIRECT_URIS`
   ([runbook](../runbooks/sign-in-keys-and-providers.md)).
