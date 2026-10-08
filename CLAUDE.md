@@ -160,6 +160,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   it: a `401` ends it and removes what the browser kept, the persisted cache and every replica, a
   `403 csrf_failed` signs in again and removes nothing, and a `400 update_required` draws *please
   update* and nothing else ([D-156](docs/prd/09-decisions.md), [D-158](docs/prd/09-decisions.md)).
+  A request asked outside a query or a mutation tells the problem hub itself, and a write that
+  changes what `GET /me` answers reads the account again (`meKey`) before it leads anywhere.
   What a browser keeps is its member's and for no longer than their session, whether or not a
   page knew them when it ended: a browser with no session keeps no replica, and a page that finds
   another member signed in under it removes what it kept and reloads
@@ -170,8 +172,11 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   imported again, since a browser may answer the second import with the first one's failure: the
   page is loaded again, or the screen says to reload. The shell's module list is derived from the household's own
   answer and lists a module only where `src/modules/registry.ts` has its screens, which the
-  module's web item adds ([D-160](docs/prd/09-decisions.md)); the app opens at a household that
-  opens, passing over one the list names as suspended ([D-162](docs/prd/09-decisions.md)). A household's replica is one tab's,
+  module's web item adds ([D-160](docs/prd/09-decisions.md)). The household list names a
+  `suspended` household whose every route answers `404` (D-115), so a screen that reads something
+  of each of a member's households passes over it or says it cannot be read, and never waits on
+  it: where the app opens ([D-162](docs/prd/09-decisions.md)), and before an account is deleted
+  ([D-163](docs/prd/09-decisions.md)). A household's replica is one tab's,
   by a Web Lock, opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
   imported for its types alone outside `sync/open.ts`, which ESLint holds and which is what keeps
   the library and its SDK out of a page until a replica is opened, and a run-time value a screen
