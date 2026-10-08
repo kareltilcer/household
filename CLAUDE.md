@@ -44,7 +44,7 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
 pnpm --filter @household/sync conformance:web  # @household/sync's web replica in Chromium against it (Playwright)
 pnpm --filter @household/web build      # the web build a deployment serves (dist/www)
 pnpm --filter @household/web check      # that build held to its bundle budget, the policy and its own id
-pnpm --filter @household/web e2e        # builds it again with the dev-only routes (build:e2e), then Playwright: axe, the pseudo-locale pass, the policy
+pnpm --filter @household/web e2e        # builds it again with the dev-only routes (build:e2e), then Playwright against an API it starts itself: axe, the pseudo-locale pass, the policy, the critical paths (needs up, db:setup and up:sync; stop dev:api first)
 ```
 
 - **`pnpm run up`, never `pnpm up`.** `pnpm up` is pnpm's own `update` command and rewrites
@@ -150,6 +150,29 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   a test's markup is held to the literal-string lint as the app's is. The bundle budget is
   `build/budget.ts` ([D-153](docs/prd/09-decisions.md),
   [ADR 0025](docs/adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)).
+- **The web app's session, shell and replica**
+  ([ADR 0026](docs/adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)).
+  A route names its layout in `paths.ts`: plain, the frame of the screens before sign-in, or the
+  shell around an account or a household, which is a member's alone, and each screen is a file
+  fetched when its address is opened. A request goes through `useApi()` inside TanStack Query and
+  its answer through `unwrap`, which is how the session hears of the three answers that are about
+  it: a `401` ends it and removes what the browser kept, the persisted cache and every replica, a
+  `403 csrf_failed` signs in again and removes nothing, and a `400 update_required` draws *please
+  update* and nothing else ([D-156](docs/prd/09-decisions.md), [D-158](docs/prd/09-decisions.md)).
+  The app holds one language at a time: `apps/web/src` imports `@household/i18n/lazy` and never
+  the package's own entry, which holds all five catalogs, and ESLint fails the import
+  ([D-159](docs/prd/09-decisions.md)). The shell's module list is derived from the household's own
+  answer and lists a module only where `src/modules/registry.ts` has its screens, which the
+  module's web item adds ([D-160](docs/prd/09-decisions.md)). A household's replica is one tab's,
+  by a Web Lock, opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
+  imported for its types alone outside `sync/open.ts`, which is what keeps the library and its SDK
+  out of a page until a replica is opened, and a run-time value a screen needs of it is added to
+  `Opened` there. The policy's two sources beside its own origin are the replica's:
+  `'wasm-unsafe-eval'`, and the sync service's origin, which a build is told
+  (`HOUSEHOLD_WEB_SYNC_ORIGIN`). The end-to-end suite starts the API itself on the development
+  services, each test a network of its own (`e2e/stack.ts`), and a member's routes are walked
+  signed in; what the suite names a person or a household holds no run of four plain letters,
+  which the pseudo-locale pass takes for a word nobody translated.
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
