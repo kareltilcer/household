@@ -46,9 +46,9 @@ import {
   isRefusedAsSent,
   readState,
   useNoWithdrawal,
-  useOnline,
   useOwnZone,
 } from './common.ts'
+import { useOnline } from '../ui/online.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import styles from './Settings.module.css'
 import { VerifyResend } from './VerifyResend.tsx'

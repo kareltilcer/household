@@ -11,21 +11,22 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { catalogChunk, catalogOf } from './build/budget.ts'
 import { headerPolicyFor, metaPolicyFor } from './build/csp.ts'
-import { deployedSync } from './build/deployment.ts'
+import { deployment } from './build/deployment.ts'
 import { household, householdDev } from './build/plugin.ts'
 import { apiOrigin, preview } from './build/preview.ts'
 import { devPagesMode } from './src/app/paths.ts'
 
 export default defineConfig(({ mode }) => {
-  // The sync service a build's pages connect to: the one its environment names, and for the
-  // end-to-end build the development stack's own unless the environment names another.
-  const sync = deployedSync(mode === devPagesMode)
+  // The services a build's pages reach beside their own origin, the sync service and the object
+  // store: the ones its environment names, and for the end-to-end build the development stack's
+  // own unless the environment names others.
+  const deployed = deployment(mode === devPagesMode)
   // The API, same-origin as in production: its session cookie is `__Host-`, and its CSRF check
   // names this origin. 127.0.0.1, where `pnpm run dev:api` listens and the end-to-end suite
   // starts its own.
   const proxy = { '/api': apiOrigin }
   return {
-    plugins: [react(), household({ policy: metaPolicyFor(sync) }), householdDev()],
+    plugins: [react(), household({ policy: metaPolicyFor(deployed) }), householdDev()],
     build: {
       outDir: mode === devPagesMode ? 'dist/e2e' : 'dist/www',
       emptyOutDir: true,
@@ -58,7 +59,7 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy,
       headers: {
-        'Content-Security-Policy': headerPolicyFor(sync),
+        'Content-Security-Policy': headerPolicyFor(deployed),
         'X-Content-Type-Options': 'nosniff',
       },
     },

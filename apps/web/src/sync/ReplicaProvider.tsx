@@ -10,16 +10,9 @@
 // and whether the replica is receiving changes, which with the sync service down and the API up
 // it is not, though everything else works (D-105).
 import type { RecordedOutcome, Replica } from '@household/sync'
-import {
-  createContext,
-  use,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react'
+import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useApi, useProblems } from '../api/ApiProvider.tsx'
+import { useOnline } from '../ui/online.ts'
 import { replicaLock } from './databases.ts'
 import type { Opened } from './open.ts'
 
@@ -46,20 +39,6 @@ export interface Sync {
 }
 
 const SyncContext = createContext<Sync | null>(null)
-
-function subscribeToConnection(notify: () => void): () => void {
-  window.addEventListener('online', notify)
-  window.addEventListener('offline', notify)
-  return () => {
-    window.removeEventListener('online', notify)
-    window.removeEventListener('offline', notify)
-  }
-}
-
-/** Whether the browser says it has a connection: what the offline bar is drawn by (A-37). */
-export function useOnline(): boolean {
-  return useSyncExternalStore(subscribeToConnection, () => window.navigator.onLine)
-}
 
 /** Whether this browser has what a replica needs: the locks, the storage and the workers. */
 function supported(): boolean {

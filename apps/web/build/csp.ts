@@ -6,10 +6,12 @@
 // against sends it as a header too, with the one directive a <meta> cannot carry.
 //
 // A directive is widened here, in the pull request that needs it and for the origin it needs.
-// Item 25 widened two, for the replica (ADR 0026): `script-src` admits compiling WebAssembly,
-// which the replica's SQLite is, and `connect-src` the sync service's origin, which a build is
-// told (deployment.ts). The payment processor's frame is item 27's.
-import { deployedSync } from './deployment.ts'
+// Item 25 widened three (ADR 0026). Two are the replica's: `script-src` admits compiling
+// WebAssembly, which the replica's SQLite is, and `connect-src` the sync service's origin. The
+// third is a picture's: `img-src` admits the object store's origin, where the API's pre-signed
+// links point. A build is told both origins (deployment.ts). The payment processor's frame is
+// item 27's.
+import { deployment, type Deployment } from './deployment.ts'
 
 /**
  * Lets a page compile WebAssembly, and nothing else: no string is evaluated as script under it,
@@ -18,15 +20,15 @@ import { deployedSync } from './deployment.ts'
  */
 export const wasm = "'wasm-unsafe-eval'"
 
-/** The directives a `<meta http-equiv>` carries, for a page that connects to `sync` beside itself. */
-export function directivesFor(sync: readonly string[]) {
+/** The directives a `<meta http-equiv>` carries, for a page of the deployment `of`. */
+export function directivesFor(of: Deployment) {
   return {
     'default-src': ["'none'"],
     'script-src': ["'self'", wasm],
     'style-src': ["'self'"],
-    'img-src': ["'self'"],
+    'img-src': ["'self'", ...of.files],
     'font-src': ["'self'"],
-    'connect-src': ["'self'", ...sync],
+    'connect-src': ["'self'", ...of.sync],
     'manifest-src': ["'self'"],
     'base-uri': ["'none'"],
     'form-action': ["'self'"],
@@ -48,17 +50,17 @@ function serialise(policy: Readonly<Record<string, readonly string[]>>): string 
 }
 
 /** The policy as index.html's `<meta http-equiv="Content-Security-Policy">` states it. */
-export function metaPolicyFor(sync: readonly string[]): string {
-  return serialise(directivesFor(sync))
+export function metaPolicyFor(of: Deployment): string {
+  return serialise(directivesFor(of))
 }
 
 /** The policy as the `Content-Security-Policy` response header states it. */
-export function headerPolicyFor(sync: readonly string[]): string {
-  return serialise({ ...directivesFor(sync), ...headerOnly })
+export function headerPolicyFor(of: Deployment): string {
+  return serialise({ ...directivesFor(of), ...headerOnly })
 }
 
-/** The sync service's sources for the deployment this process's environment names. */
-const deployed = deployedSync(false)
+/** The deployment this process's environment names. */
+const deployed = deployment(false)
 
 /** The directives of a build made in this environment. */
 export const directives = directivesFor(deployed)

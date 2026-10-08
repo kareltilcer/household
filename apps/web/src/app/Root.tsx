@@ -7,6 +7,7 @@
 import { useEffect } from 'react'
 import { Outlet } from 'react-router'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { Push } from '../push/Push.tsx'
 import { useSession } from '../session/SessionProvider.tsx'
 import { UpdateRequired } from '../session/UpdateRequired.tsx'
 import { UpdatePrompt } from '../update/UpdatePrompt.tsx'
@@ -22,6 +23,7 @@ export function Root() {
   return (
     <div className={styles.root}>
       <UpdatePrompt />
+      <Push />
       <Outlet />
     </div>
   )

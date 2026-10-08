@@ -103,9 +103,7 @@ test('a visitor who opens a member’s address signs in and lands there', async 
   await page.goto(address)
   await expect(title(page, 'Sign in')).toBeVisible()
   await expect(page).toHaveURL(paths.signIn.path)
-  await expect(
-    page.getByText('After you sign in, you’ll go to the page you opened.'),
-  ).toBeVisible()
+  await expect(page.getByText('After you sign in, you’ll go to the page you opened.')).toBeVisible()
   await expectAccessible(page)
 
   await signInAs(page, who)

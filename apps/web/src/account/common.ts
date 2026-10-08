@@ -8,7 +8,6 @@
 // `conflicted`, one person changing their own account from one place at a time, and nothing waits
 // `pending` on the device to be sent later.
 import type { FetchStatus } from '@tanstack/react-query'
-import { useSyncExternalStore } from 'react'
 import { problemIn } from '../api/problem.ts'
 import { deviceTimeZone } from '../api/problemText.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -35,24 +34,6 @@ export const signedInKey = ['me', 'signed-in'] as const
 export function useOwnZone(): string {
   const me = useMe()
   return me.timezone ?? deviceTimeZone()
-}
-
-function subscribeToConnection(notify: () => void): () => void {
-  window.addEventListener('online', notify)
-  window.addEventListener('offline', notify)
-  return () => {
-    window.removeEventListener('online', notify)
-    window.removeEventListener('offline', notify)
-  }
-}
-
-/**
- * Whether the browser says it has a connection. The account's own reading of it, and not the
- * replica's (sync/ReplicaProvider.tsx), which would bring the sync client into the download of
- * every account screen for the sake of one line.
- */
-export function useOnline(): boolean {
-  return useSyncExternalStore(subscribeToConnection, () => window.navigator.onLine)
 }
 
 /** What a read tells of itself, as TanStack Query holds it. */

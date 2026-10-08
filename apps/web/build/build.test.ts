@@ -28,17 +28,30 @@ import {
   unsafeSources,
   wasm,
 } from './csp.ts'
-import { deployedSync, devSyncOrigin, syncOriginVar, syncSources } from './deployment.ts'
+import {
+  deployedSync,
+  deployment,
+  devFilesOrigin,
+  devSyncOrigin,
+  fileSources,
+  filesOriginVar,
+  sameOrigin,
+  syncOriginVar,
+  syncSources,
+} from './deployment.ts'
 import { pushOpenMessage, pushWorkerScript } from './pushWorker.ts'
 import { devPagesMode } from '../src/app/paths.ts'
 import { buildFile, buildMeta, buildPlaceholder } from '../src/update/build.ts'
 import { buildId, devOnly, head, rootBase } from './plugin.ts'
 
 describe('the policy', () => {
-  const sync = syncSources('https://sync.household.example')
+  const told = {
+    sync: syncSources('https://sync.household.example'),
+    files: fileSources('https://files.household.example'),
+  }
 
   it('admits nothing inline and no string evaluated as script', () => {
-    for (const policy of [headerPolicy, headerPolicyFor(sync)]) {
+    for (const policy of [headerPolicy, headerPolicyFor(told)]) {
       for (const source of unsafeSources) expect(policy).not.toContain(source)
     }
     expect(directives['default-src']).toEqual(["'none'"])
@@ -48,7 +61,7 @@ describe('the policy', () => {
     expect(directives['style-src']).toEqual(["'self'"])
   })
 
-  it('names every source as itself or nothing, but for the one origin a build is told of', () => {
+  it('names every source as itself or nothing, but for the origins a build is told of', () => {
     const own = (source: string) => source === "'self'" || source === "'none'"
     const other = (policy: Readonly<Record<string, readonly string[]>>) => {
       const whole: Readonly<Record<string, readonly string[]>> = { ...policy, ...headerOnly }
@@ -56,10 +69,12 @@ describe('the policy', () => {
         sources.filter((source) => !own(source)).map((source) => `${directive} ${source}`),
       )
     }
-    expect(other(directivesFor([]))).toEqual([`script-src ${wasm}`])
-    // The sync service's origin is connected to and nothing else of it is loaded.
-    expect(other(directivesFor(sync))).toEqual([
+    expect(other(directivesFor(sameOrigin))).toEqual([`script-src ${wasm}`])
+    // The object store's origin is drawn from, the sync service's is connected to, and nothing
+    // else of either is loaded: no script, no style, no frame.
+    expect(other(directivesFor(told))).toEqual([
       `script-src ${wasm}`,
+      'img-src https://files.household.example',
       'connect-src https://sync.household.example',
       'connect-src wss://sync.household.example',
     ])
@@ -68,7 +83,7 @@ describe('the policy', () => {
   it('keeps what a <meta> cannot carry for the header alone', () => {
     expect(metaPolicy).not.toContain('frame-ancestors')
     expect(headerPolicy).toBe(`${metaPolicy}; frame-ancestors 'none'`)
-    expect(headerPolicyFor(sync)).toBe(`${metaPolicyFor(sync)}; frame-ancestors 'none'`)
+    expect(headerPolicyFor(told)).toBe(`${metaPolicyFor(told)}; frame-ancestors 'none'`)
   })
 })
 
@@ -109,6 +124,37 @@ describe('the sync service a build is told of', () => {
     const named = { [syncOriginVar]: 'https://sync.household.example' }
     expect(deployedSync(true, named)).toEqual(syncSources('https://sync.household.example'))
     expect(deployedSync(false, named)).toEqual(syncSources('https://sync.household.example'))
+  })
+})
+
+describe('the object store a build is told of', () => {
+  it('is an origin, which a picture is drawn from', () => {
+    expect(fileSources('https://files.household.example/')).toEqual([
+      'https://files.household.example',
+    ])
+    expect(fileSources(undefined)).toEqual([])
+  })
+
+  it('is refused where it is anything more than one origin', () => {
+    for (const value of [
+      'files.household.example',
+      'https://*.household.example',
+      'https://files.household.example/household',
+      'https://key:secret@files.household.example',
+    ]) {
+      expect(() => fileSources(value), value).toThrow(filesOriginVar)
+    }
+  })
+
+  it('is the development stack’s own for the end-to-end build, unless one is named', () => {
+    expect(deployment(false, {})).toEqual(sameOrigin)
+    expect(deployment(true, {})).toEqual({
+      sync: syncSources(devSyncOrigin),
+      files: fileSources(devFilesOrigin),
+    })
+    const named = { [filesOriginVar]: 'https://files.household.example' }
+    expect(deployment(true, named).files).toEqual(['https://files.household.example'])
+    expect(deployment(false, named).files).toEqual(['https://files.household.example'])
   })
 })
 

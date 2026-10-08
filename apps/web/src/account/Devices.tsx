@@ -38,14 +38,8 @@ import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import a11y from '../ui/a11y.module.css'
-import {
-  askedNow,
-  readState,
-  signedInKey,
-  useNoWithdrawal,
-  useOnline,
-  useOwnZone,
-} from './common.ts'
+import { askedNow, readState, signedInKey, useNoWithdrawal, useOwnZone } from './common.ts'
+import { useOnline } from '../ui/online.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import styles from './Settings.module.css'
 import { agentOf, type Browser, type System } from './userAgent.ts'

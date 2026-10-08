@@ -43,14 +43,8 @@ import { Select, TextField } from '../ui/Field.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { SyncMark } from '../ui/StatusMark.tsx'
-import {
-  askedNow,
-  isRefusedAsSent,
-  readState,
-  useNoWithdrawal,
-  useOnline,
-  useOwnZone,
-} from './common.ts'
+import { askedNow, isRefusedAsSent, readState, useNoWithdrawal, useOwnZone } from './common.ts'
+import { useOnline } from '../ui/online.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import styles from './Settings.module.css'
 

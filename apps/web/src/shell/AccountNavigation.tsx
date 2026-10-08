@@ -3,8 +3,10 @@
 // one by the word *Home* alone.
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
+import { useApi } from '../api/ApiProvider.tsx'
 import { paths } from '../app/paths.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { forgetPush } from '../push/worker.ts'
 import { useSession } from '../session/SessionProvider.tsx'
 import { Button } from '../ui/Button.tsx'
 import { useToast } from '../ui/Toast.tsx'
@@ -16,6 +18,7 @@ export function SignOut() {
   const t = useTranslate()
   const toast = useToast()
   const navigate = useNavigate()
+  const api = useApi()
   const { signOut } = useSession()
   const [leaving, setLeaving] = useState(false)
   return (
@@ -24,15 +27,19 @@ export function SignOut() {
       loading={leaving}
       onClick={() => {
         setLeaving(true)
-        signOut().then(
-          () => navigate(paths.signIn.path, { replace: true }),
-          () => {
-            // The session is the server's to end: with no answer from it, the member is still
-            // signed in, and is told so.
-            setLeaving(false)
-            toast({ message: t('shell.sign_out.failed') })
-          },
-        )
+        // The browser's subscription goes first, while the session can still tell the server:
+        // whoever signs in here next is sent nothing that was this member's.
+        void forgetPush(api)
+          .then(signOut)
+          .then(
+            () => navigate(paths.signIn.path, { replace: true }),
+            () => {
+              // The session is the server's to end: with no answer from it, the member is still
+              // signed in, and is told so.
+              setLeaving(false)
+              toast({ message: t('shell.sign_out.failed') })
+            },
+          )
       }}
     >
       {t('shell.sign_out.action')}

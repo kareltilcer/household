@@ -31,7 +31,7 @@ import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { paths } from '../app/paths.ts'
-import { householdKey, householdsKey, useHouseholds } from '../household/households.ts'
+import { householdsKey, membersKey, useHouseholds } from '../household/households.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe, useSession, type Me } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -40,7 +40,8 @@ import { Checkbox } from '../ui/Choice.tsx'
 import { PasswordField, TextField } from '../ui/Field.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
-import { askedNow, readState, useNoWithdrawal, useOnline, useOwnZone, type Read } from './common.ts'
+import { askedNow, readState, useNoWithdrawal, useOwnZone, type Read } from './common.ts'
+import { useOnline } from '../ui/online.ts'
 import { blockedBy, blocks, standingOf, type Standing } from './deletion.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import styles from './Settings.module.css'
@@ -117,7 +118,7 @@ function Deletion({ me }: { readonly me: Me }) {
   const owned = (list ?? []).filter((household) => household.my_role === 'owner')
   const members = useQueries({
     queries: owned.map((household) => ({
-      queryKey: [...householdKey(household.id), 'members'] as const,
+      queryKey: membersKey(household.id),
       queryFn: async ({ signal }: { readonly signal: AbortSignal }) =>
         unwrap(
           await api.GET('/households/{household_id}/members', {
