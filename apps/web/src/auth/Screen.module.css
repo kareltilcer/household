@@ -1,0 +1,89 @@
+/* A screen before sign-in: one column, inside the frame's (app/Public.module.css). Everything
+   is sized in the scales' own steps, so it widens and grows with the text. */
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  composes: title1 from '../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+.lede {
+  composes: bodyLg from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.line {
+  overflow-wrap: anywhere;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The ways on, one to a line: each a target of its own, 44 pt high in both densities. */
+.ways {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.way {
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--dens-row-min);
+  min-height: var(--dens-row-min);
+  overflow-wrap: anywhere;
+}
+
+/* The word between the form and the providers, a rule either side of it. */
+.or {
+  composes: caption from '../styles/type.module.css';
+  display: flex;
+  gap: var(--space-15);
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.or::before,
+.or::after {
+  flex: 1 1 0;
+  border-block-start: 1px solid var(--divider);
+  content: '';
+}
+
+.providers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The notices above a form, each a banner of its own. With none to draw it takes no room, and
+   leaves no gap of the screen's where it would have stood. */
+.notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.notices:empty {
+  display: none;
+}
