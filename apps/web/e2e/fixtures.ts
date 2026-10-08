@@ -60,6 +60,37 @@ export function frames(page: Page, count = 3): Promise<void> {
 }
 
 /**
+ * The reads this browser keeps, by their keys: the app's persisted cache as it wrote it, one
+ * clone under one key of one store (src/api/query.ts). Read once the app has drawn, which is
+ * after it opened the store.
+ */
+export function kept(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        const opening = indexedDB.open('household-web')
+        opening.onerror = () => {
+          reject(new Error('the kept reads could not be opened'))
+        }
+        opening.onsuccess = () => {
+          const database = opening.result
+          const read = database.transaction('query-cache').objectStore('query-cache').get('client')
+          read.onerror = () => {
+            reject(new Error('the kept reads could not be read'))
+          }
+          read.onsuccess = () => {
+            const client = read.result as
+              | { readonly clientState: { readonly queries: { readonly queryHash: string }[] } }
+              | undefined
+            database.close()
+            resolve((client?.clientState.queries ?? []).map((query) => query.queryHash))
+          }
+        }
+      }),
+  )
+}
+
+/**
  * What `colours` come to, drawn one over another in that order: the red, green and blue of the
  * result, each 0 to 255. A colour is whatever the browser computed, in whatever notation, a veil
  * that lets what is under it through among them.

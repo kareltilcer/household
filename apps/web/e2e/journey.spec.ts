@@ -7,7 +7,7 @@
 // else is registered with, and each screen a journey passes is held to axe as it stands.
 import type { Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
-import { expect, expectAccessible, frames, open, test } from './fixtures.ts'
+import { expect, expectAccessible, frames, kept, open, test } from './fixtures.ts'
 import { linkToken, person, register, totp, type Person } from './stack.ts'
 
 /** The page's one title, which a screen is known by. */
@@ -141,37 +141,6 @@ test('a visitor who opens a member’s address signs in and lands there', async 
   await expect(page).toHaveURL(address)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 })
-
-/**
- * The reads this browser keeps, by their keys: the app's persisted cache as it wrote it, one
- * clone under one key of one store (src/api/query.ts). Read once the app has drawn, which is
- * after it opened the store.
- */
-function kept(page: Page): Promise<string[]> {
-  return page.evaluate(
-    () =>
-      new Promise<string[]>((resolve, reject) => {
-        const opening = indexedDB.open('household-web')
-        opening.onerror = () => {
-          reject(new Error('the kept reads could not be opened'))
-        }
-        opening.onsuccess = () => {
-          const database = opening.result
-          const read = database.transaction('query-cache').objectStore('query-cache').get('client')
-          read.onerror = () => {
-            reject(new Error('the kept reads could not be read'))
-          }
-          read.onsuccess = () => {
-            const client = read.result as
-              | { readonly clientState: { readonly queries: { readonly queryHash: string }[] } }
-              | undefined
-            database.close()
-            resolve((client?.clientState.queries ?? []).map((query) => query.queryHash))
-          }
-        }
-      }),
-  )
-}
 
 // A second visit, which a browser that kept nothing never makes: the account is in what this
 // browser kept, and the session's cookies are not. The page that finds it so removes what was
