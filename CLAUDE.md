@@ -251,7 +251,11 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   (`household/invitationToken.ts`), and a member in no household is opened at making one
   ([D-168](docs/prd/09-decisions.md)), once their list of households has been read again: a kept
   list that names none is not gone by (`app/Home.tsx`). A focus that a control took with it as
-  it left is put back through `refocus` (`account/common.ts`).
+  it left is put back through `refocus` (`account/common.ts`). A write on its way keeps its
+  control busy until it is answered: its mutation is not `reset()` while it is pending, and rows
+  that share one say for themselves which of them is asked. A page a link's fragment opens
+  (`useFragment`) is begun again for a fragment that arrives while it is drawn, as `Invitation`
+  is, since a link opened in the tab already on its page loads nothing.
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
