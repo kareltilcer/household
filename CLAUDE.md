@@ -148,8 +148,9 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   nothing above a screen sets a title, and the walk of the routes fails one whose title does not
   name its heading ([D-165](docs/prd/09-decisions.md)). What a press came to is said to whoever
   cannot see it: a form that is refused moves the focus to the first field the refusal marked
-  (`useRefusedField`, `auth/fields.tsx`), a refusal that is no field's, and one of a control that
-  saves as it is changed, is a `Banner` with `announce`, and a screen that removes the row a
+  (`useRefusedField`, `auth/fields.tsx`), a refusal that is no field's, one of a control that
+  saves as it is changed, and a part of a screen that could not be read where no `StateFrame`
+  draws it, is a `Banner` with `announce`, and a screen that removes the row a
   dialog was opened from says where the focus goes ([D-166](docs/prd/09-decisions.md)); axe
   reads only that a field and its sentence are tied, so the screen's own test holds the focus
   and the announcement. A route is a line of
@@ -172,7 +173,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   update* and nothing else ([D-156](docs/prd/09-decisions.md), [D-158](docs/prd/09-decisions.md)).
   A request asked outside a query or a mutation tells the problem hub itself, but for the one a
   sign-out follows at once, whose own refusal is told (`push/worker.ts`), and a write that
-  changes what `GET /me` answers reads the account again (`meKey`) before it leads anywhere.
+  changes what `GET /me` answers reads the account again before it leads anywhere, by its whole
+  key (`meKey`, `exact: true`): the account's other reads are filed under it.
   A write of a screen before sign-in or of a member's own account is asked at once, connection
   or none (`askedNow`, `api/query.ts`, which a test holds every such mutation to): left to the
   query client it would wait unseen and be sent whenever the connection returned
