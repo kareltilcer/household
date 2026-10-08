@@ -236,16 +236,22 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   `household/data.ts`. Its entities are never written offline, so every write under
   `src/household` spreads `askedNow`, which the test beside the query client holds them to, and
   none is queued ([D-170](docs/prd/09-decisions.md)); a write that was answered reads the household
-  again (`useReread`). A level is never shown by the contract's word for it: `useLevelWords`,
+  again (`useReread`), and so does one refused for where its member now stands, a `403`, a `402`
+  or a `404`, which is one list for every screen of the settings (`isStandingRefusal`,
+  `household/settings/profile.ts`). A level is never shown by the contract's word for it: `useLevelWords`,
   `GrantMatrix` for an owner to fill in and `GrantSummary` for everybody to read, each saying
   what a level comes to where it draws it; a role's defaults and its ceiling are
   `@household/domain`'s, which `vectors/grants.json` holds to the server's, so a level a role may
   not hold is not offered. An unverified account is refused where it presses and no earlier, with
   `Unverified` in the control's place. Every create sends an id made once for each visit of its
-  screen, and a `422` for that id after an answer that never came is read as made. What an
+  screen, and a `422` for that id after an answer that never came is read as made, as is a
+  ceiling's `403` where what was to be made is found by its id, the server counting before it
+  looks at the id. What an
   invitation's link carried is kept in the page's memory across a sign-in and in no storage
   (`household/invitationToken.ts`), and a member in no household is opened at making one
-  ([D-168](docs/prd/09-decisions.md)).
+  ([D-168](docs/prd/09-decisions.md)), once their list of households has been read again: a kept
+  list that names none is not gone by (`app/Home.tsx`). A focus that a control took with it as
+  it left is put back through `refocus` (`account/common.ts`).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
