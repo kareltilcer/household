@@ -8,7 +8,7 @@ import { useProblemText } from '../../api/problemText.ts'
 import type { Invitation } from '../data.ts'
 import { defaultsFor, levelsOf, type Levels } from '../grants.ts'
 import type { AccessLevel } from '../households.ts'
-import { isStandingRefusal, useStandingRefusal } from './profile.ts'
+import { useStandingRefusal } from './profile.ts'
 
 export type InvitationStatus = NonNullable<Invitation['status']>
 
@@ -43,17 +43,29 @@ export function addressOf(invitation: Invitation): string | null {
 
 /**
  * The addresses, in lower case as the server compares them, that an invitation waits for or
- * brought somebody in at. An older invitation to one of them is answered `404` when it is sent
- * again (the waiting one is the one to send, and a member's address is invited nowhere), and
- * whoever declined at one has been asked again since: the row draws no *Send again*, and the
+ * that are a member's. An invitation to one of them is answered `404` when it is sent again (the
+ * waiting one is the one to send, and a member's address is invited nowhere), and whoever
+ * declined at one has been asked again since, or is in: the row draws no *Send again*, and the
  * decline is no longer news.
+ *
+ * `members` are the addresses of the household's members, as an owner reads them. Somebody who
+ * joined by an invitation and has left since is no member, and their address is asked again as
+ * any other is: an invitation that was accepted says who came, not who is here. While the
+ * members are unread, undefined, it is all there is to go by, and it is held to say so.
  */
-export function settledAddresses(list: readonly Invitation[], now: number): ReadonlySet<string> {
-  const settled = new Set<string>()
+export function settledAddresses(
+  list: readonly Invitation[],
+  now: number,
+  members?: readonly string[],
+): ReadonlySet<string> {
+  const settled = new Set<string>(members?.map((address) => address.toLowerCase()))
   for (const each of list) {
     const address = addressOf(each)
     const status = statusAt(each, now)
-    if (address !== null && (status === 'pending' || status === 'accepted')) {
+    if (
+      address !== null &&
+      (status === 'pending' || (members === undefined && status === 'accepted'))
+    ) {
       settled.add(address.toLowerCase())
     }
   }
@@ -63,7 +75,7 @@ export function settledAddresses(list: readonly Invitation[], now: number): Read
 /**
  * The declined invitations an owner is still to be told of (A-25, D-171), `list` being newest
  * first as the server lists it and `settled` its addresses that an invitation waits for or
- * brought somebody in at. An address is answered for by the newest invitation to it: asked
+ * that are a member's. An address is answered for by the newest invitation to it: asked
  * again since it declined, the earlier decline is news no longer, whatever became of the
  * asking. A link names nobody, and each declined link stands for itself.
  */
@@ -136,13 +148,6 @@ export function readAgain(state: unknown): Again | undefined {
     levels: role === 'owner' ? defaultsFor('member') : levelsOf(given),
   }
 }
-
-/**
- * Whether a refused write says that what the screen shows is no longer how things stand: the
- * member is no owner any more, the household takes no writes, or what was named is gone. The
- * household is read again, and the screen draws what it reads.
- */
-export const isStale = isStandingRefusal
 
 /**
  * What a write of these screens that was refused, for no field's sake, is said to have come to:

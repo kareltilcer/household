@@ -57,7 +57,7 @@ import { useToast } from '../../ui/Toast.tsx'
 import { cx } from '../../ui/cx.ts'
 import { useOnline } from '../../ui/online.ts'
 import type { DataState } from '../../ui/states.ts'
-import { useInvitations, useReread, type Invitation } from '../data.ts'
+import { useInvitations, useMembers, useReread, type Invitation } from '../data.ts'
 import { GrantSummary } from '../GrantMatrix.tsx'
 import { useHousehold } from '../HouseholdContext.tsx'
 import { householdKey, useRoleWord } from '../households.ts'
@@ -67,7 +67,6 @@ import {
   addressOf,
   againState,
   declinedNotices,
-  isStale,
   settledAddresses,
   statusAt,
   useEverHeld,
@@ -76,6 +75,7 @@ import {
 } from './invitations.ts'
 import styles from './Invitations.module.css'
 import { HouseholdSettingsPage, useStanding } from './Page.tsx'
+import { isStandingRefusal, useFocusKept } from './profile.ts'
 
 /** What an owner can do to an invitation as it stands. */
 interface Offered {
@@ -86,9 +86,9 @@ interface Offered {
 }
 
 /**
- * What is offered on `invitation`. One whose address another invitation waits for, or brought
- * somebody in at, is not sent again: the server answers that `404`, and the row to send is the
- * one that waits.
+ * What is offered on `invitation`. One whose address another invitation waits for, or is a
+ * member's, is not sent again: the server answers that `404`, and the row to send is the one
+ * that waits.
  */
 function offeredOn(
   invitation: Invitation,
@@ -257,12 +257,27 @@ function Sent() {
 
   const listed = read.data
   const list = listed ?? []
-  const settled = useMemo(() => settledAddresses(listed ?? [], now), [listed, now])
+  // Whose address is a member's now, as an owner reads the members: somebody who joined by an
+  // invitation and left is asked again as anybody is, and their decline is told as anybody's.
+  const people = useMembers(household.id).data
+  const settled = useMemo(
+    () =>
+      settledAddresses(
+        listed ?? [],
+        now,
+        people?.flatMap((each) => (each.email == null || each.email === '' ? [] : [each.email])),
+      ),
+    [listed, now, people],
+  )
 
   const [target, setTarget] = useState<Target | null>(null)
   const [refused, setRefused] = useState<Refused | null>(null)
   // How many times the server has said this account's address is not verified.
   const [blocked, setBlocked] = useState(0)
+  // The invitations being sent again. Each row is busy for as long as its own is on its way,
+  // whichever row was pressed last: pressed a second time meanwhile, it would be sent twice,
+  // and the second sending makes the link in the first one's email a dead one.
+  const [sending, setSending] = useState<readonly string[]>([])
   const refuse = (text: string) => {
     setRefused((was) => ({ count: (was?.count ?? 0) + 1, text }))
   }
@@ -270,8 +285,9 @@ function Sent() {
   // A control that was pressed may be gone once the list is read again: an invitation that was
   // withdrawn offers no *Withdraw*, one that somebody joined by offers nothing, and a member who
   // is an owner no longer is offered none of them. The focus the control held went with it: it
-  // is put on the list's own place, the element around the notices and the rows.
-  const view = useRef<HTMLDivElement>(null)
+  // is put on the list's own place, the element around the notices and the rows. So is the
+  // focus of a control nobody pressed, which left when the household was read again (profile.ts).
+  const view = useFocusKept(standing.changes, target)
   const pressed = useRef<{ readonly id: string; readonly control: keyof Offered } | null>(null)
   useEffect(() => {
     const was = pressed.current
@@ -313,7 +329,7 @@ function Sent() {
       // Joined by since the list was read, or no longer this member's to withdraw: the question
       // has nothing left to ask, and the list is read again. Any other failure is the
       // question's own to say, and it stays open.
-      if (!isStale(error)) return
+      if (!isStandingRefusal(error)) return
       pressed.current = { id: given.id, control: 'withdraw' }
       setTarget(null)
       refuse(refusal(error))
@@ -329,6 +345,9 @@ function Sent() {
         }),
       )
     },
+    onSettled: (_answer, _error, given) => {
+      setSending((ids) => ids.filter((each) => each !== given.id))
+    },
     onSuccess: (_answer, given) => {
       // It is the caller's now (D-103), which the row says once the list is read again.
       toast({ message: t('household.invitations.resend.done', { email: given.email }) })
@@ -343,7 +362,7 @@ function Sent() {
         return
       }
       refuse(refusal(error))
-      if (!isStale(error)) return
+      if (!isStandingRefusal(error)) return
       // The address has joined since, or the invitation was accepted: the row will say so.
       pressed.current = { id: given.id, control: 'resend' }
       void reread()
@@ -464,7 +483,7 @@ function Sent() {
                         invitation={each}
                         status={status}
                         offered={offered}
-                        resending={resend.isPending && resend.variables.id === each.id}
+                        resending={sending.includes(each.id)}
                         onWithdraw={() => {
                           withdraw.reset()
                           setRefused(null)
@@ -472,6 +491,7 @@ function Sent() {
                         }}
                         onResend={(email) => {
                           setRefused(null)
+                          setSending((ids) => [...ids, each.id])
                           resend.mutate({ id: each.id, email })
                         }}
                       />
@@ -523,7 +543,7 @@ function Sent() {
             </>
           }
         >
-          {withdraw.isError && !isStale(withdraw.error) ? (
+          {withdraw.isError && !isStandingRefusal(withdraw.error) ? (
             <Banner key={withdraw.submittedAt} tone="danger" announce>
               {say(withdraw.error)}
             </Banner>

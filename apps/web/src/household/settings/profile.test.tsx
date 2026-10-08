@@ -512,6 +512,33 @@ describe('editing the household', () => {
     })
   })
 
+  // A field that was touched and put back is no change of this owner's: it reads as the
+  // household stands once another owner has changed it, and is not sent back over theirs.
+  it('sends no field that was put back to how it stood, over what another owner made of it', async () => {
+    const server = createServer()
+    const current: Household = { ...tilcerovi, name: 'Tilcerovi — chata', version: 5 }
+    server.on(patch, async (request) => {
+      if (request.headers.get('If-Match') !== '"5"') {
+        server.household = current
+        return problem(409, 'version_conflict', { current, current_version: 5 })
+      }
+      server.household = { ...current, ...((await request.json()) as object), version: 6 }
+      return Response.json(server.household)
+    })
+    const { user, sheet, name, units, save } = await editing(server)
+    await user.type(name, 'x')
+    await user.type(name, '{Backspace}')
+    await user.selectOptions(units, 'Imperial')
+    await user.click(save)
+    await within(sheet).findByRole('alert')
+    expect(name).toHaveValue('Tilcerovi — chata')
+
+    await user.click(save)
+    expect(await screen.findByText('Saved for everyone.')).toBeInTheDocument()
+    expect(await server.body(patch)).toEqual({ units: 'imperial' })
+    expect(pairs(section('The household')).Name).toBe('Tilcerovi — chata')
+  })
+
   it('says an owner made a member meanwhile is one no longer, on the page, and takes the controls away', async () => {
     const server = createServer()
     server.on(patch, () => {

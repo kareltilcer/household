@@ -362,6 +362,26 @@ describe('an invitation the composer does not send', () => {
     expect(level('Finance')).toHaveValue('view')
   })
 
+  // The refusal was of the address. Another way of inviting puts the address away, and its
+  // sentence with it: nothing is said anew, as a failure, of a press that was answered already.
+  it('says nothing anew of a refused address when another way of inviting is chosen', async () => {
+    const server = createServer()
+    server.on(post, () => invalid('/email'))
+    const { user } = await composer(server)
+    await user.type(address(), 'petr@tilcerovi.cz')
+    await user.click(send())
+    await waitFor(() => {
+      expect(address()).toHaveAccessibleDescription(/^An invitation is already waiting/)
+    })
+    await user.click(screen.getByRole('radio', { name: 'By a link I send myself' }))
+    expect(screen.queryByRole('textbox', { name: 'Their email address' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText('The invitation was not sent')).not.toBeInTheDocument()
+    // Chosen again, the address is as it was refused, and says so still.
+    await user.click(screen.getByRole('radio', { name: 'By email, to one person' }))
+    expect(address()).toHaveAccessibleDescription(/^An invitation is already waiting/)
+  })
+
   it('reads the server’s own word that an address is missing, or is no address', async () => {
     const server = createServer()
     server.on(post, () => invalid('/email', 'required'))

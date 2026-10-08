@@ -48,7 +48,7 @@
 // membership exists.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { readState, refocus, useNoWithdrawal } from '../account/common.ts'
 import settings from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
@@ -148,7 +148,7 @@ function Offer({
   )
 }
 
-export function Invitation() {
+function Opened() {
   const t = useTranslate()
   const api = useApi()
   const queries = useQueryClient()
@@ -540,4 +540,18 @@ export function Invitation() {
       </Screen>
     </div>
   )
+}
+
+/**
+ * The page, begun anew for each link that opens it. A link opened in a tab that is on this page
+ * already changes the address's fragment and loads nothing: the page that was drawn would go on
+ * showing the invitation it had, or that it has none, and take the token that arrived out of
+ * the address unread. So it is begun again for a token that arrives, as a load would begin it:
+ * which is what "open the link again" comes to for somebody who pastes it where they are.
+ */
+export function Invitation() {
+  const arriving = new URLSearchParams(useLocation().hash.slice(1)).get('token') ?? ''
+  const [arrived, setArrived] = useState(arriving)
+  if (arriving !== '' && arriving !== arrived) setArrived(arriving)
+  return <Opened key={arrived} />
 }

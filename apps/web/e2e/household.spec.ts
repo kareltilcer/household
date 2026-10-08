@@ -514,6 +514,67 @@ test('an invitation sent to one address is not answered from another’s account
   await expectAccessible(page)
 })
 
+test('an invitation’s link opened in a tab that is on the invitation’s page already is the one that is shown', async ({
+  page,
+}) => {
+  const { who, household } = await owner(page)
+  const invited = person(guest)
+  const token = await invite(page, household, invited.email)
+  await signOut(page)
+  await register(page, invited)
+  await signIn(page, invited)
+
+  // The page loaded with no link holds none, and says to open the link again.
+  await open(page, paths.invitation.path)
+  await expect(title(page, 'There is no invitation to show here')).toBeVisible()
+  // Opened where they are, as a link pasted into the address is: the browser loads nothing, and
+  // only changes the fragment under the page. It is the invitation the page then shows.
+  await page.goto(`${paths.invitation.path}#token=${token}`)
+  await expect(title(page, `${who.name} has invited you to ${home}`)).toBeVisible()
+  await expect(page).toHaveURL(paths.invitation.path)
+  await page.getByRole('button', { name: `Join ${home}` }).click()
+  await expect(title(page, 'Home')).toBeVisible()
+  await expect(page).toHaveURL(inHousehold.home(household))
+})
+
+// An invitation somebody joined by says who came, and not who is here: a member who left and is
+// asked back is anybody again, and their decline is told as anybody's is (A-25, D-171).
+test('a decline by somebody who was a member once and left is told to the owner, who can send it again', async ({
+  page,
+}) => {
+  const { who, household } = await owner(page)
+  const back = person(guest)
+  await join(page, who, household, back)
+  await signOut(page)
+  await signIn(page, back)
+  expect((await call(page, 'POST', `/households/${household}/leave`)).status).toBe(204)
+  await signOut(page)
+  await signIn(page, who)
+  await invite(page, household, back.email)
+  await signOut(page)
+  await signIn(page, back)
+  // Answered by the invitation as their account lists it: two emails to the address carry a
+  // link by now, and the one that asked them back is the one that waits.
+  const waiting = (await call(page, 'GET', '/me/invitations')).body as {
+    readonly items?: readonly { readonly token?: string }[]
+  }
+  const token = waiting.items?.[0]?.token ?? ''
+  expect((await call(page, 'POST', `/me/invitations/${token}/decline`)).status).toBe(204)
+  await signOut(page)
+  await signIn(page, who)
+
+  await open(page, inHousehold.invitations(household))
+  await expect(page.getByText(`${back.email} declined the invitation`)).toBeVisible()
+  await expect(page.getByRole('link', { name: `Invite ${back.email} again` })).toBeVisible()
+  const declined = rows(page).filter({ hasText: 'Declined' })
+  await expect(declined).toHaveCount(1)
+  await declined.getByRole('button', { name: `Send the invitation to ${back.email} again` }).click()
+  await expectSaid(page, `Sent again to ${back.email}.`)
+  // It waits once more, and the decline is news no longer.
+  await expect(page.getByText(`${back.email} declined the invitation`)).toHaveCount(0)
+  await expect(rows(page).filter({ hasText: 'Waiting' })).toHaveCount(1)
+})
+
 test('an account whose address is not confirmed is told why, where it is refused: joining a household, and inviting into its own', async ({
   page,
 }) => {

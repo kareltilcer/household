@@ -309,6 +309,34 @@ describe('the token an invitation’s link carries', () => {
     expect(heldDestination()).toBe('/account/devices')
   })
 
+  // A link opened in a tab that is on this page already changes the fragment and loads
+  // nothing: the page is begun again for the token that arrived.
+  it('opens a link that arrives where the page is drawn already, bare or on another invitation', async () => {
+    const other = 'r8t5-2hjw-6bn4'
+    const server = serving()
+    server.on(`GET /me/invitations/${other}`, () =>
+      Response.json(offered({ token: other, household_name: 'Novákovi' })),
+    )
+    const { router } = open(paths.invitation.path, server)
+    await titled('There is no invitation to show here')
+
+    await act(() => router.navigate(link))
+    expect(await titled(invited)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(router.state.location.hash).toBe('')
+    })
+    expect(heldInvitationToken()).toBe(token)
+
+    await act(() => router.navigate(`${paths.invitation.path}#token=${other}`))
+    expect(await titled('Jana Tilcerová has invited you to Novákovi')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Join Novákovi' })).toBeInTheDocument()
+    expect(heldInvitationToken()).toBe(other)
+    expect(router.state.location.hash).toBe('')
+    // Each read once, by the token its own link carried.
+    expect(server.to(reading)).toHaveLength(1)
+    expect(server.to(`GET /me/invitations/${other}`)).toHaveLength(1)
+  })
+
   it('leads a member with no token to where the app opens', async () => {
     const server = serving()
     open(paths.invitation.path, server)

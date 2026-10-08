@@ -66,9 +66,10 @@ import { useHousehold } from '../HouseholdContext.tsx'
 import { useRoleWord, type AccessLevel, type ModuleKey } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
 import { isUnverified, Unverified, useMarkUnverified } from '../Unverified.tsx'
-import { isStale, readAgain, useEverHeld, useRefusal } from './invitations.ts'
+import { readAgain, useEverHeld, useRefusal } from './invitations.ts'
 import styles from './Invitations.module.css'
 import { HouseholdSettingsPage, Section, useStanding } from './Page.tsx'
+import { isStandingRefusal } from './profile.ts'
 
 type InvitationCreate = components['schemas']['InvitationCreate']
 type Kind = 'email' | 'link'
@@ -299,7 +300,7 @@ function Composer() {
         // place, and lifts when the account is read as verified. What was set is kept.
         markUnverified()
       } else if (isAnswerLost(error)) lose(body.kind)
-      else if (isStale(error)) void reread()
+      else if (isStandingRefusal(error)) void reread()
     },
   })
 
@@ -321,12 +322,12 @@ function Composer() {
   for (const module of matrixOrder) {
     if (codes.has(`/grants/${module}`)) rows.set(module, t('household.invite.grants.refused'))
   }
-  // Whether the refusal is said beside a field that is drawn: one that names no such field is
-  // said above the button, as any other failure is.
+  // Whether the refusal is one of a field of the form: one that names none is said above the
+  // button, as any other failure is. It is asked of what was refused, and not of what the form
+  // draws now: a field put away since, by another way of inviting or another role, takes its
+  // sentence with it, and nothing is said anew of a press that was answered already.
   const beside =
-    (kind === 'email' && (address !== undefined || codes.has('/message'))) ||
-    (kind === 'link' && codes.has('/max_uses')) ||
-    (role === 'member' && rows.size > 0)
+    address !== undefined || codes.has('/message') || codes.has('/max_uses') || rows.size > 0
   const form = useRefusedField(unsent ?? send.error)
 
   const gone = problemIn(send.error)?.code === 'not_found'

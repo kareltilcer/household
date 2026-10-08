@@ -122,6 +122,22 @@ interface Edits {
 /** The fields of the panel a `422` may name: each has its own sentence beside it. */
 const edited = ['/name', '/timezone', '/locale'] as const
 
+/**
+ * `edits` without what `household` holds already. A field put back to how it stands is no change
+ * of this owner's any more: kept as one, it would be a change again once somebody else changed
+ * that field, and be sent back over theirs with the next save.
+ */
+function changesOf(edits: Edits, household: Household): Edits {
+  const { name, timezone, locale, units, firstDay } = edits
+  return {
+    ...(name === undefined || name === household.name ? {} : { name }),
+    ...(timezone === undefined || timezone === household.timezone ? {} : { timezone }),
+    ...(locale === undefined || locale === matchLocale([household.locale]) ? {} : { locale }),
+    ...(units === undefined || units === household.units ? {} : { units }),
+    ...(firstDay === undefined || firstDay === household.first_day_of_week ? {} : { firstDay }),
+  }
+}
+
 export function EditHousehold({ onClose, onEnded }: AskedProps) {
   const t = useTranslate()
   const format = useFormat()
@@ -229,7 +245,7 @@ export function EditHousehold({ onClose, onEnded }: AskedProps) {
               : undefined
           }
           onChange={(event) => {
-            setEdits({ ...edits, name: event.currentTarget.value })
+            setEdits(changesOf({ ...edits, name: event.currentTarget.value }, household))
           }}
         />
         <Select
@@ -239,7 +255,7 @@ export function EditHousehold({ onClose, onEnded }: AskedProps) {
           options={zones.map((each) => ({ value: each, label: each }))}
           error={named.has('/timezone') ? t('household.profile.edit.timezone.invalid') : undefined}
           onChange={(event) => {
-            setEdits({ ...edits, timezone: event.currentTarget.value })
+            setEdits(changesOf({ ...edits, timezone: event.currentTarget.value }, household))
           }}
         />
         <Select
@@ -250,7 +266,7 @@ export function EditHousehold({ onClose, onEnded }: AskedProps) {
           error={named.has('/locale') ? t('household.profile.edit.language.invalid') : undefined}
           onChange={(event) => {
             const next = event.currentTarget.value
-            if (isLocale(next)) setEdits({ ...edits, locale: next })
+            if (isLocale(next)) setEdits(changesOf({ ...edits, locale: next }, household))
           }}
         />
         <Select
@@ -262,7 +278,7 @@ export function EditHousehold({ onClose, onEnded }: AskedProps) {
           ]}
           onChange={(event) => {
             const next = unitSystems.find((system) => system === event.currentTarget.value)
-            if (next !== undefined) setEdits({ ...edits, units: next })
+            if (next !== undefined) setEdits(changesOf({ ...edits, units: next }, household))
           }}
         />
         <Select
@@ -271,7 +287,9 @@ export function EditHousehold({ onClose, onEnded }: AskedProps) {
           value={firstDay === undefined ? '' : String(firstDay)}
           options={days}
           onChange={(event) => {
-            setEdits({ ...edits, firstDay: Number(event.currentTarget.value) })
+            setEdits(
+              changesOf({ ...edits, firstDay: Number(event.currentTarget.value) }, household),
+            )
           }}
         />
         {banner === undefined ? null : (

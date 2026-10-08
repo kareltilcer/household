@@ -161,7 +161,10 @@ function GrantsForm({
           off={off}
           errors={errors}
           onChange={(module, level) => {
-            save.reset()
+            // What the last save was refused with is said no longer. A save on its way is left
+            // to arrive: put away, its button would take a second press and *Put back* a first,
+            // each over a change that is still being made.
+            if (!save.isPending) save.reset()
             refusals.clear()
             // A row put back to what is saved is no change of this owner's any more. Kept as
             // one, it would be a change again as soon as somebody else changed that row, and be

@@ -435,6 +435,37 @@ describe('the notice of an invitation that was declined', () => {
     ).toBeInTheDocument()
   })
 
+  // Somebody who joined by an invitation and has left since is no member. Asked again, their
+  // decline is told as anybody's is, and their invitation is sent again as anybody's is: the
+  // invitation they once joined by says who came, and not who is here.
+  it('tells of a decline by somebody who was a member once, and offers to send it again', async () => {
+    const server = createServer()
+    server.invitations = [invitation({ ...declined, id: id(9), email: 'teta@example.cz' }), joined]
+    await list(server)
+    expect(await screen.findByText('teta@example.cz declined the invitation')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Invite teta@example.cz again' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Send the invitation to teta@example.cz again' }),
+    ).toBeInTheDocument()
+  })
+
+  // A member's address is invited nowhere: whoever declined at one is in by now, by a link or
+  // by an invitation this list no longer holds, and the server would send them nothing.
+  it('is put away where the address is a member’s by now', async () => {
+    const server = createServer()
+    server.invitations = [invitation({ ...declined, email: 'Klara@Example.cz' })]
+    await list(server)
+    const row = await rowOf('Klara@Example.cz')
+    // Once the members are read: until then nothing says whose the address is.
+    await waitFor(() => {
+      expect(screen.queryByText(/declined the invitation$/)).not.toBeInTheDocument()
+    })
+    expect(within(row).queryByRole('button', { name: /again$/ })).not.toBeInTheDocument()
+    expect(
+      within(row).getByRole('button', { name: 'Withdraw the invitation to Klara@Example.cz' }),
+    ).toBeInTheDocument()
+  })
+
   // Asked again and declined again, the address is answered for by the invitation that asked
   // last: one notice, and not the earlier one back beside it.
   it('is one for an address that declined twice, of the invitation that asked last', async () => {
@@ -597,6 +628,32 @@ describe('withdrawing an invitation', () => {
       expect(document.activeElement).toContainElement(sent())
     })
   })
+
+  it('keeps the focus on the list when the controls leave it with nothing pressed', async () => {
+    const server = createServer()
+    server.invitations = [waiting]
+    await list(server)
+    const control = await screen.findByRole('button', {
+      name: 'Withdraw the invitation to babicka@example.cz',
+    })
+    act(() => {
+      control.focus()
+    })
+    // Made a member by another owner: the page is looked at again, and reads it.
+    server.household = readBy({ ...memberOf(jana.id), role: 'member' })
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body)
+    })
+    expect(document.activeElement).toContainElement(sent())
+    // Nothing was pressed, so nothing was refused.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
 })
 
 describe('sending an invitation again', () => {
@@ -636,6 +693,42 @@ describe('sending an invitation again', () => {
     )
     await waitFor(() => {
       expect(server.to(`GET ${invitations}`).length).toBeGreaterThan(1)
+    })
+  })
+
+  // One row's sending under way keeps no other from being pressed, and the first is busy for
+  // as long as its own is on its way: pressed again meanwhile, it would be sent twice, the
+  // second making the link in the first one's email a dead one.
+  it('keeps a row busy while its own is on its way, whichever row was pressed since', async () => {
+    const server = createServer()
+    server.invitations = [revoked, expired]
+    let answer: (response: Response) => void = () => undefined
+    server.on(
+      `POST ${invitations}/${id(5)}/resend`,
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve
+        }),
+    )
+    server.on(`POST ${invitations}/${id(4)}/resend`, () => new Response(null, { status: 202 }))
+    const { user } = await list(server)
+    const first = await screen.findByRole('button', {
+      name: 'Send the invitation to stryc@example.cz again',
+    })
+    await user.click(first)
+    await user.click(
+      screen.getByRole('button', { name: 'Send the invitation to soused@example.cz again' }),
+    )
+    expect(await screen.findByText(/^Sent again to soused@example\.cz\./)).toBeInTheDocument()
+    expect(first).toHaveAttribute('aria-busy', 'true')
+    await user.click(first)
+    expect(server.to(`POST ${invitations}/${id(5)}/resend`)).toHaveLength(1)
+    act(() => {
+      answer(new Response(null, { status: 202 }))
+    })
+    expect(await screen.findByText(/^Sent again to stryc@example\.cz\./)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(first).not.toHaveAttribute('aria-busy')
     })
   })
 
@@ -731,6 +824,20 @@ describe('how an invitation stands', () => {
         now,
       ),
     ]).toEqual(['babicka@example.cz', 'teta@example.cz'])
+  })
+
+  it('counts a member’s address as settled, and not one somebody joined by and has left', () => {
+    expect([...settledAddresses([joined, declined, revoked], now, ['Klara@Example.cz'])]).toEqual([
+      'klara@example.cz',
+    ])
+    // With the members unread, an invitation somebody joined by is all there is to go by.
+    expect([...settledAddresses([joined, declined, revoked], now)]).toEqual(['teta@example.cz'])
+    const noticed = declinedNotices(
+      [invitation({ ...declined, id: id(9), email: 'teta@example.cz' }), joined],
+      now,
+      settledAddresses([joined], now, []),
+    )
+    expect(noticed.map((each) => each.id)).toEqual([id(9)])
   })
 
   it('tells of a decline only where it is the last word on its address', () => {

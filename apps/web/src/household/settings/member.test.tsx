@@ -668,6 +668,15 @@ describe('changing what a member holds', () => {
       expect(server.to(`PATCH ${at}/members/${petr}`)).toHaveLength(1)
     })
     await user.selectOptions(row('Chat'), 'Can see')
+    // The save is on its way still, and its button busy still: a second press sends nothing
+    // more, and nothing is put back from under a change that is being made.
+    const save = screen.getByRole('button', { name: 'Save changes' })
+    expect(save).toHaveAttribute('aria-busy', 'true')
+    await user.click(save)
+    await user.click(screen.getByRole('button', { name: 'Put back' }))
+    expect(server.to(`PATCH ${at}/members/${petr}`)).toHaveLength(1)
+    expect(row('Chat')).toHaveValue('view')
+    expect(screen.queryByText('The levels are back to what is saved.')).not.toBeInTheDocument()
     answer()
     expect(
       await screen.findByText('Petr Tilcer’s access is saved. They are told.'),

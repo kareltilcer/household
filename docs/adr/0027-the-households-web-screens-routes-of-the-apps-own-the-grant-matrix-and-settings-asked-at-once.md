@@ -97,7 +97,10 @@ counted among the modules that leave a member's app and their devices.
 (ADR 0026), a test holds them to it, and a write pressed with no connection says the server
 could not be reached and that nothing was changed. The shell's offline bar says the same on
 these screens, in place of its promise that changes are kept and sent, which is a module's
-(`shell/HouseholdBars.tsx`). Reads are TanStack queries filed under the
+(`shell/HouseholdBars.tsx`). A write on its way keeps its control busy until it is answered: the
+form of a member's levels does not put a save away while it is being made, and each row of the
+invitations is busy for its own sending, whichever row was pressed since. Reads are TanStack
+queries filed under the
 household's own key (`household/data.ts`), so that what the browser kept is drawn offline, and a
 write that was answered reads the household, its members, its modules, its invitations and the
 member's list of households again (`useReread`). A refusal that is about where the member
@@ -118,7 +121,10 @@ module with its level, with what is off named aloud this once. A visitor is sent
 this page as the address held for them, and the token waits in a variable and in no storage, as
 a challenged sign-in's does (ADR 0026); a reload, or an account made in another tab, loses it,
 and the person opens their link again, an email invitation being listed on their account
-meanwhile (`getMeInvitations`). The query that reads it is kept out of the stored cache.
+meanwhile (`getMeInvitations`). A link opened in a tab that is on the page already loads nothing
+and only changes the fragment under it, so the page is begun again for a token that arrives
+while it is drawn: opening the link again is then the same thing wherever it is opened. The
+query that reads it is kept out of the stored cache.
 
 **A member in no household is opened at making one** (D-168), and **the first run's question is
 asked where it leads somewhere** (D-169): `household/Start.tsx` offers the modules whose registry
@@ -138,7 +144,11 @@ read.
 **The inviter's notice of a decline stands on the invitations** (D-171), drawn from each
 invitation's own status: one for each address whose newest invitation stands declined
 (`declinedNotices`), until it is withdrawn or the address is asked again, whatever becomes of
-the asking. A link names nobody, and each declined link has its own.
+the asking. A link names nobody, and each declined link has its own. An address that is a
+member's by now is told of no longer, and its invitations are not sent again, which the server
+would refuse; whose address is a member's is read off the members, and not off an invitation
+that was accepted, which says who came and not who is here: somebody who joined once, left and
+was asked back is told of, and sent to again, as anybody is (`settledAddresses`).
 
 **A create whose answer was lost is read as made.** Every create sends an id the client made
 (D-23), once for each visit of its screen, so a press repeated after an answer that never came
@@ -187,6 +197,14 @@ left to the item that would pass the budget, and is by key prefix when it comes 
 | Household settings kept out of `heldModules`, and listed by a notion of its own in the navigation and the module's address | Three callers ask which modules a member's app has, the navigation, a module's address and the first run's question, and D-167's answer is the same for each: household settings is in every member's app. Two lists would be one for a caller to choose wrongly between. What a level on it decides is asked where it decides something (`useStanding().invitations`) |
 | The members read under the settings' note only for the reader it names the owners to, and not for an owner | The read is also what keeps the list fresh behind a member's own page: a change of what a member holds, or of their role, reads the household's members again while that page is open, so the list it leads back to is drawn as the change left it and not as it was for the moment before it is read again. It is one request after a write, for the list that the other screens of the settings read |
 | A profile whose answer was lost given the PIN that was typed last, where it was typed anew before the profile was asked for again | It takes three answers lost and a PIN changed between two presses, and what is wrong then is a PIN the owner sets again from the profile's page, where a new one is two fields. Setting it for them would be a second write hidden inside the first |
+| A member's version kept in step by the page once a child profile's PIN is set or its lock lifted, counted on by one, or the sheet held open until the member is read again | Both answer `204`, and the version they moved is the server's to say: counted here it is a guess at how the server counts. The member is read again as the answer arrives, so what is left is the moment before that read lands, or a read that failed: a save of levels pressed then is refused, said, and saved on the next press. Holding the sheet open for the read makes every PIN wait for a request that does not concern it |
+| The PIN's two fields marked as something other than a new password (`one-time-code`, or `off`), so that no password manager offers to keep what was typed | A PIN is a secret being set, which is what `new-password` says and what keeps a browser from filling the owner's own password into it. `off` is ignored for a password by every browser that would offer, and `one-time-code` says something untrue of the field, on which a phone offers the codes its messages carry. What a password manager offers once the sheet has closed is the browser's own, and is declined there |
+| The invitation's token forgotten when a session ends | What a session's end removes is removed too as a page finds its session gone, which is how somebody whose session lapsed arrives at their invitation, the page already drawn and holding its token: forgotten there, the token is gone before they come back from signing in, which is what it is held for. A token left in the page's memory opens what the page was already showing to whoever sits at it, an email invitation answers to its addressee alone, and a link admits whoever holds it, which is what a link is (FR-HH2) |
+| A sentence of its own for a member who declines an invitation into the household they are in | The server answers that as it answers an invitation that is not the account's or is over, `404`, and what the page is shown of an invitation names no household it could hold against the member's own. The page says that it cannot tell which, which is so, and nothing was to be declined: accepting it answers the membership they have |
+| A create whose id the server has answered with what the first one made, in place of the screen reading it | The server answers a repeated id `422`, a profile's by ADR 0012 and a household's and an invitation's as it does, and the two ceilings are counted before the id is looked at; changing either is the server's item, for every client, and is not what a web screen settles. What the screens do with the answer they are given is above |
+| One hook for the banner a refusal is said in, across the settings | Four small ones, each holding what its screen's banner needs and no more: a count where a second refusal has the first one's words, a key where the mutation gives one. One hook would take each screen's wording and placement as arguments to save a line of state apiece. What they had two names for is one now: which refusals are about where the member stands (`isStandingRefusal`) |
+| The read of what a create made, after a ceiling's refusal, failing the create with its own problem where it is refused | The read follows, in the same function, a request the same session was answered a moment before, and the one refusal it is asked for is that nothing is there, which leaves the ceiling's refusal standing. An answer about the session would be the next request's to hear as well, and is told then |
+| The leave screen's refusal dropped once the members are read again, so that a blocker settled in another tab gives the control back | The server's word says what the members do not, an owner who counts as none (D-137), and is what the screen says of it: dropped at every read, it would go each time the page was looked at again, and come back with the next press. The screen's own way to settle a blocker leads to the members and back, which begins it again |
 | The catalog split in this item, a module's words fetched with its screens | The first download is under its budget with this item's words in it. The split is a second way for a screen to be without its words, a failure to say for each route, and a guard that no screen outside a module reads the module's keys: machinery the budget does not yet ask for (D-159) |
 
 ## Consequences

@@ -19,6 +19,7 @@ import {
   origin,
   petr,
   problem,
+  readBy,
   tilcerovi,
   type HouseholdServer,
 } from '../testing.tsx'
@@ -431,6 +432,29 @@ describe('the invitations that wait', () => {
       expect(screen.queryByText(/waiting for an answer/)).not.toBeInTheDocument()
     })
     expect(screen.queryByRole('link', { name: 'See the invitations' })).not.toBeInTheDocument()
+  })
+})
+
+describe('an owner made a member while the members are open', () => {
+  it('loses the controls when the household is read again, and the focus one of them held stays on the list', async () => {
+    const server = createServer()
+    await membersScreen(server)
+    const control = await screen.findByRole('button', { name: 'Add a child profile' })
+    act(() => {
+      control.focus()
+    })
+    // Made a member by another owner: the page is looked at again, and reads it.
+    server.household = readBy({ ...memberOf(jana.id), role: 'member' })
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body)
+    })
+    expect(document.activeElement).toContainElement(screen.getByRole('list', { name: 'Members' }))
   })
 })
 

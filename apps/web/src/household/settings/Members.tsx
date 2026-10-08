@@ -53,6 +53,7 @@ import { ChildCreate } from './ChildCreate.tsx'
 import { statusAt } from './invitations.ts'
 import styles from './Members.module.css'
 import { HouseholdSettingsPage, useStanding } from './Page.tsx'
+import { useFocusKept } from './profile.ts'
 
 const tones: readonly MemberTone[] = [1, 2, 3, 4, 5, 6, 7, 8]
 
@@ -145,10 +146,11 @@ export function Members() {
 
   // Where the focus is once the sheet has closed: on the control that opened it, and, where
   // that control went while the sheet was open, with the owner's standing or the household's
-  // writes, on the list's own place. It is not left to drop to the page.
+  // writes, on the list's own place. It is not left to drop to the page: nor is the focus of a
+  // control that left with no sheet open, when the household was read again (profile.ts).
   const [adding, setAdding] = useState(false)
   const opener = useRef<HTMLButtonElement>(null)
-  const view = useRef<HTMLDivElement>(null)
+  const view = useFocusKept(standing.changes, adding)
   const closed = useRef(false)
   useEffect(() => {
     if (adding || !closed.current) return
