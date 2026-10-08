@@ -132,7 +132,7 @@ function Offer({
               : t('household.invitation.role.member.body')}
           </p>
         </div>
-        <GrantSummary grants={grants} whose="yours" />
+        <GrantSummary grants={grants} whose="yours" role={owner ? 'owner' : 'member'} />
       </div>
       <Banner tone="info" title={t('household.invitation.later.title')}>
         {t('household.invitation.later.body', { inviter })}

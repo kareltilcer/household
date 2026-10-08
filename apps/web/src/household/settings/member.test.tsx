@@ -147,9 +147,29 @@ describe('what a change of levels comes to', () => {
   it('tells a raise from a lowering, and names what is lowered to nothing', () => {
     const from = defaultsFor('member')
     expect(grantChange(from, { ...from, finance: 'view', shopping: 'view', chat: 'none' })).toEqual(
-      { raised: ['finance'], lowered: ['shopping', 'chat'], off: ['chat'] },
+      { raised: ['finance'], lowered: ['shopping', 'chat'], off: ['chat'], settingsOff: false },
     )
-    expect(grantChange(from, from)).toEqual({ raised: [], lowered: [], off: [] })
+    expect(grantChange(from, from)).toEqual({
+      raised: [],
+      lowered: [],
+      off: [],
+      settingsOff: false,
+    })
+  })
+
+  // No level takes household settings out of anybody's app (D-167): lowered to nothing it is
+  // lowered, and is not among the modules that leave.
+  it('does not count household settings among what leaves an app, and says it was lowered to nothing', () => {
+    const from = defaultsFor('member')
+    expect(grantChange(from, { ...from, chat: 'none', admin: 'none' })).toEqual({
+      raised: [],
+      lowered: ['chat', 'admin'],
+      off: ['chat'],
+      settingsOff: true,
+    })
+    // Lowered to something, or raised from nothing, it was not lowered to nothing.
+    expect(grantChange({ ...from, admin: 'manage' }, from).settingsOff).toBe(false)
+    expect(grantChange({ ...from, admin: 'none' }, from).settingsOff).toBe(false)
   })
 })
 
@@ -352,8 +372,20 @@ describe('what a member holds, as each reader reads it', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: 'What Klára Nováková holds' }),
     ).toBeInTheDocument()
-    expect(terms()).toEqual(['Can add and edit · 1', 'Can see · 2', 'Off · 14'])
+    // Household settings is no part of a level's count: what she holds there is said last, in
+    // a sentence that is true of it.
+    expect(terms()).toEqual([
+      'Can add and edit · 1',
+      'Can see · 2',
+      'Off · 13',
+      'Household settings',
+    ])
     expect(screen.getByText(/^Not in their app at all/)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+      ),
+    ).toBeInTheDocument()
     // The same page without its controls, and the frame says whose they are.
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
@@ -370,10 +402,16 @@ describe('what a member holds, as each reader reads it', () => {
     expect(terms()).toEqual([
       'Can set it up · 1',
       'Can add and edit · 1',
-      'Can see · 2',
+      'Can see · 1',
       'Off · 13',
+      'Household settings',
     ])
     expect(screen.getByText(/^Not in your app at all/)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+      ),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   })
 
@@ -381,7 +419,14 @@ describe('what a member holds, as each reader reads it', () => {
     const server = createServer(accountOf(adam))
     await page(adam, server)
     expect(screen.getByRole('heading', { level: 2, name: 'What you hold' })).toBeInTheDocument()
-    expect(terms()).toEqual(['Can add and edit · 3', 'Can see · 4', 'Off · 10'])
+    expect(terms()).toEqual([
+      'Can add and edit · 3',
+      'Can see · 4',
+      'Off · 9',
+      'Household settings',
+    ])
+    // Read on a screen of household settings, which is in their app: the sentence says so.
+    expect(screen.getByText(/^In your app all the same, as in every member’s/)).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   })
@@ -395,8 +440,9 @@ describe('what a member holds, as each reader reads it', () => {
     expect(terms()).toEqual([
       'Can set it up · 1',
       'Can add and edit · 1',
-      'Can see · 2',
+      'Can see · 1',
       'Off · 13',
+      'Household settings',
     ])
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
@@ -411,8 +457,9 @@ describe('what a member holds, as each reader reads it', () => {
     expect(terms()).toEqual([
       'Can set it up · 1',
       'Can add and edit · 1',
-      'Can see · 2',
+      'Can see · 1',
       'Off · 13',
+      'Household settings',
     ])
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
@@ -526,6 +573,24 @@ describe('changing what a member holds', () => {
     await user.selectOptions(row('Dashboard'), 'Can add and edit')
     expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
       '1 module is raised. 2 modules are lowered. Shopping and Utilities leave Petr Tilcer’s app entirely, and their devices drop their copy of them. Nothing they added is deleted. Petr Tilcer is told of the change.',
+    )
+  })
+
+  // Household settings leaves nobody's app (D-167): what a member loses with it is the
+  // household's invitations, and the summary says that and not that the module went.
+  it('says of household settings lowered to Off what goes with it, and not that it leaves their app', async () => {
+    const { user } = await page(petr)
+    await user.selectOptions(row('Household settings'), 'Off')
+    expect(row('Household settings')).toHaveAccessibleDescription(
+      'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not. Changed from “Can see”.',
+    )
+    expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
+      '1 module is lowered. Petr Tilcer no longer reads the household’s invitations. Its profile, its members and its modules stay theirs to read. Petr Tilcer is told of the change.',
+    )
+    // Beside a module that does leave, each is said as what it is.
+    await user.selectOptions(row('Utilities'), 'Off')
+    expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
+      '2 modules are lowered. Utilities leaves Petr Tilcer’s app entirely, and their devices drop their copy of it. Nothing they added is deleted. Petr Tilcer no longer reads the household’s invitations. Its profile, its members and its modules stay theirs to read. Petr Tilcer is told of the change.',
     )
   })
 
@@ -758,8 +823,9 @@ describe('changing what a member holds', () => {
     expect(terms()).toEqual([
       'Can set it up · 1',
       'Can add and edit · 1',
-      'Can see · 2',
+      'Can see · 1',
       'Off · 13',
+      'Household settings',
     ])
     // Every control went, the one that held the focus among them: it is on the page's own place.
     await waitFor(() => {

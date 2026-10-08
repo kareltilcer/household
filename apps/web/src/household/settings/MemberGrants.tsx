@@ -7,7 +7,8 @@
 //
 // A change is said before it is saved (D-78): how many levels go up and down, that a lowering is
 // told to its member as it happens, and which modules leave their app, and their devices,
-// altogether. It is one summary and not a sentence a row, and it is the save's own description,
+// altogether. Household settings is not among those, whatever it is lowered to (D-167): lowered
+// to *Off* it has a line of its own, which says what does go, the household's invitations. It is one summary and not a sentence a row, and it is the save's own description,
 // read with the button that would do it. What is sent is the changed modules alone, against the
 // version the page read. A change somebody else made meanwhile is not merged with this one: the
 // form is put back to what the server holds, and says so.
@@ -204,6 +205,10 @@ function GrantsForm({
                   })}
                 </li>
               ) : null}
+              {/* Household settings leaves nobody's app: what goes with it is the invitations. */}
+              {change.settingsOff ? (
+                <li>{t('household.member.holds.change.admin_off', { name })}</li>
+              ) : null}
               {/* A member is told of any change to what they hold, a raise among them (D-78). */}
               <li>{t('household.member.holds.change.told', { name })}</li>
             </ul>
@@ -276,7 +281,7 @@ export function MemberGrants({ subject }: { readonly subject: Subject }) {
               : t('household.member.holds.owner')}
         </p>
       ) : null}
-      <GrantSummary grants={held} whose={subject.own ? 'yours' : 'theirs'} />
+      <GrantSummary grants={held} whose={subject.own ? 'yours' : 'theirs'} role={subject.role} />
       {offNames.length > 0 ? (
         <p className={styles.note}>
           {t('household.member.holds.off', { modules: format.list(offNames) })}

@@ -529,16 +529,21 @@ describe('what an invitation shows', () => {
     ).toBeInTheDocument()
 
     // The modules under each level, highest first, and what is off named aloud.
+    // Household settings is no part of a level's count: it is said last, as what it is.
     expect(screen.getAllByRole('term').map((term) => term.textContent)).toEqual([
       'Can add and edit · 9',
-      'Can see · 3',
+      'Can see · 2',
       'Off · 5',
+      'Household settings',
     ])
     const held = screen.getAllByRole('definition')
     expect(held[2]).toHaveTextContent(
       'Not in your app at all: no screen, no widget, no search result, no reminder.',
     )
     expect(held[2]).toHaveTextContent('Finance, Utilities, Garden, Property, and Vehicles')
+    expect(held[3]).toHaveTextContent(
+      'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+    )
     expect(screen.getByRole('main')).not.toHaveTextContent(/\b(none|view|contribute|manage)\b/)
 
     expect(screen.getByText('This can change later, and you will be told')).toBeInTheDocument()
@@ -599,8 +604,9 @@ describe('what an invitation shows', () => {
     await titled(invited)
     expect(screen.getAllByRole('term').map((term) => term.textContent)).toEqual([
       'Can add and edit · 8',
-      'Can see · 2',
+      'Can see · 1',
       'Off · 4',
+      'Household settings',
     ])
     const main = screen.getByRole('main')
     for (const name of ['Garden', 'Chat', 'Documents']) expect(main).not.toHaveTextContent(name)
@@ -612,7 +618,8 @@ describe('a visitor at an invitation', () => {
     const server = serving()
     open(link, server, { signedIn: false })
     expect(await titled(invited)).toBeInTheDocument()
-    expect(screen.getAllByRole('term')).toHaveLength(3)
+    // The three levels a member's defaults come to, and household settings by itself.
+    expect(screen.getAllByRole('term')).toHaveLength(4)
     // Nobody's account names a zone: the day is this device's.
     const day = new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: deviceTimeZone() })
     expect(
@@ -655,7 +662,8 @@ describe('a visitor at an invitation', () => {
     server.on('GET /me', () => account.response)
     open(link, server)
     expect(await titled(invited)).toBeInTheDocument()
-    expect(screen.getAllByRole('term')).toHaveLength(3)
+    // The three levels a member's defaults come to, and household settings by itself.
+    expect(screen.getAllByRole('term')).toHaveLength(4)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
 

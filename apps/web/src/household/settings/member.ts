@@ -14,7 +14,7 @@ import { useProblemText } from '../../api/problemText.ts'
 import { useTranslate } from '../../i18n/I18nProvider.tsx'
 import { useToast } from '../../ui/Toast.tsx'
 import { useReread, type Membership } from '../data.ts'
-import { changedModules, isLowered, type Levels } from '../grants.ts'
+import { changedModules, isLowered, settingsModule, type Levels } from '../grants.ts'
 import { membersKey, type HouseholdRole, type ModuleKey } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
 
@@ -80,17 +80,27 @@ export interface GrantChange {
   readonly raised: readonly ModuleKey[]
   /** Every module lowered, the ones lowered to *Off* among them. */
   readonly lowered: readonly ModuleKey[]
-  /** The modules lowered to *Off*: the ones that leave the member's app, and their devices. */
+  /**
+   * The modules lowered to *Off* that leave the member's app, and their devices: every one but
+   * household settings, which no level takes out of anybody's app (D-167).
+   */
   readonly off: readonly ModuleKey[]
+  /**
+   * Whether household settings was lowered to *Off*: the member reads the household's
+   * invitations no longer, and its profile, its members and its modules as before.
+   */
+  readonly settingsOff: boolean
 }
 
 export function grantChange(from: Levels, next: Levels): GrantChange {
   const changed = changedModules(from, next)
   const lowered = changed.filter((module) => isLowered(from[module], next[module]))
+  const toOff = lowered.filter((module) => next[module] === 'none')
   return {
     raised: changed.filter((module) => !lowered.includes(module)),
     lowered,
-    off: lowered.filter((module) => next[module] === 'none'),
+    off: toOff.filter((module) => module !== settingsModule),
+    settingsOff: toOff.includes(settingsModule),
   }
 }
 

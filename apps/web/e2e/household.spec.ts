@@ -60,6 +60,19 @@ const child = 'Ádík'
 /** The inviter's own words in an invitation of the suite's. */
 const words = 'Přijď k nám, Víťo!'
 
+/**
+ * What a level on household settings comes to, which is not what it comes to on any other
+ * module (D-167): its screens are every member's, and what *Can see* adds is the invitations.
+ */
+const settingsSay = {
+  none: 'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+  noneYours:
+    'In your app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+  view: 'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+  contribute:
+    'No more than “Can see” gives: changing anything in the settings is for an owner, whatever is set here.',
+} as const
+
 /** The page's one title, which a screen is known by. */
 function title(page: Page, name: string) {
   return page.getByRole('heading', { level: 1, name })
@@ -265,10 +278,13 @@ test.describe('on a device that says where it is', () => {
     expect(new URL(page.url()).hash).toBe('')
     // Exactly what is given, to a visitor: the role, and the modules under each level.
     await expect(page.getByRole('heading', { name: 'You would join as a member' })).toBeVisible()
+    // Household settings is no part of a level's count: it is said last, as what it is.
     const given = page.getByRole('term')
-    await expect(given).toHaveText(['Can add and edit · 9', 'Can see · 4', 'Off · 4'])
+    const levels = ['Can add and edit · 9', 'Can see · 3', 'Off · 4', 'Household settings']
+    await expect(given).toHaveText(levels)
     await expect(page.getByRole('definition').nth(1)).toContainText('Finance')
     await expect(page.getByRole('definition').nth(2)).toContainText('Not in your app at all')
+    await expect(page.getByRole('definition').nth(3)).toContainText(settingsSay.view)
     await expect(page.getByText('To join or to decline, sign in first.')).toBeVisible()
     await expect(page.getByRole('button', { name: `Join ${home}` })).toHaveCount(0)
     await expectAccessible(page)
@@ -278,7 +294,7 @@ test.describe('on a device that says where it is', () => {
     await signInAs(page, invited)
     await expect(title(page, `${who.name} has invited you to ${home}`)).toBeVisible()
     await expect(page).toHaveURL(paths.invitation.path)
-    await expect(given).toHaveText(['Can add and edit · 9', 'Can see · 4', 'Off · 4'])
+    await expect(given).toHaveText(levels)
     await expectAccessible(page)
     await page.getByRole('button', { name: `Join ${home}` }).click()
 
@@ -630,8 +646,19 @@ test('an owner lowers what a member holds, having read what that comes to, and t
   await expect(save).toHaveCount(0)
   await expect(matrix).toBeFocused()
 
-  // Changed again and saved, which is said, and the focus goes where it went before.
+  // Changed again, and household settings lowered beside it: the one row whose *Off* takes no
+  // screen away (D-167). The row says what does go, and so does the save, which does not count
+  // it among what leaves their app.
   await shopping.selectOption({ label: 'Off' })
+  const ofSettings = page.getByRole('combobox', { name: 'Household settings' })
+  await ofSettings.selectOption({ label: 'Off' })
+  await expect(ofSettings).toHaveAccessibleDescription(
+    `${settingsSay.none} Changed from “Can see”.`,
+  )
+  await expect(save).toHaveAccessibleDescription(
+    `2 modules are lowered. Shopping leaves ${member.name}’s app entirely, and their devices drop their copy of it. Nothing they added is deleted. ${member.name} no longer reads the household’s invitations. Its profile, its members and its modules stay theirs to read. ${member.name} is told of the change.`,
+  )
+  // Saved, which is said, and the focus goes where it went before.
   await save.click()
   await expectSaid(page, `${member.name}’s access is saved. They are told.`)
   await expect(save).toHaveCount(0)
@@ -640,7 +667,8 @@ test('an owner lowers what a member holds, having read what that comes to, and t
     'Not in their app at all: no screen, no widget, no search result, no reminder.',
   )
 
-  // The member reads it on their own page: the module is among what is off for them.
+  // The member reads it on their own page: the module is among what is off for them, and
+  // household settings, which they read it in, is said by itself.
   await signOutHere(page)
   await signInAs(page, member)
   await expect(title(page, 'Home')).toBeVisible()
@@ -648,11 +676,16 @@ test('an owner lowers what a member holds, having read what that comes to, and t
   await expect(page.getByRole('heading', { name: 'What you hold' })).toBeVisible()
   await expect(page.getByRole('term')).toHaveText([
     'Can add and edit · 8',
-    'Can see · 3',
+    'Can see · 2',
     'Off · 6',
+    'Household settings',
   ])
-  await expect(page.getByRole('definition').last()).toContainText('Not in your app at all')
-  await expect(page.getByRole('definition').last()).toContainText('Shopping')
+  await expect(page.getByRole('definition').nth(2)).toContainText('Not in your app at all')
+  await expect(page.getByRole('definition').nth(2)).toContainText('Shopping')
+  await expect(page.getByRole('definition').nth(2)).not.toContainText('Household settings')
+  await expect(page.getByRole('definition').nth(3)).toHaveText(settingsSay.noneYours)
+  // What went with it is the invitations: the way between the settings' screens names none.
+  await expect(settings(page).getByRole('link')).toHaveText(['Household', 'Members', 'Modules'])
   // Nothing of theirs to change here, and the page says whose it is.
   await expect(page.getByRole('combobox')).toHaveCount(0)
   await expect(
@@ -705,9 +738,24 @@ test('a member who holds nothing on household settings reads its screens all the
     await expect(title(page, 'This link doesn’t open anything here.')).toBeVisible()
   }
   await expectAccessible(page)
-  // Their own page is theirs to read, and leads to leaving, which no level stands over.
+  // Their own page is theirs to read. What is off for them is not in their app at all, and
+  // household settings, which they are reading it in, is not said to be among that: it is said
+  // last, as what a level of nothing on it comes to.
   await page.goto(inHousehold.member(household, memberId))
   await expect(page.getByRole('heading', { name: 'What you hold' })).toBeVisible()
+  await expect(page.getByRole('term')).toHaveText([
+    'Can add and edit · 9',
+    'Can see · 2',
+    'Off · 5',
+    'Household settings',
+  ])
+  const held = page.getByRole('definition')
+  await expect(held.nth(2)).toContainText('Not in your app at all')
+  await expect(held.nth(2)).toContainText('Finance, Utilities, Garden, Property, and Vehicles')
+  await expect(held.nth(2)).not.toContainText('Household settings')
+  await expect(held.nth(3)).toHaveText(settingsSay.noneYours)
+  await expectAccessible(page)
+  // And it leads to leaving, which no level stands over.
   await page.getByRole('link', { name: `Leave ${home}` }).click()
   await expect(page.getByRole('button', { name: `Leave ${home}` })).toBeVisible()
 })
@@ -776,8 +824,10 @@ test('an owner makes a child profile, sets it a new PIN, sends it a sign-in of i
   await expect(sheet.getByRole('term')).toHaveText([
     'Can add and edit · 5',
     'Can see · 2',
-    'Off · 10',
+    'Off · 9',
+    'Household settings',
   ])
+  await expect(sheet.getByRole('definition').last()).toHaveText(settingsSay.none)
   await sheet.getByLabel('Name').fill(child)
   await sheet.getByLabel('PIN', { exact: true }).fill('4827')
   await sheet.getByLabel('The same PIN again').fill('4872')
@@ -1305,11 +1355,13 @@ test.describe('at a phone’s width and 200 % text', () => {
     const controls = matrix.getByRole('combobox')
     for (const [at, [module, level]] of defaults.entries()) {
       const control = controls.nth(at)
+      // Household settings is the one row whose level means what no other's does (D-167).
+      const sentence = module === 'Household settings' ? settingsSay[level] : says[level]
       // Named for its module, and described by the sentence drawn under it.
       await expect(control).toHaveAccessibleName(module)
       await expect(control).toHaveValue(level)
-      await expect(control).toHaveAccessibleDescription(says[level])
-      await expect(matrix.getByRole('listitem').nth(at).getByText(says[level])).toBeVisible()
+      await expect(control).toHaveAccessibleDescription(sentence)
+      await expect(matrix.getByRole('listitem').nth(at).getByText(sentence)).toBeVisible()
     }
 
     // A row that is changed says so in the same place, and the way back to the defaults is drawn.
@@ -1347,8 +1399,9 @@ test.describe('at a phone’s width and 200 % text', () => {
     // Each level with its count, then what it comes to, then the modules it is held on.
     await expect(page.getByRole('term')).toHaveText([
       'Can add and edit · 9',
-      'Can see · 4',
+      'Can see · 3',
       'Off · 4',
+      'Household settings',
     ])
     const groups = page.getByRole('definition')
     await expect(groups.nth(0)).toContainText(says.contribute)
@@ -1360,6 +1413,8 @@ test.describe('at a phone’s width and 200 % text', () => {
       'Not in your app at all: no screen, no widget, no search result, no reminder.',
     )
     await expect(groups.nth(2)).toContainText('Utilities, Garden, Property')
+    // And household settings by itself, whose level means what no other's does.
+    await expect(groups.nth(3)).toHaveText(settingsSay.view)
 
     expect(await sideways(page), 'the page scrolls sideways').toBeLessThanOrEqual(1)
     expect((await inspect(page)).clipped, 'text is clipped').toEqual([])

@@ -143,9 +143,14 @@ describe('the sheet that makes a child profile', () => {
       within(starts)
         .getAllByRole('term')
         .map((term) => term.textContent),
-    ).toEqual(['Can add and edit · 5', 'Can see · 2', 'Off · 10'])
-    expect(within(starts).getAllByRole('definition')[0]).toHaveTextContent(
-      'Tasks, Calendar, Shopping, Chores, and Pets',
+    ).toEqual(['Can add and edit · 5', 'Can see · 2', 'Off · 9', 'Household settings'])
+    const held = within(starts).getAllByRole('definition')
+    expect(held[0]).toHaveTextContent('Tasks, Calendar, Shopping, Chores, and Pets')
+    // What is off leaves their app, and household settings is not among it: it stays in a
+    // child profile's app as in every member's, which its own sentence says.
+    expect(held[2]).not.toHaveTextContent('Household settings')
+    expect(held[3]).toHaveTextContent(
+      'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
     )
     expect(
       within(starts).getByText(

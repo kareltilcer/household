@@ -124,6 +124,29 @@ describe('the grant matrix', () => {
     expect(offered(screen.getByRole('combobox', { name: 'Finance' }))).toEqual(['Off', 'Can see'])
   })
 
+  // Household settings is every member's to open whatever is set (D-167), and every change in
+  // it is an owner's: a level's sentence on any other module would be untrue of it.
+  it('says of household settings what each level comes to there, which is not what it comes to elsewhere', async () => {
+    draw(<Filled role="member" />)
+    const settings = screen.getByRole('combobox', { name: 'Household settings' })
+    expect(settings).toHaveValue('view')
+    expect(settings).toHaveAccessibleDescription(
+      'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+    )
+    // It offers what the server takes, and says what each comes to.
+    expect(offered(settings)).toEqual(['Off', 'Can see', 'Can add and edit', 'Can set it up'])
+    await userEvent.selectOptions(settings, 'Off')
+    expect(settings).toHaveAccessibleDescription(
+      'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not. Changed from “Can see”.',
+    )
+    for (const level of ['Can add and edit', 'Can set it up']) {
+      await userEvent.selectOptions(settings, level)
+      expect(settings).toHaveAccessibleDescription(
+        'No more than “Can see” gives: changing anything in the settings is for an owner, whatever is set here. Changed from “Can see”.',
+      )
+    }
+  })
+
   it('says of a module the household has off that the level holds for when it is on', () => {
     draw(<Filled role="member" off={new Set<ModuleKey>(['garden'])} />)
     expect(screen.getByRole('combobox', { name: 'Garden' })).toHaveAccessibleDescription(
@@ -133,25 +156,96 @@ describe('the grant matrix', () => {
 })
 
 describe('what somebody holds, gathered by level', () => {
+  const terms = () => screen.getAllByRole('term').map((term) => term.textContent)
+
   it('names each level with its count and its sentence, highest first, and what is off aloud', () => {
-    draw(<GrantSummary grants={defaultsFor('member')} whose="yours" />)
-    const terms = screen.getAllByRole('term').map((term) => term.textContent)
-    expect(terms).toEqual(['Can add and edit · 9', 'Can see · 3', 'Off · 5'])
+    draw(<GrantSummary grants={defaultsFor('member')} whose="yours" role="member" />)
+    // Household settings is no part of a level's count: it is a group of its own, last.
+    expect(terms()).toEqual([
+      'Can add and edit · 9',
+      'Can see · 2',
+      'Off · 5',
+      'Household settings',
+    ])
     const held = screen.getAllByRole('definition')
     expect(held[0]).toHaveTextContent(
       'Dashboard, Tasks, Reminders, Calendar, Shopping, Chores, Notes, Chat, and Pets',
     )
+    expect(held[1]).toHaveTextContent('Documents and Activity log')
     expect(held[2]).toHaveTextContent('Not in your app at all')
     expect(held[2]).toHaveTextContent('Finance, Utilities, Garden, Property, and Vehicles')
+    expect(held[3]).toHaveTextContent(
+      'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+    )
   })
 
   it('draws only the modules it is given, and no level nobody holds', () => {
-    draw(<GrantSummary grants={{ tasks: 'view', chat: 'none' }} whose="theirs" />)
-    expect(screen.getAllByRole('term').map((term) => term.textContent)).toEqual([
-      'Can see · 1',
-      'Off · 1',
-    ])
+    draw(<GrantSummary grants={{ tasks: 'view', chat: 'none' }} whose="theirs" role="member" />)
+    expect(terms()).toEqual(['Can see · 1', 'Off · 1'])
     expect(screen.getByText('Not in their app at all', { exact: false })).toBeInTheDocument()
+  })
+
+  // *Not in their app at all* is untrue of household settings, whose screens no level takes
+  // away (D-167): what is off there is said in its own sentence, in whose app it is.
+  it('says of household settings held at nothing that it stays, and its invitations do not', () => {
+    const { unmount } = draw(
+      <GrantSummary grants={defaultsFor('child')} whose="theirs" role="child" />,
+    )
+    expect(terms()).toEqual([
+      'Can add and edit · 5',
+      'Can see · 2',
+      'Off · 9',
+      'Household settings',
+    ])
+    const theirs = screen.getAllByRole('definition')
+    expect(theirs[2]).toHaveTextContent('Not in their app at all')
+    expect(theirs[2]).not.toHaveTextContent('Household settings')
+    expect(theirs[3]).toHaveTextContent(
+      'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+    )
+    unmount()
+    draw(
+      <GrantSummary
+        grants={{ ...defaultsFor('member'), admin: 'none' }}
+        whose="yours"
+        role="member"
+      />,
+    )
+    expect(terms()).toEqual([
+      'Can add and edit · 9',
+      'Can see · 2',
+      'Off · 5',
+      'Household settings',
+    ])
+    expect(screen.getAllByRole('definition')[3]).toHaveTextContent(
+      'In your app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+    )
+  })
+
+  it('says of household settings held above seeing that it gives no more than seeing does', () => {
+    draw(
+      <GrantSummary
+        grants={{ ...defaultsFor('member'), admin: 'manage' }}
+        whose="theirs"
+        role="member"
+      />,
+    )
+    // No group of its own for a level nobody else holds: the settings are not counted in one.
+    expect(terms()).toEqual([
+      'Can add and edit · 9',
+      'Can see · 2',
+      'Off · 5',
+      'Household settings',
+    ])
+    expect(screen.getAllByRole('definition')[3]).toHaveTextContent(
+      'No more than “Can see” gives: changing anything in the settings is for an owner, whatever is set here.',
+    )
+  })
+
+  it('gathers an owner’s household settings with everything else an owner holds', () => {
+    draw(<GrantSummary grants={defaultsFor('owner')} whose="theirs" role="owner" />)
+    expect(terms()).toEqual(['Can set it up · 17'])
+    expect(screen.getByRole('definition')).toHaveTextContent('Household settings')
   })
 
   it('is a line a level in a list of members, with what is off counted and not named', () => {

@@ -305,7 +305,7 @@ export function ChildCreate({ onClose }: ChildCreateProps) {
           <h3 id={startsWith} className={styles.subheading}>
             {t('household.child.create.starts.title')}
           </h3>
-          <GrantSummary grants={defaultsFor('child')} whose="theirs" />
+          <GrantSummary grants={defaultsFor('child')} whose="theirs" role="child" />
           <p className={settings.note}>{t('household.grant.child_note')}</p>
           <p className={settings.note}>{t('household.child.create.starts.note')}</p>
         </section>

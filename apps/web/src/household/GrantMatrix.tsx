@@ -9,6 +9,11 @@
 // *Can set it up*, nor more than *Can see* on Finance: the cap is said by construction, and not
 // by a save the server refuses (03-patterns §9). An owner holds everything and has no matrix to
 // fill in, which the screen that would draw one says in its place.
+//
+// Household settings is the one row whose levels do not mean what the others' mean (grants.ts,
+// D-167): no level takes its screens out of a member's app, and none above *Can see* adds
+// anything. Its row says so in sentences of its own, and a summary draws it apart from the
+// levels' groups, whose sentences would be untrue of it.
 import { accessLevels } from '@household/domain'
 import { ModuleIcon } from '@household/icons/web'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -17,6 +22,7 @@ import {
   levelsDown,
   matrixOrder,
   offeredLevels,
+  settingsModule,
   useLevelWords,
   type Levels,
   type Whose,
@@ -62,7 +68,7 @@ export function GrantMatrix({
         // by a matrix that was only opened.
         const choices = offered.includes(level) ? offered : [...offered, level]
         const says = [
-          words.says(level),
+          words.says(level, 'theirs', module),
           ...(from[module] === level
             ? []
             : [t('household.grant.changed_from', { level: words.name(from[module]) })]),
@@ -91,32 +97,55 @@ export function GrantMatrix({
   )
 }
 
-export interface GrantSummaryProps {
+interface Summarised {
   /** What somebody holds. A module it does not name is not drawn. */
   readonly grants: Readonly<Record<string, AccessLevel>> | undefined
   /** Whose app the sentences speak of. */
   readonly whose: Whose
-  /**
-   * A row of a list of members: each level with its modules on one line, the levels' sentences
-   * left out, and what is off counted and not named. The comparison is across rows.
-   */
-  readonly compact?: boolean
 }
 
-export function GrantSummary({ grants, whose, compact = false }: GrantSummaryProps) {
+export type GrantSummaryProps = Summarised &
+  (
+    | {
+        /**
+         * A row of a list of members: each level with its modules on one line, the levels'
+         * sentences left out, and what is off counted and not named. The comparison is across
+         * rows, and no sentence is drawn to be untrue of a module.
+         */
+        readonly compact: true
+      }
+    | {
+        readonly compact?: false
+        /**
+         * The role the levels are held under. An owner holds and may change everything, and
+         * household settings is gathered with the rest. For a member or a child profile it is
+         * a group of its own, last, with the sentence that is true of its level there.
+         */
+        readonly role: HouseholdRole
+      }
+  )
+
+export function GrantSummary(props: GrantSummaryProps) {
+  const { grants, whose } = props
   const t = useTranslate()
   const format = useFormat()
   const words = useLevelWords()
+  /** Household settings' own level, where it is drawn apart from the levels' groups. */
+  const settings =
+    props.compact === true || props.role === 'owner' ? undefined : grants?.[settingsModule]
   const held = levelsDown
     .map((level) => ({
       level,
-      modules: matrixOrder.filter((module) => grants?.[module] === level),
+      modules: matrixOrder.filter(
+        (module) =>
+          grants?.[module] === level && (settings === undefined || module !== settingsModule),
+      ),
     }))
     .filter((group) => group.modules.length > 0)
   const named = (modules: readonly ModuleKey[]) =>
     format.list(modules.map((module) => t(`module.${module}.name`)))
 
-  if (compact) {
+  if (props.compact === true) {
     return (
       <ul className={styles.lines} role="list">
         {held.map(({ level, modules }) => (
@@ -145,6 +174,14 @@ export function GrantSummary({ grants, whose, compact = false }: GrantSummaryPro
           </dd>
         </div>
       ))}
+      {settings === undefined ? null : (
+        <div className={styles.group}>
+          <dt className={styles.level}>{t(`module.${settingsModule}.name`)}</dt>
+          <dd className={styles.held}>
+            <span className={styles.says}>{words.says(settings, whose, settingsModule)}</span>
+          </dd>
+        </div>
+      )}
     </dl>
   )
 }

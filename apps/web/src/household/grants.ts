@@ -79,27 +79,57 @@ export type Whose = 'theirs' | 'yours'
 export interface LevelWords {
   /** The level in two or three words: *Can add and edit*. */
   readonly name: (level: AccessLevel) => string
-  /** What the level comes to, in a sentence. */
-  readonly says: (level: AccessLevel, whose?: Whose) => string
+  /**
+   * What the level comes to, in a sentence: on `module`, where the sentence is said of one.
+   * Household settings is the one module whose levels do not mean what every other's mean, and
+   * has sentences of its own.
+   */
+  readonly says: (level: AccessLevel, whose?: Whose, module?: ModuleKey) => string
 }
+
+/**
+ * The module whose levels mean what no other's do. Its profile, its members and its modules
+ * are every member's to read whatever is set (D-167); what *Can see* adds is the household's
+ * invitations; and nothing above that adds anything, every change in the settings being an
+ * owner's whatever the level says (PRD 02 FR-AC3, PRD 17 Permissions). So a sentence that is
+ * true of a level on any other module is untrue of it, *not in their app at all* first of all.
+ */
+export const settingsModule: ModuleKey = 'admin'
 
 /** The words for the four levels. */
 export function useLevelWords(): LevelWords {
   const t = useTranslate()
+  const name = (level: AccessLevel): string => {
+    switch (level) {
+      case 'none':
+        return t('household.grant.level.none')
+      case 'view':
+        return t('household.grant.level.view')
+      case 'contribute':
+        return t('household.grant.level.contribute')
+      case 'manage':
+        return t('household.grant.level.manage')
+    }
+  }
+  /** What a level on household settings comes to. */
+  const ofSettings = (level: AccessLevel, whose: Whose): string => {
+    switch (level) {
+      case 'none':
+        return whose === 'yours'
+          ? t('household.grant.admin.none_yours')
+          : t('household.grant.admin.none')
+      case 'view':
+        return t('household.grant.admin.view')
+      case 'contribute':
+      case 'manage':
+        // Named by the level's own words, never the contract's.
+        return t('household.grant.admin.more', { level: name('view') })
+    }
+  }
   return {
-    name: (level) => {
-      switch (level) {
-        case 'none':
-          return t('household.grant.level.none')
-        case 'view':
-          return t('household.grant.level.view')
-        case 'contribute':
-          return t('household.grant.level.contribute')
-        case 'manage':
-          return t('household.grant.level.manage')
-      }
-    },
-    says: (level, whose = 'theirs') => {
+    name,
+    says: (level, whose = 'theirs', module) => {
+      if (module === settingsModule) return ofSettings(level, whose)
       switch (level) {
         case 'none':
           return whose === 'yours'
