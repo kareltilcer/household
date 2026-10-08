@@ -127,13 +127,18 @@ jobs:
         run: pnpm run format:check
 
   web:
-    name: Web — bundle budget, policy, axe and the pseudo-locale pass
+    name: Web — bundle budget, policy, axe, the pseudo-locale pass and the critical paths
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The end-to-end suite starts the API itself, from its sources (apps/web/playwright.config.ts).
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           cache: true
@@ -148,15 +153,32 @@ jobs:
         run: pnpm --filter @household/web run build
       - name: Bundle budget and a policy-clean build
         run: pnpm --filter @household/web run check
+      # What the suite's API runs on, as a developer starts it: PostgreSQL, the object store and
+      # the mail catcher, the database's roles and migrations, and then PowerSync, which a
+      # member's replica connects to (docker-compose.yml).
+      - name: Start the development services
+        run: |
+          pnpm run up
+          pnpm run db:setup
+          pnpm run up:sync
       # The same build with the dev-only routes in, the twelve-state harness among them, which
       # the suite's own script writes before it runs, served under the policy to Playwright's
-      # Chromium, at the version the workspace pins: axe on every route in both themes, the
-      # pseudo-locale pass, the harness's measurements, and every test failing on a violation of
-      # the policy.
+      # Chromium, at the version the workspace pins, with the API behind it: axe on every route
+      # in both themes, the pseudo-locale pass, the harness's measurements, the critical paths
+      # through registering and signing in, a replica opened as the session, and every test
+      # failing on a violation of the policy.
       - name: Chromium
         run: pnpm --filter @household/web exec playwright install --with-deps chromium
       - name: End-to-end
+        # The API the suite starts listens on every interface: PowerSync, in its container,
+        # fetches the keys it verifies a replica's token with from it at host.docker.internal,
+        # which on a Linux runner is the docker bridge's address, not the loopback.
+        env:
+          HOUSEHOLD_E2E_API_ADDR: 0.0.0.0:8080
         run: pnpm --filter @household/web run e2e
+      - name: The services' logs
+        if: failure()
+        run: docker compose logs --tail 200
       - name: Keep the traces of what failed
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

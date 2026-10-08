@@ -3,8 +3,13 @@
 // on what no page may do: break the policy (build/csp.ts), or log an error.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test as base, type Locator, type Page } from '@playwright/test'
+import { previewOrigin } from '../build/preview.ts'
+import { apiPath } from '../src/api/names.ts'
+import { paths, type RouteId } from '../src/app/paths.ts'
 import { storageKey as displayKey, type DisplayPreferences } from '../src/display/modes.ts'
 import { storageKey as localeKey } from '../src/i18n/storage.ts'
+import { buildFile } from '../src/update/build.ts'
+import { createHousehold, network, person, register, signIn, type Person } from './stack.ts'
 
 export interface Opening extends Partial<DisplayPreferences> {
   /** The language: one Household ships, or the pseudo-locale `en-XA`. English when left out. */
@@ -208,7 +213,50 @@ export async function holdTheClock(page: Page): Promise<void> {
   await page.clock.pauseAt(new Date('2026-03-04T10:00:01Z'))
 }
 
-export const test = base.extend<{ readonly faults: string[] }>({
+/**
+ * Whether a console error is the browser's own note that the API refused a request: an answer in
+ * the four hundreds from `/api/v1`. A refusal is an answer the contract names, a wrong password's
+ * `401` or a spent link's `410`, which the app reads and says in its own words, and a browser
+ * logs each as an error all the same. Any other failed request is a fault: a file of the app's
+ * own that is missing, the API failing (a five hundred), a service that cannot be reached.
+ */
+function refusal(text: string, url: string): boolean {
+  if (!/^Failed to load resource: the server responded with a status of 4\d\d\b/.test(text)) {
+    return false
+  }
+  try {
+    const asked = new URL(url)
+    return asked.origin === previewOrigin && asked.pathname.startsWith(`${apiPath}/`)
+  } catch {
+    return false
+  }
+}
+
+/** A person the suite registered, and the household it made for them once one was needed. */
+export interface Account {
+  readonly who: Person
+  household?: string
+}
+
+interface Fixtures {
+  readonly faults: string[]
+  /** The address this test's requests come from, to the server: its own (stack.ts). */
+  readonly network: string
+  /**
+   * Signs this test's page in as the worker's member, who owns a household, and returns the
+   * household's id. A member's routes are opened after it.
+   */
+  readonly enter: () => Promise<string>
+}
+
+/**
+ * The person this worker's tests sign in as: one for each worker, since each worker loads this
+ * file once. Registered by the first test that enters as them, since registering asks the API
+ * from a page.
+ */
+const account: Account = { who: person() }
+
+export const test = base.extend<Fixtures>({
   // What the page did that no page may: collected as it happens, and held to nothing once the
   // test is done. A test that provokes a fault on purpose empties the list before it ends.
   faults: [
@@ -224,7 +272,9 @@ export const test = base.extend<{ readonly faults: string[] }>({
         })
       })
       page.on('console', (message) => {
-        if (message.type() === 'error') faults.push(message.text())
+        if (message.type() !== 'error') return
+        if (refusal(message.text(), message.location().url)) return
+        faults.push(message.text())
       })
       page.on('pageerror', (error) => {
         faults.push(error.message)
@@ -234,6 +284,48 @@ export const test = base.extend<{ readonly faults: string[] }>({
     },
     { auto: true },
   ],
+
+  network: [
+    async ({ context }, use) => {
+      const address = network()
+      // Named to the API alone, as a proxy in front of it would: on a request to another origin,
+      // the sync service's, the header would be one the page seemed to add, which that origin
+      // has not said it takes, and the browser would refuse the request before sending it.
+      await context.route(`${previewOrigin}${apiPath}/**`, (route) =>
+        route.continue({
+          headers: { ...route.request().headers(), 'x-forwarded-for': address },
+        }),
+      )
+      await use(address)
+    },
+    { auto: true },
+  ],
+
+  enter: async ({ page }, use) => {
+    await use(async () => {
+      // A document of the app's origin to ask the API from, with none of the app in it.
+      await page.goto(buildFile)
+      if (account.household === undefined) {
+        await register(page, account.who)
+        await signIn(page, account.who)
+        account.household = await createHousehold(page)
+      } else {
+        await signIn(page, account.who)
+      }
+      return account.household
+    })
+  },
 })
+
+/**
+ * An address that reaches the route `id`, for the suite's walk of every route (paths.ts): its
+ * example, opened as whoever the route is drawn for. A member's route is entered first, and an
+ * example that names a household names the member's own.
+ */
+export async function reach(id: RouteId, enter: () => Promise<string>): Promise<string> {
+  const { example, layout } = paths[id]
+  if (layout !== 'account' && layout !== 'household') return example
+  return example.replace('{household}', await enter())
+}
 
 export { displayKey, expect }

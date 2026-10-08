@@ -8,12 +8,12 @@
 //   holds text is clipped;
 // - a layout that only survives English breaks: nothing is wider than the box it is given.
 import { paths, routeIds } from '../src/app/paths.ts'
-import { expect, inspect, open, test } from './fixtures.ts'
+import { expect, inspect, open, reach, test } from './fixtures.ts'
 
 for (const id of routeIds) {
-  test(`${paths[id].path} survives the pseudo-locale`, async ({ page }) => {
+  test(`${paths[id].path} survives the pseudo-locale`, async ({ page, enter }) => {
     test.slow(id === 'harness')
-    await open(page, paths[id].example, { locale: 'en-XA' })
+    await open(page, await reach(id, enter), { locale: 'en-XA' })
     await expect(page.locator('html')).toHaveAttribute('lang', 'en-XA')
     await expect(page.getByRole('heading', { level: 1 })).toContainText('⟦')
 

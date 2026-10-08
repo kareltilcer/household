@@ -1,8 +1,9 @@
 // The replicas this browser keeps, as databases: each household's is one IndexedDB database
-// (@household/sync/web, D-4), named for the household. This file knows their names and removes
-// them, with nothing of the SDK's imported: a member who signs out, or whose session ended, has
-// what this browser kept of their households removed whether or not a replica was ever opened on
-// this page (session/SessionProvider.tsx).
+// (@household/sync/web, D-4), named for the household, which one tab at a time holds open, by a
+// lock named for the household too. This file knows their names and removes them, with nothing
+// of the SDK's imported, nor of React's, so that the end-to-end suite reads it on Node: a member
+// who signs out, or whose session ended, has what this browser kept of their households removed
+// whether or not a replica was ever opened on this page (session/SessionProvider.tsx).
 
 const prefix = 'household-'
 const suffix = '.db'
@@ -10,6 +11,11 @@ const suffix = '.db'
 /** The database a household's replica is kept in. */
 export function replicaDatabase(household: string): string {
   return `${prefix}${household.toLowerCase()}${suffix}`
+}
+
+/** The name of the lock a household's replica is held under, across this browser's tabs. */
+export function replicaLock(household: string): string {
+  return `household.replica.${household.toLowerCase()}`
 }
 
 const named = /^household-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.db$/

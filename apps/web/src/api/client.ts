@@ -11,13 +11,10 @@ import {
   type ApiClientOptions,
 } from '@household/api'
 import { version } from '../../package.json'
+import { apiPath, csrfCookie } from './names.ts'
 import { ownBuild } from '../update/build.ts'
 
-/** Where the API is served: this origin's own `/api/v1`, in production and behind the dev proxy. */
-export const apiPath = '/api/v1'
-
-/** The cookie the server sets beside the session's, readable so that a script can send it back. */
-export const csrfCookie = '__Host-hh_csrf'
+export { apiPath, csrfCookie }
 
 /**
  * The app as `Household-Client` names it, which the server holds to its minimum version

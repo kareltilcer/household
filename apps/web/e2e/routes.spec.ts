@@ -3,14 +3,17 @@
 // checked here with no further word.
 import type { Page } from '@playwright/test'
 import { paths, routeIds } from '../src/app/paths.ts'
-import { displayKey, expect, expectAccessible, open, test } from './fixtures.ts'
+import { displayKey, expect, expectAccessible, open, reach, test } from './fixtures.ts'
 
+// Each route as whoever it is drawn for sees it on opening its address: a visitor for the
+// screens before sign-in, a member with a household for the shell's. What a route goes on to
+// show, a second step, a dialog, is opened by the tests of the flows that reach it.
 for (const id of routeIds) {
   for (const theme of ['light', 'dark'] as const) {
-    test(`${paths[id].path} is accessible in the ${theme} theme`, async ({ page }) => {
+    test(`${paths[id].path} is accessible in the ${theme} theme`, async ({ page, enter }) => {
       // The harness is a hundred and eight cells in two themes.
       test.slow(id === 'harness')
-      await open(page, paths[id].example, { theme })
+      await open(page, await reach(id, enter), { theme })
       await expectAccessible(page)
     })
   }

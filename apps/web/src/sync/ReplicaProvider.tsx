@@ -20,6 +20,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useApi, useProblems } from '../api/ApiProvider.tsx'
+import { replicaLock } from './databases.ts'
 import type { Opened } from './open.ts'
 
 export type ReplicaState =
@@ -58,11 +59,6 @@ function subscribeToConnection(notify: () => void): () => void {
 /** Whether the browser says it has a connection: what the offline bar is drawn by (A-37). */
 export function useOnline(): boolean {
   return useSyncExternalStore(subscribeToConnection, () => window.navigator.onLine)
-}
-
-/** The name of the lock a household's replica is held under, across this browser's tabs. */
-export function replicaLock(household: string): string {
-  return `household.replica.${household.toLowerCase()}`
 }
 
 /** Whether this browser has what a replica needs: the locks, the storage and the workers. */
