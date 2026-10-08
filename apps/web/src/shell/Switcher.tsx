@@ -124,7 +124,11 @@ export function Switcher() {
     <SwitcherView
       household={household}
       others={(households.data ?? []).filter((other) => other.id !== household.id)}
-      failed={households.isError}
+      // Could not be read, with nothing kept of them: a read that failed, or one that waits for
+      // a connection. A list this browser kept stands, whatever became of asking for it again.
+      failed={
+        households.data === undefined && (households.isError || households.fetchStatus === 'paused')
+      }
       onSwitch={(to) => {
         void navigate(inHousehold.home(to), { state: switchedByMember })
       }}

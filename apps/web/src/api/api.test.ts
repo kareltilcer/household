@@ -382,3 +382,19 @@ describe('a write that must not wait', () => {
     expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
   })
 })
+
+describe('the account, read again after a write', () => {
+  // Where the account is signed in and what it is notified of are filed under its key. Named by
+  // the key's beginning they are named too, and one edit from being asked for where this browser
+  // kept them and the page has no screen to ask with (ADR 0026).
+  it('is named by its whole key on every screen that reads it again', () => {
+    const readings = Object.entries(screens).flatMap(([path, source]) =>
+      [...source.matchAll(/(?:invalidate|refetch)Queries\(\{ queryKey: meKey([^}]*)\}/g)].map(
+        ([, rest = '']) => ({ path, rest: rest.trim() }),
+      ),
+    )
+    // The sources were read at all: every screen that changes how an account signs in is here.
+    expect(readings.length).toBeGreaterThanOrEqual(5)
+    expect(readings.filter(({ rest }) => rest !== ', exact: true')).toEqual([])
+  })
+})

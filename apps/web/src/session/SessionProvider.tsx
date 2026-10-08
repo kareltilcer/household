@@ -18,7 +18,7 @@
 // the account keeps none (ADR 0026).
 import { problemOf, type components } from '@household/api'
 import { matchLocale, pseudoLocale } from '@household/i18n/lazy'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   createContext,
   use,
@@ -104,7 +104,6 @@ export function SessionProvider({
 }: SessionProviderProps) {
   const api = useApi()
   const problems = useProblems()
-  const queries = useQueryClient()
   const { locale, setLocale, setFormatting } = useI18n()
   // Set when the session that was here ended, and until someone signs in: whatever the account's
   // query still holds, nobody is signed in.
@@ -229,16 +228,22 @@ export function SessionProvider({
     }
   }, [accountLocale, setFormatting, setLocale])
 
+  // The query's own, which is the same function for as long as the query is observed: what the
+  // query answers is new at each render, and a function made of it would be too.
+  const { refetch } = account
+
+  // Asked through this page's own reading of the account, and not of the cache beside it. What a
+  // browser kept is removed from the cache with no word to whoever reads it, and a visitor's page
+  // that removed it, an account kept and no session to go with it, is not drawn again for that:
+  // its reading is still of the entry that went. Asked through, the reading takes up the cache's
+  // own again and hears the answer; asked of the cache, the answer came to an entry nobody here
+  // read, and the page that had just signed its member in went on drawing a visitor's.
   const entered = useCallback(async () => {
     await forgetting.current
     setEnded(null)
     setLeft(false)
-    await queries.query({
-      queryKey: meKey,
-      queryFn: async () => unwrap(await api.GET('/me')),
-      staleTime: 0,
-    })
-  }, [api, queries])
+    await refetch({ throwOnError: true })
+  }, [refetch])
 
   const signOut = useCallback(async () => {
     const answer = await api.POST('/auth/logout')
@@ -255,9 +260,6 @@ export function SessionProvider({
     await forgetOnce()
   }, [api, problems, forgetOnce])
 
-  // The query's own, which is the same function for as long as the query is observed: what the
-  // query answers is new at each render, and a `retry` made of it would be too.
-  const { refetch } = account
   const retry = useCallback(() => {
     void refetch()
   }, [refetch])

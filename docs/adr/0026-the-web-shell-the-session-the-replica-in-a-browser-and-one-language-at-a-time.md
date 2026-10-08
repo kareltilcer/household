@@ -56,7 +56,10 @@ removed, and the address they were at is held for the sign-in that follows. A `4
 signs them in again and removes nothing. A `400 update_required` draws one screen in every
 route's place, whose action reloads the page. Signing out ends the session at the server first,
 and removes the same only once it has: unreached, the member is still signed in and is told so,
-and a session the server ended already is signed out.
+and a session the server ended already is signed out. A sign-in is seen by asking for the
+account through the session's own reading of it, and never of the cache beside it: what a
+browser kept is removed from the cache with no word to whoever reads it, and a reading left on
+an entry that went hears nothing of an answer that comes to another.
 
 **What a browser keeps is its member's, and for no longer than their session** (D-161). The
 account it keeps is kept for a day and for one build, and the session's cookies lapse with the
@@ -181,8 +184,9 @@ sending a link again is a wait and no refusal, drawn as the countdown on its con
 (`auth/Resend.tsx`): it is said once as it arrives, politely and in the control's own words, and
 no second of the countdown after it. What a screen is drawn from that could not be read is
 announced as it arrives, as a body's failure is (`Unread`, `app/guards.tsx`), and so is a part
-of one with the way to ask again, the providers an account's screen could not read: nothing of
-it is drawn while it is asked again, so a second failure is drawn, and said, anew. And the row a
+of one with the way to ask again, the providers an account's screen could not read and the
+households a member's notification settings are chosen among: nothing of it is drawn while it
+is asked again, so a second failure is drawn, and said, anew. And the row a
 confirmation was opened from, gone once the browser or device it names is signed out, leaves the
 focus to the lists' own place, as the inbox's does; a picture's removal, which nothing else
 says, leaves it on the control that chooses another. axe reads only that a field and its
@@ -250,7 +254,9 @@ every other console error still fails its test.
 | The focus put by hand wherever the control that held it leaves with what it did: a second step turned off, a provider disconnected, a stage of the second step's setup that takes the last one's place, a deletion's form the server's refusal replaced | Each of these is said: by a toast, by the refusal's own banner, or by the screen that takes the place of the one before, whose title and heading name it. A list is different, which goes on under the focus and whose next row is what its member was reading (D-166), and so is a picture's removal, which nothing else says. A ref and an effect for each control that goes with what it did are one more thing apiece to keep in step with what the screen draws, and a control kept in its place to hold the focus would turn under it from disconnecting a provider to connecting one, where a second press begins a link |
 | What pinning, putting away and showing a module came to said by the arrange screen in this item, the focus following the row to its new list, and the same of a merge's banner put away in the inbox | No member reaches either with anything in it: no module has a web screen until item 26 registers the first (D-160), and the inbox is empty until a module's entities are written offline. Each wants sentences of its own in five languages and a place for the focus, for screens held today by their tests and the dev pages alone. They are handed on with the screens (Consequences) |
 | The stated switch held back where a household was reached by the browser's Back or Forward, from one the member chose in the switcher | A page is not told a history move from a link followed: the router's word for the first page a tab loads is the same, and the entry gone back to carries the state it was made with, which says nothing of the choice that left it. Telling them apart is a mark written into each household's history entry as it opens, a second navigation at every opening, for a sentence that is true of the tab, whose household did change with its address, that one press puts away and whose control leads back |
-| What a browser kept removed without emptying the query cache under a screen that is drawn, or a visitor's screen drawn again once it is removed | Emptying the cache tells no screen (`queries.clear()`): a sign-in screen drawn before a kept account was read from storage and found without a session has its question of which providers the server signs in with cancelled, and draws none until it is drawn again, which the next key typed does. A browser comes to it only by its cookies being cleared alone, since their thirty idle days outlast the day the cache is kept, and only where the screen's file arrives before the cache is read. Resetting the queries in place asks each again at once, the account's among them, of a session that has just ended, which a sign-out would then read as a session that expired; a second way to empty the cache is one more to keep in step with the first |
+| What a browser kept removed without emptying the query cache under a screen that is drawn, or a visitor's screen drawn again once it is removed | Emptying the cache tells no screen (`queries.clear()`): a sign-in screen drawn before a kept account was read from storage and found without a session has its question of which providers the server signs in with cancelled, and draws none until it is drawn again, which the next key typed does. The session's own reading of the account is left on the entry that went as well, which nothing draws again: a sign-in on that page is seen because the session asks through that reading (below). A browser comes to it only by its cookies being cleared alone, since their thirty idle days outlast the day the cache is kept, and only where the screen's file arrives before the cache is read. Resetting the queries in place asks each again at once, the account's among them, of a session that has just ended, which a sign-out would then read as a session that expired; a second way to empty the cache is one more to keep in step with the first |
+| The account read after a sign-in by asking the query client for it, beside the session's own reading of it, as item 25 first had it | A visitor's page that found an account kept and no session removes what was kept, and is drawn again for nothing: its reading of the account was still of the entry that went. The answer to a sign-in made on that page came to an entry nobody read, and the member, signed in, was drawn the sign-in again, its fields empty and no word said, until they loaded the page again: a member in no household, whose browser notes no replica, with its cookies cleared alone. Asked through its own reading, the reading takes up the cache's entry and hears the answer. Whether a page is drawn again for a state set to what it was is React's own affair: a unit harness with the cache persisted drew it again and saw the sign-in, and a browser did not. The session's test holds it with nothing persisted, where it failed too, and the end-to-end journey makes that second visit in a browser |
+| A list of the member's households that could not be read again said to be unread though this browser kept it, or one whose read waits for a connection said nothing of, as item 25 first had the switcher | A kept read stands in for a server that cannot be asked (above): the switcher told a member in one household that their others could not be loaded whenever asking again failed, though the kept list said there were none, and told a member whose list waited for a connection, nothing kept of it, nothing at all, as if they were in no other. It is said where nothing is kept and the read failed or waits, as every other read is |
 | Every granted module listed, with a screen that says it is not built | A link to nothing (D-160) |
 | The arrangement in a synced entity now | A server item's work inside this one (D-155) |
 | The suite against a stand-in API, or with requests answered by the test | The Done-when is the flow through the server: its mail, its throttles, its cookies. A stand-in would be a second server kept in step by hand |
@@ -262,10 +268,19 @@ every other console error still fails its test.
   the session hears of the three answers. A request made outside it tells the hub itself, as
   the renewal of a browser's push does (`push/worker.ts`); the one that does not is the removal
   a sign-out follows, whose own refusal is told (above).
-- A screen that reads the account again names its key whole (`meKey`, `exact`). Where an
-  account is signed in and what it is notified of are filed under that key, and a refetch by the
-  key's beginning would ask for those too, of a page that kept them from an earlier visit and has
-  no screen to ask with: each would be left as failed.
+- A screen that reads the account again names its key whole (`meKey`, `exact`), which a test
+  holds the screens before sign-in and the account's own to. Where an account is signed in and
+  what it is notified of are filed under that key, and a refetch by the key's beginning would
+  ask for those too, of a page that kept them from an earlier visit and has no screen to ask
+  with: each would be left as failed.
+- The session asks for the account through its own reading of it (`refetch`,
+  `session/SessionProvider.tsx`), after a sign-in as when it is asked again. Emptying the cache
+  tells no reader (`queries.clear()`), and one that is not drawn again afterwards is left on
+  the entry that went, where it hears nothing of a fetch made beside it: a reader that outlives
+  a removal of what the browser kept, which today is the session's alone, asks through itself.
+- A read is said to be unread only where nothing is kept of it: one that failed, and one that
+  waits for a connection, alike. What the browser kept is drawn, whatever became of asking for
+  it again.
 - A screen that draws the page's `<h1>` says the same words to `usePageTitle` (`app/title.ts`),
   where it draws them; `Screen` and `SettingsPage` do for the screens they frame. The walk of the
   routes fails a route whose title does not name its heading (D-165).

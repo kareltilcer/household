@@ -75,7 +75,7 @@ function Scan({
       unwrap(await api.POST('/auth/mfa/activate', { body: { code: digits } })),
     onSettled: () => {
       // On, or perhaps on: the account says which.
-      void queries.invalidateQueries({ queryKey: meKey })
+      void queries.invalidateQueries({ queryKey: meKey, exact: true })
     },
     onSuccess: (answer) => {
       onCodes(answer.recovery_codes)

@@ -151,7 +151,8 @@ function SecondStep({
   const queries = useQueryClient()
   const toast = useToast()
   const [asking, setAsking] = useState<'codes' | 'off' | null>(null)
-  const refresh = () => queries.invalidateQueries({ queryKey: meKey })
+  // The account alone, by its whole key: its other reads are filed under it.
+  const refresh = () => queries.invalidateQueries({ queryKey: meKey, exact: true })
   // Turned off from somewhere else since this page was read: there is nothing left to do.
   const gone = (error: unknown) => {
     if (problemIn(error)?.status !== 404) return
@@ -281,7 +282,7 @@ function SignInWith({ me }: { readonly me: Me }) {
     },
     onSuccess: (_answer, provider) => {
       toast({ message: t('account.security.providers.disconnected', { provider: name(provider) }) })
-      void queries.invalidateQueries({ queryKey: meKey })
+      void queries.invalidateQueries({ queryKey: meKey, exact: true })
     },
   })
 

@@ -401,12 +401,35 @@ export function Notifications() {
   const list = households.data ?? []
   const chosen = list.find((household) => household.id === scope)
   const household = chosen?.id ?? null
+  // Could not be read, with nothing kept of them: a read that failed, or one that waits for a
+  // connection. The defaults below are the account's, and are drawn all the same.
+  const unread =
+    households.data === undefined && (households.isError || households.fetchStatus === 'paused')
   return (
     <SettingsPage title={t('account.notifications.title')} lead={t('account.notifications.lead')}>
       <ThisBrowser />
       <Section title={t('account.notifications.settings.title')}>
-        {/* With no household there are only the defaults, and nothing to choose between. */}
-        {list.length === 0 ? null : (
+        {unread ? (
+          // In the place of the control that chooses one of them, and said as it arrives: with
+          // nothing said, the screen would read as that of a member in no household.
+          <Banner
+            tone="danger"
+            title={t('shell.households.error.title')}
+            announce
+            actions={
+              <Button
+                onClick={() => {
+                  void households.refetch()
+                }}
+              >
+                {t('ui.retry')}
+              </Button>
+            }
+          >
+            {t('shell.households.error.body')}
+          </Banner>
+        ) : list.length === 0 ? null : (
+          // With no household there are only the defaults, and nothing to choose between.
           <div className={styles.form}>
             <Select
               label={t('account.notifications.scope.label')}

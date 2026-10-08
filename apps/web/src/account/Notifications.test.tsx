@@ -395,6 +395,23 @@ describe('the preferences', () => {
     ).toBeInTheDocument()
   })
 
+  it('say the member’s households could not be read where they could not, the defaults still drawn', async () => {
+    const server = createServer()
+    server.on('GET /households', () => Promise.reject(new TypeError('offline')))
+    withPreferences(server)
+    const { user } = await notifications(server)
+    // Said as it arrives, where the control that chooses a household would be: with nothing
+    // said, the screen would read as that of a member in no household.
+    const unread = await screen.findByRole('alert')
+    expect(unread).toHaveTextContent('Your households could not be read')
+    expect(screen.queryByRole('combobox', { name: 'Settings for' })).not.toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Notifications from Household' })).toBeChecked()
+    server.on('GET /households', () => Response.json({ items: [tilcerovi, chata] }))
+    await user.click(within(unread).getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('combobox', { name: 'Settings for' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('say that email is a small fixed set that arrives whatever is off', async () => {
     const server = createServer()
     withPreferences(server)

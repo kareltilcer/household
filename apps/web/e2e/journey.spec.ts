@@ -1,8 +1,9 @@
 // The way in, end to end, against the API itself (plan item 25; A-1 to A-10): a person registers,
 // proves their address by the link their email carried, signs in, turns a second step on from
 // their account, and signs in again with a code from it and then with a recovery code; a visitor
-// who opened a member's address lands there after signing in; and a password is set anew by a
-// reset's link. Each person is this test's own, at an address nobody
+// who opened a member's address lands there after signing in; a member whose browser kept their
+// account and lost its session signs in again on the page that found it so; and a password is
+// set anew by a reset's link. Each person is this test's own, at an address nobody
 // else is registered with, and each screen a journey passes is held to axe as it stands.
 import type { Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
@@ -137,6 +138,64 @@ test('a visitor who opens a member’s address signs in and lands there', async 
 
   await signInAs(page, who)
   await expect(page).toHaveURL(address)
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+})
+
+/**
+ * The reads this browser keeps, by their keys: the app's persisted cache as it wrote it, one
+ * clone under one key of one store (src/api/query.ts). Read once the app has drawn, which is
+ * after it opened the store.
+ */
+function kept(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        const opening = indexedDB.open('household-web')
+        opening.onerror = () => {
+          reject(new Error('the kept reads could not be opened'))
+        }
+        opening.onsuccess = () => {
+          const database = opening.result
+          const read = database.transaction('query-cache').objectStore('query-cache').get('client')
+          read.onerror = () => {
+            reject(new Error('the kept reads could not be read'))
+          }
+          read.onsuccess = () => {
+            const client = read.result as
+              | { readonly clientState: { readonly queries: { readonly queryHash: string }[] } }
+              | undefined
+            database.close()
+            resolve((client?.clientState.queries ?? []).map((query) => query.queryHash))
+          }
+        }
+      }),
+  )
+}
+
+// A second visit, which a browser that kept nothing never makes: the account is in what this
+// browser kept, and the session's cookies are not. The page that finds it so removes what was
+// kept and draws nothing again for that, and a sign-in on it is still seen (ADR 0026).
+test('a member whose browser kept their account and lost its session signs in on the page that found it so', async ({
+  page,
+  context,
+}) => {
+  const who = person()
+  await page.goto(paths.signIn.example)
+  await register(page, who)
+  await signInAs(page, who)
+  // In no household yet, a member is opened at their account, and this browser keeps no replica.
+  await expect(page).toHaveURL(paths.account.path)
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await expect.poll(() => kept(page)).toContain(JSON.stringify(['me']))
+
+  // The cookies go and the rest stays, as when they are cleared by themselves.
+  await context.clearCookies()
+  await page.goto(paths.account.path)
+  await expect(title(page, 'Sign in')).toBeVisible()
+  await expect.poll(() => kept(page)).not.toContain(JSON.stringify(['me']))
+
+  await signInAs(page, who)
+  await expect(page).toHaveURL(paths.account.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 })
 

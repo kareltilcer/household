@@ -258,6 +258,30 @@ describe('a household’s shell', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
   })
 
+  it('says the member’s other households could not be read while the browser has no connection to read them with', async () => {
+    // The household is read, and the connection goes before the list of the member's others is:
+    // once, since the household is read again when the connection is back.
+    let read = false
+    open(inHousehold.home(home), {
+      asking: (path) => {
+        if (read || path !== `/households/${home}`) return
+        read = true
+        onlineManager.setOnline(false)
+      },
+    })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
+    // Asked for with no connection, the read waits for one: the switcher is no label of a
+    // member in this household alone meanwhile.
+    expect(screen.getByText('We couldn’t load your other households.')).toBeInTheDocument()
+    act(() => {
+      onlineManager.setOnline(true)
+    })
+    expect(
+      await screen.findByRole('button', { name: 'Switch household. Currently Tilcerovi' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('We couldn’t load your other households.')).not.toBeInTheDocument()
+  })
+
   it('opens any other address under a household on nothing, with the way back to its home', async () => {
     open(`${inHousehold.home(home)}/no-such-page`)
     await screen.findByRole('heading', { level: 1, name: 'This link doesn’t open anything here.' })

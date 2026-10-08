@@ -377,6 +377,30 @@ describe('a session that ends', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/^visitor en$/)
     expect(at.asked).toEqual([])
   })
+
+  it('removed by a visitor’s page, leaves that page to see whoever signs in on it', async () => {
+    const deleted = databases()
+    noteReplica(me.id)
+    let cookies = ''
+    const at = server(
+      () => Response.json(me),
+      () => cookies,
+    )
+    open(at)
+    // The page drew a visitor's before it removed what was kept, and nothing draws it again for
+    // the removal: what it reads the account by is the cache's entry that went.
+    await waitFor(() => {
+      expect(deleted).toHaveBeenCalledWith(replicaDatabase(me.id))
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/^visitor en$/)
+    // A sign-in the server answered: its cookies are here, and the screen that made it says so.
+    cookies = signedIn
+    await userEvent.click(screen.getByRole('button', { name: 'enter' }))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('member Jana')
+    })
+    expect(at.asked).toEqual(['GET /me'])
+  })
 })
 
 describe('another member who signs in under an open page', () => {
