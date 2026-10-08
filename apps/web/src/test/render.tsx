@@ -1,6 +1,6 @@
 // A component drawn as the app draws it: in a language, with the display modes and the toasts
 // above it. English unless a test names another.
-import type { DisplayLocale } from '@household/i18n'
+import type { DisplayLocale } from '@household/i18n/lazy'
 import { render, type RenderResult } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { vi } from 'vitest'

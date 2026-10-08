@@ -1,0 +1,88 @@
+/* The arrange screen, and the shell's own pages of words: one column, as wide as a list reads. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-3) var(--space-6);
+}
+
+.title {
+  composes: title1 from '../styles/type.module.css';
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.lede {
+  composes: bodyLg from '../styles/type.module.css';
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.note {
+  composes: body from '../styles/type.module.css';
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-block-start: var(--space-2);
+}
+
+.heading {
+  composes: title3 from '../styles/type.module.css';
+  margin: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--dens-row-min);
+  padding: var(--space-05) var(--space-1);
+}
+
+.row + .row {
+  border-block-start: 1px solid var(--divider);
+}
+
+.module {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+  padding-inline-start: var(--space-1);
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The household's own home: its modules, as links. */
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

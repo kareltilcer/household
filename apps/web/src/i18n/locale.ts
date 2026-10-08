@@ -1,9 +1,9 @@
 // Which language the app is shown in, and which locale it formats in. The language is the
 // member's (06-accessibility-and-i18n §2): one of the five Household ships, or the pseudo-locale,
-// kept in this browser until item 25 reads it from their account. The formatting locale is the
-// same language as the device writes it: a member who reads German on a device set to `de-AT`
-// sees Austria's numbers.
-import { locales, matchLocale, pseudoLocale, type DisplayLocale } from '@household/i18n'
+// kept in this browser, and read from their account once they are signed in (session/). The
+// formatting locale is the same language as the account or the device writes it: a member who
+// reads German on a device set to `de-AT` sees Austria's numbers.
+import { locales, matchLocale, pseudoLocale, type DisplayLocale } from '@household/i18n/lazy'
 import { storageKey } from './storage.ts'
 
 /** Where the chosen language is kept: the same key the end-to-end suite sets a language by. */

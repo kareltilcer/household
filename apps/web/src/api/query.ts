@@ -56,6 +56,17 @@ export function createQueryClient({ onProblem }: QueryClientOptions = {}): Query
   })
 }
 
+/**
+ * How a write that must not wait is asked: at once, connection or none (D-164). Left to itself
+ * the query client holds a write made with no connection in the page and sends it when one
+ * returns, and a sign-in completed, a password changed, every device signed out or an account
+ * deleted minutes after the press, with nothing on the screen to say it is still to come and
+ * nobody there to see it, is not what was asked for. Asked at once it fails at once, and its
+ * screen says that the server could not be reached and nothing was changed. Every write of the
+ * screens before sign-in and of a member's own account is asked so (auth/, account/).
+ */
+export const askedNow = { networkMode: 'always' } as const
+
 /** The database the cache is kept in, and the one key it is kept under. */
 const database = { name: 'household-web', store: 'query-cache', key: 'client' } as const
 

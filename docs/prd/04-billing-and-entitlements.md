@@ -73,7 +73,7 @@ A household is always in exactly one state, and the state is resolved once per r
 | `read_only` | ✓ | ✗ | ✗ | pull only | After grace. Data intact and fully exportable throughout the **12-month** retention window, then warned and deleted — D-32 |
 | `canceled` | ✓ | ✗ | ✗ | pull only | Customer cancelled. Same as `read_only`, same retention window, different messaging |
 | `restricted` | ✓ | ✗ | ✗ | pull only | **Owner-initiated**, not billing-related. GDPR Art. 18. Reversible by any owner at any time — see FR-BI7 |
-| `suspended` | ✗ | ✗ | ✗ | ✗ | Abuse or legal. Rare, staff-initiated, always with notice: `platform_admin` suspends with what the household is told of why, which its lockout shows and each of its owners is emailed, as they are when it is lifted (**D-147**). Every household route answers `404`; the household list still names it, with the notice, for the lockout; its replicas are emptied (**D-115**) |
+| `suspended` | ✗ | ✗ | ✗ | ✗ | Abuse or legal. Rare, staff-initiated, always with notice: `platform_admin` suspends with what the household is told of why, which its lockout shows and each of its owners is emailed, as they are when it is lifted (**D-147**). Every household route answers `404`; the household list still names it, with the notice, for the lockout; its replicas are emptied (**D-115**). On the web the app does not open at it while the member is in a household that opens (**D-162**) |
 
 The states are resolved by a precedence (**D-114**): a suspension outranks everything; a lapse
 (`read_only`, `canceled`) outranks a restriction, since only a lapse carries a deletion date; and a

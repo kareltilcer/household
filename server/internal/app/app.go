@@ -301,7 +301,13 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 
 	api := chi.NewRouter()
 	api.Use(clientversion.Middleware(a.MinClients), d.Contract.Middleware(api, contract.Limits{MaxBody: d.MaxBodyBytes}),
-		a.Origins.Middleware)
+		// Apple's page posts its answer to a web sign-in, and to that route alone (plan item 25).
+		a.Origins.Admitting(func(r *http.Request) string {
+			if r.URL.Path == contract.BasePath+identity.AppleReturnPath {
+				return identity.AppleOrigin
+			}
+			return ""
+		}))
 	api.NotFound(httpx.NotFound)
 	api.MethodNotAllowed(httpx.MethodNotAllowed)
 

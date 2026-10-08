@@ -8,9 +8,11 @@
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Button } from '../ui/Button.tsx'
 import styles from './Root.module.css'
+import { usePageTitle } from './title.ts'
 
 function Failure() {
   const t = useTranslate()
+  usePageTitle(t('ui.error.title'))
   return (
     <>
       <h1 className={styles.title}>{t('ui.error.title')}</h1>

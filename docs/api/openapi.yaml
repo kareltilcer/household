@@ -89,7 +89,8 @@ info:
     another site sent it. So is an unsafe request the session cookie authenticates that names no
     origin, or whose `X-CSRF-Token` is not its session's token and its `__Host-hh_csrf` cookie's
     value. A request that names no origin and carries no session cookie, a native client's, is
-    not checked.
+    not checked. The one unsafe request taken from another site's page is Apple's answer to a web
+    sign-in, which Apple's own page posts to `/auth/oauth/apple/return`, and which reads no session.
 
     ## Concurrency and idempotency
 
@@ -591,8 +592,9 @@ paths:
         server's, and the `state`, which the provider sends back to the redirect URI and the client
         compares before going on. It lasts ten minutes and is used once. A start made signed in may
         be completed by `/link`, and only by the account that made it. A provider the server is not
-        configured for answers `404`. A client's network may begin sixty an hour. Apple answers a
-        request for an address or a name as a form posted to the redirect URI.
+        configured for answers `404`, and `getAuthOauth` names those it is. A client's network may
+        begin sixty an hour. Apple answers a request for an address or a name as a form posted to
+        the redirect URI, which for the web client is `/auth/oauth/apple/return`.
 
         Authentication is optional: a start made with the account's credential records the account,
         which `/link` needs, and one made without it is completed only at `/callback`.
@@ -712,6 +714,89 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { description: This is the only credential on the account, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/oauth:
+    get:
+      operationId: getAuthOauth
+      tags: [auth]
+      summary: The identity providers the server signs in with
+      description: |
+        The providers this server is configured for, Google before Apple. A client offers these
+        and no other: a provider the server is not configured for answers `404` at
+        `/auth/oauth/{provider}/start`, and a control that could only fail is not drawn (FR-ID2).
+        The list is empty where none is configured. Unauthenticated, since the sign-in screen
+        reads it.
+      security: []
+      responses:
+        '200':
+          description: The configured providers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [providers]
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      type: string
+                      enum: [google, apple]
+
+  /auth/oauth/apple/return:
+    post:
+      operationId: postAuthOauthAppleReturn
+      tags: [auth]
+      summary: Receive Apple's answer to a web sign-in
+      description: |
+        Apple answers a sign-in that asked for an address or a name with a form its own page posts
+        to the redirect URI, where another provider redirects with a query. The web client is
+        static files and receives no `POST`, so its redirect URI for Apple is this operation. It
+        reads the form and sends the browser on, `303`, to the web client's `sign-in/apple`, with
+        what Apple sent in the fragment, which a browser sends to no server: `code` and `state`,
+        and `name` the one time Apple gives the person's; or `error` with the `state`, when the
+        person turned the sign-in down. The page there compares the state with the one it began
+        with, and completes the sign-in at `/auth/oauth/apple/callback`, or the link at
+        `/auth/oauth/apple/link`, with the verifier it kept.
+
+        Apple's page posts the form, so this is the one unsafe operation that admits another
+        site's origin: Apple's own, `https://appleid.apple.com`, and no other. It reads no session,
+        signs nobody in and keeps nothing, and the code it passes on is spent only with the
+        verifier of the browser that began the sign-in. It takes no `Idempotency-Key`, which no
+        client of Household's sends it. A form that carries neither a code nor an error, or a
+        field longer than the contract admits, answers `422`, and a server not configured for
+        Apple `404`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  maxLength: 2048
+                state:
+                  type: string
+                  maxLength: 128
+                user:
+                  type: string
+                  maxLength: 4096
+                  description: 'JSON that Apple sends once, the first time a person signs in: their name and their address.'
+                error:
+                  type: string
+                  maxLength: 128
+      responses:
+        '303':
+          description: Sent on to the web client
+          headers:
+            Location:
+              description: The web client's `sign-in/apple`, with what Apple sent in its fragment.
+              schema:
+                type: string
+                format: uri
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
 
   /auth/mfa/enroll:
     post:

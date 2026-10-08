@@ -53,6 +53,10 @@ paths:
   /auth/oauth/{provider}:
     parameters: [{ name: provider, in: path, required: true, schema: { type: string } }]
     delete: { operationId: deleteAuthOauthByProvider, responses: { '204': { description: Unlinked }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/oauth:
+    get: { operationId: getAuthOauth, security: [], responses: { '200': { description: The configured providers }, default: { $ref: '#/components/responses/Problem' } } }
+  /auth/oauth/apple/return:
+    post: { operationId: postAuthOauthAppleReturn, security: [], requestBody: { required: true, content: { application/x-www-form-urlencoded: { schema: { type: object } } } }, responses: { '303': { description: Sent on to the web client }, default: { $ref: '#/components/responses/Problem' } } }
   /me/devices:
     get: { operationId: getMeDevices, responses: { '200': { description: Devices }, default: { $ref: '#/components/responses/Problem' } } }
   /me/devices/{device_id}:

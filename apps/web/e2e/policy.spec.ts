@@ -1,9 +1,16 @@
 // The Content-Security-Policy (PRD 07 §4, build/csp.ts) on a served page: it is there, it is the
 // strict one, and it is in force. Every other test of the suite fails on a violation (fixtures.ts);
 // this one provokes two, to show that the policy refuses them and that the suite would hear it.
-import { headerPolicy, metaPolicy, unsafeSources } from '../build/csp.ts'
+import { headerPolicyFor, metaPolicyFor, unsafeSources } from '../build/csp.ts'
+import { deployment } from '../build/deployment.ts'
 import { paths } from '../src/app/paths.ts'
 import { expect, open, test } from './fixtures.ts'
+
+// The build the suite runs against reaches the development stack's sync service and its object
+// store (vite.config.ts), unless this environment names others.
+const deployed = deployment(true)
+const headerPolicy = headerPolicyFor(deployed)
+const metaPolicy = metaPolicyFor(deployed)
 
 test('a page is served under the strict policy, and carries it itself', async ({ page }) => {
   const response = await page.goto(paths.home.example)

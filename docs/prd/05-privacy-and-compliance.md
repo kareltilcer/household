@@ -127,7 +127,9 @@ days not used (D-140), and an erased account's customers there are deleted with 
 are its own record, kept as the statute asks (§1). A household chosen for deletion is scheduled
 then, with the account's, and its members are told; cancelling the account's deletion cancels it,
 as an owner the household has by then does, and nothing else. The request is refused with every
-blocking household at once, never one at a time.
+blocking household at once, never one at a time. A `suspended` household answers nobody (D-115),
+so a client cannot read who else is in one before it asks: the web says so of one the user owns,
+offers to delete it with the account all the same, and the server's resolution stands (**D-163**).
 
 **FR-PR4 — Deletion is a 30-day soft window then irreversible.** The account is disabled
 immediately, sessions and tokens are revoked (under D-93 a sync token already issued runs until it

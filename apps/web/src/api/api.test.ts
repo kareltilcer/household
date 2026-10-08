@@ -4,7 +4,13 @@ import type { UseStore } from 'idb-keyval'
 import { describe, expect, it, vi } from 'vitest'
 import { clientName, cookieValue, createWebClient, csrfCookie } from './client.ts'
 import { ApiProblemError, isRetryable, problemIn, unwrap } from './problem.ts'
-import { cacheMaxAge, createPersister, createQueryClient, persistOptions } from './query.ts'
+import {
+  askedNow,
+  cacheMaxAge,
+  createPersister,
+  createQueryClient,
+  persistOptions,
+} from './query.ts'
 
 const origin = 'https://household.example'
 
@@ -47,8 +53,10 @@ describe('the web client', () => {
     await client.GET('/healthz')
     const [request] = sent
     expect(request?.url).toBe(`${origin}/api/v1/healthz`)
-    expect(request?.headers.get('Household-Client')).toBe(clientName)
-    expect(clientName).toMatch(/^web\/\d+\.\d+\.\d+/)
+    // A page no build made names the version alone, and a build's page its id after it.
+    expect(request?.headers.get('Household-Client')).toBe(clientName(undefined))
+    expect(clientName(undefined)).toMatch(/^web\/\d+\.\d+\.\d+$/)
+    expect(clientName('008f0f94379a5b41')).toBe(`${clientName(undefined)}+008f0f94379a5b41`)
     expect(request?.credentials).toBe('same-origin')
     // A session is a cookie no script can read: the client carries no credential of its own.
     expect(request?.headers.has('Authorization')).toBe(false)
@@ -337,5 +345,56 @@ describe('the cache kept in this browser', () => {
       onlineManager.setOnline(true)
       client.unmount()
     }
+  })
+})
+
+/** The screens before sign-in and those of a member's own account, each file as it is written. */
+const screens = import.meta.glob<string>(
+  ['../auth/*.{ts,tsx}', '../account/*.{ts,tsx}', '!../**/*.test.{ts,tsx}'],
+  { query: '?raw', import: 'default', eager: true },
+)
+
+describe('a write that must not wait', () => {
+  it('is sent at once, though the browser says it has no connection', async () => {
+    const client = createQueryClient()
+    const sent = vi.fn(() => Promise.resolve('an answer'))
+    client.mount()
+    onlineManager.setOnline(false)
+    try {
+      const write = new MutationObserver(client, { ...askedNow, mutationFn: sent })
+      await write.mutate()
+      expect(sent).toHaveBeenCalledTimes(1)
+      expect(write.getCurrentResult().isPaused).toBe(false)
+    } finally {
+      onlineManager.setOnline(true)
+      client.unmount()
+    }
+  })
+
+  // A sign-in completed, a password set or an account deleted when a connection returns,
+  // minutes after the press and with nobody at the screen, is not what was asked for (D-164).
+  it('is every write of the screens before sign-in and of a member’s own account', () => {
+    const writes = Object.entries(screens).flatMap(([path, source]) =>
+      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
+    )
+    // The sources were read at all: every screen of the two that writes is among them.
+    expect(writes.length).toBeGreaterThan(20)
+    expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
+  })
+})
+
+describe('the account, read again after a write', () => {
+  // Where the account is signed in and what it is notified of are filed under its key. Named by
+  // the key's beginning they are named too, and one edit from being asked for where this browser
+  // kept them and the page has no screen to ask with (ADR 0026).
+  it('is named by its whole key on every screen that reads it again', () => {
+    const readings = Object.entries(screens).flatMap(([path, source]) =>
+      [...source.matchAll(/(?:invalidate|refetch)Queries\(\{ queryKey: meKey([^}]*)\}/g)].map(
+        ([, rest = '']) => ({ path, rest: rest.trim() }),
+      ),
+    )
+    // The sources were read at all: every screen that changes how an account signs in is here.
+    expect(readings.length).toBeGreaterThanOrEqual(5)
+    expect(readings.filter(({ rest }) => rest !== ', exact: true')).toEqual([])
   })
 })

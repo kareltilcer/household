@@ -1,0 +1,103 @@
+/* The shell's frame: a bar across the top, the sidebar down the inline start, and the content.
+   Sizes are in rem and em, so the frame grows with the text it holds. */
+.frame {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-areas:
+    'bar bar'
+    'side content';
+  grid-template-rows: auto 1fr;
+  grid-template-columns: minmax(0, 16rem) minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* Too narrow for the sidebar to stand beside the content: it is a panel, and the content has the
+   window's width. The query is Frame.tsx's own. */
+@media (width < 52em) {
+  .frame {
+    grid-template-areas:
+      'bar'
+      'content';
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Drawn nowhere until the keyboard reaches it, and then over the bar's start. */
+.skip {
+  position: absolute;
+  inset-block-start: var(--space-05);
+  inset-inline-start: var(--space-05);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--dens-row-min);
+  padding: 0 var(--space-2);
+  background: var(--surface-raised);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+}
+
+.skip:not(:focus-visible) {
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.bar {
+  display: flex;
+  grid-area: bar;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+  min-height: calc(var(--dens-row-min) + var(--space-1));
+  padding: var(--space-05) var(--space-2);
+  background: var(--surface);
+  border-block-end: 1px solid var(--border);
+}
+
+.heading {
+  composes: title3 from '../styles/type.module.css';
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sidebar {
+  grid-area: side;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--surface-sunken);
+  border-inline-end: 1px solid var(--border);
+}
+
+.navigation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+}
+
+.content {
+  display: flex;
+  grid-area: content;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The landmark takes the focus from the skip link, and shows none of its own: it is no control. */
+.main:focus {
+  outline: none;
+}

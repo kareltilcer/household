@@ -1,0 +1,34 @@
+.link {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--dens-row-min);
+  padding: var(--space-05) var(--space-15);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.link:hover {
+  background: var(--surface-raised);
+}
+
+/* The destination that is open: a rule down its start and a heavier name, beside its ground. */
+.link[aria-current='page'] {
+  background: var(--surface-raised);
+  box-shadow: inset 3px 0 0 var(--accent);
+  font-weight: 600;
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

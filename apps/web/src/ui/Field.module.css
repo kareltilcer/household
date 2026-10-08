@@ -83,3 +83,35 @@
   min-width: 4rem;
   text-align: center;
 }
+
+/* A password and the control that shows it, side by side: the field takes what room is left. */
+.revealable {
+  display: flex;
+  gap: var(--space-1);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.revealable .control {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.reveal {
+  flex: none;
+  min-width: var(--dens-row-min);
+  min-height: var(--dens-row-min);
+  padding: 0 var(--space-15);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Pressed: the password is shown. Said by more than its ground, by `aria-pressed`. */
+.reveal[aria-pressed='true'] {
+  background: var(--surface-sunken);
+  font-weight: 600;
+}

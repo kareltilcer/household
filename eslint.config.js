@@ -473,6 +473,22 @@ const semanticTokens = {
   },
 }
 
+/** The i18n package's own entry, which holds all five catalogs: the web app imports `/lazy`. */
+const wholeCatalogs = {
+  name: '@household/i18n',
+  allowTypeImports: true,
+  message:
+    'Import @household/i18n/lazy: the package’s own entry holds all five catalogs, and the web app loads one language at a time.',
+}
+
+/** The sync library's entries, imported for their types alone outside `apps/web/src/sync/open.ts`. */
+const syncLibrary = ['@household/sync', '@household/sync/web'].map((name) => ({
+  name,
+  allowTypeImports: true,
+  message:
+    'Import @household/sync for its types alone: a value a screen needs of it at run time is handed over with the open replica (apps/web/src/sync/open.ts), which keeps the library out of a page until a replica is opened.',
+}))
+
 export default defineConfig(
   // design/ holds the clickable ES5 prototype, a reference that never ships; Prettier and
   // CodeQL skip it too. An editor that lints it with this file would flag every script.
@@ -528,6 +544,28 @@ export default defineConfig(
     // 06-clients §3: they spend colour through the semantic tokens, never raw or by a primitive.
     files: ['apps/**'],
     rules: { 'household/no-literal-strings': 'error', 'household/semantic-tokens': 'error' },
+  },
+  {
+    // What the web app's first download must not hold (plan item 25, ADR 0026). It loads one
+    // language at a time (D-159): the i18n package's own entry holds all five catalogs, and one
+    // import of it puts them back. And nothing of the sync library or its SDK is in a page until
+    // a replica is opened: every file imports it for its types alone, and `sync/open.ts`, the
+    // one file fetched when a replica is, hands over what a screen needs of it at run time. A
+    // test may hold all the catalogs, to say what a key reads in each, and the library's values.
+    files: ['apps/web/src/**'],
+    ignores: ['apps/web/src/**/*.test.{ts,tsx}', 'apps/web/src/test/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        { paths: [wholeCatalogs, ...syncLibrary] },
+      ],
+    },
+  },
+  {
+    files: ['apps/web/src/sync/open.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', { paths: [wholeCatalogs] }],
+    },
   },
   {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs', '**/*.jsx'],

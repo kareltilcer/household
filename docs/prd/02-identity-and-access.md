@@ -94,7 +94,9 @@ detection for a stolen refresh token and it is cheap. **D-14.** One exception: a
 again within a minute of its use, while the token it was exchanged for is still unused, is a retry
 whose answer was lost, and is answered with a new pair; the unused one is retired, so presenting
 it later is a reuse. **D-98.** The email is the account-takeover notice (A-11), calm, naming the
-device and linking to a password reset, which signs every device out.
+device and linking to a password reset, which signs every device out. On the web the email is
+the whole of the notice: a web session is told of a reuse by nothing, and the screen is the
+device's own, shown by the app whose sign-in ended (**D-157**).
 
 An access token authenticates a request only while its device's sign-in is live, which the server
 reads on each request as it reads a web session: a revoked device, a password reset or signing out
@@ -135,7 +137,16 @@ sync cursor, so its local replica is discarded on next contact rather than being
 D-93 the device is refused any further sync token, and its client discards the replica when it is
 refused. A sync token already issued keeps the device replicating until it expires, so that
 token's lifetime is how long a revoked device can still receive new rows: **five minutes**
-(`POST …/sync/credentials`, plan item 13), and the client asks for another before then.
+(`POST …/sync/credentials`, plan item 13), and the client asks for another before then. A web
+session that ends, by being revoked, by signing out everywhere or by its thirty days, is met by its
+browser as a `401`, and takes what the browser kept with it: the persisted cache and every
+household's replica are removed, and the address the member was at is held for the sign-in that
+follows. A request the server did not take for the app's own, `403 csrf_failed`, asks for a new
+sign-in and removes nothing (**D-156**, [ADR 0026](../adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)).
+What a browser keeps is its member's, and for no longer than their session: it is removed too
+where the session is found gone by a page that never knew its member, the account it read kept
+no longer or its cookies lapsed, and a page that finds another member signed in under it removes
+what it kept and starts again (**D-161**).
 
 **FR-ID8 — Account deletion.** Self-service, from the app. See
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §4 for what happens to households

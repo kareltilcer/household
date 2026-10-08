@@ -1,4 +1,4 @@
-import { locales, sourceLocale, type Locale } from './catalogs.ts'
+import { locales, sourceLocale, type Locale } from './locales.ts'
 
 /**
  * The language to show a member who prefers `preferences`, most preferred first, as BCP 47

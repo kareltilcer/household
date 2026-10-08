@@ -6,21 +6,9 @@ import de from '../catalogs/de.json'
 import en from '../catalogs/en.json'
 import pl from '../catalogs/pl.json'
 import sk from '../catalogs/sk.json'
-import type { MessageArgs } from './generated/messages.ts'
+import type { Catalog, Locale, MessageKey } from './locales.ts'
 
-/** The languages Household 1.0 ships in (PRD 03 §9), English first as the source. */
-export const locales = ['en', 'cs', 'sk', 'de', 'pl'] as const
-
-export type Locale = (typeof locales)[number]
-
-/** The source language: every key is defined by its English message. */
-export const sourceLocale = 'en' satisfies Locale
-
-/** A key of every catalog. */
-export type MessageKey = keyof MessageArgs
-
-/** One language's messages, by key. */
-export type Catalog = { readonly [K in MessageKey]: string }
+export { locales, sourceLocale, type Catalog, type Locale, type MessageKey } from './locales.ts'
 
 /**
  * `catalogs`, held to English's keys: each must have every key (a Catalog) and no other, so

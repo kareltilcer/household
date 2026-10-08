@@ -134,6 +134,8 @@ func (s *Service) PublicRoutes(r chi.Router) {
 	r.Post("/auth/password-reset/confirm", s.confirmReset)
 	r.Post("/auth/mfa/verify", s.verifyMFA)
 	r.Post("/auth/oauth/{provider}/callback", s.oauthCallback)
+	r.Get("/auth/oauth", s.oauthProviders)
+	r.Post(AppleReturnPath, s.appleReturn)
 }
 
 // OptionalRoutes registers the routes a person reaches signed in or not, on the API's router, behind

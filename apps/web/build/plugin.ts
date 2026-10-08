@@ -1,15 +1,15 @@
 // What the build adds to Vite's own: the policy in index.html (csp.ts), the script that sets the
-// display modes before the first paint (boot.ts), and the build's id, in index.html and in
-// build.json beside it, which is how a page learns that a newer build is live (06-clients §7).
-// And what it refuses: a dev-only page in any build but the end-to-end suite's (D-154), and a
-// base other than the origin's root.
+// display modes before the first paint (boot.ts), the service worker that shows a Web Push
+// (pushWorker.ts), and the build's id, in index.html and in build.json beside it, which is how a
+// page learns that a newer build is live (06-clients §7). And what it refuses: a dev-only page in
+// any build but the end-to-end suite's (D-154), and a base other than the origin's root.
 import { createHash } from 'node:crypto'
 import { relative, sep } from 'node:path'
 import type { HtmlTagDescriptor, Plugin } from 'vite'
 import { devPagesMode } from '../src/app/paths.ts'
 import { buildFile, buildMeta, buildPlaceholder } from '../src/update/build.ts'
 import { bootScript } from './boot.ts'
-import { metaPolicy } from './csp.ts'
+import { pushWorkerFile, pushWorkerScript } from './pushWorker.ts'
 
 function digest(...parts: (string | Uint8Array)[]): string {
   const hash = createHash('sha256')
@@ -72,6 +72,7 @@ const encoding = /[ \t]*<meta charset="utf-8" \/>\r?\n?/
 export function head(
   html: string,
   bootFile: string,
+  policy: string,
 ): { readonly html: string; readonly tags: HtmlTagDescriptor[] } {
   if (!encoding.test(html)) {
     throw new Error('index.html has no <meta charset="utf-8" />: its encoding has nothing to move')
@@ -82,7 +83,7 @@ export function head(
       { tag: 'meta', attrs: { charset: 'utf-8' }, injectTo: 'head-prepend' },
       {
         tag: 'meta',
-        attrs: { 'http-equiv': 'Content-Security-Policy', content: metaPolicy },
+        attrs: { 'http-equiv': 'Content-Security-Policy', content: policy },
         injectTo: 'head-prepend',
       },
       // A classic script, so that it runs before the stylesheet below it paints anything.
@@ -91,7 +92,12 @@ export function head(
   }
 }
 
-export function household(): Plugin {
+export interface HouseholdOptions {
+  /** The policy index.html carries, as its `<meta>` states it (csp.ts). */
+  readonly policy: string
+}
+
+export function household({ policy }: HouseholdOptions): Plugin {
   const boot = bootScript()
   const bootFile = `assets/display-${digest(boot).slice(0, 8)}.js`
   let root = ''
@@ -107,9 +113,12 @@ export function household(): Plugin {
     },
     buildStart() {
       this.emitFile({ type: 'asset', fileName: bootFile, source: boot })
+      // At the root and under one name in every build: a browser knows a service worker by its
+      // address, and one that moved would be a second worker beside the first.
+      this.emitFile({ type: 'asset', fileName: pushWorkerFile, source: pushWorkerScript() })
     },
     transformIndexHtml(html) {
-      return head(html, bootFile)
+      return head(html, bootFile, policy)
     },
     generateBundle(_, bundle) {
       if (!devPages) {
@@ -145,6 +154,25 @@ export function household(): Plugin {
         // Beside index.html, where the page asks for it by its absolute path.
         fileName: buildFile.replace(/^\//, ''),
         source: `${JSON.stringify({ id })}\n`,
+      })
+    },
+  }
+}
+
+/**
+ * The development server's half: it serves the service worker that shows a Web Push at the
+ * address the build writes it to, so that a browser on the development server subscribes as one
+ * on a build does. Nothing else of the build's is the development server's: no policy, no id.
+ */
+export function householdDev(): Plugin {
+  return {
+    name: 'household-dev',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use(`/${pushWorkerFile}`, (_request, response) => {
+        response.setHeader('Content-Type', 'text/javascript; charset=utf-8')
+        response.setHeader('Cache-Control', 'no-store')
+        response.end(pushWorkerScript())
       })
     },
   }

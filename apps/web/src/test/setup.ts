@@ -1,10 +1,17 @@
-// What every component test starts from: Testing Library's matchers, a document cleared between
-// tests, and the few parts of a browser that jsdom leaves out and the components ask for.
+// What every component test starts from: Testing Library's matchers, the five catalogs in hand,
+// a document cleared between tests, and the few parts of a browser that jsdom leaves out and the
+// components ask for.
+import { catalogs, locales } from '@household/i18n'
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
+import { holdCatalog } from '../i18n/catalogs.ts'
 
 beforeEach(() => {
+  // The app fetches the catalog of the language it starts in before it draws (main.tsx), and a
+  // language chosen later when it is chosen. A test holds all five from the start, so that a
+  // component drawn in any of them is drawn at once; one that tests the fetching drops them.
+  for (const locale of locales) holdCatalog(locale, catalogs[locale])
   // jsdom has no media queries: every test starts on a device that prefers nothing.
   vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
     matches: false,
@@ -21,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   window.localStorage.clear()
+  window.sessionStorage.clear()
   for (const attribute of [...document.documentElement.attributes]) {
     document.documentElement.removeAttribute(attribute.name)
   }

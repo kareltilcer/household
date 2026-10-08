@@ -32,6 +32,7 @@ export {
   type ProblemCode,
   type StorageCeilingReached,
   type UnreadableProblem,
+  type UpdateRequired,
   type ValidationFailure,
   type VersionConflict,
 } from './problem.ts'

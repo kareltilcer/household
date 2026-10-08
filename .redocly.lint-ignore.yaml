@@ -22,15 +22,18 @@ docs/api/openapi.yaml:
     - '#/paths/~1households~1{household_id}~1pets~1doses~1{dose_id}'
     - '#/paths/~1households~1{household_id}~1pets~1{pet_id}~1routine'
     - '#/paths/~1households~1{household_id}~1pets~1{pet_id}~1vet'
-  # Liveness and readiness probes answer 200 or 503 and nothing else, and PowerSync's keys, which
-  # anyone may read, 200 and nothing else.
+  # Liveness and readiness probes answer 200 or 503 and nothing else, and PowerSync's keys and
+  # the providers the server signs in with, which anyone may read, 200 and nothing else.
   operation-4xx-response:
     - '#/paths/~1healthz/get/responses'
     - '#/paths/~1readyz/get/responses'
     - '#/paths/~1sync~1jwks/get/responses'
-  # The realtime stream upgrades to a WebSocket: its success is 101, not a 2XX.
+    - '#/paths/~1auth~1oauth/get/responses'
+  # The realtime stream upgrades to a WebSocket: its success is 101, not a 2XX. And Apple's
+  # form is answered by sending the browser on to the web client: its success is 303.
   operation-2xx-response:
     - '#/paths/~1households~1{household_id}~1stream/get/responses'
+    - '#/paths/~1auth~1oauth~1apple~1return/post/responses'
   # The 400 update_required any operation answers a client below the minimum version, declared
   # on none of them, as the other protocol-level codes are not: the response check and the
   # clients read it by name.

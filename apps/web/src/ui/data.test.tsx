@@ -29,6 +29,7 @@ const words = {
   period: 'Electricity, this period',
   more: '6 % more than last period',
   missing: 'Two readings on the same meter produce the first figure.',
+  add: 'Add a reading',
   perMonth: 'kWh per month',
   storage: 'Storage by module',
   used: '4.1 GB of 10 GB',
@@ -413,6 +414,48 @@ describe('a metric tile', () => {
     draw(<MetricTile label={words.period} value="0" />)
     expect(screen.getByText('0')).toBeVisible()
     expect(screen.queryByText('Not enough information')).not.toBeInTheDocument()
+  })
+
+  it('offers the one action that supplies what is missing, under what is missing', async () => {
+    const onAdd = vi.fn()
+    draw(
+      <MetricTile
+        label={words.period}
+        missing={words.missing}
+        action={<Button onClick={onAdd}>{words.add}</Button>}
+      />,
+    )
+    const action = screen.getByRole('button', { name: words.add })
+    // After the sentence that names what it supplies, in the order they are read.
+    expect(
+      screen.getByText(words.missing).compareDocumentPosition(action) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    await userEvent.click(action)
+    expect(onAdd).toHaveBeenCalledTimes(1)
+  })
+
+  it('draws no action beside a figure, which is missing nothing', () => {
+    draw(
+      <MetricTile
+        label={words.period}
+        value="0"
+        unit="kWh"
+        action={<Button>{words.add}</Button>}
+      />,
+    )
+    expect(screen.getByText('0')).toBeVisible()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('draws nothing where an action would be for a member who is given none', () => {
+    const { container } = draw(
+      <MetricTile label={words.period} missing={words.missing} action={false} />,
+    )
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    // No empty box under the sentence: an action that is absent leaves no trace.
+    expect(container.querySelector('p:last-child')).toHaveTextContent(words.missing)
   })
 })
 

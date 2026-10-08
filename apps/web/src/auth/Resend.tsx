@@ -1,0 +1,168 @@
+// Sending the verification link again (`postAuthVerifyEmailResend`), from *Check your email*
+// (A-3) and from a verification link that has expired. The server answers `202` whether or not
+// the address has an account or is verified already, so what the control says once it is
+// answered is said of the system and not of the address (D-13).
+//
+// An address may ask once a minute (PRD 02 §9). The wait is drawn as a countdown on the control
+// and not as a refusal (auth.js A-3): the control keeps its place and its focus, says how long,
+// and takes no press until then. A `429` is the same wait, for as long as its `Retry-After`
+// says; one longer than a countdown is worth reading is said as the time it ends. A wait the
+// server answered a press with is said once besides, politely, to whoever cannot see the control
+// change under them: its words as the answer arrived, and no alert, a wait being no refusal.
+import { useMutation } from '@tanstack/react-query'
+import { useCallback, useEffect, useState } from 'react'
+import { useApi } from '../api/ApiProvider.tsx'
+import { ApiProblemError, problemIn, unwrap } from '../api/problem.ts'
+import { deviceTimeZone, useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
+import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
+import a11y from '../ui/a11y.module.css'
+import { Banner } from '../ui/Banner.tsx'
+import { Button } from '../ui/Button.tsx'
+import { checkEmail, EmailField, refusedEmail, type EmailFault } from './fields.tsx'
+import { Form } from './Screen.tsx'
+
+/** How long an address waits between two links: the server's own minute. */
+const cooldown = 60_000
+
+/** The longest wait counted down in seconds. A longer one is said as the time it ends. */
+const countedDown = 90
+
+interface Wait {
+  /** When the control may be pressed again, in milliseconds since the epoch. */
+  readonly until: number | undefined
+  /** The clock as it was last read: the countdown is drawn from the two. */
+  readonly now: number
+}
+
+/**
+ * A wait, counted down as its seconds pass. It begins with what is left of the minute a link
+ * sent at `sentAt` began: nothing, on a page loaded again after it, and never more than the
+ * minute, whatever the device's clock has done since.
+ */
+function useWait(sentAt: number | undefined) {
+  const [wait, setWait] = useState<Wait>(() => {
+    const now = Date.now()
+    const until = sentAt === undefined ? now : Math.min(sentAt, now) + cooldown
+    return { until: until > now ? until : undefined, now }
+  })
+  const waitUntil = useCallback((until: number) => {
+    setWait({ until, now: Date.now() })
+  }, [])
+  const { until } = wait
+  useEffect(() => {
+    if (until === undefined) return undefined
+    const timer = window.setInterval(() => {
+      const now = Date.now()
+      setWait((current) => ({ ...current, now }))
+      if (now >= until) window.clearInterval(timer)
+    }, 1000)
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [until])
+  const seconds = until === undefined ? 0 : Math.max(0, Math.ceil((until - wait.now) / 1000))
+  return { seconds, until, waitUntil }
+}
+
+export interface ResendProps {
+  /** The address the link goes to, where the screen knows it. Left out, a field asks for it. */
+  readonly to?: string | undefined
+  /** What the control says while it can be pressed. */
+  readonly label: string
+  /**
+   * When a link was last sent to the address, as `Date.now()` counts, where the screen knows:
+   * the control starts out waiting what is left of its minute.
+   */
+  readonly sentAt?: number | undefined
+}
+
+export function Resend({ to, label, sentAt }: ResendProps) {
+  const t = useTranslate()
+  const format = useFormat()
+  const api = useApi()
+  const problemText = useProblemText()
+  const [typed, setTyped] = useState('')
+  const [fault, setFault] = useState<{ readonly email: EmailFault }>()
+  const { seconds, until, waitUntil } = useWait(sentAt)
+  // The control's words as a limit's answer arrived, for the region that says them once.
+  const [limited, setLimited] = useState('')
+
+  /** What the control says with `left` seconds to wait, until `end`. */
+  const waitingWords = (left: number, end: number) =>
+    left <= countedDown
+      ? t('auth.verify.resend_in', { seconds: left })
+      : t('auth.verify.resend_at', { time: format.time(new Date(end), deviceTimeZone()) })
+
+  const resend = useMutation({
+    ...askedNow,
+    mutationFn: async (email: string) => {
+      unwrap(await api.POST('/auth/verify-email/resend', { body: { email } }))
+    },
+    onSuccess: () => {
+      waitUntil(Date.now() + cooldown)
+    },
+    onError: (error) => {
+      if (problemIn(error)?.status !== 429) return
+      const at = error instanceof ApiProblemError ? error.retryAt?.getTime() : undefined
+      const now = Date.now()
+      const end = at ?? now + cooldown
+      waitUntil(end)
+      setLimited(waitingWords(Math.max(0, Math.ceil((end - now) / 1000)), end))
+    },
+  })
+
+  const waiting = seconds > 0
+  const submit = () => {
+    // Enter in the field asks too, and is answered as a press on the control is.
+    if (waiting) return
+    const email = to ?? typed.trim()
+    const found = to === undefined ? checkEmail(email) : undefined
+    if (found !== undefined) {
+      resend.reset()
+      setFault({ email: found })
+      return
+    }
+    setFault(undefined)
+    setLimited('')
+    resend.mutate(email)
+  }
+
+  const emailFault = fault?.email ?? (to === undefined ? refusedEmail(resend.error) : undefined)
+  // A limit is the wait, said on the control. Anything else that is no field's is said here.
+  const refused =
+    resend.error !== null && problemIn(resend.error)?.status !== 429 && emailFault === undefined
+  const words = !waiting || until === undefined ? label : waitingWords(seconds, until)
+  return (
+    <>
+      {/* On the page from the first, so that what is put in it is said: for as long as the wait
+          it tells of, and not a word of the countdown's own. */}
+      <p className={a11y.visuallyHidden} role="status">
+        {waiting ? limited : ''}
+      </p>
+      {resend.isSuccess ? (
+        <Banner tone="info" announce>
+          {t('auth.verify.resent')}
+        </Banner>
+      ) : null}
+      {refused ? (
+        <Banner tone="danger" announce>
+          {problemText(resend.error)}
+        </Banner>
+      ) : null}
+      <Form onSubmit={submit} busy={resend.isPending} refused={fault ?? resend.error}>
+        {to === undefined ? (
+          <EmailField value={typed} onChange={setTyped} fault={emailFault} />
+        ) : null}
+        <Button
+          type="submit"
+          variant={to === undefined ? 'primary' : 'secondary'}
+          loading={resend.isPending}
+          aria-disabled={waiting}
+        >
+          {words}
+        </Button>
+      </Form>
+    </>
+  )
+}

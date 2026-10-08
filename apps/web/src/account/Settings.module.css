@@ -1,0 +1,224 @@
+/* A settings page of a member's own account (A-19, A-12, A-20, F-20): a title, and sections with
+   a heading each, in one column that reads comfortably on a desk and is the window's on a phone.
+   Its widths are in rem, so the column widens with the text: at 200 % it is the window's, and
+   nothing in it is wider than the column. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 44rem;
+  min-width: 0;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-3) var(--space-8);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  composes: title1 from '../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+.lead {
+  composes: bodyLg from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* A section: a rule, its heading, and what it holds, one under another. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--divider);
+}
+
+.heading {
+  composes: title3 from '../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+.text {
+  overflow-wrap: anywhere;
+}
+
+.note {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* A form's fields, one under another, no wider than a line of them reads well. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 28rem;
+  min-width: 0;
+}
+
+/* Where the focus goes once the row a confirmation was opened from has left its list: no
+   control, and so it shows no ring of its own. */
+.view {
+  min-width: 0;
+}
+
+.view:focus {
+  outline: none;
+}
+
+/* A control with the sentence that goes with it. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: var(--dens-row-min);
+  overflow-wrap: anywhere;
+}
+
+/* A member's picture, or their initials where they have none, beside what changes it. */
+.picture {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.portrait {
+  flex: none;
+  width: 4rem;
+  height: 4rem;
+  object-fit: cover;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+}
+
+/* What a row of a list says of itself beside its name: a role, or that it is this browser. */
+.badge {
+  composes: caption from '../styles/type.module.css';
+  flex: none;
+  padding: var(--space-05) var(--space-1);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+}
+
+/* Two fields side by side while both fit, and one under the other when they do not. */
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.pair > * {
+  flex: 1 1 9rem;
+}
+
+/* The second step's square (A-5). It is drawn dark on light in either theme, in a light scope of
+   its own (ADR 0024): a reader of such a square expects that, and not every one reads the other. */
+.qr {
+  display: flex;
+  align-self: flex-start;
+  width: 12rem;
+  max-width: 100%;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  fill: var(--text-primary);
+}
+
+/* The key to type, and a recovery code: the mono face, in groups a reader can keep their place
+   in, and broken only between groups. */
+.key {
+  composes: num from '../styles/type.module.css';
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-15);
+  min-width: 0;
+}
+
+.codes {
+  composes: num from '../styles/type.module.css';
+  display: grid;
+  /* As many columns as fit, and one where a code is all the column there is room for. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.code {
+  white-space: nowrap;
+}
+
+/* What an account's deletion does to each household: its name, the sentence, and its choice. */
+.situations {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.situation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+  padding: var(--space-15) 0;
+  border-block-end: 1px solid var(--divider);
+}
+
+.situation:last-child {
+  border-block-end: 0;
+}
+
+/* The recovery codes on paper (A-6): the codes and what says what they are, and nothing of the
+   shell around them or of the controls beside them. The rule holds only while the codes are on
+   the page, so no other screen prints differently for it. */
+@media print {
+  :root:has(.codes) :is(nav, header),
+  :root:has(.codes) .unprinted {
+    display: none;
+  }
+}

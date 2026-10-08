@@ -56,10 +56,11 @@ and on again, which seals a new secret and makes new codes under the new key.
 client below it gets *please update* on every request (PRD 06 §7). Unset, every version is served.
 Raise the mobile minimum only once the version it names is live in both stores, and the server has
 served the previous minor for six months. The web app names itself by the version in
-`apps/web/package.json`, which is `0.0.0` until a release raises it: leave the web minimum unset
-until the build that is live names the version it would be raised to, or every web client is
-refused, the newest with the rest
-([ADR 0025](../adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)).
+`apps/web/package.json` with its build's id after it, `web/0.1.0+3f2a…`, and the version is raised
+only by a change after which older builds must be refused (D-158): raise the web minimum to that
+version once the build that names it is live, and not before, or every web client is refused, the
+newest with the rest. A web client below the minimum draws *please update*, whose action is a reload
+([ADR 0026](../adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)).
 
 ## Google
 
@@ -78,13 +79,20 @@ refused, the newest with the rest
    `HOUSEHOLD_APPLE_PRIVATE_KEY` to the `.p8` file's contents, the PEM block whole.
 
 Apple returns a person who is asked for an address or a name with a form posted to the return URL,
-not a redirect with a query: the page at that URL must accept a `POST`.
+not a redirect with a query: the page at that URL must accept a `POST`. The web client is static
+files and accepts none, so its return URL for Apple is the API's own,
+`https://app.household.example/api/v1/auth/oauth/apple/return`, which reads the form and sends the
+browser on to the web client's `sign-in/apple` with what Apple sent in the fragment
+([ADR 0026](../adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)). Register that address
+as the Services ID's return URL. It is the one route that takes an unsafe request from another
+site's origin, Apple's `https://appleid.apple.com`, and it reads no session.
 
 ## The redirect URIs
 
 `HOUSEHOLD_OAUTH_REDIRECT_URIS` lists every URI a provider may send a person back to, comma-separated,
-each matched exactly: no prefix, no wildcard. The web client's, `https://app.household.example/sign-in/google`,
-is typical. The mobile app's is an `https` URL too, one the app opens as a universal link (iOS) and an
+each matched exactly: no prefix, no wildcard. The web client sends two, both at its own origin:
+`https://app.household.example/sign-in/google` for Google, and
+`https://app.household.example/api/v1/auth/oauth/apple/return` for Apple (above). The mobile app's is an `https` URL too, one the app opens as a universal link (iOS) and an
 app link (Android), such as `https://app.household.example/sign-in/mobile`: the server redeems the
 code as the web client Google knows and the Services ID Apple knows, and neither accepts a custom
 scheme such as `household://` as a return URL. A provider configured with no URI stops the server at
@@ -93,7 +101,8 @@ sees it.
 
 A provider is configured whole or not at all: a client id without its secret, or Apple without its
 key, stops the server at start, naming what is missing. A provider not configured answers `404`, and
-the clients do not offer it.
+the clients do not offer it: `GET /api/v1/auth/oauth` names the ones that are, and a sign-in screen
+draws those and no other.
 
 A provider that refuses the server itself, `invalid_client` or `unauthorized_client`, because the
 Google secret was rotated at Google or the Apple key was revoked, fails every sign-in with it `500`,
