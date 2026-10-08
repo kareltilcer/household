@@ -59,7 +59,7 @@ import { Stepper, TextArea, TextField } from '../../ui/Field.tsx'
 import { useToast } from '../../ui/Toast.tsx'
 import { cx } from '../../ui/cx.ts'
 import { useOnline } from '../../ui/online.ts'
-import { useMembers, useOff, useReread, type Invitation } from '../data.ts'
+import { useOff, useOwnerNames, useReread, type Invitation } from '../data.ts'
 import { GrantMatrix } from '../GrantMatrix.tsx'
 import { changedModules, defaultsFor, matrixOrder, type Levels } from '../grants.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
@@ -213,12 +213,7 @@ function Made({ url, made }: { readonly url: string; readonly made: Invitation }
 function ForAnOwner() {
   const t = useTranslate()
   const format = useFormat()
-  const household = useHousehold()
-  const members = useMembers(household.id)
-  const owners = (members.data ?? [])
-    .filter((member) => member.role === 'owner')
-    .map((member) => member.display_name ?? '')
-    .filter((name) => name !== '')
+  const owners = useOwnerNames(useHousehold().id)
   return (
     <p className={account.text}>
       {owners.length === 0
@@ -551,7 +546,13 @@ function Composer() {
       )
       foot = (
         <div className={account.actions}>
-          <Button type="submit" form={formId} variant="primary" loading={send.isPending}>
+          <Button
+            type="submit"
+            form={formId}
+            variant="primary"
+            // Busy, once an invitation is sent, until its list has taken this screen's place.
+            loading={send.isPending || (send.isSuccess && lost === undefined)}
+          >
             {kind === 'email' ? t('household.invite.send') : t('household.invite.make')}
           </Button>
           <Link className={account.link} to={inHousehold.invitations(household.id)}>

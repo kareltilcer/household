@@ -49,18 +49,13 @@ export function MemberRemove({ subject }: { readonly subject: Subject }) {
   // Whether the member was removed, and the page is on its way to the list. What is kept of
   // them is dropped, and the household read again, as this page leaves and not a moment sooner.
   const removed = useRef(false)
-  const forget = useRef<() => void>(() => undefined)
-  useEffect(() => {
-    forget.current = () => {
-      queries.removeQueries({ queryKey: memberKey(household.id, subject.id), exact: true })
-      void reread()
-    }
-  }, [queries, reread, household.id, subject.id])
   useEffect(
     () => () => {
-      if (removed.current) forget.current()
+      if (!removed.current) return
+      queries.removeQueries({ queryKey: memberKey(household.id, subject.id), exact: true })
+      void reread()
     },
-    [],
+    [queries, reread, household.id, subject.id],
   )
 
   const remove = useMutation({
@@ -119,6 +114,8 @@ export function MemberRemove({ subject }: { readonly subject: Subject }) {
         <div className={styles.actions}>
           <Button
             variant="danger"
+            // Busy, once they are removed, until the list has taken this page's place.
+            loading={remove.isSuccess}
             onClick={() => {
               refusals.clear()
               setAsking(true)

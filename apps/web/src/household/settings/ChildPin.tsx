@@ -20,7 +20,7 @@ import { PasswordField } from '../../ui/Field.tsx'
 import { useToast } from '../../ui/Toast.tsx'
 import { useReread, type Membership } from '../data.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
-import { memberKey, pinShape, type Refusals, type Subject } from './member.ts'
+import { memberKey, pinShape, unlocked, type Refusals, type Subject } from './member.ts'
 import { Refused } from './MemberRefused.tsx'
 
 export function ChildPin({
@@ -58,9 +58,7 @@ export function ChildPin({
     },
     onSuccess: () => {
       // A new PIN unlocks the profile: the server's word, drawn before the member is read again.
-      queries.setQueryData<Membership>(memberKey(household.id, subject.id), (was) =>
-        was?.child == null ? was : { ...was, child: { ...was.child, pin_locked: false } },
-      )
+      queries.setQueryData<Membership>(memberKey(household.id, subject.id), unlocked)
       // Never the PIN itself: it is said by the owner, in person.
       toast({ message: t('household.child.pin.done', { name }) })
       onClose()

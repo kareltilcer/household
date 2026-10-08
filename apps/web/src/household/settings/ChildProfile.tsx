@@ -33,7 +33,7 @@ import { useHousehold } from '../HouseholdContext.tsx'
 import { ChildGraduate } from './ChildGraduate.tsx'
 import { ChildPicture } from './ChildPicture.tsx'
 import { ChildPin } from './ChildPin.tsx'
-import { memberKey, useFocusHandedOn, useRefusals, type Subject } from './member.ts'
+import { memberKey, unlocked, useFocusHandedOn, useRefusals, type Subject } from './member.ts'
 import { Refused } from './MemberRefused.tsx'
 import { Section, useStanding } from './Page.tsx'
 
@@ -63,9 +63,7 @@ export function ChildProfile({ subject }: { readonly subject: Subject }) {
     },
     onSuccess: () => {
       // The server's word that the lock is lifted, drawn before the member is read again.
-      queries.setQueryData<Membership>(memberKey(household.id, subject.id), (was) =>
-        was?.child == null ? was : { ...was, child: { ...was.child, pin_locked: false } },
-      )
+      queries.setQueryData<Membership>(memberKey(household.id, subject.id), unlocked)
       toast({ message: t('household.child.unlock.done', { name }) })
       void reread()
     },

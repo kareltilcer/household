@@ -39,6 +39,34 @@ describe.each(locales)('catalogs/%s.json', (locale) => {
   })
 })
 
+// A row's own control is drawn as a word and named in full for what it acts on (the web's
+// `RowAction` and `RowLink`). What is drawn is what somebody who speaks to their device says to
+// press it, so the name holds the drawn words together and in their order (WCAG 2.1, 2.5.3):
+// *Send again* is in *Send again to {email}*, and not in *Send the invitation to {email} again*.
+describe('a control drawn as a word and named in full', () => {
+  const drawnInNamed: readonly (readonly [string, string])[] = [
+    ['account.devices.rename.action', 'account.devices.rename.named'],
+    ['account.devices.sign_out', 'account.devices.sign_out_named'],
+    ['account.households.leave', 'household.leave.action'],
+    ['account.households.open', 'account.households.open_named'],
+    ['account.households.waiting.open', 'account.households.waiting.open_named'],
+    ['household.invitations.resend.word', 'household.invitations.resend.named'],
+    ['household.invitations.withdraw.word', 'household.invitations.withdraw.named'],
+    ['household.invitations.withdraw.word', 'household.invitations.withdraw.named_link'],
+    ['household.modules.turn_off.word', 'household.modules.turn_off.named'],
+    ['household.modules.turn_on.word', 'household.modules.turn_on.named'],
+  ]
+
+  it.each(locales)('holds the word it is drawn as in its name, in %s', (locale) => {
+    const catalog: Readonly<Record<string, string>> = catalogs[locale]
+    const apart = drawnInNamed.filter(([drawn, named]) => {
+      const word = (catalog[drawn] ?? '').toLocaleLowerCase(locale)
+      return word === '' || !(catalog[named] ?? '').toLocaleLowerCase(locale).includes(word)
+    })
+    expect(apart).toEqual([])
+  })
+})
+
 describe('the module names', () => {
   it("are one per module of the contract's ModuleKeyValue", () => {
     const contract: unknown = parse(readFileSync(join(root, 'docs/api/openapi.yaml'), 'utf8'))

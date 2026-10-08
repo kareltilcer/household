@@ -444,7 +444,7 @@ test('an invitation sent again goes out with a new link, and the one before open
   const first = await invite(page, household, address)
   await open(page, inHousehold.invitations(household))
   const row = rows(page).filter({ hasText: address })
-  const again = row.getByRole('button', { name: `Send the invitation to ${address} again` })
+  const again = row.getByRole('button', { name: `Send again to ${address}` })
   await again.click()
   // Sent, which is said with what it does to the link before. The row and its control stay
   // where they were, and the focus with them.
@@ -568,7 +568,7 @@ test('a decline by somebody who was a member once and left is told to the owner,
   await expect(page.getByRole('link', { name: `Invite ${back.email} again` })).toBeVisible()
   const declined = rows(page).filter({ hasText: 'Declined' })
   await expect(declined).toHaveCount(1)
-  await declined.getByRole('button', { name: `Send the invitation to ${back.email} again` }).click()
+  await declined.getByRole('button', { name: `Send again to ${back.email}` }).click()
   await expectSaid(page, `Sent again to ${back.email}.`)
   // It waits once more, and the decline is news no longer.
   await expect(page.getByText(`${back.email} declined the invitation`)).toHaveCount(0)

@@ -3,7 +3,7 @@
 // above it; and its states.
 import { onlineManager } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { deviceTimeZone } from '../api/problemText.ts'
 import { inHousehold, paths } from '../app/paths.ts'
 import { ownName, timeZones } from '../i18n/names.ts'
@@ -32,6 +32,12 @@ const unreachable =
 function deviceReads(...languages: string[]): void {
   vi.spyOn(window.navigator, 'languages', 'get').mockReturnValue(languages)
 }
+
+// A device that names a country Household has a profile of, as most do: a test of one that
+// names another, or none, says so itself.
+beforeEach(() => {
+  deviceReads('cs-CZ', 'en')
+})
 
 async function creating(server: HouseholdServer = createServer()) {
   const opened = open(paths.householdNew.path, server)
@@ -96,8 +102,6 @@ describe('what this device says of where its member is', () => {
 
 describe('creating a household', () => {
   it('asks for the name alone, and opens with the rest read from the device and the countries', async () => {
-    // No profile is of a country this device's languages name: the first one listed stands.
-    deviceReads('en-US', 'en')
     await form()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(document.title).toBe(`${title} · Household`)
@@ -118,9 +122,9 @@ describe('creating a household', () => {
     const country = field('Country')
     expect(optionsOf(country)).toEqual(['Czechia', 'Germany', 'United Kingdom'])
     expect(country).toHaveValue('CZ')
-    // It was not read from the device, and does not say it was.
+    expect(country).not.toBeRequired()
     expect(country).toHaveAccessibleDescription(
-      'It decides which tariff presets, document types and statutory dates are offered.',
+      'Read from this device. It decides which tariff presets, document types and statutory dates are offered.',
     )
 
     const zone = field('Timezone')
@@ -155,6 +159,50 @@ describe('creating a household', () => {
     // Units and the first day of the week are the country's own, and are not asked.
     expect(screen.getAllByRole('combobox')).toHaveLength(4)
     expect(screen.getByRole('button', { name: 'Create the household' })).toBeInTheDocument()
+  })
+
+  // A browser in English anywhere but Britain: nothing to confirm, so the country is asked. The
+  // first of the list is chosen by nobody, nor is the currency that would follow it.
+  it('asks for the country too where the device names none, and chooses none for its member', async () => {
+    deviceReads('en-US', 'en')
+    const server = createServer()
+    made(server)
+    const { user } = await form(server)
+    // The name is not all that is asked, and nothing says it is.
+    expect(screen.queryByText(/^Only the name is asked\./)).not.toBeInTheDocument()
+    const country = screen.getByRole('combobox', { name: /^Country/ })
+    expect(country).toHaveValue('')
+    expect(country).toHaveDisplayValue('Choose a country')
+    expect(country).toBeRequired()
+    // It was not read from the device, and does not say it was.
+    expect(country).toHaveAccessibleDescription(
+      'It decides which tariff presets, document types and statutory dates are offered.',
+    )
+    // The currency follows the country: there is none yet for it to follow.
+    expect(screen.queryByRole('combobox', { name: 'Money is counted in' })).not.toBeInTheDocument()
+
+    await user.type(screen.getByRole('textbox', { name: /^Name/ }), 'Novákovi')
+    await user.click(screen.getByRole('button', { name: 'Create Novákovi' }))
+    expect(country).toHaveAccessibleDescription(
+      expect.stringContaining('Choose the country the household is in.'),
+    )
+    expect(country).toBeInvalid()
+    await waitFor(() => {
+      expect(country).toHaveFocus()
+    })
+    expect(server.to('POST /households')).toHaveLength(0)
+
+    await user.selectOptions(country, 'Germany')
+    expect(field('Money is counted in')).toHaveValue('EUR')
+    await user.click(screen.getByRole('button', { name: 'Create Novákovi' }))
+    await waitFor(() => {
+      expect(server.to('POST /households')).toHaveLength(1)
+    })
+    expect(await server.body('POST /households')).toMatchObject({
+      name: 'Novákovi',
+      country: 'DE',
+      base_currency: 'EUR',
+    })
   })
 
   it('reads the country from the device’s languages, and says so until it is changed', async () => {

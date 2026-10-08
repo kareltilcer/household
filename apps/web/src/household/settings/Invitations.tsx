@@ -88,20 +88,23 @@ interface Offered {
 /**
  * What is offered on `invitation`. One whose address another invitation waits for, or is a
  * member's, is not sent again: the server answers that `404`, and the row to send is the one
- * that waits.
+ * that waits. `joined` are the members' addresses alone: one that waits is its own address's
+ * to send, and still is not sent to somebody who came in by another way meanwhile.
  */
 function offeredOn(
   invitation: Invitation,
   status: InvitationStatus,
   settled: ReadonlySet<string>,
+  joined: ReadonlySet<string>,
 ): Offered {
-  const address = addressOf(invitation)
+  const address = addressOf(invitation)?.toLowerCase()
   return {
     withdraw: status === 'pending' || status === 'declined' || status === 'expired',
     resend:
-      address !== null &&
+      address !== undefined &&
       status !== 'accepted' &&
-      (status === 'pending' || !settled.has(address.toLowerCase())),
+      !joined.has(address) &&
+      (status === 'pending' || !settled.has(address)),
   }
 }
 
@@ -229,6 +232,7 @@ interface Refused {
 
 function Sent() {
   const t = useTranslate()
+  const format = useFormat()
   const api = useApi()
   const toast = useToast()
   const queries = useQueryClient()
@@ -260,15 +264,18 @@ function Sent() {
   // Whose address is a member's now, as an owner reads the members: somebody who joined by an
   // invitation and left is asked again as anybody is, and their decline is told as anybody's.
   const people = useMembers(household.id).data
-  const settled = useMemo(
+  const addresses = useMemo(
     () =>
-      settledAddresses(
-        listed ?? [],
-        now,
-        people?.flatMap((each) => (each.email == null || each.email === '' ? [] : [each.email])),
+      people?.flatMap((each) =>
+        each.email == null || each.email === '' ? [] : [each.email.toLowerCase()],
       ),
-    [listed, now, people],
+    [people],
   )
+  const settled = useMemo(
+    () => settledAddresses(listed ?? [], now, addresses),
+    [listed, now, addresses],
+  )
+  const joined = useMemo(() => new Set(addresses), [addresses])
 
   const [target, setTarget] = useState<Target | null>(null)
   const [refused, setRefused] = useState<Refused | null>(null)
@@ -296,13 +303,13 @@ function Sent() {
     if (
       standing.changes &&
       row !== undefined &&
-      offeredOn(row, statusAt(row, now), settled)[was.control]
+      offeredOn(row, statusAt(row, now), settled, joined)[was.control]
     ) {
       return
     }
     pressed.current = null
     refocus(view.current)
-  }, [listed, now, settled, standing.changes])
+  }, [listed, now, settled, joined, standing.changes])
 
   const withdraw = useMutation({
     ...askedNow,
@@ -448,7 +455,12 @@ function Sent() {
                       tone="info"
                       title={
                         who === null
-                          ? t('household.invitations.declined.title_link')
+                          ? t('household.invitations.declined.title_link', {
+                              day:
+                                each.created_at === undefined
+                                  ? ''
+                                  : format.dayOf(each.created_at, zone),
+                            })
                           : t('household.invitations.declined.title', { who })
                       }
                       actions={
@@ -475,7 +487,7 @@ function Sent() {
                   {list.map((each) => {
                     const status = statusAt(each, now)
                     const offered = changes
-                      ? offeredOn(each, status, settled)
+                      ? offeredOn(each, status, settled, joined)
                       : { withdraw: false, resend: false }
                     return (
                       <Row

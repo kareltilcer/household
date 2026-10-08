@@ -51,6 +51,17 @@ export function useMembers(household: string): UseQueryResult<Membership[]> {
 }
 
 /**
+ * The names of the household's owners, in the order they joined: whose it is to change what a
+ * member may only read. Nobody's while the members are unread.
+ */
+export function useOwnerNames(household: string): string[] {
+  return (useMembers(household).data ?? [])
+    .filter((member) => member.role === 'owner')
+    .map((member) => member.display_name ?? '')
+    .filter((name) => name !== '')
+}
+
+/**
  * The invitations a household sent, newest first, in every status. A member who holds `none` on
  * household settings is answered `404`: the invitations are what `view` on it unlocks.
  */

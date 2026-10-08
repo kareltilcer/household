@@ -170,7 +170,7 @@ describe('the invitations a household sent', () => {
     expect(within(several).getByText('A link, passed on by hand')).toBeInTheDocument()
     expect(within(several).getByText('Joined with this link: 2 of 4')).toBeInTheDocument()
     // A link has no address to send to again, and is withdrawn by the day it was made.
-    expect(within(several).queryByRole('button', { name: /again$/ })).not.toBeInTheDocument()
+    expect(within(several).queryByRole('button', { name: /^Send again/ })).not.toBeInTheDocument()
     expect(
       within(several).getByRole('button', { name: 'Withdraw the link made on Jan 1, 2099' }),
     ).toBeInTheDocument()
@@ -207,7 +207,7 @@ describe('the invitations a household sent', () => {
       within(await rowOf(who))
         .queryAllByRole('button')
         .map((button) => button.textContent)
-    const again = (who: string) => `Send the invitation to ${who} againSend again`
+    const again = (who: string) => `Send again to ${who}Send again`
     const withdraw = (who: string) => `Withdraw the invitation to ${who}Withdraw`
     expect(await controls('babicka@example.cz')).toEqual([
       again('babicka@example.cz'),
@@ -407,7 +407,9 @@ describe('the notice of an invitation that was declined', () => {
     const server = createServer()
     server.invitations = [{ ...link, status: 'declined' }]
     const { user } = await list(server)
-    expect(await screen.findByText('Somebody who had the link declined')).toBeInTheDocument()
+    expect(
+      await screen.findByText(/^Somebody who had the link made on .+ declined$/),
+    ).toBeInTheDocument()
     expect(
       screen.getByText(/^Nothing was shared with them, and the link is closed for everybody/),
     ).toBeInTheDocument()
@@ -429,7 +431,7 @@ describe('the notice of an invitation that was declined', () => {
     const old = await rowOf('petr@example.cz')
     expect(screen.queryByText(/declined the invitation$/)).not.toBeInTheDocument()
     expect(within(old).getByText('Declined')).toBeInTheDocument()
-    expect(within(old).queryByRole('button', { name: /again$/ })).not.toBeInTheDocument()
+    expect(within(old).queryByRole('button', { name: /^Send again/ })).not.toBeInTheDocument()
     expect(
       within(old).getByRole('button', { name: 'Withdraw the invitation to petr@example.cz' }),
     ).toBeInTheDocument()
@@ -445,7 +447,7 @@ describe('the notice of an invitation that was declined', () => {
     expect(await screen.findByText('teta@example.cz declined the invitation')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Invite teta@example.cz again' })).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Send the invitation to teta@example.cz again' }),
+      screen.getByRole('button', { name: 'Send again to teta@example.cz' }),
     ).toBeInTheDocument()
   })
 
@@ -460,7 +462,23 @@ describe('the notice of an invitation that was declined', () => {
     await waitFor(() => {
       expect(screen.queryByText(/declined the invitation$/)).not.toBeInTheDocument()
     })
-    expect(within(row).queryByRole('button', { name: /again$/ })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: /^Send again/ })).not.toBeInTheDocument()
+    expect(
+      within(row).getByRole('button', { name: 'Withdraw the invitation to Klara@Example.cz' }),
+    ).toBeInTheDocument()
+  })
+
+  // One that still waits for somebody who came in by another way meanwhile, a link, is sent to
+  // nobody: the server would answer that nothing is there to send. It is withdrawn as any is.
+  it('offers no sending again of one that waits for an address that is a member’s by now', async () => {
+    const server = createServer()
+    server.invitations = [invitation({ ...waiting, email: 'Klara@Example.cz' })]
+    await list(server)
+    const row = await rowOf('Klara@Example.cz')
+    // Once the members are read: until then nothing says whose the address is.
+    await waitFor(() => {
+      expect(within(row).queryByRole('button', { name: /^Send again/ })).not.toBeInTheDocument()
+    })
     expect(
       within(row).getByRole('button', { name: 'Withdraw the invitation to Klara@Example.cz' }),
     ).toBeInTheDocument()
@@ -665,9 +683,7 @@ describe('sending an invitation again', () => {
       return new Response(null, { status: 202 })
     })
     const { user } = await list(server)
-    await user.click(
-      await screen.findByRole('button', { name: 'Send the invitation to stryc@example.cz again' }),
-    )
+    await user.click(await screen.findByRole('button', { name: 'Send again to stryc@example.cz' }))
     expect(
       await screen.findByText(
         'Sent again to stryc@example.cz. The link sent before no longer works; this one works for 14 days.',
@@ -685,9 +701,7 @@ describe('sending an invitation again', () => {
     server.invitations = [revoked]
     server.on(`POST ${invitations}/${id(4)}/resend`, () => problem(404, 'not_found'))
     const { user } = await list(server)
-    await user.click(
-      await screen.findByRole('button', { name: 'Send the invitation to soused@example.cz again' }),
-    )
+    await user.click(await screen.findByRole('button', { name: 'Send again to soused@example.cz' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'That is no longer there to change. The page shows how things stand now.',
     )
@@ -713,12 +727,10 @@ describe('sending an invitation again', () => {
     server.on(`POST ${invitations}/${id(4)}/resend`, () => new Response(null, { status: 202 }))
     const { user } = await list(server)
     const first = await screen.findByRole('button', {
-      name: 'Send the invitation to stryc@example.cz again',
+      name: 'Send again to stryc@example.cz',
     })
     await user.click(first)
-    await user.click(
-      screen.getByRole('button', { name: 'Send the invitation to soused@example.cz again' }),
-    )
+    await user.click(screen.getByRole('button', { name: 'Send again to soused@example.cz' }))
     expect(await screen.findByText(/^Sent again to soused@example\.cz\./)).toBeInTheDocument()
     expect(first).toHaveAttribute('aria-busy', 'true')
     await user.click(first)
@@ -740,7 +752,7 @@ describe('sending an invitation again', () => {
     const { user } = await list(server)
     await user.click(
       await screen.findByRole('button', {
-        name: 'Send the invitation to babicka@example.cz again',
+        name: 'Send again to babicka@example.cz',
       }),
     )
     // The answer to the press: said as it arrives, its words drawn a moment after its region.
@@ -771,7 +783,7 @@ describe('sending an invitation again', () => {
     const { user } = await list(server)
     await user.click(
       await screen.findByRole('button', {
-        name: 'Send the invitation to babicka@example.cz again',
+        name: 'Send again to babicka@example.cz',
       }),
     )
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -785,7 +797,7 @@ describe('sending an invitation again', () => {
     server.on(`POST ${invitations}/${id(1)}/resend`, () => Promise.reject(new TypeError('offline')))
     const { user } = await list(server)
     const again = await screen.findByRole('button', {
-      name: 'Send the invitation to babicka@example.cz again',
+      name: 'Send again to babicka@example.cz',
     })
     onlineManager.setOnline(false)
     try {

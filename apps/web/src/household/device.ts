@@ -8,7 +8,8 @@ import type { Country } from './data.ts'
 /**
  * The country of `countries` that `languages` name first: the region each tag carries, or the
  * one its language is most likely spoken in where it carries none (`cs` is Czechia's). Undefined
- * where none of them is a country Household has a profile of.
+ * where none of them is a country Household has a profile of: the country is then asked, and no
+ * other stands in for it (D-172).
  */
 export function deviceCountry(
   countries: readonly Country[],

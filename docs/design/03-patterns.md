@@ -288,7 +288,9 @@ specify the flow; this is the flow.
 1. **Register or sign in.** Google / Apple / email. Apple is mandatory if any third-party sign-in
    is offered ([FR-ID2](../prd/02-identity-and-access.md)).
 2. **Create the household** — name, country, timezone, locale, base currency. Country, timezone
-   and currency are **pre-filled from the device and confirmed**, not asked.
+   and currency are **pre-filled from the device and confirmed**, not asked. A device that names
+   no country the product has a profile of is asked for one: none is chosen for its member
+   ([D-172](../prd/09-decisions.md)).
 3. **"What brought you here?"** — pick one module. This chooses the starting dashboard layout and
    the module the app opens into. It is **not** a module-enablement screen; everything stays on.
 4. **Do the thing.** Straight into that module's capture surface.

@@ -19,7 +19,7 @@ import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { Banner } from '../../ui/Banner.tsx'
 import { cx } from '../../ui/cx.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
-import { useMembers, writes } from '../data.ts'
+import { useOwnerNames, writes } from '../data.ts'
 import styles from './Settings.module.css'
 
 export { Section }
@@ -84,7 +84,7 @@ function StandingNote() {
   const format = useFormat()
   const household = useHousehold()
   const standing = useStanding()
-  const members = useMembers(household.id)
+  const owners = useOwnerNames(household.id)
   if (!standing.writes) {
     return (
       <Banner tone="warning">
@@ -95,10 +95,6 @@ function StandingNote() {
     )
   }
   if (!standing.owner) {
-    const owners = (members.data ?? [])
-      .filter((member) => member.role === 'owner')
-      .map((member) => member.display_name ?? '')
-      .filter((name) => name !== '')
     return (
       <Banner tone="neutral">
         {owners.length === 0

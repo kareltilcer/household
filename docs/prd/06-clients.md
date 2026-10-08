@@ -65,7 +65,8 @@ every member's to read (**D-167**).
 
 **Where the web opens.** A member is opened at the household they were last in, or their first
 (D-162); one who is in none, at making one, which is the first thing a new account does, and a
-child profile at its account (**D-168**). A household that was just made asks *what brought you
+child profile at its account (**D-168**). Making one asks for its country too where the device
+names none, and chooses none for its member (**D-172**). A household that was just made asks *what brought you
 here?* where the build has a module that takes a first record, and opens at its Home where it
 has none yet (**D-169**).
 

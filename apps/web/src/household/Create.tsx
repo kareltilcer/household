@@ -9,6 +9,11 @@
 // until its member chooses one themselves. Units and the first day of the week are not on the
 // form: the server takes the country's own, and the household's settings change them.
 //
+// A device whose languages name no country Household has a profile of, a browser in English
+// anywhere but Britain, says nothing to confirm. The country is then asked too, and none stands
+// in for it: the first of the list would be chosen by nobody, and with it the currency, which
+// no screen changes afterwards. The currency is drawn once there is a country for it to follow.
+//
 // What the prototype drew and this does not: the three steps after this one (modules, people,
 // *ready*), which DD-6 put *what brought you here?* in the place of (Start.tsx); the day the
 // trial ends, which nothing knows before the household exists; and *I was invited to one
@@ -77,8 +82,8 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
   // Made once for the visit: a press after an answer that was lost asks for the same household.
   const [id] = useState(newId)
   const [name, setName] = useState('')
-  // Set, anew, each time a name of nothing is submitted: it is not sent.
-  const [missing, setMissing] = useState<object>()
+  // Set, anew, each time it is submitted with no name or no country: it is not sent.
+  const [missing, setMissing] = useState<{ readonly name: boolean; readonly country: boolean }>()
 
   // By name, in the member's language, as a list of countries is looked through.
   const listed = useMemo(() => {
@@ -91,7 +96,8 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
   const [ownZone] = useState(deviceTimeZone)
   const reading = catalogLocale(shown)
 
-  const [country, setCountry] = useState(() => fromDevice ?? listed[0]?.value ?? '')
+  // What the device named, or none until its member chooses one.
+  const [country, setCountry] = useState(fromDevice ?? '')
   const [timezone, setTimezone] = useState(ownZone)
   const [language, setLanguage] = useState<Locale>(reading)
   // The currency the member chose themselves: until they have, it is the country's.
@@ -155,7 +161,7 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
   const form = useRefusedField(missing ?? create.error)
   const nameCode = refused.get('/name')
   const nameError =
-    missing !== undefined || nameCode === 'required' || nameCode === 'min_length'
+    missing?.name === true || nameCode === 'required' || nameCode === 'min_length'
       ? t('household.create.name.missing')
       : nameCode === undefined
         ? undefined
@@ -182,9 +188,9 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
       noValidate
       onSubmit={(event) => {
         event.preventDefault()
-        if (named === '') {
+        if (named === '' || country === '') {
           create.reset()
-          setMissing({})
+          setMissing({ name: named === '', country: country === '' })
           return
         }
         setMissing(undefined)
@@ -218,9 +224,19 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
             ? `${source} ${t('household.create.country.help')}`
             : t('household.create.country.help')
         }
+        // Asked, where the device named none: nothing is chosen until its member chooses.
+        {...(fromDevice === undefined
+          ? { placeholder: t('household.profile.country.choose'), required: true }
+          : {})}
         value={country}
         options={listed}
-        error={refused.has('/country') ? t('household.create.country.refused') : undefined}
+        error={
+          missing?.country === true
+            ? t('household.create.country.missing')
+            : refused.has('/country')
+              ? t('household.create.country.refused')
+              : undefined
+        }
         onChange={(event) => {
           setCountry(event.currentTarget.value)
         }}
@@ -254,16 +270,18 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
           if (isLocale(next)) setLanguage(next)
         }}
       />
-      <Select
-        label={t('household.create.currency.label')}
-        help={t('household.create.currency.help')}
-        value={currency}
-        options={currencies}
-        error={refused.has('/base_currency') ? t('household.create.currency.refused') : undefined}
-        onChange={(event) => {
-          setChosen(event.currentTarget.value)
-        }}
-      />
+      {country === '' ? null : (
+        <Select
+          label={t('household.create.currency.label')}
+          help={t('household.create.currency.help')}
+          value={currency}
+          options={currencies}
+          error={refused.has('/base_currency') ? t('household.create.currency.refused') : undefined}
+          onChange={(event) => {
+            setChosen(event.currentTarget.value)
+          }}
+        />
+      )}
       <Banner tone="info" title={t('household.create.trial.title')}>
         {t('household.create.trial.body')}
       </Banner>
@@ -309,8 +327,13 @@ function Creation() {
   const online = useOnline()
   const withdrawn = useNoWithdrawal()
   const waiting = useWaiting(true)
+  // Said where it is so: with no country read from the device, the name is not all that is asked.
+  const confirmed = countries.data !== undefined && deviceCountry(countries.data) !== undefined
   return (
-    <SettingsPage title={t('household.create.title')} lead={t('household.create.lead')}>
+    <SettingsPage
+      title={t('household.create.title')}
+      lead={confirmed ? t('household.create.lead') : undefined}
+    >
       <Invited waiting={waiting} />
       <Section title={t('household.create.new.title')}>
         <StateFrame

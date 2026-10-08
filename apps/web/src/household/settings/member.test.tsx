@@ -691,6 +691,81 @@ describe('changing what a member holds', () => {
     )
   })
 
+  // Put back while its save was on its way, a row is still a choice: the save leaves the row at
+  // what was sent, and the choice is then the change it was made as.
+  it('keeps a row put back while its save was on its way as a change once the save has landed', async () => {
+    const server = createServer()
+    let answer: () => void = () => undefined
+    server.on(
+      `PATCH ${at}/members/${petr}`,
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = () => {
+            const grants = { ...memberOf(petr).grants, finance: 'view' as const }
+            resolve(Response.json(change(server, petr, { grants, version: 2 })))
+          }
+        }),
+    )
+    const { user } = await page(petr, server)
+    await user.selectOptions(row('Finance'), 'Can see')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => {
+      expect(server.to(`PATCH ${at}/members/${petr}`)).toHaveLength(1)
+    })
+    await user.selectOptions(row('Finance'), 'Off')
+    answer()
+    expect(
+      await screen.findByText('Petr Tilcer’s access is saved. They are told.'),
+    ).toBeInTheDocument()
+    // Saved as it was sent, and what was chosen since is still to be saved over it.
+    expect(row('Finance')).toHaveValue('none')
+    expect(row('Finance')).toHaveAccessibleDescription(
+      expect.stringContaining('Changed from “Can see”.'),
+    )
+    expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
+      expect.stringContaining('1 module is lowered.'),
+    )
+  })
+
+  // Where that save fails nothing was saved, and the row put back is no change: kept as one, it
+  // would be sent back over what somebody else gives the row afterwards.
+  it('keeps no change of a row put back while a save that then failed was on its way', async () => {
+    const server = createServer()
+    let answer: () => void = () => undefined
+    server.on(
+      `PATCH ${at}/members/${petr}`,
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = () => {
+            resolve(problem(500, 'internal'))
+          }
+        }),
+    )
+    const { user } = await page(petr, server)
+    await user.selectOptions(row('Finance'), 'Can see')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => {
+      expect(server.to(`PATCH ${at}/members/${petr}`)).toHaveLength(1)
+    })
+    await user.selectOptions(row('Finance'), 'Off')
+    answer()
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+
+    // Another owner lets Petr see Finance, and the page is looked at again.
+    change(server, petr, {
+      grants: { ...memberOf(petr, server.members).grants, finance: 'view' },
+      version: 2,
+    })
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(row('Finance')).toHaveValue('view')
+    })
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+  })
+
   // The same route draws the next member's page: what was chosen on one is not carried to it.
   it('drops what was chosen and not saved with the page it was chosen on, and asks nothing first', async () => {
     const server = createServer()

@@ -45,6 +45,22 @@ import own from './Member.module.css'
 import { Refused } from './MemberRefused.tsx'
 import { Section, useStanding } from './Page.tsx'
 
+type Edits = Partial<Record<ModuleKey, AccessLevel>>
+
+/**
+ * `edits` without the rows that stand at `held` already: those are no change of this owner's.
+ * Kept as one, such a row would be a change again as soon as somebody else changed it, and be
+ * sent back over theirs with the next save.
+ */
+function changesOver(edits: Edits, held: Levels): Edits {
+  return Object.fromEntries(
+    matrixOrder.flatMap((module) => {
+      const level = edits[module]
+      return level === undefined || level === held[module] ? [] : [[module, level] as const]
+    }),
+  )
+}
+
 interface Asked {
   /** The changed modules alone, each with its new level. */
   readonly grants: Readonly<Record<string, AccessLevel>>
@@ -73,7 +89,7 @@ function GrantsForm({
   const saved = useMemo(() => levelsOf(subject.membership.grants), [subject.membership.grants])
   // What the owner chose, over what is saved: a row somebody else changed meanwhile is drawn as
   // it now stands, and is no change of this owner's to be sent back as it was.
-  const [edits, setEdits] = useState<Partial<Record<ModuleKey, AccessLevel>>>({})
+  const [edits, setEdits] = useState<Edits>({})
   const levels = useMemo<Levels>(() => ({ ...saved, ...edits }), [saved, edits])
   const change = grantChange(saved, levels)
   const changed = [...change.raised, ...change.lowered]
@@ -91,19 +107,20 @@ function GrantsForm({
           body: { grants },
         }),
       ),
-    onSuccess: (answer, asked) => {
+    onSuccess: (answer) => {
       queries.setQueryData(memberKey(household.id, subject.id), answer)
       // What was sent is saved, and no change any more. A row chosen while the save was on its
-      // way was not sent, and is still a change to save.
-      setEdits((last) =>
-        Object.fromEntries(
-          Object.entries(last).filter(([module, level]) => asked.grants[module] !== level),
-        ),
-      )
+      // way was not sent, and is still a change to save where it is not what is saved now: one
+      // put back to what it was before the save among them.
+      const now = levelsOf(answer.grants)
+      setEdits((last) => changesOver(last, now))
       toast({ message: t('household.member.holds.saved', { name }) })
       void reread()
     },
     onError: (error) => {
+      // A row put back while the save was on its way was kept as a choice, for the save to be
+      // held against: nothing was saved, so it is no change, and is kept as none.
+      setEdits((last) => changesOver(last, saved))
       // A level the server will not give is its row's own to say, beside the row.
       if ([...fieldCodes(error).keys()].some((field) => field.startsWith('/grants/'))) return
       // The page is not how things stand: the rows are put back to what the server holds now,
@@ -166,14 +183,13 @@ function GrantsForm({
             // each over a change that is still being made.
             if (!save.isPending) save.reset()
             refusals.clear()
-            // A row put back to what is saved is no change of this owner's any more. Kept as
-            // one, it would be a change again as soon as somebody else changed that row, and be
-            // sent back over theirs with the next save.
-            setEdits((last) =>
-              level === saved[module]
-                ? Object.fromEntries(Object.entries(last).filter(([each]) => each !== module))
-                : { ...last, [module]: level },
-            )
+            // A row put back to what is saved is no change of this owner's any more. While a
+            // save is on its way what is saved is about to be what was sent: every choice is
+            // kept until it is answered, and is then held against what the answer left.
+            setEdits((last) => {
+              const next = { ...last, [module]: level }
+              return save.isPending ? next : changesOver(next, saved)
+            })
           }}
         />
       </div>

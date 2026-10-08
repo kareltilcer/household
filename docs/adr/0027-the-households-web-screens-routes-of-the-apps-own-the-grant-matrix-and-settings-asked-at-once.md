@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-08
 - **Plan item:** 26
-- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §3 to §6; [06-clients](../prd/06-clients.md) §2; [17-household-admin](../prd/modules/17-household-admin.md) §1 to §3, Sync and Permissions; design [03-patterns](../design/03-patterns.md) §2, §6 and §9, [02-components](../design/02-components.md) §4.5, DD-6; D-78, D-80, D-103, D-104, D-153, D-159, D-160, D-164 to D-171; the consequences of [ADR 0011](0011-households-as-the-platforms-own-module.md), [ADR 0012](0012-child-profiles-pins-and-graduation.md) and [ADR 0026](0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md) for item 26
+- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §3 to §6; [06-clients](../prd/06-clients.md) §2; [17-household-admin](../prd/modules/17-household-admin.md) §1 to §3, Sync and Permissions; design [03-patterns](../design/03-patterns.md) §2, §6 and §9, [02-components](../design/02-components.md) §4.5, DD-6; D-78, D-80, D-103, D-104, D-153, D-159, D-160, D-164 to D-172; the consequences of [ADR 0011](0011-households-as-the-platforms-own-module.md), [ADR 0012](0012-child-profiles-pins-and-graduation.md) and [ADR 0026](0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md) for item 26
 
 ## Context
 
@@ -57,8 +57,9 @@ Leaving is beside them, at `/households/{id}/leave`, being no setting and every 
 server's two notifications that link into these screens name them so (`invitations.go`,
 `children.go`), as storage's already did. The screens share one frame
 (`household/settings/Page.tsx`): the way between them above the title, and under it the one
-sentence that says where the member stands, that the household takes no writes, or that changing
-what is here is an owner's, or that a change needs a connection.
+sentence that says where the member stands: that the household takes no writes, or that changing
+what is here is an owner's. That a change needs a connection is the shell's to say, in the bar it
+draws with none (below).
 
 **Household settings is listed for every member** (D-167). `shell/navigation.ts` holds it among
 the modules a member holds whatever the household's answer gives them on it; what a level on it
@@ -98,10 +99,11 @@ counted among the modules that leave a member's app and their devices.
 could not be reached and that nothing was changed. The shell's offline bar says the same on
 these screens, in place of its promise that changes are kept and sent, which is a module's
 (`shell/HouseholdBars.tsx`). A write on its way keeps its control busy until it is answered: the
-form of a member's levels does not put a save away while it is being made, and each row of the
-invitations is busy for its own sending, whichever row was pressed since. Reads are TanStack
-queries filed under the
-household's own key (`household/data.ts`), so that what the browser kept is drawn offline, and a
+form of a member's levels does not put a save away while it is being made, and holds a row
+chosen meanwhile against what the save then leaves; each row of the invitations is busy for its
+own sending, whichever row was pressed since; and a write that leads to another screen, an
+invitation sent or a member removed, as a household made, joined or left, is busy until that
+screen has opened. Reads are TanStack queries filed under the household's own key (`household/data.ts`), so that what the browser kept is drawn offline, and a
 write that was answered reads the household, its members, its modules, its invitations and the
 member's list of households again (`useReread`). A refusal that is about where the member
 stands and not about what they sent, an owner no longer (`403`), a household that takes no writes
@@ -134,6 +136,13 @@ no household is read again first (`app/Home.tsx`), or somebody who joined one si
 invitation answered on another device, would be sent to make a household beside the one they are
 in. With no connection there is nothing to wait for, and what was kept is what there is to go by.
 
+**The screen that makes a household confirms what the device says, and asks for what it does
+not** (D-172; `household/Create.tsx`, `device.ts`). The country is the one the device's languages
+name, of those Household has a profile of, and the currency follows it. Where they name none the
+country is asked beside the name: none stands chosen until its member chooses one, the currency
+is drawn once it has a country to follow, and the screen does not say that only the name is
+asked.
+
 **The screen that leaves says what stands in the way before it asks, from the members it reads,
 and takes the server's word over its own.** A member who is the household's only owner, and one
 who is its payer of record, are told so as the screen opens, both at once where both hold, each
@@ -144,9 +153,9 @@ read.
 **The inviter's notice of a decline stands on the invitations** (D-171), drawn from each
 invitation's own status: one for each address whose newest invitation stands declined
 (`declinedNotices`), until it is withdrawn or the address is asked again, whatever becomes of
-the asking. A link names nobody, and each declined link has its own. An address that is a
-member's by now is told of no longer, and its invitations are not sent again, which the server
-would refuse; whose address is a member's is read off the members, and not off an invitation
+the asking. A link names nobody, and each declined link has its own, named by the day the link
+was made. An address that is a member's by now is told of no longer, and its invitations are not
+sent again, one that still waits among them, which the server would refuse; whose address is a member's is read off the members, and not off an invitation
 that was accepted, which says who came and not who is here: somebody who joined once, left and
 was asked back is told of, and sent to again, as anybody is (`settledAddresses`).
 
@@ -205,6 +214,11 @@ left to the item that would pass the budget, and is by key prefix when it comes 
 | One hook for the banner a refusal is said in, across the settings | Four small ones, each holding what its screen's banner needs and no more: a count where a second refusal has the first one's words, a key where the mutation gives one. One hook would take each screen's wording and placement as arguments to save a line of state apiece. What they had two names for is one now: which refusals are about where the member stands (`isStandingRefusal`) |
 | The read of what a create made, after a ceiling's refusal, failing the create with its own problem where it is refused | The read follows, in the same function, a request the same session was answered a moment before, and the one refusal it is asked for is that nothing is there, which leaves the ceiling's refusal standing. An answer about the session would be the next request's to hear as well, and is told then |
 | The leave screen's refusal dropped once the members are read again, so that a blocker settled in another tab gives the control back | The server's word says what the members do not, an owner who counts as none (D-137), and is what the screen says of it: dropped at every read, it would go each time the page was looked at again, and come back with the next press. The screen's own way to settle a blocker leads to the members and back, which begins it again |
+| The first country of the list standing where the device's languages name none, as the form first had it | D-172 |
+| Where the app opens saying that the households could not be read, where a list this browser kept empty was asked for again and the asking failed | What was kept is drawn whatever became of asking for it again, a read that failed and one that waits for a connection alike (ADR 0026): with no connection the same member is opened at making a household by what was kept, and a second rule for a server that did not answer would be one more for the two to disagree by. Somebody who joined a household elsewhere since makes nothing there until the server answers, and where the app opens reads the list again the next time it is opened |
+| A create that is read back as made compared with what was sent last, and said to differ where a field was changed between the two presses: whether a child's Home is locked, what a household's money is counted in | It takes an answer lost and a field changed before the next press. What was made is what was sent first, as a profile is said to be made by the name it holds, and the screen it leads to shows it: a profile's own page says whether its Home is locked, and the household's profile what its money is counted in. No operation changes either, and what puts one right is what could from the first: a profile or a household made a moment ago, with nothing in it, removed and made again. The comparison would be a second statement of every field of each create, for a case its own sentence would then have to explain |
+| The leave screen's two reasons read from the account deletion's `standingOf` (`account/deletion.ts`), and one helper for the ids the two compare | They ask different things of the same members. A deletion asks what becomes of each household when the account goes, one of four kinds, one of which the member may choose their way out of; leaving asks which of two reasons stand in the way of one household, both at once where both hold, and takes the server's word for either over its own. Drawn from the deletion's kinds, the screen would map them back to the two reasons it began with, from a household's summary where it holds the household. What the two share is three lines |
+| A module's address guarded against a registry line whose `home` is that same address, and the navigation's fallback to it taken out | No line names its module's own address: where a module opens is a screen of its own, which is what the registry says of it. The fallback is what the type asks of two callers that list only the modules with screens, and the guard would be code for a line nobody has written |
 | The catalog split in this item, a module's words fetched with its screens | The first download is under its budget with this item's words in it. The split is a second way for a screen to be without its words, a failure to say for each route, and a guard that no screen outside a module reads the module's keys: machinery the budget does not yet ask for (D-159) |
 
 ## Consequences
@@ -245,7 +259,7 @@ left to the item that would pass the budget, and is by key prefix when it comes 
   in, that a parent can see what they keep in their private space (FR-CH3). The child signs in
   on a phone: **item 29** tells them.
 - **Item 29** builds the same screens on mobile from the same rule (`@household/domain`'s
-  grants) and the same decisions (D-167 to D-171).
+  grants) and the same decisions (D-167 to D-172).
 - **What would make this worth revisiting**: a module whose screens cannot each be a route (a
   wizard that must not be entered half-way); a member's name on the replica, which would let the
   member list be drawn from it; or an operation that lists what a member was notified of.

@@ -84,6 +84,16 @@ export function subjectOf(membership: Membership, user: string, reader: string):
   }
 }
 
+/**
+ * `member` with their child profile's lock lifted, as the page keeps them once the server has
+ * said it is: by an unlock, and by a new PIN. Drawn so before they are read again.
+ */
+export function unlocked(member: Membership | undefined): Membership | undefined {
+  return member?.child == null
+    ? member
+    : { ...member, child: { ...member.child, pin_locked: false } }
+}
+
 /** What a change of somebody's levels comes to, by module, in the matrix's order. */
 export interface GrantChange {
   readonly raised: readonly ModuleKey[]
