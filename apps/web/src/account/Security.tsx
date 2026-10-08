@@ -289,8 +289,11 @@ function SignInWith({ me }: { readonly me: Me }) {
     if (!offered.isError) return null
     return (
       <Section title={t('account.security.providers.title')}>
+        {/* Said as it arrives, as a body's failure is (ui/StateFrame): nothing of the section is
+            drawn while it is asked again, so one that fails again is drawn anew, and said anew. */}
         <Banner
           tone="danger"
+          announce
           actions={
             <Button
               onClick={() => {

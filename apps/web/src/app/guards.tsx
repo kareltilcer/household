@@ -45,7 +45,9 @@ export interface UnreadProps {
  * said, with the way to ask again. A read that waits for a connection is one of these to a
  * member, and no skeleton. It is said as it arrives, as a body's failure is (ui/StateFrame): it
  * takes the place of a skeleton, and asked again to no avail it is drawn anew, where a screen
- * that came back without a word would tell whoever cannot see it nothing of the press.
+ * that came back without a word would tell whoever cannot see it nothing of the press. Asked
+ * again with the browser offline, nothing is asked: the read waits for a connection as it did,
+ * and the sentence that says so stands as it was, to be drawn anew by what the read comes to.
  */
 export function Unread({ title, body, retry }: UnreadProps) {
   const t = useTranslate()

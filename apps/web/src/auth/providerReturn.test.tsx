@@ -1,5 +1,7 @@
+import type { QueryClient } from '@tanstack/react-query'
 import { screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { signedInKey } from '../account/common.ts'
 import { paths } from '../app/paths.ts'
 import { holdDestination } from '../session/destination.ts'
 import { heldChallenge } from './challenge.ts'
@@ -224,6 +226,27 @@ describe('a return from a provider, to link it to the account', () => {
     })
     const asked = backend.sent.map((request) => `${request.method} ${request.path}`)
     expect(asked.lastIndexOf('GET /me')).toBeGreaterThan(asked.indexOf(link))
+  })
+
+  it('reads the account alone again: what else this browser kept under its key is as it was', async () => {
+    begun({ intent: 'link', returnTo: account })
+    const backend = serve()
+    backend.signIn()
+    backend.on(link, () => empty(204))
+    // Where the account is signed in, as an earlier visit read it and this browser kept it. No
+    // screen of this page reads it, so nothing here has the way to ask for it again.
+    const caches: QueryClient[] = []
+    const { address } = open(returned, {
+      backend,
+      kept: (queries) => {
+        caches.push(queries)
+        queries.setQueryData(signedInKey, { sessions: [], devices: [] })
+      },
+    })
+    await waitFor(() => {
+      expect(address()).toBe(account)
+    })
+    expect(caches[0]?.getQueryState(signedInKey)).toMatchObject({ status: 'success', error: null })
   })
 
   it('goes back to the account’s security where the flow names no path of the app’s own', async () => {

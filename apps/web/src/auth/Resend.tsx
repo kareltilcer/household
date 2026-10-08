@@ -6,7 +6,9 @@
 // An address may ask once a minute (PRD 02 §9). The wait is drawn as a countdown on the control
 // and not as a refusal (auth.js A-3): the control keeps its place and its focus, says how long,
 // and takes no press until then. A `429` is the same wait, for as long as its `Retry-After`
-// says; one longer than a countdown is worth reading is said as the time it ends.
+// says; one longer than a countdown is worth reading is said as the time it ends. A wait the
+// server answered a press with is said once besides, politely, to whoever cannot see the control
+// change under them: its words as the answer arrived, and no alert, a wait being no refusal.
 import { useMutation } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
@@ -14,6 +16,7 @@ import { ApiProblemError, problemIn, unwrap } from '../api/problem.ts'
 import { deviceTimeZone, useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
+import a11y from '../ui/a11y.module.css'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
 import { checkEmail, EmailField, refusedEmail, type EmailFault } from './fields.tsx'
@@ -82,6 +85,14 @@ export function Resend({ to, label, sentAt }: ResendProps) {
   const [typed, setTyped] = useState('')
   const [fault, setFault] = useState<{ readonly email: EmailFault }>()
   const { seconds, until, waitUntil } = useWait(sentAt)
+  // The control's words as a limit's answer arrived, for the region that says them once.
+  const [limited, setLimited] = useState('')
+
+  /** What the control says with `left` seconds to wait, until `end`. */
+  const waitingWords = (left: number, end: number) =>
+    left <= countedDown
+      ? t('auth.verify.resend_in', { seconds: left })
+      : t('auth.verify.resend_at', { time: format.time(new Date(end), deviceTimeZone()) })
 
   const resend = useMutation({
     ...askedNow,
@@ -94,7 +105,10 @@ export function Resend({ to, label, sentAt }: ResendProps) {
     onError: (error) => {
       if (problemIn(error)?.status !== 429) return
       const at = error instanceof ApiProblemError ? error.retryAt?.getTime() : undefined
-      waitUntil(at ?? Date.now() + cooldown)
+      const now = Date.now()
+      const end = at ?? now + cooldown
+      waitUntil(end)
+      setLimited(waitingWords(Math.max(0, Math.ceil((end - now) / 1000)), end))
     },
   })
 
@@ -110,6 +124,7 @@ export function Resend({ to, label, sentAt }: ResendProps) {
       return
     }
     setFault(undefined)
+    setLimited('')
     resend.mutate(email)
   }
 
@@ -117,13 +132,14 @@ export function Resend({ to, label, sentAt }: ResendProps) {
   // A limit is the wait, said on the control. Anything else that is no field's is said here.
   const refused =
     resend.error !== null && problemIn(resend.error)?.status !== 429 && emailFault === undefined
-  const words = !waiting
-    ? label
-    : seconds <= countedDown || until === undefined
-      ? t('auth.verify.resend_in', { seconds })
-      : t('auth.verify.resend_at', { time: format.time(new Date(until), deviceTimeZone()) })
+  const words = !waiting || until === undefined ? label : waitingWords(seconds, until)
   return (
     <>
+      {/* On the page from the first, so that what is put in it is said: for as long as the wait
+          it tells of, and not a word of the countdown's own. */}
+      <p className={a11y.visuallyHidden} role="status">
+        {waiting ? limited : ''}
+      </p>
       {resend.isSuccess ? (
         <Banner tone="info" announce>
           {t('auth.verify.resent')}

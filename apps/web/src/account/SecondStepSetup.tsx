@@ -256,6 +256,9 @@ function Start({
         <Button
           variant="primary"
           onClick={() => {
+            // Asked afresh: a refusal the screen drew in the question's place, an address not
+            // yet verified, is no answer to the password about to be typed.
+            enrol.reset()
             setAsking(true)
           }}
         >

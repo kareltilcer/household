@@ -131,8 +131,9 @@ function Returned({ provider }: { readonly provider: Provider }) {
     },
     // The account signs in with the provider from here on, and what this page read of it is
     // from before: it is read again before the way back is taken, to a screen that says what
-    // the account signs in with.
-    onSuccess: () => queries.refetchQueries({ queryKey: meKey }),
+    // the account signs in with. The account alone, by its whole key: what else is filed under
+    // it, a list this browser kept and this page has not read, has nobody here to ask for it.
+    onSuccess: () => queries.refetchQueries({ queryKey: meKey, exact: true }),
   })
 
   useOnArrival(() => {

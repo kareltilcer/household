@@ -54,8 +54,10 @@ export function ResetSet() {
       // A session of this account's in this browser has just ended, and the app learns that by
       // asking who is signed in. It is asked before the way to the sign-in is taken, which is a
       // visitor's alone and would send a member on; and where nobody was signed in, nothing is
-      // asked, since a visitor's page asks the server nothing it would refuse.
-      await queries.refetchQueries({ queryKey: meKey })
+      // asked, since a visitor's page asks the server nothing it would refuse. The account alone,
+      // by its whole key: what else is filed under it, a list this browser kept and this page
+      // has not read, has nobody here to ask for it.
+      await queries.refetchQueries({ queryKey: meKey, exact: true })
       void navigate(paths.signIn.path, { replace: true, state: noticeState('password_set') })
     },
   })

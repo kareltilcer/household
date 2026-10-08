@@ -370,6 +370,40 @@ describe('Google and Apple', () => {
       '/reset',
     )
   })
+
+  it('are said not to have been read, and said again where asking again comes to nothing', async () => {
+    const server = createServer()
+    // A server that cannot be reached, each request failing when the test says it has.
+    let fail: () => void = () => undefined
+    server.on(
+      'GET /auth/oauth',
+      () =>
+        new Promise<Response>((_, reject) => {
+          fail = () => {
+            reject(new TypeError('offline'))
+          }
+        }),
+    )
+    const { user } = await security(server)
+    const unread = 'The ways to sign in could not be read. Nothing was changed.'
+    await waitFor(() => {
+      expect(server.to('GET /auth/oauth')).toHaveLength(1)
+    })
+    fail()
+    // An alert, as a body that could not be read is: nothing moved the focus to it.
+    const said = await screen.findByRole('alert')
+    expect(said).toHaveTextContent(unread)
+
+    await user.click(within(said).getByRole('button', { name: 'Try again' }))
+    // Nothing of the section is drawn while it is asked again.
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+    expect(server.to('GET /auth/oauth')).toHaveLength(2)
+    fail()
+    // Drawn anew, which is what says it a second time: that is what the press came to.
+    expect(await screen.findByRole('alert')).toHaveTextContent(unread)
+  })
 })
 
 describe('a child profile', () => {

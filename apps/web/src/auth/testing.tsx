@@ -6,7 +6,9 @@
 // The routes around the screens are places of this file's, each drawn as its own address: where
 // a screen leads is the test's to say, and what the shell draws there is not.
 import type { components } from '@household/api'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { render, type RenderResult } from '@testing-library/react'
+import { useEffect } from 'react'
 import {
   createBrowserRouter,
   createMemoryRouter,
@@ -224,6 +226,20 @@ export interface Opening {
   readonly backend?: Backend
   /** Draws the page under React's strict mode, as the app is drawn in development. */
   readonly strict?: boolean
+  /**
+   * What this browser kept from before: the test is handed the page's own cache as the page
+   * starts, files in it what an earlier visit read, and may read it again afterwards.
+   */
+  readonly kept?: (queries: QueryClient) => void
+}
+
+/** Hands `to` the page's cache, before the effect of any screen drawn after it has run. */
+function Kept({ to }: { readonly to: (queries: QueryClient) => void }) {
+  const queries = useQueryClient()
+  useEffect(() => {
+    to(queries)
+  }, [queries, to])
+  return null
 }
 
 /** Opens the app at `address`, as a browser that follows a link or types an address would. */
@@ -245,11 +261,12 @@ export function openInBrowser(address: string, opening: Opening = {}): Opened {
 
 function draw(
   router: ReturnType<typeof createMemoryRouter>,
-  { backend = serve(), strict = false }: Opening,
+  { backend = serve(), strict = false, kept }: Opening,
 ): Opened {
   const client = createWebClient({ origin, fetch: backend.fetch, cookies: backend.cookies })
   const view = render(
     <Providers persist={false} client={client} cookies={backend.cookies}>
+      {kept === undefined ? null : <Kept to={kept} />}
       <RouterProvider router={router} />
     </Providers>,
     { reactStrictMode: strict },

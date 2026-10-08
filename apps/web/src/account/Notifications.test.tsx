@@ -130,7 +130,9 @@ describe('this browser', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Turn on notifications in this browser' }),
     )
-    expect(await screen.findByText('This browser is blocking notifications')).toBeInTheDocument()
+    const blocking = await screen.findByText('This browser is blocking notifications')
+    // What the press came to, and the control that was pressed is gone: said as it arrives.
+    expect(blocking.closest('[role="status"]')).not.toBeNull()
     expect(
       screen.getByText(
         /so the settings below reach your other devices only\. To allow them, open this site’s settings in the browser/,
@@ -142,6 +144,16 @@ describe('this browser', () => {
     ).not.toBeInTheDocument()
     expect(screen.getByRole('switch', { name: 'The weekly digest' })).toBeInTheDocument()
     expect(server.to('POST /push/subscriptions')).toHaveLength(0)
+  })
+
+  it('reads in its place that it was blocking them before the screen opened', async () => {
+    withPush({ permission: 'denied' })
+    const server = createServer()
+    withPreferences(server)
+    await notifications(server)
+    const blocking = await screen.findByText('This browser is blocking notifications')
+    // Nothing was pressed here: it is no answer to announce.
+    expect(blocking.closest('[role="status"], [role="alert"]')).toBeNull()
   })
 
   it('is turned off here, at the server and in the browser', async () => {

@@ -173,6 +173,9 @@ describe('the account screen', () => {
       expect(screen.queryByRole('button', { name: 'Remove picture' })).not.toBeInTheDocument()
     })
     expect(await server.body('PATCH /me')).toEqual({ avatar_url: null })
+    // The control that was pressed went with the picture: the focus is on the one that stays,
+    // which says there is a picture to choose, and not on nothing.
+    expect(screen.getByRole('button', { name: 'Choose a picture' })).toHaveFocus()
 
     server.on('PUT /me/avatar', () => problem(413, 'payload_too_large'))
     fireEvent.change(chooser, { target: { files: [file] } })
@@ -199,6 +202,35 @@ describe('the account screen', () => {
     expect(container.querySelector('img')).not.toBeInTheDocument()
     expect(initialsOf(' jana  tilcerová nováková ')).toBe('JT')
     expect(initialsOf('')).toBe('')
+  })
+
+  it('leaves the focus where its member took it while a picture was being removed', async () => {
+    const server = createServer({ ...jana, avatar_url: `${origin}/files/picture` })
+    let answer: () => void = () => undefined
+    server.on(
+      'PATCH /me',
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = () => {
+            server.me = { ...server.me, avatar_url: null }
+            resolve(Response.json(server.me))
+          }
+        }),
+    )
+    const { user } = await account(server)
+    await user.click(screen.getByRole('button', { name: 'Remove picture' }))
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(1)
+    })
+    // On to the next control before the server has answered: the focus is theirs to keep.
+    await user.tab()
+    const taken = document.activeElement
+    answer()
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Remove picture' })).not.toBeInTheDocument()
+    })
+    expect(taken).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Choose a picture' })).not.toHaveFocus()
   })
 
   it('names each language in its own, changes the words, and tells the account', async () => {

@@ -70,6 +70,10 @@ function ThisBrowser() {
   const t = useTranslate()
   const say = useProblemText(useOwnZone())
   const push = usePush()
+  // Whether the browser was asked from this screen. What it answered is then what a press came
+  // to, and a refusal is said as it arrives; one it had given before the screen opened is read
+  // in its place.
+  const [asked, setAsked] = useState(false)
   if (push.state === undefined) return null
   const { permission, subscribed } = push.state
   const turnOn = (
@@ -78,6 +82,7 @@ function ThisBrowser() {
         variant="primary"
         loading={push.asking}
         onClick={() => {
+          setAsked(true)
           // The browser's question is put in this press, and by nothing else.
           push.ask().catch(() => undefined)
         }}
@@ -105,7 +110,7 @@ function ThisBrowser() {
       {permission === 'unsupported' ? (
         <p className={styles.text}>{t('push.unsupported')}</p>
       ) : permission === 'denied' ? (
-        <Banner tone="warning" title={t('push.denied.title')}>
+        <Banner tone="warning" title={t('push.denied.title')} announce={asked}>
           {t('push.denied.body')}
         </Banner>
       ) : permission === 'granted' && subscribed ? (

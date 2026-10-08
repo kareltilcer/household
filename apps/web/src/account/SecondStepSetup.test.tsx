@@ -1,7 +1,8 @@
 // Turning the second step on (A-5, A-6): the password, the square and the key, the code and its
 // refusals, and the ten recovery codes, which are shown once and asked about before they go.
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { focusManager } from '@tanstack/react-query'
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { squares } from './QrCode.tsx'
 import { codesFile } from './RecoveryCodes.tsx'
 import { grouped } from './SecondStepSetup.tsx'
@@ -24,6 +25,11 @@ const codes = [
   '2PWL-8KRN',
   'B9XT-M5DQ',
 ]
+
+// A test that says the page is looked at again leaves the next one a page nobody has looked at.
+afterEach(() => {
+  focusManager.setFocused(undefined)
+})
 
 async function setup(server: Server = createServer()) {
   const opened = open('/account/2fa', server)
@@ -186,6 +192,29 @@ describe('turning the second step on', () => {
     expect(
       await screen.findByText(/^A link is on its way to jana@tilcerovi\.cz\./),
     ).toBeInTheDocument()
+  })
+
+  it('asks afresh once the address is verified, with nothing of that refusal left in the question', async () => {
+    const server = createServer()
+    server.on('POST /auth/mfa/enroll', () => problem(403, 'account_unverified'))
+    const { user } = await setup(server)
+    await user.click(screen.getByRole('button', { name: 'Set it up' }))
+    const refused = screen.getByRole('dialog')
+    await user.type(within(refused).getByLabelText('Password'), 'the password')
+    await user.click(within(refused).getByRole('button', { name: 'Continue' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    // The address is proven in the tab its email's link opened, and the account is read again
+    // when this page is looked at again: it is verified, as the server here always said.
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await user.click(await screen.findByRole('button', { name: 'Set it up' }))
+    const password = within(screen.getByRole('dialog')).getByLabelText('Password')
+    expect(password).not.toHaveAttribute('aria-invalid')
+    expect(password).toHaveAccessibleDescription('')
   })
 
   it('says so before asking anything of an account it already knows is unverified', async () => {

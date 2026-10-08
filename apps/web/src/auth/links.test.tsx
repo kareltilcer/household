@@ -1,6 +1,8 @@
+import type { QueryClient } from '@tanstack/react-query'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import { signedInKey } from '../account/common.ts'
 import { deviceTimeZone } from '../api/problemText.ts'
 import { paths } from '../app/paths.ts'
 import { closingAt } from './DeletionCancel.tsx'
@@ -255,6 +257,31 @@ describe('the link a reset email carries', () => {
     expect(backend.to('GET /me').length).toBeGreaterThan(1)
     // One sentence says why they are here, not two.
     expect(screen.queryByText(/You were signed out/)).not.toBeInTheDocument()
+  })
+
+  it('asks who is signed in, and for nothing else this browser kept under the account’s key', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    // Somebody else is signed in to this browser, and the reset ends no session of theirs.
+    backend.signIn()
+    backend.on(confirm, () => empty(204))
+    // Where their account is signed in, as an earlier visit read it and this browser kept it. No
+    // screen of this page reads it, so nothing here has the way to ask for it again.
+    const caches: QueryClient[] = []
+    const { address: at } = open(link, {
+      backend,
+      kept: (queries) => {
+        caches.push(queries)
+        queries.setQueryData(signedInKey, { sessions: [], devices: [] })
+      },
+    })
+    await user.type(await screen.findByLabelText('New password'), password)
+    await user.click(screen.getByRole('button', { name: submit }))
+    // Still a member, they are sent on from the sign-in, which is a visitor's alone.
+    await waitFor(() => {
+      expect(at()).toBe(paths.home.path)
+    })
+    expect(caches[0]?.getQueryState(signedInKey)).toMatchObject({ status: 'success', error: null })
   })
 
   it.each([

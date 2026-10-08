@@ -227,8 +227,9 @@ describe('check your email', () => {
     pass(43_000)
     expect(control).toHaveAccessibleName('Send it again')
     expect(control).not.toHaveAttribute('aria-disabled')
-    // A wait is no refusal: nothing was said as one.
+    // A wait is no refusal: nothing was said as one, nor a second of the countdown at all.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
 
     await user.click(control)
     // The address waits its minute again.
@@ -281,15 +282,25 @@ describe('check your email', () => {
       expect(control).toHaveAccessibleName('Send it again in 30 s')
     })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // What the press came to is said once, politely, to whoever cannot see the control change:
+    // its words as the answer arrived, which the countdown's own seconds are not said after.
+    const said = screen.getByRole('status')
+    expect(said).toHaveTextContent('Send it again in 30 s')
+    pass(10_000)
+    expect(control).toHaveAccessibleName('Send it again in 20 s')
+    expect(said).toHaveTextContent('Send it again in 30 s')
 
     // A wait too long to count down is said as the time it ends.
     backend.on(resend, () => problem(429, 'rate_limited', {}, { 'Retry-After': '3000' }))
-    pass(30_000)
+    pass(20_000)
+    // The wait is over, and nothing of it is left to be read.
+    expect(said).toBeEmptyDOMElement()
     await user.click(control)
     await waitFor(() => {
       expect(control).toHaveAccessibleName(/^Send it again at \d{1,2}:\d{2}/)
     })
     expect(control).toHaveAttribute('aria-disabled', 'true')
+    expect(said).toHaveTextContent(/^Send it again at \d{1,2}:\d{2}/)
   })
 
   it('asks for the address where the page has none, with the same control', async () => {

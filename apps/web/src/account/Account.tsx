@@ -188,6 +188,7 @@ function Picture({ me }: { readonly me: Me }) {
   const queries = useQueryClient()
   const say = useProblemText(useOwnZone())
   const chooser = useRef<HTMLInputElement>(null)
+  const choose = useRef<HTMLButtonElement>(null)
   const upload = useMutation({
     ...askedNow,
     mutationFn: async (file: File) =>
@@ -238,6 +239,7 @@ function Picture({ me }: { readonly me: Me }) {
             }}
           />
           <Button
+            ref={choose}
             loading={upload.isPending}
             onClick={() => {
               chooser.current?.click()
@@ -249,9 +251,20 @@ function Picture({ me }: { readonly me: Me }) {
             <Button
               variant="ghost"
               loading={remove.isPending}
-              onClick={() => {
+              onClick={(event) => {
+                const pressed = event.currentTarget
                 upload.reset()
-                remove.mutate({ avatar_url: null })
+                remove.mutate(
+                  { avatar_url: null },
+                  {
+                    // The control that removed it goes with the picture, and nothing else says
+                    // it went: the focus it still holds goes to the one that stays, which then
+                    // offers to choose a picture where it offered to change one.
+                    onSuccess: () => {
+                      if (document.activeElement === pressed) choose.current?.focus()
+                    },
+                  },
+                )
               }}
             >
               {t('account.profile.picture.remove')}

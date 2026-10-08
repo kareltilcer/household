@@ -175,11 +175,18 @@ the account's screens as on the screens before sign-in (`useRefusedField`, `auth
 refusal that marks no field is a banner, announced where it is drawn: so is one of a control
 that is put back and holds the focus already, a language, a timezone or a first day the server
 would not take, and the one sentence about two fields together, quiet hours that are one time
-twice. What a screen is drawn from that could not be read is announced as it arrives, as a
-body's failure is (`Unread`, `app/guards.tsx`). And the row a confirmation was opened from, gone
-once the browser or device it names is signed out, leaves the focus to the lists' own place, as
-the inbox's does. axe reads only that a field and its sentence are tied, so each screen's own
-test holds where the focus is and what is announced.
+twice; and so is the browser's own refusal of the question a press put, notifications it
+blocks, where one it had given before the screen opened is read in its place. A limit on
+sending a link again is a wait and no refusal, drawn as the countdown on its control
+(`auth/Resend.tsx`): it is said once as it arrives, politely and in the control's own words, and
+no second of the countdown after it. What a screen is drawn from that could not be read is
+announced as it arrives, as a body's failure is (`Unread`, `app/guards.tsx`), and so is a part
+of one with the way to ask again, the providers an account's screen could not read: nothing of
+it is drawn while it is asked again, so a second failure is drawn, and said, anew. And the row a
+confirmation was opened from, gone once the browser or device it names is signed out, leaves the
+focus to the lists' own place, as the inbox's does; a picture's removal, which nothing else
+says, leaves it on the control that chooses another. axe reads only that a field and its
+sentence are tied, so each screen's own test holds where the focus is and what is announced.
 
 **The end-to-end suite starts the API itself, on the development services, and each test is a
 network of its own.** The preview server proxies `/api` to it, so a page is same-origin with the
@@ -236,6 +243,12 @@ every other console error still fails its test.
 | A table of titles beside `paths.ts`, or the title read off the page's `<h1>` by an observer | The first is a second name for each screen, kept in step with its heading by hand, with no word for a screen that changes what it says as it opens, a link's page or a provider's return. The second watches the document for what the screen that draws the heading already holds as a value. The screen says it, once, where it draws it |
 | A refusal's sentence beside its field and tied to it, with nothing moved and nothing announced, as item 25 first had the account's screens | A sentence added beside a field the focus is not on is said to nobody who cannot see it: pressed with a wrong password, *Change password* told a screen reader's user nothing, where a save says so in a toast. It is level AA of the gate 06-clients §4 sets (WCAG 2.1, 4.1.3), and axe reads only that the two are tied. The focus moves to the field, as on the screens before sign-in (D-166) |
 | Every field's sentence announced as an alert, in `ui/Field` | Said twice where the focus moves to the field, which reads the sentence with it, and as urgently as the server's own failure. A field's fault is read with the field, and a banner is for what is no field's |
+| The switcher's line that a member's other households could not be read announced as a failure is | It answers no press and offers none: the household that is open is as it was, and the line is read in its place in the navigation, under the household's name and the member's role in it. An alert would say it to every member whose list could not be read, most of whom are in one household, and say it again each time the navigation's panel is opened at a phone's width and each time the list is asked for again |
+| The wait kept out of a resend's own words while it counts down, for a screen reader that says a focused control's name as it changes | The countdown on the control is the design's (auth.js A-3), and the one place the wait is drawn. A screen reader that says a focused control's name as it changes would say each second of it; whether one does was not heard, the suite running no assistive technology, and it is for the release's passes with VoiceOver and TalkBack to hear (design 06-accessibility-and-i18n §1). Held still, the control's name would say nothing of the wait to whoever comes to it later, and the seconds drawn in a second place are one more to keep in step with the first. What a press came to is said besides, once: a limit's wait, in the control's words as its answer arrived |
+| A `429` to a resend said as every other limit is, in a banner announced as an alert | A wait is no refusal (auth.js A-3): the address may ask again when its minute is over, and the control says when. An alert would say it as urgently as a failure, and draw a second sentence beside the control that counts the same wait down. It is said once, politely, by a region that draws nothing |
+| What could not be read drawn anew at each press of *Try again* while the browser is offline | With no connection the query client holds the question and asks nothing, so the press comes to nothing new: the sentence that says the server could not be asked, and to check the connection, still holds, and the question is asked by itself when the connection is back, its answer drawn, and said, in the sentence's place. A count of presses to draw the alert again by is a second word on when it is drawn, for a press that changed nothing |
+| The focus put by hand wherever the control that held it leaves with what it did: a second step turned off, a provider disconnected, a stage of the second step's setup that takes the last one's place, a deletion's form the server's refusal replaced | Each of these is said: by a toast, by the refusal's own banner, or by the screen that takes the place of the one before, whose title and heading name it. A list is different, which goes on under the focus and whose next row is what its member was reading (D-166), and so is a picture's removal, which nothing else says. A ref and an effect for each control that goes with what it did are one more thing apiece to keep in step with what the screen draws, and a control kept in its place to hold the focus would turn under it from disconnecting a provider to connecting one, where a second press begins a link |
+| What pinning, putting away and showing a module came to said by the arrange screen in this item, the focus following the row to its new list, and the same of a merge's banner put away in the inbox | No member reaches either with anything in it: no module has a web screen until item 26 registers the first (D-160), and the inbox is empty until a module's entities are written offline. Each wants sentences of its own in five languages and a place for the focus, for screens held today by their tests and the dev pages alone. They are handed on with the screens (Consequences) |
 | The stated switch held back where a household was reached by the browser's Back or Forward, from one the member chose in the switcher | A page is not told a history move from a link followed: the router's word for the first page a tab loads is the same, and the entry gone back to carries the state it was made with, which says nothing of the choice that left it. Telling them apart is a mark written into each household's history entry as it opens, a second navigation at every opening, for a sentence that is true of the tab, whose household did change with its address, that one press puts away and whose control leads back |
 | What a browser kept removed without emptying the query cache under a screen that is drawn, or a visitor's screen drawn again once it is removed | Emptying the cache tells no screen (`queries.clear()`): a sign-in screen drawn before a kept account was read from storage and found without a session has its question of which providers the server signs in with cancelled, and draws none until it is drawn again, which the next key typed does. A browser comes to it only by its cookies being cleared alone, since their thirty idle days outlast the day the cache is kept, and only where the screen's file arrives before the cache is read. Resetting the queries in place asks each again at once, the account's among them, of a session that has just ended, which a sign-out would then read as a session that expired; a second way to empty the cache is one more to keep in step with the first |
 | Every granted module listed, with a screen that says it is not built | A link to nothing (D-160) |
@@ -249,14 +262,19 @@ every other console error still fails its test.
   the session hears of the three answers. A request made outside it tells the hub itself, as
   the renewal of a browser's push does (`push/worker.ts`); the one that does not is the removal
   a sign-out follows, whose own refusal is told (above).
+- A screen that reads the account again names its key whole (`meKey`, `exact`). Where an
+  account is signed in and what it is notified of are filed under that key, and a refetch by the
+  key's beginning would ask for those too, of a page that kept them from an earlier visit and has
+  no screen to ask with: each would be left as failed.
 - A screen that draws the page's `<h1>` says the same words to `usePageTitle` (`app/title.ts`),
   where it draws them; `Screen` and `SettingsPage` do for the screens they frame. The walk of the
   routes fails a route whose title does not name its heading (D-165).
 - A form gives its `<form>` the ref `useRefusedField` answers (`auth/fields.tsx`), with what it
   was last refused with, a new value for each refusal: the screens before sign-in through
   `Form`. A refusal that is no field's, and one of a control that saves as it is changed, is a
-  `Banner` with `announce`, and a screen that removes the row a dialog was opened from says
-  where the focus goes (D-166).
+  `Banner` with `announce`, as is a part of a screen that could not be read and offers to be
+  asked again, where it is not a `StateFrame`'s; and a screen that removes the row a dialog was
+  opened from says where the focus goes (D-166).
 - A write of a screen before sign-in or of a member's own account spreads `askedNow`
   (`api/query.ts`), and a test holds every one of them to it. A module's screens say for
   themselves which of their writes wait for a connection.
@@ -264,7 +282,10 @@ every other console error still fails its test.
   what it needs at run time is added to `Opened` (`sync/open.ts`).
 - **Item 26** registers household settings in `modules/registry.ts`, the first module the
   sidebar lists, builds the member screen that item 11's owner controls stand on, and gives a
-  member in no household the way to make one, which the account's empty state leaves out.
+  member in no household the way to make one, which the account's empty state leaves out. With
+  the first module the arrange screen has something to arrange: a row moved by its handle says
+  where it has come to, and item 26 has one that is pinned, put away or shown again say so too,
+  and take the focus with it to the list it went to (D-166).
 - **Item 27** widens the policy for the payment processor's frame, draws the entitlement banner
   in `shell/HouseholdBars.tsx` and the suspended lockout where a household answers `404` while the
   list names it: the app opens there only for a member in no household that opens (D-162).
@@ -280,7 +301,9 @@ every other console error still fails its test.
 - Until a module's entities are written offline, the inbox is empty on real data: the resolvers
   are held by their tests and by `/dev/sync`. Signing out removes a replica with whatever it had
   queued, and today it can have queued nothing: the first module written offline adds, to the
-  sign-out, the count of changes not yet sent and the question that names them.
+  sign-out, the count of changes not yet sent and the question that names them, and to the
+  inbox what putting a merge's banner away came to, said, with the focus left to the list's own
+  place as an answered row leaves it (D-166).
 - A replica's removal is asked for and not waited on (`sync/databases.ts`): the browser carries
   it out once every connection to the database has closed, which for one another tab holds is
   when that tab lets go, and for one the asking page holds itself and then loads itself again is
