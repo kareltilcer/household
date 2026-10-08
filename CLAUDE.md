@@ -159,15 +159,19 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   it: a `401` ends it and removes what the browser kept, the persisted cache and every replica, a
   `403 csrf_failed` signs in again and removes nothing, and a `400 update_required` draws *please
   update* and nothing else ([D-156](docs/prd/09-decisions.md), [D-158](docs/prd/09-decisions.md)).
+  What a browser keeps is its member's and for no longer than their session, whether or not a
+  page knew them when it ended: a browser with no session keeps no replica, and a page that finds
+  another member signed in under it removes what it kept and reloads
+  ([D-161](docs/prd/09-decisions.md)).
   The app holds one language at a time: `apps/web/src` imports `@household/i18n/lazy` and never
   the package's own entry, which holds all five catalogs, and ESLint fails the import
   ([D-159](docs/prd/09-decisions.md)). The shell's module list is derived from the household's own
   answer and lists a module only where `src/modules/registry.ts` has its screens, which the
   module's web item adds ([D-160](docs/prd/09-decisions.md)). A household's replica is one tab's,
   by a Web Lock, opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
-  imported for its types alone outside `sync/open.ts`, which is what keeps the library and its SDK
-  out of a page until a replica is opened, and a run-time value a screen needs of it is added to
-  `Opened` there. The policy admits three sources beside its own origin: for the replica,
+  imported for its types alone outside `sync/open.ts`, which ESLint holds and which is what keeps
+  the library and its SDK out of a page until a replica is opened, and a run-time value a screen
+  needs of it is added to `Opened` there. The policy admits three sources beside its own origin: for the replica,
   `'wasm-unsafe-eval'` and the sync service's origin in `connect-src`, and for a picture the
   object store's origin in `img-src`, both origins told to a build (`HOUSEHOLD_WEB_SYNC_ORIGIN`,
   `HOUSEHOLD_WEB_FILES_ORIGIN`). The end-to-end suite starts the API itself on the development
