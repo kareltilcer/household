@@ -9,7 +9,8 @@
 // It handles no `fetch` and keeps no cache, so registering it changes nothing of how a page loads.
 import type { ApiClient } from '@household/api'
 import { pushOpenMessage, pushWorkerFile } from '../../build/pushWorker.ts'
-import { ApiProblemError, unwrap } from '../api/problem.ts'
+import { ApiProblemError, problemIn, unwrap } from '../api/problem.ts'
+import type { ProblemHub } from '../api/problems.ts'
 import { isOwnPath } from '../app/paths.ts'
 
 /** What the browser says of notifications from this origin, or that it has no Web Push at all. */
@@ -192,13 +193,17 @@ export async function unsubscribePush(api: ApiClient): Promise<PushState> {
  * member only while the session that registered it lives. A browser with no Push, one that was
  * never asked or refused, and one whose member turned notifications off here are left as they
  * are. It never rejects: a browser that could not be registered is tried at the next sign-in.
+ * It asks the server outside any query or mutation, so what it is refused with is told to
+ * `problems` here: a refusal that is about the session is answered as it is wherever it is met.
  */
-export async function renewPush(api: ApiClient): Promise<void> {
+export async function renewPush(api: ApiClient, problems: ProblemHub): Promise<void> {
   try {
     if (!pushSupported() || Notification.permission !== 'granted' || turnedOff()) return
     await subscribePush(api)
-  } catch {
+  } catch (error) {
     // Left as it was.
+    const problem = problemIn(error)
+    if (problem !== undefined) problems.report(problem)
   }
 }
 
@@ -206,7 +211,10 @@ export async function renewPush(api: ApiClient): Promise<void> {
  * Removes this browser's subscription, for a sign-out: called before the session ends, so that
  * the server can still be told, and the next person to sign in here is sent nothing that was the
  * last one's. The member's own choice is not touched. It never rejects: the server ends a
- * subscription with its session whether or not it heard.
+ * subscription with its session whether or not it heard. What it is refused with is told to
+ * nobody: the sign-out follows at once and is told its own refusal, and a session the server
+ * ended already is then the sign-out done, where told of this one first it would be drawn as a
+ * session that expired under its member.
  */
 export async function forgetPush(api: ApiClient): Promise<void> {
   try {

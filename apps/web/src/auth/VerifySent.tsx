@@ -11,7 +11,7 @@ import { paths } from '../app/paths.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Resend } from './Resend.tsx'
 import { Screen, Way, Ways } from './Screen.tsx'
-import { sentTo } from './sent.ts'
+import { sentAt, sentTo } from './sent.ts'
 
 export function VerifySent() {
   const t = useTranslate()
@@ -22,8 +22,13 @@ export function VerifySent() {
       title={t('auth.verify.title')}
       lede={email === undefined ? t('auth.verify.ask') : t('auth.verify.sent_to', { email })}
     >
-      {/* A link was sent as the registration was answered: the address waits its minute. */}
-      <Resend to={email} label={t('auth.verify.resend')} sentJustNow={email !== undefined} />
+      {/* A link was sent as the registration was answered: the address waits its minute, of
+          which a page loaded again since has less left, or none. */}
+      <Resend
+        to={email}
+        label={t('auth.verify.resend')}
+        sentAt={email === undefined ? undefined : sentAt(location.state)}
+      />
       <Ways>
         <Way to={paths.register.path}>{t('auth.verify.different')}</Way>
         <Way to={paths.signIn.path}>{t('auth.way.sign_in')}</Way>

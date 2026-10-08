@@ -90,13 +90,18 @@ interface Status {
   readonly downloadError: Error | undefined
 }
 
-/** A replica as far as the provider and its hooks ask of one, and what was done to it. */
-function replica() {
+/**
+ * A replica as far as the provider and its hooks ask of one, and what was done to it. Its status
+ * is a replica's as it is opened, before its first attempt has begun: one of a database that
+ * never synced, unless `opening` says otherwise.
+ */
+function replica(opening: Partial<Status> = {}) {
   let status: Status = {
     connected: false,
-    connecting: true,
+    connecting: false,
     hasSynced: false,
     downloadError: undefined,
+    ...opening,
   }
   let changed: () => void = () => undefined
   let inbox: (entries: readonly RecordedOutcome[]) => void = () => undefined
@@ -249,10 +254,14 @@ describe('a household’s replica', () => {
     browserWith(browser.api)
     const mine = replica()
     draw(() => Promise.resolve(mine.opened))
-    // Still at its first attempt: not yet known.
+    // Not yet tried, and then at its first attempt: not yet known.
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent(/^open null/)
     })
+    act(() => {
+      mine.becomes({ connecting: true })
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/^open null/)
     act(() => {
       mine.becomes({ connected: true, connecting: false, hasSynced: true })
     })
@@ -262,6 +271,40 @@ describe('a household’s replica', () => {
       mine.becomes({ connected: false, connecting: false, downloadError: new Error('down') })
     })
     expect(screen.getByRole('status')).toHaveTextContent(/^open false/)
+    // The SDK tries again every few seconds, and keeps the failure until an attempt succeeds:
+    // it is said for as long, and not taken back for the length of each attempt.
+    act(() => {
+      mine.becomes({ connecting: true })
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/^open false/)
+    act(() => {
+      mine.becomes({ connecting: false })
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/^open false/)
+    act(() => {
+      mine.becomes({ connected: true, connecting: false })
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/^open true/)
+  })
+
+  it('says nothing of a replica opened again until an attempt of its has failed', async () => {
+    const browser = locks()
+    browserWith(browser.api)
+    // A database that synced on an earlier visit says so as it is opened, connected to nothing
+    // yet: that is no failure to receive.
+    const mine = replica({ hasSynced: true })
+    draw(() => Promise.resolve(mine.opened))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/^open null/)
+    })
+    act(() => {
+      mine.becomes({ connecting: true })
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/^open null/)
+    act(() => {
+      mine.becomes({ connected: true, connecting: false })
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/^open true/)
   })
 
   it('tells what needs the member’s attention, as the replica holds it', async () => {

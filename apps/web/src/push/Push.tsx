@@ -5,17 +5,18 @@
 // browser may have let one go since. Nothing is asked: the browser's question is a press's alone
 // (worker.ts).
 import { useEffect } from 'react'
-import { useApi } from '../api/ApiProvider.tsx'
+import { useApi, useProblems } from '../api/ApiProvider.tsx'
 import { useSession } from '../session/SessionProvider.tsx'
 import { PushLinks } from './PushLinks.tsx'
 import { renewPush } from './worker.ts'
 
 export function Push() {
   const api = useApi()
+  const problems = useProblems()
   const { state } = useSession()
   const member = state.status === 'member' ? state.me.id : null
   useEffect(() => {
-    if (member !== null) void renewPush(api)
-  }, [api, member])
+    if (member !== null) void renewPush(api, problems)
+  }, [api, problems, member])
   return <PushLinks />
 }

@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { pushOpenMessage } from '../../build/pushWorker.ts'
 import { createWebClient } from '../api/client.ts'
 import { ApiProblemError } from '../api/problem.ts'
+import { createProblemHub } from '../api/problems.ts'
 import { Providers } from '../app/App.tsx'
 import { paths } from '../app/paths.ts'
 import { routes } from '../app/routes.tsx'
@@ -35,6 +36,9 @@ import {
 } from './worker.ts'
 
 const origin = 'https://household.example'
+
+/** Where a renewal tells what it was refused with, in a test that listens for none of it. */
+const unheard = createProblemHub()
 
 let browser: PushStandIns | undefined
 
@@ -193,13 +197,13 @@ describe('turning notifications off in this browser', () => {
     expect(unsubscribed()).toBe(1)
 
     // The permission is granted still, and the member turned them off here: a sign-in leaves it.
-    await renewPush(api)
+    await renewPush(api, unheard)
     expect(subscribe).not.toHaveBeenCalled()
     expect(sent).toHaveLength(1)
 
     // Turned on again by the member, it is renewed again.
     await subscribePush(api)
-    await renewPush(api)
+    await renewPush(api, unheard)
     expect(sent.filter((each) => each.method === 'POST')).toHaveLength(2)
   })
 
@@ -219,7 +223,7 @@ describe('renewing after a sign-in', () => {
   it('registers a browser that allows notifications, asking nothing', async () => {
     const { notification, subscribe } = withPush({ permission: 'granted' })
     const { api, sent } = server({})
-    await renewPush(api)
+    await renewPush(api, unheard)
     expect(notification.requestPermission).not.toHaveBeenCalled()
     expect(subscribe).toHaveBeenCalledTimes(1)
     expect(sent.at(-1)?.method).toBe('POST')
@@ -228,9 +232,9 @@ describe('renewing after a sign-in', () => {
   it('leaves a browser that was never asked, or refused, as it is', async () => {
     const { notification, register } = withPush({ permission: 'default' })
     const { api, sent } = server({})
-    await renewPush(api)
+    await renewPush(api, unheard)
     notification.permission = 'denied'
-    await renewPush(api)
+    await renewPush(api, unheard)
     expect(notification.requestPermission).not.toHaveBeenCalled()
     expect(register).not.toHaveBeenCalled()
     expect(sent).toEqual([])
@@ -238,12 +242,25 @@ describe('renewing after a sign-in', () => {
 
   it('swallows a browser with no Push, and a server that fails', async () => {
     const quiet = server({})
-    await expect(renewPush(quiet.api)).resolves.toBeUndefined()
+    await expect(renewPush(quiet.api, unheard)).resolves.toBeUndefined()
     expect(quiet.sent).toEqual([])
 
     withPush({ permission: 'granted' })
     const failing = server({ register: () => refusal(500, 'internal') })
-    await expect(renewPush(failing.api)).resolves.toBeUndefined()
+    await expect(renewPush(failing.api, unheard)).resolves.toBeUndefined()
+  })
+
+  it('tells what the server refused it with, as a request made outside any query must', async () => {
+    withPush({ permission: 'granted' })
+    const problems = createProblemHub()
+    const told: (string | undefined)[] = []
+    problems.subscribe((problem) => {
+      told.push(problem.code)
+    })
+    // The session ended since this page read its account: the session is told so.
+    const ended = server({ register: () => refusal(401, 'unauthenticated') })
+    await expect(renewPush(ended.api, problems)).resolves.toBeUndefined()
+    expect(told).toEqual(['unauthenticated'])
   })
 })
 
@@ -258,7 +275,7 @@ describe('forgetting at a sign-out', () => {
     expect(sent.map((request) => request.method)).toEqual(['DELETE'])
     expect(unsubscribed()).toBe(1)
     // The next sign-in subscribes it again.
-    await renewPush(api)
+    await renewPush(api, unheard)
     expect(subscribe).toHaveBeenCalledTimes(1)
   })
 

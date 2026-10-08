@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiProblemError } from '../api/problem.ts'
 import { challengeIn, dropChallenge, heldChallenge, holdChallenge } from './challenge.ts'
 import { noticeIn, noticeState } from './notice.ts'
-import { sentState, sentTo } from './sent.ts'
+import { sentAt, sentState, sentTo } from './sent.ts'
 
 /** What `unwrap` throws for a response of `status` whose body is `body`. */
 function refusal(status: number, body: unknown): ApiProblemError {
@@ -87,6 +87,16 @@ describe('what a history entry carries to a screen', () => {
     expect(sentTo(sentState('jana@example.test'))).toBe('jana@example.test')
     for (const state of [undefined, null, 'jana@example.test', {}, { email: '' }, { email: 1 }]) {
       expect(sentTo(state)).toBeUndefined()
+    }
+  })
+
+  it('is when that link was sent, where it says', () => {
+    const before = Date.now()
+    const at = sentAt(sentState('jana@example.test'))
+    expect(at).toBeGreaterThanOrEqual(before)
+    expect(at).toBeLessThanOrEqual(Date.now())
+    for (const state of [undefined, null, 7, {}, { at: '7' }, { at: Number.NaN }]) {
+      expect(sentAt(state)).toBeUndefined()
     }
   })
 })

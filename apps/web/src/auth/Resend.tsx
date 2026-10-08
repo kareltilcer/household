@@ -31,11 +31,16 @@ interface Wait {
   readonly now: number
 }
 
-/** A wait, counted down as its seconds pass. */
-function useWait(waiting: boolean) {
+/**
+ * A wait, counted down as its seconds pass. It begins with what is left of the minute a link
+ * sent at `sentAt` began: nothing, on a page loaded again after it, and never more than the
+ * minute, whatever the device's clock has done since.
+ */
+function useWait(sentAt: number | undefined) {
   const [wait, setWait] = useState<Wait>(() => {
     const now = Date.now()
-    return { until: waiting ? now + cooldown : undefined, now }
+    const until = sentAt === undefined ? now : Math.min(sentAt, now) + cooldown
+    return { until: until > now ? until : undefined, now }
   })
   const waitUntil = useCallback((until: number) => {
     setWait({ until, now: Date.now() })
@@ -61,18 +66,21 @@ export interface ResendProps {
   readonly to?: string | undefined
   /** What the control says while it can be pressed. */
   readonly label: string
-  /** A link was sent as the screen opened, so the control starts out waiting its minute. */
-  readonly sentJustNow?: boolean
+  /**
+   * When a link was last sent to the address, as `Date.now()` counts, where the screen knows:
+   * the control starts out waiting what is left of its minute.
+   */
+  readonly sentAt?: number | undefined
 }
 
-export function Resend({ to, label, sentJustNow = false }: ResendProps) {
+export function Resend({ to, label, sentAt }: ResendProps) {
   const t = useTranslate()
   const format = useFormat()
   const api = useApi()
   const problemText = useProblemText()
   const [typed, setTyped] = useState('')
   const [fault, setFault] = useState<{ readonly email: EmailFault }>()
-  const { seconds, until, waitUntil } = useWait(sentJustNow)
+  const { seconds, until, waitUntil } = useWait(sentAt)
 
   const resend = useMutation({
     mutationFn: async (email: string) => {

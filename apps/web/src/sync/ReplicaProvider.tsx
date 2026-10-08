@@ -58,13 +58,16 @@ export interface ReplicaProviderProps {
   readonly open?: OpenReplica
 }
 
-/** Whether the replica is receiving, read off PowerSync's status. */
+/**
+ * Whether the replica is receiving, read off PowerSync's status. It is not once an attempt of
+ * its has failed, and the SDK keeps that failure through every attempt after it, until one
+ * succeeds. Before that there is nothing to say: a replica opened again has synced before and
+ * has not tried yet, and one at its first attempt has not failed.
+ */
 function receivingOf(replica: Replica): boolean | null {
   const status = replica.db.currentStatus
   if (status.connected) return true
-  // Still at its first attempt, or between two: not yet a thing to say.
-  if (status.connecting) return null
-  return status.downloadError === undefined && status.hasSynced !== true ? null : false
+  return status.downloadError === undefined ? null : false
 }
 
 export function ReplicaProvider({ household, children, open }: ReplicaProviderProps) {

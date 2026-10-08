@@ -187,10 +187,11 @@ describe('check your email', () => {
     })
   }
 
-  const sent = { pathname: paths.verifySent.path, state: sentState(address) }
+  /** The entry a registration answered just now leads to, made as the test's clock reads. */
+  const sent = () => ({ pathname: paths.verifySent.path, state: sentState(address) })
 
   it('says where the link went, and leads on', async () => {
-    open(sent)
+    open(sent())
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Check your email' }),
     ).toBeInTheDocument()
@@ -215,7 +216,7 @@ describe('check your email', () => {
     const user = userEvent.setup()
     const backend = serve()
     backend.on(resend, () => empty(202))
-    open(sent, { backend })
+    open(sent(), { backend })
     const control = await screen.findByRole('button', { name: 'Send it again in 60 s' })
     expect(control).toHaveAttribute('aria-disabled', 'true')
     await user.click(control)
@@ -248,12 +249,31 @@ describe('check your email', () => {
     expect(control).toHaveAccessibleName('Send it again in 60 s')
   })
 
+  it('waits what is left of the minute on a page loaded again, and not at all once it is over', async () => {
+    holdTheClock()
+    // The history entry is as the registration left it, however much later it is drawn again.
+    const entry = sent()
+    pass(20_000)
+    const again = open(entry)
+    expect(await screen.findByRole('button', { name: 'Send it again in 40 s' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    again.unmount()
+
+    pass(60_000)
+    open(entry)
+    expect(await screen.findByRole('button', { name: 'Send it again' })).not.toHaveAttribute(
+      'aria-disabled',
+    )
+  })
+
   it('takes a limit for the wait it is, for as long as the server says', async () => {
     holdTheClock()
     const user = userEvent.setup()
     const backend = serve()
     backend.on(resend, () => problem(429, 'rate_limited', {}, { 'Retry-After': '30' }))
-    open(sent, { backend })
+    open(sent(), { backend })
     const control = await screen.findByRole('button', { name: 'Send it again in 60 s' })
     pass(60_000)
     await user.click(control)

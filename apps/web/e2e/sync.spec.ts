@@ -47,6 +47,50 @@ test('a household’s replica opens under the policy, as the session, and connec
   await expect(page.getByRole('status')).toHaveCount(0)
 })
 
+test('with the sync service gone a household says so once, through every attempt to reach it', async ({
+  page,
+  context,
+  enter,
+  faults,
+}) => {
+  const household = await enter()
+  // The sync service refuses every connection, its socket among them, and the API answers as
+  // ever (D-105). Each refusal is an attempt of the replica's, which tries again every 5 s.
+  let attempts = 0
+  await context.route(`${devSyncOrigin}/**`, (route) => {
+    attempts += 1
+    return route.abort('connectionrefused')
+  })
+  await page.routeWebSocket(
+    (url) => url.href.startsWith(devSyncOrigin.replace(/^http/, 'ws')),
+    (socket) => {
+      attempts += 1
+      void socket.close()
+    },
+  )
+  await open(page, inHousehold.home(household))
+  const bar = page
+    .getByRole('status')
+    .filter({ hasText: 'Not receiving changes from other members right now.' })
+  await expect(bar).toBeVisible()
+
+  // The bar that is drawn stays drawn while the replica tries again: taken away for the length
+  // of an attempt and put back, it would be said anew every few seconds for as long as the
+  // service is gone.
+  const drawn = await bar.elementHandle()
+  const before = attempts
+  await expect.poll(() => attempts, { timeout: 30_000 }).toBeGreaterThan(before)
+  await frames(page)
+  expect(await drawn.evaluate((element) => element.isConnected)).toBe(true)
+  await expect(bar).toHaveCount(1)
+  // The connections refused, as the browser and the SDK each say them, are this test's own
+  // doing, and its only faults.
+  expect(
+    faults.filter((fault) => !/ERR_CONNECTION_REFUSED|^\[PowerSync\]: Sync error/.test(fault)),
+  ).toEqual([])
+  faults.length = 0
+})
+
 test('a second tab leaves the household’s replica to the first', async ({
   page,
   context,

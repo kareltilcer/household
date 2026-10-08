@@ -88,7 +88,10 @@ another waits, says where the sync UI would be that another tab keeps this house
 over when the first lets go. The replica is closed, and the lock with it, when the household
 leaves the screen. Nothing of the sync library or its SDK is in a page until a replica is first
 opened: every other file imports the library for its types alone, and what a screen needs of it
-at run time is handed over with the open replica (`sync/open.ts`).
+at run time is handed over with the open replica (`sync/open.ts`). With the replica comes
+whether it is receiving the household's changes, which the bar above a household's screens says
+where it is not (D-105): not, once an attempt of the replica's has failed, for as long as the
+SDK keeps that failure, which is until an attempt succeeds; and nothing to say before then.
 
 **The policy is widened by three sources and nothing else.** `script-src` gains
 `'wasm-unsafe-eval'`, which lets a page compile WebAssembly and evaluates no string as script;
@@ -172,6 +175,7 @@ every other console error still fails its test.
 | A `fetch` that turns the library's bearer into a cookie on the server's side, or a web-session token minted for the replica | The first is the server reading a credential it was not sent. The second is a second credential for a browser that has one, with its own lifetime and revocation to keep in step |
 | PowerSync's shared worker (`multiTab`) in place of the lock | It shares the connection, not the connector: two tabs would still each push the queue (ADR 0019) |
 | A `BroadcastChannel` election of the tab that holds the replica | A lock the browser releases when a tab dies, with no heartbeat to time out |
+| Whether a replica is receiving read off the SDK's `connecting` and `hasSynced`, as item 25 first had it | A replica opened again has synced before and has not tried yet, so every household opened a second time was said, and announced, not to be receiving until its connection was made. And `connecting` is true for the length of every attempt, so with the sync service gone the bar was taken away and said anew at each, every five seconds. The failure of the last attempt, which the SDK keeps until one succeeds, is neither |
 | `'unsafe-eval'`, or the SDK built without WebAssembly | The first is what PRD 07 §4 forbids. There is no SQLite for the browser that is not WebAssembly |
 | The sync service's origin as a wildcard, or `connect-src *` | A policy is widened for one origin. A page that could connect anywhere could send what it reads anywhere |
 | The sync origin read at run time from the API's answer | The policy is in the page before any script runs: a script cannot widen it |
@@ -182,6 +186,7 @@ every other console error still fails its test.
 | A service worker that also caches the app, for offline | PL-4 names none, and it would serve the files a newer build replaces (ADR 0025). The web reads from its persisted cache |
 | Notification permission asked at sign-in | 06-clients §6: asked in context, never on first launch |
 | The browser's subscription removed after the sign-out, or put back where the sign-out failed | It goes first so that a session that still stands tells the server, and after it there is none to tell with. Put back, it needs the server the sign-out could not reach. A member whose sign-out failed was leaving, and the app registers the browser again when it next starts with them signed in (`push/Push.tsx`) |
+| What that removal was refused with told to the problem hub, as the renewal's is and as a request outside a query otherwise owes | The sign-out follows it at once and is told its own refusal. Told of the removal's first, a session the server had ended already would be drawn as one that expired under its member, the address they pressed *Sign out* at held for whoever signs in next, where the sign-out reads the same `401` as the sign-out done |
 | The file of recovery codes let go of in the press that hands it over, or by a timer after it | A browser may begin reading the file only once the press has returned, and how long after is its own affair. It is let go of with the screen that showed the codes |
 | A catalog that failed to load imported again when the connection is back | Chromium keeps an import that failed and answers the next one of the same file with that failure, asking the network nothing: the page stayed blank until it was reloaded by hand. The page is loaded again, which asks for every file of its own anew, and a language chosen later says to reload |
 | The catalogs fetched as data, which can be asked for again, and not imported | A second way to load and to name a build's files, and to count them in the budget, for a failure that loading the page again answers |
@@ -194,7 +199,9 @@ every other console error still fails its test.
 ## Consequences
 
 - A screen's requests go through TanStack Query, their answers through `unwrap`: that is how
-  the session hears of the three answers. A request made outside it tells the hub itself.
+  the session hears of the three answers. A request made outside it tells the hub itself, as
+  the renewal of a browser's push does (`push/worker.ts`); the one that does not is the removal
+  a sign-out follows, whose own refusal is told (above).
 - A module's screen shows a row's state through `sync/` and never imports the library's code:
   what it needs at run time is added to `Opened` (`sync/open.ts`).
 - **Item 26** registers household settings in `modules/registry.ts`, the first module the
