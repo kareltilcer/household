@@ -160,7 +160,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   it: a `401` ends it and removes what the browser kept, the persisted cache and every replica, a
   `403 csrf_failed` signs in again and removes nothing, and a `400 update_required` draws *please
   update* and nothing else ([D-156](docs/prd/09-decisions.md), [D-158](docs/prd/09-decisions.md)).
-  A request asked outside a query or a mutation tells the problem hub itself, and a write that
+  A request asked outside a query or a mutation tells the problem hub itself, but for the one a
+  sign-out follows at once, whose own refusal is told (`push/worker.ts`), and a write that
   changes what `GET /me` answers reads the account again (`meKey`) before it leads anywhere.
   What a browser keeps is its member's and for no longer than their session, whether or not a
   page knew them when it ended: a browser with no session keeps no replica, and a page that finds
@@ -180,13 +181,17 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   by a Web Lock, opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
   imported for its types alone outside `sync/open.ts`, which ESLint holds and which is what keeps
   the library and its SDK out of a page until a replica is opened, and a run-time value a screen
-  needs of it is added to `Opened` there. The policy admits three sources beside its own origin: for the replica,
+  needs of it is added to `Opened` there. Whether a replica is receiving (D-105) is read off the
+  failure the SDK keeps until an attempt succeeds, never off `connecting` or `hasSynced`: a
+  replica opened again has synced and has not tried yet, and every retry is connecting. The policy admits three sources beside its own origin: for the replica,
   `'wasm-unsafe-eval'` and the sync service's origin in `connect-src`, and for a picture the
   object store's origin in `img-src`, both origins told to a build (`HOUSEHOLD_WEB_SYNC_ORIGIN`,
   `HOUSEHOLD_WEB_FILES_ORIGIN`). The end-to-end suite starts the API itself on the development
   services, each test a network of its own (`e2e/stack.ts`), and a member's routes are walked
   signed in; what the suite names a person or a household holds no run of four plain letters,
-  which the pseudo-locale pass takes for a word nobody translated.
+  which the pseudo-locale pass takes for a word nobody translated. Every test starts in a browser
+  that kept nothing, with every service answering: what a screen draws on a second visit, or with
+  a service away, is walked only by a test that reloads or takes the service away.
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
