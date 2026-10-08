@@ -50,6 +50,14 @@ export function noteReplica(household: string): void {
 }
 
 /**
+ * Whether this browser noted a replica it has not removed since: what says one may be kept where
+ * nothing else does, the session's cookies lapsed and the account it read kept no longer.
+ */
+export function keepsReplicas(): boolean {
+  return listed().some(isReplicaDatabase)
+}
+
+/**
  * Removes every replica this browser keeps. A database that is open, in this tab or another, is
  * removed once it has been closed, and whatever asks to open it meanwhile waits for that: the
  * removal is asked for here and not waited on, since a tab that never closes its replica would

@@ -9,7 +9,7 @@
 // A session has nothing to renew. What a `401` means for one is the credential's to say
 // (`sessionCredential`): the session ended, and the replica is discarded (FR-ID7).
 import { isUnsafeMethod, readProblem, type ApiClient } from '@household/api'
-import { Revoked, type Credential } from '@household/sync'
+import type { Credential } from '@household/sync'
 import { clientName, cookieValue, csrfCookie } from '../api/client.ts'
 import type { ProblemHub } from '../api/problems.ts'
 
@@ -63,15 +63,23 @@ export function sessionFetch({
  * other request, and the replica is told its sign-in has ended, at which it discards itself
  * (FR-ID7). Any other answer leaves the replica to ask again: one refused request is no proof
  * that a session has gone.
+ *
+ * `ended` makes what tells the replica so, the library's `Revoked`: whoever opens the replica
+ * hands it over (open.ts), and this file imports the library for its types alone, as every file
+ * but that one does.
  */
-export function sessionCredential(api: ApiClient, problems: ProblemHub): Credential {
+export function sessionCredential(
+  api: ApiClient,
+  problems: ProblemHub,
+  ended: () => Error,
+): Credential {
   return {
     current: () => Promise.resolve('session'),
     renew: async () => {
       const { response, error } = await api.GET('/me')
       if (response.status !== 401) return
       problems.report(readProblem(response.status, error))
-      throw new Revoked('the web session has ended')
+      throw ended()
     },
   }
 }

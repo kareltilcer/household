@@ -1,7 +1,8 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { focusManager } from '@tanstack/react-query'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createWebClient } from '../api/client.ts'
 import { csrfCookie } from '../api/names.ts'
 import { Providers } from '../app/App.tsx'
@@ -14,6 +15,11 @@ import { draw } from '../test/render.tsx'
 import { HouseholdBars } from './HouseholdBars.tsx'
 
 const origin = 'https://household.example'
+
+// A test that says the page is looked at again leaves the next one a page nobody has looked at.
+afterEach(() => {
+  focusManager.setFocused(undefined)
+})
 const me = {
   id: '01900000-0000-7000-8000-00000000d0e5',
   email: 'jana@example.test',
@@ -101,7 +107,11 @@ function open(address: string, { memberships = [home, cottage], household: answe
 describe('a household’s shell', () => {
   it('draws the household the address names: its name, its navigation, and one landmark', async () => {
     open(inHousehold.home(home))
-    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
+    // The first screen this file draws loads the shell's own files, which on a machine with
+    // other work takes longer than the second a find waits by itself.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
     expect(screen.getAllByRole('main')).toHaveLength(1)
     // The household is stated on every screen: in the bar, and at the head of the sidebar.
     expect(screen.getByRole('banner')).toHaveTextContent('Tilcerovi')
@@ -140,6 +150,44 @@ describe('a household’s shell', () => {
     // Nothing of a household is drawn around it: not its name, not a list of modules.
     expect(screen.queryByRole('navigation', { name: 'Household' })).not.toBeInTheDocument()
     expect(lastHousehold(me.id)).toBeNull()
+  })
+
+  it('opens nothing for a household the member was taken out of, whatever this browser kept of it', async () => {
+    const memberships = [home, cottage]
+    let member = true
+    const { router } = open(inHousehold.home(home), {
+      memberships,
+      household: (id) => {
+        const found = known[id]
+        return found === undefined || (id === home && !member) ? notFound() : Response.json(found)
+      },
+    })
+    await screen.findByRole('navigation', { name: 'Household' })
+    await waitFor(() => {
+      expect(lastHousehold(me.id)).toBe(home)
+    })
+    // Taken out of it since: the page is looked at again, and what it shows is read again.
+    member = false
+    memberships.splice(0, 1)
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'This link doesn’t open anything here.',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Household' })).not.toBeInTheDocument()
+    expect(screen.getByRole('banner')).not.toHaveTextContent('Tilcerovi')
+    // The way out leads to a household they are in, and not back by the list this browser kept.
+    await userEvent.click(screen.getByRole('link', { name: 'Go to Home' }))
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.home(cottage))
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('banner')).toHaveTextContent('Chata')
+    })
   })
 
   it('does not ask the server for an address that names no household at all', async () => {

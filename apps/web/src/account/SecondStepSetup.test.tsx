@@ -1,6 +1,6 @@
 // Turning the second step on (A-5, A-6): the password, the square and the key, the code and its
 // refusals, and the ten recovery codes, which are shown once and asked about before they go.
-import { screen, waitFor, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { squares } from './QrCode.tsx'
 import { codesFile } from './RecoveryCodes.tsx'
@@ -105,12 +105,15 @@ describe('turning the second step on', () => {
     expect(await screen.findByText('Copied all ten')).toBeInTheDocument()
 
     const files: Blob[] = []
+    const released: string[] = []
     vi.stubGlobal('URL', {
       createObjectURL: (file: Blob) => {
         files.push(file)
         return 'blob:codes'
       },
-      revokeObjectURL: () => undefined,
+      revokeObjectURL: (address: string) => {
+        released.push(address)
+      },
     })
     const names: string[] = []
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click(
@@ -120,6 +123,8 @@ describe('turning the second step on', () => {
     })
     await user.click(screen.getByRole('button', { name: 'Download' }))
     expect(names).toEqual([codesFile])
+    // The file is the browser's to read once the press has returned: it is not let go of in it.
+    expect(released).toEqual([])
     const text = await files[0]?.text()
     expect(text).toContain('Household recovery codes.')
     expect(text?.trim().split('\n').slice(-10)).toEqual(codes)
@@ -128,6 +133,10 @@ describe('turning the second step on', () => {
     vi.stubGlobal('print', print)
     await user.click(screen.getByRole('button', { name: 'Print' }))
     expect(print).toHaveBeenCalledTimes(1)
+
+    // It is let go of with the screen that showed the codes.
+    cleanup()
+    expect(released).toEqual(['blob:codes'])
   })
 
   it('says a wrong password is wrong, where it was asked', async () => {

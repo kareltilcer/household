@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-08
 - **Plan item:** 25
-- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §5–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-160; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
+- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §5–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-161; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
 
 ## Context
 
@@ -51,7 +51,18 @@ persisted cache and every replica's database, is removed, and the address they w
 for the sign-in that follows. A `403 csrf_failed` signs them in again and removes nothing. A `400
 update_required` draws one screen in every route's place, whose action reloads the page. Signing
 out ends the session at the server first, and removes the same only once it has: unreached, the
-member is still signed in and is told so.
+member is still signed in and is told so, and a session the server ended already is signed out.
+
+**What a browser keeps is its member's, and for no longer than their session** (D-161). The
+account it keeps is kept for a day and for one build, and the session's cookies lapse with the
+session; a replica outlives both, and is one database for each household, opened by whoever is
+signed in. So the removal does not wait on a page that knew the member. A `401` to `GET /me`
+ends the session of a page that had read no account, which is not asked again; a browser with
+no session that still notes a replica (`sync/databases.ts`) removes what it kept as it starts;
+and a page that finds another member signed in under it, from another tab or where a failed
+CSRF check left the first one's page as it was, removes what it kept and starts again by a
+reload. A household the server answers `404` for opens nothing whatever the browser kept of
+it, and the list it kept, which may be what led there, is read again.
 
 **A build is `web/<version>+<build id>`** (D-158). The version is `apps/web/package.json`'s,
 raised by the pull request after which a deployment must refuse older builds, and by no other;
@@ -139,6 +150,11 @@ every other console error still fails its test.
 |---|---|
 | Asking `GET /me` on every load, whoever is there | A visitor's every page would ask for what the server refuses, and a browser logs each refusal as an error. The CSRF cookie is set and cleared with the session's, so its absence is the answer |
 | The replica kept when a session ends, for the member's return | A session ended from elsewhere is how a lost browser is dealt with (D-156) |
+| What a session left removed only by a page that had read its account | The kept account lasts a day and one build, and the cookies lapse with the session: the lost browser D-156 is for is opened later than either, and the replica it left would be the next member's to open (D-161) |
+| A replica and a cache named for the member as well as the household | Every member's copy would stay in a shared browser until they came back to sign out of it, which is the replica kept for a return. One database a household, removed with its session, has nothing to tell apart |
+| The first member's page kept where another is found signed in, its reads asked again | What its screens hold in memory is the first one's, and a read that now fails keeps what it last had. A page that starts again holds nothing of them, and the open replica is closed by the page that goes |
+| A household drawn from what the browser kept while the server answers `404` for it | A kept read stands in for a server that cannot be asked, not for one that answered: a member taken out of a household would be drawn its shell for as long as the cache lasts (F-17) |
+| Where the app opens waiting on the list of households being read again, every time | A round trip before every opening, and seconds of it on a connection that fails, to cover a list that named a household since left: that list is dropped by the `404` that found it out |
 | A `fetch` that turns the library's bearer into a cookie on the server's side, or a web-session token minted for the replica | The first is the server reading a credential it was not sent. The second is a second credential for a browser that has one, with its own lifetime and revocation to keep in step |
 | PowerSync's shared worker (`multiTab`) in place of the lock | It shares the connection, not the connector: two tabs would still each push the queue (ADR 0019) |
 | A `BroadcastChannel` election of the tab that holds the replica | A lock the browser releases when a tab dies, with no heartbeat to time out |
@@ -151,6 +167,8 @@ every other console error still fails its test.
 | The providers a build offers as a build-time setting | A deployment that configures a provider would rebuild its web client to show it, and the two would disagree in between |
 | A service worker that also caches the app, for offline | PL-4 names none, and it would serve the files a newer build replaces (ADR 0025). The web reads from its persisted cache |
 | Notification permission asked at sign-in | 06-clients §6: asked in context, never on first launch |
+| The browser's subscription removed after the sign-out, or put back where the sign-out failed | It goes first so that a session that still stands tells the server, and after it there is none to tell with. Put back, it needs the server the sign-out could not reach. A member whose sign-out failed was leaving, and the app registers the browser again when it next starts with them signed in (`push/Push.tsx`) |
+| The file of recovery codes let go of in the press that hands it over, or by a timer after it | A browser may begin reading the file only once the press has returned, and how long after is its own affair. It is let go of with the screen that showed the codes |
 | English in the entry as a fallback for a catalog that fails to load | Counted on every visit of members who do not read it (D-159) |
 | Every granted module listed, with a screen that says it is not built | A link to nothing (D-160) |
 | The arrangement in a synced entity now | A server item's work inside this one (D-155) |

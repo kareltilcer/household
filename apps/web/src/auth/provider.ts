@@ -10,6 +10,8 @@
 // what Apple sent in the fragment. A deployment registers these two addresses with the
 // providers and with the server, exactly (docs/runbooks/sign-in-keys-and-providers.md).
 import type { ApiClient } from '@household/api'
+import { useQuery } from '@tanstack/react-query'
+import { useApi } from '../api/ApiProvider.tsx'
 import { apiPath } from '../api/client.ts'
 import { unwrap } from '../api/problem.ts'
 import { fill, paths } from '../app/paths.ts'
@@ -19,6 +21,19 @@ export type Provider = (typeof providers)[number]
 
 export function isProvider(value: unknown): value is Provider {
   return providers.some((provider) => provider === value)
+}
+
+/**
+ * The providers this server signs in with (`getAuthOauth`), for a screen that offers those and
+ * no other (FR-ID2). What the server is configured for today: asked each time, and kept nowhere.
+ */
+export function useOfferedProviders() {
+  const api = useApi()
+  return useQuery({
+    queryKey: ['auth', 'oauth'] as const,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/auth/oauth', { signal })).providers,
+    meta: { persist: false },
+  })
 }
 
 /** What a flow was begun for: to sign in, or to link the provider to the account signed in. */

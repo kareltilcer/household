@@ -1,4 +1,4 @@
-// The catalogs this page holds. The web app loads one language at a time (D-153): the entry
+// The catalogs this page holds. The web app loads one language at a time (D-159): the entry
 // fetches the catalog of the language it starts in before it draws a word (main.tsx), and a
 // language chosen later is fetched when it is chosen. What has arrived is kept here, outside
 // React, so that the provider reads it as it draws and a switch back to a language already

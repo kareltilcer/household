@@ -530,7 +530,7 @@ export default defineConfig(
     rules: { 'household/no-literal-strings': 'error', 'household/semantic-tokens': 'error' },
   },
   {
-    // The web app loads one language at a time (D-153, plan item 25): the package's own entry
+    // The web app loads one language at a time (D-159, plan item 25): the package's own entry
     // holds all five catalogs, and one import of it puts them back into the first download. A
     // test may hold them all, to say what a key reads in each.
     files: ['apps/web/src/**'],

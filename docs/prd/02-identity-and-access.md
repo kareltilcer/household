@@ -143,6 +143,10 @@ browser as a `401`, and takes what the browser kept with it: the persisted cache
 household's replica are removed, and the address the member was at is held for the sign-in that
 follows. A request the server did not take for the app's own, `403 csrf_failed`, asks for a new
 sign-in and removes nothing (**D-156**, [ADR 0026](../adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)).
+What a browser keeps is its member's, and for no longer than their session: it is removed too
+where the session is found gone by a page that never knew its member, the account it read kept
+no longer or its cookies lapsed, and a page that finds another member signed in under it removes
+what it kept and starts again (**D-161**).
 
 **FR-ID8 — Account deletion.** Self-service, from the app. See
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §4 for what happens to households

@@ -6,7 +6,7 @@
 // Copy, Download and Print are each a real way to keep them, the drawer being the place they
 // belong. *Finish* is there before the box is ticked: pressed too soon it asks again, and never
 // sits dead.
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
@@ -20,8 +20,11 @@ import styles from './Settings.module.css'
 /** The name of the file the codes are saved as: the same in every language, as a file's is. */
 export const codesFile = 'household-recovery-codes.txt'
 
-/** Hands the member `text` as a file named `name`: made in the page, and fetched from nowhere. */
-function download(name: string, text: string): void {
+/**
+ * Hands the member `text` as a file named `name`: made in the page, and fetched from nowhere. It
+ * answers with the address the file is at, for its caller to let go of.
+ */
+function download(name: string, text: string): string {
   const address = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = address
@@ -29,7 +32,7 @@ function download(name: string, text: string): void {
   document.body.append(link)
   link.click()
   link.remove()
-  URL.revokeObjectURL(address)
+  return address
 }
 
 export interface RecoveryCodesProps {
@@ -45,6 +48,16 @@ export function RecoveryCodes({ codes, onFinish }: RecoveryCodesProps) {
   const [saved, setSaved] = useState(false)
   const [asked, setAsked] = useState(false)
   const box = useRef<HTMLInputElement>(null)
+  // The files handed over are let go of with the screen, and not in the press that made them:
+  // a browser may begin reading a file only once the press has returned, and one let go of by
+  // then is saved as nothing.
+  const files = useRef<string[]>([])
+  useEffect(() => {
+    const made = files.current
+    return () => {
+      for (const address of made.splice(0)) URL.revokeObjectURL(address)
+    }
+  }, [])
   const list = codes.join('\n')
   return (
     <SettingsPage title={t('account.codes.title')} lead={t('account.codes.lead')}>
@@ -73,7 +86,9 @@ export function RecoveryCodes({ codes, onFinish }: RecoveryCodesProps) {
         </Button>
         <Button
           onClick={() => {
-            download(codesFile, `${t('account.codes.file_heading')}\n\n${list}\n`)
+            files.current.push(
+              download(codesFile, `${t('account.codes.file_heading')}\n\n${list}\n`),
+            )
           }}
         >
           {t('account.codes.download')}

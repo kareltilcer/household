@@ -1,8 +1,8 @@
-import { useMutation } from '@tanstack/react-query'
+import { focusManager, useMutation } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useApi } from '../api/ApiProvider.tsx'
 import { createWebClient } from '../api/client.ts'
 import { csrfCookie } from '../api/names.ts'
@@ -18,6 +18,11 @@ import { heldDestination, holdDestination, takeDestination } from './destination
 import { useSession } from './SessionProvider.tsx'
 
 const origin = 'https://household.example'
+
+// A test that says the page is looked at again leaves the next one a page nobody has looked at.
+afterEach(() => {
+  focusManager.setFocused(undefined)
+})
 const signedIn = `${csrfCookie}=token`
 
 const me = {
@@ -246,6 +251,125 @@ describe('a session that ends', () => {
     })
     expect(at.asked).toContain('POST /auth/logout')
     expect(deleted).toHaveBeenCalledWith(replicaDatabase(me.id))
+  })
+
+  it('by signing out of a session the server ended already is signed out, and not said to have failed', async () => {
+    let ended = false
+    const deleted = databases()
+    const at = server(() => (ended ? problem(401, 'unauthenticated') : Response.json(me)))
+    open(at)
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('member Jana')
+    })
+    noteReplica(me.id)
+    ended = true
+    await userEvent.click(screen.getByRole('button', { name: 'leave' }))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/^visitor en$/)
+    })
+    expect(deleted).toHaveBeenCalledWith(replicaDatabase(me.id))
+  })
+
+  it('is acted on where the page never knew the member: the account is kept for a day, and a replica for longer', async () => {
+    const deleted = databases()
+    // Left by a session of before: this page has read no account, and holds none.
+    noteReplica(me.id)
+    const at = server(() => problem(401, 'unauthenticated'))
+    open(at)
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('visitor expired')
+    })
+    await waitFor(() => {
+      expect(deleted).toHaveBeenCalledWith(replicaDatabase(me.id))
+    })
+    // The server said the session is gone, and is not asked again when the page is looked at.
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await act(() => Promise.resolve())
+    expect(at.asked).toEqual(['GET /me'])
+  })
+
+  it('unheard of, its cookies lapsed with it, leaves no replica in a browser that holds no session', async () => {
+    const deleted = databases()
+    noteReplica(me.id)
+    const at = server(
+      () => problem(401, 'unauthenticated'),
+      () => '',
+    )
+    open(at)
+    await waitFor(() => {
+      expect(deleted).toHaveBeenCalledWith(replicaDatabase(me.id))
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/^visitor en$/)
+    expect(at.asked).toEqual([])
+  })
+})
+
+describe('another member who signs in under an open page', () => {
+  const other = { ...me, id: '01900000-0000-7000-8000-00000000beef', display_name: 'Petr' }
+
+  it('is given nothing the first one’s page kept: it is removed, and the page starts again', async () => {
+    const deleted = databases()
+    const restart = vi.fn()
+    let who = me
+    const at = server(() => Response.json(who))
+    const router = createMemoryRouter(inRoot([{ path: '/', Component: Probe }]), {
+      initialEntries: ['/'],
+    })
+    render(
+      <Providers persist={false} client={at.client} cookies={at.cookies} restart={restart}>
+        <RouterProvider router={router} />
+      </Providers>,
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('member Jana')
+    })
+    noteReplica(me.id)
+    // The account is read again, as when the page is looked at again, and is another member's:
+    // they signed in from another tab of this browser.
+    who = other
+    await userEvent.click(screen.getByRole('button', { name: 'enter' }))
+    await waitFor(() => {
+      expect(restart).toHaveBeenCalledTimes(1)
+    })
+    expect(deleted).toHaveBeenCalledWith(replicaDatabase(me.id))
+  })
+
+  it('is no one new where the same member is read again, or signs in after signing out', async () => {
+    const restart = vi.fn()
+    databases()
+    let signedOut = false
+    const at = server((request) => {
+      if (request.method === 'POST') {
+        signedOut = true
+        return new Response(null, { status: 204 })
+      }
+      return Response.json(signedOut ? other : me)
+    })
+    const router = createMemoryRouter(inRoot([{ path: '/', Component: Probe }]), {
+      initialEntries: ['/'],
+    })
+    render(
+      <Providers persist={false} client={at.client} cookies={at.cookies} restart={restart}>
+        <RouterProvider router={router} />
+      </Providers>,
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('member Jana')
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'enter' }))
+    await act(() => Promise.resolve())
+    // Signed out, what the page kept went with them: whoever signs in next starts from nothing.
+    await userEvent.click(screen.getByRole('button', { name: 'leave' }))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/^visitor en$/)
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'enter' }))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('member Petr')
+    })
+    expect(restart).not.toHaveBeenCalled()
   })
 })
 

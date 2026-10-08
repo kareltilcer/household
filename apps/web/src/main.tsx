@@ -2,7 +2,7 @@
 // (ADR 0024), then the app's own ground; the display modes are on the root before anything is
 // drawn, as the script in the page's head already put them (build/boot.ts). The catalog of the
 // language the app starts in is fetched before a word is drawn: the app holds one language at a
-// time (D-153, ADR 0026).
+// time (D-159, ADR 0026).
 import '@household/tokens/fonts.css'
 import '@household/tokens/tokens.css'
 import './styles/base.css'

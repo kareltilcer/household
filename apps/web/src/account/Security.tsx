@@ -17,14 +17,14 @@
 //   could only fail is not drawn. The only way an account signs in cannot be disconnected.
 //
 // A child profile signs in with its PIN alone (D-104), and has none of these.
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { paths } from '../app/paths.ts'
-import { startProvider, type Provider } from '../auth/provider.ts'
+import { startProvider, useOfferedProviders, type Provider } from '../auth/provider.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { meKey, useMe, type Me } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -252,12 +252,7 @@ function SignInWith({ me }: { readonly me: Me }) {
   const queries = useQueryClient()
   const toast = useToast()
   const say = useProblemText(useOwnZone())
-  const offered = useQuery({
-    queryKey: ['auth', 'oauth'] as const,
-    queryFn: async ({ signal }) => unwrap(await api.GET('/auth/oauth', { signal })).providers,
-    // What the server is configured for today: asked each time, and kept nowhere.
-    meta: { persist: false },
-  })
+  const offered = useOfferedProviders()
   const name = (provider: Provider): string =>
     provider === 'google'
       ? t('account.security.providers.google')

@@ -1,8 +1,10 @@
 // The shell around one household: the one the address names (D-4). It reads the household as its
 // member does, keeps its replica open while it is on screen (sync/ReplicaProvider.tsx), and draws
 // its screens inside the frame. An address that names a household the member is not in, one that
-// is suspended, or no household at all, opens nothing, and says no more than that (F-17).
+// is suspended, or no household at all, opens nothing, and says no more than that (F-17): the
+// server's word for it stands over whatever this browser kept of the household.
 import { isUuid } from '@household/api'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Outlet, useParams } from 'react-router'
 import { problemIn } from '../api/problem.ts'
@@ -10,7 +12,7 @@ import { NotAvailable } from '../app/NotAvailable.tsx'
 import { Waiting } from '../app/guards.tsx'
 import styles from '../app/Root.module.css'
 import { HouseholdContext } from '../household/HouseholdContext.tsx'
-import { rememberHousehold, useHouseholdQuery } from '../household/households.ts'
+import { householdsKey, rememberHousehold, useHouseholdQuery } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import { ReplicaProvider } from '../sync/ReplicaProvider.tsx'
@@ -38,25 +40,34 @@ function Outside({ children }: { readonly children: React.ReactNode }) {
 function Opened({ id }: { readonly id: string }) {
   const t = useTranslate()
   const me = useMe()
+  const queries = useQueryClient()
   const household = useHouseholdQuery(id)
-  const found = household.data !== undefined
+  // The server's last word: the household is none of this member's, whether or not this
+  // browser kept it from when it was.
+  const gone = problemIn(household.error)?.status === 404
+  const found = household.data !== undefined && !gone
   useEffect(() => {
     if (found) rememberHousehold(me.id, id)
   }, [found, me.id, id])
+  // The list this browser kept may be what named it, and would lead back here from where the
+  // app opens: it is read again before it leads anywhere.
+  useEffect(() => {
+    if (gone) queries.removeQueries({ queryKey: householdsKey, exact: true })
+  }, [gone, queries])
 
+  // Not found is not an error: the address opens nothing for this member.
+  if (gone) {
+    return (
+      <Outside>
+        <NotAvailable />
+      </Outside>
+    )
+  }
   if (household.data === undefined) {
     if (!household.isError) {
       return (
         <Outside>
           <Waiting />
-        </Outside>
-      )
-    }
-    // Not found is not an error: the address opens nothing for this member.
-    if (problemIn(household.error)?.status === 404) {
-      return (
-        <Outside>
-          <NotAvailable />
         </Outside>
       )
     }

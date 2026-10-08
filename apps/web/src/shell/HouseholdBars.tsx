@@ -18,7 +18,7 @@ export function HouseholdBars() {
   const t = useTranslate()
   const { online, receiving } = useSync()
   const replica = useReplica()
-  const writes = useHousehold().entitlement?.can_write === true
+  const writes = useHousehold().entitlement?.can_write !== false
   useEffect(() => {
     if (writes) replica?.resume()
   }, [replica, writes])

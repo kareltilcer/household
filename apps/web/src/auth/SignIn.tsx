@@ -10,7 +10,7 @@
 // §9). An account with the second step on answers with a challenge, which signs nobody in: it is
 // held for the second-step screens (challenge.ts).
 import type { MessageKey } from '@household/i18n/lazy'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
@@ -27,7 +27,7 @@ import { challengeIn, holdChallenge } from './challenge.ts'
 import { Destination } from './Destination.tsx'
 import { checkEmail, EmailField, fieldCodes, refusedEmail, type EmailFault } from './fields.tsx'
 import { noticeIn, type Notice } from './notice.ts'
-import { providers, startProvider, type Provider } from './provider.ts'
+import { providers, startProvider, useOfferedProviders, type Provider } from './provider.ts'
 import { Form, Notices, Screen, Way, Ways } from './Screen.tsx'
 import styles from './Screen.module.css'
 
@@ -86,11 +86,7 @@ export function SignIn() {
 
   // The providers this server signs in with. A control that could only fail is not drawn
   // (FR-ID2), so until the list is known, and where it is empty, nothing of them is.
-  const offered = useQuery({
-    queryKey: ['auth', 'providers'],
-    queryFn: async ({ signal }) => unwrap(await api.GET('/auth/oauth', { signal })).providers,
-    meta: { persist: false },
-  })
+  const offered = useOfferedProviders()
   const listed = providers.filter((provider) => offered.data?.includes(provider) === true)
   const start = useMutation({
     mutationFn: (provider: Provider) => startProvider({ api, provider, intent: 'sign-in' }),

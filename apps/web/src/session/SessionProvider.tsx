@@ -10,6 +10,10 @@
 // - `400 update_required`: this build is older than the server serves. Nothing else is drawn but
 //   the screen that says so (UpdateRequired.tsx).
 //
+// What a browser keeps of a member's households is theirs, and for no longer than their session
+// (D-161). It is removed where the session is found gone though this page never knew its member,
+// and where another member is found signed in under the page, which then starts again.
+//
 // The language is the account's once it is known, and the display modes stay this browser's:
 // the account keeps none (ADR 0026).
 import type { components } from '@household/api'
@@ -29,6 +33,7 @@ import { useApi, useProblems } from '../api/ApiProvider.tsx'
 import { cookieValue, csrfCookie } from '../api/client.ts'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useI18n } from '../i18n/I18nProvider.tsx'
+import { keepsReplicas } from '../sync/databases.ts'
 
 export type Me = components['schemas']['Me']
 
@@ -78,11 +83,25 @@ export interface SessionProviderProps {
   readonly forget: () => Promise<void>
   /** Reads the page's cookies. Defaults to `document.cookie`. */
   readonly cookies?: () => string
+  /**
+   * Starts the page again, for whoever is signed in now: called once what it kept of another
+   * member has been removed. Defaults to a reload.
+   */
+  readonly restart?: () => void
 }
 
 const pageCookies = () => document.cookie
 
-export function SessionProvider({ children, forget, cookies = pageCookies }: SessionProviderProps) {
+const reloadPage = () => {
+  window.location.reload()
+}
+
+export function SessionProvider({
+  children,
+  forget,
+  cookies = pageCookies,
+  restart = reloadPage,
+}: SessionProviderProps) {
   const api = useApi()
   const problems = useProblems()
   const queries = useQueryClient()
@@ -133,11 +152,34 @@ export function SessionProvider({ children, forget, cookies = pageCookies }: Ses
   }, [forget])
 
   // What a session that is gone left behind is removed, whether its ending was heard of here or
-  // not: an account still kept in a browser whose cookies were cleared.
+  // not: an account still kept in a browser whose cookies were cleared, and a replica, which is
+  // kept for longer than the account's day and outlives the cookies that lapsed with its session.
   const kept = account.data !== undefined
+  const replicas = keepsReplicas()
   useEffect(() => {
-    if (kept && !hinted) void forgetOnce()
-  }, [kept, hinted, forgetOnce])
+    if ((kept || replicas) && !hinted) void forgetOnce()
+  }, [kept, replicas, hinted, forgetOnce])
+
+  // The server said the session this browser holds is gone, of a page that never knew it as a
+  // member's: the account is kept for a day and for one build, and the cookies for longer. It
+  // ended all the same, and is not asked about again.
+  useEffect(() => {
+    if (!refused) return
+    setEnded('expired')
+    void forgetOnce()
+  }, [refused, forgetOnce])
+
+  // Whose households this page holds. Another member may be found signed in under it: from
+  // another tab of this browser, or where a failed CSRF check left the first one's page as it
+  // was. What it kept is the first one's, and the page starts again for whoever is here now.
+  const holder = useRef<string | undefined>(undefined)
+  const who = account.data?.id
+  useEffect(() => {
+    const before = holder.current
+    holder.current = who
+    if (before === undefined || who === undefined || before === who) return
+    void forgetOnce().finally(restart)
+  }, [who, forgetOnce, restart])
 
   useEffect(
     () =>
@@ -193,7 +235,9 @@ export function SessionProvider({ children, forget, cookies = pageCookies }: Ses
   }, [api, queries])
 
   const signOut = useCallback(async () => {
-    unwrap(await api.POST('/auth/logout'))
+    const answer = await api.POST('/auth/logout')
+    // A session the server no longer knows has ended already: what was asked for is so.
+    if (answer.response.status !== 401) unwrap(answer)
     member.current = false
     setLeft(true)
     await forgetOnce()

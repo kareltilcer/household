@@ -106,7 +106,8 @@ describe('a web session’s credential', () => {
         return Promise.resolve(respond())
       },
     })
-    return { credential: sessionCredential(api, problems), told, asked }
+    const ended = () => new Revoked('the web session has ended')
+    return { credential: sessionCredential(api, problems, ended), told, asked }
   }
 
   it('has nothing to renew: asked to, it asks whether the session still stands', async () => {

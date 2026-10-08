@@ -29,10 +29,12 @@ export interface ProvidersProps {
   readonly client?: ApiClient
   /** Reads the page's cookies. Left out, `document.cookie`; a test says what they are. */
   readonly cookies?: () => string
+  /** Starts the page again. Left out, a reload; a test notes that it was asked for. */
+  readonly restart?: () => void
 }
 
 /** Everything a screen may ask for, with no router: what a component test wraps its subject in. */
-export function Providers({ children, persist = true, client, cookies }: ProvidersProps) {
+export function Providers({ children, persist = true, client, cookies, restart }: ProvidersProps) {
   const [problems] = useState(createProblemHub)
   const [api] = useState(() => client ?? createWebClient(cookies === undefined ? {} : { cookies }))
   const [queries] = useState(() => createQueryClient({ onProblem: problems.report }))
@@ -50,7 +52,11 @@ export function Providers({ children, persist = true, client, cookies }: Provide
   }, [queries, persister])
   const inner = (
     <ApiProvider client={api} problems={problems}>
-      <SessionProvider forget={forget} {...(cookies === undefined ? {} : { cookies })}>
+      <SessionProvider
+        forget={forget}
+        {...(cookies === undefined ? {} : { cookies })}
+        {...(restart === undefined ? {} : { restart })}
+      >
         <ToastProvider>{children}</ToastProvider>
       </SessionProvider>
     </ApiProvider>

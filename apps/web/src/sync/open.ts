@@ -3,7 +3,13 @@
 // fetched when a replica is first opened and not before (ReplicaProvider.tsx imports it as it
 // opens one): a visitor's page, and a member's first paint, download none of it.
 import type { ApiClient } from '@household/api'
-import { localTables, NeedsConnection, type RecordedOutcome, type Replica } from '@household/sync'
+import {
+  localTables,
+  NeedsConnection,
+  Revoked,
+  type RecordedOutcome,
+  type Replica,
+} from '@household/sync'
 import { openReplica } from '@household/sync/web'
 import { apiPath } from '../api/client.ts'
 import type { ProblemHub } from '../api/problems.ts'
@@ -85,7 +91,7 @@ export async function openHouseholdReplica({
       dbFilename: replicaDatabase(household),
       household,
       apiUrl: new URL(apiPath, window.location.origin).href,
-      credential: sessionCredential(api, problems),
+      credential: sessionCredential(api, problems, () => new Revoked('the web session has ended')),
       fetch: sessionFetch({ problems }),
     }),
   )
