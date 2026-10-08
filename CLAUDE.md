@@ -255,7 +255,14 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   control busy until it is answered: its mutation is not `reset()` while it is pending, and rows
   that share one say for themselves which of them is asked. A page a link's fragment opens
   (`useFragment`) is begun again for a fragment that arrives while it is drawn, as `Invitation`
-  is, since a link opened in the tab already on its page loads nothing.
+  is, since a link opened in the tab already on its page loads nothing. A write that leads to
+  another screen stays busy once it has succeeded, until that screen's file has come, and a
+  choice made on a form while its save is on its way is kept and held against the answer. A
+  form chooses nothing for its member: what it would confirm and was not given is asked, by its
+  select's placeholder, and what follows from it is absent until it is chosen
+  ([D-172](docs/prd/09-decisions.md)). A row's control drawn as one word (`RowAction`,
+  `RowLink`) holds that word in its name, together and in order, in all five languages, which
+  the catalogs' own test holds each pair to (WCAG 2.5.3).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
