@@ -186,6 +186,7 @@ function Picture({ me }: { readonly me: Me }) {
   const t = useTranslate()
   const api = useApi()
   const queries = useQueryClient()
+  const toast = useToast()
   const say = useProblemText(useOwnZone())
   const chooser = useRef<HTMLInputElement>(null)
   const choose = useRef<HTMLButtonElement>(null)
@@ -205,6 +206,9 @@ function Picture({ me }: { readonly me: Me }) {
       ),
     onSuccess: (saved) => {
       queries.setQueryData(meKey, saved)
+      // The picture is all that changes, and it is drawn for the eye alone: where one took
+      // another's place not a word on the page is different. It is said, as the name's save is.
+      toast({ message: t('account.profile.picture.saved') })
     },
   })
   const remove = useSaveMe()

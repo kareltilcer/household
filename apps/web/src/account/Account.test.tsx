@@ -167,6 +167,8 @@ describe('the account screen', () => {
     expect(parts).toEqual([['file', file]])
     expect(sent?.headers.get('Content-Type')).not.toBe('application/json')
     expect(container.querySelector('img')).toHaveAttribute('src', address)
+    // The picture is drawn for the eye alone: that it was saved is said, as the name's save is.
+    expect(await screen.findByText('Your picture is saved.')).toBeInTheDocument()
 
     await user.click(remove)
     await waitFor(() => {

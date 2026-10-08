@@ -17,7 +17,7 @@ import { replicaLock } from './databases.ts'
 import type { Opened } from './open.ts'
 
 export type ReplicaState =
-  /** Being opened, or waiting for its turn at the household's lock with none known to hold it. */
+  /** Being opened, or asking for the household's lock, which is answered at once. */
   | { readonly phase: 'opening' }
   /** Open in this tab, and connected or trying to be. */
   | ({ readonly phase: 'open' } & Opened)
@@ -104,38 +104,53 @@ export function ReplicaProvider({ household, children, open }: ReplicaProviderPr
       (async (id) =>
         (await import('./open.ts')).openHouseholdReplica({ household: id, api, problems }))
 
-    const hold = async () => {
-      // Another tab holding it is said at once, and waited out.
-      const { held: taken = [] } = await window.navigator.locks.query()
-      if (!over() && taken.some((lock) => lock.name === name)) set({ phase: 'elsewhere' })
-      await window.navigator.locks.request(name, { signal: waiting.signal }, async () => {
-        if (over()) return
-        set({ phase: 'opening' })
-        let mine: Opened
-        try {
-          mine = await openIt(household)
-        } catch {
-          if (!over()) set({ phase: 'unavailable' })
-          return
-        }
-        const { replica } = mine
-        const unlisten = replica.db.registerListener({
-          statusChanged: () => {
-            if (!over()) setReceiving(receivingOf(replica))
-          },
-        })
-        if (!over()) {
-          set({ phase: 'open', ...mine })
-          // Connecting is the replica's to keep trying: a sync service that cannot be reached is
-          // the state the status says, not a failure to open.
-          replica.connect().catch(() => undefined)
-          setReceiving(receivingOf(replica))
-          // Held until this household is left: the lock is the replica's for as long as it is open.
-          await released
-        }
-        unlisten()
-        await replica.close().catch(() => undefined)
+    // The replica, for as long as the lock is this tab's: opened, connected, and closed again.
+    const keep = async () => {
+      if (over()) return
+      set({ phase: 'opening' })
+      let mine: Opened
+      try {
+        mine = await openIt(household)
+      } catch {
+        if (!over()) set({ phase: 'unavailable' })
+        return
+      }
+      const { replica } = mine
+      const unlisten = replica.db.registerListener({
+        statusChanged: () => {
+          if (!over()) setReceiving(receivingOf(replica))
+        },
       })
+      if (!over()) {
+        set({ phase: 'open', ...mine })
+        // Connecting is the replica's to keep trying: a sync service that cannot be reached is
+        // the state the status says, not a failure to open.
+        replica.connect().catch(() => undefined)
+        setReceiving(receivingOf(replica))
+        // Held until this household is left: the lock is the replica's for as long as it is open.
+        await released
+      }
+      unlisten()
+      await replica.close().catch(() => undefined)
+    }
+    const hold = async () => {
+      // Asked for only if it is free, and taken where it is. That another tab holds it is learnt
+      // by asking, and not read off a list of the locks held: a list is a moment old by the time
+      // it is acted on, and a tab another's request slipped in front of would wait its turn
+      // without a word of whose it was.
+      const elsewhere = await window.navigator.locks.request(
+        name,
+        { ifAvailable: true },
+        async (lock) => {
+          if (lock === null) return true
+          await keep()
+          return false
+        },
+      )
+      if (!elsewhere || over()) return
+      // Another tab holding it is said at once, and waited out.
+      set({ phase: 'elsewhere' })
+      await window.navigator.locks.request(name, { signal: waiting.signal }, keep)
     }
     hold().catch(() => {
       // The wait for the lock was given up as the household was left, or the browser refused it.

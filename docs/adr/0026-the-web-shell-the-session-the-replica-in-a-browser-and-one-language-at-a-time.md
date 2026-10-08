@@ -91,15 +91,17 @@ its sign-in has ended, at which it discards itself (FR-ID7). Any other answer le
 to ask again.
 
 **One tab holds a household's replica, by a Web Lock named for the household**
-(`sync/ReplicaProvider.tsx`). The tab that takes the lock opens the replica and connects it;
-another waits, says where the sync UI would be that another tab keeps this household, and takes
-over when the first lets go. The replica is closed, and the lock with it, when the household
-leaves the screen. Nothing of the sync library or its SDK is in a page until a replica is first
-opened: every other file imports the library for its types alone, and what a screen needs of it
-at run time is handed over with the open replica (`sync/open.ts`). With the replica comes
-whether it is receiving the household's changes, which the bar above a household's screens says
-where it is not (D-105): not, once an attempt of the replica's has failed, for as long as the
-SDK keeps that failure, which is until an attempt succeeds; and nothing to say before then.
+(`sync/ReplicaProvider.tsx`). A tab asks for the lock only if it is free, which the browser
+answers at once. The tab that takes it opens the replica and connects it; another, answered
+that it is held, says where the sync UI would be that another tab keeps this household, waits,
+and takes over when the first lets go. The replica is closed, and the lock with it, when the
+household leaves the screen. Nothing of the sync library or its SDK is in a page until a replica
+is first opened: every other file imports the library for its types alone, and what a screen
+needs of it at run time is handed over with the open replica (`sync/open.ts`). With the replica
+comes whether it is receiving the household's changes, which the bar above a household's
+screens says where it is not (D-105): not, once an attempt of the replica's has failed, for as
+long as the SDK keeps that failure, which is until an attempt succeeds; and nothing to say
+before then.
 
 **The policy is widened by three sources and nothing else.** `script-src` gains
 `'wasm-unsafe-eval'`, which lets a page compile WebAssembly and evaluates no string as script;
@@ -182,11 +184,17 @@ twice; and so is the browser's own refusal of the question a press put, notifica
 blocks, where one it had given before the screen opened is read in its place. A limit on
 sending a link again is a wait and no refusal, drawn as the countdown on its control
 (`auth/Resend.tsx`): it is said once as it arrives, politely and in the control's own words, and
-no second of the countdown after it. What a screen is drawn from that could not be read is
-announced as it arrives, as a body's failure is (`Unread`, `app/guards.tsx`), and so is a part
-of one with the way to ask again, the providers an account's screen could not read and the
-households a member's notification settings are chosen among: nothing of it is drawn while it
-is asked again, so a second failure is drawn, and said, anew. And the row a
+no second of the countdown after it. What a press changed that no control of its own says is
+said as well. The sentence that says what this browser does with notifications is a status from
+the press that turns them on or off, and says what it comes to as its words change, where on a
+screen that only opened it is read in its place (`account/Notifications.tsx`); and a picture
+that was saved, which is drawn for the eye alone, and a device's new name, which its row shows
+only once the list is read again, are said in a toast, as a name's save and a device's sign-out
+are. What a screen is drawn from that could not be read is announced as it arrives, as a body's
+failure is (`Unread`, `app/guards.tsx`), and so is a part of one with the way to ask again, the
+providers an account's screen could not read and the households a member's notification
+settings are chosen among: nothing of it is drawn while it is asked again, so a second failure
+is drawn, and said, anew. And the row a
 confirmation was opened from, gone once the browser or device it names is signed out, leaves the
 focus to the lists' own place, as the inbox's does; a picture's removal, which nothing else
 says, leaves it on the control that chooses another. axe reads only that a field and its
@@ -220,6 +228,7 @@ every other console error still fails its test.
 | A replica's removal waited on, or taken back where its member signs in again before the tab that holds it has let go | The removal is asked for and not waited on, since a tab that never closes its replica would hold up the sign-in that follows, and a browser gives a page no way to take a removal back once it is asked. One that another tab blocks is carried out when that tab closes its replica, whoever is signed in by then: where that is the same member, signed in again in another tab before this one was looked at, what goes is a copy read again when the household is next opened, and nothing queued. What a removal owes a replica that has queued something is the first module written offline's to settle (Consequences) |
 | The replica closed by the page that finds another member signed in, before it asks for the removal and loads itself again | The removal is carried out once the page's own connection has closed, which is as the page goes. Chromium keeps a removal whose page has gone (tried in review round 6), and the suite runs no other engine, so nothing here holds Firefox or Safari to it. Closing first is a second way to close a replica, beside the household leaving the screen, to keep in step with it, for a copy only another member of the same household would open on the same browser, which PowerSync holds to what is theirs at its first checkpoint and no screen reads yet. It is settled with what a removal owes a queue (Consequences) |
 | The household's lock told apart as this tab's own, where a replica left a moment ago is still closing | A page cannot ask the browser whether a lock is its own: a household left and opened again within the moment its replica takes to close reads its own lock as another tab's, and says so until the lock is its own again, which is that moment. Telling them apart is a list of the locks this page holds, kept in step with the browser's, for a sentence that is gone before it is read |
+| Whether another tab holds the household's lock read off the browser's list of the locks held, and the lock asked for after, as item 25 first had it | A list is a moment old by the time it is acted on: of two tabs opened together each read that nobody held the lock, and the one the other's request slipped in front of waited its turn saying only that the replica was being opened, for as long as the other tab lived. The lock is asked for only if it is free, which the browser answers at once and for certain, and waited for where it is not |
 | PowerSync's shared worker (`multiTab`) in place of the lock | It shares the connection, not the connector: two tabs would still each push the queue (ADR 0019) |
 | A `BroadcastChannel` election of the tab that holds the replica | A lock the browser releases when a tab dies, with no heartbeat to time out |
 | Whether a replica is receiving read off the SDK's `connecting` and `hasSynced`, as item 25 first had it | A replica opened again has synced before and has not tried yet, so every household opened a second time was said, and announced, not to be receiving until its connection was made. And `connecting` is true for the length of every attempt, so with the sync service gone the bar was taken away and said anew at each, every five seconds. The failure of the last attempt, which the SDK keeps until one succeeds, is neither |
@@ -250,6 +259,7 @@ every other console error still fails its test.
 | The switcher's line that a member's other households could not be read announced as a failure is | It answers no press and offers none: the household that is open is as it was, and the line is read in its place in the navigation, under the household's name and the member's role in it. An alert would say it to every member whose list could not be read, most of whom are in one household, and say it again each time the navigation's panel is opened at a phone's width and each time the list is asked for again |
 | The wait kept out of a resend's own words while it counts down, for a screen reader that says a focused control's name as it changes | The countdown on the control is the design's (auth.js A-3), and the one place the wait is drawn. A screen reader that says a focused control's name as it changes would say each second of it; whether one does was not heard, the suite running no assistive technology, and it is for the release's passes with VoiceOver and TalkBack to hear (design 06-accessibility-and-i18n §1). Held still, the control's name would say nothing of the wait to whoever comes to it later, and the seconds drawn in a second place are one more to keep in step with the first. What a press came to is said besides, once: a limit's wait, in the control's words as its answer arrived |
 | A `429` to a resend said as every other limit is, in a banner announced as an alert | A wait is no refusal (auth.js A-3): the address may ask again when its minute is over, and the control says when. An alert would say it as urgently as a failure, and draw a second sentence beside the control that counts the same wait down. It is said once, politely, by a region that draws nothing |
+| The sentence that says what this browser does with notifications a status from the first, pressed or not | A screen reader may say a region that arrives with its words in it, and the section arrives once the browser has been read, a moment after the screen: every opening of the screen could say what nobody asked, where what was so before it opened is read in its place. It is a status from the press that turns notifications on or off, as the banner that says the browser blocks them is announced only where a press on this screen was answered with it (D-166) |
 | What could not be read drawn anew at each press of *Try again* while the browser is offline | With no connection the query client holds the question and asks nothing, so the press comes to nothing new: the sentence that says the server could not be asked, and to check the connection, still holds, and the question is asked by itself when the connection is back, its answer drawn, and said, in the sentence's place. A count of presses to draw the alert again by is a second word on when it is drawn, for a press that changed nothing |
 | The focus put by hand wherever the control that held it leaves with what it did: a second step turned off, a provider disconnected, a stage of the second step's setup that takes the last one's place, a deletion's form the server's refusal replaced | Each of these is said: by a toast, by the refusal's own banner, or by the screen that takes the place of the one before, whose title and heading name it. A list is different, which goes on under the focus and whose next row is what its member was reading (D-166), and so is a picture's removal, which nothing else says. A ref and an effect for each control that goes with what it did are one more thing apiece to keep in step with what the screen draws, and a control kept in its place to hold the focus would turn under it from disconnecting a provider to connecting one, where a second press begins a link |
 | What pinning, putting away and showing a module came to said by the arrange screen in this item, the focus following the row to its new list, and the same of a merge's banner put away in the inbox | No member reaches either with anything in it: no module has a web screen until item 26 registers the first (D-160), and the inbox is empty until a module's entities are written offline. Each wants sentences of its own in five languages and a place for the focus, for screens held today by their tests and the dev pages alone. They are handed on with the screens (Consequences) |
@@ -289,7 +299,10 @@ every other console error still fails its test.
   `Form`. A refusal that is no field's, and one of a control that saves as it is changed, is a
   `Banner` with `announce`, as is a part of a screen that could not be read and offers to be
   asked again, where it is not a `StateFrame`'s; and a screen that removes the row a dialog was
-  opened from says where the focus goes (D-166).
+  opened from says where the focus goes (D-166). A write whose success no control of its screen
+  says is said in a toast; where a sentence of the screen says it already, that sentence is a
+  status from the press on, and is one element through every state the press moves between, so
+  that its words change where they stand.
 - A write of a screen before sign-in or of a member's own account spreads `askedNow`
   (`api/query.ts`), and a test holds every one of them to it. A module's screens say for
   themselves which of their writes wait for a connection.

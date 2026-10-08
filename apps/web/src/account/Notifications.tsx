@@ -70,27 +70,14 @@ function ThisBrowser() {
   const t = useTranslate()
   const say = useProblemText(useOwnZone())
   const push = usePush()
-  // Whether the browser was asked from this screen. What it answered is then what a press came
-  // to, and a refusal is said as it arrives; one it had given before the screen opened is read
-  // in its place.
-  const [asked, setAsked] = useState(false)
+  // Whether a press on this screen turned notifications on or off here, or tried to. What the
+  // browser then says is what the press came to, and is said as it arrives: that it blocks
+  // them, or the sentence that says what it does with them. What it said before the screen
+  // opened is read in its place.
+  const [pressed, setPressed] = useState(false)
   if (push.state === undefined) return null
   const { permission, subscribed } = push.state
-  const turnOn = (
-    <div className={styles.actions}>
-      <Button
-        variant="primary"
-        loading={push.asking}
-        onClick={() => {
-          setAsked(true)
-          // The browser's question is put in this press, and by nothing else.
-          push.ask().catch(() => undefined)
-        }}
-      >
-        {t('push.turn_on')}
-      </Button>
-    </div>
-  )
+  const on = permission === 'granted' && subscribed
   const failed =
     push.askError !== null ? (
       <Banner tone="danger" announce>
@@ -110,29 +97,46 @@ function ThisBrowser() {
       {permission === 'unsupported' ? (
         <p className={styles.text}>{t('push.unsupported')}</p>
       ) : permission === 'denied' ? (
-        <Banner tone="warning" title={t('push.denied.title')} announce={asked}>
+        <Banner tone="warning" title={t('push.denied.title')} announce={pressed}>
           {t('push.denied.body')}
         </Banner>
-      ) : permission === 'granted' && subscribed ? (
-        <>
-          <p className={styles.text}>{t('push.on')}</p>
-          <div className={styles.actions}>
-            <Button
-              loading={push.turningOff}
-              onClick={() => {
-                push.turnOff().catch(() => undefined)
-              }}
-            >
-              {t('push.turn_off')}
-            </Button>
-          </div>
-        </>
       ) : (
         <>
-          <p className={styles.text}>
-            {permission === 'granted' ? t('push.off_here') : t('push.not_asked')}
+          {/* One sentence, whichever of the three it reads: a press that turns notifications on
+              or off changes its words where it stands, and from that press on it is a status,
+              so that what the press came to is said, politely, as the words change. */}
+          <p className={styles.text} role={pressed ? 'status' : undefined}>
+            {on
+              ? t('push.on')
+              : permission === 'granted'
+                ? t('push.off_here')
+                : t('push.not_asked')}
           </p>
-          {turnOn}
+          <div className={styles.actions}>
+            {on ? (
+              <Button
+                loading={push.turningOff}
+                onClick={() => {
+                  setPressed(true)
+                  push.turnOff().catch(() => undefined)
+                }}
+              >
+                {t('push.turn_off')}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                loading={push.asking}
+                onClick={() => {
+                  setPressed(true)
+                  // The browser's question is put in this press, and by nothing else.
+                  push.ask().catch(() => undefined)
+                }}
+              >
+                {t('push.turn_on')}
+              </Button>
+            )}
+          </div>
         </>
       )}
       {failed}

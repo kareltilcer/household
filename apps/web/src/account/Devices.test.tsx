@@ -279,6 +279,8 @@ describe('where an account is signed in', () => {
     await waitFor(async () => {
       expect(await server.body(`PATCH /me/devices/${phone.id}`)).toEqual({ label: 'Pixel 6' })
     })
+    // The panel closes onto a row still named as it was: that the name was saved is said.
+    expect(await screen.findByText('The device’s name is saved.')).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'Sign out Pixel 6' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })

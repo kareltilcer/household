@@ -109,14 +109,22 @@ describe('this browser', () => {
     })
     expect(notification.requestPermission).not.toHaveBeenCalled()
     expect(server.to('POST /push/subscriptions')).toHaveLength(0)
+    // What the browser says as the screen opens is read in its place: nothing was pressed.
+    const said = screen.getByText(
+      'Notifications are not turned on in this browser. It asks you first.',
+    )
+    expect(said).not.toHaveAttribute('role')
 
     await user.click(turnOn)
     expect(notification.requestPermission).toHaveBeenCalledTimes(1)
-    expect(
-      await screen.findByText(
+    // What the press came to is said: the sentence that was there is a status, and its words
+    // change where it stands, which a sentence that arrived in its place would not be.
+    await waitFor(() => {
+      expect(said).toHaveTextContent(
         'This browser shows notifications from Household while you are signed in here.',
-      ),
-    ).toBeInTheDocument()
+      )
+    })
+    expect(said).toHaveAttribute('role', 'status')
     expect(subscribe).toHaveBeenCalledTimes(1)
     expect(await server.body('POST /push/subscriptions')).toMatchObject({ transport: 'web_push' })
     expect(screen.getByRole('button', { name: 'Turn off in this browser' })).toBeInTheDocument()
@@ -164,10 +172,18 @@ describe('this browser', () => {
     const server = createServer()
     withPreferences(server)
     const { user } = await notifications(server)
-    await user.click(await screen.findByRole('button', { name: 'Turn off in this browser' }))
-    expect(
-      await screen.findByText('This browser allows notifications, and they are turned off here.'),
-    ).toBeInTheDocument()
+    const turnOff = await screen.findByRole('button', { name: 'Turn off in this browser' })
+    const said = screen.getByText(
+      'This browser shows notifications from Household while you are signed in here.',
+    )
+    await user.click(turnOff)
+    // Said as it changes, by the sentence that was there, as turning them on is.
+    await waitFor(() => {
+      expect(said).toHaveTextContent(
+        'This browser allows notifications, and they are turned off here.',
+      )
+    })
+    expect(said).toHaveAttribute('role', 'status')
     expect(server.to('DELETE /push/subscriptions')).toHaveLength(1)
     expect(unsubscribed()).toBe(1)
     // Turned on again without the browser's question, which it has answered.

@@ -9,34 +9,25 @@ import { ReplicaProvider, useInbox, useSync, type OpenReplica } from './ReplicaP
 const household = '01900000-0000-7000-8000-0000000000a1'
 
 /**
- * A browser's Web Locks, as far as the provider asks of them: one holder of a name at a time,
- * the others waiting their turn, a wait given up by its signal, and who holds and who waits.
+ * A browser's Web Locks, as far as the provider asks of them: one holder of a name at a time, a
+ * request that is only for a lock that is free answered at once with none, the others waiting
+ * their turn, and a wait given up by its signal. It has no list of who holds what to read: one
+ * read is a moment old by the time it is acted on, and the provider asks for the lock instead.
  */
 function locks() {
   const held = new Set<string>()
   const waiting = new Map<string, (() => void)[]>()
-  const pending: string[] = []
   const api = {
-    query: () =>
-      Promise.resolve({
-        held: [...held].map((name) => ({ name })),
-        pending: pending.map((name) => ({ name })),
-      }),
-    request: async (
+    request: async <Answer,>(
       name: string,
-      options: { readonly signal?: AbortSignal },
-      callback: () => Promise<void>,
-    ) => {
+      options: { readonly signal?: AbortSignal; readonly ifAvailable?: boolean },
+      callback: (lock: { readonly name: string } | null) => Promise<Answer>,
+    ): Promise<Answer> => {
       if (held.has(name)) {
-        pending.push(name)
-        await new Promise<void>((resolve, reject) => {
-          const turn = () => {
-            pending.splice(pending.indexOf(name), 1)
-            resolve()
-          }
+        if (options.ifAvailable === true) return callback(null)
+        await new Promise<void>((turn, reject) => {
           waiting.set(name, [...(waiting.get(name) ?? []), turn])
           options.signal?.addEventListener('abort', () => {
-            pending.splice(pending.indexOf(name), 1)
             waiting.set(
               name,
               (waiting.get(name) ?? []).filter((other) => other !== turn),
@@ -47,7 +38,7 @@ function locks() {
       }
       held.add(name)
       try {
-        await callback()
+        return await callback({ name })
       } finally {
         held.delete(name)
         waiting.get(name)?.shift()?.()
@@ -211,6 +202,21 @@ describe('a household’s replica', () => {
       expect(screen.getByRole('status')).toHaveTextContent(/^open/)
     })
     expect(open).toHaveBeenCalledOnce()
+  })
+
+  it('learns that another tab has it by asking for the lock, and not from a list a moment old', async () => {
+    const browser = locks()
+    // A list read just before the other tab's request was granted says that nobody holds it.
+    const stale = { ...browser.api, query: () => Promise.resolve({ held: [], pending: [] }) }
+    browserWith(stale)
+    browser.takenElsewhere(replicaLock(household))
+    const open = vi.fn<OpenReplica>(() => Promise.resolve(replica().opened))
+    draw(open)
+    // A tab that waited its turn on that list's word would say only that it is being opened.
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/^elsewhere/)
+    })
+    expect(open).not.toHaveBeenCalled()
   })
 
   it('gives up its wait when the household is left before its turn came', async () => {

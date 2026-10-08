@@ -173,7 +173,12 @@ function Rename({
           body: { label: next },
         }),
       ),
-    onSuccess: onDone,
+    onSuccess: () => {
+      // The panel closes onto the row's own control, named as it was until the list is read
+      // again: that the name was saved is said, as a device signed out is.
+      toast({ message: t('account.devices.rename.saved') })
+      onDone()
+    },
     onError: (error) => {
       // Signed out since the list was read: there is nothing left to name.
       if (problemIn(error)?.status !== 404) return
