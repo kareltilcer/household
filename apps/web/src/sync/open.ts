@@ -3,7 +3,7 @@
 // fetched when a replica is first opened and not before (ReplicaProvider.tsx imports it as it
 // opens one): a visitor's page, and a member's first paint, download none of it.
 import type { ApiClient } from '@household/api'
-import { localTables, type RecordedOutcome, type Replica } from '@household/sync'
+import { localTables, NeedsConnection, type RecordedOutcome, type Replica } from '@household/sync'
 import { openReplica } from '@household/sync/web'
 import { apiPath } from '../api/client.ts'
 import type { ProblemHub } from '../api/problems.ts'
@@ -28,12 +28,19 @@ export interface Opened {
    * oldest first: now, and each time it changes, until the function it returns is called.
    */
   readonly watchInbox: (listener: (entries: readonly RecordedOutcome[]) => void) => () => void
+  /**
+   * Whether `error` is the library's refusal of a write to an entity that is not written offline
+   * (D-84): what a screen that tried one says needs a connection (rowState.ts). A stand-in that
+   * makes no write may leave it out, and then no error is taken for that refusal.
+   */
+  readonly needsConnection?: (error: unknown) => boolean
 }
 
 /** `replica` with what the app's screens watch it by. */
 export function opened(replica: Replica): Opened {
   return {
     replica,
+    needsConnection: (error) => error instanceof NeedsConnection,
     watchInbox: (listener) => {
       let stopped = false
       const stop = replica.db.onChange(
