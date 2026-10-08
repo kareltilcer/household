@@ -246,7 +246,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   `Unverified` in the control's place. Every create sends an id made once for each visit of its
   screen, and a `422` for that id after an answer that never came is read as made, as is a
   ceiling's `403` where what was to be made is found by its id, the server counting before it
-  looks at the id. What an
+  looks at the id; an email invitation repeated so is answered for its address, which the
+  server looks at first, and the composer says that beside the field. What an
   invitation's link carried is kept in the page's memory across a sign-in and in no storage
   (`household/invitationToken.ts`), and a member in no household is opened at making one
   ([D-168](docs/prd/09-decisions.md)), once their list of households has been read again: a kept

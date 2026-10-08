@@ -175,7 +175,10 @@ was asked back is told of, and sent to again, as anybody is (`settledAddresses`)
 (D-23), once for each visit of its screen, so a press repeated after an answer that never came
 names the same household, invitation or profile; the server answers that `422` for the id, and
 the screen reads what it made, or says that it may have been made and where to look, in place of
-asking for it again for ever. A household and a child profile are looked for by their id where
+asking for it again for ever. An invitation by email is the exception in what it is answered
+with: the server looks at the address before the id, so its repeat is refused for an address an
+invitation already waits for, which the composer says beside the field, with the way to the
+list. A household and a child profile are looked for by their id where
 the repeat is refused for a ceiling too (`403`): the server counts what an account owns, and a
 household's members, before it looks at the id, so the thing that reached the ceiling is refused
 as one too many of itself. A profile read so is said to be made by the name it holds.
