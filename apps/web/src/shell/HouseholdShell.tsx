@@ -64,7 +64,9 @@ function Opened({ id }: { readonly id: string }) {
     )
   }
   if (household.data === undefined) {
-    if (!household.isError) {
+    // A read asked for with no connection waits for one, neither loading nor failed: to a member
+    // it could not be made, and is said so, as the account's screens say it (account/common.ts).
+    if (!household.isError && household.fetchStatus !== 'paused') {
       return (
         <Outside>
           <Waiting />

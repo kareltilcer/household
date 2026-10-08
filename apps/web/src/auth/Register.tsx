@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { useI18n } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -53,6 +54,7 @@ export function Register() {
   const [faults, setFaults] = useState<Faults>()
 
   const register = useMutation({
+    ...askedNow,
     mutationFn: async (account: {
       readonly display_name: string
       readonly email: string

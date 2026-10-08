@@ -16,6 +16,7 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { heldDestination } from '../session/destination.ts'
@@ -27,7 +28,13 @@ import { challengeIn, holdChallenge } from './challenge.ts'
 import { Destination } from './Destination.tsx'
 import { checkEmail, EmailField, fieldCodes, refusedEmail, type EmailFault } from './fields.tsx'
 import { noticeIn, type Notice } from './notice.ts'
-import { providers, startProvider, useOfferedProviders, type Provider } from './provider.ts'
+import {
+  providers,
+  startProvider,
+  useOfferedProviders,
+  useShownAgain,
+  type Provider,
+} from './provider.ts'
 import { Form, Notices, Screen, Way, Ways } from './Screen.tsx'
 import styles from './Screen.module.css'
 
@@ -67,6 +74,7 @@ export function SignIn() {
   const [faults, setFaults] = useState<Faults>()
 
   const signIn = useMutation({
+    ...askedNow,
     mutationFn: async (credentials: { readonly email: string; readonly password: string }) =>
       unwrap(await api.POST('/auth/login', { body: { ...credentials, client_type: 'web' } })),
     onSuccess: async () => {
@@ -89,8 +97,11 @@ export function SignIn() {
   const offered = useOfferedProviders()
   const listed = providers.filter((provider) => offered.data?.includes(provider) === true)
   const start = useMutation({
+    ...askedNow,
     mutationFn: (provider: Provider) => startProvider({ api, provider, intent: 'sign-in' }),
   })
+  // Back from the provider's page, to this one as the browser kept it: the start is put back.
+  useShownAgain(start.reset)
 
   const submit = () => {
     const address = email.trim()
@@ -165,7 +176,8 @@ export function SignIn() {
             {listed.map((provider) => (
               <Button
                 key={provider}
-                // It stays busy once the start is answered: the page is leaving for the provider.
+                // It stays busy once the start is answered: the page is leaving for the
+                // provider's, and is put back where it is shown again from there.
                 loading={start.variables === provider && (start.isPending || start.isSuccess)}
                 onClick={() => {
                   signIn.reset()

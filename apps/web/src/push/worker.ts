@@ -24,6 +24,12 @@ export interface PushState {
 
 const unsupported: PushState = { permission: 'unsupported', subscribed: false }
 
+/**
+ * The query that holds this browser's state (usePush.ts): read again by key where something
+ * else changes it, as the renewal at a sign-in does (Push.tsx).
+ */
+export const pushStateKey = ['push', 'state'] as const
+
 /** Whether this browser has what a Web Push needs: service workers, the Push API, notifications. */
 export function pushSupported(): boolean {
   return (

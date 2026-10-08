@@ -24,6 +24,7 @@ import { Link } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { fieldCodes } from '../auth/fields.tsx'
 import { useDisplay } from '../display/DisplayProvider.tsx'
@@ -41,7 +42,7 @@ import { List, ListRow } from '../ui/ListRow.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { useToast } from '../ui/Toast.tsx'
-import { askedNow, isRefusedAsSent, readState, useNoWithdrawal, useOwnZone } from './common.ts'
+import { isRefusedAsSent, readState, useNoWithdrawal, useOwnZone } from './common.ts'
 import { useOnline } from '../ui/online.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import styles from './Settings.module.css'
@@ -276,12 +277,16 @@ function Language({ me }: { readonly me: Me }) {
   // asked for, and goes back to the account's own when the account could not be told.
   const [chosen, setChosen] = useState<Locale | null>(null)
   const [unfetched, setUnfetched] = useState(false)
+  // The language chosen last: one whose catalog arrives after another was chosen is shown no
+  // longer (I18nProvider.tsx), and the account is not told of it either.
+  const last = useRef<Locale | null>(null)
   const options = useMemo(
     () => locales.map((locale) => ({ value: locale, label: ownName(locale) })),
     [],
   )
   const choose = (next: Locale) => {
     const before = shown
+    last.current = next
     setChosen(next)
     setUnfetched(false)
     save.reset()
@@ -289,6 +294,7 @@ function Language({ me }: { readonly me: Me }) {
     // member's other devices and their emails follow.
     setLocale(next).then(
       () => {
+        if (last.current !== next) return
         save.mutate(
           { locale: next },
           {
@@ -303,6 +309,7 @@ function Language({ me }: { readonly me: Me }) {
         )
       },
       () => {
+        if (last.current !== next) return
         setChosen(null)
         setUnfetched(true)
       },

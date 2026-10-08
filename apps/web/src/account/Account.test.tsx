@@ -1,9 +1,11 @@
 // Account settings (A-19) as a member uses them: each control's save and its refusal, what is
 // kept in this browser alone, the households list in its states, and what a child profile has
 // none of.
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { catalogs, type Catalog } from '@household/i18n'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { storageKey } from '../display/modes.ts'
+import { dropCatalogs, fetchCatalog, holdCatalog } from '../i18n/catalogs.ts'
 import { initialsOf } from './Account.tsx'
 import {
   chata,
@@ -16,6 +18,13 @@ import {
   tilcerovi,
   type Server,
 } from './testing.tsx'
+
+// A language's catalog is fetched when it is chosen, where this page does not hold it: a test
+// that says when one arrives answers for the fetch itself.
+vi.mock(import('../i18n/catalogs.ts'), async (original) => {
+  const actual = await original()
+  return { ...actual, fetchCatalog: vi.fn(actual.fetchCatalog) }
+})
 
 const title = 'Your account'
 
@@ -202,6 +211,44 @@ describe('the account screen', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Váš účet' })).toBeInTheDocument()
     expect(document.documentElement).toHaveAttribute('lang', 'cs')
     expect(await server.body('PATCH /me')).toEqual({ locale: 'cs' })
+  })
+
+  it('tells the account of the language chosen last, though one chosen before it arrives after', async () => {
+    // German is still to be fetched, and Polish this page holds.
+    dropCatalogs()
+    holdCatalog('en', catalogs.en)
+    holdCatalog('pl', catalogs.pl)
+    let arrive: (catalog: Catalog) => void = () => undefined
+    vi.mocked(fetchCatalog).mockImplementationOnce(
+      () =>
+        new Promise<Catalog>((resolve) => {
+          arrive = resolve
+        }),
+    )
+    const server = createServer()
+    server.on('PATCH /me', async (request) => {
+      const change = (await request.json()) as { locale: string }
+      server.me = { ...server.me, locale: change.locale }
+      return Response.json(server.me)
+    })
+    const { user } = await account(server)
+    const language = screen.getByRole('combobox', { name: 'Language' })
+    await user.selectOptions(language, 'de')
+    await user.selectOptions(language, 'pl')
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Twoje konto' }),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(1)
+    })
+    // German's catalog arrives now, for a choice that another has taken the place of.
+    await act(async () => {
+      arrive(catalogs.de)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(server.to('PATCH /me')).toHaveLength(1)
+    expect(await server.body('PATCH /me')).toEqual({ locale: 'pl' })
+    expect(document.documentElement).toHaveAttribute('lang', 'pl')
   })
 
   it('puts the language back where the account could not be told', async () => {

@@ -86,11 +86,11 @@ info:
 
     An unsafe request whose `Origin` (or, lacking one, `Referer`) names an origin that is not
     Household's own web client's is refused `403` (`csrf_failed`), whatever it carries: a page on
-    another site sent it. The one exception is Apple's answer to a web sign-in, which Apple's own
-    page posts to `/auth/oauth/apple/return`. So is an unsafe request the session cookie authenticates that names no
+    another site sent it. So is an unsafe request the session cookie authenticates that names no
     origin, or whose `X-CSRF-Token` is not its session's token and its `__Host-hh_csrf` cookie's
     value. A request that names no origin and carries no session cookie, a native client's, is
-    not checked.
+    not checked. The one unsafe request taken from another site's page is Apple's answer to a web
+    sign-in, which Apple's own page posts to `/auth/oauth/apple/return`, and which reads no session.
 
     ## Concurrency and idempotency
 

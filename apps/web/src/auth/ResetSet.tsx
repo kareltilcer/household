@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { meKey } from '../session/SessionProvider.tsx'
@@ -45,6 +46,7 @@ export function ResetSet() {
   const [fault, setFault] = useState<{ readonly password: PasswordFault }>()
 
   const set = useMutation({
+    ...askedNow,
     mutationFn: async (chosen: string) => {
       unwrap(await api.POST('/auth/password-reset/confirm', { body: { token, password: chosen } }))
     },

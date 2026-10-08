@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { ApiProblemError, problemIn, unwrap } from '../api/problem.ts'
 import { deviceTimeZone, useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
@@ -83,6 +84,7 @@ export function Resend({ to, label, sentAt }: ResendProps) {
   const { seconds, until, waitUntil } = useWait(sentAt)
 
   const resend = useMutation({
+    ...askedNow,
     mutationFn: async (email: string) => {
       unwrap(await api.POST('/auth/verify-email/resend', { body: { email } }))
     },

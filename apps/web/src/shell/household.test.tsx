@@ -1,4 +1,4 @@
-import { focusManager } from '@tanstack/react-query'
+import { focusManager, onlineManager } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -16,9 +16,11 @@ import { HouseholdBars } from './HouseholdBars.tsx'
 
 const origin = 'https://household.example'
 
-// A test that says the page is looked at again leaves the next one a page nobody has looked at.
+// A test that says the page is looked at again leaves the next one a page nobody has looked at,
+// and one that takes the connection away leaves the next one a browser that has it.
 afterEach(() => {
   focusManager.setFocused(undefined)
+  onlineManager.setOnline(true)
 })
 const me = {
   id: '01900000-0000-7000-8000-00000000d0e5',
@@ -66,12 +68,22 @@ interface Server {
   readonly suspended?: readonly string[]
   /** Answers a household's own address: left out, what `known` holds, else not found. */
   readonly household?: (id: string) => Response
+  /** Told of each request as it is asked, before it is answered. */
+  readonly asking?: (path: string) => void
+}
+
+/**
+ * Takes the browser's connection away as the account is read: what the screen that follows
+ * reads is then asked for with none, and waits for one.
+ */
+function offlineOnceKnown(path: string): void {
+  if (path === '/me') onlineManager.setOnline(false)
 }
 
 /** The app at `address`, signed in, over a server of the test's, and what the server was asked. */
 function open(
   address: string,
-  { memberships = [home, cottage], suspended = [], household: answer }: Server = {},
+  { memberships = [home, cottage], suspended = [], household: answer, asking }: Server = {},
 ) {
   const asked: string[] = []
   const client = createWebClient({
@@ -81,6 +93,7 @@ function open(
     fetch: (request) => {
       const path = new URL(request.url).pathname.replace('/api/v1', '')
       asked.push(path)
+      asking?.(path)
       if (path === '/me') return Promise.resolve(Response.json(me))
       if (path === '/households') {
         return Promise.resolve(
@@ -233,6 +246,18 @@ describe('a household’s shell', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
   }, 20_000)
 
+  it('says a household could not be read while the browser has no connection to read it with', async () => {
+    open(inHousehold.home(home), { asking: offlineOnceKnown })
+    // Asked for with no connection, the read waits for one: no skeleton stands for it meanwhile.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'This household could not be read' }),
+    ).toBeInTheDocument()
+    act(() => {
+      onlineManager.setOnline(true)
+    })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
+  })
+
   it('opens any other address under a household on nothing, with the way back to its home', async () => {
     open(`${inHousehold.home(home)}/no-such-page`)
     await screen.findByRole('heading', { level: 1, name: 'This link doesn’t open anything here.' })
@@ -269,6 +294,19 @@ describe('where the app opens', () => {
     const { router } = open(paths.home.path)
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(inHousehold.home(cottage))
+    })
+  })
+
+  it('says the households could not be read while the browser has no connection, and opens once it has', async () => {
+    const { router } = open(paths.home.path, { asking: offlineOnceKnown })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Your households could not be read' }),
+    ).toBeInTheDocument()
+    act(() => {
+      onlineManager.setOnline(true)
+    })
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.home(home))
     })
   })
 
@@ -345,6 +383,19 @@ describe('a link that opened another household than the tab was in', () => {
     await waitFor(() => {
       expect(window.sessionStorage.getItem('household.tab')).toBe(home)
     })
+    expect(screen.queryByText('Switched household to open this link.')).not.toBeInTheDocument()
+  })
+
+  it('offers no way back to a household the platform has suspended since', async () => {
+    window.sessionStorage.setItem('household.tab', cottage)
+    const { asked } = open(inHousehold.home(home), { suspended: [cottage] })
+    // The list names it still, with its state, and its own address opens nothing (D-115).
+    expect(
+      await screen.findByRole('button', { name: 'Switch household. Currently Tilcerovi' }),
+    ).toBeInTheDocument()
+    expect(asked).toContain('/households')
+    // No banner at all: one that is announced is drawn before its words, its control with it.
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument()
     expect(screen.queryByText('Switched household to open this link.')).not.toBeInTheDocument()
   })
 

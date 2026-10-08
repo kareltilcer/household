@@ -1,6 +1,7 @@
-// What the account's screens share that draws nothing: how their writes are asked, which state a
-// read is in, the zone a member's times are said in, and whether a refusal is of what was sent.
-// Which field a `422` names is read as the screens before sign-in read it (auth/fields.tsx).
+// What the account's screens share that draws nothing: which state a read is in, the zone a
+// member's times are said in, and whether a refusal is of what was sent. Which field a `422`
+// names is read as the screens before sign-in read it (auth/fields.tsx), and a write is asked
+// as they ask theirs, at once (api/query.ts, `askedNow`).
 //
 // A member's account is no household's (A-19): its reads and writes are plain requests, and none
 // of them is a mutation a replica holds. So of the twelve states (02-components §0) these screens
@@ -15,15 +16,6 @@ import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import type { StateText } from '../ui/StateFrame.tsx'
 import type { DataState } from '../ui/states.ts'
-
-/**
- * How every write of the account is asked: at once, connection or none. Left to itself the query
- * client holds a write made with no connection in the page and sends it when one returns, and a
- * password changed, every device signed out or an account deleted minutes after the press, with
- * nothing on the screen to say it is still to come, is not what its member asked for. Asked at
- * once it fails at once, and says that the server could not be reached and nothing was changed.
- */
-export const askedNow = { networkMode: 'always' } as const
 
 /**
  * The query that holds where the account is signed in, its browsers and its phones and tablets

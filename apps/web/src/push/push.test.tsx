@@ -12,6 +12,7 @@ import { ApiProblemError } from '../api/problem.ts'
 import { createProblemHub } from '../api/problems.ts'
 import { Providers } from '../app/App.tsx'
 import { paths } from '../app/paths.ts'
+import { Root } from '../app/Root.tsx'
 import { routes } from '../app/routes.tsx'
 import { PushLinks } from './PushLinks.tsx'
 import {
@@ -374,6 +375,42 @@ describe('the app, wherever it is open', () => {
       expect(asked).toContain('POST /push/subscriptions')
     })
     expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+
+  it('has a screen that read this browser’s state before it was registered read it again', async () => {
+    withPush({ permission: 'granted' })
+    const said = { on: 'subscribed', off: 'not subscribed' }
+    function Said() {
+      const { state } = usePushPrompt()
+      return <p>{state === undefined ? null : state.subscribed ? said.on : said.off}</p>
+    }
+    // The server's key is still on its way when the screen first reads what the browser holds.
+    let give: (key: Response) => void = () => undefined
+    const key = new Promise<Response>((resolve) => {
+      give = resolve
+    })
+    const client = createWebClient({
+      origin,
+      cookies: () => '__Host-hh_csrf=t',
+      retry: { delays: [] },
+      fetch: (request) => {
+        const path = new URL(request.url).pathname.replace('/api/v1', '')
+        if (path === '/push/vapid-key') return key
+        if (path === '/me') return Promise.resolve(Response.json(me))
+        return Promise.resolve(new Response(null, { status: 204 }))
+      },
+    })
+    const router = createMemoryRouter([
+      { Component: Root, children: [{ path: '*', Component: Said }] },
+    ])
+    render(
+      <Providers persist={false} client={client} cookies={() => '__Host-hh_csrf=t'}>
+        <RouterProvider router={router} />
+      </Providers>,
+    )
+    expect(await screen.findByText(said.off)).toBeInTheDocument()
+    give(Response.json({ key: serverKey }))
+    expect(await screen.findByText(said.on)).toBeInTheDocument()
   })
 
   it('asks a browser that was never asked nothing, and the server nothing of it', async () => {

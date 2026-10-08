@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import {
+  pushStateKey,
   readPushState,
   requestPushPermission,
   subscribePush,
@@ -14,9 +15,6 @@ import {
   type PushPermission,
   type PushState,
 } from './worker.ts'
-
-/** The query that holds this browser's state: read by key where something else changes it. */
-export const pushStateKey = ['push', 'state'] as const
 
 export interface Push {
   /** What this browser says, or undefined until it has been read. */

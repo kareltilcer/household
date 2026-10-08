@@ -20,6 +20,7 @@ import { useNavigate, useParams } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
 import { isOwnPath, paths } from '../app/paths.ts'
 import { useI18n } from '../i18n/I18nProvider.tsx'
@@ -115,12 +116,14 @@ function Returned({ provider }: { readonly provider: Provider }) {
   }, [])
 
   const signIn = useMutation({
+    ...askedNow,
     mutationFn: async (body: Callback) =>
       unwrap(
         await api.POST('/auth/oauth/{provider}/callback', { params: { path: { provider } }, body }),
       ),
   })
   const link = useMutation({
+    ...askedNow,
     mutationFn: async (body: Pick<Callback, 'code' | 'state' | 'code_verifier'>) => {
       unwrap(
         await api.POST('/auth/oauth/{provider}/link', { params: { path: { provider } }, body }),

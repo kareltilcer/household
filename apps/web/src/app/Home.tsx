@@ -19,7 +19,8 @@ function MemberHome({ me }: { readonly me: Me }) {
   const t = useTranslate()
   const households = useHouseholds()
   if (households.data === undefined) {
-    if (!households.isError) return <Waiting />
+    // A read that waits for a connection could not be made, to a member: it is said so.
+    if (!households.isError && households.fetchStatus !== 'paused') return <Waiting />
     return (
       <div className={styles.page}>
         <h1 className={styles.title}>{t('shell.households.error.title')}</h1>

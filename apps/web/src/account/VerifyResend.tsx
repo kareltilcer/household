@@ -6,10 +6,11 @@ import { useMutation } from '@tanstack/react-query'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
-import { askedNow, useOwnZone } from './common.ts'
+import { useOwnZone } from './common.ts'
 import styles from './Settings.module.css'
 
 export function VerifyResend({ email }: { readonly email: string }) {

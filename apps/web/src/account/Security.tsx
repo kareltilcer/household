@@ -23,9 +23,15 @@ import { Link } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { checkNewPassword, fieldCodes } from '../auth/fields.tsx'
-import { startProvider, useOfferedProviders, type Provider } from '../auth/provider.ts'
+import {
+  startProvider,
+  useOfferedProviders,
+  useShownAgain,
+  type Provider,
+} from '../auth/provider.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { meKey, useMe, type Me } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -34,7 +40,7 @@ import { PasswordField } from '../ui/Field.tsx'
 import { List, ListRow } from '../ui/ListRow.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import a11y from '../ui/a11y.module.css'
-import { askedNow, signedInKey, useOwnZone } from './common.ts'
+import { signedInKey, useOwnZone } from './common.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import { PasswordDialog } from './PasswordDialog.tsx'
 import { RecoveryCodes } from './RecoveryCodes.tsx'
@@ -262,6 +268,9 @@ function SignInWith({ me }: { readonly me: Me }) {
     mutationFn: (provider: Provider) =>
       startProvider({ api, provider, intent: 'link', returnTo: paths.accountSecurity.path }),
   })
+  // Back from the provider's page with no link made, to this one as the browser kept it: the
+  // control that stayed busy while the page was leaving is put back.
+  useShownAgain(connect.reset)
   const disconnect = useMutation({
     ...askedNow,
     mutationFn: async (provider: Provider) => {

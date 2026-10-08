@@ -10,6 +10,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
+import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { heldDestination } from '../session/destination.ts'
 import { useSession } from '../session/SessionProvider.tsx'
@@ -42,6 +43,7 @@ export function useAnswer(challenge: Challenge) {
   const session = useSession()
   const navigate = useNavigate()
   return useMutation({
+    ...askedNow,
     mutationFn: async ({ code, trust }: Answer) =>
       unwrap(
         await api.POST('/auth/mfa/verify', {

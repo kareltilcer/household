@@ -11,6 +11,7 @@
 // providers and with the server, exactly (docs/runbooks/sign-in-keys-and-providers.md).
 import type { ApiClient } from '@household/api'
 import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { apiPath } from '../api/client.ts'
 import { unwrap } from '../api/problem.ts'
@@ -170,4 +171,24 @@ export async function startProvider({
     ...(returnTo === undefined ? {} : { returnTo }),
   })
   leave(begun.authorization_url)
+}
+
+/**
+ * Runs `act` when the page a flow left is shown again as it was left. A screen keeps a
+ * provider's control busy once its start is answered, the page being on its way to the
+ * provider's (SignIn.tsx, account/Security.tsx), and a browser that keeps a page for its Back
+ * button shows it again with everything it held: the start answered, and its control busy still,
+ * which would then take no press. The screen hands over what puts its start back.
+ */
+export function useShownAgain(act: () => void): void {
+  useEffect(() => {
+    const shown = (event: PageTransitionEvent) => {
+      // Kept by the browser and shown again, and not loaded: a page that is loaded starts afresh.
+      if (event.persisted) act()
+    }
+    window.addEventListener('pageshow', shown)
+    return () => {
+      window.removeEventListener('pageshow', shown)
+    }
+  }, [act])
 }

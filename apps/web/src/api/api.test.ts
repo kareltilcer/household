@@ -4,7 +4,13 @@ import type { UseStore } from 'idb-keyval'
 import { describe, expect, it, vi } from 'vitest'
 import { clientName, cookieValue, createWebClient, csrfCookie } from './client.ts'
 import { ApiProblemError, isRetryable, problemIn, unwrap } from './problem.ts'
-import { cacheMaxAge, createPersister, createQueryClient, persistOptions } from './query.ts'
+import {
+  askedNow,
+  cacheMaxAge,
+  createPersister,
+  createQueryClient,
+  persistOptions,
+} from './query.ts'
 
 const origin = 'https://household.example'
 
@@ -339,5 +345,40 @@ describe('the cache kept in this browser', () => {
       onlineManager.setOnline(true)
       client.unmount()
     }
+  })
+})
+
+/** The screens before sign-in and those of a member's own account, each file as it is written. */
+const screens = import.meta.glob<string>(
+  ['../auth/*.{ts,tsx}', '../account/*.{ts,tsx}', '!../**/*.test.{ts,tsx}'],
+  { query: '?raw', import: 'default', eager: true },
+)
+
+describe('a write that must not wait', () => {
+  it('is sent at once, though the browser says it has no connection', async () => {
+    const client = createQueryClient()
+    const sent = vi.fn(() => Promise.resolve('an answer'))
+    client.mount()
+    onlineManager.setOnline(false)
+    try {
+      const write = new MutationObserver(client, { ...askedNow, mutationFn: sent })
+      await write.mutate()
+      expect(sent).toHaveBeenCalledTimes(1)
+      expect(write.getCurrentResult().isPaused).toBe(false)
+    } finally {
+      onlineManager.setOnline(true)
+      client.unmount()
+    }
+  })
+
+  // A sign-in completed, a password set or an account deleted when a connection returns,
+  // minutes after the press and with nobody at the screen, is not what was asked for (D-164).
+  it('is every write of the screens before sign-in and of a member’s own account', () => {
+    const writes = Object.entries(screens).flatMap(([path, source]) =>
+      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
+    )
+    // The sources were read at all: every screen of the two that writes is among them.
+    expect(writes.length).toBeGreaterThan(20)
+    expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
   })
 })

@@ -1,7 +1,7 @@
 // How an account signs in, as a member changes it: the password and each refusal the server has
 // a sentence for, the second step's two confirmations, and Google and Apple where the server
 // signs in with them.
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { startProvider } from '../auth/provider.ts'
 import { createServer, invalid, jana, noContent, open, problem, type Server } from './testing.tsx'
@@ -306,6 +306,26 @@ describe('Google and Apple', () => {
       intent: 'link',
       returnTo: '/account/security',
     })
+  })
+
+  it('take a press again on a page the browser kept and shows again, back from the provider’s', async () => {
+    const server = createServer()
+    configured(server, ['google'])
+    const { user } = await security(server)
+    const connect = await screen.findByRole('button', { name: 'Connect Google' })
+    await user.click(connect)
+    // The page is leaving for the provider's, and its control stays busy meanwhile.
+    await waitFor(() => {
+      expect(connect).toHaveAttribute('aria-busy', 'true')
+    })
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    })
+    await waitFor(() => {
+      expect(connect).not.toHaveAttribute('aria-busy', 'true')
+    })
+    await user.click(connect)
+    expect(startProvider).toHaveBeenCalledTimes(2)
   })
 
   it('disconnect one that is connected, and say so', async () => {

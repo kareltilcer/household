@@ -1,4 +1,5 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { onlineManager } from '@tanstack/react-query'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { paths } from '../app/paths.ts'
@@ -209,6 +210,27 @@ describe('the sign-in screen', () => {
     await screen.findByRole('alert')
   })
 
+  it('is asked at once though the browser says it has no connection, and is sent by nothing when one returns', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    backend.on('POST /auth/login', () => problem(401, 'invalid_credentials'))
+    open(paths.signIn.path, { backend })
+    await screen.findByRole('heading', { level: 1 })
+    onlineManager.setOnline(false)
+    try {
+      await signIn(user)
+      // Not held for a connection, with a busy control and no word: it is asked, and answered.
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Email or password is not correct.',
+      )
+      expect(screen.getByRole('button', { name: 'Sign in' })).not.toHaveAttribute('aria-busy')
+    } finally {
+      onlineManager.setOnline(true)
+    }
+    // Nothing waited for the connection: a sign-in sent now would be nobody's.
+    expect(backend.to('POST /auth/login')).toHaveLength(1)
+  })
+
   it('says what a failure of the server’s did to what was typed', async () => {
     const user = userEvent.setup()
     const backend = serve()
@@ -266,6 +288,29 @@ describe('the providers on the sign-in screen', () => {
     })
     expect(screen.queryByRole('button', { name: /^Continue with/ })).not.toBeInTheDocument()
     expect(screen.queryByText('Or')).not.toBeInTheDocument()
+  })
+
+  it('take a press again on a page the browser kept and shows again, back from the provider’s', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    backend.on('GET /auth/oauth', () => Response.json({ providers: ['google'] }))
+    open(paths.signIn.path, { backend })
+    const google = await screen.findByRole('button', { name: 'Continue with Google' })
+    const before = vi.mocked(startProvider).mock.calls.length
+    await user.click(google)
+    // The start is answered and the page is leaving for the provider's: the control stays busy.
+    await waitFor(() => {
+      expect(google).toHaveAttribute('aria-busy', 'true')
+    })
+    // Back, to the page as the browser kept it and not one loaded again: the start is put back.
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    })
+    await waitFor(() => {
+      expect(google).not.toHaveAttribute('aria-busy', 'true')
+    })
+    await user.click(google)
+    expect(vi.mocked(startProvider).mock.calls.length - before).toBe(2)
   })
 
   it('say why a flow could not be started', async () => {

@@ -16,6 +16,7 @@ import type { ReactNode } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { deviceTimeZone, useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -48,6 +49,7 @@ export function DeletionCancel() {
   const closes = closingAt(fragment.get('at'))
 
   const keep = useMutation({
+    ...askedNow,
     mutationFn: async () => {
       unwrap(await api.POST('/auth/deletion/cancel', { body: { token } }))
     },

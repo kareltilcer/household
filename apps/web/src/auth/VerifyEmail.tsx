@@ -12,6 +12,7 @@ import type { ReactNode } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useSession } from '../session/SessionProvider.tsx'
@@ -30,6 +31,7 @@ export function VerifyEmail() {
   const signedIn = session.state.status !== 'visitor'
 
   const verify = useMutation({
+    ...askedNow,
     mutationFn: async (link: string) => {
       unwrap(await api.POST('/auth/verify-email', { body: { token: link } }))
     },

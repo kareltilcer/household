@@ -53,9 +53,15 @@ export function Switched() {
     }
   }, [household])
 
-  // The household the tab was in is named only where it is this member's still: one they have
-  // left since, or another person's who signed in here before them, is named to nobody.
-  const previous = from === null ? undefined : households.data?.find(({ id }) => id === from)
+  // The household the tab was in is named only where it is this member's still, and opens: one
+  // they have left since, or another person's who signed in here before them, is named to
+  // nobody, and the way back to one suspended since would open nothing (D-115).
+  const previous =
+    from === null
+      ? undefined
+      : households.data?.find(
+          ({ id, entitlement }) => id === from && entitlement?.state !== 'suspended',
+        )
   if (previous === undefined || dismissed) return null
   return (
     <Banner

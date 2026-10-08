@@ -6,7 +6,7 @@
 // else is registered with, and each screen a journey passes is held to axe as it stands.
 import type { Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
-import { expect, expectAccessible, open, test } from './fixtures.ts'
+import { expect, expectAccessible, frames, open, test } from './fixtures.ts'
 import { linkToken, person, register, totp, type Person } from './stack.ts'
 
 /** The page's one title, which a screen is known by. */
@@ -171,4 +171,41 @@ test('a password is set anew by the link a reset’s email carried, and the old 
   await expect(page.getByText('Email or password is not correct.')).toBeVisible()
   await signInAs(page, who, next)
   await expect(page).toHaveURL(paths.account.path)
+})
+
+test('a sign-in pressed with no connection says so at once, and nothing signs in once the connection is back', async ({
+  page,
+  context,
+  faults,
+}) => {
+  const who = person()
+  await page.goto(paths.signIn.example)
+  await register(page, who)
+
+  await open(page, paths.signIn.example)
+  let asked = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/auth/login')) asked += 1
+  })
+  await context.setOffline(true)
+  await signInAs(page, who)
+  // Asked at once, and not held for a connection: the screen says the server was not reached,
+  // and the control is theirs again.
+  await expect(page.getByRole('alert')).toContainText('We couldn’t reach Household.')
+  const button = page.getByRole('button', { name: 'Sign in', exact: true })
+  await expect(button).not.toHaveAttribute('aria-busy', 'true')
+
+  // The connection is back, and nothing was left waiting for it: a sign-in sent now, with
+  // nobody at the screen, would sign in whoever had walked away from it.
+  const before = asked
+  await context.setOffline(false)
+  await frames(page, 10)
+  expect(asked).toBe(before)
+  await expect(page).toHaveURL(paths.signIn.path)
+
+  await button.click()
+  await expect(page).toHaveURL(paths.account.path)
+  // The requests that found no connection, as the browser says each, are this test's own doing.
+  expect(faults.filter((fault) => !/ERR_INTERNET_DISCONNECTED/.test(fault))).toEqual([])
+  faults.length = 0
 })

@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-08
 - **Plan item:** 25
-- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §5–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-163; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
+- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §5–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-164; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
 
 ## Context
 
@@ -122,6 +122,14 @@ screens say what the server does where the prototype says otherwise: twelve char
 password checked at the server against its own copy of the breach list, limits by address and
 network, each link's own lifetime, and a deletion only its link cancels.
 
+**A write of these screens, and of a member's own account, is asked at once** (D-164). Left to
+itself the query client holds a write made with no connection in the page and sends it when one
+returns (ADR 0025), which is what a household's queued write wants and no sign-in does. Asked at
+once (`api/query.ts`, `askedNow`) it fails at once, and its screen says that the server could not
+be reached and that nothing was changed. A provider's control stays busy once its start is
+answered, the page being on its way to the provider's, and is put back where the browser shows
+that page again as it kept it, for its Back button (`auth/provider.ts`).
+
 **The service worker shows a Web Push and does nothing else.** The build writes it as one file
 at the origin's root (`build/pushWorker.ts`), part of the build's id: it handles `push` and
 `notificationclick`, has no `fetch` handler and keeps no cache, so it serves no file of any
@@ -187,6 +195,9 @@ every other console error still fails its test.
 | Notification permission asked at sign-in | 06-clients §6: asked in context, never on first launch |
 | The browser's subscription removed after the sign-out, or put back where the sign-out failed | It goes first so that a session that still stands tells the server, and after it there is none to tell with. Put back, it needs the server the sign-out could not reach. A member whose sign-out failed was leaving, and the app registers the browser again when it next starts with them signed in (`push/Push.tsx`) |
 | What that removal was refused with told to the problem hub, as the renewal's is and as a request outside a query otherwise owes | The sign-out follows it at once and is told its own refusal. Told of the removal's first, a session the server had ended already would be drawn as one that expired under its member, the address they pressed *Sign out* at held for whoever signs in next, where the sign-out reads the same `401` as the sign-out done |
+| A write of the screens before sign-in left to the query client's own rule, held in the page until a connection returns, as item 25 first had it | Pressed with the browser offline, a sign-in showed a busy control and no word, and was completed whenever the connection came back, with nobody at the screen and whatever screen it had been left for since; a reset's password was set, and every device signed out, minutes after its press. It is asked at once and fails at once, as the account's own writes are (D-164) |
+| Asking at once made the query client's rule for every write | A household's write made with no connection is queued on the web (06-clients), and waits in the page until a replica keeps it (ADR 0025). Which of a module's writes wait is its screens' to say: a sign-in's and an account's are no household's |
+| A provider's control busy only while its start is asked, and idle again once it is answered | The page is on its way to the provider's for as long as that page takes to answer, and a control idle meanwhile takes a second press, which begins a second flow. It stays busy, and a page the browser kept and shows again, back from the provider's, puts its start back |
 | The file of recovery codes let go of in the press that hands it over, or by a timer after it | A browser may begin reading the file only once the press has returned, and how long after is its own affair. It is let go of with the screen that showed the codes |
 | A catalog that failed to load imported again when the connection is back | Chromium keeps an import that failed and answers the next one of the same file with that failure, asking the network nothing: the page stayed blank until it was reloaded by hand. The page is loaded again, which asks for every file of its own anew, and a language chosen later says to reload |
 | The catalogs fetched as data, which can be asked for again, and not imported | A second way to load and to name a build's files, and to count them in the budget, for a failure that loading the page again answers |
@@ -202,6 +213,9 @@ every other console error still fails its test.
   the session hears of the three answers. A request made outside it tells the hub itself, as
   the renewal of a browser's push does (`push/worker.ts`); the one that does not is the removal
   a sign-out follows, whose own refusal is told (above).
+- A write of a screen before sign-in or of a member's own account spreads `askedNow`
+  (`api/query.ts`), and a test holds every one of them to it. A module's screens say for
+  themselves which of their writes wait for a connection.
 - A module's screen shows a row's state through `sync/` and never imports the library's code:
   what it needs at run time is added to `Opened` (`sync/open.ts`).
 - **Item 26** registers household settings in `modules/registry.ts`, the first module the

@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -25,6 +26,7 @@ export function ResetRequest() {
   const [fault, setFault] = useState<{ readonly email: EmailFault }>()
 
   const request = useMutation({
+    ...askedNow,
     mutationFn: async (address: string) => {
       unwrap(await api.POST('/auth/password-reset', { body: { email: address } }))
     },
