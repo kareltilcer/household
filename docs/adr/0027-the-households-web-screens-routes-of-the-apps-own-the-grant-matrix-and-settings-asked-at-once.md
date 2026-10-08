@@ -115,12 +115,19 @@ names the same reasons in `blocked_by`, is drawn the same way where it disagrees
 read.
 
 **The inviter's notice of a decline stands on the invitations** (D-171), drawn from each
-invitation's own status.
+invitation's own status: one for each that stands declined, until it is withdrawn or its address
+has another invitation that waits or was taken.
 
-**The catalog is not split yet.** This item's words are keys under `household.*`, and with
-them the first download is under its 200 kB; the split ADR 0026 describes, a module's words
-fetched with its screens, is left to the item that would pass the budget, and is by key prefix
-when it comes (Consequences).
+**A create whose answer was lost is read as made.** Every create sends an id the client made
+(D-23), once for each visit of its screen, so a press repeated after an answer that never came
+names the same household, invitation or profile; the server answers that `422` for the id, and
+the screen reads what it made, or says that it may have been made and where to look, in place of
+asking for it again for ever.
+
+**The catalog is not split yet.** This item's words are keys under `household.*`, some four
+hundred of them, and with them the first download is 194 kB of its 200 kB, 30 of them the
+largest catalog; the split ADR 0026 describes, a module's words fetched with its screens, is
+left to the item that would pass the budget, and is by key prefix when it comes (Consequences).
 
 ## Alternatives rejected
 
@@ -171,9 +178,19 @@ when it comes (Consequences).
 - FR-HH4 has the payer unblocked by handing billing over *or cancelling the subscription*; the
   server refuses a payer of record whatever the subscription's state. The leave screen says what
   the server does. Which of the two is meant is the PRD's to settle with item 27.
-- The first download is counted in the pull request that added these words. The item whose
-  words would pass 200 kB splits a language's catalog by key prefix, `household.*` first, each
-  part fetched with the screens that read it (D-159).
+- The first download is 194 kB of its 200 kB. **Item 27**'s words pass it, so it splits a
+  language's catalog first, by key prefix, `household.*` and its own each fetched with the
+  screens that read them (D-159).
+- A token kept in the page's memory does not outlive a page load: a visitor who signs in with a
+  provider, whose pages take the tab away and bring it back, returns to the invitation's page
+  with no token, and opens their link again, as after a reload. The page says of both where an
+  invitation sent by email waits meanwhile.
+- A household a member has left keeps its replica in the browser until the session ends
+  (D-161, ADR 0026): nothing opens it again, and a second removal by household is one more to
+  keep in step with the first.
+- The sheet that makes a child profile says that the child is told, the first time they sign
+  in, that a parent can see what they keep in their private space (FR-CH3). The child signs in
+  on a phone: **item 29** tells them.
 - **Item 29** builds the same screens on mobile from the same rule (`@household/domain`'s
   grants) and the same decisions (D-167 to D-171).
 - **What would make this worth revisiting**: a module whose screens cannot each be a route (a
