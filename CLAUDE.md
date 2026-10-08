@@ -146,7 +146,13 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   the screen it shows: a screen that draws the page's `<h1>` says the same words to
   `usePageTitle` (`app/title.ts`), as `Screen` and `SettingsPage` do for the screens they frame,
   nothing above a screen sets a title, and the walk of the routes fails one whose title does not
-  name its heading ([D-165](docs/prd/09-decisions.md)). A route is a line of
+  name its heading ([D-165](docs/prd/09-decisions.md)). What a press came to is said to whoever
+  cannot see it: a form that is refused moves the focus to the first field the refusal marked
+  (`useRefusedField`, `auth/fields.tsx`), a refusal that is no field's, and one of a control that
+  saves as it is changed, is a `Banner` with `announce`, and a screen that removes the row a
+  dialog was opened from says where the focus goes ([D-166](docs/prd/09-decisions.md)); axe
+  reads only that a field and its sentence are tied, so the screen's own test holds the focus
+  and the announcement. A route is a line of
   `src/app/paths.ts`, which the end-to-end suite walks with axe in both themes and in the
   pseudo-locale, every test failing on a violation of the policy; what a route opens, a dialog, a
   menu or a toast, is opened under the same two in `e2e/overlays.spec.ts` or in the spec of the
