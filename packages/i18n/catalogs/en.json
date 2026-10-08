@@ -777,6 +777,7 @@
   "household.leave.intro.two": "Two things have to be settled first, and here they both are.",
   "household.leave.last_owner.action": "Make somebody an owner",
   "household.leave.last_owner.body": "If you go, nobody is left who can invite, remove or change what anyone sees. Make somebody else an owner first.",
+  "household.leave.last_owner.children": "If you go, nobody is left who can invite, remove or change what anyone sees, and a child profile can’t be an owner. Invite somebody as an owner first.",
   "household.leave.last_owner.deleting": "An owner whose account is being deleted does not count as one.",
   "household.leave.last_owner.title": "You are the only owner",
   "household.leave.payer.body": "Billing has to be handed to another owner before you go. A household whose payer has left lapses for a reason nobody in it can fix.",

@@ -175,13 +175,18 @@ function Opened() {
   const zone = me?.timezone ?? deviceTimeZone()
   const say = useProblemText(zone)
 
+  // Answered, the token opens nothing more, and is held no longer: where it is still the one
+  // held. A link opened here since holds its own, which the answer to this one leaves alone.
+  const spent = () => {
+    if (heldInvitationToken() === token) forgetInvitationToken()
+  }
   const join = useMutation({
     ...askedNow,
     mutationFn: async () =>
       unwrap(await api.POST('/me/invitations/{token}/accept', { params: { path: { token } } })),
     // What is so whether or not this page is still drawn when the answer comes.
     onSuccess: () => {
-      forgetInvitationToken()
+      spent()
       void queries.invalidateQueries({ queryKey: householdsKey, exact: true })
       void queries.invalidateQueries({ queryKey: waitingInvitationsKey, exact: true })
     },
@@ -196,7 +201,7 @@ function Opened() {
       unwrap(await api.POST('/me/invitations/{token}/decline', { params: { path: { token } } }))
     },
     onSuccess: () => {
-      forgetInvitationToken()
+      spent()
       void queries.invalidateQueries({ queryKey: waitingInvitationsKey, exact: true })
     },
   })

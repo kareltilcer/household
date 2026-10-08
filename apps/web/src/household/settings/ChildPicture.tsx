@@ -94,6 +94,8 @@ export function ChildPicture({
           params: { path },
         }),
       ),
+    // Kept whether or not the page is still drawn when the answer comes, as an upload is.
+    onSuccess: kept,
     onError: (error) => {
       refusals.refuse(error)
     },
@@ -139,8 +141,7 @@ export function ChildPicture({
                 const pressed = event.currentTarget
                 refusals.clear()
                 remove.mutate(undefined, {
-                  onSuccess: (saved) => {
-                    kept(saved)
+                  onSuccess: () => {
                     // The control that removed it goes with the picture, and nothing else says
                     // it went: the focus it still holds goes to the one that stays, which then
                     // offers to choose a picture where it offered to change one, or to the

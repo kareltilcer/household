@@ -49,7 +49,13 @@ import { problemIn, unwrap } from '../../api/problem.ts'
 import { askedNow } from '../../api/query.ts'
 import { NotAvailable } from '../../app/NotAvailable.tsx'
 import { inHousehold } from '../../app/paths.ts'
-import { checkEmail, fieldCodes, useRefusedField, type EmailFault } from '../../auth/fields.tsx'
+import {
+  checkEmail,
+  fieldCodes,
+  isMadeAlready,
+  useRefusedField,
+  type EmailFault,
+} from '../../auth/fields.tsx'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { useMe } from '../../session/SessionProvider.tsx'
 import { Banner } from '../../ui/Banner.tsx'
@@ -90,7 +96,7 @@ const longestMessage = 500
  * key, and one pressed again by the invitation's own id.
  */
 function isAnswerLost(error: unknown): boolean {
-  return problemIn(error)?.code === 'idempotency_in_progress' || fieldCodes(error).has('/id')
+  return problemIn(error)?.code === 'idempotency_in_progress' || isMadeAlready(error)
 }
 
 function WhatAMemberGets({
@@ -321,7 +327,8 @@ function Composer() {
   // Whether the refusal is one of a field of the form: one that names none is said above the
   // button, as any other failure is. It is asked of what was refused, and not of what the form
   // draws now: a field put away since, by another way of inviting or another role, takes its
-  // sentence with it, and nothing is said anew of a press that was answered already.
+  // sentence with it, and nothing is said anew of a press that was answered already. Neither
+  // is chosen while a send is on its way, so the answer finds the fields it was sent from.
   const beside =
     address !== undefined || codes.has('/message') || codes.has('/max_uses') || rows.size > 0
   const form = useRefusedField(unsent ?? send.error)
@@ -454,6 +461,9 @@ function Composer() {
                 { value: 'link', label: t('household.invite.how.link') },
               ]}
               onChange={(value) => {
+                // Not while a send is on its way: its answer is about the form as it was sent,
+                // and a field put away meanwhile would take its refusal with it, unsaid.
+                if (send.isPending) return
                 if (value === 'email' || value === 'link') setKind(value)
               }}
             />
@@ -511,6 +521,7 @@ function Composer() {
                 { value: 'owner', label: word('owner') },
               ]}
               onChange={(value) => {
+                if (send.isPending) return
                 if (value === 'member' || value === 'owner') setRole(value)
               }}
             />

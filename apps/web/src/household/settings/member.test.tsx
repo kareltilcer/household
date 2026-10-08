@@ -1185,6 +1185,45 @@ describe('removing a member', () => {
     expect(screen.queryByText('This link doesn’t open anything here.')).not.toBeInTheDocument()
   })
 
+  it('says so to an owner who had gone back before the answer came, leaves them there and keeps nothing of the member', async () => {
+    const server = createServer()
+    let answer = () => {}
+    const held = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    server.on(`DELETE ${at}/members/${petr}`, async () => {
+      await held
+      server.members = server.members.filter((each) => each.user_id !== petr)
+      return noContent()
+    })
+    const { user, router } = await page(petr, server)
+    await user.click(screen.getByRole('button', { name: 'Remove Petr Tilcer' }))
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Remove Petr Tilcer from Tilcerovi',
+      }),
+    )
+    await waitFor(() => {
+      expect(server.to(`DELETE ${at}/members/${petr}`)).toHaveLength(1)
+    })
+    // The browser's own way back is held by no question.
+    await act(() => router.navigate(inHousehold.modules(home)))
+    await screen.findByRole('heading', { level: 1, name: 'Modules' })
+    const read = server.to(`GET ${at}`).length
+    answer()
+
+    expect(await screen.findByText('Petr Tilcer was removed. They are told.')).toBeInTheDocument()
+    // The household is read again, and the owner is led nowhere from where they went.
+    await waitFor(() => {
+      expect(server.to(`GET ${at}`).length).toBeGreaterThan(read)
+    })
+    expect(router.state.location.pathname).toBe(inHousehold.modules(home))
+    // The member's own address draws nothing this browser had kept of them.
+    await act(() => router.navigate(inHousehold.member(home, petr)))
+    expect(await screen.findByText('This link doesn’t open anything here.')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1, name: 'Petr Tilcer' })).not.toBeInTheDocument()
+  })
+
   it('says of a child profile that it ends with its PIN and its sign-ins, and tells nobody', async () => {
     const server = createServer()
     server.on(`DELETE ${at}/members/${adam}`, noContent)

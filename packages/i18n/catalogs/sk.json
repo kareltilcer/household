@@ -777,6 +777,7 @@
   "household.leave.intro.two": "Najprv treba vyriešiť dve veci. Tu sú obe.",
   "household.leave.last_owner.action": "Urobiť niekoho vlastníkom",
   "household.leave.last_owner.body": "Keď odídete, nezostane nikto, kto môže pozývať, odoberať alebo meniť, čo kto vidí. Najprv urobte vlastníkom niekoho ďalšieho.",
+  "household.leave.last_owner.children": "Keď odídete, nezostane nikto, kto môže pozývať, odoberať alebo meniť, čo kto vidí, a detský profil vlastníkom byť nemôže. Najprv niekoho pozvite ako vlastníka.",
   "household.leave.last_owner.deleting": "Vlastník, ktorého účet sa práve maže, sa nepočíta.",
   "household.leave.last_owner.title": "Ste jediným vlastníkom",
   "household.leave.payer.body": "Skôr než odídete, musí platenie prevziať iný vlastník. Domácnosti, ktorej odišiel platiteľ, skončí predplatné z dôvodu, ktorý v nej nikto nedokáže napraviť.",

@@ -50,7 +50,7 @@ import { problemIn, unwrap } from '../api/problem.ts'
 import { deviceTimeZone, useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { inHousehold } from '../app/paths.ts'
-import { fieldCodes, useRefusedField } from '../auth/fields.tsx'
+import { fieldCodes, isMadeAlready, useRefusedField } from '../auth/fields.tsx'
 import { useFormat, useI18n, useTranslate } from '../i18n/I18nProvider.tsx'
 import { currencyName, ownName, timeZones } from '../i18n/names.ts'
 import { useMe } from '../session/SessionProvider.tsx'
@@ -139,7 +139,7 @@ function Form({
         // press made, whose answer never arrived: it is read, and is the answer.
         const read = () =>
           api.GET('/households/{household_id}', { params: { path: { household_id: body.id } } })
-        if (fieldCodes(error).has('/id')) return unwrap(await read())
+        if (isMadeAlready(error)) return unwrap(await read())
         // As many as an account may own, and that press may have made the last of them: the
         // server counts them before it looks at the id. Where the household is there, it is
         // the answer; where it is not, the refusal stands.

@@ -1,7 +1,7 @@
 // A child profile's own part of its page (PRD 17 FR-HA7; PRD 02 §6): what every reader is told
 // of it, and what an owner does to it: unlock it, set a new PIN, set its picture, and give it a
 // sign-in of its own.
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { inHousehold } from '../../app/paths.ts'
 import type { Membership } from '../data.ts'
@@ -362,6 +362,35 @@ describe('a child profile’s picture', () => {
     expect(container.querySelector('img')).not.toBeInTheDocument()
     // The control the focus went to says it: nothing says it twice.
     expect(screen.queryByText('Adam’s picture is removed.')).not.toBeInTheDocument()
+  })
+
+  it('keeps a removal that is answered once the page has been left', async () => {
+    const server = createServer()
+    change(server, { avatar_url: address, version: 2 })
+    let answer = () => {}
+    const held = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    server.on(`DELETE ${profile}/avatar`, async () => {
+      await held
+      return Response.json(change(server, { avatar_url: null, version: 3 }))
+    })
+    const { user, part, router } = await page(server)
+    await user.click(within(part).getByRole('button', { name: 'Remove picture' }))
+    await waitFor(() => {
+      expect(server.to(`DELETE ${profile}/avatar`)).toHaveLength(1)
+    })
+    // The answer is slow, and the owner does not wait for it.
+    await act(() => router.navigate(inHousehold.modules(home)))
+    await screen.findByRole('heading', { level: 1, name: 'Modules' })
+    const read = server.to(`GET ${at}`).length
+    answer()
+
+    // What is kept is the mutation's to keep, wherever its owner is by then: the household is
+    // read again, and its members with it.
+    await waitFor(() => {
+      expect(server.to(`GET ${at}`).length).toBeGreaterThan(read)
+    })
   })
 
   it('gives each refusal its sentence, and changes no picture', async () => {

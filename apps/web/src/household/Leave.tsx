@@ -16,7 +16,9 @@
 // screens being plan item 27's, so what has to happen is named and nothing is linked; and
 // deleting the household, the last owner's other way out, is not built, so only making somebody
 // else an owner is offered. A member who is the only one in the household is told that leaving
-// would leave it with nobody in it. A child profile does not leave: an owner removes it (D-104).
+// would leave it with nobody in it, and one whose only company is child profiles, which are
+// never made owners, is led to where somebody is invited and not to a list that can give no
+// owner. A child profile does not leave: an owner removes it (D-104).
 //
 // What leaving does to what the member wrote is said in a section of its own, always, and again
 // in the confirmation: what they added stays with the household, and their private notes and
@@ -103,12 +105,16 @@ function Leaving({ me }: { readonly me: Me }) {
   // leaves the page, and not a moment sooner: the shell around it reads the household from the
   // same place, and with it gone would ask the server for one that is no longer theirs.
   const left = useRef(false)
-  useEffect(
-    () => () => {
+  // Whether this screen has left the page: by the browser's own way back, which no question
+  // holds, it may have before a leaving it asked for is answered.
+  const gone = useRef(false)
+  useEffect(() => {
+    gone.current = false
+    return () => {
+      gone.current = true
       if (left.current) queries.removeQueries({ queryKey: householdKey(id) })
-    },
-    [queries, id],
-  )
+    }
+  }, [queries, id])
 
   const leave = useMutation({
     ...askedNow,
@@ -128,6 +134,8 @@ function Leaving({ me }: { readonly me: Me }) {
       void queries.invalidateQueries({ queryKey: householdsKey, exact: true })
       toast({ message: t('household.leave.done', { household: name }) })
       left.current = true
+      // The screen went before the answer came, and took its own tidying with it.
+      if (gone.current) queries.removeQueries({ queryKey: householdKey(id) })
       void navigate(paths.home.path, { replace: true })
     },
     onError: (error) => {
@@ -146,6 +154,9 @@ function Leaving({ me }: { readonly me: Me }) {
   const others = list.filter((each) => each !== own)
   const anotherOwner = others.some((each) => each.role === 'owner')
   const alone = own !== undefined && others.length === 0
+  // Whether everybody else here is a child profile, which is never made an owner (FR-CH1): the
+  // list of members is then no place to make one, and somebody has to be invited first.
+  const onlyChildren = others.length > 0 && others.every((each) => each.role === 'child')
   // And as the server said it, to a press: its word stands for as long as the screen does.
   const named = blockedBy(leave.error)
   const lastOwner = (own?.role === 'owner' && !anotherOwner) || named.includes('last_owner')
@@ -238,13 +249,25 @@ function Leaving({ me }: { readonly me: Me }) {
               ) : null}
               {lastOwner && !alone ? (
                 <Section title={t('household.leave.last_owner.title')}>
-                  <p className={styles.text}>{t('household.leave.last_owner.body')}</p>
+                  <p className={styles.text}>
+                    {onlyChildren
+                      ? t('household.leave.last_owner.children')
+                      : t('household.leave.last_owner.body')}
+                  </p>
                   {uncounted ? (
                     <p className={styles.text}>{t('household.leave.last_owner.deleting')}</p>
                   ) : null}
-                  <Link className={styles.link} to={inHousehold.members(id)}>
-                    {t('household.leave.last_owner.action')}
-                  </Link>
+                  {/* No way that could only lead to nobody: where the members can give no owner,
+                      the way on is to where one is invited. */}
+                  {onlyChildren ? (
+                    <Link className={styles.link} to={inHousehold.invite(id)}>
+                      {t('household.invite.title')}
+                    </Link>
+                  ) : (
+                    <Link className={styles.link} to={inHousehold.members(id)}>
+                      {t('household.leave.last_owner.action')}
+                    </Link>
+                  )}
                 </Section>
               ) : null}
               {payer ? (

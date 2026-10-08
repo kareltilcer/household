@@ -53,7 +53,13 @@ import { useHousehold } from '../HouseholdContext.tsx'
 import { moduleStatesKey, type ModuleKey } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
 import { HouseholdSettingsPage, useStanding } from './Page.tsx'
-import { useFocusKept, useSaid, useStandingRefusal, type AskedProps } from './profile.ts'
+import {
+  isStandingRefusal,
+  useFocusKept,
+  useSaid,
+  useStandingRefusal,
+  type AskedProps,
+} from './profile.ts'
 
 /** The modules a household turns on and off, in the matrix's order: every one but its settings. */
 const switched = matrixOrder.filter((module) => module !== 'admin')
@@ -65,8 +71,10 @@ const switched = matrixOrder.filter((module) => module !== 'admin')
  * what lists their modules follows them.
  */
 function useSwitch() {
+  const t = useTranslate()
   const api = useApi()
   const queries = useQueryClient()
+  const toast = useToast()
   const household = useHousehold()
   const reread = useReread(household.id)
   return useMutation({
@@ -78,11 +86,24 @@ function useSwitch() {
           body: { enabled },
         }),
       ),
-    onSuccess: (saved, { module }) => {
+    // What is so, and that it is said, whether or not the screen is still drawn when the answer
+    // comes: an owner who went on to another meanwhile is told there.
+    onSuccess: (saved, { module, enabled }) => {
       queries.setQueryData<ModuleState[]>(moduleStatesKey(household.id), (was) =>
         was?.map((each) => (each.module === module ? { ...each, ...saved } : each)),
       )
+      const named = { module: t(`module.${module}.name`) }
+      toast({
+        message: enabled
+          ? t('household.modules.turn_on.done', named)
+          : t('household.modules.turn_off.done', named),
+      })
       void reread()
+    },
+    onError: (error) => {
+      // Refused for where the member now stands: the household is read again, which then draws
+      // no control for them.
+      if (isStandingRefusal(error)) void reread()
     },
   })
 }
@@ -115,7 +136,6 @@ function ModuleRow({
 }: RowProps) {
   const t = useTranslate()
   const format = useFormat()
-  const toast = useToast()
   // The row's own, so that one row's change under way keeps no other from being pressed.
   const turnOn = useSwitch()
   const name = t(`module.${module}.name`)
@@ -158,15 +178,7 @@ function ModuleRow({
                   onTurnOff()
                   return
                 }
-                turnOn.mutate(
-                  { module, enabled: true },
-                  {
-                    onSuccess: () => {
-                      toast({ message: t('household.modules.turn_on.done', { module: name }) })
-                    },
-                    onError: onRefused,
-                  },
-                )
+                turnOn.mutate({ module, enabled: true }, { onError: onRefused })
               }}
             />
           ) : null}
@@ -185,7 +197,6 @@ interface TurnOffProps extends AskedProps {
 /** The confirmation: retention is no footnote of it, but all it says (FR-HA8). */
 function TurnOff({ module, held, onClose, onEnded }: TurnOffProps) {
   const t = useTranslate()
-  const toast = useToast()
   const say = useProblemText(useTimeZone())
   const standing = useStandingRefusal()
   const turnOff = useSwitch()
@@ -213,10 +224,7 @@ function TurnOff({ module, held, onClose, onEnded }: TurnOffProps) {
               turnOff.mutate(
                 { module, enabled: false },
                 {
-                  onSuccess: () => {
-                    toast({ message: t('household.modules.turn_off.done', { module: name }) })
-                    onClose()
-                  },
+                  onSuccess: onClose,
                   onError: (error) => {
                     const ended = standing(error)
                     if (ended !== undefined) onEnded(ended)
@@ -248,7 +256,6 @@ export function Modules() {
   const standing = useStandingRefusal()
   const read = useModuleStates(household.id)
   const people = useMembers(household.id).data
-  const reread = useReread(household.id)
   const [confirming, setConfirming] = useState<ModuleKey | null>(null)
   const [said, say] = useSaid()
   const view = useFocusKept(changes, confirming)
@@ -261,12 +268,11 @@ export function Modules() {
   const heldBy = (module: ModuleKey) =>
     people?.filter((member) => (member.grants?.[module] ?? 'none') !== 'none').length
 
-  // Refused for where the member now stands: said, and the household read again, which then
-  // draws no control for them. Any other failure is said, and changed nothing.
+  // Refused for where the member now stands: said, the household being read again, which then
+  // draws no control for them (`useSwitch`). Any other failure is said, and changed nothing.
   const ended = (text: string) => {
     setConfirming(null)
     say(text)
-    void reread()
   }
   const refused = (error: unknown) => {
     const text = standing(error)

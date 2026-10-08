@@ -28,6 +28,7 @@ import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { useRefusedField } from '../auth/fields.tsx'
+import { isUnverified, useMarkUnverified } from '../household/Unverified.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { meKey, useMe, type Me } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -192,7 +193,7 @@ function Start({
 }) {
   const t = useTranslate()
   const api = useApi()
-  const queries = useQueryClient()
+  const markUnverified = useMarkUnverified()
   const [asking, setAsking] = useState(false)
   const enrol = useMutation({
     ...askedNow,
@@ -203,13 +204,11 @@ function Start({
       onEnrolled({ at: 'scan', secret: enrolment.secret, uri: enrolment.otpauth_uri })
     },
     onError: (error) => {
-      if (problemIn(error)?.code !== 'account_unverified') return
+      if (!isUnverified(error)) return
       // The server's word on it, whatever this page had read: the block is drawn in the
       // screen's own place, and lifts when the account is read as verified.
       setAsking(false)
-      queries.setQueryData<Me>(meKey, (was) =>
-        was === undefined ? was : { ...was, email_verified: false },
-      )
+      markUnverified()
     },
   })
   const on = me.mfa_enabled === true
@@ -240,7 +239,7 @@ function Start({
           title={t('account.second_step.unverified.title')}
           // Said as it arrives where it is the server's answer to the password just given, the
           // question having closed; read in its place where the screen opened with it.
-          announce={problemIn(enrol.error)?.code === 'account_unverified'}
+          announce={isUnverified(enrol.error)}
         >
           {t('account.second_step.unverified.body')}
         </Banner>

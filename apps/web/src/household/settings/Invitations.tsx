@@ -75,7 +75,7 @@ import {
 } from './invitations.ts'
 import styles from './Invitations.module.css'
 import { HouseholdSettingsPage, useStanding } from './Page.tsx'
-import { isStandingRefusal, useFocusKept } from './profile.ts'
+import { isStandingRefusal, useFocusKept, useSaid } from './profile.ts'
 
 /** What an owner can do to an invitation as it stands. */
 interface Offered {
@@ -224,12 +224,6 @@ function Row({
   )
 }
 
-/** A refusal that is no dialog's to say, and which one it is: each is said as it arrives. */
-interface Refused {
-  readonly count: number
-  readonly text: string
-}
-
 function Sent() {
   const t = useTranslate()
   const format = useFormat()
@@ -278,16 +272,14 @@ function Sent() {
   const joined = useMemo(() => new Set(addresses), [addresses])
 
   const [target, setTarget] = useState<Target | null>(null)
-  const [refused, setRefused] = useState<Refused | null>(null)
+  // A refusal that is no dialog's to say: each is said as it arrives.
+  const [refused, refuse] = useSaid()
   // How many times the server has said this account's address is not verified.
   const [blocked, setBlocked] = useState(0)
   // The invitations being sent again. Each row is busy for as long as its own is on its way,
   // whichever row was pressed last: pressed a second time meanwhile, it would be sent twice,
   // and the second sending makes the link in the first one's email a dead one.
   const [sending, setSending] = useState<readonly string[]>([])
-  const refuse = (text: string) => {
-    setRefused((was) => ({ count: (was?.count ?? 0) + 1, text }))
-  }
 
   // A control that was pressed may be gone once the list is read again: an invitation that was
   // withdrawn offers no *Withdraw*, one that somebody joined by offers nothing, and a member who
@@ -398,7 +390,7 @@ function Sent() {
           <Unverified key={blocked} why={t('household.invite.unverified')} announce />
         ) : null}
         {refused === null ? null : (
-          <Banner key={refused.count} tone="danger" announce>
+          <Banner key={refused.id} tone="danger" announce>
             {refused.text}
           </Banner>
         )}
@@ -498,11 +490,11 @@ function Sent() {
                         resending={sending.includes(each.id)}
                         onWithdraw={() => {
                           withdraw.reset()
-                          setRefused(null)
+                          refuse(null)
                           setTarget({ id: each.id, email: addressOf(each) })
                         }}
                         onResend={(email) => {
-                          setRefused(null)
+                          refuse(null)
                           setSending((ids) => [...ids, each.id])
                           resend.mutate({ id: each.id, email })
                         }}

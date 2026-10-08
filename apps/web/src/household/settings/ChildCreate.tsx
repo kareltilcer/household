@@ -31,7 +31,7 @@ import { useApi } from '../../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../../api/problem.ts'
 import { useProblemText } from '../../api/problemText.ts'
 import { askedNow } from '../../api/query.ts'
-import { fieldCodes, useRefusedField } from '../../auth/fields.tsx'
+import { fieldCodes, isMadeAlready, useRefusedField } from '../../auth/fields.tsx'
 import { useTranslate } from '../../i18n/I18nProvider.tsx'
 import { Banner } from '../../ui/Banner.tsx'
 import { Button } from '../../ui/Button.tsx'
@@ -66,15 +66,6 @@ function isYear(typed: string, latest: number): boolean {
   if (!/^[0-9]{4}$/.test(typed)) return false
   const year = Number(typed)
   return year >= earliestYear && year <= latest
-}
-
-/**
- * Whether `error` is the server's answer to a profile it has made already: a `422` that names
- * the id and no field beside it.
- */
-function isMadeAlready(error: unknown): boolean {
-  const named = fieldCodes(error)
-  return named.size === 1 && named.has('/id')
 }
 
 /** Whether `error` says the household has as many members as it may have. */

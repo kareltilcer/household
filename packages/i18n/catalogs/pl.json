@@ -777,6 +777,7 @@
   "household.leave.intro.two": "Najpierw trzeba załatwić dwie rzeczy. Oto obie.",
   "household.leave.last_owner.action": "Nadaj komuś rolę właściciela",
   "household.leave.last_owner.body": "Jeśli odejdziesz, nie zostanie nikt, kto może zapraszać, usuwać lub zmieniać to, co kto widzi. Najpierw nadaj komuś innemu rolę właściciela.",
+  "household.leave.last_owner.children": "Jeśli odejdziesz, nie zostanie nikt, kto może zapraszać, usuwać lub zmieniać to, co kto widzi, a profil dziecka nie może być właścicielem. Najpierw zaproś kogoś jako właściciela.",
   "household.leave.last_owner.deleting": "Właściciel, którego konto jest właśnie usuwane, się nie liczy.",
   "household.leave.last_owner.title": "Jesteś jedynym właścicielem",
   "household.leave.payer.body": "Zanim odejdziesz, płatności musi przejąć inny właściciel. Gospodarstwo, którego płatnik odszedł, wygasa z powodu, którego nikt w nim nie może naprawić.",

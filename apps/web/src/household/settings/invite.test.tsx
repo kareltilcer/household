@@ -233,6 +233,41 @@ describe('sending an invitation', () => {
     })
   })
 
+  it('takes no other way of inviting, and no other role, while a send is on its way', async () => {
+    const server = createServer()
+    let answer = () => {}
+    const asked = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    server.on(post, async () => {
+      await asked
+      // An address an invitation already waits for: the field's own to say.
+      return problem(422, 'validation_failed', {
+        errors: [{ field: '/email', code: 'invalid' }],
+      })
+    })
+    const { user } = await composer(server)
+    await user.type(address(), 'babicka@example.cz')
+    await user.click(send())
+    await waitFor(() => {
+      expect(server.to(post)).toHaveLength(1)
+    })
+    // Chosen meanwhile, either would put away a field the answer may be about.
+    await user.click(screen.getByRole('radio', { name: 'By a link I send myself' }))
+    await user.click(screen.getByRole('radio', { name: 'Owner' }))
+    expect(screen.getByRole('radio', { name: 'By email, to one person' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Member' })).toBeChecked()
+    answer()
+
+    // The refusal finds the field it is of, and is said with it.
+    await waitFor(() => {
+      expect(address()).toHaveAccessibleDescription(
+        expect.stringContaining('An invitation is already waiting for this address'),
+      )
+    })
+    expect(address()).toHaveFocus()
+  })
+
   it('says an invitation was sent to an owner who went on to another screen meanwhile, and leaves them there', async () => {
     const server = createServer()
     let answer = () => {}

@@ -337,6 +337,37 @@ describe('the token an invitation’s link carries', () => {
     expect(server.to(`GET /me/invitations/${other}`)).toHaveLength(1)
   })
 
+  it('goes on holding the link opened since, when the one before it is answered', async () => {
+    const other = 'r8t5-2hjw-6bn4'
+    const server = serving()
+    const slow = pending()
+    server.on(accepting, () => slow.response)
+    server.on(`GET /me/invitations/${other}`, () =>
+      Response.json(offered({ token: other, household_name: 'Novákovi' })),
+    )
+    const { user, router, cache } = openKeeping(link, server, {
+      kept: (queries) => {
+        queries.setQueryData(householdsKey, [])
+      },
+    })
+    await user.click(await screen.findByRole('button', { name: 'Join Tilcerovi' }))
+    await waitFor(() => {
+      expect(server.to(accepting)).toHaveLength(1)
+    })
+    // Another link is opened where the page stands, before the first is answered.
+    await act(() => router.navigate(`${paths.invitation.path}#token=${other}`))
+    expect(await titled('Jana Tilcerová has invited you to Novákovi')).toBeInTheDocument()
+    expect(heldInvitationToken()).toBe(other)
+    slow.answer(Response.json(joined))
+    // The first one's answer is kept, as it is wherever its page has gone.
+    await waitFor(() => {
+      expect(cache().getQueryState(householdsKey)?.isInvalidated).toBe(true)
+    })
+    // The token held is the second's, and stays held; its page stays where it is.
+    expect(heldInvitationToken()).toBe(other)
+    expect(router.state.location.pathname).toBe(paths.invitation.path)
+  })
+
   it('leads a member with no token to where the app opens', async () => {
     const server = serving()
     open(paths.invitation.path, server)

@@ -163,6 +163,41 @@ describe('leaving a household', () => {
     expect(screen.queryByRole('heading', { level: 1, name: title })).not.toBeInTheDocument()
   })
 
+  it('keeps nothing of it either where the screen had gone before the answer came', async () => {
+    const server = createServer(accountOf(petr))
+    let answer = () => {}
+    const held = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    server.on(leaving, async () => {
+      await held
+      server.on(`GET /households/${home}`, () => problem(404, 'not_found'))
+      server.on(reading, () => problem(404, 'not_found'))
+      return noContent()
+    })
+    const { user, router } = await read(server)
+    await confirmLeaving(user)
+    await waitFor(() => {
+      expect(server.to(leaving)).toHaveLength(1)
+    })
+    // The browser's own way back is held by no question, and the screen's tidying went with it.
+    await act(() => router.navigate(inHousehold.modules(home)))
+    await screen.findByRole('heading', { level: 1, name: 'Modules' })
+    answer()
+
+    // Out of the household, wherever in it they stood, and told so.
+    expect(await screen.findByText('You left Tilcerovi.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.home.path)
+    })
+    const asked = server.to(`GET /households/${home}`).length
+    await router.navigate(inHousehold.leave(home))
+    await waitFor(() => {
+      expect(server.to(`GET /households/${home}`)).toHaveLength(asked + 1)
+    })
+    expect(screen.queryByRole('heading', { level: 1, name: title })).not.toBeInTheDocument()
+  })
+
   it('keeps the household when its member says so', async () => {
     const server = createServer(accountOf(petr))
     const { user } = await read(server)
@@ -241,6 +276,29 @@ describe('leaving a household', () => {
     ).toBeInTheDocument()
     // There is nobody to make an owner, and deleting the household is not built: no link.
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('leads the only owner whose company is child profiles to where somebody is invited', async () => {
+    const server = createServer()
+    // Jana and the household's child profile: nobody the list of members could make an owner.
+    server.members = membersWith({ [jana.id]: { is_billing_payer: false } }).filter(
+      (each) => each.user_id === jana.id || each.role === 'child',
+    )
+    await read(server)
+    expect(screen.getByText(one)).toBeInTheDocument()
+    expect(sections()).toEqual(['You are the only owner', 'What you leave behind'])
+    expect(
+      screen.getByText(
+        'If you go, nobody is left who can invite, remove or change what anyone sees, and a child profile can’t be an owner. Invite somebody as an owner first.',
+      ),
+    ).toBeInTheDocument()
+    // No way to a list that can give no owner: the one that is drawn leads to the composer.
+    expect(screen.queryByRole('link', { name: 'Make somebody an owner' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Invite somebody' })).toHaveAttribute(
+      'href',
+      inHousehold.invite(home),
+    )
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 

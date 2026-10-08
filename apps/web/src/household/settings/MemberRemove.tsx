@@ -14,7 +14,7 @@
 // as the page leaves: read again while the page still stood, the member's own address would
 // answer that it opens nothing, and the page would say so on its way out.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import styles from '../../account/Settings.module.css'
 import { useApi } from '../../api/ApiProvider.tsx'
@@ -49,14 +49,20 @@ export function MemberRemove({ subject }: { readonly subject: Subject }) {
   // Whether the member was removed, and the page is on its way to the list. What is kept of
   // them is dropped, and the household read again, as this page leaves and not a moment sooner.
   const removed = useRef(false)
-  useEffect(
-    () => () => {
-      if (!removed.current) return
-      queries.removeQueries({ queryKey: memberKey(household.id, subject.id), exact: true })
-      void reread()
-    },
-    [queries, reread, household.id, subject.id],
-  )
+  const forget = useCallback(() => {
+    queries.removeQueries({ queryKey: memberKey(household.id, subject.id), exact: true })
+    void reread()
+  }, [queries, reread, household.id, subject.id])
+  // Whether this page has left: by the browser's own way back, which no question holds, it may
+  // have before a removal it asked for is answered.
+  const gone = useRef(false)
+  useEffect(() => {
+    gone.current = false
+    return () => {
+      gone.current = true
+      if (removed.current) forget()
+    }
+  }, [forget])
 
   const remove = useMutation({
     ...askedNow,
@@ -80,7 +86,10 @@ export function MemberRemove({ subject }: { readonly subject: Subject }) {
             ? t('household.member.remove.done_child', { name })
             : t('household.member.remove.done', { name }),
       })
-      void navigate(inHousehold.members(household.id), { replace: true })
+      // The page went before the answer came: what is kept of the member goes now, and its
+      // owner is told where they are, and stays there.
+      if (gone.current) forget()
+      else void navigate(inHousehold.members(household.id), { replace: true })
     },
     onError: (error) => {
       // Billing moved to them since the page was read: what the control's place would have said.

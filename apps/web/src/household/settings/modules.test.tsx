@@ -352,6 +352,34 @@ describe('turning a module on', () => {
     expect(within(await row('Pets')).getByText('On')).toBeInTheDocument()
   })
 
+  it('says so to an owner who went on to another screen before the answer came', async () => {
+    const server = createServer()
+    server.off = ['pets']
+    let answer = () => {}
+    const held = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    server.on(turning('pets'), async () => {
+      await held
+      server.off = []
+      return Response.json({ module: 'pets', enabled: true, my_level: 'manage' })
+    })
+    const { user, router } = await modules(server)
+    await user.click(within(await row('Pets')).getByRole('button', { name: 'Turn on Pets' }))
+    await waitFor(() => {
+      expect(server.to(turning('pets'))).toHaveLength(1)
+    })
+    // The answer is slow, and the owner does not wait for it.
+    await act(() => router.navigate(inHousehold.members(home)))
+    await screen.findByRole('heading', { level: 1, name: 'Members' })
+    answer()
+
+    expect(
+      await screen.findByText('Pets is on for everyone, and everything in it is back.'),
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(inHousehold.members(home))
+  })
+
   it('makes its own row’s control busy, and leaves every other to be pressed', async () => {
     const server = switching()
     server.off = ['pets', 'property']

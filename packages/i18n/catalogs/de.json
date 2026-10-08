@@ -777,6 +777,7 @@
   "household.leave.intro.two": "Zuerst sind zwei Dinge zu klären, und hier stehen beide.",
   "household.leave.last_owner.action": "Jemanden zum Inhaber machen",
   "household.leave.last_owner.body": "Wenn Sie gehen, bleibt niemand, der einladen, entfernen oder ändern kann, was jemand sieht. Machen Sie zuerst jemand anderen zum Inhaber.",
+  "household.leave.last_owner.children": "Wenn Sie gehen, bleibt niemand, der einladen, entfernen oder ändern kann, was jemand sieht, und ein Kinderprofil kann kein Inhaber sein. Laden Sie zuerst jemanden als Inhaber ein.",
   "household.leave.last_owner.deleting": "Ein Inhaber, dessen Konto gerade gelöscht wird, zählt nicht.",
   "household.leave.last_owner.title": "Sie sind der einzige Inhaber",
   "household.leave.payer.body": "Bevor Sie gehen, muss ein anderer Inhaber die Abrechnung übernehmen. Ein Haushalt, dessen Zahler gegangen ist, läuft aus einem Grund aus, den darin niemand beheben kann.",
