@@ -939,7 +939,7 @@ Phase 0 · after 24, 18, 9, 15, 20 · size XL
 - **Done when**
   - E2E passes register → verify → sign in → MFA.
   - The listed rows reach their required states.
-- **PR:** —
+- **PR:** [#30](https://github.com/kareltilcer/household/pull/30)
 
 ### 26 · Web household — create, invite, members, grants, children, modules · `planned`
 
