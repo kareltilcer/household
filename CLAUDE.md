@@ -142,7 +142,11 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   toasts, is drawn inside the open modal (`ui/topLayer.ts`), since the page outside one is inert.
   A component names its words by key (`useTranslate`) and formats through
   `useFormat`: `Intl`, money from whole minor units, an instant in the timezone its caller names. A
-  screen spends the twelve states through `ui/states.ts` and `StateFrame`. A route is a line of
+  screen spends the twelve states through `ui/states.ts` and `StateFrame`. A page is titled for
+  the screen it shows: a screen that draws the page's `<h1>` says the same words to
+  `usePageTitle` (`app/title.ts`), as `Screen` and `SettingsPage` do for the screens they frame,
+  nothing above a screen sets a title, and the walk of the routes fails one whose title does not
+  name its heading ([D-165](docs/prd/09-decisions.md)). A route is a line of
   `src/app/paths.ts`, which the end-to-end suite walks with axe in both themes and in the
   pseudo-locale, every test failing on a violation of the policy; what a route opens, a dialog, a
   menu or a toast, is opened under the same two in `e2e/overlays.spec.ts` or in the spec of the
@@ -167,11 +171,13 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   or none (`askedNow`, `api/query.ts`, which a test holds every such mutation to): left to the
   query client it would wait unseen and be sent whenever the connection returned
   ([D-164](docs/prd/09-decisions.md)). A read that is paused, asked with the browser offline, is
-  drawn as could not be read and never as a skeleton.
+  drawn as could not be read and never as a skeleton, the session's own among them (`Unread`,
+  `app/guards.tsx`).
   What a browser keeps is its member's and for no longer than their session, whether or not a
   page knew them when it ended: a browser with no session keeps no replica, and a page that finds
   another member signed in under it removes what it kept and reloads
-  ([D-161](docs/prd/09-decisions.md)).
+  ([D-161](docs/prd/09-decisions.md)). A replica's removal is asked for and not waited on, which
+  the first module written offline settles for what it has queued.
   The app holds one language at a time: `apps/web/src` imports `@household/i18n/lazy` and never
   the package's own entry, which holds all five catalogs, and ESLint fails the import
   ([D-159](docs/prd/09-decisions.md)). A file of the app's own whose import failed is not
