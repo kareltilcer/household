@@ -92,17 +92,31 @@ export function ProviderReturn() {
   const { provider } = useParams()
   // An address under `sign-in` that names no provider opens nothing.
   if (!isProvider(provider)) return <NotAvailable />
-  return <Returned provider={provider} />
+  return <Arrived provider={provider} />
 }
 
-function Returned({ provider }: { readonly provider: Provider }) {
+/**
+ * The return, begun anew for each answer that reaches the page, drawn already or not
+ * (fragment.ts). The first takes the flow this tab kept, and one that follows it finds none and
+ * completes nothing.
+ */
+function Arrived({ provider }: { readonly provider: Provider }) {
+  const carried = useFragmentAndQuery()
+  return <Returned key={carried.arrival} provider={provider} carried={carried} />
+}
+
+interface ReturnedProps {
+  readonly provider: Provider
+  readonly carried: Carried
+}
+
+function Returned({ provider, carried }: ReturnedProps) {
   const { t, locale } = useI18n()
   const api = useApi()
   const queries = useQueryClient()
   const session = useSession()
   const navigate = useNavigate()
   const problemText = useProblemText()
-  const carried = useFragmentAndQuery()
   const [outcome, setOutcome] = useState<Outcome>({ kind: 'working' })
 
   // Whether the screen is still the one drawn, when an answer arrives: an answer that comes

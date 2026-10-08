@@ -6,7 +6,7 @@ import { paths } from '../app/paths.ts'
 import { holdDestination } from '../session/destination.ts'
 import { heldChallenge } from './challenge.ts'
 import type { PendingFlow } from './provider.ts'
-import { empty, invalid, jana, open, pending, problem, serve } from './testing.tsx'
+import { arrive, empty, invalid, jana, open, pending, problem, serve } from './testing.tsx'
 
 const verifier = 'v'.repeat(64)
 
@@ -178,6 +178,47 @@ describe('a return from a provider, to sign in', () => {
     expect(await screen.findByRole('heading', { level: 1, name: unfinished })).toBeInTheDocument()
     expect(screen.getByText('Nothing was changed. You can start it again.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Start again' })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['Google’s, in the query', 'google' as const, '/sign-in/google?code=c1&state=s1'],
+    ['Apple’s, in the fragment', 'apple' as const, '/sign-in/apple#code=c1&state=s1'],
+  ])(
+    'completes a return that arrives where the page is drawn already: %s',
+    async (_, provider, address) => {
+      const route = `POST /auth/oauth/${provider}/callback`
+      const backend = admitting(route)
+      // The page as a return nobody began left it, the flow it would have completed taken.
+      const page = open(`/sign-in/${provider}`, { backend })
+      await screen.findByRole('heading', { level: 1, name: unfinished })
+      expect(backend.to(route)).toHaveLength(0)
+
+      begun({ provider })
+      await arrive(page, address)
+      await waitFor(() => {
+        expect(page.address()).toBe(paths.home.path)
+      })
+      expect(backend.to(route).map((request) => request.body)).toEqual([
+        { code: 'c1', state: 's1', code_verifier: verifier, locale: 'en' },
+      ])
+      expect(window.sessionStorage.getItem('household.provider')).toBeNull()
+    },
+  )
+
+  it('completes nothing for a second return, the flow being the first one’s', async () => {
+    begun()
+    const backend = serve()
+    backend.on(callback, () => problem(409, 'link_required'))
+    const page = open(returned, { backend })
+    await screen.findByRole('heading', { level: 1, name: 'This address already has an account' })
+
+    await arrive(page, '/sign-in/google?code=c2&state=s1')
+    expect(await screen.findByRole('heading', { level: 1, name: unfinished })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(page.address()).toBe('/sign-in/google')
+    })
+    // The code that arrived was sent nowhere: the verifier it would go with is kept no longer.
+    expect(backend.to(callback)).toHaveLength(1)
   })
 
   it('opens nothing at an address that names no provider', async () => {

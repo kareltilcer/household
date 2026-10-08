@@ -183,7 +183,11 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   A write of a screen before sign-in or of a member's own account is asked at once, connection
   or none (`askedNow`, `api/query.ts`, which a test holds every such mutation to): left to the
   query client it would wait unseen and be sent whenever the connection returned
-  ([D-164](docs/prd/09-decisions.md)). A read that is paused, asked with the browser offline, is
+  ([D-164](docs/prd/09-decisions.md)). A page that a link's fragment or a provider's return opens
+  reads it through `useFragment` or `useFragmentAndQuery` (`auth/fragment.ts`), which take it out
+  of the address, and draws its screen keyed by the `arrival` they count: a link opened in a tab
+  that is on its page already loads nothing, and the screen is begun again for it.
+  A read that is paused, asked with the browser offline, is
   drawn as could not be read and never as a skeleton, the session's own among them (`Unread`,
   `app/guards.tsx`), and a read is said to be unread only where nothing is kept of it: what the
   browser kept is drawn, whatever became of asking again.

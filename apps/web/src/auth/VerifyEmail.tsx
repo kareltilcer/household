@@ -22,12 +22,17 @@ import { useFragment } from './fragment.ts'
 import { Resend } from './Resend.tsx'
 import { Screen, Way, Ways } from './Screen.tsx'
 
+/** The page, begun anew for each link that opens it, drawn already or not (fragment.ts). */
 export function VerifyEmail() {
+  const { arrival, fragment } = useFragment()
+  return <Opened key={arrival} token={fragment.get('token') ?? ''} />
+}
+
+function Opened({ token }: { readonly token: string }) {
   const t = useTranslate()
   const api = useApi()
   const session = useSession()
   const problemText = useProblemText()
-  const token = useFragment().get('token') ?? ''
   const signedIn = session.state.status !== 'visitor'
 
   const verify = useMutation({

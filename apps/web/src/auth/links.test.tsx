@@ -6,7 +6,7 @@ import { signedInKey } from '../account/common.ts'
 import { deviceTimeZone } from '../api/problemText.ts'
 import { paths } from '../app/paths.ts'
 import { closingAt } from './DeletionCancel.tsx'
-import { empty, invalid, open, pending, problem, serve } from './testing.tsx'
+import { arrive, empty, invalid, open, pending, problem, serve } from './testing.tsx'
 
 const address = 'jana@example.test'
 const password = 'a long enough password'
@@ -143,6 +143,69 @@ describe('the link a verification email carries', () => {
       { token: 't1' },
       { token: 't1' },
     ])
+  })
+
+  it('spends a link that arrives where the page is drawn already, each as a load would', async () => {
+    const backend = serve()
+    // A link that verified its address answers so again, as the server's does.
+    backend.on(verify, ({ body }) =>
+      (body as { readonly token: string }).token === 't1'
+        ? empty(204)
+        : problem(410, 'token_expired'),
+    )
+    // Opened with no link: the page holds none, and says so.
+    const page = open(paths.verifyEmail.path, { backend })
+    await screen.findByRole('heading', { level: 1, name: 'This link doesn’t verify anything' })
+
+    await arrive(page, link)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Your email is verified' }),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(page.address()).toBe(paths.verifyEmail.path)
+    })
+
+    // Another link, where the page says what became of the one before.
+    await arrive(page, `${paths.verifyEmail.path}#token=t2`)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'This link has expired' }),
+    ).toBeInTheDocument()
+
+    // And the first again: the server is asked again, as a load would ask it.
+    await arrive(page, link)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Your email is verified' }),
+    ).toBeInTheDocument()
+    // Once more, where the page already says what this very link came to.
+    await arrive(page, link)
+    await waitFor(() => {
+      expect(backend.to(verify)).toHaveLength(4)
+    })
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Your email is verified' }),
+    ).toBeInTheDocument()
+    expect(backend.to(verify).map((request) => request.body)).toEqual([
+      { token: 't1' },
+      { token: 't2' },
+      { token: 't1' },
+      { token: 't1' },
+    ])
+    await waitFor(() => {
+      expect(page.address()).toBe(paths.verifyEmail.path)
+    })
+  })
+
+  it('spends a link that arrives once, though React’s strict mode draws the page twice', async () => {
+    const backend = serve()
+    backend.on(verify, () => empty(204))
+    const page = open(paths.verifyEmail.path, { backend, strict: true })
+    await screen.findByRole('heading', { level: 1, name: 'This link doesn’t verify anything' })
+    await arrive(page, link)
+    await screen.findByRole('heading', { level: 1, name: 'Your email is verified' })
+    await waitFor(() => {
+      expect(page.address()).toBe(paths.verifyEmail.path)
+    })
+    expect(backend.to(verify)).toHaveLength(1)
   })
 })
 
@@ -358,6 +421,40 @@ describe('the link a reset email carries', () => {
     // The link is as good as it was: the form is still here.
     expect(screen.getByRole('button', { name: submit })).toBeInTheDocument()
   })
+
+  it('is begun again for a link that arrives where the page is drawn already, and sets the password with that one', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    backend.on(confirm, ({ body }) =>
+      (body as { readonly token: string }).token === 'r1'
+        ? problem(410, 'token_expired')
+        : empty(204),
+    )
+    const page = open(link, { backend })
+    await user.type(await screen.findByLabelText('New password'), password)
+    await user.click(screen.getByRole('button', { name: submit }))
+    await screen.findByRole('heading', { level: 1, name: 'This link has expired' })
+
+    // The new link they asked for, opened where the old one's page still stands.
+    await arrive(page, `${paths.resetSet.path}#token=r2`)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Choose a new password' }),
+    ).toBeInTheDocument()
+    // A page begun again: nothing of the one before is in it, what was typed neither.
+    expect(screen.getByLabelText('New password')).toHaveValue('')
+    await waitFor(() => {
+      expect(page.address()).toBe(paths.resetSet.path)
+    })
+    await user.type(screen.getByLabelText('New password'), password)
+    await user.click(screen.getByRole('button', { name: submit }))
+    await waitFor(() => {
+      expect(page.address()).toBe(paths.signIn.path)
+    })
+    expect(backend.to(confirm).map((request) => request.body)).toEqual([
+      { token: 'r1', password },
+      { token: 'r2', password },
+    ])
+  })
 })
 
 describe('the link a graduation carries', () => {
@@ -475,6 +572,35 @@ describe('the link a graduation carries', () => {
       'This password has turned up in a breach',
     )
     expect(screen.getByRole('button', { name: 'Set my password' })).toBeInTheDocument()
+  })
+
+  it('opens the newer link an owner sent, where the page says the older one no longer works', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    backend.on(confirm, ({ body }) =>
+      (body as { readonly token: string }).token === 'g1'
+        ? problem(410, 'token_already_used')
+        : empty(204),
+    )
+    const page = await choose(backend)
+    await screen.findByRole('heading', { level: 1, name: 'This link no longer works' })
+
+    await arrive(page, `${paths.graduate.path}#token=g2`)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Choose your password' }),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(page.address()).toBe(paths.graduate.path)
+    })
+    await user.type(screen.getByLabelText('Password'), password)
+    await user.click(screen.getByRole('button', { name: 'Set my password' }))
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Your account is ready' }),
+    ).toBeInTheDocument()
+    expect(backend.to(confirm).map((request) => request.body)).toEqual([
+      { token: 'g1', password },
+      { token: 'g2', password },
+    ])
   })
 })
 
@@ -595,6 +721,31 @@ describe('the link an account deletion’s email carries', () => {
     await user.click(await screen.findByRole('button', { name: keep }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)
     expect(screen.getByRole('button', { name: keep })).toBeInTheDocument()
+  })
+
+  it('reads a link that arrives where the page said it had none, the day it names with it', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    backend.on(cancel, () => empty(204))
+    const page = open(paths.deletionCancel.path, { backend })
+    await screen.findByRole('heading', { level: 1, name: 'This link doesn’t cancel anything' })
+
+    const closes = '2026-11-07T12:00:00+01:00'
+    const fragment = new URLSearchParams({ token: 'd2', at: closes }).toString()
+    await arrive(page, `${paths.deletionCancel.path}#${fragment}`)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Keep your account' }),
+    ).toBeInTheDocument()
+    const day = new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: deviceTimeZone() })
+    expect(
+      screen.getByText(new RegExp(`deleted for good on ${day.format(new Date(closes))}\\.`)),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(page.address()).toBe(paths.deletionCancel.path)
+    })
+    await user.click(screen.getByRole('button', { name: keep }))
+    await screen.findByRole('heading', { level: 1, name: 'Your account is kept' })
+    expect(backend.to(cancel).map((request) => request.body)).toEqual([{ token: 'd2' }])
   })
 
   it('reads the instant an address carries, and nothing else for one', () => {

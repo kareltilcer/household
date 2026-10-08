@@ -39,14 +39,29 @@ export function closingAt(at: string | null): Date | undefined {
   return Number.isNaN(read.getTime()) ? undefined : read
 }
 
+/** The page, begun anew for each link that opens it, drawn already or not (fragment.ts). */
 export function DeletionCancel() {
+  const { arrival, fragment } = useFragment()
+  return (
+    <Opened
+      key={arrival}
+      token={fragment.get('token') ?? ''}
+      closes={closingAt(fragment.get('at'))}
+    />
+  )
+}
+
+interface OpenedProps {
+  readonly token: string
+  /** The instant the account closes, where the address said it. */
+  readonly closes: Date | undefined
+}
+
+function Opened({ token, closes }: OpenedProps) {
   const t = useTranslate()
   const format = useFormat()
   const api = useApi()
   const problemText = useProblemText()
-  const fragment = useFragment()
-  const token = fragment.get('token') ?? ''
-  const closes = closingAt(fragment.get('at'))
 
   const keep = useMutation({
     ...askedNow,
