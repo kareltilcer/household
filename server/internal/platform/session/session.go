@@ -375,11 +375,31 @@ func (o *Origins) fromAllowed(r *http.Request) bool {
 // on another site, whose browser says so. A request that names no origin, which is not a
 // browser's, passes, and the credential it carries decides.
 func (o *Origins) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !httpx.Safe(r.Method) && origin(r) != "" && !o.fromAllowed(r) {
-			problem.Write(w, reqctx.RequestID(r.Context()), Refusal())
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	return o.Admitting(func(*http.Request) string { return "" })(next)
+}
+
+// Admitting is Middleware for a router one of whose routes another site's page is meant to post
+// to: foreign returns the origin r's route takes an unsafe request from beside the list's, and ""
+// for every route that takes none. The route so named reads no session, since a request it admits
+// is not the web client's own.
+func (o *Origins) Admitting(foreign func(*http.Request) string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !httpx.Safe(r.Method) && origin(r) != "" && !o.fromAllowed(r) && !from(r, foreign(r)) {
+				problem.Write(w, reqctx.RequestID(r.Context()), Refusal())
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// from reports whether r names admitted as its origin; never for an admitted that is none.
+func from(r *http.Request, admitted string) bool {
+	want, ok := normalise(admitted)
+	if !ok {
+		return false
+	}
+	got, ok := normalise(origin(r))
+	return ok && got == want
 }
