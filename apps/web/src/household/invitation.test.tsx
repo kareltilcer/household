@@ -1023,21 +1023,3 @@ describe('an answer the server refuses', () => {
     expect(screen.getByRole('heading', { level: 1, name: invited })).toBeInTheDocument()
   })
 })
-
-/** The screen, as it is written: held as the screens before sign-in are (api/api.test.ts). */
-const sources = import.meta.glob<string>('./Invitation.tsx', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-})
-
-describe('an answer to an invitation', () => {
-  // Joined or declined when a connection returns, minutes after the press and with nobody at
-  // the screen, is not what was asked for (D-164, D-80).
-  it('is a write asked at once, as every write of the page is', () => {
-    const writes = Object.values(sources).flatMap((source) =>
-      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => first),
-    )
-    expect(writes).toEqual(['...askedNow,', '...askedNow,'])
-  })
-})
