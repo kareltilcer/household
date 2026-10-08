@@ -162,7 +162,9 @@ every other console error still fails its test.
   `sign-in/google` are registered with the providers and in `HOUSEHOLD_OAUTH_REDIRECT_URIS`
   ([runbook](../runbooks/sign-in-keys-and-providers.md)).
 - Until a module's entities are written offline, the inbox is empty on real data: the resolvers
-  are held by their tests and by `/dev/sync`.
+  are held by their tests and by `/dev/sync`. Signing out removes a replica with whatever it had
+  queued, and today it can have queued nothing: the first module written offline adds, to the
+  sign-out, the count of changes not yet sent and the question that names them.
 - The arrange screen moves a row by its handle's arrow keys and by its menu. Dragging a row is
   not built: PL-4's dnd-kit comes with the first board.
 - **What would make this worth revisiting**: a browser that stops taking `http://127.0.0.1` for a
