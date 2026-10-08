@@ -37,6 +37,7 @@
 // refusal stands beside the field it is of. Nothing is *absent*, *withdrawn* or *read-only*: no
 // grant stands over making a household, and no household is there yet to have lapsed.
 import { newId, type components } from '@household/api'
+import { currencyCodes } from '@household/domain'
 import { catalogLocale, isLocale, locales, type Locale } from '@household/i18n/lazy'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
@@ -51,7 +52,7 @@ import { askedNow } from '../api/query.ts'
 import { inHousehold } from '../app/paths.ts'
 import { fieldCodes, useRefusedField } from '../auth/fields.tsx'
 import { useFormat, useI18n, useTranslate } from '../i18n/I18nProvider.tsx'
-import { ownName, timeZones } from '../i18n/names.ts'
+import { currencyName, ownName, timeZones } from '../i18n/names.ts'
 import { useMe } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
@@ -59,7 +60,7 @@ import { Select, TextField } from '../ui/Field.tsx'
 import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
-import { useCountries, useLocalized, type Country } from './data.ts'
+import { useCountries, useCountryChoices, type Country } from './data.ts'
 import { deviceCountry } from './device.ts'
 import { householdKey, householdsKey } from './households.ts'
 import { useWaiting, WaitingList, type Waiting } from './Waiting.tsx'
@@ -69,13 +70,19 @@ type HouseholdCreate = components['schemas']['HouseholdCreate']
 /** The fields of the form, as a `422` names them. */
 const fields = ['/name', '/country', '/timezone', '/locale', '/base_currency'] as const
 
-function Form({ countries }: { readonly countries: readonly Country[] }) {
+function Form({
+  countries,
+  fromDevice,
+}: {
+  readonly countries: readonly Country[]
+  /** The country the device named as the form opened, by its code: undefined where it named none. */
+  readonly fromDevice: string | undefined
+}) {
   const t = useTranslate()
   const api = useApi()
   const queries = useQueryClient()
   const navigate = useNavigate()
   const format = useFormat()
-  const localized = useLocalized()
   const { locale: shown } = useI18n()
   const say = useProblemText(useOwnZone())
 
@@ -85,14 +92,7 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
   // Set, anew, each time it is submitted with no name or no country: it is not sent.
   const [missing, setMissing] = useState<{ readonly name: boolean; readonly country: boolean }>()
 
-  // By name, in the member's language, as a list of countries is looked through.
-  const listed = useMemo(() => {
-    const collator = new Intl.Collator(format.locale)
-    return countries
-      .map((country) => ({ value: country.code, label: localized(country.name) }))
-      .sort((one, other) => collator.compare(one.label, other.label))
-  }, [countries, localized, format.locale])
-  const [fromDevice] = useState(() => deviceCountry(countries)?.code)
+  const listed = useCountryChoices(countries)
   const [ownZone] = useState(deviceTimeZone)
   const reading = catalogLocale(shown)
 
@@ -112,19 +112,22 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
     () => locales.map((locale) => ({ value: locale, label: ownName(locale) })),
     [],
   )
-  const currencies = useMemo(() => {
-    const names = new Intl.DisplayNames([format.locale], { type: 'currency' })
-    return [...new Set(countries.map((each) => each.currency))].sort().map((code) => {
-      const named = names.of(code)
-      return {
-        value: code,
-        label:
-          named === undefined || named === code
-            ? code
-            : t('household.create.currency.option', { code, name: named }),
-      }
-    })
-  }, [countries, format.locale, t])
+  // Every currency the server takes, by its code: a household counts its money in whichever
+  // its member says, and no screen changes it afterwards. The country's own stands chosen.
+  const currencies = useMemo(
+    () =>
+      currencyCodes.map((code) => {
+        const named = currencyName(format.locale, code)
+        return {
+          value: code,
+          label:
+            named === undefined
+              ? code
+              : t('household.create.currency.option', { code, name: named }),
+        }
+      }),
+    [format.locale, t],
+  )
 
   const create = useMutation({
     ...askedNow,
@@ -146,14 +149,11 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
         return made.data
       }
     },
+    // What is so whether or not this screen is still drawn when the answer comes: the
+    // household's shell reads it from here, and the member's list is read again, naming one more.
     onSuccess: (household) => {
-      // The household's shell reads it from here, and the member's list is read again: it
-      // names one more.
       queries.setQueryData(householdKey(household.id), household)
       void queries.invalidateQueries({ queryKey: householdsKey, exact: true })
-      // On to the first run's question, which passes on to Home while nothing takes a first
-      // record. The form is no place to come back to: its household is made.
-      void navigate(inHousehold.start(household.id), { replace: true })
     },
   })
 
@@ -194,14 +194,18 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
           return
         }
         setMissing(undefined)
-        create.mutate({
-          id,
-          name: named,
-          country,
-          timezone,
-          base_currency: currency,
-          locale: language,
-        })
+        create.mutate(
+          { id, name: named, country, timezone, base_currency: currency, locale: language },
+          {
+            // On to the first run's question, which passes on to Home while nothing takes a
+            // first record, from this screen alone: a member who went on to another while the
+            // answer was on its way stays there, and finds the household among theirs. The form
+            // is no place to come back to: its household is made.
+            onSuccess: (household) => {
+              void navigate(inHousehold.start(household.id), { replace: true })
+            },
+          },
+        )
       }}
     >
       <TextField
@@ -327,8 +331,15 @@ function Creation() {
   const online = useOnline()
   const withdrawn = useNoWithdrawal()
   const waiting = useWaiting(true)
+  // What the device named, of the countries as they were first read. Read once, for the form
+  // and for the sentence over it alike: a list that is read again while the form stands changes
+  // neither what the form opened with nor what is said of it.
+  const [device, setDevice] = useState<{ readonly country: string | undefined }>()
+  if (device === undefined && countries.data !== undefined) {
+    setDevice({ country: deviceCountry(countries.data)?.code })
+  }
   // Said where it is so: with no country read from the device, the name is not all that is asked.
-  const confirmed = countries.data !== undefined && deviceCountry(countries.data) !== undefined
+  const confirmed = device?.country !== undefined
   return (
     <SettingsPage
       title={t('household.create.title')}
@@ -373,7 +384,7 @@ function Creation() {
             withdrawn,
           }}
         >
-          {() => <Form countries={countries.data ?? []} />}
+          {() => <Form countries={countries.data ?? []} fromDevice={device?.country} />}
         </StateFrame>
       </Section>
     </SettingsPage>

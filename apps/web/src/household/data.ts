@@ -14,7 +14,7 @@ import { useCallback, useMemo } from 'react'
 import { catalogLocale, pseudoLocale, pseudolocalize } from '@household/i18n/lazy'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
-import { useI18n } from '../i18n/I18nProvider.tsx'
+import { useFormat, useI18n } from '../i18n/I18nProvider.tsx'
 import {
   householdKey,
   householdsKey,
@@ -142,6 +142,23 @@ export function useLocalized(): (text: LocalizedText) => string {
     (text) => (locale === pseudoLocale ? pseudolocalize(text.en) : text[catalogLocale(locale)]),
     [locale],
   )
+}
+
+/**
+ * `countries` as a list to choose from: by name, in the language the app is shown in, as a list
+ * of countries is looked through.
+ */
+export function useCountryChoices(
+  countries: readonly Country[],
+): { readonly value: string; readonly label: string }[] {
+  const localized = useLocalized()
+  const { locale } = useFormat()
+  return useMemo(() => {
+    const collator = new Intl.Collator(locale)
+    return countries
+      .map((country) => ({ value: country.code, label: localized(country.name) }))
+      .sort((one, other) => collator.compare(one.label, other.label))
+  }, [countries, localized, locale])
 }
 
 /**

@@ -233,6 +233,35 @@ describe('sending an invitation', () => {
     })
   })
 
+  it('says an invitation was sent to an owner who went on to another screen meanwhile, and leaves them there', async () => {
+    const server = createServer()
+    let answer = () => {}
+    const asked = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    server.on(post, async (request) => {
+      const sent = (await request.json()) as Parameters<typeof invitation>[0]
+      await asked
+      return Response.json(invitation(sent), { status: 201 })
+    })
+    const { user, router } = await composer(server)
+    await user.type(address(), 'babicka@example.cz')
+    await user.click(send())
+    await waitFor(() => {
+      expect(server.to(post)).toHaveLength(1)
+    })
+
+    // The answer is slow, and the owner does not wait for it.
+    await act(() => router.navigate(inHousehold.modules(home)))
+    await screen.findByRole('heading', { level: 1, name: 'Modules' })
+    answer()
+
+    expect(
+      await screen.findByText('Sent to babicka@example.cz. It works for 14 days.'),
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(inHousehold.modules(home))
+  })
+
   it('leaves out a message nobody wrote', async () => {
     const server = createServer()
     taking(server)

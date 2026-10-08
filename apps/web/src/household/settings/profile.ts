@@ -18,22 +18,31 @@ import { problemIn } from '../../api/problem.ts'
 import { useI18n, useTranslate } from '../../i18n/I18nProvider.tsx'
 
 /**
- * Whether a refused write is about where the member stands and not about what they sent: `403`
- * to a member who was an owner when the page was read, `402` from a household that became
- * read-only or restricted meanwhile, and `404` for what is no longer there. The one list of
- * them, for every screen of the settings: whoever is told one reads the household again, which
- * takes away the controls that are theirs no longer.
+ * The refusals that are about where the member stands and not about what they sent, each with
+ * the sentence it is said in: `403` to a member who was an owner when the page was read, `402`
+ * from a household that became read-only or restricted meanwhile, and `404` for what is no
+ * longer there. The one list of them, for every screen of the settings.
  */
-export function isStandingRefusal(error: unknown): boolean {
+function standingSentence(error: unknown) {
   switch (problemIn(error)?.code) {
     case 'forbidden':
+      return 'household.settings.refused.not_owner'
     case 'entitlement_read_only':
     case 'entitlement_restricted':
+      return 'household.settings.refused.read_only'
     case 'not_found':
-      return true
+      return 'household.settings.refused.gone'
     default:
-      return false
+      return undefined
   }
+}
+
+/**
+ * Whether a refused write is about where the member stands: whoever is told one reads the
+ * household again, which takes away the controls that are theirs no longer.
+ */
+export function isStandingRefusal(error: unknown): boolean {
+  return standingSentence(error) !== undefined
 }
 
 /** The sentence for a refusal that is about where the member stands, or undefined for any other. */
@@ -41,17 +50,8 @@ export function useStandingRefusal(): (error: unknown) => string | undefined {
   const t = useTranslate()
   return useCallback(
     (error) => {
-      switch (problemIn(error)?.code) {
-        case 'forbidden':
-          return t('household.settings.refused.not_owner')
-        case 'entitlement_read_only':
-        case 'entitlement_restricted':
-          return t('household.settings.refused.read_only')
-        case 'not_found':
-          return t('household.settings.refused.gone')
-        default:
-          return undefined
-      }
+      const sentence = standingSentence(error)
+      return sentence === undefined ? undefined : t(sentence)
     },
     [t],
   )

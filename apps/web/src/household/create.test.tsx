@@ -1,7 +1,8 @@
 // Creating a household (A-22): what the form opens with, read from the device and from the
 // countries; the one request it makes and where it leads; each refusal; the invitations that wait
 // above it; and its states.
-import { onlineManager } from '@tanstack/react-query'
+import { currencyCodes } from '@household/domain'
+import { focusManager, onlineManager } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { deviceTimeZone } from '../api/problemText.ts'
@@ -19,8 +20,10 @@ import {
   type HouseholdServer,
 } from './testing.tsx'
 
-// A test that takes the connection away leaves the next one a browser that has it.
+// A test that takes the connection away leaves the next one a browser that has it, and one that
+// says the page is looked at again leaves the next one a page nobody has looked at.
 afterEach(() => {
+  focusManager.setFocused(undefined)
   onlineManager.setOnline(true)
 })
 
@@ -140,14 +143,15 @@ describe('creating a household', () => {
       'The language you are reading now. What the household’s shared words and its emails are in. Each member’s own app language is theirs.',
     )
 
-    // The currencies of the countries, each once and by its code and its name as the member's
-    // language has it, and the country's own chosen.
+    // Every currency the server takes, one of no country Household has a profile of among them,
+    // each by its code and its name as the member's language has it, and the country's own
+    // chosen: no screen changes it afterwards.
     const currency = field('Money is counted in')
-    const named = new Intl.DisplayNames(['en-US'], { type: 'currency' })
+    expect(optionsOf(currency)).toHaveLength(currencyCodes.length)
     expect(optionsOf(currency)).toEqual(
-      ['CZK', 'EUR', 'GBP'].map((code) => `${code} — ${named.of(code) ?? ''}`),
+      expect.arrayContaining(['CHF — Swiss Franc', 'CZK — Czech Koruna', 'EUR — Euro']),
     )
-    expect(optionsOf(currency)[1]).toBe('EUR — Euro')
+    expect(optionsOf(currency).map((option) => option.slice(0, 3))).toEqual(currencyCodes)
     expect(currency).toHaveValue('CZK')
 
     expect(screen.getByText('Thirty days, no card')).toBeInTheDocument()
@@ -159,6 +163,34 @@ describe('creating a household', () => {
     // Units and the first day of the week are the country's own, and are not asked.
     expect(screen.getAllByRole('combobox')).toHaveLength(4)
     expect(screen.getByRole('button', { name: 'Create the household' })).toBeInTheDocument()
+  })
+
+  // The form opens with the countries as they were first read, and what is said over it is said
+  // of the same reading: a list read again while it stands, with a profile it did not have,
+  // does not say that only the name is asked over a country that still is.
+  it('says nothing of the device’s country that the form did not open with', async () => {
+    deviceReads('cs-CZ')
+    const server = createServer()
+    server.on('GET /reference/countries', () =>
+      Response.json({ version: 1, items: countries.filter((each) => each.code !== 'CZ') }),
+    )
+    await form(server)
+    expect(screen.getByRole('combobox', { name: /^Country/ })).toBeRequired()
+    expect(screen.queryByText(/^Only the name is asked\./)).not.toBeInTheDocument()
+
+    server.on('GET /reference/countries', () => Response.json({ version: 2, items: countries }))
+    act(() => {
+      focusManager.setFocused(false)
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('combobox', { name: /^Country/ })).getAllByRole('option'),
+      ).toHaveLength(countries.length + 1)
+    })
+    expect(screen.getByRole('combobox', { name: /^Country/ })).toBeRequired()
+    expect(screen.getByRole('combobox', { name: /^Country/ })).toHaveValue('')
+    expect(screen.queryByText(/^Only the name is asked\./)).not.toBeInTheDocument()
   })
 
   // A browser in English anywhere but Britain: nothing to confirm, so the country is asked. The
@@ -292,6 +324,37 @@ describe('creating a household', () => {
     // The form is no entry to go back to: its household is made.
     await router.navigate(-1)
     expect(router.state.location.pathname).toBe(inHousehold.home(sent.id))
+  })
+
+  it('leaves a member who went on to another screen before the answer where they went', async () => {
+    const server = createServer()
+    let answer = () => {}
+    const asked = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    let answered = false
+    server.on('POST /households', async (request) => {
+      const sent = (await request.json()) as { id: string; name: string }
+      await asked
+      answered = true
+      return Response.json({ ...tilcerovi, ...sent, version: 1 }, { status: 201 })
+    })
+    const { user, router } = await form(server)
+    await user.type(screen.getByRole('textbox', { name: /^Name/ }), 'Novákovi')
+    await user.click(screen.getByRole('button', { name: 'Create Novákovi' }))
+    await waitFor(() => {
+      expect(server.to('POST /households')).toHaveLength(1)
+    })
+
+    await act(() => router.navigate(paths.account.path))
+    answer()
+    await waitFor(() => {
+      expect(answered).toBe(true)
+    })
+    // Long enough for the answer to be read and whatever follows it to have followed.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+
+    expect(router.state.location.pathname).toBe(paths.account.path)
   })
 
   it('sends what was chosen', async () => {

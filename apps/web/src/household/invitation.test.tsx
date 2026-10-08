@@ -585,12 +585,11 @@ describe('what an invitation shows', () => {
       screen.getByText('This invitation stops working on September 24, 2026.'),
     ).toBeInTheDocument()
 
-    // What declining does is said before it is pressed.
-    expect(
-      screen.getByText(
-        'Declining is recorded and Jana Tilcerová is told. It closes this invitation for good, and adds nothing to your account.',
-      ),
-    ).toBeInTheDocument()
+    // What declining does is said before it is pressed, to whoever reads the control alone too:
+    // no question is asked after it.
+    expect(screen.getByRole('button', { name: 'Decline' })).toHaveAccessibleDescription(
+      'Declining is recorded and Jana Tilcerová is told. It closes this invitation for good, and adds nothing to your account.',
+    )
     // Nobody wrote anything with it.
     expect(screen.queryByRole('figure')).not.toBeInTheDocument()
     // A member is on the page: the address held for their return is held no longer.

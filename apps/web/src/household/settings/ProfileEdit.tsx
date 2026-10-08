@@ -31,7 +31,7 @@ import { Sheet } from '../../ui/Dialog.tsx'
 import { Select, TextField } from '../../ui/Field.tsx'
 import { KeyValue } from '../../ui/KeyValue.tsx'
 import { useToast } from '../../ui/Toast.tsx'
-import { useLocalized, useReread, type Country } from '../data.ts'
+import { useCountryChoices, useReread, type Country } from '../data.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
 import { householdKey, type Household } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
@@ -312,9 +312,7 @@ export interface MoveCountryProps extends AskedProps {
 
 export function MoveCountry({ others, now, onClose, onEnded }: MoveCountryProps) {
   const t = useTranslate()
-  const format = useFormat()
   const toast = useToast()
-  const localized = useLocalized()
   const standing = useStandingRefusal()
   const other = useElse()
   const save = useSaveHousehold()
@@ -325,13 +323,7 @@ export function MoveCountry({ others, now, onClose, onEnded }: MoveCountryProps)
   const [missing, setMissing] = useState<object>()
   const refused = useRefusedField(missing ?? save.error)
 
-  const options = useMemo(
-    () =>
-      others
-        .map((country) => ({ value: country.code, label: localized(country.name) }))
-        .sort((one, two) => one.label.localeCompare(two.label, format.locale)),
-    [others, localized, format.locale],
-  )
+  const options = useCountryChoices(others)
   const chosen = options.find((option) => option.value === to)
   const invalid = fieldCodes(save.error).has('/country')
   const banner = save.isError ? other(save.error, ['/country']) : undefined

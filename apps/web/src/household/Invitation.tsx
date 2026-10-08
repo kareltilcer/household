@@ -47,7 +47,7 @@
 // says. *Absent*, *withdrawn*, *conflicted* and *rejected* have nothing to be before a
 // membership exists.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { readState, refocus, useNoWithdrawal } from '../account/common.ts'
 import settings from '../account/Settings.module.css'
@@ -158,6 +158,7 @@ function Opened() {
   const session = useSession()
   const markUnverified = useMarkUnverified()
   const withdrawn = useNoWithdrawal()
+  const declining = useId()
 
   // The token its link carried, or the one held since a visitor left here to sign in. Read once,
   // as the page opens: what becomes of the held one afterwards is this page's own doing.
@@ -387,10 +388,13 @@ function Opened() {
               {t('household.invitation.join', { household })}
             </Button>
           )}
-          {/* Declining needs no verified address: it extends no trust to anybody. */}
+          {/* Declining needs no verified address: it extends no trust to anybody. What it does
+              is asked about by no question, and said by the sentence under it, which is its
+              description: read with the control, by whoever does not see it stand there. */}
           <Button
             loading={decline.isPending}
             aria-disabled={joining}
+            aria-describedby={declining}
             onClick={() => {
               join.reset()
               decline.mutate()
@@ -399,7 +403,9 @@ function Opened() {
             {t('household.invitation.decline')}
           </Button>
         </div>
-        <p className={settings.note}>{t('household.invitation.foot', { inviter })}</p>
+        <p id={declining} className={settings.note}>
+          {t('household.invitation.foot', { inviter })}
+        </p>
       </>
     )
   }

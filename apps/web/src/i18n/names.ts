@@ -1,6 +1,6 @@
 // The names `Intl` gives and no catalog holds: a language's own name for itself, the days of the
-// week, and the zones this browser knows. A member's account and a household's profile offer the
-// same lists to choose from, and are named here once.
+// week, a currency's name, and the zones this browser knows. A member's account and a
+// household's profile offer the same lists to choose from, and are named here once.
 import type { Locale } from '@household/i18n/lazy'
 
 /** A language's own name for itself, as `Intl` has it, with a capital as a list of names has. */
@@ -26,6 +26,20 @@ export function dayName(locale: string, day: number): string {
     dayNamers.set(locale, named)
   }
   return named.format(aSunday + day * 24 * 60 * 60 * 1000)
+}
+
+/** What names a currency in each language asked for: made once, as a list of them asks. */
+const currencyNamers = new Map<string, Intl.DisplayNames>()
+
+/** The name of the currency `code` in `locale`, or undefined where `Intl` has none but its code. */
+export function currencyName(locale: string, code: string): string | undefined {
+  let named = currencyNamers.get(locale)
+  if (named === undefined) {
+    named = new Intl.DisplayNames([locale], { type: 'currency' })
+    currencyNamers.set(locale, named)
+  }
+  const name = named.of(code)
+  return name === undefined || name === code ? undefined : name
 }
 
 /**

@@ -274,11 +274,12 @@ function Composer() {
           body,
         }),
       ),
+    // What is so whether or not this screen is still drawn when the answer comes: where it
+    // leads is the press's own to say (below), to an owner who is still here.
     onSuccess: (sent, body) => {
       if (body.kind === 'email') {
         void reread()
         toast({ message: t('household.invite.sent', { email: body.email ?? '' }) })
-        void navigate(inHousehold.invitations(household.id))
         return
       }
       const url = sent.url ?? ''
@@ -419,15 +420,24 @@ function Composer() {
             setLost(undefined)
             setUnsent(fault === undefined ? undefined : { fault })
             if (fault !== undefined) return
-            send.mutate({
-              id,
-              kind,
-              role,
-              ...(kind === 'email' ? { email: to } : { max_uses: uses }),
-              // An owner holds everything: the server sets it, and is sent no levels to refuse.
-              ...(role === 'member' ? { grants: levels } : {}),
-              ...(kind === 'email' && words !== '' ? { message: words } : {}),
-            })
+            send.mutate(
+              {
+                id,
+                kind,
+                role,
+                ...(kind === 'email' ? { email: to } : { max_uses: uses }),
+                // An owner holds everything: the server sets it, and is sent no levels to refuse.
+                ...(role === 'member' ? { grants: levels } : {}),
+                ...(kind === 'email' && words !== '' ? { message: words } : {}),
+              },
+              {
+                // On to the list, from this screen alone: an owner who went on to another while
+                // the answer was on its way is told there, and stays where they went.
+                onSuccess: (_sent, body) => {
+                  if (body.kind === 'email') void navigate(inHousehold.invitations(household.id))
+                },
+              },
+            )
           }}
         >
           {online ? null : (

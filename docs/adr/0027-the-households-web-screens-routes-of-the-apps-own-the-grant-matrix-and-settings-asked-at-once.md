@@ -103,7 +103,11 @@ form of a member's levels does not put a save away while it is being made, and h
 chosen meanwhile against what the save then leaves; each row of the invitations is busy for its
 own sending, whichever row was pressed since; and a write that leads to another screen, an
 invitation sent or a member removed, as a household made, joined or left, is busy until that
-screen has opened. Reads are TanStack queries filed under the household's own key (`household/data.ts`), so that what the browser kept is drawn offline, and a
+screen has opened. A screen whose links stay live while its write is on its way, the composer and
+the screen that makes a household, leads on from the press's own callback and not the
+mutation's: what is so whatever is drawn by then, what is kept and what is said, is the
+mutation's, and a member who went on to another screen meanwhile is told there and stays there.
+Reads are TanStack queries filed under the household's own key (`household/data.ts`), so that what the browser kept is drawn offline, and a
 write that was answered reads the household, its members, its modules, its invitations and the
 member's list of households again (`useReread`). A refusal that is about where the member
 stands and not about what they sent, an owner no longer (`403`), a household that takes no writes
@@ -138,10 +142,12 @@ in. With no connection there is nothing to wait for, and what was kept is what t
 
 **The screen that makes a household confirms what the device says, and asks for what it does
 not** (D-172; `household/Create.tsx`, `device.ts`). The country is the one the device's languages
-name, of those Household has a profile of, and the currency follows it. Where they name none the
+name, of those Household has a profile of, and the currency follows it, of every one the server
+takes (`@household/domain`'s `currencyCodes`). Where they name none the
 country is asked beside the name: none stands chosen until its member chooses one, the currency
 is drawn once it has a country to follow, and the screen does not say that only the name is
-asked.
+asked. What the device named is read once, as the countries first arrive, for the form and for
+the sentence over it alike.
 
 **The screen that leaves says what stands in the way before it asks, from the members it reads,
 and takes the server's word over its own.** A member who is the household's only owner, and one
@@ -219,6 +225,9 @@ left to the item that would pass the budget, and is by key prefix when it comes 
 | A create that is read back as made compared with what was sent last, and said to differ where a field was changed between the two presses: whether a child's Home is locked, what a household's money is counted in | It takes an answer lost and a field changed before the next press. What was made is what was sent first, as a profile is said to be made by the name it holds, and the screen it leads to shows it: a profile's own page says whether its Home is locked, and the household's profile what its money is counted in. No operation changes either, and what puts one right is what could from the first: a profile or a household made a moment ago, with nothing in it, removed and made again. The comparison would be a second statement of every field of each create, for a case its own sentence would then have to explain |
 | The leave screen's two reasons read from the account deletion's `standingOf` (`account/deletion.ts`), and one helper for the ids the two compare | They ask different things of the same members. A deletion asks what becomes of each household when the account goes, one of four kinds, one of which the member may choose their way out of; leaving asks which of two reasons stand in the way of one household, both at once where both hold, and takes the server's word for either over its own. Drawn from the deletion's kinds, the screen would map them back to the two reasons it began with, from a household's summary where it holds the household. What the two share is three lines |
 | A module's address guarded against a registry line whose `home` is that same address, and the navigation's fallback to it taken out | No line names its module's own address: where a module opens is a screen of its own, which is what the registry says of it. The fallback is what the type asks of two callers that list only the modules with screens, and the guard would be code for a line nobody has written |
+| The currencies a new household is offered being those of the countries Household has a profile of, as the form first had it | A rule the client alone applies: the server takes every ISO 4217 code, a household that is in Czechia and counts in francs is a household, and what its money is counted in is the one thing no screen changes afterwards (FR-HA2, plan item 62). The country's own stands chosen, so nobody who wants it looks through the list |
+| A household that was made, or an invitation that was sent, opening its next screen wherever its member has gone by the time the answer comes, as both first did from the mutation's own callback | The composer's links and the account's stay live while the write is on its way: an owner who went on to the members and began something there was pulled to the invitations in the middle of it. The press leads on from the screen it was made on, and nowhere else; the toast and what is kept do not wait on that. The two confirmations that lead on, removing a member and leaving, hold the page inert while theirs is asked, and leaving is right to take its member out of the household wherever they stand in it |
+| One picture control for a member's own picture and a child profile's, taking the two writes and the words | They share the chooser, the three refusals of a file and the focus that follows a removal, some forty lines, and differ in everything around them: whose write it is and where its refusal is said (the profile's own place, which a panel shares), a household that takes no upload, which a member's own picture never meets, a removal that is said where no control is left to say it, and the household read again. One control would take each of those as an argument, and the account's screen, item 25's, would be rebuilt around it to save a second copy of a file input |
 | The catalog split in this item, a module's words fetched with its screens | The first download is under its budget with this item's words in it. The split is a second way for a screen to be without its words, a failure to say for each route, and a guard that no screen outside a module reads the module's keys: machinery the budget does not yet ask for (D-159) |
 
 ## Consequences
