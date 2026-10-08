@@ -5,6 +5,7 @@ import type { components } from '@household/api'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
+import { useTranslate } from '../i18n/I18nProvider.tsx'
 
 export type HouseholdSummary = components['schemas']['HouseholdSummary']
 export type Household = components['schemas']['Household']
@@ -46,6 +47,22 @@ export const moduleKeys = everyModule([
   'activity',
   'admin',
 ])
+
+/** The word for a member's role in a household. */
+export function useRoleWord(): (role: HouseholdRole | undefined) => string {
+  const t = useTranslate()
+  return (role) => {
+    switch (role) {
+      case 'owner':
+        return t('shell.role.owner')
+      case 'child':
+        return t('shell.role.child')
+      case 'member':
+      case undefined:
+        return t('shell.role.member')
+    }
+  }
+}
 
 /** The list of a member's households: read by key where a membership is made or ended. */
 export const householdsKey = ['households'] as const

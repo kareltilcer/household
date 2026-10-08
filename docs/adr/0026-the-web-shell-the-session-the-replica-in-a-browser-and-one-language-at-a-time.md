@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-08
 - **Plan item:** 25
-- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §5–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-162; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
+- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §5–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-163; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
 
 ## Context
 
@@ -64,7 +64,10 @@ CSRF check left the first one's page as it was, removes what it kept and starts 
 reload. A household the server answers `404` for opens nothing whatever the browser kept of
 it, and the list it kept, which may be what led there, is read again. Where the app opens
 passes over a household that list names as suspended, whose address answers `404` too
-(D-115), for one that opens (D-162).
+(D-115), for one that opens (D-162). And the screen that deletes an account reads nothing of a
+suspended household, whose members answer `404` as the rest of it does: of one its member owns it
+says what the list of households says, offers the box that deletes it with the account, and
+leaves where they stand in it to the server (D-163).
 
 **A build is `web/<version>+<build id>`** (D-158). The version is `apps/web/package.json`'s,
 raised by the pull request after which a deployment must refuse older builds, and by no other;
@@ -160,6 +163,8 @@ every other console error still fails its test.
 | A replica and a cache named for the member as well as the household | Every member's copy would stay in a shared browser until they came back to sign out of it, which is the replica kept for a return. One database a household, removed with its session, has nothing to tell apart |
 | The first member's page kept where another is found signed in, its reads asked again | What its screens hold in memory is the first one's, and a read that now fails keeps what it last had. A page that starts again holds nothing of them, and the open replica is closed by the page that goes |
 | The app opened at the household last open, though the list names it suspended | Its address answers `404` (D-115), and the screen that says so leads back to where the app opens: a member with another household could not reach it. The app opens at one that opens, and at the suspended one, where item 27 draws its lockout, only for a member in no other (D-162) |
+| A suspended household's members read by the screen that deletes an account, which waits on them, or the household said to be left as one the member does not own is | The read never comes (D-115): its owner was told their households could not be read and to check their connection, and could not ask for a deletion the server would have taken. Said to be left, its only owner would be refused for a box the screen never drew. The screen says it cannot read it, and offers the box (D-163) |
+| The box of a suspended household drawn only once the server's refusal has named it as its member's alone | The refusal would be kept as a second word on where a member stands, beside what the page reads again after every refusal, and put away when it no longer holds. Its owner knows whether they own it alone, and a box ticked or left wrongly is answered by the server either way |
 | A household's replica removed as the server answers `404` for it | What a browser keeps is bounded by its session (D-161), as a device that never reconnects keeps its copy (FR-SY8): nothing opens that replica again or draws from it, and it goes with the sign-out or the session's end. A second removal, by household, would be one more to keep in step with the first, for a copy its former member could read until the membership ended |
 | The replicas left where another member is found signed in from another tab, and removed only after a failed CSRF check | A page cannot tell the two apart: either way the account under it is another's. Where the second member's own tab has opened a replica since, what goes with it is a copy read again when the household is next opened, and nothing queued: no module writes offline, and the first that does settles what a removal owes a replica that has queued something (Consequences) |
 | A household drawn from what the browser kept while the server answers `404` for it | A kept read stands in for a server that cannot be asked, not for one that answered: a member taken out of a household would be drawn its shell for as long as the cache lasts (F-17) |

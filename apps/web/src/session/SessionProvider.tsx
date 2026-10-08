@@ -16,7 +16,7 @@
 //
 // The language is the account's once it is known, and the display modes stay this browser's:
 // the account keeps none (ADR 0026).
-import type { components } from '@household/api'
+import { problemOf, type components } from '@household/api'
 import { matchLocale, pseudoLocale } from '@household/i18n/lazy'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -237,11 +237,17 @@ export function SessionProvider({
   const signOut = useCallback(async () => {
     const answer = await api.POST('/auth/logout')
     // A session the server no longer knows has ended already: what was asked for is so.
-    if (answer.response.status !== 401) unwrap(answer)
+    if (answer.response.status !== 401) {
+      // Asked outside a query or a mutation, so what it was refused with is told here: a
+      // refusal that is about the session is answered as it is wherever it is met.
+      const refusal = problemOf(answer)
+      if (refusal !== undefined) problems.report(refusal)
+      unwrap(answer)
+    }
     member.current = false
     setLeft(true)
     await forgetOnce()
-  }, [api, forgetOnce])
+  }, [api, problems, forgetOnce])
 
   const retry = useCallback(() => {
     void account.refetch()

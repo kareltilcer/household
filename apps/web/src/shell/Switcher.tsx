@@ -15,9 +15,9 @@ import { inHousehold } from '../app/paths.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import {
   useHouseholds,
+  useRoleWord,
   type EntitlementState,
   type Household,
-  type HouseholdRole,
   type HouseholdSummary,
 } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -25,22 +25,6 @@ import a11y from '../ui/a11y.module.css'
 import { Button } from '../ui/Button.tsx'
 import { Menu } from '../ui/Menu.tsx'
 import styles from './Sidebar.module.css'
-
-/** The word for a member's role in a household. */
-export function useRoleWord(): (role: HouseholdRole | undefined) => string {
-  const t = useTranslate()
-  return (role) => {
-    switch (role) {
-      case 'owner':
-        return t('shell.role.owner')
-      case 'child':
-        return t('shell.role.child')
-      case 'member':
-      case undefined:
-        return t('shell.role.member')
-    }
-  }
-}
 
 /**
  * The word a household is named with beside its name, for a state in which something is held

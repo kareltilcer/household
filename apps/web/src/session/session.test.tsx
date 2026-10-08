@@ -253,6 +253,24 @@ describe('a session that ends', () => {
     expect(deleted).toHaveBeenCalledWith(replicaDatabase(me.id))
   })
 
+  it('by a sign-out the server refused is told of the refusal, as of any other request’s', async () => {
+    const deleted = databases()
+    // Not taken for the app’s own: the member signs in again, and what the browser kept stays.
+    const at = server((request) =>
+      request.method === 'POST' ? problem(403, 'csrf_failed') : Response.json(me),
+    )
+    open(at)
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('member Jana')
+    })
+    noteReplica(me.id)
+    await userEvent.click(screen.getByRole('button', { name: 'leave' }))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('visitor csrf')
+    })
+    expect(deleted).not.toHaveBeenCalled()
+  })
+
   it('by signing out of a session the server ended already is signed out, and not said to have failed', async () => {
     let ended = false
     const deleted = databases()

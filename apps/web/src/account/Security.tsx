@@ -24,7 +24,7 @@ import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { paths } from '../app/paths.ts'
-import { checkNewPassword } from '../auth/fields.tsx'
+import { checkNewPassword, fieldCodes } from '../auth/fields.tsx'
 import { startProvider, useOfferedProviders, type Provider } from '../auth/provider.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { meKey, useMe, type Me } from '../session/SessionProvider.tsx'
@@ -34,7 +34,7 @@ import { PasswordField } from '../ui/Field.tsx'
 import { List, ListRow } from '../ui/ListRow.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import a11y from '../ui/a11y.module.css'
-import { askedNow, fieldCode, signedInKey, useOwnZone } from './common.ts'
+import { askedNow, signedInKey, useOwnZone } from './common.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import { PasswordDialog } from './PasswordDialog.tsx'
 import { RecoveryCodes } from './RecoveryCodes.tsx'
@@ -66,7 +66,7 @@ function ChangePassword({ me }: { readonly me: Me }) {
     },
   })
   const wrong = problemIn(change.error)?.code === 'invalid_credentials'
-  const refused = fieldCode(change.error, '/new_password')
+  const refused = fieldCodes(change.error).get('/new_password')
   const currentError = checked.current
     ? t('account.security.password.current.missing')
     : wrong

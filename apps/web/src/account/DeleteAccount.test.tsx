@@ -105,6 +105,15 @@ describe('where a member stands in a household', () => {
     expect(blocks(coOwner, new Set())).toBe(false)
   })
 
+  it('is the server’s to say, for a household they own whose members could not be read', () => {
+    // A suspended one: the list still names it, and every route of it answers `404` (D-115).
+    const standing = standingOf(tilcerovi, me, undefined)
+    expect(standing).toMatchObject({ kind: 'unread' })
+    expect(blocks(standing, new Set())).toBe(false)
+    // Its only member is counted by the list itself: it goes with the account.
+    expect(standingOf(zahrada, me, undefined)).toMatchObject({ kind: 'alone', payer: false })
+  })
+
   it('reads what a refusal names, and nothing from what is no such document', () => {
     expect(
       blockedBy({
@@ -386,6 +395,39 @@ describe('deleting an account', () => {
     expect(
       await screen.findByRole('button', { name: /^Schedule deletion for / }),
     ).toBeInTheDocument()
+  })
+
+  it('does not wait on a suspended household, which answers nobody, and offers its box all the same', async () => {
+    const server = createServer()
+    const suspended = { ...tilcerovi, entitlement: { state: 'suspended' as const } }
+    // Its members are not answered for: asked, they would be `404`, as every route of it is.
+    withHouseholds(server, [suspended, { ...zahrada, entitlement: { state: 'suspended' } }])
+    server.on('POST /me/deletion', () => Response.json(scheduled, { status: 202 }))
+    const { user, router } = await deleting(server)
+    const row = await situation('Tilcerovi')
+    expect(
+      row.getByText(/^It is suspended, so who else is in it can’t be read here\./),
+    ).toBeInTheDocument()
+    // One the list itself counts a single member of goes with the account, read or not.
+    expect(
+      (await situation('Zahrada')).getByText(
+        /^It goes with your account: you are its only member\./,
+      ),
+    ).toBeInTheDocument()
+    expect(server.to(`GET /households/${tilcerovi.id}/members`)).toHaveLength(0)
+    expect(server.to(`GET /households/${zahrada.id}/members`)).toHaveLength(0)
+
+    // Nothing is held: the server says where they stand in it. Its only owner names it.
+    await user.click(row.getByRole('checkbox', { name: 'Delete Tilcerovi with my account' }))
+    await user.type(screen.getByLabelText('Password'), 'the password')
+    await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/account/deletion/cancel')
+    })
+    expect(await server.body('POST /me/deletion')).toEqual({
+      password_or_confirmation: 'the password',
+      delete_sole_owned_households: [tilcerovi.id],
+    })
   })
 
   it('keeps the account when the member says so', async () => {

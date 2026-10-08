@@ -13,6 +13,9 @@
 //   make someone else an owner, which is said in words, the members' screen not being built yet
 //   (plan item 26), or name the household to be deleted with the account, by a box that names it.
 // - A payer is held until billing is handed over or the subscription cancelled.
+// - A suspended household the member owns answers nobody, so who else is in it cannot be read
+//   (D-115): the screen says so and offers its box all the same, the one way its only owner has
+//   on, and the server says where they stand in it (D-163).
 // - What the member added to a household that goes on stays there as a former member's (PRD 05
 //   §4): the prototype has it stay under their name, which the erasure does not leave.
 // - Counts of what a household holds have no source a member's own page can read, and are left
@@ -96,6 +99,19 @@ function Situation({
       {standing.kind === 'leaves' ? (
         <span className={styles.text}>{t('account.delete.leaves')}</span>
       ) : null}
+      {standing.kind === 'unread' ? (
+        <>
+          <span className={styles.text}>{t('account.delete.unread')}</span>
+          <Checkbox
+            label={t('account.delete.sole.choose', { household: name })}
+            checked={chosen}
+            onChange={(event) => {
+              onChoose(event.currentTarget.checked)
+            }}
+          />
+          {chosen ? <span className={styles.text}>{t('account.delete.sole.chosen')}</span> : null}
+        </>
+      ) : null}
     </li>
   )
 }
@@ -115,7 +131,11 @@ function Deletion({ me }: { readonly me: Me }) {
   const households = useHouseholds()
   const list = households.data
   // Only an owner can be a household's last owner, or its payer: the rest need no more read.
-  const owned = (list ?? []).filter((household) => household.my_role === 'owner')
+  // Nor is a suspended household read, which answers `404` on every route (D-115), its members'
+  // among them: asked for, they would hold this screen at a read that never comes.
+  const owned = (list ?? []).filter(
+    (household) => household.my_role === 'owner' && household.entitlement?.state !== 'suspended',
+  )
   const members = useQueries({
     queries: owned.map((household) => ({
       queryKey: membersKey(household.id),
@@ -330,7 +350,8 @@ function Deletion({ me }: { readonly me: Me }) {
                   schedule.mutate({
                     password_or_confirmation: typed,
                     delete_sole_owned_households: standings.flatMap((standing) =>
-                      standing.kind === 'sole' && chosen.has(standing.household.id)
+                      (standing.kind === 'sole' || standing.kind === 'unread') &&
+                      chosen.has(standing.household.id)
                         ? [standing.household.id]
                         : [],
                     ),

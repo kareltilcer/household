@@ -13,6 +13,10 @@
 //   blocks only while its subscription will charge again, which nothing here can read, so that
 //   is said as a condition and left to the server to refuse;
 // - in every other, the membership ends when the account does.
+//
+// One household's members a member cannot read: a suspended one's, whose every route answers
+// `404` (D-115) while the list still names it. Where they stand in one they own is then the
+// server's alone to say, but for its only member, whom the list itself counts.
 import type { components } from '@household/api'
 import type { HouseholdSummary } from '../household/households.ts'
 
@@ -27,6 +31,12 @@ export type Standing =
   | { readonly kind: 'payer'; readonly household: HouseholdSummary }
   /** The membership ends, and the household goes on. */
   | { readonly kind: 'leaves'; readonly household: HouseholdSummary }
+  /**
+   * The member owns it with others in it, and who they are could not be read: it is suspended.
+   * The server says which of the above it is when it is asked, and the member may name it to be
+   * deleted with their account meanwhile, as its only owner would.
+   */
+  | { readonly kind: 'unread'; readonly household: HouseholdSummary }
 
 function same(one: string | undefined, other: string): boolean {
   return one?.toLowerCase() === other.toLowerCase()
@@ -35,14 +45,19 @@ function same(one: string | undefined, other: string): boolean {
 /**
  * Where `user` stands in `household`. `members` is the household's members as its member reads
  * them, which a household the member owns needs and any other does not: only an owner can be the
- * last owner, or pay.
+ * last owner, or pay. Left out for a household they own, its members could not be read.
  */
 export function standingOf(
   household: HouseholdSummary,
   user: string,
   members: readonly Membership[] | undefined,
 ): Standing {
-  if (household.my_role !== 'owner' || members === undefined) return { kind: 'leaves', household }
+  if (household.my_role !== 'owner') return { kind: 'leaves', household }
+  if (members === undefined) {
+    return household.member_count === 1
+      ? { kind: 'alone', household, payer: false }
+      : { kind: 'unread', household }
+  }
   const payer = members.some((member) => same(member.user_id, user) && member.is_billing_payer)
   const others = members.filter((member) => !same(member.user_id, user))
   if (others.length === 0) return { kind: 'alone', household, payer }
@@ -53,7 +68,7 @@ export function standingOf(
 /**
  * Whether `standing` stands in the way for certain, `chosen` being the households the member
  * chose to delete with their account: a household that would be left with no owner, or one that
- * goes on with nobody paying for it.
+ * goes on with nobody paying for it. One that could not be read is no certainty: the server says.
  */
 export function blocks(standing: Standing, chosen: ReadonlySet<string>): boolean {
   switch (standing.kind) {
@@ -63,6 +78,7 @@ export function blocks(standing: Standing, chosen: ReadonlySet<string>): boolean
       return !chosen.has(standing.household.id)
     case 'alone':
     case 'leaves':
+    case 'unread':
       return false
   }
 }

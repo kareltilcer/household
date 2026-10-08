@@ -4,7 +4,7 @@ import { paths } from '../app/paths.ts'
 import { holdDestination } from '../session/destination.ts'
 import { heldChallenge } from './challenge.ts'
 import type { PendingFlow } from './provider.ts'
-import { empty, invalid, open, pending, problem, serve } from './testing.tsx'
+import { empty, invalid, jana, open, pending, problem, serve } from './testing.tsx'
 
 const verifier = 'v'.repeat(64)
 
@@ -209,6 +209,23 @@ describe('a return from a provider, to link it to the account', () => {
     expect(backend.to(callback)).toHaveLength(0)
   })
 
+  it('reads the account again once the link is made, before it goes back to say so', async () => {
+    begun({ intent: 'link', returnTo: account })
+    const backend = serve()
+    backend.signIn()
+    backend.on(link, () => {
+      // The account signs in with Google from here on, which the page it opened with did not say.
+      backend.signIn({ ...jana, credentials: ['password', 'google'] })
+      return empty(204)
+    })
+    const { address } = open(returned, { backend })
+    await waitFor(() => {
+      expect(address()).toBe(account)
+    })
+    const asked = backend.sent.map((request) => `${request.method} ${request.path}`)
+    expect(asked.lastIndexOf('GET /me')).toBeGreaterThan(asked.indexOf(link))
+  })
+
   it('goes back to the account’s security where the flow names no path of the app’s own', async () => {
     begun({ intent: 'link', returnTo: '//elsewhere.example/account' })
     const backend = serve()
@@ -240,6 +257,12 @@ describe('a return from a provider, to link it to the account', () => {
       'the account is a child profile',
       () => problem(403, 'forbidden'),
       'A child profile signs in with its PIN alone, so nothing can be connected to it.',
+    ],
+    [
+      // A `403` too, and no child profile's: the code says which.
+      'the request was not taken for the app’s own',
+      () => problem(403, 'csrf_failed'),
+      'Something went wrong at our end. Nothing you typed was lost. Try again.',
     ],
     [
       'the server failed',

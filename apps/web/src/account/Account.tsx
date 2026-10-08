@@ -25,9 +25,10 @@ import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { paths } from '../app/paths.ts'
+import { fieldCodes } from '../auth/fields.tsx'
 import { useDisplay } from '../display/DisplayProvider.tsx'
 import { densities, motions, scales, themes } from '../display/modes.ts'
-import { useHouseholds, type HouseholdRole } from '../household/households.ts'
+import { useHouseholds, useRoleWord } from '../household/households.ts'
 import { useFormat, useI18n, useTranslate } from '../i18n/I18nProvider.tsx'
 import { meKey, useMe, type Me } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -40,14 +41,7 @@ import { List, ListRow } from '../ui/ListRow.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { useToast } from '../ui/Toast.tsx'
-import {
-  askedNow,
-  fieldCode,
-  isRefusedAsSent,
-  readState,
-  useNoWithdrawal,
-  useOwnZone,
-} from './common.ts'
+import { askedNow, isRefusedAsSent, readState, useNoWithdrawal, useOwnZone } from './common.ts'
 import { useOnline } from '../ui/online.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import styles from './Settings.module.css'
@@ -75,7 +69,7 @@ function Name({ me }: { readonly me: Me }) {
   const save = useSaveMe()
   const [name, setName] = useState(me.display_name)
   const [missing, setMissing] = useState(false)
-  const refused = fieldCode(save.error, '/display_name') !== undefined
+  const refused = fieldCodes(save.error).has('/display_name')
   const error =
     missing || refused
       ? t('account.profile.name.missing')
@@ -469,17 +463,7 @@ function Households() {
   const households = useHouseholds()
   const online = useOnline()
   const withdrawn = useNoWithdrawal()
-  const role = (given: HouseholdRole | undefined): string => {
-    switch (given) {
-      case 'owner':
-        return t('shell.role.owner')
-      case 'child':
-        return t('shell.role.child')
-      case 'member':
-      case undefined:
-        return t('shell.role.member')
-    }
-  }
+  const role = useRoleWord()
   const list = households.data ?? []
   return (
     <Section title={t('account.households.title')}>

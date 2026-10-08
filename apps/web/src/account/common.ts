@@ -1,5 +1,6 @@
 // What the account's screens share that draws nothing: how their writes are asked, which state a
-// read is in, the zone a member's times are said in, and what a refusal says of a field.
+// read is in, the zone a member's times are said in, and whether a refusal is of what was sent.
+// Which field a `422` names is read as the screens before sign-in read it (auth/fields.tsx).
 //
 // A member's account is no household's (A-19): its reads and writes are plain requests, and none
 // of them is a mutation a replica holds. So of the twelve states (02-components §0) these screens
@@ -64,16 +65,6 @@ export function readState(read: Read, online: boolean, empty = false): DataState
 export function useNoWithdrawal(): StateText {
   const t = useTranslate()
   return { text: t('ui.not_available.title') }
-}
-
-/**
- * The check a `422` says `field` failed, a JSON Pointer such as `/new_password`, or undefined
- * where the refusal is none, or is not about that field.
- */
-export function fieldCode(error: unknown, field: string): string | undefined {
-  const problem = problemIn(error)
-  if (problem?.code !== 'validation_failed') return undefined
-  return problem.errors.find((failure) => failure.field === field)?.code
 }
 
 /** Whether `error` is a `422` at all: a refusal of what was sent, whatever field it names. */

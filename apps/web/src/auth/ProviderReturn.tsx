@@ -14,7 +14,7 @@
 // signs in as they always have, and links the provider from their account.
 import type { components } from '@household/api'
 import { pseudoLocale } from '@household/i18n/lazy'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
@@ -24,7 +24,7 @@ import { NotAvailable } from '../app/NotAvailable.tsx'
 import { isOwnPath, paths } from '../app/paths.ts'
 import { useI18n } from '../i18n/I18nProvider.tsx'
 import { heldDestination } from '../session/destination.ts'
-import { useSession } from '../session/SessionProvider.tsx'
+import { meKey, useSession } from '../session/SessionProvider.tsx'
 import { useOnArrival } from './arrival.ts'
 import { challengeIn, holdChallenge } from './challenge.ts'
 import { useFragmentAndQuery, type Carried } from './fragment.ts'
@@ -82,7 +82,8 @@ function unlinkedBy(error: unknown): Unlinked {
   if (problem?.code === 'identity_already_linked') return 'already'
   if (problem?.status === 422) return 'invalid'
   if (problem?.status === 401) return 'signed_out'
-  if (problem?.status === 403) return 'child'
+  // By its code: a `403` is also what a request that was not taken for the app's own is answered.
+  if (problem?.code === 'forbidden') return 'child'
   return 'other'
 }
 
@@ -96,6 +97,7 @@ export function ProviderReturn() {
 function Returned({ provider }: { readonly provider: Provider }) {
   const { t, locale } = useI18n()
   const api = useApi()
+  const queries = useQueryClient()
   const session = useSession()
   const navigate = useNavigate()
   const problemText = useProblemText()
@@ -124,6 +126,10 @@ function Returned({ provider }: { readonly provider: Provider }) {
         await api.POST('/auth/oauth/{provider}/link', { params: { path: { provider } }, body }),
       )
     },
+    // The account signs in with the provider from here on, and what this page read of it is
+    // from before: it is read again before the way back is taken, to a screen that says what
+    // the account signs in with.
+    onSuccess: () => queries.refetchQueries({ queryKey: meKey }),
   })
 
   useOnArrival(() => {
