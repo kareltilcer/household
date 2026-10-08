@@ -219,7 +219,9 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   that kept nothing, with a connection and every service answering: what a screen draws on a
   second visit, offline or with a service away is walked only by a test that reloads, or takes
   the connection or the service away, in a real browser: a unit harness with the cache persisted
-  passed where Chromium failed.
+  passed where Chromium failed. A test that has a page looked at again dispatches a
+  `visibilitychange` that bubbles, as the browser's own does: the query client listens on
+  `window`.
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
