@@ -1,0 +1,82 @@
+/* The sync UI's dev page: sections of states, each state in both themes, as the harness draws its
+   bodies (harness/Harness.module.css). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-3);
+}
+
+.header,
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.title {
+  composes: title1 from '../../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+.sectionName {
+  composes: title2 from '../../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+.lead,
+.note,
+.rule {
+  max-width: 76ch;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.rule {
+  composes: caption from '../../styles/type.module.css';
+}
+
+.states {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.stateName {
+  composes: title3 from '../../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+/* The two themes side by side while each has room, and one above the other when they do not. */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-2);
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-15);
+  min-width: 0;
+  min-height: var(--space-8);
+  padding: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+}
+
+/* The controls that open a panel, a row of them that wraps. */
+.openers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
