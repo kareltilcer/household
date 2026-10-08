@@ -47,8 +47,10 @@ describe('the web client', () => {
     await client.GET('/healthz')
     const [request] = sent
     expect(request?.url).toBe(`${origin}/api/v1/healthz`)
-    expect(request?.headers.get('Household-Client')).toBe(clientName)
-    expect(clientName).toMatch(/^web\/\d+\.\d+\.\d+/)
+    // A page no build made names the version alone, and a build's page its id after it.
+    expect(request?.headers.get('Household-Client')).toBe(clientName(undefined))
+    expect(clientName(undefined)).toMatch(/^web\/\d+\.\d+\.\d+$/)
+    expect(clientName('008f0f94379a5b41')).toBe(`${clientName(undefined)}+008f0f94379a5b41`)
     expect(request?.credentials).toBe('same-origin')
     // A session is a cookie no script can read: the client carries no credential of its own.
     expect(request?.headers.has('Authorization')).toBe(false)

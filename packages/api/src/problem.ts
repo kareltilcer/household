@@ -111,6 +111,13 @@ export type FairUseRefusal = Envelope &
     | { code: 'household_limit_reached'; ceiling: number }
   )
 
+/**
+ * `400 update_required`: the client is older than the oldest version of its type the server
+ * serves, `minimum_version`, and is answered this whatever it asked (ADR 0010). It shows its
+ * *please update* screen and nothing else.
+ */
+export type UpdateRequired = Envelope & { code: 'update_required'; minimum_version: string }
+
 /** `422 validation_failed`, naming each failure in `errors`. */
 export type ValidationFailure = Envelope &
   Omit<Schemas['ValidationProblem'], keyof Schemas['Problem']> & {
@@ -126,6 +133,7 @@ export type PlainProblem = Envelope & {
     | EntitlementRefusal['code']
     | StorageCeilingReached['code']
     | FairUseRefusal['code']
+    | UpdateRequired['code']
     | ValidationFailure['code']
   >
 }
@@ -137,6 +145,7 @@ export type ApiProblem =
   | EntitlementRefusal
   | StorageCeilingReached
   | FairUseRefusal
+  | UpdateRequired
   | ValidationFailure
   | PlainProblem
 
@@ -188,6 +197,8 @@ export function readProblem(status: number, body: unknown): ApiProblem | Unreada
         : unreadable
     case 'household_limit_reached':
       return isInteger(body.ceiling) ? (problem as FairUseRefusal) : unreadable
+    case 'update_required':
+      return typeof body.minimum_version === 'string' ? (problem as UpdateRequired) : unreadable
     case 'validation_failed':
       return Array.isArray(body.errors) ? (problem as ValidationFailure) : unreadable
     default:

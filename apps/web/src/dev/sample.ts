@@ -2,7 +2,7 @@
 // catalog (harness/model.ts says why); under the pseudo-locale they are accented and padded as a
 // catalog's message is, so the pass that looks for a layout that only survives English, and for a
 // string that escaped the catalogs, covers them too.
-import { pseudoLocale, pseudolocalize } from '@household/i18n'
+import { pseudoLocale, pseudolocalize } from '@household/i18n/lazy'
 import { useMemo } from 'react'
 import { useI18n } from '../i18n/I18nProvider.tsx'
 

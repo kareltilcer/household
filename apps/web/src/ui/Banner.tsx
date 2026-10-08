@@ -102,13 +102,21 @@ export function Banner({
   )
 }
 
+export interface OfflineBarProps {
+  /**
+   * What it says, where that is not that the browser is offline: that the household's changes
+   * are not arriving though everything else works (D-105).
+   */
+  readonly sentence?: string
+}
+
 /**
  * The offline bar (02-components §2, 06-clients §5): persistent, unobtrusive, and never in the
  * way of what it sits above. A read looks the same with it as without. It is drawn when the
  * connection goes and is said politely then, so it is drawn before its sentence, as a banner
  * that is announced is.
  */
-export function OfflineBar() {
+export function OfflineBar({ sentence }: OfflineBarProps) {
   const t = useTranslate()
   const worded = useDrawnFirst(true)
   return (
@@ -116,7 +124,7 @@ export function OfflineBar() {
       <span className={styles.offlineGlyph}>
         <StatusIcon status="offline" />
       </span>
-      {worded ? <span>{t('ui.offline.bar')}</span> : null}
+      {worded ? <span>{sentence ?? t('ui.offline.bar')}</span> : null}
     </div>
   )
 }

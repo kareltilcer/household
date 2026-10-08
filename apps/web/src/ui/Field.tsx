@@ -98,6 +98,46 @@ export function TextField({
   )
 }
 
+export interface PasswordFieldProps extends FieldProps, Omit<Native<'input'>, 'type'> {}
+
+/**
+ * A password, with a control that shows what was typed: a password that cannot be read back is
+ * typed twice or mistyped once. The control says what it will do, in a word, and whether the
+ * password is shown, to assistive technology; shown or not, the field is a password's to a
+ * password manager, by its `autoComplete`, which its owner names.
+ */
+export function PasswordField({ label, help, error, required, ...rest }: PasswordFieldProps) {
+  const t = useTranslate()
+  const [shown, setShown] = useState(false)
+  return (
+    <Field label={label} help={help} error={error} required={required}>
+      {(wiring) => (
+        <span className={styles.revealable}>
+          <input
+            {...rest}
+            {...wiring}
+            type={shown ? 'text' : 'password'}
+            className={styles.control}
+            // What a browser would do to prose it does not do to a password that is shown.
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            className={styles.reveal}
+            aria-pressed={shown}
+            onClick={() => {
+              setShown((now) => !now)
+            }}
+          >
+            {t('ui.password.show')}
+          </button>
+        </span>
+      )}
+    </Field>
+  )
+}
+
 export interface TextAreaProps extends FieldProps, Native<'textarea'> {}
 
 export function TextArea({ label, help, error, required, ...rest }: TextAreaProps) {

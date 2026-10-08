@@ -1,11 +1,11 @@
 import { act, render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { heldDestination } from '../session/destination.ts'
 import { buildMeta } from '../update/build.ts'
 import { Providers } from './App.tsx'
-import { paths, routeIds } from './paths.ts'
+import { fill, inHousehold, paths, routeIds } from './paths.ts'
 import { inRoot, routes, served } from './routes.tsx'
 
 function open(address: string, table: RouteObject[] = routes) {
@@ -17,21 +17,52 @@ function open(address: string, table: RouteObject[] = routes) {
   )
 }
 
-/** The screens of a table: what is drawn inside Root, under the boundary a failed one stops at. */
-function screens(table: RouteObject[]): RouteObject[] {
-  return table.flatMap((root) => root.children ?? []).flatMap((inner) => inner.children ?? [])
+/**
+ * The screens of a table, each by its whole path: every route that draws one, under whatever
+ * layouts and boundaries, a layout's own path before its screens' and an index at its layout's.
+ */
+function screens(table: readonly RouteObject[], under = ''): string[] {
+  return table.flatMap((route) => {
+    const own = route.path ?? ''
+    const path = own.startsWith('/') || own === '*' ? own : [under, own].filter(Boolean).join('/')
+    if (route.children !== undefined) return screens(route.children, path === '*' ? under : path)
+    return [own === '*' && under !== '' ? `${under}/*` : path]
+  })
 }
 
 describe('the routes', () => {
   // The end-to-end suite walks paths.ts with axe in both themes (06-clients §8): a route the
   // router had and that list had not would be a route nothing checks.
   it('are exactly the paths of paths.ts', () => {
-    expect(screens(routes).map((route) => route.path)).toEqual(routeIds.map((id) => paths[id].path))
+    expect(screens(routes).sort()).toEqual(routeIds.map((id) => paths[id].path).sort())
     expect(served).toEqual(routeIds)
   })
 
+  it('give every path a layout, and the shell to a member’s routes alone', () => {
+    for (const id of routeIds) {
+      const { path, layout } = paths[id]
+      expect(path.startsWith('/households/'), id).toBe(layout === 'household')
+      if (layout === 'account') expect(path.startsWith('/account'), id).toBe(true)
+    }
+  })
+
+  it('fill a pattern with what it names, each value as one segment', () => {
+    expect(fill('/households/:householdId/sync', { householdId: 'h1' })).toBe('/households/h1/sync')
+    expect(fill('/a/:b/*', { b: 'x/y' })).toBe('/a/x%2Fy')
+    expect(fill('/a/:b/*', { b: 'x' }, '/c/d')).toBe('/a/x/c/d')
+    expect(() => fill('/a/:b', {})).toThrow(/needs b/)
+    expect(inHousehold.module('h1', 'shopping', 'lists/2')).toBe(
+      '/households/h1/modules/shopping/lists/2',
+    )
+  })
+
   it('keep the dev-only pages apart from the ones every build has', () => {
-    expect(routeIds.filter((id) => paths[id].dev)).toEqual(['harness', 'primitives'])
+    expect(routeIds.filter((id) => paths[id].dev)).toEqual([
+      'harness',
+      'primitives',
+      'devShell',
+      'devSync',
+    ])
     for (const id of routeIds) {
       expect(paths[id].path.startsWith('/dev/'), id).toBe(paths[id].dev)
     }
@@ -47,20 +78,42 @@ describe('the app', () => {
     document.head.querySelector(`meta[name="${buildMeta}"]`)?.remove()
   })
 
-  it('opens on its name, inside the page’s one main landmark', async () => {
-    open(paths.home.example)
-    expect(await screen.findByRole('heading', { level: 1, name: 'Household' })).toBeInTheDocument()
+  it('opens a visitor at the way in, inside the page’s one main landmark', async () => {
+    const router = createMemoryRouter(routes, { initialEntries: [paths.home.example] })
+    render(
+      <Providers persist={false}>
+        <RouterProvider router={router} />
+      </Providers>,
+    )
+    await screen.findByRole('heading', { level: 1 })
+    expect(router.state.location.pathname).toBe(paths.signIn.path)
     expect(screen.getAllByRole('main')).toHaveLength(1)
     expect(document.title).toBe('Household')
   })
 
-  it('says an address is not available without saying why, and leads back', async () => {
+  it('says an address opens nothing without saying why, and leads back', async () => {
     open(paths.notFound.example)
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'This page is not available' }),
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'This link doesn’t open anything here.',
+      }),
     ).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('link', { name: 'Go to the start page' }))
-    expect(await screen.findByRole('heading', { level: 1, name: 'Household' })).toBeInTheDocument()
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('link', { name: 'Go to Home' })).toHaveAttribute('href', '/')
+  })
+
+  it('sends a visitor who opens a member’s address to sign in, and holds the address', async () => {
+    const address = '/account/devices?x=1'
+    const router = createMemoryRouter(routes, { initialEntries: [address] })
+    render(
+      <Providers persist={false}>
+        <RouterProvider router={router} />
+      </Providers>,
+    )
+    await screen.findByRole('heading', { level: 1 })
+    expect(router.state.location.pathname).toBe(paths.signIn.path)
+    expect(heldDestination()).toBe(address)
   })
 
   const Broken = () => {

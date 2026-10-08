@@ -7,7 +7,10 @@ import { gzipSync } from 'node:zlib'
 const kB = 1000
 
 export const budgets = {
-  /** The scripts index.html names: the entry, and every file the entry imports before it runs. */
+  /**
+   * The scripts index.html names, the entry and every file the entry imports before it runs, and
+   * with them the catalog of the language the app starts in.
+   */
   script: 200 * kB,
   /** The stylesheets index.html names. The faces they name are fetched by script, and are not here. */
   style: 20 * kB,
@@ -16,6 +19,31 @@ export const budgets = {
 } as const
 
 export type Budget = keyof typeof budgets
+
+/**
+ * What a language's catalog is named in a build: `assets/catalog-<language>-<hash>.js`. The app
+ * holds one language at a time and fetches its catalog before it draws a word (src/main.tsx), so
+ * a catalog is part of what a first visit downloads though index.html does not name it.
+ */
+export const catalogChunk = 'catalog-'
+
+/** Where @household/i18n keeps its catalogs, as a module's id ends: one JSON file a language. */
+const catalogModule = /[\\/]packages[\\/]i18n[\\/]catalogs[\\/]([a-z]{2})\.json$/
+
+/**
+ * The language whose catalog a chunk of the modules `ids` is, or undefined for any other chunk:
+ * one that holds a catalog and nothing else.
+ */
+export function catalogOf(ids: readonly string[]): string | undefined {
+  const [only, ...rest] = ids
+  if (only === undefined || rest.length > 0) return undefined
+  return catalogModule.exec(only.replace(/[?#].*$/, ''))?.[1]
+}
+
+/** Whether `path` is a catalog's file, by the name the build gives one. */
+export function isCatalog(path: string): boolean {
+  return (path.split('/').at(-1) ?? '').startsWith(catalogChunk)
+}
 
 /** A file's size as a server sends it: gzip at its best level, in bytes. */
 export function compressed(content: string | Uint8Array): number {
@@ -60,9 +88,10 @@ export interface Measured {
 }
 
 /**
- * Every measurement of a build against its budget: the initial scripts together, the initial
- * stylesheets together, and each other script alone. `read` gives a file's content by the path
- * index.html or the build names it.
+ * Every measurement of a build against its budget: the initial scripts together with the largest
+ * language's catalog, which the app fetches before it draws; the initial stylesheets together;
+ * and each other script alone. `read` gives a file's content by the path index.html or the build
+ * names it.
  */
 export function measure(
   html: string,
@@ -72,11 +101,17 @@ export function measure(
   const initial = initialFiles(html)
   const total = (paths: readonly string[]) =>
     paths.reduce((sum, path) => sum + compressed(read(path)), 0)
+  const later = scripts.filter((path) => !initial.script.includes(path))
+  // A first visit downloads one catalog, and the budget is held for whichever language is read:
+  // the largest.
+  const catalog = Math.max(0, ...later.filter(isCatalog).map((path) => compressed(read(path))))
   return [
     {
       budget: 'script',
-      what: `${String(initial.script.length)} initial scripts`,
-      bytes: total(initial.script),
+      what:
+        `${String(initial.script.length)} initial scripts` +
+        (catalog > 0 ? ' and the largest catalog' : ''),
+      bytes: total(initial.script) + catalog,
       limit: budgets.script,
     },
     {
@@ -85,8 +120,8 @@ export function measure(
       bytes: total(initial.style),
       limit: budgets.style,
     },
-    ...scripts
-      .filter((path) => !initial.script.includes(path))
+    ...later
+      .filter((path) => !isCatalog(path))
       .map((path): Measured => ({
         budget: 'lazy',
         what: path,

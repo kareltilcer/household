@@ -11,6 +11,7 @@ import {
   type ApiClientOptions,
 } from '@household/api'
 import { version } from '../../package.json'
+import { ownBuild } from '../update/build.ts'
 
 /** Where the API is served: this origin's own `/api/v1`, in production and behind the dev proxy. */
 export const apiPath = '/api/v1'
@@ -20,11 +21,15 @@ export const csrfCookie = '__Host-hh_csrf'
 
 /**
  * The app as `Household-Client` names it, which the server holds to its minimum version
- * (ADR 0010). The version is this package's own, which a release raises: until one has, every
- * build is `0.0.0`, and a deployment's web minimum set above the version its newest build names
- * would refuse that build with every other (ADR 0025).
+ * (ADR 0010): `web/` and this package's own version, with the build's id after it as SemVer's
+ * build metadata, which the server reads past and a log tells one build from another by. The
+ * version is raised by the pull request after which a deployment must refuse the builds before
+ * it, and by no other: a deployment's web minimum is then a version every older build is under
+ * (ADR 0026). A page no build made, the development server's, names the version alone.
  */
-export const clientName = `web/${version}`
+export function clientName(build: string | undefined = ownBuild()): string {
+  return build === undefined ? `web/${version}` : `web/${version}+${build}`
+}
 
 /**
  * The value of the cookie `name` in a `document.cookie` string, or undefined when it has none: as
@@ -79,7 +84,7 @@ export function createWebClient(options: WebClientOptions = {}): ApiClient {
     // Same-origin, said outright: the session cookie goes to the app's own origin and nowhere
     // else, whatever a caller's Request was made with.
     fetch: (request) => base(new Request(request, { credentials: 'same-origin' })),
-    headers: { 'Household-Client': clientName },
+    headers: { 'Household-Client': clientName() },
     ...(options.retry === undefined ? {} : { retry: options.retry }),
   })
   client.use(csrfMiddleware(options.cookies ?? (() => document.cookie)))

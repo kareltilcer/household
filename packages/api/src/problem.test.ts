@@ -118,6 +118,17 @@ describe('a problem document', () => {
     }
   })
 
+  it('from a server that no longer serves the client names the oldest version it does', () => {
+    const read = readProblem(400, problem('update_required', 400, { minimum_version: '1.6.0' }))
+    if (read.code !== 'update_required') throw new Error('not an update the server asks for')
+    expect(read.minimum_version).toBe('1.6.0')
+    // One that names no version is no answer a client could act on by its type.
+    expect(readProblem(400, problem('update_required', 400, {})).code).toBeUndefined()
+    expect(
+      readProblem(400, problem('update_required', 400, { minimum_version: 16 })).code,
+    ).toBeUndefined()
+  })
+
   it('with validation_failed names its failures', () => {
     const errors = [{ field: '/name', code: 'required' }]
     const read = readProblem(422, problem('validation_failed', 422, { errors }))

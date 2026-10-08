@@ -7,6 +7,8 @@
  *   English it translates (PL-9). Native review clears them before GA (plan item 95).
  * - The server reads the same files through this directory's Go module (catalogs.go) and
  *   renders them with internal/platform/i18n, which implements message.ts's subset.
+ * - lazy.ts (`@household/i18n/lazy`) is the entry for a client that loads one language at a
+ *   time: this one holds all five.
  */
 export {
   catalogs,

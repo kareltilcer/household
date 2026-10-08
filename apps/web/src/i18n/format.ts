@@ -37,6 +37,8 @@ export interface Formatters {
   readonly instant: (at: Date | string, timeZone: string, style?: DateStyle) => string
   /** The calendar day an instant falls on in the zone `timeZone` names, with no time of day. */
   readonly dayOf: (at: Date | string, timeZone: string, style?: DateStyle) => string
+  /** The time of day of an instant in the zone `timeZone` names, with no date: *16:42*. */
+  readonly time: (at: Date | string, timeZone: string) => string
 }
 
 /** `amountMinor` of a currency with `digits` decimal places, as an exact decimal: 123456 → 1234.56. */
@@ -155,5 +157,6 @@ export function createFormatters(locale: string): Formatters {
       dates({ dateStyle: style, timeStyle: 'short', timeZone }).format(instantOf(at)),
     dayOf: (at, timeZone, style = 'medium') =>
       dates({ dateStyle: style, timeZone }).format(instantOf(at)),
+    time: (at, timeZone) => dates({ timeStyle: 'short', timeZone }).format(instantOf(at)),
   }
 }

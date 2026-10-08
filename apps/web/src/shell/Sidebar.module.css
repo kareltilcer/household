@@ -1,0 +1,64 @@
+/* The sidebar's own parts: the switcher at its head, its groups of destinations, its foot. */
+.switcher {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+.switch {
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  text-align: start;
+}
+
+.household {
+  composes: title3 from '../styles/type.module.css';
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.role {
+  composes: caption from '../styles/type.module.css';
+  margin: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+.label {
+  composes: caption from '../styles/type.module.css';
+  margin: 0;
+  padding: 0 var(--space-15);
+  color: var(--text-muted);
+}
+
+/* What is the member's own, after the household's: set apart by a rule. */
+.foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  align-items: stretch;
+  min-width: 0;
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--divider);
+}
+
+/* The count of what waits at a destination: a number in a pill, which its link's name explains. */
+.count {
+  composes: caption from '../styles/type.module.css';
+  flex: none;
+  min-width: 1.5rem;
+  padding: 0 var(--space-1);
+  background: var(--surface-inverse);
+  border-radius: var(--radius-pill);
+  color: var(--text-inverse);
+  text-align: center;
+}

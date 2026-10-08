@@ -188,13 +188,13 @@ function Probe() {
       <Press
         name="cs"
         onPress={() => {
-          setLocale('cs')
+          void setLocale('cs')
         }}
       />
       <Press
         name="pseudo"
         onPress={() => {
-          setLocale('en-XA')
+          void setLocale('en-XA')
         }}
       />
     </div>

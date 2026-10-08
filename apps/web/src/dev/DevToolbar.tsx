@@ -1,8 +1,7 @@
 // The dev pages' own controls: the language, the pseudo-locale among them, and the display modes.
-// The member's settings screen for the same choices is item 25's; this is where they are switched
-// while there is none, and where the pseudo-locale stays once there is. Its words are fixtures, as
-// the harness's are (harness/model.ts).
-import { locales, pseudoLocale, type DisplayLocale } from '@household/i18n'
+// A member chooses the same in their account's settings (account/); the pseudo-locale is chosen
+// here alone. Its words are fixtures, as the harness's are (harness/model.ts).
+import { locales, pseudoLocale, type DisplayLocale } from '@household/i18n/lazy'
 import { useDisplay } from '../display/DisplayProvider.tsx'
 import {
   densities,
@@ -36,7 +35,7 @@ export function DevToolbar() {
         value={locale}
         onChange={(event) => {
           const next = oneOf(displayLocales, event.currentTarget.value)
-          if (next !== undefined) setLocale(next)
+          if (next !== undefined) void setLocale(next)
         }}
       />
       <Select

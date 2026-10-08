@@ -9,35 +9,58 @@
 // hot reloading injects styles inline, which the policy exists to refuse.
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
-import { headerPolicy } from './build/csp.ts'
-import { preview } from './build/preview.ts'
-import { household } from './build/plugin.ts'
+import { catalogChunk, catalogOf } from './build/budget.ts'
+import { headerPolicyFor, metaPolicyFor } from './build/csp.ts'
+import { deployedSync } from './build/deployment.ts'
+import { household, householdDev } from './build/plugin.ts'
+import { apiOrigin, preview } from './build/preview.ts'
 import { devPagesMode } from './src/app/paths.ts'
 
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), household()],
-  build: {
-    outDir: mode === devPagesMode ? 'dist/e2e' : 'dist/www',
-    emptyOutDir: true,
-    // A file inlined as a data: URL is one the policy refuses: every font and image stays a file.
-    assetsInlineLimit: 0,
-    // Source maps for the build the end-to-end suite runs, which a failing test is debugged in,
-    // and none for the build a deployment serves: a map beside its script hands the app's
-    // sources to whoever asks for it (build/check.ts fails a build that holds one).
-    sourcemap: mode === devPagesMode,
-  },
-  server: {
-    // The API, same-origin as in production: its session cookie is `__Host-`, and its CSRF check
-    // names this origin. 127.0.0.1, where `pnpm run dev:api` listens.
-    proxy: { '/api': 'http://127.0.0.1:8080' },
-  },
-  preview: {
-    host: preview.host,
-    port: preview.port,
-    strictPort: true,
-    headers: {
-      'Content-Security-Policy': headerPolicy,
-      'X-Content-Type-Options': 'nosniff',
+export default defineConfig(({ mode }) => {
+  // The sync service a build's pages connect to: the one its environment names, and for the
+  // end-to-end build the development stack's own unless the environment names another.
+  const sync = deployedSync(mode === devPagesMode)
+  // The API, same-origin as in production: its session cookie is `__Host-`, and its CSRF check
+  // names this origin. 127.0.0.1, where `pnpm run dev:api` listens and the end-to-end suite
+  // starts its own.
+  const proxy = { '/api': apiOrigin }
+  return {
+    plugins: [react(), household({ policy: metaPolicyFor(sync) }), householdDev()],
+    build: {
+      outDir: mode === devPagesMode ? 'dist/e2e' : 'dist/www',
+      emptyOutDir: true,
+      // A file inlined as a data: URL is one the policy refuses: every font and image stays a file.
+      assetsInlineLimit: 0,
+      // Source maps for the build the end-to-end suite runs, which a failing test is debugged in,
+      // and none for the build a deployment serves: a map beside its script hands the app's
+      // sources to whoever asks for it (build/check.ts fails a build that holds one).
+      sourcemap: mode === devPagesMode,
+      rolldownOptions: {
+        output: {
+          // A language's catalog is a file of its own, named for what it is: the bundle budget
+          // counts the largest of them with what a first visit downloads (build/budget.ts).
+          chunkFileNames: (chunk) =>
+            catalogOf(chunk.moduleIds) === undefined
+              ? 'assets/[name]-[hash].js'
+              : `assets/${catalogChunk}[name]-[hash].js`,
+        },
+      },
     },
-  },
-}))
+    // The replica's SDK runs its SQLite, which is WebAssembly, in a worker of its own, written as
+    // a module as the app is; the development server leaves both packages as they are published,
+    // since its optimiser would bundle the worker away from the files it loads.
+    worker: { format: 'es' },
+    optimizeDeps: { exclude: ['@powersync/web', '@journeyapps/wa-sqlite'] },
+    server: { proxy },
+    preview: {
+      host: preview.host,
+      port: preview.port,
+      strictPort: true,
+      proxy,
+      headers: {
+        'Content-Security-Policy': headerPolicyFor(sync),
+        'X-Content-Type-Options': 'nosniff',
+      },
+    },
+  }
+})

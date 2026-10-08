@@ -530,6 +530,28 @@ export default defineConfig(
     rules: { 'household/no-literal-strings': 'error', 'household/semantic-tokens': 'error' },
   },
   {
+    // The web app loads one language at a time (D-153, plan item 25): the package's own entry
+    // holds all five catalogs, and one import of it puts them back into the first download. A
+    // test may hold them all, to say what a key reads in each.
+    files: ['apps/web/src/**'],
+    ignores: ['apps/web/src/**/*.test.{ts,tsx}', 'apps/web/src/test/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@household/i18n',
+              allowTypeImports: true,
+              message:
+                'Import @household/i18n/lazy: the package’s own entry holds all five catalogs, and the web app loads one language at a time.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs', '**/*.jsx'],
     extends: [tseslint.configs.disableTypeChecked],
   },

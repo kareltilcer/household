@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Script } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   attributesOf,
@@ -16,28 +17,115 @@ import {
   themes,
 } from '../src/display/modes.ts'
 import { bootScript } from './boot.ts'
-import { directives, headerOnly, headerPolicy, metaPolicy, unsafeSources } from './csp.ts'
+import {
+  directives,
+  directivesFor,
+  headerOnly,
+  headerPolicy,
+  headerPolicyFor,
+  metaPolicy,
+  metaPolicyFor,
+  unsafeSources,
+  wasm,
+} from './csp.ts'
+import { deployedSync, devSyncOrigin, syncOriginVar, syncSources } from './deployment.ts'
+import { pushOpenMessage, pushWorkerScript } from './pushWorker.ts'
 import { devPagesMode } from '../src/app/paths.ts'
 import { buildFile, buildMeta, buildPlaceholder } from '../src/update/build.ts'
 import { buildId, devOnly, head, rootBase } from './plugin.ts'
 
 describe('the policy', () => {
-  it('admits nothing inline and nothing evaluated', () => {
-    for (const source of unsafeSources) expect(headerPolicy).not.toContain(source)
+  const sync = syncSources('https://sync.household.example')
+
+  it('admits nothing inline and no string evaluated as script', () => {
+    for (const policy of [headerPolicy, headerPolicyFor(sync)]) {
+      for (const source of unsafeSources) expect(policy).not.toContain(source)
+    }
     expect(directives['default-src']).toEqual(["'none'"])
     // Scripts and styles from the app's own origin alone: no scheme, no wildcard, no other host.
-    expect(directives['script-src']).toEqual(["'self'"])
+    // A script may compile WebAssembly, which the replica's SQLite is, and nothing more.
+    expect(directives['script-src']).toEqual(["'self'", wasm])
     expect(directives['style-src']).toEqual(["'self'"])
   })
 
-  it('names every source as itself or nothing', () => {
-    const sources: readonly string[] = Object.values({ ...directives, ...headerOnly }).flat()
-    expect(sources.filter((source) => source !== "'self'" && source !== "'none'")).toEqual([])
+  it('names every source as itself or nothing, but for the one origin a build is told of', () => {
+    const own = (source: string) => source === "'self'" || source === "'none'"
+    const other = (policy: Readonly<Record<string, readonly string[]>>) => {
+      const whole: Readonly<Record<string, readonly string[]>> = { ...policy, ...headerOnly }
+      return Object.entries(whole).flatMap(([directive, sources]) =>
+        sources.filter((source) => !own(source)).map((source) => `${directive} ${source}`),
+      )
+    }
+    expect(other(directivesFor([]))).toEqual([`script-src ${wasm}`])
+    // The sync service's origin is connected to and nothing else of it is loaded.
+    expect(other(directivesFor(sync))).toEqual([
+      `script-src ${wasm}`,
+      'connect-src https://sync.household.example',
+      'connect-src wss://sync.household.example',
+    ])
   })
 
   it('keeps what a <meta> cannot carry for the header alone', () => {
     expect(metaPolicy).not.toContain('frame-ancestors')
     expect(headerPolicy).toBe(`${metaPolicy}; frame-ancestors 'none'`)
+    expect(headerPolicyFor(sync)).toBe(`${metaPolicyFor(sync)}; frame-ancestors 'none'`)
+  })
+})
+
+describe('the sync service a build is told of', () => {
+  it('is an origin, connected to by its requests and by its socket', () => {
+    expect(syncSources('https://sync.household.example')).toEqual([
+      'https://sync.household.example',
+      'wss://sync.household.example',
+    ])
+    expect(syncSources(' http://127.0.0.1:8081/ ')).toEqual([
+      'http://127.0.0.1:8081',
+      'ws://127.0.0.1:8081',
+    ])
+  })
+
+  it('is behind the page’s own origin where none is named', () => {
+    expect(syncSources(undefined)).toEqual([])
+    expect(syncSources('  ')).toEqual([])
+  })
+
+  it('is refused where it is anything more than one origin', () => {
+    for (const value of [
+      'sync.household.example',
+      'https://*.household.example',
+      'https://sync.household.example/stream',
+      'https://user:secret@sync.household.example',
+      'https://sync.household.example?x=1',
+      'wss://sync.household.example',
+      'https://a.example https://b.example',
+    ]) {
+      expect(() => syncSources(value), value).toThrow(syncOriginVar)
+    }
+  })
+
+  it('is the development stack’s own for the end-to-end build, unless one is named', () => {
+    expect(deployedSync(false, {})).toEqual([])
+    expect(deployedSync(true, {})).toEqual(syncSources(devSyncOrigin))
+    const named = { [syncOriginVar]: 'https://sync.household.example' }
+    expect(deployedSync(true, named)).toEqual(syncSources('https://sync.household.example'))
+    expect(deployedSync(false, named)).toEqual(syncSources('https://sync.household.example'))
+  })
+})
+
+describe('the service worker that shows a Web Push', () => {
+  const script = pushWorkerScript()
+
+  it('shows what was pushed and opens what is pressed, and does nothing else', () => {
+    const listened = [...script.matchAll(/addEventListener\('([a-z]+)'/g)].map(([, event]) => event)
+    // No `fetch`, no `install` that fills a cache: it serves no file of any build (ADR 0026).
+    expect(listened).toEqual(['push', 'notificationclick'])
+    expect(script).not.toMatch(/\bcaches\b|\bimportScripts\b|\bfetch\(/)
+    expect(script).toContain(JSON.stringify(pushOpenMessage))
+  })
+
+  it('is a script a browser parses', () => {
+    // Compiled and never run.
+    expect(() => new Script(script)).not.toThrow()
   })
 })
 
@@ -141,7 +229,7 @@ describe("the page's head", () => {
   const source = readFileSync(join(root, 'index.html'), 'utf8')
 
   it('opens on the encoding, then the policy, then the script that sets the display modes', () => {
-    const { html, tags } = head(source, 'assets/display-1.js')
+    const { html, tags } = head(source, 'assets/display-1.js', metaPolicy)
     // In the order they are written, each before what index.html already holds.
     expect(tags.map((tag) => [tag.tag, tag.attrs, tag.injectTo])).toEqual([
       ['meta', { charset: 'utf-8' }, 'head-prepend'],
@@ -155,9 +243,9 @@ describe("the page's head", () => {
   })
 
   it('refuses a page with no encoding to put first', () => {
-    expect(() => head(source.replace(/<meta charset[^>]*>/, ''), 'assets/display-1.js')).toThrow(
-      /no <meta charset="utf-8" \/>/,
-    )
+    expect(() =>
+      head(source.replace(/<meta charset[^>]*>/, ''), 'assets/display-1.js', metaPolicy),
+    ).toThrow(/no <meta charset="utf-8" \/>/)
   })
 })
 

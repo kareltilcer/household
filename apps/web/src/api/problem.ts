@@ -7,10 +7,16 @@ import { problemOf, type ApiProblem, type UnreadableProblem } from '@household/a
 export class ApiProblemError extends Error {
   override readonly name = 'ApiProblemError'
   readonly problem: ApiProblem | UnreadableProblem
+  /**
+   * When asking again may be answered, where the response said: a `429`'s `Retry-After`, counted
+   * from when the answer was read. A screen says the time, and does not ask before it.
+   */
+  readonly retryAt: Date | undefined
 
-  constructor(problem: ApiProblem | UnreadableProblem) {
+  constructor(problem: ApiProblem | UnreadableProblem, retryAt?: Date) {
     super(`${String(problem.status)} ${problem.code ?? 'unreadable'}`)
     this.problem = problem
+    this.retryAt = retryAt
   }
 
   /** The response's status. */
@@ -30,9 +36,21 @@ export function unwrap<Data>(result: {
   readonly response: Response
 }): Data {
   const problem = problemOf(result)
-  if (problem !== undefined) throw new ApiProblemError(problem)
+  if (problem !== undefined) throw new ApiProblemError(problem, retryAt(result.response))
   // A `204` has no body: its operation's data type says so, and `undefined` is its value.
   return result.data as Data
+}
+
+/**
+ * When `response` says to ask again: its `Retry-After`, in seconds as the contract sends it or as
+ * a date, from now. Undefined where it names none, or none that can be read.
+ */
+export function retryAt(response: Response, now: () => number = Date.now): Date | undefined {
+  const value = response.headers.get('Retry-After')?.trim() ?? ''
+  if (value === '') return undefined
+  if (/^\d+$/.test(value)) return new Date(now() + Number(value) * 1000)
+  const date = Date.parse(value)
+  return Number.isNaN(date) ? undefined : new Date(date)
 }
 
 /** The problem `error` carries, or undefined for any other failure: a lost connection, a bug. */
