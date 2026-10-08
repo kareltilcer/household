@@ -258,9 +258,13 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   already on its page loads nothing; the pages of `auth/` that read a fragment (`useFragment`)
   do not yet. A write that leads to another screen goes there from `mutate`'s own callback,
   which is dropped with its screen, where the mutation's `onSuccess` would lead a member away
-  from wherever they had gone meanwhile; it stays busy once it has succeeded, until that
-  screen's file has come; and a choice made on a form while its save is on its way is kept and
-  held against the answer. A form chooses nothing for its member: what it would confirm and was
+  from wherever they had gone meanwhile; what is kept and what is said of a success are the
+  mutation's own (`onSuccess` at the hook), which holds whether or not its screen is still
+  drawn, a confirmation holding its page inert and not the browser's own way back. It stays
+  busy once it has succeeded, until that screen's file has come; and a choice made on a form
+  while its save is on its way is kept and held against the answer. Whether somebody could do a
+  thing is read off their role and not off their being a member: a child profile is never made
+  an owner. A form chooses nothing for its member: what it would confirm and was
   not given is asked, by its select's placeholder, and what follows from it is absent until it
   is chosen ([D-172](docs/prd/09-decisions.md)); and it offers what the server takes, narrowed
   by no rule of its own. A control drawn as one word beside its hidden name (`RowAction`,
