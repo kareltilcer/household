@@ -83,9 +83,21 @@ is across rows. A level is never shown by the contract's word for it: *Off*, *Ca
 and edit*, *Can set it up*. Neither has a legend, a second column or a width of its own, so
 both are one column at a phone's width.
 
+**Household settings is the one row whose levels have sentences of their own**, since D-167
+makes it the one module that *Off* does not take out of a member's app: held at *Off* it keeps
+its profile, its members and its modules, and not its invitations; *Can see* adds the
+invitations; and nothing above that adds anything for a member, every change in the settings
+being an owner's whatever the level says (FR-AC3). The matrix says so on its row. Where levels
+are gathered for a member or a child, household settings is drawn as a group of its own and not
+under a level whose sentence would be untrue of it; for an owner, who holds and changes
+everything, it is one module among the seventeen. And a change that lowers it to *Off* is not
+counted among the modules that leave a member's app and their devices.
+
 **Every write of these screens is asked at once** (D-170): each mutation spreads `askedNow`
 (ADR 0026), a test holds them to it, and a write pressed with no connection says the server
-could not be reached and that nothing was changed. Reads are TanStack queries filed under the
+could not be reached and that nothing was changed. The shell's offline bar says the same on
+these screens, in place of its promise that changes are kept and sent, which is a module's
+(`shell/HouseholdBars.tsx`). Reads are TanStack queries filed under the
 household's own key (`household/data.ts`), so that what the browser kept is drawn offline, and a
 write that was answered reads the household, its members, its modules, its invitations and the
 member's list of households again (`useReread`). The screens read the API and not the replica:
@@ -152,6 +164,10 @@ left to the item that would pass the budget, and is by key prefix when it comes 
 | The leave screen asking the server first, with a request that changes nothing, to learn what stands in the way | No such operation exists, and a `POST` that might succeed is not a question. The members the screen reads say who the owners are and who pays; the one thing they do not say, an owner whose account is scheduled for deletion and counts as none (D-137), is what the server's `409` is drawn for |
 | The control that leaves drawn and disabled while something stands in the way | Absence, not disabling (design 03-patterns §2): a disabled control says a thing can be done and not why it cannot. The two refusals are the screen's content, each with what unblocks it |
 | A notice of a decline with the time it was declined, or one a control puts away | D-171: the contract keeps no such time, and a dismissal kept in one browser is true in that browser alone |
+| The one sentence for *Off* on every row, household settings among them, as the matrix first had it | A member who holds *Off* on household settings read, on a screen of household settings, that it was not in their app at all, and an owner lowering it was told that it would leave the member's devices. It is the one row D-167 makes untrue of that sentence, so it is the one row with its own |
+| Household settings offered only *Off* and *Can see* in the matrix, the two levels that differ for a member | The server takes all four, and a level the matrix would not offer is one a member may already hold: the row would show a choice that is not among its choices. A rule the client alone applies is not built (as a child's PIN is not judged here); the sentence says that the higher two give no more |
+| The settings' own note that a change needs a connection, under the shell's bar that says changes are saved and will sync | Two sentences, one over the other, that say opposite things, and the announced one was the untrue one. The bar is what is said as the connection goes, so the bar says what holds on the screen it stands over |
+| The household's replica closed before leaving is asked, so that it asks nothing of a household its member is about to be out of | A leave that is refused leaves a member in a household whose replica would have to be opened again, by a second way of closing one beside the household leaving the screen (ADR 0026). What it costs to leave it open is one request for the replica's credentials answered `404` in the moment between the answer and the navigation, which the SDK notes on the console and nobody is shown |
 | The catalog split in this item, a module's words fetched with its screens | The first download is under its budget with this item's words in it. The split is a second way for a screen to be without its words, a failure to say for each route, and a guard that no screen outside a module reads the module's keys: machinery the budget does not yet ask for (D-159) |
 
 ## Consequences
