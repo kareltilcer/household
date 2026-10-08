@@ -297,7 +297,8 @@ describe('the list of modules while it is read, unread and kept', () => {
     expect(await rows()).toHaveLength(16)
   })
 
-  it('draws what this browser kept when the connection goes, and says a change needs one', async () => {
+  // That a change needs a connection is the shell's bar's to say (shell/HouseholdBars.tsx).
+  it('draws what this browser kept when the connection goes, and a change pressed says it was not made', async () => {
     const server = createServer()
     server.on(turning('garden'), () => Promise.reject(new TypeError('offline')))
     const { user } = await modules(server)
@@ -306,11 +307,6 @@ describe('the list of modules while it is read, unread and kept', () => {
     act(() => {
       window.dispatchEvent(new Event('offline'))
     })
-    expect(
-      await screen.findByText(
-        'Changing anything here needs a connection: it is changed on the server or not at all. Reading does not.',
-      ),
-    ).toBeInTheDocument()
     expect(await rows()).toHaveLength(16)
     expect(within(await row('Garden')).getByText('On')).toBeInTheDocument()
 

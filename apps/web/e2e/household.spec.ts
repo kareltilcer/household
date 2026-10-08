@@ -1195,6 +1195,17 @@ test('a second visit of somebody who was an owner when this browser last read th
 })
 
 /**
+ * What the shell's bar says with no connection: over the household's settings and over
+ * leaving, whose changes are made on the server or not at all (D-170), and over any other
+ * screen of a household, whose changes are kept and sent.
+ */
+const offline = {
+  settings:
+    'Offline — you are reading what this browser kept. Changing anything here needs a connection.',
+  elsewhere: 'Offline — changes are saved and will sync',
+} as const
+
+/**
  * Whether a fault is the connection's being away, as the browser says each request that found
  * none and the replica's SDK each attempt of its own: a test that takes the connection away has
  * those, and they are its own doing.
@@ -1224,6 +1235,10 @@ test('a change pressed with no connection says so at once, and nothing is sent o
   await editor.getByLabel('Name').fill(renamed)
 
   await context.setOffline(true)
+  // The bar says what is so on this screen: a change needs a connection, and none is saved to
+  // be sent later, which is what it says everywhere else.
+  await expect(page.getByText(offline.settings)).toBeVisible()
+  await expect(page.getByText(offline.elsewhere)).toHaveCount(0)
   const save = editor.getByRole('button', { name: 'Save for everyone' })
   await save.click()
   // Asked at once, and not held for a connection: the panel says the server was not reached,
@@ -1289,12 +1304,19 @@ test('a second visit with no connection draws the members from what this browser
   await expect(listed).toContainText('Can see: Documents, Activity log, and Household settings')
   await expect(listed).toContainText('Off: 5 modules')
   await expect(page.getByText('The member list did not load')).toHaveCount(0)
-  // That there is no connection is said, and that a change here needs one.
-  await expect(page.getByRole('status')).toContainText('Offline')
-  await expect(
-    page.getByText('Changing anything here needs a connection', { exact: false }),
-  ).toBeVisible()
+  // That there is no connection is said once, by the shell's bar, with what is so here: a
+  // change needs one.
+  const bar = page.getByRole('status')
+  await expect(bar).toHaveText(offline.settings)
+  await expect(page.getByText('it is changed on the server or not at all')).toHaveCount(0)
   await expectAccessible(page)
+  // On a screen whose changes are kept and sent, the same bar says that.
+  await sidebar(page).getByRole('link', { name: 'Home' }).click()
+  await expect(title(page, 'Home')).toBeVisible()
+  await expect(bar).toHaveText(offline.elsewhere)
+  await sidebar(page).getByRole('link', { name: 'Household settings' }).click()
+  await expect(title(page, 'Household')).toBeVisible()
+  await expect(bar).toHaveText(offline.settings)
   expect(faults.filter((fault) => !ofNoConnection(fault))).toEqual([])
   faults.length = 0
 })

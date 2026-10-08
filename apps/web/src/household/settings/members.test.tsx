@@ -451,18 +451,14 @@ describe('the list of members, as it is read', () => {
     expect(await rows()).toHaveLength(5)
   })
 
-  it('is drawn as this browser kept it when the connection goes, and says a change needs one', async () => {
+  // That a change needs a connection is the shell's bar's to say (shell/HouseholdBars.tsx).
+  it('is drawn as this browser kept it when the connection goes', async () => {
     await membersScreen()
     expect(await rows()).toHaveLength(5)
     vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false)
     act(() => {
       window.dispatchEvent(new Event('offline'))
     })
-    expect(
-      await screen.findByText(
-        'Changing anything here needs a connection: it is changed on the server or not at all. Reading does not.',
-      ),
-    ).toBeInTheDocument()
     expect(await rows()).toHaveLength(5)
     expect(screen.queryByText('The member list did not load')).not.toBeInTheDocument()
   })

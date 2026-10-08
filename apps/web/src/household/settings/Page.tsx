@@ -1,7 +1,9 @@
 // What every screen of household settings is set in (PRD 17 §1 to §3; C-49 to C-51): the way
 // between its screens, the screen's one title, and under it what the member reading it should
-// know before anything else: that the household is read-only, that changing what is here is an
-// owner's, or that a change needs a connection.
+// know before anything else: that the household is read-only, or that changing what is here is
+// an owner's. That a change here needs a connection is the shell's to say, in the bar it draws
+// with none (shell/HouseholdBars.tsx): said here as well, it stood under a bar that said the
+// opposite.
 //
 // Every member may open these screens, whatever they hold on household settings (D-167): the
 // profile, the members with what each holds, and the modules are every member's to read. What
@@ -16,7 +18,6 @@ import { inHousehold } from '../../app/paths.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { Banner } from '../../ui/Banner.tsx'
 import { cx } from '../../ui/cx.ts'
-import { useOnline } from '../../ui/online.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
 import { useMembers, writes } from '../data.ts'
 import styles from './Settings.module.css'
@@ -83,7 +84,6 @@ function StandingNote() {
   const format = useFormat()
   const household = useHousehold()
   const standing = useStanding()
-  const online = useOnline()
   const members = useMembers(household.id)
   if (!standing.writes) {
     return (
@@ -107,7 +107,6 @@ function StandingNote() {
       </Banner>
     )
   }
-  if (!online) return <Banner tone="neutral">{t('household.settings.note.offline')}</Banner>
   return null
 }
 

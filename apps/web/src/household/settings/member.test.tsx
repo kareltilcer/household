@@ -236,17 +236,13 @@ describe('one member’s page', () => {
     ).toBeInTheDocument()
   })
 
-  it('is read as this browser kept it once the connection goes, and says a change needs one', async () => {
+  // That a change needs a connection is the shell's bar's to say (shell/HouseholdBars.tsx).
+  it('is read as this browser kept it once the connection goes', async () => {
     await page(petr)
     vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false)
     act(() => {
       window.dispatchEvent(new Event('offline'))
     })
-    expect(
-      await screen.findByText(
-        'Changing anything here needs a connection: it is changed on the server or not at all. Reading does not.',
-      ),
-    ).toBeInTheDocument()
     // What was read stays drawn, as it was read.
     expect(screen.getByRole('heading', { level: 1, name: 'Petr Tilcer' })).toBeInTheDocument()
     expect(row('Utilities')).toHaveValue('manage')
