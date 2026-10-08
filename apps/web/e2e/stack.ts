@@ -105,7 +105,9 @@ interface Message {
  * after it has answered.
  */
 export async function linkToken(email: string, route: string): Promise<string> {
-  const link = new RegExp(`/${route.replace(/[/]/g, '\\/')}#token=([A-Za-z0-9_-]+)`)
+  // The route is looked for as it is written, and no pattern is made of it: only what follows
+  // it, the token, is matched.
+  const link = `/${route}#token=`
   for (let attempt = 0; attempt < 80; attempt += 1) {
     const found = (await (
       await fetch(`${mailOrigin}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)
@@ -115,7 +117,10 @@ export async function linkToken(email: string, route: string): Promise<string> {
       const message = (await (await fetch(`${mailOrigin}/api/v1/message/${ID}`)).json()) as {
         readonly Text?: string
       }
-      const token = link.exec(message.Text ?? '')?.[1]
+      const text = message.Text ?? ''
+      const at = text.indexOf(link)
+      const token =
+        at === -1 ? undefined : /^[A-Za-z0-9_-]+/.exec(text.slice(at + link.length))?.[0]
       if (token !== undefined) return token
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
