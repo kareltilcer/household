@@ -624,7 +624,7 @@ describe('the composer, for whoever may not invite', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Go to Home' })).toHaveAttribute(
       'href',
-      inHousehold.settings(home),
+      inHousehold.home(home),
     )
     expect(server.to(`GET /households/${home}/modules`)).toHaveLength(0)
     expect(server.to(`GET /households/${home}/members`)).toHaveLength(0)

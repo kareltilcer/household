@@ -931,23 +931,3 @@ describe('the profile under the pseudo-locale', () => {
     expect(plain()).toEqual([])
   })
 })
-
-/** The profile's own files, each as it is written. */
-const sources = import.meta.glob<string>(['./Profile*.tsx', './profile.ts', '!./*.test.tsx'], {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-})
-
-describe('a change of the household’s profile', () => {
-  // Left to the query client, a change made with no connection would wait unseen and be sent
-  // when one returned: a household renamed, or its code replaced, minutes after the press (D-170).
-  it('is asked at once, every one of them', () => {
-    const writes = Object.entries(sources).flatMap(([path, source]) =>
-      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
-    )
-    // The sources were read at all: the save and the new code are among them.
-    expect(writes).toHaveLength(2)
-    expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
-  })
-})

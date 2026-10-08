@@ -10,7 +10,7 @@ import { storageKey } from '../display/modes.ts'
 import { draw } from '../test/render.tsx'
 import { Button } from './Button.tsx'
 import { Composition, Flow, TimeSeries } from './charts/Charts.tsx'
-import { Avatar, ModuleChip } from './Chip.tsx'
+import { Avatar, initialsOf, ModuleChip } from './Chip.tsx'
 import { DataTable, type Column, type Sort } from './DataTable.tsx'
 import { KeyValue } from './KeyValue.tsx'
 import { List, ListRow } from './ListRow.tsx'
@@ -141,6 +141,11 @@ describe('a module chip and an avatar', () => {
   it('say a member’s name where the avatar stands alone', () => {
     draw(<Avatar initials="PN" tone={3} name={words.petr} />)
     expect(screen.getByRole('img', { name: words.petr })).toHaveTextContent('PN')
+  })
+
+  it('take for a member’s initials the first letters of their name’s first two words', () => {
+    expect(initialsOf(' jana  tilcerová nováková ')).toBe('JT')
+    expect(initialsOf('')).toBe('')
   })
 })
 

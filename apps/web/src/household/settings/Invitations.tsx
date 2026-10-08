@@ -47,14 +47,13 @@ import { inHousehold } from '../../app/paths.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { useMe } from '../../session/SessionProvider.tsx'
 import { Banner } from '../../ui/Banner.tsx'
-import { Button } from '../../ui/Button.tsx'
+import { Button, RowAction } from '../../ui/Button.tsx'
 import { Dialog } from '../../ui/Dialog.tsx'
 import { EmptyState } from '../../ui/EmptyState.tsx'
 import { List } from '../../ui/ListRow.tsx'
 import { Skeleton } from '../../ui/Skeleton.tsx'
 import { StateFrame } from '../../ui/StateFrame.tsx'
 import { useToast } from '../../ui/Toast.tsx'
-import a11y from '../../ui/a11y.module.css'
 import { cx } from '../../ui/cx.ts'
 import { useOnline } from '../../ui/online.ts'
 import type { DataState } from '../../ui/states.ts'
@@ -110,31 +109,6 @@ interface Target {
   readonly id: string
   /** The address it was sent to, or null for a link. */
   readonly email: string | null
-}
-
-/** A row's own control, named for what it acts on and drawn as the one word. */
-function RowAction({
-  name,
-  word,
-  loading = false,
-  onPress,
-}: {
-  readonly name: string
-  readonly word: string
-  readonly loading?: boolean
-  readonly onPress: () => void
-}) {
-  return (
-    <Button
-      loading={loading}
-      onClick={() => {
-        onPress()
-      }}
-    >
-      <span className={a11y.visuallyHidden}>{name}</span>
-      <span aria-hidden="true">{word}</span>
-    </Button>
-  )
 }
 
 /** The glyph that stands beside each status's words: decoration, the words saying all of it. */
@@ -572,6 +546,6 @@ export function Invitations() {
   const household = useHousehold()
   const held = useEverHeld(useStanding().invitations)
   // Absent: no list, no reason, and nothing asked of the server.
-  if (!held) return <NotAvailable home={inHousehold.settings(household.id)} />
+  if (!held) return <NotAvailable home={inHousehold.home(household.id)} />
   return <Sent />
 }

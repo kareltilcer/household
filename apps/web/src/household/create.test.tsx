@@ -6,7 +6,8 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { deviceTimeZone } from '../api/problemText.ts'
 import { inHousehold, paths } from '../app/paths.ts'
-import { deviceCountry, ownName, timeZones } from './device.ts'
+import { ownName, timeZones } from '../i18n/names.ts'
+import { deviceCountry } from './device.ts'
 import {
   countries,
   createServer,
@@ -26,13 +27,6 @@ afterEach(() => {
 const title = 'Set up your household'
 const unreachable =
   'We couldn’t reach Household. Nothing you typed was lost. Check your connection and try again.'
-
-/** The screens this file holds, each as it is written. */
-const sources = import.meta.glob<string>('./Create.tsx', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-})
 
 /** The languages this device says its member reads, first the one they prefer. */
 function deviceReads(...languages: string[]): void {
@@ -575,14 +569,5 @@ describe('the form’s states', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     // Nothing waited for the connection: a household made now would be nobody's press.
     expect(server.to('POST /households')).toHaveLength(1)
-  })
-
-  // A household made minutes after the press, with nobody at the screen, is not what was asked
-  // for (D-164): the write is held to being asked at once, as the account's are (api.test.ts).
-  it('makes its one write a write that is asked at once', () => {
-    const writes = Object.values(sources).flatMap((source) =>
-      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => first),
-    )
-    expect(writes).toEqual(['...askedNow,'])
   })
 })

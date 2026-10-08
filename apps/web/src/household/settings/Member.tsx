@@ -20,7 +20,7 @@
 // it. *Populated* is the page. *Offline* is the page as this browser kept it, with every write
 // answered at once that the server could not be reached. *Absent* is an address that names no
 // member of the household, and *withdrawn* a member removed while the page stood open, whose
-// next read finds nobody: both draw the neutral *not available*, with the list of members as its
+// next read finds nobody: both draw the neutral *not available*, with the household's home as its
 // way out, and neither says which it was. *Read-only* is the same page without its controls,
 // which the frame of the settings says the reason for (Page.tsx). *Empty* has nothing to be on
 // one member's page. *Pending* and *syncing* are a write under way, its control busy;
@@ -77,7 +77,7 @@ function MemberPage({ userId }: { readonly userId: string }) {
   // Nobody of the household is at this address, or is any more. It opens nothing, as any other
   // address that does (F-17): whatever this browser kept of them is not drawn in its place.
   if (problemIn(read.error)?.status === 404) {
-    return <NotAvailable home={inHousehold.members(household.id)} />
+    return <NotAvailable home={inHousehold.home(household.id)} />
   }
   const subject = read.data === undefined ? undefined : subjectOf(read.data, userId, me.id)
   // Until the member is read the page is the members', which is where it stands.

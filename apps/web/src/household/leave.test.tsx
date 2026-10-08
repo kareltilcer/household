@@ -48,13 +48,6 @@ const behind =
 const two = 'Two things have to be settled first, and here they both are.'
 const one = 'One thing has to be settled first.'
 
-/** The screens this file holds, each as it is written. */
-const sources = import.meta.glob<string>('./Leave.tsx', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-})
-
 /** The household's members with `changes` made to the ones it names. */
 function membersWith(changes: Readonly<Record<string, Partial<Membership>>>): Membership[] {
   return members.map((each) => ({ ...each, ...changes[each.user_id ?? ''] }))
@@ -468,15 +461,6 @@ describe('leaving, in the screen’s states', () => {
     // Nothing waited for the connection: a leaving sent now would be nobody's press.
     expect(server.to(leaving)).toHaveLength(1)
     expect(router.state.location.pathname).toBe(inHousehold.leave(home))
-  })
-
-  // A membership ended minutes after the press, with nobody at the screen, is not what was
-  // asked for (D-164): the write is held to being asked at once (api.test.ts).
-  it('makes its one write a write that is asked at once', () => {
-    const writes = Object.values(sources).flatMap((source) =>
-      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => first),
-    )
-    expect(writes).toEqual(['...askedNow,'])
   })
 })
 

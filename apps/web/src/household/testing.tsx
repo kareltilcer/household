@@ -198,8 +198,8 @@ export function invitation(more: Partial<SentInvitation> = {}): SentInvitation {
     grants: defaultsFor('member'),
     url: null,
     invited_by: { user_id: jana.id, label: jana.display_name, is_former_member: false },
-    created_at: '2026-09-09T18:00:00Z',
-    expires_at: '2026-09-23T18:00:00Z',
+    created_at: '2099-01-01T10:00:00Z',
+    expires_at: '2099-01-15T10:00:00Z',
     status: 'pending',
     max_uses: 1,
     uses: 0,
@@ -310,7 +310,6 @@ export function createServer(me: Me = jana): HouseholdServer {
     Response.json({ items: moduleStates(server.off, server.household.my_grants) }),
   )
   server.on('GET /reference/countries', () => Response.json({ version: 1, items: countries }))
-  server.on('GET /me/invitations', () => Response.json({ items: [] }))
   return server
 }
 

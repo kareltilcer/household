@@ -29,7 +29,6 @@
 // said where it was asked.
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { initialsOf } from '../../account/Account.tsx'
 import { readState } from '../../account/common.ts'
 import settings from '../../account/Settings.module.css'
 import { inHousehold } from '../../app/paths.ts'
@@ -37,7 +36,7 @@ import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { useMe } from '../../session/SessionProvider.tsx'
 import { Banner } from '../../ui/Banner.tsx'
 import { Button } from '../../ui/Button.tsx'
-import { Avatar, type MemberTone } from '../../ui/Chip.tsx'
+import { Portrait, type MemberTone } from '../../ui/Chip.tsx'
 import { cx } from '../../ui/cx.ts'
 import { EmptyState } from '../../ui/EmptyState.tsx'
 import { List } from '../../ui/ListRow.tsx'
@@ -59,27 +58,6 @@ const tones: readonly MemberTone[] = [1, 2, 3, 4, 5, 6, 7, 8]
 /** A member's colour in the household: theirs by their place in its list, and around again. */
 function toneOf(place: number): MemberTone {
   return tones[place % tones.length] ?? 1
-}
-
-function Picture({ member, tone }: { readonly member: Membership; readonly tone: MemberTone }) {
-  // A picture's link is good for minutes (D-9), and the list may be read from what this browser
-  // kept: a link that no longer loads gives way to the initials, and is no broken image.
-  const [failed, setFailed] = useState<string | null>(null)
-  const address = member.avatar_url ?? null
-  if (address !== null && failed !== address) {
-    return (
-      <img
-        className={styles.picture}
-        src={address}
-        // Decoration: the member's name is written beside it.
-        alt=""
-        onError={() => {
-          setFailed(address)
-        }}
-      />
-    )
-  }
-  return <Avatar initials={initialsOf(member.display_name ?? '')} tone={tone} />
 }
 
 function Row({ member, tone }: { readonly member: Membership; readonly tone: MemberTone }) {
@@ -105,7 +83,12 @@ function Row({ member, tone }: { readonly member: Membership; readonly tone: Mem
           })
   return (
     <li className={styles.row}>
-      <Picture member={member} tone={tone} />
+      <Portrait
+        address={member.avatar_url ?? null}
+        name={name}
+        tone={tone}
+        className={styles.picture}
+      />
       <div className={styles.text}>
         <Link className={cx(settings.link, settings.strong)} to={page}>
           {own ? t('household.members.you', { name }) : name}

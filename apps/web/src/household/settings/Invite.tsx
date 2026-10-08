@@ -618,6 +618,6 @@ export function Invite() {
   const household = useHousehold()
   const held = useEverHeld(useStanding().invitations)
   // Absent: no form, no reason, and nothing asked of the server.
-  if (!held) return <NotAvailable home={inHousehold.settings(household.id)} />
+  if (!held) return <NotAvailable home={inHousehold.home(household.id)} />
   return <Composer />
 }

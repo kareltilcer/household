@@ -5,14 +5,14 @@
 // (PRD 04 §3): the control that would choose one is then absent, and one that is there is still
 // removed.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import styles from '../../account/Settings.module.css'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../../api/problem.ts'
 import { askedNow } from '../../api/query.ts'
 import { useTranslate } from '../../i18n/I18nProvider.tsx'
 import { Button } from '../../ui/Button.tsx'
-import { Avatar } from '../../ui/Chip.tsx'
+import { Portrait } from '../../ui/Chip.tsx'
 import { cx } from '../../ui/cx.ts'
 import { useToast } from '../../ui/Toast.tsx'
 import { useReread, type Membership } from '../data.ts'
@@ -21,36 +21,6 @@ import { memberKey, type Refusals, type Subject } from './member.ts'
 
 /** The images the server makes a picture of (`putChildrenByUserIdAvatar`). */
 const pictures = 'image/jpeg,image/png,image/gif,image/webp'
-
-/** The first letters of a name's first two words: what stands where a profile has no picture. */
-function initialsOf(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => (Array.from(word)[0] ?? '').toLocaleUpperCase())
-    .join('')
-}
-
-function Portrait({ name, address }: { readonly name: string; readonly address: string | null }) {
-  // A picture's link is good for minutes (D-9), and the member may be read from what this
-  // browser kept: a link that no longer loads gives way to the initials, and is no broken image.
-  const [failed, setFailed] = useState<string | null>(null)
-  if (address !== null && failed !== address) {
-    return (
-      <img
-        className={styles.portrait}
-        src={address}
-        // Decoration: the profile's name is the page's own title.
-        alt=""
-        onError={() => {
-          setFailed(address)
-        }}
-      />
-    )
-  }
-  return <Avatar initials={initialsOf(name)} tone={1} />
-}
 
 export function ChildPicture({
   subject,
@@ -131,7 +101,7 @@ export function ChildPicture({
     <div ref={group} tabIndex={-1} className={cx(styles.group, styles.view)}>
       <p className={styles.strong}>{t('household.child.picture.label')}</p>
       <div className={styles.picture}>
-        <Portrait name={name} address={address} />
+        <Portrait address={address} name={name} className={styles.portrait} />
         <div className={styles.actions}>
           {uploads ? (
             <>

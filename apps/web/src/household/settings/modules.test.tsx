@@ -701,23 +701,3 @@ describe('the modules under the pseudo-locale', () => {
     expect(plain()).toBe('')
   })
 })
-
-/** The screen's own files, each as it is written. */
-const sources = import.meta.glob<string>(['./Modules*.tsx', '!./*.test.tsx'], {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-})
-
-describe('a module turned on or off', () => {
-  // Left to the query client, a change made with no connection would wait unseen and be sent
-  // when one returned: a module gone from everybody's app minutes after the press (D-170).
-  it('is asked at once', () => {
-    const writes = Object.entries(sources).flatMap(([path, source]) =>
-      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
-    )
-    // The source was read at all: the one write of the screen is in it.
-    expect(writes).toHaveLength(1)
-    expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
-  })
-})

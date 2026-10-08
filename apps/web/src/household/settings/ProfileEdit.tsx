@@ -24,6 +24,7 @@ import { useProblemText } from '../../api/problemText.ts'
 import { askedNow } from '../../api/query.ts'
 import { fieldCodes, useRefusedField } from '../../auth/fields.tsx'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
+import { dayName, ownName, timeZones, weekdays } from '../../i18n/names.ts'
 import { Banner } from '../../ui/Banner.tsx'
 import { Button } from '../../ui/Button.tsx'
 import { Sheet } from '../../ui/Dialog.tsx'
@@ -34,7 +35,7 @@ import { useLocalized, useReread, type Country } from '../data.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
 import { householdKey, type Household } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
-import { dayName, ownName, useStandingRefusal, weekdays, type AskedProps } from './profile.ts'
+import { useStandingRefusal, type AskedProps } from './profile.ts'
 
 type HouseholdUpdate = components['schemas']['HouseholdUpdate']
 type UnitSystem = components['schemas']['UnitSystem']
@@ -143,11 +144,8 @@ export function EditHousehold({ onClose, onEnded }: AskedProps) {
   const units = edits.units ?? household.units
   const firstDay = edits.firstDay ?? household.first_day_of_week
 
-  const zones = useMemo(() => {
-    const known = Intl.supportedValuesOf('timeZone')
-    // The household's own stays in the list though this browser does not name it.
-    return known.includes(household.timezone) ? known : [household.timezone, ...known]
-  }, [household.timezone])
+  // The household's own stays in the list though this browser does not name it.
+  const zones = useMemo(() => timeZones(household.timezone), [household.timezone])
   const languages = useMemo(
     () => locales.map((locale) => ({ value: locale, label: ownName(locale) })),
     [],

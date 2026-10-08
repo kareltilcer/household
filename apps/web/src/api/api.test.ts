@@ -348,9 +348,17 @@ describe('the cache kept in this browser', () => {
   })
 })
 
-/** The screens before sign-in and those of a member's own account, each file as it is written. */
+/**
+ * The screens before sign-in, those of a member's own account and a household's own, each file
+ * as it is written.
+ */
 const screens = import.meta.glob<string>(
-  ['../auth/*.{ts,tsx}', '../account/*.{ts,tsx}', '!../**/*.test.{ts,tsx}'],
+  [
+    '../auth/*.{ts,tsx}',
+    '../account/*.{ts,tsx}',
+    '../household/**/*.{ts,tsx}',
+    '!../**/*.test.{ts,tsx}',
+  ],
   { query: '?raw', import: 'default', eager: true },
 )
 
@@ -373,12 +381,14 @@ describe('a write that must not wait', () => {
 
   // A sign-in completed, a password set or an account deleted when a connection returns,
   // minutes after the press and with nobody at the screen, is not what was asked for (D-164).
-  it('is every write of the screens before sign-in and of a member’s own account', () => {
+  // Nor is a household made or left, a member removed, a level changed, an invitation sent or a
+  // module turned off: household settings is changed on the server or not at all (D-170).
+  it('is every write of the screens before sign-in, of a member’s own account and of a household’s own screens', () => {
     const writes = Object.entries(screens).flatMap(([path, source]) =>
       [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
     )
-    // The sources were read at all: every screen of the two that writes is among them.
-    expect(writes.length).toBeGreaterThan(20)
+    // The sources were read at all: every screen of the three that writes is among them.
+    expect(writes.length).toBeGreaterThan(40)
     expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
   })
 })

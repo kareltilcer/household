@@ -1,7 +1,7 @@
 // What the household's profile (C-49) and its modules (C-51) share that draws nothing: how a
 // refusal that is about where the member stands is said, the banner a refusal of no field's is
 // said in, where the focus goes once the controls that held it have left, and how the profile
-// names what no catalog holds, a language, a day of the week and the household's code.
+// draws what no catalog holds, a word `Intl` gives (i18n/names.ts) and the household's code.
 //
 // Every change of the two screens is an owner's, in a household that takes writes, and is asked
 // of the server at once (D-170): nothing waits on the device. So a refusal says one of two
@@ -10,7 +10,7 @@
 // are an owner no longer, the household takes no writes now, or what was to be changed is not
 // there. That is said on the page, the household is read again, and the controls leave with
 // what it then says (absence, not disabling), the focus they held among them.
-import { pseudoLocale, pseudolocalize, type Locale } from '@household/i18n/lazy'
+import { pseudoLocale, pseudolocalize } from '@household/i18n/lazy'
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { problemIn } from '../../api/problem.ts'
 import { useI18n, useTranslate } from '../../i18n/I18nProvider.tsx'
@@ -114,25 +114,6 @@ export function useFocusKept(changes: boolean, open: unknown): RefObject<HTMLDiv
 export function useGiven(): (text: string) => string {
   const { locale } = useI18n()
   return useCallback((text) => (locale === pseudoLocale ? pseudolocalize(text) : text), [locale])
-}
-
-/** A language's own name for itself, as `Intl` has it, with a capital as a list of names has. */
-export function ownName(locale: Locale): string {
-  const name = new Intl.DisplayNames([locale], { type: 'language' }).of(locale) ?? locale
-  return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1)
-}
-
-/** A Sunday, at noon in UTC: the day the days of the week are counted from, 0 for Sunday. */
-const aSunday = Date.UTC(2026, 0, 4, 12)
-
-/** The days of the week as the contract numbers them, Monday first as a list of them reads. */
-export const weekdays = [1, 2, 3, 4, 5, 6, 0] as const
-
-/** The name of the day the contract numbers `day`, 0 for Sunday to 6 for Saturday, in `locale`. */
-export function dayName(locale: string, day: number): string {
-  return new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(
-    aSunday + day * 24 * 60 * 60 * 1000,
-  )
 }
 
 /**

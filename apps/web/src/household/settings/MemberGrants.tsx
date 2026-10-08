@@ -61,8 +61,6 @@ function useOff(household: string): ReadonlySet<ModuleKey> {
 interface Asked {
   /** The changed modules alone, each with its new level. */
   readonly grants: Readonly<Record<string, AccessLevel>>
-  /** Whether any of them is a lowering, which its member is told of. */
-  readonly lowered: boolean
 }
 
 function GrantsForm({
@@ -115,11 +113,7 @@ function GrantsForm({
           Object.entries(last).filter(([module, level]) => asked.grants[module] !== level),
         ),
       )
-      toast({
-        message: asked.lowered
-          ? t('household.member.holds.saved_told', { name })
-          : t('household.member.holds.saved', { name }),
-      })
+      toast({ message: t('household.member.holds.saved', { name }) })
       void reread()
     },
     onError: (error) => {
@@ -159,7 +153,6 @@ function GrantsForm({
         refusals.clear()
         save.mutate({
           grants: Object.fromEntries(changed.map((module) => [module, levels[module]])),
-          lowered: change.lowered.length > 0,
         })
       }}
     >
@@ -199,10 +192,7 @@ function GrantsForm({
               ) : null}
               {change.lowered.length > 0 ? (
                 <li>
-                  {t('household.member.holds.change.lowered', {
-                    count: change.lowered.length,
-                    name,
-                  })}
+                  {t('household.member.holds.change.lowered', { count: change.lowered.length })}
                 </li>
               ) : null}
               {change.off.length > 0 ? (
@@ -214,6 +204,8 @@ function GrantsForm({
                   })}
                 </li>
               ) : null}
+              {/* A member is told of any change to what they hold, a raise among them (D-78). */}
+              <li>{t('household.member.holds.change.told', { name })}</li>
             </ul>
           </Banner>
         </div>

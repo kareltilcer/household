@@ -576,23 +576,3 @@ describe('a child profile the server refuses', () => {
     expect(screen.queryByText(madeEma)).not.toBeInTheDocument()
   })
 })
-
-/** The members screen and its sheet, each file as it is written. */
-const sources = import.meta.glob<string>(['./ChildCreate.tsx', './Members.tsx'], {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-})
-
-describe('a write of the list of members', () => {
-  // Who is in a household is changed on the server or not at all (PRD 17, Sync; D-80): a
-  // profile made when a connection returns, minutes after the press, is not what was asked for.
-  it('is asked at once, and never held for a connection', () => {
-    expect(Object.keys(sources)).toHaveLength(2)
-    const writes = Object.entries(sources).flatMap(([path, source]) =>
-      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
-    )
-    expect(writes.length).toBeGreaterThan(0)
-    expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
-  })
-})

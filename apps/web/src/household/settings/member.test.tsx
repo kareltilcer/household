@@ -89,19 +89,6 @@ function terms(): (string | null)[] {
 
 const row = (module: string) => screen.getByRole('combobox', { name: module })
 
-/** The files of one member's page, each as it is written: the list and the sheet that makes a profile are another's. */
-const sources = import.meta.glob<string>(
-  [
-    './Member*.tsx',
-    './member*.ts',
-    './Child*.tsx',
-    '!./Members.tsx',
-    '!./ChildCreate.tsx',
-    '!./*.test.{ts,tsx}',
-  ],
-  { query: '?raw', import: 'default', eager: true },
-)
-
 /** A second child profile, so that a child profile has another's page to read. */
 const ema = '0190a000-0000-7000-8000-000000000006'
 
@@ -155,19 +142,6 @@ function pageOf(subject: Subject, me: string): string {
 }
 
 const buttons = () => screen.queryAllByRole('button').map((button) => button.textContent)
-
-describe('a write of a member’s page', () => {
-  // A level changed, a member removed or a PIN set when a connection returns, minutes after the
-  // press and with nobody at the screen, is not what was asked for (D-80, D-164).
-  it('is asked at once, every one of them', () => {
-    const writes = Object.entries(sources).flatMap(([path, source]) =>
-      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
-    )
-    // The sources were read at all: every part of the page that writes is among them.
-    expect(writes.length).toBeGreaterThanOrEqual(9)
-    expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
-  })
-})
 
 describe('what a change of levels comes to', () => {
   it('tells a raise from a lowering, and names what is lowered to nothing', () => {
@@ -270,7 +244,7 @@ describe('one member’s page', () => {
     // The neutral screen: it names nobody, gives no cause and offers no retry.
     expect(screen.getAllByRole('heading')).toHaveLength(1)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    expect(screen.getByRole('link')).toHaveAttribute('href', inHousehold.members(home))
+    expect(screen.getByRole('link')).toHaveAttribute('href', inHousehold.home(home))
   })
 
   it('opens nothing at an address that is no id at all', async () => {
@@ -526,16 +500,18 @@ describe('changing what a member holds', () => {
     )
     const save = screen.getByRole('button', { name: 'Save changes' })
     // The save's own description: read with the button that would do it.
-    expect(save).toHaveAccessibleDescription('1 module is raised.')
+    expect(save).toHaveAccessibleDescription(
+      '1 module is raised. Petr Tilcer is told of the change.',
+    )
     expect(screen.getByRole('button', { name: 'Put back' })).toBeInTheDocument()
   })
 
-  it('says of a lowering that its member is told as it happens', async () => {
+  it('says of any change that its member is told of it', async () => {
     const { user } = await page(petr)
     await user.selectOptions(row('Shopping'), 'Can see')
     await user.selectOptions(row('Finance'), 'Can see')
     expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
-      '1 module is raised. 1 module is lowered. Petr Tilcer is told as it happens.',
+      '1 module is raised. 1 module is lowered. Petr Tilcer is told of the change.',
     )
   })
 
@@ -543,17 +519,17 @@ describe('changing what a member holds', () => {
     const { user } = await page(petr)
     await user.selectOptions(row('Utilities'), 'Off')
     expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
-      '1 module is lowered. Petr Tilcer is told as it happens. Utilities leaves Petr Tilcer’s app entirely, and their devices drop their copy of it. Nothing they added is deleted.',
+      '1 module is lowered. Utilities leaves Petr Tilcer’s app entirely, and their devices drop their copy of it. Nothing they added is deleted. Petr Tilcer is told of the change.',
     )
     // One summary for every row, and not a sentence a row.
     await user.selectOptions(row('Shopping'), 'Off')
     await user.selectOptions(row('Dashboard'), 'Can add and edit')
     expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
-      '1 module is raised. 2 modules are lowered. Petr Tilcer is told as it happens. Shopping and Utilities leave Petr Tilcer’s app entirely, and their devices drop their copy of them. Nothing they added is deleted.',
+      '1 module is raised. 2 modules are lowered. Shopping and Utilities leave Petr Tilcer’s app entirely, and their devices drop their copy of them. Nothing they added is deleted. Petr Tilcer is told of the change.',
     )
   })
 
-  it('sends the changed modules alone against the version it read, and says a lowering is told', async () => {
+  it('sends the changed modules alone against the version it read, and says its member is told', async () => {
     const server = createServer()
     taking(server, petr)
     const { user, name } = await page(petr, server)
@@ -594,13 +570,16 @@ describe('changing what a member holds', () => {
     // The next change goes against the version the save answered.
     await user.selectOptions(row('Chat'), 'Can see')
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
-    // A raise alone is saved, and nothing is said of telling.
+    // A raise alone is saved, and its member is told of that too.
     await waitFor(() => {
       expect(server.to(`PATCH ${at}/members/${petr}`)).toHaveLength(2)
     })
     expect(server.to(`PATCH ${at}/members/${petr}`)[1]?.headers.get('If-Match')).toBe('"2"')
     expect(await server.body(`PATCH ${at}/members/${petr}`)).toEqual({ grants: { chat: 'view' } })
-    expect(await screen.findAllByText('Petr Tilcer’s access is saved.')).toHaveLength(1)
+    // Saved: nothing is left to save.
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+    })
   })
 
   it('keeps a row chosen while a save was on its way as a change still to save', async () => {
@@ -624,14 +603,16 @@ describe('changing what a member holds', () => {
     })
     await user.selectOptions(row('Chat'), 'Can see')
     answer()
-    expect(await screen.findByText('Petr Tilcer’s access is saved.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Petr Tilcer’s access is saved. They are told.'),
+    ).toBeInTheDocument()
     // What was sent is saved; what was chosen since was not sent, and is not dropped.
     expect(row('Finance')).toHaveAccessibleDescription(
       'Everything in it can be read, and nothing changed.',
     )
     expect(row('Chat')).toHaveValue('view')
     expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
-      '1 module is raised.',
+      '1 module is raised. Petr Tilcer is told of the change.',
     )
   })
 

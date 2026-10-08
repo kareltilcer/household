@@ -38,10 +38,11 @@ import { useHouseholds, useRoleWord } from '../household/households.ts'
 import { RowLink } from '../household/RowLink.tsx'
 import { useWaiting, WaitingList } from '../household/Waiting.tsx'
 import { useFormat, useI18n, useTranslate } from '../i18n/I18nProvider.tsx'
+import { dayName, ownName, timeZones, weekdays } from '../i18n/names.ts'
 import { meKey, useMe, type Me } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
-import { Avatar } from '../ui/Chip.tsx'
+import { Portrait } from '../ui/Chip.tsx'
 import { EmptyState } from '../ui/EmptyState.tsx'
 import { Select, TextField } from '../ui/Field.tsx'
 import { KeyValue } from '../ui/KeyValue.tsx'
@@ -155,37 +156,6 @@ function Email({ email, verified }: { readonly email: string; readonly verified:
   )
 }
 
-/** The first letters of a name's first two words: what stands where a member has no picture. */
-export function initialsOf(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => (Array.from(word)[0] ?? '').toLocaleUpperCase())
-    .join('')
-}
-
-function Portrait({ me }: { readonly me: Me }) {
-  // A picture's link is good for minutes (D-9), and the account may be read from what this
-  // browser kept: a link that no longer loads gives way to the initials, and is no broken image.
-  const [failed, setFailed] = useState<string | null>(null)
-  const address = me.avatar_url ?? null
-  if (address !== null && failed !== address) {
-    return (
-      <img
-        className={styles.portrait}
-        src={address}
-        // Decoration: the member's name is written beside it.
-        alt=""
-        onError={() => {
-          setFailed(address)
-        }}
-      />
-    )
-  }
-  return <Avatar initials={initialsOf(me.display_name)} tone={1} />
-}
-
 /** The images the server makes a picture of (`putMeAvatar`). */
 const pictures = 'image/jpeg,image/png,image/gif,image/webp'
 
@@ -234,7 +204,11 @@ function Picture({ me }: { readonly me: Me }) {
     <div className={styles.group}>
       <p className={styles.strong}>{t('account.profile.picture.label')}</p>
       <div className={styles.picture}>
-        <Portrait me={me} />
+        <Portrait
+          address={me.avatar_url ?? null}
+          name={me.display_name}
+          className={styles.portrait}
+        />
         <div className={styles.actions}>
           <input
             ref={chooser}
@@ -291,12 +265,6 @@ function Picture({ me }: { readonly me: Me }) {
       )}
     </div>
   )
-}
-
-/** A language's own name for itself, as `Intl` has it, with a capital as a list of names has. */
-function ownName(locale: Locale): string {
-  const name = new Intl.DisplayNames([locale], { type: 'language' }).of(locale) ?? locale
-  return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1)
 }
 
 function Language({ me }: { readonly me: Me }) {
@@ -436,12 +404,6 @@ function Appearance() {
   )
 }
 
-/** A Sunday, at noon in UTC: the day the days of the week are counted from, 0 for Sunday. */
-const aSunday = Date.UTC(2026, 0, 4, 12)
-
-/** The days of the week as the contract numbers them, Monday first as a list of them reads. */
-const weekdays = [1, 2, 3, 4, 5, 6, 0] as const
-
 function DatesAndTimes({ me }: { readonly me: Me }) {
   const t = useTranslate()
   const format = useFormat()
@@ -451,18 +413,12 @@ function DatesAndTimes({ me }: { readonly me: Me }) {
   // A choice the server will not take is no failure of the server's: it is said as a refusal.
   const why = (error: unknown) => (isRefusedAsSent(error) ? t('account.refused') : say(error))
   const own = me.timezone ?? null
-  const zones = useMemo(() => {
-    const known = Intl.supportedValuesOf('timeZone')
-    // The account's own stays in the list though this browser does not name it.
-    return own === null || known.includes(own) ? known : [own, ...known]
-  }, [own])
-  const days = useMemo(() => {
-    const named = new Intl.DateTimeFormat(format.locale, { weekday: 'long', timeZone: 'UTC' })
-    return weekdays.map((day) => ({
-      value: String(day),
-      label: named.format(aSunday + day * 24 * 60 * 60 * 1000),
-    }))
-  }, [format.locale])
+  // The account's own stays in the list though this browser does not name it.
+  const zones = useMemo(() => timeZones(own), [own])
+  const days = useMemo(
+    () => weekdays.map((day) => ({ value: String(day), label: dayName(format.locale, day) })),
+    [format.locale],
+  )
   // While a choice is being saved the control says what was chosen; refused, it is put back.
   const zone = saveZone.isPending ? (saveZone.variables.timezone ?? null) : own
   const firstDay = saveDay.isPending

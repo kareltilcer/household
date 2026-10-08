@@ -6,7 +6,6 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { storageKey } from '../display/modes.ts'
 import { dropCatalogs, fetchCatalog, holdCatalog } from '../i18n/catalogs.ts'
-import { initialsOf } from './Account.tsx'
 import {
   chata,
   createServer,
@@ -201,8 +200,6 @@ describe('the account screen', () => {
     if (picture === null) throw new Error('no picture')
     fireEvent.error(picture)
     expect(container.querySelector('img')).not.toBeInTheDocument()
-    expect(initialsOf(' jana  tilcerová nováková ')).toBe('JT')
-    expect(initialsOf('')).toBe('')
   })
 
   it('leaves the focus where its member took it while a picture was being removed', async () => {
@@ -486,7 +483,6 @@ describe('the account screen', () => {
   it('draws nothing of the invitations while none waits, or while they cannot be read', async () => {
     const server = createServer()
     server.on('GET /households', () => Response.json({ items: [tilcerovi] }))
-    server.on('GET /me/invitations', () => Response.json({ items: [] }))
     const { unmount } = await account(server)
     await screen.findByRole('list', { name: 'Households' })
     await waitFor(() => {

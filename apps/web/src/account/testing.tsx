@@ -118,6 +118,7 @@ export function createServer(me: Me = jana): Server {
   }
   server.on('GET /me', () => Response.json(server.me))
   server.on('GET /households', () => Response.json({ items: [] }))
+  server.on('GET /me/invitations', () => Response.json({ items: [] }))
   server.on('GET /auth/oauth', () => Response.json({ providers: [] }))
   return server
 }
