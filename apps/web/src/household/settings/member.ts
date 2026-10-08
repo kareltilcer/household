@@ -8,6 +8,7 @@
 import type { ApiClient } from '@household/api'
 import { queryOptions, useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { refocus } from '../../account/common.ts'
 import { problemIn, unwrap } from '../../api/problem.ts'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { useProblemText } from '../../api/problemText.ts'
@@ -17,6 +18,13 @@ import { useReread, type Membership } from '../data.ts'
 import { changedModules, isLowered, settingsModule, type Levels } from '../grants.ts'
 import { membersKey, type HouseholdRole, type ModuleKey } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
+import { isStandingRefusal, useStandingRefusal } from './profile.ts'
+
+/**
+ * A child profile's PIN as the contract takes one (`postChildren`, `putChildrenByUserIdPin`):
+ * four to six digits, and nothing else.
+ */
+export const pinShape = /^[0-9]{4,6}$/
 
 /** One member of a household, under the household's members. */
 export function memberKey(household: string, user: string) {
@@ -24,8 +32,9 @@ export function memberKey(household: string, user: string) {
 }
 
 /**
- * The member `user` names, as the caller reads them. An id that is no member's, and one that is
- * no id at all, answer `404` alike.
+ * The member `user` names, as the caller reads them. An id that is no member's answers `404`;
+ * one that is no id at all is refused before anybody is looked for (`422`), so the page asks
+ * for none (Member.tsx).
  */
 export function memberQuery(api: ApiClient, household: string, user: string) {
   return queryOptions({
@@ -105,15 +114,14 @@ export function grantChange(from: Levels, next: Levels): GrantChange {
 }
 
 /**
- * Whether `error` says the page is no longer how things stand: somebody changed the member
- * meanwhile, the member is gone, or the reader is no longer an owner. What the page shows is
- * then read again.
+ * Whether `error` says the page is no longer how things stand: the reader is no longer an owner,
+ * the household takes no writes now or the member is gone, as on every screen of the settings
+ * (profile.ts), or somebody changed the member meanwhile. What the page shows is then read again.
  */
 export function isStale(error: unknown): boolean {
+  if (isStandingRefusal(error)) return true
   switch (problemIn(error)?.code) {
     case 'version_conflict':
-    case 'forbidden':
-    case 'not_found':
     case 'last_owner':
     case 'billing_payer':
       return true
@@ -149,6 +157,7 @@ export function useRefusals(household: string): Refusals {
   const t = useTranslate()
   const toast = useToast()
   const say = useProblemText(useTimeZone())
+  const standing = useStandingRefusal()
   const reread = useReread(household)
   const [refusal, setRefusal] = useState<Refusal>()
   const refuse = useCallback(
@@ -156,29 +165,19 @@ export function useRefusals(household: string): Refusals {
       const said = (text: string) => {
         setRefusal((last) => ({ key: (last?.key ?? 0) + 1, text }))
       }
-      switch (problemIn(error)?.code) {
-        case 'not_found':
-          setRefusal(undefined)
-          toast({ message: t('household.settings.refused.gone') })
-          break
-        case 'version_conflict':
-          said(t('household.settings.refused.conflict'))
-          break
-        case 'forbidden':
-          said(t('household.settings.refused.not_owner'))
-          break
-        case 'entitlement_read_only':
-        case 'entitlement_restricted':
-          said(own ?? t('household.settings.refused.read_only'))
-          break
-        default:
-          said(own ?? say(error))
-      }
+      const code = problemIn(error)?.code
+      if (code === 'not_found') {
+        setRefusal(undefined)
+        toast({ message: standing(error) ?? say(error) })
+      } else if (code === 'version_conflict') said(t('household.settings.refused.conflict'))
+      // In the part's own words where it has them for this refusal, then the sentence for
+      // where the member stands, then what every screen says of a request that failed.
+      else said(own ?? standing(error) ?? say(error))
       const stale = isStale(error)
       if (stale) void reread()
       return stale
     },
-    [t, toast, say, reread],
+    [t, toast, say, standing, reread],
   )
   const clear = useCallback(() => {
     setRefusal(undefined)
@@ -195,10 +194,7 @@ export function useRefusals(household: string): Refusals {
 export function useFocusHandedOn(held: boolean, target: RefObject<HTMLElement | null>): void {
   const was = useRef(held)
   useEffect(() => {
-    if (was.current && !held) {
-      const focused = document.activeElement
-      if (focused === null || focused === document.body) target.current?.focus()
-    }
+    if (was.current && !held) refocus(target.current)
     was.current = held
   }, [held, target])
 }

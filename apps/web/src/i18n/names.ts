@@ -15,11 +15,17 @@ const aSunday = Date.UTC(2026, 0, 4, 12)
 /** The days of the week as the contract numbers them, Monday first as a list of them reads. */
 export const weekdays = [1, 2, 3, 4, 5, 6, 0] as const
 
+/** What names a day of the week in each language asked for: made once, as a list of seven asks. */
+const dayNamers = new Map<string, Intl.DateTimeFormat>()
+
 /** The name of the day the contract numbers `day`, 0 for Sunday to 6 for Saturday, in `locale`. */
 export function dayName(locale: string, day: number): string {
-  return new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(
-    aSunday + day * 24 * 60 * 60 * 1000,
-  )
+  let named = dayNamers.get(locale)
+  if (named === undefined) {
+    named = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' })
+    dayNamers.set(locale, named)
+  }
+  return named.format(aSunday + day * 24 * 60 * 60 * 1000)
 }
 
 /**

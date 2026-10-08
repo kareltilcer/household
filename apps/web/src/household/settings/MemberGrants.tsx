@@ -28,7 +28,7 @@ import { Banner } from '../../ui/Banner.tsx'
 import { Button } from '../../ui/Button.tsx'
 import { cx } from '../../ui/cx.ts'
 import { useToast } from '../../ui/Toast.tsx'
-import { useModuleStates, useReread } from '../data.ts'
+import { useOff, useReread } from '../data.ts'
 import { GrantMatrix, GrantSummary } from '../GrantMatrix.tsx'
 import { levelsOf, matrixOrder, type Levels } from '../grants.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
@@ -44,20 +44,6 @@ import {
 import own from './Member.module.css'
 import { Refused } from './MemberRefused.tsx'
 import { Section, useStanding } from './Page.tsx'
-
-/** The modules the household has off, whatever anybody holds on them. */
-function useOff(household: string): ReadonlySet<ModuleKey> {
-  const states = useModuleStates(household).data
-  return useMemo(
-    () =>
-      new Set(
-        (states ?? []).flatMap((state) =>
-          state.enabled === false && state.module !== undefined ? [state.module] : [],
-        ),
-      ),
-    [states],
-  )
-}
 
 interface Asked {
   /** The changed modules alone, each with its new level. */
@@ -177,7 +163,14 @@ function GrantsForm({
           onChange={(module, level) => {
             save.reset()
             refusals.clear()
-            setEdits((last) => ({ ...last, [module]: level }))
+            // A row put back to what is saved is no change of this owner's any more. Kept as
+            // one, it would be a change again as soon as somebody else changed that row, and be
+            // sent back over theirs with the next save.
+            setEdits((last) =>
+              level === saved[module]
+                ? Object.fromEntries(Object.entries(last).filter(([each]) => each !== module))
+                : { ...last, [module]: level },
+            )
           }}
         />
       </div>

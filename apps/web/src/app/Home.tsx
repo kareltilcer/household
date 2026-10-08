@@ -39,6 +39,11 @@ function MemberHome({ me }: { readonly me: Me }) {
   const open =
     opening.find((household) => household.id === last) ?? opening[0] ?? households.data[0]
   if (open === undefined) {
+    // In none, as this browser last read it, which may be a day old: somebody who has joined
+    // one since, by an invitation answered elsewhere, is not sent to make one. The list is
+    // being read again, and where the app opens waits for it. With no connection nothing is
+    // being read, and what was kept is what there is to go by.
+    if (households.isFetching) return <Waiting />
     const to = me.is_child === true ? paths.account.path : paths.householdNew.path
     return <Navigate to={to} replace />
   }

@@ -34,7 +34,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { readState, useNoWithdrawal } from '../account/common.ts'
+import { readState, refocus, useNoWithdrawal } from '../account/common.ts'
 import { Section, SettingsPage } from '../account/Page.tsx'
 import styles from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
@@ -161,9 +161,7 @@ function Leaving({ me }: { readonly me: Me }) {
   // focus they held goes to the screen's own place, where what stands in the way is drawn.
   const view = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (!stopped) return
-    const focused = document.activeElement
-    if (focused === null || focused === document.body) view.current?.focus()
+    if (stopped) refocus(view.current)
   }, [stopped])
 
   // Any other failure is said in the confirmation, which stays: the member is still a member.

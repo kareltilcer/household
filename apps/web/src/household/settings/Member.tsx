@@ -26,6 +26,7 @@
 // one member's page. *Pending* and *syncing* are a write under way, its control busy;
 // *conflicted* and *rejected* are refusals said where they are met, there being no queue to
 // hold a change that waits.
+import { isUuid } from '@household/api'
 import { useRef } from 'react'
 import { useParams } from 'react-router'
 import { readState, useNoWithdrawal } from '../../account/common.ts'
@@ -136,6 +137,9 @@ function MemberPage({ userId }: { readonly userId: string }) {
 export function Member() {
   const { userId = '' } = useParams()
   const household = useHousehold()
+  // An address that names no id names nobody, and the server is not asked: it would refuse the
+  // address itself (`422`), where the page has an answer only for a member it does not find.
+  if (!isUuid(userId)) return <NotAvailable home={inHousehold.home(household.id)} />
   // A page is one member's, in one household: what was chosen, opened or refused on one is not
   // carried to the next, which the same route draws.
   return <MemberPage key={`${household.id}/${userId}`} userId={userId} />

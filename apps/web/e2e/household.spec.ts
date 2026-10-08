@@ -31,6 +31,7 @@ import {
   test,
 } from './fixtures.ts'
 import {
+  acceptInvitation,
   call,
   changeMeanwhile,
   createChild,
@@ -1192,6 +1193,38 @@ test('a second visit of somebody who was an owner when this browser last read th
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(place(page)).not.toBeFocused()
   await expectAccessible(page)
+})
+
+// A second visit of somebody who was in no household when this browser last read their list,
+// and has joined one since, by an invitation answered elsewhere. Where the app opens goes by
+// the list, and a list that names none sends its member to make a household: read a day ago,
+// it is read again first.
+test('a second visit of somebody who joined a household elsewhere opens at it, and not at making one', async ({
+  page,
+  browser,
+}) => {
+  const { household } = await owner(page)
+  const invited = person(guest)
+  const token = await invite(page, household, invited.email)
+  await signOut(page)
+  await register(page, invited)
+  await signIn(page, invited)
+  await open(page, paths.home.path)
+  await expect(title(page, 'Set up your household')).toBeVisible()
+  await expect.poll(() => kept(page)).toContain(JSON.stringify(['households']))
+
+  // They join from another browser: this one hears nothing of it.
+  const elsewhere = await browser.newContext({ baseURL: previewOrigin })
+  const other = await elsewhere.newPage()
+  await other.goto(buildFile)
+  await signIn(other, invited)
+  await acceptInvitation(other, token)
+  await elsewhere.close()
+
+  await page.goto(paths.home.path)
+  await expect(title(page, 'Home')).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`${inHousehold.home(household)}$`))
+  await expect(sidebar(page)).toContainText('Member')
 })
 
 /**

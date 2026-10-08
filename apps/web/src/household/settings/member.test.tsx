@@ -1,7 +1,7 @@
 // One member's page (PRD 17 §2): who reads what of whom, the levels as a form an owner fills in,
 // a role made and unmade, a member removed, and what each refusal is said as. A child profile's
 // own controls are held beside this (ChildProfile.test.tsx).
-import { onlineManager } from '@tanstack/react-query'
+import { focusManager, onlineManager } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { inHousehold } from '../../app/paths.ts'
@@ -30,8 +30,10 @@ import { grantChange } from './member.ts'
 
 const at = `/households/${home}`
 
-// A test that takes the connection away leaves the next one a browser that has it.
+// A test that takes the connection away leaves the next one a browser that has it, and one
+// that says the page is looked at again a page nobody has looked at.
 afterEach(() => {
+  focusManager.setFocused(undefined)
   onlineManager.setOnline(true)
 })
 
@@ -263,14 +265,17 @@ describe('one member’s page', () => {
     expect(screen.getByRole('link')).toHaveAttribute('href', inHousehold.home(home))
   })
 
-  it('opens nothing at an address that is no id at all', async () => {
-    open(inHousehold.member(home, 'nobody'))
+  // The server refuses an address that is no id before it looks for anybody (`422`), which is
+  // no answer this page has a screen for: it is asked nothing.
+  it('opens nothing at an address that is no id at all, and asks for nobody', async () => {
+    const { server } = open(inHousehold.member(home, 'nobody'))
     expect(
       await screen.findByRole('heading', {
         level: 1,
         name: 'This link doesn’t open anything here.',
       }),
     ).toBeInTheDocument()
+    expect(server.to(`GET ${at}/members/nobody`)).toHaveLength(0)
   })
 
   // Withdrawn: a member removed by somebody else while the page stood open.
@@ -785,17 +790,59 @@ describe('changing what a member holds', () => {
     expect(server.to(`PATCH ${at}/members/${petr}`)).toHaveLength(asked)
   })
 
-  it('says a household that turned read-only changed nothing', async () => {
+  it('says a household that turned read-only changed nothing, and keeps the sentence when the form goes', async () => {
     const server = createServer()
-    server.on(`PATCH ${at}/members/${petr}`, () =>
-      problem(402, 'entitlement_read_only', { state: 'read_only', remedy: 'subscribe' }),
-    )
+    server.on(`PATCH ${at}/members/${petr}`, () => {
+      // The subscription lapsed a moment ago.
+      server.household = {
+        ...server.household,
+        entitlement: { state: 'read_only', can_write: false, can_upload: false },
+      }
+      return problem(402, 'entitlement_read_only', { state: 'read_only', remedy: 'subscribe' })
+    })
     const { user } = await page(petr, server)
     await user.selectOptions(row('Finance'), 'Can see')
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The household is read-only now, so nothing was changed.',
-    )
+    const said = await screen.findByText('The household is read-only now, so nothing was changed.')
+    expect(said.closest('[role="alert"]')).not.toBeNull()
+    // The household is read again, as on every screen of the settings: no control is left to
+    // be refused a second time, and what the page says of it stays.
+    await waitFor(() => {
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    })
+    expect(screen.queryByRole('button', { name: 'Remove Petr Tilcer' })).not.toBeInTheDocument()
+    expect(said).toBeInTheDocument()
+  })
+
+  // A row chosen and then put back is no change. Kept as one, it would come back as this
+  // owner's the moment another owner changed that row, and be sent over theirs.
+  it('holds no change of a row that was put back, whoever changes that row next', async () => {
+    const server = createServer()
+    taking(server, petr)
+    const { user } = await page(petr, server)
+    await user.selectOptions(row('Finance'), 'Can see')
+    await user.selectOptions(row('Finance'), 'Off')
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+
+    // Another owner lets Petr see Finance, and the page is looked at again.
+    change(server, petr, {
+      grants: { ...memberOf(petr, server.members).grants, finance: 'view' },
+      version: 2,
+    })
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(row('Finance')).toHaveValue('view')
+    })
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+
+    await user.selectOptions(row('Tasks'), 'Can see')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => {
+      expect(server.to(`PATCH ${at}/members/${petr}`)).toHaveLength(1)
+    })
+    expect(await server.body(`PATCH ${at}/members/${petr}`)).toEqual({ grants: { tasks: 'view' } })
   })
 
   it('says an owner who is one no longer may not change it, and keeps the sentence when the form goes', async () => {

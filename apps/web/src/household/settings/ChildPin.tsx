@@ -20,11 +20,8 @@ import { PasswordField } from '../../ui/Field.tsx'
 import { useToast } from '../../ui/Toast.tsx'
 import { useReread, type Membership } from '../data.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
-import { memberKey, type Refusals, type Subject } from './member.ts'
+import { memberKey, pinShape, type Refusals, type Subject } from './member.ts'
 import { Refused } from './MemberRefused.tsx'
-
-/** A PIN as the contract takes one (`putChildrenByUserIdPin`). */
-const shaped = /^[0-9]{4,6}$/
 
 export function ChildPin({
   subject,
@@ -107,7 +104,7 @@ export function ChildPin({
           event.preventDefault()
           set.reset()
           refusals.clear()
-          if (!shaped.test(pin)) {
+          if (!pinShape.test(pin)) {
             setFault({ field: 'pin' })
             return
           }

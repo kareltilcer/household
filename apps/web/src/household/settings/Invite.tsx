@@ -40,10 +40,10 @@
 // that does not exist yet.
 import { newId, type components } from '@household/api'
 import { useMutation } from '@tanstack/react-query'
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import account from '../../account/Settings.module.css'
-import { copyText } from '../../account/common.ts'
+import { copyText, refocus } from '../../account/common.ts'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../../api/problem.ts'
 import { askedNow } from '../../api/query.ts'
@@ -59,7 +59,7 @@ import { Stepper, TextArea, TextField } from '../../ui/Field.tsx'
 import { useToast } from '../../ui/Toast.tsx'
 import { cx } from '../../ui/cx.ts'
 import { useOnline } from '../../ui/online.ts'
-import { useMembers, useModuleStates, useReread, type Invitation } from '../data.ts'
+import { useMembers, useOff, useReread, type Invitation } from '../data.ts'
 import { GrantMatrix } from '../GrantMatrix.tsx'
 import { changedModules, defaultsFor, matrixOrder, type Levels } from '../grants.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
@@ -106,17 +106,8 @@ function WhatAMemberGets({
   const t = useTranslate()
   const format = useFormat()
   const household = useHousehold()
-  // Which modules the household has off. Until it is read none is said to be, and the matrix is
-  // filled in all the same: a level on a module that is off holds for when it is turned on.
-  const modules = useModuleStates(household.id)
-  const off = useMemo(() => {
-    const states = modules.data ?? []
-    return new Set(
-      matrixOrder.filter((module) =>
-        states.some((each) => each.module === module && each.enabled === false),
-      ),
-    )
-  }, [modules.data])
+  // Which modules the household has off: the matrix is filled in while that is being read.
+  const off = useOff(household.id)
   const counts = useRef<HTMLParagraphElement>(null)
   const held = (level: AccessLevel) =>
     format.number(matrixOrder.filter((module) => levels[module] === level).length)
@@ -360,8 +351,7 @@ function Composer() {
   useEffect(() => {
     if (drawn.current === shown) return
     drawn.current = shown
-    const focused = document.activeElement
-    if (focused === null || focused === document.body) view.current?.focus()
+    refocus(view.current)
   }, [shown])
 
   const toList = (

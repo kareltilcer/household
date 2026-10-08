@@ -37,7 +37,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import account from '../../account/Settings.module.css'
-import { readState } from '../../account/common.ts'
+import { readState, refocus } from '../../account/common.ts'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../../api/problem.ts'
 import { useProblemText } from '../../api/problemText.ts'
@@ -66,6 +66,7 @@ import { isUnverified, Unverified, useMarkUnverified } from '../Unverified.tsx'
 import {
   addressOf,
   againState,
+  declinedNotices,
   isStale,
   settledAddresses,
   statusAt,
@@ -284,8 +285,7 @@ function Sent() {
       return
     }
     pressed.current = null
-    const focused = document.activeElement
-    if (focused === null || focused === document.body) view.current?.focus()
+    refocus(view.current)
   }, [listed, now, settled, standing.changes])
 
   const withdraw = useMutation({
@@ -416,15 +416,7 @@ function Sent() {
           {({ writes }) => {
             const changes = standing.changes && writes
             // A-25: what was declined, to the owners, until it is withdrawn or asked again.
-            const declined = standing.owner
-              ? list.filter((each) => {
-                  const address = addressOf(each)
-                  return (
-                    statusAt(each, now) === 'declined' &&
-                    (address === null || !settled.has(address.toLowerCase()))
-                  )
-                })
-              : []
+            const declined = standing.owner ? declinedNotices(list, now, settled) : []
             return (
               <>
                 {changes ? invite : null}

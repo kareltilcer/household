@@ -1,9 +1,10 @@
-// What the household's profile (C-49) and its modules (C-51) share that draws nothing: how a
-// refusal that is about where the member stands is said, the banner a refusal of no field's is
-// said in, where the focus goes once the controls that held it have left, and how the profile
-// draws what no catalog holds, a word `Intl` gives (i18n/names.ts) and the household's code.
+// What the household's profile (C-49) and its modules (C-51) share that draws nothing: the banner
+// a refusal of no field's is said in, where the focus goes once the controls that held it have
+// left, and how the profile draws what no catalog holds, a word `Intl` gives (i18n/names.ts) and
+// the household's code. And what every screen of the settings shares with them: which refusals
+// are about where the member stands, and how each is said.
 //
-// Every change of the two screens is an owner's, in a household that takes writes, and is asked
+// Every change of these screens is an owner's, in a household that takes writes, and is asked
 // of the server at once (D-170): nothing waits on the device. So a refusal says one of two
 // kinds of thing. What was sent was not taken, which is said beside what sent it and leaves it
 // there to be put right. Or the member no longer stands where the control was drawn for: they
@@ -12,15 +13,30 @@
 // what it then says (absence, not disabling), the focus they held among them.
 import { pseudoLocale, pseudolocalize } from '@household/i18n/lazy'
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { refocus } from '../../account/common.ts'
 import { problemIn } from '../../api/problem.ts'
 import { useI18n, useTranslate } from '../../i18n/I18nProvider.tsx'
 
 /**
- * The sentence for a refusal that is about where the member stands and not about what they
- * sent, or undefined for any other: `403` to a member who was an owner when the page was read,
- * `402` from a household that became read-only or restricted meanwhile, and `404` for what is
- * no longer there. Whoever is told one reads the household again, which takes the controls away.
+ * Whether a refused write is about where the member stands and not about what they sent: `403`
+ * to a member who was an owner when the page was read, `402` from a household that became
+ * read-only or restricted meanwhile, and `404` for what is no longer there. The one list of
+ * them, for every screen of the settings: whoever is told one reads the household again, which
+ * takes away the controls that are theirs no longer.
  */
+export function isStandingRefusal(error: unknown): boolean {
+  switch (problemIn(error)?.code) {
+    case 'forbidden':
+    case 'entitlement_read_only':
+    case 'entitlement_restricted':
+    case 'not_found':
+      return true
+    default:
+      return false
+  }
+}
+
+/** The sentence for a refusal that is about where the member stands, or undefined for any other. */
 export function useStandingRefusal(): (error: unknown) => string | undefined {
   const t = useTranslate()
   return useCallback(
@@ -97,9 +113,7 @@ export function useFocusKept(changes: boolean, open: unknown): RefObject<HTMLDiv
   }, [])
   useEffect(() => {
     if (changes) return
-    const focused = document.activeElement
-    if (focused !== null && focused !== document.body) return
-    if (last.current?.isConnected === false) view.current?.focus()
+    if (last.current?.isConnected === false) refocus(view.current)
   }, [changes, open])
   return view
 }

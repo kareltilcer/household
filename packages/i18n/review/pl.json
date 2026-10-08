@@ -563,6 +563,7 @@
   "household.child.picture.label": "Picture",
   "household.child.picture.no_uploads": "The household takes no uploads just now, so the picture was not changed.",
   "household.child.picture.remove": "Remove picture",
+  "household.child.picture.removed": "{name}’s picture is removed.",
   "household.child.picture.saved": "{name}’s picture is saved.",
   "household.child.picture.too_large": "That picture is over 20 MB. Choose a smaller one. The picture was not changed.",
   "household.child.picture.unreadable": "That file isn’t a picture Household can use. Choose a JPEG, PNG, GIF or WebP image. The picture was not changed.",

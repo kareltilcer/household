@@ -100,7 +100,12 @@ these screens, in place of its promise that changes are kept and sent, which is 
 (`shell/HouseholdBars.tsx`). Reads are TanStack queries filed under the
 household's own key (`household/data.ts`), so that what the browser kept is drawn offline, and a
 write that was answered reads the household, its members, its modules, its invitations and the
-member's list of households again (`useReread`). The screens read the API and not the replica:
+member's list of households again (`useReread`). A refusal that is about where the member
+stands and not about what they sent, an owner no longer (`403`), a household that takes no writes
+now (`402`) or what was to be changed gone (`404`), is one list for every screen of the settings
+(`isStandingRefusal`, `settings/profile.ts`): each says it and reads the household again, and the
+controls that are theirs no longer leave with what it then says. The screens read the API and not
+the replica:
 admin's entities reach a replica without a member's name or address, and no screen here is
 written offline, so there is nothing a replica would add.
 
@@ -117,7 +122,11 @@ meanwhile (`getMeInvitations`). The query that reads it is kept out of the store
 
 **A member in no household is opened at making one** (D-168), and **the first run's question is
 asked where it leads somewhere** (D-169): `household/Start.tsx` offers the modules whose registry
-entry has a `capture`, of those the member holds, and passes on to Home while none has.
+entry has a `capture`, of those the member holds, and passes on to Home while none has. Where the
+app opens does not take this browser's word that a member is in none: a list it kept that names
+no household is read again first (`app/Home.tsx`), or somebody who joined one since, by an
+invitation answered on another device, would be sent to make a household beside the one they are
+in. With no connection there is nothing to wait for, and what was kept is what there is to go by.
 
 **The screen that leaves says what stands in the way before it asks, from the members it reads,
 and takes the server's word over its own.** A member who is the household's only owner, and one
@@ -127,14 +136,18 @@ names the same reasons in `blocked_by`, is drawn the same way where it disagrees
 read.
 
 **The inviter's notice of a decline stands on the invitations** (D-171), drawn from each
-invitation's own status: one for each that stands declined, until it is withdrawn or its address
-has another invitation that waits or was taken.
+invitation's own status: one for each address whose newest invitation stands declined
+(`declinedNotices`), until it is withdrawn or the address is asked again, whatever becomes of
+the asking. A link names nobody, and each declined link has its own.
 
 **A create whose answer was lost is read as made.** Every create sends an id the client made
 (D-23), once for each visit of its screen, so a press repeated after an answer that never came
 names the same household, invitation or profile; the server answers that `422` for the id, and
 the screen reads what it made, or says that it may have been made and where to look, in place of
-asking for it again for ever.
+asking for it again for ever. A household and a child profile are looked for by their id where
+the repeat is refused for a ceiling too (`403`): the server counts what an account owns, and a
+household's members, before it looks at the id, so the thing that reached the ceiling is refused
+as one too many of itself. A profile read so is said to be made by the name it holds.
 
 **The catalog is not split yet.** This item's words are keys under `household.*`, some four
 hundred of them, and with them the first download is 194 kB of its 200 kB, 30 of them the
@@ -168,6 +181,12 @@ left to the item that would pass the budget, and is by key prefix when it comes 
 | Household settings offered only *Off* and *Can see* in the matrix, the two levels that differ for a member | The server takes all four, and a level the matrix would not offer is one a member may already hold: the row would show a choice that is not among its choices. A rule the client alone applies is not built (as a child's PIN is not judged here); the sentence says that the higher two give no more |
 | The settings' own note that a change needs a connection, under the shell's bar that says changes are saved and will sync | Two sentences, one over the other, that say opposite things, and the announced one was the untrue one. The bar is what is said as the connection goes, so the bar says what holds on the screen it stands over |
 | The household's replica closed before leaving is asked, so that it asks nothing of a household its member is about to be out of | A leave that is refused leaves a member in a household whose replica would have to be opened again, by a second way of closing one beside the household leaving the screen (ADR 0026). What it costs to leave it open is one request for the replica's credentials answered `404` in the moment between the answer and the navigation, which the SDK notes on the console and nobody is shown |
+| A household's replica removed from the browser as its member leaves it | What it holds is what the member read while they were in the household, kept where only their own session reaches and removed with that session (D-161). Nothing opens it again and nothing reads it, and a removal by household is a second one to keep in step with the session's (Consequences). It keeps nothing from the member that they did not have the day before they left |
+| The modules list, the matrix and an invitation's levels left without a module whose flag is off for the household (`flags`, D-146) | Sixteen modules are listed and granted today that no client opens, their screens not being built: what these screens list is what the household enables and what a member is given, which the server keeps whatever the flag says and holds for when the module opens. An owner who could not set a level on a module while it is dark would find it open one day at whatever each member happened to hold. Where a dark module must not be is the navigation, and there the household's own answer already holds it to no level (D-160) |
+| A flag on each route's line of `paths.ts` saying its changes are asked at once, read by the offline bar in place of the two addresses it knows | Every screen of a household whose writes are asked at once is under `/settings` or is `/leave`, and item 27's sections are added under `/settings`: the flag would be set on seven lines to say what two addresses say, and a route's line would hold what its screen decides. The first such screen outside the two adds its address to `changesAtOnce`, whose sentence the shell's tests hold |
+| Household settings kept out of `heldModules`, and listed by a notion of its own in the navigation and the module's address | Three callers ask which modules a member's app has, the navigation, a module's address and the first run's question, and D-167's answer is the same for each: household settings is in every member's app. Two lists would be one for a caller to choose wrongly between. What a level on it decides is asked where it decides something (`useStanding().invitations`) |
+| The members read under the settings' note only for the reader it names the owners to, and not for an owner | The read is also what keeps the list fresh behind a member's own page: a change of what a member holds, or of their role, reads the household's members again while that page is open, so the list it leads back to is drawn as the change left it and not as it was for the moment before it is read again. It is one request after a write, for the list that the other screens of the settings read |
+| A profile whose answer was lost given the PIN that was typed last, where it was typed anew before the profile was asked for again | It takes three answers lost and a PIN changed between two presses, and what is wrong then is a PIN the owner sets again from the profile's page, where a new one is two fields. Setting it for them would be a second write hidden inside the first |
 | The catalog split in this item, a module's words fetched with its screens | The first download is under its budget with this item's words in it. The split is a second way for a screen to be without its words, a failure to say for each route, and a guard that no screen outside a module reads the module's keys: machinery the budget does not yet ask for (D-159) |
 
 ## Consequences

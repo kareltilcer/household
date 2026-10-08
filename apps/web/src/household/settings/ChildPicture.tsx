@@ -6,6 +6,7 @@
 // removed.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
+import { pictureTypes } from '../../account/common.ts'
 import styles from '../../account/Settings.module.css'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../../api/problem.ts'
@@ -17,10 +18,7 @@ import { cx } from '../../ui/cx.ts'
 import { useToast } from '../../ui/Toast.tsx'
 import { useReread, type Membership } from '../data.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
-import { memberKey, type Refusals, type Subject } from './member.ts'
-
-/** The images the server makes a picture of (`putChildrenByUserIdAvatar`). */
-const pictures = 'image/jpeg,image/png,image/gif,image/webp'
+import { memberKey, useFocusHandedOn, type Refusals, type Subject } from './member.ts'
 
 export function ChildPicture({
   subject,
@@ -45,6 +43,10 @@ export function ChildPicture({
   const has = address !== null
   // A household in grace writes and takes no upload: there is nothing to choose a picture with.
   const uploads = household.entitlement?.can_upload !== false
+  // One that stopped taking them while the page was open says so to the upload it refuses, and
+  // the household read again takes the control that chooses away: the focus it held goes to
+  // the picture's own place.
+  useFocusHandedOn(uploads, group)
 
   const kept = (saved: Membership) => {
     queries.setQueryData(memberKey(household.id, subject.id), saved)
@@ -109,7 +111,7 @@ export function ChildPicture({
                 ref={chooser}
                 type="file"
                 hidden
-                accept={pictures}
+                accept={pictureTypes}
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0]
                   // Chosen again, the same file is a change again.
@@ -145,6 +147,10 @@ export function ChildPicture({
                     // picture's own place where the household takes no upload to choose.
                     const stays = choose.current ?? group.current
                     if (document.activeElement === pressed) stays?.focus()
+                    // Where no control is left to say it by what it now offers, it is said.
+                    if (choose.current === null) {
+                      toast({ message: t('household.child.picture.removed', { name }) })
+                    }
                   },
                 })
               }}

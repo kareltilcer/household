@@ -50,6 +50,7 @@ import { useHousehold } from '../HouseholdContext.tsx'
 import { useRoleWord } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
 import { ChildCreate } from './ChildCreate.tsx'
+import { statusAt } from './invitations.ts'
 import styles from './Members.module.css'
 import { HouseholdSettingsPage, useStanding } from './Page.tsx'
 
@@ -130,7 +131,12 @@ export function Members() {
 
   const list = members.data ?? []
   const alone = list.every((member) => member.user_id === me.id)
-  const waiting = (invitations.data ?? []).filter((each) => each.status === 'pending').length
+  // How many wait for an answer, to a member who may read them now: what this browser kept of
+  // them from when they could is not counted, nor is one whose time ran out since it was read.
+  const [now] = useState(() => Date.now())
+  const waiting = standing.invitations
+    ? (invitations.data ?? []).filter((each) => statusAt(each, now) === 'pending').length
+    : 0
   // One owner, who is then the one reading, and an adult beside them who could be a second.
   const nudged =
     standing.changes &&

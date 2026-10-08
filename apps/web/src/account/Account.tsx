@@ -50,7 +50,7 @@ import { List, ListRow } from '../ui/ListRow.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { useToast } from '../ui/Toast.tsx'
-import { isRefusedAsSent, readState, useNoWithdrawal, useOwnZone } from './common.ts'
+import { isRefusedAsSent, pictureTypes, readState, useNoWithdrawal, useOwnZone } from './common.ts'
 import { useOnline } from '../ui/online.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import styles from './Settings.module.css'
@@ -156,9 +156,6 @@ function Email({ email, verified }: { readonly email: string; readonly verified:
   )
 }
 
-/** The images the server makes a picture of (`putMeAvatar`). */
-const pictures = 'image/jpeg,image/png,image/gif,image/webp'
-
 function Picture({ me }: { readonly me: Me }) {
   const t = useTranslate()
   const api = useApi()
@@ -214,7 +211,7 @@ function Picture({ me }: { readonly me: Me }) {
             ref={chooser}
             type="file"
             hidden
-            accept={pictures}
+            accept={pictureTypes}
             onChange={(event) => {
               const file = event.currentTarget.files?.[0]
               // Chosen again, the same file is a change again.

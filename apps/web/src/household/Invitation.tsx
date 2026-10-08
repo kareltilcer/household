@@ -49,7 +49,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { readState, useNoWithdrawal } from '../account/common.ts'
+import { readState, refocus, useNoWithdrawal } from '../account/common.ts'
 import settings from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
@@ -256,9 +256,7 @@ export function Invitation() {
   const place = useRef<HTMLDivElement>(null)
   const settled = join.isError || decline.isError || decline.isSuccess
   useEffect(() => {
-    if (!settled) return
-    const focused = document.activeElement
-    if (focused === null || focused === document.body) place.current?.focus()
+    if (settled) refocus(place.current)
   }, [settled, unverified])
 
   const home = visitor ? (

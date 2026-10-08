@@ -1,7 +1,7 @@
 // The list of members (C-50) as each member of the household reads it: who is in it and what
 // each holds, what an owner has beside it, and the list in each of its states.
-import { onlineManager } from '@tanstack/react-query'
-import { act, fireEvent, screen, within } from '@testing-library/react'
+import { focusManager, onlineManager } from '@tanstack/react-query'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { inHousehold } from '../../app/paths.ts'
 import type { Membership } from '../data.ts'
@@ -18,6 +18,7 @@ import {
   open,
   origin,
   petr,
+  problem,
   tilcerovi,
   type HouseholdServer,
 } from '../testing.tsx'
@@ -28,8 +29,10 @@ const invitationsRoute = `GET /households/${home}/invitations`
 
 const readOnly = { state: 'read_only', can_write: false, can_upload: false } as const
 
-// A test that takes the connection away leaves the next one a browser that has it.
+// A test that takes the connection away leaves the next one a browser that has it, and one
+// that says the page is looked at again a page nobody has looked at.
 afterEach(() => {
+  focusManager.setFocused(undefined)
   onlineManager.setOnline(true)
   vi.restoreAllMocks()
 })
@@ -391,6 +394,42 @@ describe('the invitations that wait', () => {
     await membersScreen(unread)
     expect(await rows()).toHaveLength(5)
     expect(screen.queryByText(/waiting for an answer/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'See the invitations' })).not.toBeInTheDocument()
+  })
+
+  it('are not counted past their time, though this browser read them as waiting', async () => {
+    const server = createServer()
+    server.invitations = [
+      invitation(),
+      invitation({
+        id: '0190a000-0000-7000-8000-0000000000c2',
+        email: 'stryc@example.cz',
+        expires_at: '2020-01-10T12:00:00Z',
+      }),
+    ]
+    await membersScreen(server)
+    expect(await screen.findByText('1 invitation is waiting for an answer.')).toBeInTheDocument()
+  })
+
+  // What this browser kept of them is a member's who could read them. Their level lowered to
+  // nothing, they are told of none, and led to no screen that would open nothing.
+  it('are spoken of no longer once the member may not read them', async () => {
+    const server = createServer(accountOf(petr))
+    server.invitations = [invitation()]
+    await membersScreen(server)
+    expect(await screen.findByText('1 invitation is waiting for an answer.')).toBeInTheDocument()
+
+    server.household = {
+      ...server.household,
+      my_grants: { ...memberOf(petr).grants, admin: 'none' },
+    }
+    server.on(invitationsRoute, () => problem(404, 'not_found'))
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(screen.queryByText(/waiting for an answer/)).not.toBeInTheDocument()
+    })
     expect(screen.queryByRole('link', { name: 'See the invitations' })).not.toBeInTheDocument()
   })
 })

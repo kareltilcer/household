@@ -38,9 +38,8 @@ import { unwrap } from '../../api/problem.ts'
 import { useProblemText } from '../../api/problemText.ts'
 import { askedNow } from '../../api/query.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
-import a11y from '../../ui/a11y.module.css'
 import { Banner } from '../../ui/Banner.tsx'
-import { Button } from '../../ui/Button.tsx'
+import { Button, RowAction } from '../../ui/Button.tsx'
 import { Dialog } from '../../ui/Dialog.tsx'
 import { List, ListRow } from '../../ui/ListRow.tsx'
 import { useOnline } from '../../ui/online.ts'
@@ -143,9 +142,17 @@ function ModuleRow({
           {changes ? (
             // One control, which says what it will do and is named for its module. It stays
             // where it is when the module is turned on or off, and the focus with it.
-            <Button
+            <RowAction
+              name={
+                enabled
+                  ? t('household.modules.turn_off.named', { module: name })
+                  : t('household.modules.turn_on.named', { module: name })
+              }
+              word={
+                enabled ? t('household.modules.turn_off.word') : t('household.modules.turn_on.word')
+              }
               loading={turnOn.isPending}
-              onClick={() => {
+              onPress={() => {
                 onPress()
                 if (enabled) {
                   onTurnOff()
@@ -161,18 +168,7 @@ function ModuleRow({
                   },
                 )
               }}
-            >
-              <span className={a11y.visuallyHidden}>
-                {enabled
-                  ? t('household.modules.turn_off.named', { module: name })
-                  : t('household.modules.turn_on.named', { module: name })}
-              </span>
-              <span aria-hidden="true">
-                {enabled
-                  ? t('household.modules.turn_off.word')
-                  : t('household.modules.turn_on.word')}
-              </span>
-            </Button>
+            />
           ) : null}
         </>
       }

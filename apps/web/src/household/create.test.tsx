@@ -295,6 +295,27 @@ describe('creating a household', () => {
     expect(((await server.body('POST /households')) as Asked).id).toBe(first.id)
   })
 
+  // The server counts what an account owns before it looks at the id: the fifth household,
+  // made by a press whose answer was lost, refuses the next press as one too many.
+  it('reads the household an earlier press made where the account is found to own as many as it may', async () => {
+    const server = createServer()
+    server.on('POST /households', async (request) => {
+      const asked = (await request.json()) as Asked
+      server.on(`GET /households/${asked.id}`, () =>
+        Response.json({ ...tilcerovi, id: asked.id, name: 'Novákovi' }),
+      )
+      return problem(403, 'household_limit_reached', { ceiling: 5 })
+    })
+    const { user, router } = await form(server)
+    await user.type(screen.getByRole('textbox', { name: /^Name/ }), 'Novákovi')
+    await user.click(screen.getByRole('button', { name: 'Create Novákovi' }))
+    const asked = (await server.body('POST /households')) as Asked
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.home(asked.id))
+    })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('asks for a name before it asks the server', async () => {
     const server = createServer()
     const { user } = await form(server)

@@ -24,7 +24,13 @@ import {
   tilcerovi,
   type HouseholdServer,
 } from '../testing.tsx'
-import { againState, readAgain, settledAddresses, statusAt } from './invitations.ts'
+import {
+  againState,
+  declinedNotices,
+  readAgain,
+  settledAddresses,
+  statusAt,
+} from './invitations.ts'
 
 // A test that says the page is looked at again leaves the next one a page nobody has looked at,
 // and one that takes the connection away leaves the next one a browser that has it.
@@ -428,6 +434,22 @@ describe('the notice of an invitation that was declined', () => {
       within(old).getByRole('button', { name: 'Withdraw the invitation to petr@example.cz' }),
     ).toBeInTheDocument()
   })
+
+  // Asked again and declined again, the address is answered for by the invitation that asked
+  // last: one notice, and not the earlier one back beside it.
+  it('is one for an address that declined twice, of the invitation that asked last', async () => {
+    const server = createServer()
+    server.invitations = [
+      invitation({ ...declined, id: id(9), grants: defaultsFor('member') }),
+      declined,
+    ]
+    const { user } = await list(server)
+    expect(await screen.findAllByText('petr@example.cz declined the invitation')).toHaveLength(1)
+    await user.click(screen.getByRole('link', { name: 'Invite petr@example.cz again' }))
+    await screen.findByRole('heading', { level: 1, name: 'Invite somebody' })
+    // What the last one proposed, and not what the first did.
+    expect(screen.getByRole('combobox', { name: 'Finance' })).toHaveValue('none')
+  })
 })
 
 describe('withdrawing an invitation', () => {
@@ -709,6 +731,23 @@ describe('how an invitation stands', () => {
         now,
       ),
     ]).toEqual(['babicka@example.cz', 'teta@example.cz'])
+  })
+
+  it('tells of a decline only where it is the last word on its address', () => {
+    const again = invitation({ ...declined, id: id(9), email: 'Petr@Example.cz' })
+    const noticed = (list: Parameters<typeof settledAddresses>[0]) =>
+      declinedNotices(list, now, settledAddresses(list, now)).map((each) => each.id)
+    // Newest first, as the server lists them.
+    expect(noticed([again, declined])).toEqual([id(9)])
+    // Asked again, whatever became of the asking: it waits, or was withdrawn, or ran out.
+    expect(noticed([{ ...again, status: 'pending' }, declined])).toEqual([])
+    expect(noticed([{ ...again, status: 'revoked' }, declined])).toEqual([])
+    expect(noticed([{ ...again, status: 'expired' }, declined])).toEqual([])
+    // An earlier one sent again waits, under a later one that was declined.
+    expect(noticed([again, { ...declined, status: 'pending' }])).toEqual([])
+    // A link names nobody: each declined one stands for itself.
+    const one = { ...link, status: 'declined' } as const
+    expect(noticed([declined, one, { ...one, id: id(7) }])).toEqual([id(3), id(6), id(7)])
   })
 })
 

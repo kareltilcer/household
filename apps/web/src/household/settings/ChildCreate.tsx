@@ -19,8 +19,10 @@
 // server keeps no Idempotency-Key for it, a PIN never being stored under one, so the profile's id
 // is made once for each opening of the sheet: asked again it is the same profile that is asked
 // for, and a `422` that names `/id` and nothing else is the answer to one that was made already,
-// its first answer lost. It is read as made, the profile holding what was sent first. The PIN is
-// shown to nobody afterwards: not in the toast, and not on the page.
+// its first answer lost. So is a household found full, which may be full of this very profile:
+// the server counts its members before it looks at the id. The profile is read by its id, and
+// is made where it is there, holding what was sent first, its name as the toast then says it.
+// The PIN is shown to nobody afterwards: not in the toast, and not on the page.
 import { newId, type components } from '@household/api'
 import { useMutation } from '@tanstack/react-query'
 import { useId, useRef, useState } from 'react'
@@ -42,12 +44,11 @@ import { GrantSummary } from '../GrantMatrix.tsx'
 import { defaultsFor } from '../grants.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
 import { useTimeZone } from '../timezone.ts'
+import { pinShape } from './member.ts'
 import styles from './Members.module.css'
+import { isStandingRefusal, useStandingRefusal } from './profile.ts'
 
 type ChildProfileCreate = components['schemas']['ChildProfileCreate']
-
-/** The contract's PIN: four to six digits, and nothing else. */
-const aPin = /^[0-9]{4,6}$/
 
 /** The earliest year of birth the contract takes. */
 const earliestYear = 1900
@@ -76,19 +77,18 @@ function isMadeAlready(error: unknown): boolean {
   return named.size === 1 && named.has('/id')
 }
 
+/** Whether `error` says the household has as many members as it may have. */
+function isFull(error: unknown): boolean {
+  return problemIn(error)?.code === 'fair_use_ceiling'
+}
+
 /**
  * Whether `error` says the household is not as this page read it: its owner one no longer, its
- * writes stopped, its members as many as it may have, or the household itself gone from them.
+ * writes stopped or the household itself gone from them, as on every screen of the settings
+ * (profile.ts), or its members as many as it may have.
  */
 function isOutOfDate(error: unknown): boolean {
-  const code = problemIn(error)?.code
-  return (
-    code === 'forbidden' ||
-    code === 'fair_use_ceiling' ||
-    code === 'entitlement_read_only' ||
-    code === 'entitlement_restricted' ||
-    code === 'not_found'
-  )
+  return isStandingRefusal(error) || isFull(error)
 }
 
 /** What a submission was not sent for: what the server would certainly refuse, found here. */
@@ -111,6 +111,7 @@ export function ChildCreate({ onClose }: ChildCreateProps) {
   const household = useHousehold()
   const reread = useReread(household.id)
   const say = useProblemText(useTimeZone())
+  const standing = useStandingRefusal()
   const form = useId()
   const lockHelp = useId()
   const startsWith = useId()
@@ -136,22 +137,36 @@ export function ChildCreate({ onClose }: ChildCreateProps) {
   }
   const create = useMutation({
     ...askedNow,
-    mutationFn: async (profile: ChildProfileCreate) =>
-      unwrap(
-        await api.POST('/households/{household_id}/children', {
-          params: { path: { household_id: household.id } },
-          body: profile,
-        }),
-      ),
-    onSuccess: (_membership, profile) => {
-      made(profile.display_name)
-    },
-    onError: (error, profile) => {
-      // Made the first time it was asked for, though its answer never came.
-      if (isMadeAlready(error)) {
-        made(profile.display_name)
-        return
+    mutationFn: async (profile: ChildProfileCreate) => {
+      try {
+        return unwrap(
+          await api.POST('/households/{household_id}/children', {
+            params: { path: { household_id: household.id } },
+            body: profile,
+          }),
+        )
+      } catch (error) {
+        // The id is this sheet's own. One the server has already is the profile an earlier
+        // request made, whose answer never came; and a household found full may be full of that
+        // very profile. It is read by its id, and where it is there it is the answer.
+        if (!isMadeAlready(error) && !isFull(error)) throw error
+        const read = await api
+          .GET('/households/{household_id}/members/{user_id}', {
+            params: { path: { household_id: household.id, user_id: profile.id } },
+          })
+          .catch(() => undefined)
+        if (read?.data !== undefined) return read.data
+        // Full of others, and nothing was made. The server's word that it has the id stands
+        // though the profile could not be read: it was made.
+        if (isFull(error)) throw error
+        return undefined
       }
+    },
+    onSuccess: (membership, profile) => {
+      // By the name the profile holds, which is the one that was sent first.
+      made(membership?.display_name ?? profile.display_name)
+    },
+    onError: (error) => {
       // The page behind the sheet is read again, and says how the household stands itself.
       if (isOutOfDate(error)) void reread()
     },
@@ -178,17 +193,12 @@ export function ChildCreate({ onClose }: ChildCreateProps) {
 
   /** What a refusal that is no field's says, in the sheet's own words where it has them. */
   const refusal = (): string | undefined => {
-    if (!create.isError || marked || isMadeAlready(create.error)) return undefined
+    if (!create.isError || marked) return undefined
     const problem = problemIn(create.error)
     if (problem?.code === 'fair_use_ceiling') {
       return t('household.child.create.refused.full', { count: problem.ceiling })
     }
-    if (problem?.code === 'forbidden') return t('household.settings.refused.not_owner')
-    if (problem?.code === 'entitlement_read_only' || problem?.code === 'entitlement_restricted') {
-      return t('household.settings.refused.read_only')
-    }
-    if (problem?.code === 'not_found') return t('household.settings.refused.gone')
-    return say(create.error)
+    return standing(create.error) ?? say(create.error)
   }
   const why = refusal()
 
@@ -222,9 +232,9 @@ export function ChildCreate({ onClose }: ChildCreateProps) {
           const found: Faults = {
             name: called === '',
             year: born !== '' && !isYear(born, yearIn(household.timezone)),
-            pin: !aPin.test(pin),
+            pin: !pinShape.test(pin),
             // Said once the PIN itself is one: two that differ are no news beside one that is none.
-            again: aPin.test(pin) && again !== pin,
+            again: pinShape.test(pin) && again !== pin,
           }
           if (found.name || found.year || found.pin || found.again) {
             create.reset()

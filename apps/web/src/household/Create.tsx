@@ -19,7 +19,8 @@
 //
 // The household's id is the client's, made once for the visit: pressed again after an answer
 // that never arrived, the same household is asked for and not a second one, and where the
-// server says it has that id already, the earlier press made it and it is read.
+// server says it has that id already, or that the account owns as many as it may, the earlier
+// press made it where it can be read.
 //
 // A-22's states (ledger preset F) are *loading*, the countries being read; *populated*, the form;
 // and *error*, the countries unread with nothing kept, and a create that failed, said in the form
@@ -127,12 +128,16 @@ function Form({ countries }: { readonly countries: readonly Country[] }) {
       } catch (error) {
         // The id is this visit's own. One the server has already is the household an earlier
         // press made, whose answer never arrived: it is read, and is the answer.
-        if (!fieldCodes(error).has('/id')) throw error
-        return unwrap(
-          await api.GET('/households/{household_id}', {
-            params: { path: { household_id: body.id } },
-          }),
-        )
+        const read = () =>
+          api.GET('/households/{household_id}', { params: { path: { household_id: body.id } } })
+        if (fieldCodes(error).has('/id')) return unwrap(await read())
+        // As many as an account may own, and that press may have made the last of them: the
+        // server counts them before it looks at the id. Where the household is there, it is
+        // the answer; where it is not, the refusal stands.
+        if (problemIn(error)?.code !== 'household_limit_reached') throw error
+        const made = await read().catch(() => undefined)
+        if (made?.data === undefined) throw error
+        return made.data
       }
     },
     onSuccess: (household) => {

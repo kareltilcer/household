@@ -321,6 +321,28 @@ describe('a profile whose answer was lost', () => {
     })
   })
 
+  // The server counts the household's members before it looks at the id: a household the
+  // first request filled refuses its repeat as full, of the very profile that filled it.
+  it('is read as made where the household is full of the very profile it asks for, by the name that profile holds', async () => {
+    const server = createServer()
+    server.on(childrenRoute, async (request) => {
+      const sent = (await request.json()) as Sent
+      // Made by a request whose answer never came, under the name that one carried.
+      const made = { ...memberOf(adam), user_id: sent.id, display_name: 'Emička' }
+      server.members = [...server.members, made]
+      server.on(`${membersRoute}/${sent.id}`, () => Response.json(made))
+      return problem(403, 'fair_use_ceiling', { resource: 'members', ceiling: 12 })
+    })
+    const opened = await sheet(server)
+    await ask(opened)
+    expect(await screen.findByText(madeEma.replace('Ema', 'Emička'))).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(opened.opener).toHaveFocus()
+    })
+  })
+
   it('is not read as made where the refusal names anything beside the id', async () => {
     const server = createServer()
     server.on(childrenRoute, () =>
@@ -490,6 +512,9 @@ describe('a child profile the server refuses', () => {
       expect(server.to(membersRoute).length).toBeGreaterThan(before)
     })
     expect(opened.name).toHaveValue('Ema')
+    // Full of others: the profile was looked for by its id, and is nobody.
+    const asked = (await server.body(childrenRoute)) as Sent
+    expect(server.to(`${membersRoute}/${asked.id}`)).toHaveLength(1)
   })
 
   it('says its owner is one no longer, and once it is closed puts the focus on the list', async () => {

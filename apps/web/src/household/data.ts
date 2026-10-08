@@ -10,7 +10,7 @@
 // (`askedNow`, api/query.ts), and says so where the server could not be reached.
 import type { ApiClient, components } from '@household/api'
 import { queryOptions, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { catalogLocale, pseudoLocale, pseudolocalize } from '@household/i18n/lazy'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
@@ -22,6 +22,7 @@ import {
   membersKey,
   moduleStatesKey,
   type Household,
+  type ModuleKey,
 } from './households.ts'
 
 export type Membership = components['schemas']['Membership']
@@ -89,6 +90,23 @@ export function moduleStatesQuery(api: ApiClient, household: string) {
 
 export function useModuleStates(household: string): UseQueryResult<ModuleState[]> {
   return useQuery(moduleStatesQuery(useApi(), household))
+}
+
+/**
+ * The modules the household has off, whatever anybody holds on them. Until they are read none
+ * is said to be: a level on a module that is off holds for when it is turned on.
+ */
+export function useOff(household: string): ReadonlySet<ModuleKey> {
+  const states = useModuleStates(household).data
+  return useMemo(
+    () =>
+      new Set(
+        (states ?? []).flatMap((state) =>
+          state.enabled === false && state.module !== undefined ? [state.module] : [],
+        ),
+      ),
+    [states],
+  )
 }
 
 /** The countries Household has a profile of: the ones a household can be set in. */

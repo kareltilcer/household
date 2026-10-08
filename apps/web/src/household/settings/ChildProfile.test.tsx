@@ -360,6 +360,8 @@ describe('a child profile’s picture', () => {
     expect(server.to(`DELETE ${profile}/avatar`)).toHaveLength(1)
     expect(within(part).getByRole('button', { name: 'Choose a picture' })).toHaveFocus()
     expect(container.querySelector('img')).not.toBeInTheDocument()
+    // The control the focus went to says it: nothing says it twice.
+    expect(screen.queryByText('Adam’s picture is removed.')).not.toBeInTheDocument()
   })
 
   it('gives each refusal its sentence, and changes no picture', async () => {
@@ -391,6 +393,34 @@ describe('a child profile’s picture', () => {
       ),
     ).toBeInTheDocument()
     expect(container.querySelector('img')).not.toBeInTheDocument()
+  })
+
+  // Grace began while the page was open (PRD 04 §3): the upload it refuses says so, and the
+  // household read again takes away the control that would choose one, the focus it held going
+  // to the picture's own place.
+  it('takes the way to choose a picture away once the household is found to take no uploads', async () => {
+    const server = createServer()
+    parts()
+    server.on(`PUT ${profile}/avatar`, () => {
+      server.household = {
+        ...server.household,
+        entitlement: { state: 'grace', can_write: true, can_upload: false },
+      }
+      return problem(402, 'entitlement_read_only', { state: 'grace', remedy: 'subscribe' })
+    })
+    const { part, container } = await page(server)
+    within(part).getByRole('button', { name: 'Choose a picture' }).focus()
+    fireEvent.change(chooser(container), { target: { files: [file] } })
+    expect(
+      await within(part).findByText(
+        'The household takes no uploads just now, so the picture was not changed.',
+      ),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(within(part).queryByRole('button', { name: 'Choose a picture' })).toBeNull()
+    })
+    expect(document.activeElement).not.toBe(document.body)
+    expect(document.activeElement).toContainElement(within(part).getByText('Picture'))
   })
 
   it('draws initials where the picture’s link no longer loads', async () => {
@@ -426,6 +456,8 @@ describe('a child profile’s picture', () => {
     // Nothing is left to choose with: the focus is on the picture's own place, and not on nothing.
     expect(document.activeElement).not.toBe(document.body)
     expect(document.activeElement).toContainElement(within(part).getByText('Picture'))
+    // And no control says by what it offers that the picture went: it is said.
+    expect(await screen.findByText('Adam’s picture is removed.')).toBeInTheDocument()
   })
 })
 
