@@ -7,8 +7,7 @@
 // order. *Hidden* is what the member put away themselves, and is named in one place, the arrange
 // screen. A module the member holds `none` on, or the household has turned off, is in none of
 // the three: absent, with no trace, and not counted.
-import { moduleIds } from '@household/tokens'
-import type { Household, ModuleKey } from '../household/households.ts'
+import { moduleKeys, type Household, type ModuleKey } from '../household/households.ts'
 import { hasScreens, type ModuleRegistry } from '../modules/registry.ts'
 
 /** A member's own arrangement of their modules in one household (D-38). */
@@ -43,7 +42,7 @@ const destinations: ReadonlySet<ModuleKey> = new Set<ModuleKey>(['dashboard'])
  */
 export function heldModules(household: Pick<Household, 'my_grants'>): ModuleKey[] {
   const grants = household.my_grants ?? {}
-  return moduleIds.filter((module) => {
+  return moduleKeys.filter((module) => {
     const level = grants[module]
     return level !== undefined && level !== 'none'
   })
@@ -71,4 +70,111 @@ export function navigationOf(
     .filter((module) => !has(pinned, module) && !has(hidden, module))
     .sort((a, b) => place(a) - place(b))
   return { pinned: [...new Set(pinned)], listed, hidden: [...new Set(hidden)] }
+}
+
+/** The arrangement that draws `navigation` as it stands: what a change to it starts from. */
+function settled(arrangement: Arrangement, navigation: Navigation): Arrangement {
+  // What the arrangement names beyond what is drawn, a module the member no longer holds, is
+  // kept where it was: it comes back there if they hold it again.
+  const drawn = new Set<ModuleKey>([
+    ...navigation.pinned,
+    ...navigation.listed,
+    ...navigation.hidden,
+  ])
+  const kept = (list: readonly ModuleKey[]) => list.filter((module) => !drawn.has(module))
+  return {
+    pinned: [...navigation.pinned, ...kept(arrangement.pinned)],
+    order: [...navigation.listed, ...kept(arrangement.order)],
+    hidden: [...navigation.hidden, ...kept(arrangement.hidden)],
+  }
+}
+
+/**
+ * `arrangement` with `module` moved `by` places in the list it is in, the pinned ones or the
+ * rest, and held at that list's ends.
+ */
+export function moved(
+  arrangement: Arrangement,
+  navigation: Navigation,
+  module: ModuleKey,
+  by: number,
+): Arrangement {
+  const base = settled(arrangement, navigation)
+  const within = (list: readonly ModuleKey[], length: number): ModuleKey[] | undefined => {
+    const from = list.indexOf(module)
+    if (from === -1 || from >= length) return undefined
+    const to = Math.min(length - 1, Math.max(0, from + by))
+    const next = [...list]
+    next.splice(from, 1)
+    next.splice(to, 0, module)
+    return next
+  }
+  const pinned = within(base.pinned, navigation.pinned.length)
+  if (pinned !== undefined) return { ...base, pinned }
+  const order = within(base.order, navigation.listed.length)
+  return order === undefined ? base : { ...base, order }
+}
+
+/** `arrangement` with `module` pinned, after the ones pinned already. */
+export function pinned(
+  arrangement: Arrangement,
+  navigation: Navigation,
+  module: ModuleKey,
+): Arrangement {
+  const base = settled(arrangement, navigation)
+  if (!navigation.listed.includes(module)) return base
+  return {
+    ...base,
+    pinned: [...navigation.pinned, module, ...base.pinned.slice(navigation.pinned.length)],
+    order: base.order.filter((other) => other !== module),
+  }
+}
+
+/** `arrangement` with `module` no longer pinned: first of the rest, next to where it was. */
+export function unpinned(
+  arrangement: Arrangement,
+  navigation: Navigation,
+  module: ModuleKey,
+): Arrangement {
+  const base = settled(arrangement, navigation)
+  if (!navigation.pinned.includes(module)) return base
+  return {
+    ...base,
+    pinned: base.pinned.filter((other) => other !== module),
+    order: [module, ...base.order],
+  }
+}
+
+/** `arrangement` with `module` put away: in neither list, and named in the arrange screen alone. */
+export function hidden(
+  arrangement: Arrangement,
+  navigation: Navigation,
+  module: ModuleKey,
+): Arrangement {
+  const base = settled(arrangement, navigation)
+  if (base.hidden.includes(module)) return base
+  return {
+    pinned: base.pinned.filter((other) => other !== module),
+    order: base.order.filter((other) => other !== module),
+    hidden: [...navigation.hidden, module, ...base.hidden.slice(navigation.hidden.length)],
+  }
+}
+
+/** `arrangement` with `module` shown again: last of the list, where a member looks for it. */
+export function shown(
+  arrangement: Arrangement,
+  navigation: Navigation,
+  module: ModuleKey,
+): Arrangement {
+  const base = settled(arrangement, navigation)
+  if (!navigation.hidden.includes(module)) return base
+  return {
+    ...base,
+    hidden: base.hidden.filter((other) => other !== module),
+    order: [
+      ...navigation.listed,
+      module,
+      ...base.order.slice(navigation.listed.length).filter((other) => other !== module),
+    ],
+  }
 }

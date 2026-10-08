@@ -7,13 +7,16 @@
 // It lists the households the member belongs to and no other. A household whose subscription
 // has lapsed stays in the list with its state in a word, and can be entered: that is how its
 // payer reaches its billing. With one membership there is nothing to switch between, and the
-// name is a label and no control.
+// name is a label and no control. The household the member stands in is drawn from the address
+// at once: opening the switcher never blanks it, and where the others could not be read it says
+// so in a line and the one that is open is as it was.
 import { useNavigate } from 'react-router'
 import { inHousehold } from '../app/paths.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import {
   useHouseholds,
   type EntitlementState,
+  type Household,
   type HouseholdRole,
   type HouseholdSummary,
 } from '../household/households.ts'
@@ -23,15 +26,7 @@ import { Button } from '../ui/Button.tsx'
 import { Menu } from '../ui/Menu.tsx'
 import styles from './Sidebar.module.css'
 
-/** The states a household is named with beside its name: those in which something is held back. */
-const stated: ReadonlySet<EntitlementState> = new Set<EntitlementState>([
-  'grace',
-  'read_only',
-  'restricted',
-  'canceled',
-  'suspended',
-])
-
+/** The word for a member's role in a household. */
 export function useRoleWord(): (role: HouseholdRole | undefined) => string {
   const t = useTranslate()
   return (role) => {
@@ -47,10 +42,14 @@ export function useRoleWord(): (role: HouseholdRole | undefined) => string {
   }
 }
 
+/**
+ * The word a household is named with beside its name, for a state in which something is held
+ * back: a word, and no lock glyph. A household that is trialing, paid for or past due is named
+ * with none.
+ */
 function useStateWord(): (state: EntitlementState | undefined) => string | undefined {
   const t = useTranslate()
   return (state) => {
-    if (state === undefined || !stated.has(state)) return undefined
     switch (state) {
       case 'grace':
         return t('shell.entitlement.grace')
@@ -62,21 +61,31 @@ function useStateWord(): (state: EntitlementState | undefined) => string | undef
         return t('shell.entitlement.canceled')
       case 'suspended':
         return t('shell.entitlement.suspended')
-      default:
+      case 'trialing':
+      case 'active':
+      case 'past_due':
+      case undefined:
         return undefined
     }
   }
 }
 
-export function Switcher() {
+export interface SwitcherViewProps {
+  /** The household that is open. */
+  readonly household: Pick<Household, 'id' | 'name' | 'my_role'>
+  /** The member's other households, in the server's order. */
+  readonly others: readonly HouseholdSummary[]
+  /** Whether the member's households could not be read. */
+  readonly failed: boolean
+  /** Goes to `household`: one event, by which everything of a household changes together. */
+  readonly onSwitch: (household: string) => void
+}
+
+export function SwitcherView({ household, others, failed, onSwitch }: SwitcherViewProps) {
   const t = useTranslate()
-  const navigate = useNavigate()
-  const household = useHousehold()
-  const households = useHouseholds()
   const roleWord = useRoleWord()
   const stateWord = useStateWord()
   const role = roleWord(household.my_role)
-  const others = (households.data ?? []).filter((other) => other.id !== household.id)
 
   const named = (other: HouseholdSummary): string => {
     const name = other.name ?? ''
@@ -86,18 +95,12 @@ export function Switcher() {
       : t('shell.switcher.item_state', { name, role: roleWord(other.my_role), state })
   }
 
-  // The household the member is standing in is drawn at once, from the address: opening the
-  // switcher never blanks it. With no other to go to, it is a label.
   if (others.length === 0) {
     return (
       <div className={styles.switcher}>
         <p className={styles.household}>{household.name}</p>
         <p className={styles.role}>{role}</p>
-        {households.isError ? (
-          <p className={styles.role} role="status">
-            {t('shell.switcher.error')}
-          </p>
-        ) : null}
+        {failed ? <p className={styles.role}>{t('shell.switcher.error')}</p> : null}
       </div>
     )
   }
@@ -117,11 +120,30 @@ export function Switcher() {
           id: other.id,
           label: named(other),
           onSelect: () => {
-            void navigate(inHousehold.home(other.id), { state: { switched: true } })
+            onSwitch(other.id)
           },
         }))}
       />
       <p className={styles.role}>{role}</p>
     </div>
+  )
+}
+
+/** What a navigation carries when the member chose the household themselves (Switched.tsx). */
+export const switchedByMember = { switched: true } as const
+
+export function Switcher() {
+  const navigate = useNavigate()
+  const household = useHousehold()
+  const households = useHouseholds()
+  return (
+    <SwitcherView
+      household={household}
+      others={(households.data ?? []).filter((other) => other.id !== household.id)}
+      failed={households.isError}
+      onSwitch={(to) => {
+        void navigate(inHousehold.home(to), { state: switchedByMember })
+      }}
+    />
   )
 }

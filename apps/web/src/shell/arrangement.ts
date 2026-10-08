@@ -3,9 +3,8 @@
 // the server keeps it yet: item 36 gives it a store that follows the member across their devices,
 // and until then a phone and a browser order their lists apart. It is a preference and no
 // household's data: it survives a sign-out, and a household's read-only state does not hold it.
-import { moduleIds } from '@household/tokens'
 import { useCallback, useSyncExternalStore } from 'react'
-import type { ModuleKey } from '../household/households.ts'
+import { moduleKeys, type ModuleKey } from '../household/households.ts'
 import { noArrangement, type Arrangement } from './navigation.ts'
 
 /** The key a member's arrangement of a household is kept under. */
@@ -15,7 +14,7 @@ export function arrangementKey(user: string, household: string): string {
 
 function modulesIn(value: unknown): ModuleKey[] {
   if (!Array.isArray(value)) return []
-  const known = new Set<string>(moduleIds)
+  const known = new Set<string>(moduleKeys)
   return [...new Set(value.filter((entry): entry is ModuleKey => known.has(String(entry))))]
 }
 

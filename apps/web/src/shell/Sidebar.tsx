@@ -4,12 +4,18 @@
 //
 // The module list is derived and never authored (navigation.ts): the modules the household's own
 // answer grants this member, of those this build has screens for, in the order the member put
-// them. A module they do not hold is not in it, nor anywhere else in the shell.
+// them. A module they do not hold is not in it, nor anywhere else in the shell. It is a list and
+// no tree, and nothing is written from it: it has no pending, syncing, conflicted or rejected
+// state to be in (ledger F-13). While the household is being read the shell around it is not
+// drawn at all (HouseholdShell.tsx), so no module is drawn for a moment that the member does not
+// hold; a household's read-only state changes nothing here, navigation being a read.
 import { ModuleIcon } from '@household/icons/web'
+import type { ReactNode } from 'react'
 import { inHousehold, paths } from '../app/paths.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
+import type { Household, ModuleKey } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
-import { modules } from '../modules/registry.ts'
+import { modules, type ModuleRegistry } from '../modules/registry.ts'
 import { useMe } from '../session/SessionProvider.tsx'
 import { useArrangement } from './arrangement.ts'
 import { NavLink } from './NavLink.tsx'
@@ -19,13 +25,21 @@ import styles from './Sidebar.module.css'
 import { Switcher } from './Switcher.tsx'
 import { SyncLink } from './SyncLink.tsx'
 
-export function Sidebar() {
+export interface SidebarViewProps {
+  readonly household: Pick<Household, 'id' | 'my_grants'>
+  /** The member whose arrangement of this household's modules it is drawn in. */
+  readonly user: string
+  /** The modules this build has screens for. */
+  readonly registry: ModuleRegistry
+  /** The switcher, at its head. */
+  readonly switcher: ReactNode
+}
+
+export function SidebarView({ household, user, registry, switcher }: SidebarViewProps) {
   const t = useTranslate()
-  const me = useMe()
-  const household = useHousehold()
-  const [arrangement] = useArrangement(me.id, household.id)
-  const navigation = navigationOf(household, modules, arrangement)
-  const link = (module: (typeof navigation.listed)[number]) => (
+  const [arrangement] = useArrangement(user, household.id)
+  const navigation = navigationOf(household, registry, arrangement)
+  const link = (module: ModuleKey) => (
     <NavLink
       key={module}
       to={inHousehold.module(household.id, module)}
@@ -34,9 +48,11 @@ export function Sidebar() {
       {t(`module.${module}.name`)}
     </NavLink>
   )
+  const arrangeable =
+    navigation.pinned.length + navigation.listed.length + navigation.hidden.length > 0
   return (
     <>
-      <Switcher />
+      {switcher}
       <SearchSlot />
       <div className={styles.group}>
         <NavLink to={inHousehold.home(household.id)} end>
@@ -56,13 +72,21 @@ export function Sidebar() {
         </div>
       )}
       <div className={styles.foot}>
-        {navigation.pinned.length + navigation.listed.length + navigation.hidden.length ===
-        0 ? null : (
+        {/* Arranging needs something to arrange: with no module to list, its way in is absent. */}
+        {arrangeable ? (
           <NavLink to={inHousehold.arrange(household.id)}>{t('shell.sidebar.arrange')}</NavLink>
-        )}
+        ) : null}
         <SyncLink />
         <NavLink to={paths.account.path}>{t('shell.sidebar.account')}</NavLink>
       </div>
     </>
+  )
+}
+
+export function Sidebar() {
+  const me = useMe()
+  const household = useHousehold()
+  return (
+    <SidebarView household={household} user={me.id} registry={modules} switcher={<Switcher />} />
   )
 }

@@ -19,6 +19,7 @@ import { AccountNavigation } from './AccountNavigation.tsx'
 import { Frame } from './Frame.tsx'
 import { HouseholdBars } from './HouseholdBars.tsx'
 import { Sidebar } from './Sidebar.tsx'
+import { Switched } from './Switched.tsx'
 
 /** The shell with no household in it: around what stands in a household's place. */
 function Outside({ children }: { readonly children: React.ReactNode }) {
@@ -83,7 +84,12 @@ function Opened({ id }: { readonly id: string }) {
           heading={household.data.name}
           navigationLabel={t('shell.navigation')}
           navigation={<Sidebar />}
-          above={<HouseholdBars />}
+          above={
+            <>
+              <HouseholdBars />
+              <Switched />
+            </>
+          }
         >
           <Outlet />
         </Frame>

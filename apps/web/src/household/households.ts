@@ -13,6 +13,40 @@ export type AccessLevel = components['schemas']['AccessLevel']
 export type EntitlementState = components['schemas']['EntitlementState']
 export type ModuleKey = components['schemas']['ModuleKeyValue']
 
+/**
+ * `values`, held to the contract's modules in both directions: a key the contract has not fails
+ * the build, and so does one this list leaves out, which makes the argument `never`.
+ */
+function everyModule<const T extends readonly ModuleKey[]>(
+  values: T & ([Exclude<ModuleKey, T[number]>] extends [never] ? unknown : never),
+): readonly ModuleKey[] {
+  return values
+}
+
+/**
+ * The modules in the product's own order, which is the contract's (`ModuleKeyValue`): the order
+ * a member's list is in until they give it one of their own (D-38).
+ */
+export const moduleKeys = everyModule([
+  'dashboard',
+  'tasks',
+  'reminders',
+  'calendar',
+  'shopping',
+  'chores',
+  'notes',
+  'documents',
+  'finance',
+  'utilities',
+  'garden',
+  'property',
+  'vehicles',
+  'pets',
+  'chat',
+  'activity',
+  'admin',
+])
+
 /** The list of a member's households: read by key where a membership is made or ended. */
 export const householdsKey = ['households'] as const
 
