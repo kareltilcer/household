@@ -213,6 +213,10 @@ every other console error still fails its test.
   sign-out, the count of changes not yet sent and the question that names them.
 - The arrange screen moves a row by its handle's arrow keys and by its menu. Dragging a row is
   not built: PL-4's dnd-kit comes with the first board.
+- The first download is 180 kB of its 200 kB (D-153), 19 of them a language's whole catalog,
+  which every module's words are added to. The item whose words would take it past the budget
+  splits a language's catalog as the screens are split, the app's own words in the first
+  download and a module's fetched with its screens; item 26 is the first to add a module's.
 - **What would make this worth revisiting**: a browser that stops taking `http://127.0.0.1` for a
   secure context, which the suite's cookies stand on; a PowerSync release whose workers are not
   the page's own origin's; or a provider that posts its answer from more than one origin.

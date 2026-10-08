@@ -145,7 +145,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   screen spends the twelve states through `ui/states.ts` and `StateFrame`. A route is a line of
   `src/app/paths.ts`, which the end-to-end suite walks with axe in both themes and in the
   pseudo-locale, every test failing on a violation of the policy; what a route opens, a dialog, a
-  menu or a toast, is opened under the same two in `e2e/overlays.spec.ts`. A dev-only page (`src/dev`) writes
+  menu or a toast, is opened under the same two in `e2e/overlays.spec.ts` or in the spec of the
+  screens that open it. A dev-only page (`src/dev`) writes
   its words as fixtures and is in no build a deployment serves ([D-154](docs/prd/09-decisions.md));
   a test's markup is held to the literal-string lint as the app's is. The bundle budget is
   `build/budget.ts` ([D-153](docs/prd/09-decisions.md),
@@ -165,9 +166,12 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   ([D-161](docs/prd/09-decisions.md)).
   The app holds one language at a time: `apps/web/src` imports `@household/i18n/lazy` and never
   the package's own entry, which holds all five catalogs, and ESLint fails the import
-  ([D-159](docs/prd/09-decisions.md)). The shell's module list is derived from the household's own
+  ([D-159](docs/prd/09-decisions.md)). A file of the app's own whose import failed is not
+  imported again, since a browser may answer the second import with the first one's failure: the
+  page is loaded again, or the screen says to reload. The shell's module list is derived from the household's own
   answer and lists a module only where `src/modules/registry.ts` has its screens, which the
-  module's web item adds ([D-160](docs/prd/09-decisions.md)). A household's replica is one tab's,
+  module's web item adds ([D-160](docs/prd/09-decisions.md)); the app opens at a household that
+  opens, passing over one the list names as suspended ([D-162](docs/prd/09-decisions.md)). A household's replica is one tab's,
   by a Web Lock, opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
   imported for its types alone outside `sync/open.ts`, which ESLint holds and which is what keeps
   the library and its SDK out of a page until a replica is opened, and a run-time value a screen

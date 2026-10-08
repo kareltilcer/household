@@ -958,7 +958,7 @@ Phase 0 · after 25, 10, 11 · size L
     - the nudge when there is only one owner;
     - child profiles: create, PIN reset, unlock, locked dashboard, graduate: item 11's owner controls ([ADR 0012](adr/0012-child-profiles-pins-and-graduation.md)), which stand on this screen.
   - **§3 Modules** (C-51): each toggle says what it will do.
-  - **Item 25's hand-over** ([ADR 0026](adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)): household settings is the first module with a web screen, registered in `src/modules/registry.ts`, by which the sidebar lists it; the account's empty state, *you are not in a household yet*, gains its one action, creating one; and the screens that refuse an unverified account (A-4) say so where they refuse, as the second step's enrolment does.
+  - **Item 25's hand-over** ([ADR 0026](adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)): household settings is the first module with a web screen, registered in `src/modules/registry.ts`, by which the sidebar lists it; the account's empty state, *you are not in a household yet*, gains its one action, creating one; and the screens that refuse an unverified account (A-4) say so where they refuse, as the second step's enrolment does. The first download stands at 180 kB of its 200 kB with one catalog a language (D-153, D-159): where this item's words would take it past, a language's catalog is split as the screens are, the app's own words first and a module's fetched with its screens.
   - **Leaving** (A-26): both refusals shown at once.
   - **Ownership transfer.**
 - **Inputs**
