@@ -1,12 +1,13 @@
 // The way in, end to end, against the API itself (plan item 25; A-1 to A-10): a person registers,
-// proves their address by the link their email carried, signs in, and signs in again once a
-// second step is on; a visitor who opened a member's address lands there after signing in; and a
-// password is set anew by a reset's link. Each person is this test's own, at an address nobody
+// proves their address by the link their email carried, signs in, turns a second step on from
+// their account, and signs in again with a code from it and then with a recovery code; a visitor
+// who opened a member's address lands there after signing in; and a password is set anew by a
+// reset's link. Each person is this test's own, at an address nobody
 // else is registered with, and each screen a journey passes is held to axe as it stands.
 import type { Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
 import { expect, expectAccessible, open, test } from './fixtures.ts'
-import { call, linkToken, person, register, totp, type Person } from './stack.ts'
+import { linkToken, person, register, totp, type Person } from './stack.ts'
 
 /** The page's one title, which a screen is known by. */
 function title(page: Page, name: string) {
@@ -21,9 +22,11 @@ async function signInAs(page: Page, who: Person, password = who.password): Promi
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
 }
 
-test('a person registers, verifies their address by the link in their email, and signs in', async ({
+test('a person registers, verifies their address, signs in, turns the second step on and signs in with it', async ({
   page,
 }) => {
+  // One journey through eight screens, each under axe.
+  test.slow()
   const who = person()
   await open(page, paths.register.example)
   await page.getByLabel('Name').fill(who.name)
@@ -53,32 +56,47 @@ test('a person registers, verifies their address by the link in their email, and
   // They are in no household yet, and their account is theirs either way (A-19).
   await expect(page).toHaveURL(paths.account.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
-})
 
-test('a member whose second step is on signs in with a code from their authenticator', async ({
-  page,
-}) => {
-  const who = person()
-  await open(page, paths.signIn.example)
-  await register(page, who)
-  await signInAs(page, who)
-  await expect(page).toHaveURL(paths.account.path)
+  // The second step, turned on from the account's own screens (A-5): the password, the
+  // authenticator's key, a code from it.
+  await page.getByRole('link', { name: 'Signing in' }).click()
+  await page.getByRole('link', { name: 'Add a second step' }).click()
+  await expect(title(page, 'Add a second step')).toBeVisible()
+  await page.getByRole('button', { name: 'Set it up' }).click()
+  const asked = page.getByRole('dialog', { name: 'Your password, first' })
+  await asked.getByLabel('Password', { exact: true }).fill(who.password)
+  await expectAccessible(page)
+  await asked.getByRole('button', { name: 'Continue' }).click()
 
-  // The second step is turned on as the account's own screen turns it on: an enrolment the
-  // password allows, and a code from the authenticator. A code is taken once, and none older
-  // than the last one taken, so the authenticator's last code turns it on, and the one it shows
-  // now is left for the sign-in.
-  const enrolled = await call(page, 'POST', '/auth/mfa/enroll', { password: who.password })
-  expect(enrolled.status).toBe(200)
-  const { secret } = enrolled.body as { readonly secret: string }
-  const activated = await call(page, 'POST', '/auth/mfa/activate', {
-    code: totp(secret, Date.now() - 30_000),
-  })
-  expect(activated.status).toBe(200)
+  const key = page.getByText('Key to type').locator('xpath=following-sibling::p[1]')
+  await expect(key).toBeVisible()
+  const secret = (await key.innerText()).replace(/\s/g, '')
+  await expectAccessible(page)
+  // A code is taken once, and none older than the last one taken: the authenticator's last code
+  // turns the step on, and the one it shows now is left for the sign-in that follows.
+  await page.getByLabel('Code from the app').fill(totp(secret, Date.now() - 30_000))
+  await page.getByRole('button', { name: 'Turn it on' }).click()
 
+  // The ten recovery codes, shown once (A-6), and saved as a file the page makes itself.
+  await expect(title(page, 'Ten codes, in case the app is gone')).toBeVisible()
+  const codes = await page
+    .getByRole('list', { name: 'Recovery codes' })
+    .getByRole('listitem')
+    .allInnerTexts()
+  expect(codes).toHaveLength(10)
+  await expectAccessible(page)
+  const saved = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download' }).click()
+  await saved
+  await page.getByLabel('I have saved them').check()
+  await page.getByRole('button', { name: 'Finish' }).click()
+  await expect(title(page, 'Signing in')).toBeVisible()
+  await expect(page.getByText('On. Signing in on a new browser', { exact: false })).toBeVisible()
+  await expectAccessible(page)
+
+  // Signing in again is challenged for a code (A-7).
   await page.getByRole('button', { name: 'Sign out' }).click()
   await signInAs(page, who)
-
   await expect(title(page, 'Enter your code')).toBeVisible()
   await expect(page).toHaveURL(paths.secondStep.path)
   await expectAccessible(page)
@@ -86,11 +104,22 @@ test('a member whose second step is on signs in with a code from their authentic
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByText('That code isn’t right.', { exact: false })).toBeVisible()
   await expectAccessible(page)
-
   await page.getByLabel('Six-digit code').fill(totp(secret))
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page).toHaveURL(paths.account.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+
+  // And with the authenticator out of reach, one of the ten stands in for it (A-8).
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await signInAs(page, who)
+  await page.getByRole('link', { name: 'Use a recovery code instead' }).click()
+  await expect(title(page, 'Use a recovery code')).toBeVisible()
+  await expectAccessible(page)
+  await page.getByLabel('Recovery code').fill(codes[0] ?? '')
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await expect(page).toHaveURL(paths.account.path)
+  await page.getByRole('link', { name: 'Signing in' }).click()
+  await expect(page.getByText('9 recovery codes left')).toBeVisible()
 })
 
 test('a visitor who opens a member’s address signs in and lands there', async ({ page }) => {

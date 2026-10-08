@@ -9,6 +9,7 @@
 // the suite's API trusts the address `X-Forwarded-For` names, and each test names its own, so no
 // test spends another's limits, in one run or across runs against the same database.
 import { createHmac, randomBytes, randomInt } from 'node:crypto'
+import { crc32, deflateSync } from 'node:zlib'
 import { newId } from '@household/api'
 import type { Page } from '@playwright/test'
 import { csrfCookie } from '../src/api/names.ts'
@@ -194,4 +195,51 @@ export function totp(secret: string, at: number = Date.now()): string {
   const offset = (digest.at(-1) ?? 0) & 0x0f
   const code = (digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000
   return code.toString().padStart(6, '0')
+}
+
+/**
+ * Signs `who` in on a phone of theirs, beside the browser: a device the account's own list then
+ * shows, named `label`. The phone's tokens are its own and are not kept: the page's session is
+ * untouched.
+ */
+export async function signInOnPhone(page: Page, who: Person, label = 'Áňin 5a'): Promise<void> {
+  expecting(
+    await call(page, 'POST', '/auth/login', {
+      email: who.email,
+      password: who.password,
+      client_type: 'mobile',
+      device: { id: newId(), label, platform: 'ios' },
+    }),
+    200,
+    'signing in on a phone',
+  )
+}
+
+/** A PNG chunk: its length, its type and data, and the checksum of those two. */
+function chunk(type: string, data: Buffer): Buffer {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data])
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(data.length)
+  const sum = Buffer.alloc(4)
+  sum.writeUInt32BE(crc32(body))
+  return Buffer.concat([length, body, sum])
+}
+
+/** A picture to upload: a PNG of one colour, `side` pixels square. */
+export function picture(side = 48): Buffer {
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(side, 0)
+  header.writeUInt32BE(side, 4)
+  // Eight bits a channel, in red, green and blue.
+  header.writeUInt8(8, 8)
+  header.writeUInt8(2, 9)
+  // Each row is its filter, none, and then its pixels.
+  const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(side * 3, 0x7a)])
+  const rows = Buffer.concat(Array.from({ length: side }, () => row))
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(rows)),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
 }
