@@ -6,7 +6,7 @@ import { createWebClient } from '../api/client.ts'
 import { heldDestination } from '../session/destination.ts'
 import { buildMeta } from '../update/build.ts'
 import { Providers } from './App.tsx'
-import { fill, inHousehold, paths, routeIds } from './paths.ts'
+import { fill, inHousehold, isOwnPath, paths, routeIds } from './paths.ts'
 import { inRoot, routes, served } from './routes.tsx'
 
 // A visitor's pages ask the server one thing, which providers it signs in with, and are answered
@@ -63,6 +63,15 @@ describe('the routes', () => {
     expect(inHousehold.module('h1', 'shopping', 'lists/2')).toBe(
       '/households/h1/modules/shopping/lists/2',
     )
+  })
+
+  it('are told from another origin’s address, which is held, gone back to and opened by nothing', () => {
+    for (const own of ['/', '/account', '/households/h1/sync?x=1#y']) {
+      expect(isOwnPath(own), own).toBe(true)
+    }
+    for (const other of ['', 'account', 'https://other.example/', '//other.example', '/\\other']) {
+      expect(isOwnPath(other), other).toBe(false)
+    }
   })
 
   it('keep the dev-only pages apart from the ones every build has', () => {

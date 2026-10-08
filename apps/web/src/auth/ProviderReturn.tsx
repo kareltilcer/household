@@ -21,7 +21,7 @@ import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
-import { paths } from '../app/paths.ts'
+import { isOwnPath, paths } from '../app/paths.ts'
 import { useI18n } from '../i18n/I18nProvider.tsx'
 import { heldDestination } from '../session/destination.ts'
 import { useSession } from '../session/SessionProvider.tsx'
@@ -69,9 +69,7 @@ function answerIn({ fragment, query }: Carried) {
  */
 function backOf(flow: PendingFlow): string {
   const to = flow.returnTo
-  const own =
-    to !== undefined && to.startsWith('/') && !to.startsWith('//') && !to.startsWith('/\\')
-  return own ? to : paths.accountSecurity.path
+  return to !== undefined && isOwnPath(to) ? to : paths.accountSecurity.path
 }
 
 /** `name` held to the contract's longest, counted in characters as the contract counts them. */

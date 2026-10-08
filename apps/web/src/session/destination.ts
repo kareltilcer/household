@@ -2,19 +2,15 @@
 // held while they sign in, through a second step or a provider's pages and back, and opened once
 // they are in. Kept in this tab's own storage, so that it survives the provider's redirect and
 // belongs to no other tab; a browser that refuses storage holds it for the page's life.
+import { isOwnPath } from '../app/paths.ts'
 
 const key = 'household.destination'
 
 let inMemory: string | null = null
 
-/** Whether `path` is an address of the app's own: a path from the root, and no other origin's. */
-function own(path: string): boolean {
-  return path.startsWith('/') && !path.startsWith('//') && !path.startsWith('/\\')
-}
-
 /** Holds `path`, the address to open after signing in. Anything but a path of the app's is not held. */
 export function holdDestination(path: string): void {
-  if (!own(path)) return
+  if (!isOwnPath(path)) return
   inMemory = path
   try {
     window.sessionStorage.setItem(key, path)
@@ -27,7 +23,7 @@ export function holdDestination(path: string): void {
 export function heldDestination(): string | null {
   try {
     const stored = window.sessionStorage.getItem(key)
-    if (stored !== null && own(stored)) return stored
+    if (stored !== null && isOwnPath(stored)) return stored
   } catch {
     // What this page holds itself is all there is.
   }

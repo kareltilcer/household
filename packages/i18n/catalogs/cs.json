@@ -200,7 +200,7 @@
   "account.profile.email.verified": "{email} · ověřeno",
   "account.profile.language.help": "Jazyk aplikace na všech zařízeních a e-mailů, které vám Household posílá.",
   "account.profile.language.label": "Jazyk",
-  "account.profile.language.unfetched": "Tento jazyk se nepodařilo načíst. Zkontrolujte připojení a zvolte ho znovu.",
+  "account.profile.language.unfetched": "Tento jazyk se nepodařilo načíst. Zkontrolujte připojení, načtěte stránku znovu a zvolte ho ještě jednou.",
   "account.profile.name.help": "Jak vám říkají ve všech domácnostech, kde jste členem.",
   "account.profile.name.label": "Jméno",
   "account.profile.name.missing": "Doplňte jméno. Zobrazuje se u všeho, co uděláte.",

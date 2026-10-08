@@ -202,6 +202,16 @@ export function fill(path: string, params: Readonly<Record<string, string>>, res
   return rest === '' ? base : `${base}/${rest.replace(/^\/+/, '')}`
 }
 
+/**
+ * Whether `path` is an address of the app's own: a path from the root, and no other origin's,
+ * which is what a browser takes `//host` and `/\host` for. It is asked of whatever a tab's
+ * storage held or a message carried, before that is opened: the address held while a visitor
+ * signs in, where a provider's link goes back to, the one a pressed notification names.
+ */
+export function isOwnPath(path: string): boolean {
+  return path.startsWith('/') && !path.startsWith('//') && !path.startsWith('/\\')
+}
+
 /** The addresses of a household's own routes. */
 export const inHousehold = {
   home: (householdId: string) => fill(paths.household.path, { householdId }),

@@ -25,6 +25,37 @@ test('a page says what language it is in, and what it is', async ({ page }) => {
   await expect(page).toHaveTitle('Household')
 })
 
+test('a page whose language could not be fetched is loaded again when the connection is back', async ({
+  page,
+  faults,
+}) => {
+  // The catalog's own file, refused for as long as the connection is away: the app's script
+  // came, and its words did not.
+  let away = true
+  let refused = 0
+  await page.route('**/assets/catalog-*.js', (route) => {
+    if (!away) return route.continue()
+    refused += 1
+    return route.abort('internetdisconnected')
+  })
+  await page.goto(paths.signIn.example)
+  await expect.poll(() => refused).toBe(1)
+  // Nothing is drawn: there is no word to say so in.
+  await expect(page.locator('#root')).toBeEmpty()
+
+  // The browser keeps the import that failed, and would answer another of the same file with
+  // that failure: the page is loaded again, and asks for every file of its own anew.
+  away = false
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('online'))
+  })
+  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()
+  expect(refused).toBe(1)
+  // The file that was refused is the one fault, and this test's own.
+  expect(faults).toEqual([expect.stringContaining('ERR_INTERNET_DISCONNECTED')])
+  faults.length = 0
+})
+
 test('a page opened at a route whose file is still on its way has its landmark already', async ({
   page,
 }) => {

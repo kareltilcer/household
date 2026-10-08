@@ -200,7 +200,7 @@
   "account.profile.email.verified": "{email} · bestätigt",
   "account.profile.language.help": "Die Sprache der App auf allen Geräten und der E-Mails, die Household Ihnen sendet.",
   "account.profile.language.label": "Sprache",
-  "account.profile.language.unfetched": "Diese Sprache konnte nicht geladen werden. Prüfen Sie Ihre Verbindung und wählen Sie sie erneut.",
+  "account.profile.language.unfetched": "Diese Sprache konnte nicht geladen werden. Prüfen Sie Ihre Verbindung, laden Sie die Seite neu und wählen Sie sie erneut.",
   "account.profile.name.help": "So heißen Sie in jedem Haushalt, dem Sie angehören.",
   "account.profile.name.label": "Name",
   "account.profile.name.missing": "Geben Sie einen Namen ein. Er steht bei allem, was Sie tun.",

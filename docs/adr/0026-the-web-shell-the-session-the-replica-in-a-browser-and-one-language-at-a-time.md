@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-08
 - **Plan item:** 25
-- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §5–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-161; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
+- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §5–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-162; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
 
 ## Context
 
@@ -62,7 +62,9 @@ no session that still notes a replica (`sync/databases.ts`) removes what it kept
 and a page that finds another member signed in under it, from another tab or where a failed
 CSRF check left the first one's page as it was, removes what it kept and starts again by a
 reload. A household the server answers `404` for opens nothing whatever the browser kept of
-it, and the list it kept, which may be what led there, is read again.
+it, and the list it kept, which may be what led there, is read again. Where the app opens
+passes over a household that list names as suspended, whose address answers `404` too
+(D-115), for one that opens (D-162).
 
 **A build is `web/<version>+<build id>`** (D-158). The version is `apps/web/package.json`'s,
 raised by the pull request after which a deployment must refuse older builds, and by no other;
@@ -126,9 +128,13 @@ first, while the session can still tell the server.
 
 **The app holds one language at a time** (D-159). `@household/i18n/lazy` is the package's entry
 with no catalog in it; the app fetches the catalog of the language it starts in before it draws
-a word, and one chosen later when it is chosen. `build/check.ts` counts the largest catalog with
-the scripts a first visit downloads. Every screen is a file fetched when its address is opened.
-The entry is 139 kB, where it was 177 kB with a third of these words.
+a word, and one chosen later when it is chosen. Where the first cannot be fetched the page is
+loaded again when the connection is back, and where a later one cannot its control says to
+reload: a browser may answer a second import of a file with the first one's failure.
+`build/check.ts` counts the largest catalog with the scripts a first visit downloads. Every
+screen is a file fetched when its address is opened. Split, the entry was 139 kB where it had
+been 177 kB with a third of these words; with every screen of this item the first download is
+180 kB of the 200, 19 of them the largest catalog.
 
 **The sidebar is derived, and lists what this build can open** (D-160). `shell/navigation.ts` is
 the port of the prototype's `navFor`: the modules the household's answer gives the member a level
@@ -153,6 +159,9 @@ every other console error still fails its test.
 | What a session left removed only by a page that had read its account | The kept account lasts a day and one build, and the cookies lapse with the session: the lost browser D-156 is for is opened later than either, and the replica it left would be the next member's to open (D-161) |
 | A replica and a cache named for the member as well as the household | Every member's copy would stay in a shared browser until they came back to sign out of it, which is the replica kept for a return. One database a household, removed with its session, has nothing to tell apart |
 | The first member's page kept where another is found signed in, its reads asked again | What its screens hold in memory is the first one's, and a read that now fails keeps what it last had. A page that starts again holds nothing of them, and the open replica is closed by the page that goes |
+| The app opened at the household last open, though the list names it suspended | Its address answers `404` (D-115), and the screen that says so leads back to where the app opens: a member with another household could not reach it. The app opens at one that opens, and at the suspended one, where item 27 draws its lockout, only for a member in no other (D-162) |
+| A household's replica removed as the server answers `404` for it | What a browser keeps is bounded by its session (D-161), as a device that never reconnects keeps its copy (FR-SY8): nothing opens that replica again or draws from it, and it goes with the sign-out or the session's end. A second removal, by household, would be one more to keep in step with the first, for a copy its former member could read until the membership ended |
+| The replicas left where another member is found signed in from another tab, and removed only after a failed CSRF check | A page cannot tell the two apart: either way the account under it is another's. Where the second member's own tab has opened a replica since, what goes with it is a copy read again when the household is next opened, and nothing queued: no module writes offline, and the first that does settles what a removal owes a replica that has queued something (Consequences) |
 | A household drawn from what the browser kept while the server answers `404` for it | A kept read stands in for a server that cannot be asked, not for one that answered: a member taken out of a household would be drawn its shell for as long as the cache lasts (F-17) |
 | Where the app opens waiting on the list of households being read again, every time | A round trip before every opening, and seconds of it on a connection that fails, to cover a list that named a household since left: that list is dropped by the `404` that found it out |
 | A `fetch` that turns the library's bearer into a cookie on the server's side, or a web-session token minted for the replica | The first is the server reading a credential it was not sent. The second is a second credential for a browser that has one, with its own lifetime and revocation to keep in step |
@@ -169,6 +178,8 @@ every other console error still fails its test.
 | Notification permission asked at sign-in | 06-clients §6: asked in context, never on first launch |
 | The browser's subscription removed after the sign-out, or put back where the sign-out failed | It goes first so that a session that still stands tells the server, and after it there is none to tell with. Put back, it needs the server the sign-out could not reach. A member whose sign-out failed was leaving, and the app registers the browser again when it next starts with them signed in (`push/Push.tsx`) |
 | The file of recovery codes let go of in the press that hands it over, or by a timer after it | A browser may begin reading the file only once the press has returned, and how long after is its own affair. It is let go of with the screen that showed the codes |
+| A catalog that failed to load imported again when the connection is back | Chromium keeps an import that failed and answers the next one of the same file with that failure, asking the network nothing: the page stayed blank until it was reloaded by hand. The page is loaded again, which asks for every file of its own anew, and a language chosen later says to reload |
+| The catalogs fetched as data, which can be asked for again, and not imported | A second way to load and to name a build's files, and to count them in the budget, for a failure that loading the page again answers |
 | English in the entry as a fallback for a catalog that fails to load | Counted on every visit of members who do not read it (D-159) |
 | Every granted module listed, with a screen that says it is not built | A link to nothing (D-160) |
 | The arrangement in a synced entity now | A server item's work inside this one (D-155) |
@@ -186,7 +197,7 @@ every other console error still fails its test.
   member in no household the way to make one, which the account's empty state leaves out.
 - **Item 27** widens the policy for the payment processor's frame, draws the entitlement banner
   in `shell/HouseholdBars.tsx` and the suspended lockout where a household answers `404` while the
-  list names it.
+  list names it: the app opens there only for a member in no household that opens (D-162).
 - **Item 36** gives a member's arrangement a store, and **item 37** puts the search field in
   `shell/SearchSlot.tsx` and the dashboard in Home's place.
 - **Items 28 and 29** show A-11 on the device whose sign-in ended (D-157).

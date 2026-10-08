@@ -10,6 +10,7 @@
 import type { ApiClient } from '@household/api'
 import { pushOpenMessage, pushWorkerFile } from '../../build/pushWorker.ts'
 import { ApiProblemError, unwrap } from '../api/problem.ts'
+import { isOwnPath } from '../app/paths.ts'
 
 /** What the browser says of notifications from this origin, or that it has no Web Push at all. */
 export type PushPermission = 'unsupported' | 'default' | 'denied' | 'granted'
@@ -236,6 +237,5 @@ export function pushTarget(data: unknown): string | null {
   if (typeof data !== 'object' || data === null) return null
   const message: Partial<Record<string, unknown>> = { ...data }
   if (message.type !== pushOpenMessage || typeof message.url !== 'string') return null
-  const { url } = message
-  return url.startsWith('/') && !url.startsWith('//') && !url.startsWith('/\\') ? url : null
+  return isOwnPath(message.url) ? message.url : null
 }

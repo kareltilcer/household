@@ -59,12 +59,20 @@ function notFound(): Response {
 interface Server {
   /** The households the member is in. */
   readonly memberships?: readonly string[]
+  /**
+   * Those of them the platform suspended: the list still names each, with its state, and its own
+   * address is not found (D-115).
+   */
+  readonly suspended?: readonly string[]
   /** Answers a household's own address: left out, what `known` holds, else not found. */
   readonly household?: (id: string) => Response
 }
 
 /** The app at `address`, signed in, over a server of the test's, and what the server was asked. */
-function open(address: string, { memberships = [home, cottage], household: answer }: Server = {}) {
+function open(
+  address: string,
+  { memberships = [home, cottage], suspended = [], household: answer }: Server = {},
+) {
   const asked: string[] = []
   const client = createWebClient({
     origin,
@@ -81,13 +89,14 @@ function open(address: string, { memberships = [home, cottage], household: answe
               id,
               name: known[id]?.name,
               my_role: 'owner',
-              entitlement: { state: 'trialing' },
+              entitlement: { state: suspended.includes(id) ? 'suspended' : 'trialing' },
             })),
           }),
         )
       }
       const id = /^\/households\/([^/]+)$/.exec(path)?.[1]
       if (id !== undefined) {
+        if (suspended.includes(id)) return Promise.resolve(notFound())
         if (answer !== undefined) return Promise.resolve(answer(id))
         const found = known[id]
         return Promise.resolve(found === undefined ? notFound() : Response.json(found))
@@ -276,6 +285,46 @@ describe('where the app opens', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.account.path)
     })
+  })
+
+  it('is a household that opens, where the one they were last in has been suspended since', async () => {
+    rememberHousehold(me.id, cottage)
+    const { router } = open(paths.home.path, { suspended: [cottage] })
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.home(home))
+    })
+  })
+
+  it('is the first household that opens, where their first is suspended', async () => {
+    const { router } = open(paths.home.path, { suspended: [home] })
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.home(cottage))
+    })
+  })
+
+  it('leads from a suspended household’s address, which opens nothing, to one that opens', async () => {
+    rememberHousehold(me.id, cottage)
+    const { router } = open(inHousehold.home(cottage), { suspended: [cottage] })
+    await userEvent.click(await screen.findByRole('link', { name: 'Go to Home' }))
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.home(home))
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('banner')).toHaveTextContent('Tilcerovi')
+    })
+  })
+
+  it('is the suspended household’s own address for a member in no other: where its lockout stands', async () => {
+    const { router } = open(paths.home.path, { memberships: [cottage], suspended: [cottage] })
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.home(cottage))
+    })
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'This link doesn’t open anything here.',
+      }),
+    ).toBeInTheDocument()
   })
 })
 

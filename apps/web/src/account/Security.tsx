@@ -24,6 +24,7 @@ import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { paths } from '../app/paths.ts'
+import { checkNewPassword } from '../auth/fields.tsx'
 import { startProvider, useOfferedProviders, type Provider } from '../auth/provider.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { meKey, useMe, type Me } from '../session/SessionProvider.tsx'
@@ -38,9 +39,6 @@ import { Section, SettingsPage } from './Page.tsx'
 import { PasswordDialog } from './PasswordDialog.tsx'
 import { RecoveryCodes } from './RecoveryCodes.tsx'
 import styles from './Settings.module.css'
-
-/** The least a password may be, as the contract has it. */
-export const shortestPassword = 12
 
 function ChangePassword({ me }: { readonly me: Me }) {
   const t = useTranslate()
@@ -88,7 +86,8 @@ function ChangePassword({ me }: { readonly me: Me }) {
       noValidate
       onSubmit={(event) => {
         event.preventDefault()
-        const failed = { current: current === '', next: next.length < shortestPassword }
+        // The new one is held to the contract's minimum as every screen that sets one holds it.
+        const failed = { current: current === '', next: checkNewPassword(next) !== undefined }
         setChecked(failed)
         change.reset()
         if (failed.current || failed.next) return

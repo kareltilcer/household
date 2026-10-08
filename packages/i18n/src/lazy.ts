@@ -33,7 +33,10 @@ const loaded = new Map<Locale, Promise<Catalog>>()
 
 /**
  * `locale`'s catalog. It rejects where the file cannot be fetched, with no connection or after a
- * newer build took it away, and a later call tries again.
+ * newer build took it away, and a later call imports it again. Whether that asks the network
+ * again is the browser's: Chromium keeps an import that failed and answers the next one of the
+ * same file with that failure, for as long as the page lives, so a caller whose fetch failed
+ * loads the page again, or tells its member to.
  */
 export function loadCatalog(locale: Locale): Promise<Catalog> {
   let catalog = loaded.get(locale)

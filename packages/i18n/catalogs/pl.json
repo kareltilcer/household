@@ -200,7 +200,7 @@
   "account.profile.email.verified": "{email} · zweryfikowany",
   "account.profile.language.help": "Język aplikacji na wszystkich urządzeniach i wiadomości e-mail, które wysyła ci Household.",
   "account.profile.language.label": "Język",
-  "account.profile.language.unfetched": "Nie udało się wczytać tego języka. Sprawdź połączenie i wybierz go ponownie.",
+  "account.profile.language.unfetched": "Nie udało się wczytać tego języka. Sprawdź połączenie, załaduj stronę ponownie i wybierz go jeszcze raz.",
   "account.profile.name.help": "Tak nazywa cię każde gospodarstwo domowe, do którego należysz.",
   "account.profile.name.label": "Imię",
   "account.profile.name.missing": "Wpisz imię. Pojawia się przy wszystkim, co robisz.",

@@ -113,6 +113,16 @@ describe('changing the password', () => {
       expect.stringContaining('Twelve characters or more.'),
     )
     expect(server.to('POST /auth/password')).toHaveLength(0)
+    // Counted in characters, as the contract counts them: eleven, the last of them two units long.
+    await user.clear(screen.getByLabelText('New password'))
+    await user.click(screen.getByLabelText('New password'))
+    await user.paste('elevenchar\u{1d4b3}')
+    expect(screen.getByLabelText('New password')).toHaveValue('elevenchar\u{1d4b3}')
+    await user.click(screen.getByRole('button', { name: 'Change password' }))
+    expect(screen.getByLabelText('New password')).toHaveAccessibleDescription(
+      expect.stringContaining('Twelve characters or more.'),
+    )
+    expect(server.to('POST /auth/password')).toHaveLength(0)
   })
 
   it('says when to try again after too many attempts', async () => {
