@@ -1,0 +1,149 @@
+{
+  "description": "Module grants: the levels a new member of each role starts with on the seventeen modules, and the highest level a role may hold on one. A client draws both before the server is asked, in the invitation composer, a child profile's making and a member's matrix; the server writes the first and refuses or caps above the second. Run by @household/domain (grants.test.ts) and by the server's twin (internal/platform/household).",
+  "sources": [
+    "PRD 02-identity-and-access FR-AC3: a member's defaults, all seventeen modules listed, the line drawn at money and possessions",
+    "PRD 02 FR-AC4: a child's defaults, and its ceiling, contribute everywhere and view on Finance",
+    "PRD 02 §4: an owner holds manage on every module, and it cannot be reduced",
+    "docs/api/openapi.yaml ModuleKeyValue: the seventeen modules, in the order the lists are answered in",
+    "design/v1 household.js MATRIX (member and child default columns); its child cap column holds the activity log and household settings to view, which the PRD does not, and the PRD wins"
+  ],
+  "groups": {
+    "defaults": [
+      {
+        "name": "an owner holds manage everywhere",
+        "input": "owner",
+        "output": {
+          "dashboard": "manage",
+          "tasks": "manage",
+          "reminders": "manage",
+          "calendar": "manage",
+          "shopping": "manage",
+          "chores": "manage",
+          "notes": "manage",
+          "documents": "manage",
+          "finance": "manage",
+          "utilities": "manage",
+          "garden": "manage",
+          "property": "manage",
+          "vehicles": "manage",
+          "pets": "manage",
+          "chat": "manage",
+          "activity": "manage",
+          "admin": "manage"
+        }
+      },
+      {
+        "name": "a member is open on what a household does together and closed on what it owns and spends",
+        "input": "member",
+        "output": {
+          "dashboard": "contribute",
+          "tasks": "contribute",
+          "reminders": "contribute",
+          "calendar": "contribute",
+          "shopping": "contribute",
+          "chores": "contribute",
+          "notes": "contribute",
+          "documents": "view",
+          "finance": "none",
+          "utilities": "none",
+          "garden": "none",
+          "property": "none",
+          "vehicles": "none",
+          "pets": "contribute",
+          "chat": "contribute",
+          "activity": "view",
+          "admin": "view"
+        }
+      },
+      {
+        "name": "a child profile",
+        "input": "child",
+        "output": {
+          "dashboard": "view",
+          "tasks": "contribute",
+          "reminders": "view",
+          "calendar": "contribute",
+          "shopping": "contribute",
+          "chores": "contribute",
+          "notes": "none",
+          "documents": "none",
+          "finance": "none",
+          "utilities": "none",
+          "garden": "none",
+          "property": "none",
+          "vehicles": "none",
+          "pets": "contribute",
+          "chat": "none",
+          "activity": "none",
+          "admin": "none"
+        }
+      }
+    ],
+    "ceiling": [
+      {
+        "name": "an owner on finance",
+        "input": {
+          "role": "owner",
+          "module": "finance"
+        },
+        "output": "manage"
+      },
+      {
+        "name": "a member on finance",
+        "input": {
+          "role": "member",
+          "module": "finance"
+        },
+        "output": "manage"
+      },
+      {
+        "name": "a member on household settings",
+        "input": {
+          "role": "member",
+          "module": "admin"
+        },
+        "output": "manage"
+      },
+      {
+        "name": "a child on finance",
+        "input": {
+          "role": "child",
+          "module": "finance"
+        },
+        "output": "view"
+      },
+      {
+        "name": "a child on chores",
+        "input": {
+          "role": "child",
+          "module": "chores"
+        },
+        "output": "contribute"
+      },
+      {
+        "name": "a child on the activity log",
+        "input": {
+          "role": "child",
+          "module": "activity"
+        },
+        "output": "contribute"
+      },
+      {
+        "name": "a child on household settings",
+        "input": {
+          "role": "child",
+          "module": "admin"
+        },
+        "output": "contribute"
+      },
+      {
+        "name": "a child on chat",
+        "input": {
+          "role": "child",
+          "module": "chat"
+        },
+        "output": "contribute"
+      }
+    ]
+  }
+}

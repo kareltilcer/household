@@ -401,7 +401,7 @@ func lockNotices(ctx context.Context, tx pgx.Tx, household uuid.UUID, m membersh
 	for _, o := range owners {
 		out = append(out, notify.Notification{
 			To: o, Category: notify.Direct, Message: messageChildLocked, Args: i18n.Args{"member": m.name}, Module: Name,
-			Link: "/households/" + household.String() + "/members/" + m.user.String(), Coalesce: "child_locked:" + m.user.String(),
+			Link: "/households/" + household.String() + "/settings/members/" + m.user.String(), Coalesce: "child_locked:" + m.user.String(),
 		})
 	}
 	return out, nil

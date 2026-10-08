@@ -6,7 +6,7 @@ import { ModuleIcon } from '@household/icons/web'
 import { inHousehold } from '../app/paths.ts'
 import { usePageTitle } from '../app/title.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
-import { modules } from '../modules/registry.ts'
+import { homeOf, modules } from '../modules/registry.ts'
 import { useMe } from '../session/SessionProvider.tsx'
 import styles from '../shell/Arrange.module.css'
 import { useArrangement } from '../shell/arrangement.ts'
@@ -33,7 +33,9 @@ export function HouseholdHome() {
           {open.map((module) => (
             <li key={module}>
               <NavLink
-                to={inHousehold.module(household.id, module)}
+                to={
+                  homeOf(modules, module, household.id) ?? inHousehold.module(household.id, module)
+                }
                 icon={<ModuleIcon module={module} />}
               >
                 {t(`module.${module}.name`)}

@@ -9,10 +9,11 @@
 // The households' names are fixtures, as every word of a dev page is (D-154). The words the
 // shell says itself are the catalogs'.
 import type { ReactNode } from 'react'
-import { Placeholder } from '../../app/Placeholder.tsx'
+import { inHousehold } from '../../app/paths.ts'
 import { usePageTitle } from '../../app/title.ts'
 import { HouseholdContext } from '../../household/HouseholdContext.tsx'
-import type { Household, HouseholdSummary } from '../../household/households.ts'
+import type { Household, HouseholdSummary, ModuleKey } from '../../household/households.ts'
+import { beginnings, StartAnswers } from '../../household/Start.tsx'
 import { useTranslate } from '../../i18n/I18nProvider.tsx'
 import type { ModuleRegistry } from '../../modules/registry.ts'
 import { ArrangeLists } from '../../shell/Arrange.tsx'
@@ -26,16 +27,25 @@ import { DevToolbar } from '../DevToolbar.tsx'
 import { useSample, type Sample } from '../sample.ts'
 import styles from './DevShell.module.css'
 
-/** The modules this page has screens for: a registry of its own, each opening the same page. */
-const screens = { load: () => Promise.resolve({ Component: Placeholder }) }
+/**
+ * The modules this page has screens for: a registry of its own, each opening at its module's
+ * own address. Two of them take a first record, which the first run's question offers.
+ */
+const at = (module: ModuleKey) => ({
+  home: (household: string) => inHousehold.module(household, module),
+})
+const capturing = (module: ModuleKey) => ({ ...at(module), capture: at(module).home })
 const registry: ModuleRegistry = {
-  shopping: screens,
-  tasks: screens,
-  garden: screens,
-  finance: screens,
-  notes: screens,
-  admin: screens,
+  shopping: capturing('shopping'),
+  tasks: capturing('tasks'),
+  garden: at('garden'),
+  finance: at('finance'),
+  notes: at('notes'),
+  admin: at('admin'),
 }
+
+/** A build with no screen at all: what the shell draws where it has no module to list. */
+const bare: ModuleRegistry = {}
 
 type Grants = NonNullable<Household['my_grants']>
 
@@ -145,6 +155,9 @@ export function DevShell() {
           <Case title={sample('Arrange: pinned, in order, hidden by me')}>
             <ArrangeLists household={first} user={user} registry={registry} />
           </Case>
+          <Case title={sample('The first run’s question: two modules to begin at')}>
+            <StartAnswers household={first} offered={beginnings(first, registry)} />
+          </Case>
         </HouseholdContext>
         <HouseholdContext value={empty}>
           <Case title={sample('Sidebar: no module to list, one household')}>
@@ -152,7 +165,7 @@ export function DevShell() {
               <SidebarView
                 household={empty}
                 user={user}
-                registry={registry}
+                registry={bare}
                 switcher={
                   <SwitcherView household={empty} others={[]} failed={false} onSwitch={switchTo} />
                 }
@@ -165,7 +178,7 @@ export function DevShell() {
             </div>
           </Case>
           <Case title={sample('Arrange: nothing to arrange')}>
-            <ArrangeLists household={empty} user={user} registry={registry} />
+            <ArrangeLists household={empty} user={user} registry={bare} />
           </Case>
         </HouseholdContext>
       </SyncFixture>

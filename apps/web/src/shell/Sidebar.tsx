@@ -15,7 +15,7 @@ import { inHousehold, paths } from '../app/paths.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import type { Household, ModuleKey } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
-import { modules, type ModuleRegistry } from '../modules/registry.ts'
+import { homeOf, modules, type ModuleRegistry } from '../modules/registry.ts'
 import { useMe } from '../session/SessionProvider.tsx'
 import { useArrangement } from './arrangement.ts'
 import { NavLink } from './NavLink.tsx'
@@ -42,7 +42,8 @@ export function SidebarView({ household, user, registry, switcher }: SidebarView
   const link = (module: ModuleKey) => (
     <NavLink
       key={module}
-      to={inHousehold.module(household.id, module)}
+      // Where the module opens: the link is drawn as open on every screen under that address.
+      to={homeOf(registry, module, household.id) ?? inHousehold.module(household.id, module)}
       icon={<ModuleIcon module={module} />}
     >
       {t(`module.${module}.name`)}

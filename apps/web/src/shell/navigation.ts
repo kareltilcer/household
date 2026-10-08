@@ -36,13 +36,24 @@ export interface Navigation {
 const destinations: ReadonlySet<ModuleKey> = new Set<ModuleKey>(['dashboard'])
 
 /**
+ * Household settings is every member's to open, whatever level they hold on it (D-167): its
+ * profile, its members with what each of them holds and its modules are read by every member
+ * (PRD 17, Permissions), "why can Petr see Finance and I can't" being a question nobody should
+ * need an owner for. A level of `none` on it takes away what `view` unlocks, the invitations,
+ * whose own screen answers for that; every change in it is an owner's.
+ */
+const everyMembers: ReadonlySet<ModuleKey> = new Set<ModuleKey>(['admin'])
+
+/**
  * The modules the member holds in `household`, in the product's order: each the household's own
- * answer gives a level above `none`. That answer already holds a module the household turned off,
- * or whose flag is off, to no level (openapi.yaml, `my_grants`).
+ * answer gives a level above `none`, and the one that is every member's. That answer already
+ * holds a module the household turned off, or whose flag is off, to no level (openapi.yaml,
+ * `my_grants`).
  */
 export function heldModules(household: Pick<Household, 'my_grants'>): ModuleKey[] {
   const grants = household.my_grants ?? {}
   return moduleKeys.filter((module) => {
+    if (everyMembers.has(module)) return true
     const level = grants[module]
     return level !== undefined && level !== 'none'
   })

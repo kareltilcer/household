@@ -142,9 +142,13 @@ describe('a household’s shell', () => {
       'aria-current',
       'page',
     )
-    // No module has a screen in this build yet, so none is listed, though several are held.
+    // Of the modules the member holds, the ones this build has screens for are listed:
+    // household settings, and not Shopping, which has none yet.
     expect(within(navigation).queryByText('Shopping')).not.toBeInTheDocument()
-    expect(within(navigation).queryByText('Household settings')).not.toBeInTheDocument()
+    expect(within(navigation).getByRole('link', { name: 'Household settings' })).toHaveAttribute(
+      'href',
+      inHousehold.settings(home),
+    )
     // The first thing the keyboard reaches skips past the bar and the navigation.
     const skip = screen.getByRole('link', { name: 'Skip to the content' })
     expect(skip).toHaveAttribute('href', '#content')
@@ -296,6 +300,13 @@ describe('a household’s shell', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('leads from a module’s name to where the module opens, for one this build has screens for', async () => {
+    const { router } = open(inHousehold.module(home, 'admin'))
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.settings(home))
+    })
+  })
+
   it('is a panel opened from the bar where the window is too narrow for a sidebar', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: query.includes('width <'),
@@ -342,10 +353,12 @@ describe('where the app opens', () => {
     })
   })
 
-  it('is their account for a member who is in no household', async () => {
+  // The first thing a new account does (DD-6): the screen that makes a household, which says
+  // of an invitation that waits for them too.
+  it('is making a household for a member who is in none', async () => {
     const { router } = open(paths.home.path, { memberships: [] })
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe(paths.account.path)
+      expect(router.state.location.pathname).toBe(paths.householdNew.path)
     })
   })
 

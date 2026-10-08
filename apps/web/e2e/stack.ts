@@ -157,6 +157,14 @@ export async function signIn(page: Page, who: Person): Promise<void> {
   )
 }
 
+/** The id of the person the page's browser is signed in as. */
+export async function whoAmI(page: Page): Promise<string> {
+  const { body } = expecting(await call(page, 'GET', '/me'), 200, 'reading the account')
+  const { id } = body as { readonly id?: unknown }
+  if (typeof id !== 'string') throw new Error('the account has no id')
+  return id
+}
+
 /** Makes a household the signed-in person owns, and returns its id. */
 export async function createHousehold(page: Page, name = 'Dům č. 7'): Promise<string> {
   const id = newId()

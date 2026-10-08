@@ -1,7 +1,9 @@
 // Where the app opens. It has no screen of its own: a visitor is sent to sign in, and a member to
 // their household, the one they were last in on this browser where they are still in it, or else
 // their first. The household is in the address from then on (D-4). A member who is in none is
-// sent to their account, which says so and is theirs either way (A-19).
+// sent to make one, which is the first thing a new account does (DD-6, A-22) and where an
+// invitation that waits for them is said; a child profile, which makes none (D-104), to what
+// is its own, its account.
 //
 // A household the platform suspended is passed over while the member is in one that opens
 // (D-162). The list still names it, for its lockout, and its own address answers `404` (D-115):
@@ -36,7 +38,10 @@ function MemberHome({ me }: { readonly me: Me }) {
   // In none but suspended ones, a member is opened at the first: where its lockout stands.
   const open =
     opening.find((household) => household.id === last) ?? opening[0] ?? households.data[0]
-  if (open === undefined) return <Navigate to={paths.account.path} replace />
+  if (open === undefined) {
+    const to = me.is_child === true ? paths.account.path : paths.householdNew.path
+    return <Navigate to={to} replace />
+  }
   return <Navigate to={inHousehold.home(open.id)} replace />
 }
 

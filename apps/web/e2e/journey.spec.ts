@@ -54,8 +54,9 @@ test('a person registers, verifies their address, signs in, turns the second ste
   await expectAccessible(page)
 
   await signInAs(page, who)
-  // They are in no household yet, and their account is theirs either way (A-19).
-  await expect(page).toHaveURL(paths.account.path)
+  // They are in no household yet, and are opened at making one, the first thing a new account
+  // does (DD-6); their account is beside it either way (A-19).
+  await expect(page).toHaveURL(paths.householdNew.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 
   // The second step, turned on from the account's own screens (A-5): the password, the
@@ -107,7 +108,7 @@ test('a person registers, verifies their address, signs in, turns the second ste
   await expectAccessible(page)
   await page.getByLabel('Six-digit code').fill(totp(secret))
   await page.getByRole('button', { name: 'Continue' }).click()
-  await expect(page).toHaveURL(paths.account.path)
+  await expect(page).toHaveURL(paths.householdNew.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 
   // And with the authenticator out of reach, one of the ten stands in for it (A-8).
@@ -118,7 +119,7 @@ test('a person registers, verifies their address, signs in, turns the second ste
   await expectAccessible(page)
   await page.getByLabel('Recovery code').fill(codes[0] ?? '')
   await page.getByRole('button', { name: 'Continue' }).click()
-  await expect(page).toHaveURL(paths.account.path)
+  await expect(page).toHaveURL(paths.householdNew.path)
   await page.getByRole('link', { name: 'Signing in' }).click()
   await expect(page.getByText('9 recovery codes left')).toBeVisible()
 })
@@ -183,8 +184,8 @@ test('a member whose browser kept their account and lost its session signs in on
   await page.goto(paths.signIn.example)
   await register(page, who)
   await signInAs(page, who)
-  // In no household yet, a member is opened at their account, and this browser keeps no replica.
-  await expect(page).toHaveURL(paths.account.path)
+  // In no household yet, a member is opened at making one, and this browser keeps no replica.
+  await expect(page).toHaveURL(paths.householdNew.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
   await expect.poll(() => kept(page)).toContain(JSON.stringify(['me']))
 
@@ -229,7 +230,7 @@ test('a password is set anew by the link a reset’s email carried, and the old 
   await signInAs(page, who)
   await expect(page.getByText('Email or password is not correct.')).toBeVisible()
   await signInAs(page, who, next)
-  await expect(page).toHaveURL(paths.account.path)
+  await expect(page).toHaveURL(paths.householdNew.path)
 })
 
 test('a sign-in pressed with no connection says so at once, and nothing signs in once the connection is back', async ({
@@ -263,7 +264,7 @@ test('a sign-in pressed with no connection says so at once, and nothing signs in
   await expect(page).toHaveURL(paths.signIn.path)
 
   await button.click()
-  await expect(page).toHaveURL(paths.account.path)
+  await expect(page).toHaveURL(paths.householdNew.path)
   // The requests that found no connection, as the browser says each, are this test's own doing.
   expect(faults.filter((fault) => !/ERR_INTERNET_DISCONNECTED/.test(fault))).toEqual([])
   faults.length = 0

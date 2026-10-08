@@ -9,7 +9,7 @@ import { paths, type RouteId } from '../src/app/paths.ts'
 import { storageKey as displayKey, type DisplayPreferences } from '../src/display/modes.ts'
 import { storageKey as localeKey } from '../src/i18n/storage.ts'
 import { buildFile } from '../src/update/build.ts'
-import { createHousehold, network, person, register, signIn, type Person } from './stack.ts'
+import { createHousehold, network, person, register, signIn, whoAmI, type Person } from './stack.ts'
 
 export interface Opening extends Partial<DisplayPreferences> {
   /** The language: one Household ships, or the pseudo-locale `en-XA`. English when left out. */
@@ -236,6 +236,8 @@ function refusal(text: string, url: string): boolean {
 export interface Account {
   readonly who: Person
   household?: string
+  /** Their id, which their own page among the household's members is addressed by. */
+  user?: string
 }
 
 interface Fixtures {
@@ -308,6 +310,7 @@ export const test = base.extend<Fixtures>({
       if (account.household === undefined) {
         await register(page, account.who)
         await signIn(page, account.who)
+        account.user = await whoAmI(page)
         account.household = await createHousehold(page)
       } else {
         await signIn(page, account.who)
@@ -320,12 +323,14 @@ export const test = base.extend<Fixtures>({
 /**
  * An address that reaches the route `id`, for the suite's walk of every route (paths.ts): its
  * example, opened as whoever the route is drawn for. A member's route is entered first, and an
- * example that names a household names the member's own.
+ * example that names a household names the member's own, and one that names a member names
+ * them.
  */
 export async function reach(id: RouteId, enter: () => Promise<string>): Promise<string> {
   const { example, layout } = paths[id]
   if (layout !== 'account' && layout !== 'household') return example
-  return example.replace('{household}', await enter())
+  const household = await enter()
+  return example.replace('{household}', household).replace('{member}', account.user ?? '')
 }
 
 export { displayKey, expect }
