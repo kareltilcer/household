@@ -55,3 +55,10 @@
 .arrow {
   flex: none;
 }
+
+/* The one action of a tile with no figure, under what is missing, at its own width. */
+.action {
+  display: flex;
+  flex-wrap: wrap;
+  margin-block-start: var(--space-05);
+}
