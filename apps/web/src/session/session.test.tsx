@@ -187,13 +187,16 @@ describe('a session that ends', () => {
 
   it('by a 401 leaves nobody signed in, and removes what this browser kept of their households', async () => {
     const deleted = databases()
-    await refused(() => problem(401, 'unauthenticated'))
+    const at = await refused(() => problem(401, 'unauthenticated'))
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('visitor expired')
     })
     await waitFor(() => {
       expect(deleted).toHaveBeenCalledWith(replicaDatabase(me.id))
     })
+    await act(() => Promise.resolve())
+    // The server said the session is gone, and is not asked whose it is again.
+    expect(at.asked.filter((request) => request === 'GET /me')).toHaveLength(1)
     // A preference of theirs is no household's data, and stays.
     expect(window.localStorage.getItem(arrangementKey(me.id, me.id))).toBe('{}')
   })

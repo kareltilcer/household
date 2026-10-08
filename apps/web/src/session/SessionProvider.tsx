@@ -105,7 +105,9 @@ export function SessionProvider({ children, forget, cookies = pageCookies }: Ses
     // The account is asked for again when the page is looked at again, which is when a session
     // ended from elsewhere is noticed.
     staleTime: 60_000,
-    enabled: hinted && minimumVersion === null,
+    // A session the server said is gone is not asked about again until someone signs in, though
+    // its cookies are still here: forgetting empties this query, which would ask at once.
+    enabled: hinted && minimumVersion === null && ended === null && !left,
   })
   const refused = problemIn(account.error)?.code === 'unauthenticated'
 

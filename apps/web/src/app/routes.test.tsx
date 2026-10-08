@@ -2,16 +2,25 @@ import { act, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createWebClient } from '../api/client.ts'
 import { heldDestination } from '../session/destination.ts'
 import { buildMeta } from '../update/build.ts'
 import { Providers } from './App.tsx'
 import { fill, inHousehold, paths, routeIds } from './paths.ts'
 import { inRoot, routes, served } from './routes.tsx'
 
+// A visitor's pages ask the server one thing, which providers it signs in with, and are answered
+// here: no test asks the network.
+const client = createWebClient({
+  origin: 'https://household.example',
+  cookies: () => '',
+  fetch: () => Promise.resolve(Response.json({ providers: [] })),
+})
+
 function open(address: string, table: RouteObject[] = routes) {
   const router = createMemoryRouter(table, { initialEntries: [address] })
   return render(
-    <Providers persist={false}>
+    <Providers persist={false} client={client}>
       <RouterProvider router={router} />
     </Providers>,
   )
@@ -81,7 +90,7 @@ describe('the app', () => {
   it('opens a visitor at the way in, inside the page’s one main landmark', async () => {
     const router = createMemoryRouter(routes, { initialEntries: [paths.home.example] })
     render(
-      <Providers persist={false}>
+      <Providers persist={false} client={client}>
         <RouterProvider router={router} />
       </Providers>,
     )
@@ -107,7 +116,7 @@ describe('the app', () => {
     const address = '/account/devices?x=1'
     const router = createMemoryRouter(routes, { initialEntries: [address] })
     render(
-      <Providers persist={false}>
+      <Providers persist={false} client={client}>
         <RouterProvider router={router} />
       </Providers>,
     )
