@@ -151,7 +151,9 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   (`useRefusedField`, `auth/fields.tsx`), a refusal that is no field's, one of a control that
   saves as it is changed, and a part of a screen that could not be read where no `StateFrame`
   draws it, is a `Banner` with `announce`, and a screen that removes the row a
-  dialog was opened from says where the focus goes ([D-166](docs/prd/09-decisions.md)); axe
+  dialog was opened from says where the focus goes; a write whose success no control of its
+  screen says is said in a toast, and a sentence that says it is a status from the press on, one
+  element whose words change where they stand ([D-166](docs/prd/09-decisions.md)); axe
   reads only that a field and its sentence are tied, so the screen's own test holds the focus
   and the announcement. A route is a line of
   `src/app/paths.ts`, which the end-to-end suite walks with axe in both themes and in the
@@ -201,7 +203,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   of each of a member's households passes over it or says it cannot be read, and never waits on
   it: where the app opens ([D-162](docs/prd/09-decisions.md)), and before an account is deleted
   ([D-163](docs/prd/09-decisions.md)). A household's replica is one tab's,
-  by a Web Lock, opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
+  by a Web Lock, asked for only if it is free and waited for where it is held, never read off
+  the browser's list of locks, and opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
   imported for its types alone outside `sync/open.ts`, which ESLint holds and which is what keeps
   the library and its SDK out of a page until a replica is opened, and a run-time value a screen
   needs of it is added to `Opened` there. Whether a replica is receiving (D-105) is read off the
