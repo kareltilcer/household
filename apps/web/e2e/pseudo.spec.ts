@@ -15,7 +15,11 @@ for (const id of routeIds) {
     test.slow(id === 'harness')
     await open(page, await reach(id, enter), { locale: 'en-XA' })
     await expect(page.locator('html')).toHaveAttribute('lang', 'en-XA')
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('⟦')
+    // The screen is drawn in the pseudo-locale's words. Asked of the page's landmark and not of
+    // its title, which on a member's own page is their name once they are read: what a member
+    // wrote is drawn as they wrote it (stack.ts), and a title read a moment sooner or later
+    // would pass or fail by that moment.
+    await expect(page.getByRole('main')).toContainText('⟦')
 
     expect(await inspect(page)).toEqual({ escaped: [], unbalanced: [], clipped: [] })
     expect(
