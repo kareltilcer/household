@@ -146,8 +146,16 @@ describe('who is signed in', () => {
       await screen.findByRole('heading', { level: 1, name: 'Household can’t be reached' }),
     ).toBeInTheDocument()
     expect(screen.getAllByRole('main')).toHaveLength(1)
-    down = false
+    // Said as it arrives, in a skeleton's place: asked again to no avail, it is drawn anew and
+    // said anew, where a screen that came back without a word would tell nothing of the press.
+    expect(screen.getByRole('alert')).toHaveTextContent(/^Household can’t be reached/)
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => {
+      expect(at.asked.filter((request) => request === 'GET /me')).toHaveLength(2)
+    })
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Household can’t be reached/)
+    down = false
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }))
     await waitFor(() => {
       expect(screen.queryByText('Household can’t be reached')).not.toBeInTheDocument()
     })

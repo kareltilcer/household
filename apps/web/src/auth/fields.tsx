@@ -6,6 +6,7 @@
 // the requests behind these screens are counted against a limit (PRD 02 §9), and a registration
 // spent on an empty field is one of five an hour. The server's own answer is still the one that
 // holds: a `422` is read back onto the field it names.
+import { useEffect, useRef, type RefObject } from 'react'
 import { problemIn } from '../api/problem.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -23,6 +24,22 @@ export function fieldCodes(error: unknown): ReadonlyMap<string, string> {
     if (!named.has(field)) named.set(field, code)
   }
   return named
+}
+
+/**
+ * Where the focus goes when a form is refused: to the first field the refusal marked, whose
+ * sentence is then read with the field. A sentence that arrives beside a field the focus is not
+ * on is said to nobody who cannot see it (WCAG 2.1, 4.1.3). `refused` is what the last
+ * submission was refused with, a new value for each refusal; one that marks no field moves
+ * nothing, and its banner is announced where it is drawn. The form takes the ref this answers.
+ */
+export function useRefusedField(refused: unknown): RefObject<HTMLFormElement | null> {
+  const form = useRef<HTMLFormElement>(null)
+  useEffect(() => {
+    if (refused === undefined || refused === null) return
+    form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+  }, [refused])
+  return form
 }
 
 export type EmailFault = 'required' | 'invalid'

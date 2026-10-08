@@ -318,6 +318,10 @@ describe('deleting an account', () => {
     await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
     expect(password).toHaveAccessibleDescription(expect.stringContaining('Enter your password.'))
     expect(server.to('POST /me/deletion')).toHaveLength(0)
+    // The focus is on the field each time it is refused, from the control that asked.
+    await waitFor(() => {
+      expect(password).toHaveFocus()
+    })
 
     await user.type(password, 'not it')
     await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
@@ -325,6 +329,9 @@ describe('deleting an account', () => {
       expect(password).toHaveAccessibleDescription(
         expect.stringContaining('That isn’t your password.'),
       )
+    })
+    await waitFor(() => {
+      expect(password).toHaveFocus()
     })
     expect(router.state.location.pathname).toBe('/account/delete')
   })

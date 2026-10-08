@@ -25,7 +25,7 @@ import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
-import { checkNewPassword, fieldCodes } from '../auth/fields.tsx'
+import { checkNewPassword, fieldCodes, useRefusedField } from '../auth/fields.tsx'
 import {
   startProvider,
   useOfferedProviders,
@@ -71,6 +71,8 @@ function ChangePassword({ me }: { readonly me: Me }) {
       void queries.invalidateQueries({ queryKey: signedInKey })
     },
   })
+  // What the server refused it with, or what it was last checked to, anew at each submission.
+  const form = useRefusedField(change.error ?? checked)
   const wrong = problemIn(change.error)?.code === 'invalid_credentials'
   const refused = fieldCodes(change.error).get('/new_password')
   const currentError = checked.current
@@ -88,6 +90,7 @@ function ChangePassword({ me }: { readonly me: Me }) {
   const other = change.isError && !wrong && refused === undefined ? say(change.error) : undefined
   return (
     <form
+      ref={form}
       className={styles.form}
       noValidate
       onSubmit={(event) => {

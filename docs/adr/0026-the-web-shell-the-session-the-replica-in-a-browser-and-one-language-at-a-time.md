@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-08
 - **Plan item:** 25
-- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §4–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-165; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
+- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §4–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-166; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
 
 ## Context
 
@@ -169,6 +169,18 @@ as `index.html` calls it. Nothing above the screens sets a title: an effect of `
 after its screens' own, and would stand over theirs. axe holds only that a page has a title, so
 the suite's walk of the routes holds each route's title to its heading.
 
+**What a press came to is said to whoever cannot see it** (D-166). A form that is refused puts
+the focus on the first field the refusal marked, whose sentence is then read with the field, on
+the account's screens as on the screens before sign-in (`useRefusedField`, `auth/fields.tsx`). A
+refusal that marks no field is a banner, announced where it is drawn: so is one of a control
+that is put back and holds the focus already, a language, a timezone or a first day the server
+would not take, and the one sentence about two fields together, quiet hours that are one time
+twice. What a screen is drawn from that could not be read is announced as it arrives, as a
+body's failure is (`Unread`, `app/guards.tsx`). And the row a confirmation was opened from, gone
+once the browser or device it names is signed out, leaves the focus to the lists' own place, as
+the inbox's does. axe reads only that a field and its sentence are tied, so each screen's own
+test holds where the focus is and what is announced.
+
 **The end-to-end suite starts the API itself, on the development services, and each test is a
 network of its own.** The preview server proxies `/api` to it, so a page is same-origin with the
 API as a deployment's is; `__Host-` cookies are set on `http://127.0.0.1`, which a browser takes
@@ -222,6 +234,10 @@ every other console error still fails its test.
 | English in the entry as a fallback for a catalog that fails to load | Counted on every visit of members who do not read it (D-159) |
 | One title, the app's name, for every route, as item 25 first had it | A tab, a history entry and a screen reader's list of windows name a page by its title: with one for all, three tabs of the app read alike, and going from a profile to signing in changes nothing a title says. It is level A of the gate 06-clients §4 sets (WCAG 2.1, 2.4.2), and axe passes any title at all (D-165) |
 | A table of titles beside `paths.ts`, or the title read off the page's `<h1>` by an observer | The first is a second name for each screen, kept in step with its heading by hand, with no word for a screen that changes what it says as it opens, a link's page or a provider's return. The second watches the document for what the screen that draws the heading already holds as a value. The screen says it, once, where it draws it |
+| A refusal's sentence beside its field and tied to it, with nothing moved and nothing announced, as item 25 first had the account's screens | A sentence added beside a field the focus is not on is said to nobody who cannot see it: pressed with a wrong password, *Change password* told a screen reader's user nothing, where a save says so in a toast. It is level AA of the gate 06-clients §4 sets (WCAG 2.1, 4.1.3), and axe reads only that the two are tied. The focus moves to the field, as on the screens before sign-in (D-166) |
+| Every field's sentence announced as an alert, in `ui/Field` | Said twice where the focus moves to the field, which reads the sentence with it, and as urgently as the server's own failure. A field's fault is read with the field, and a banner is for what is no field's |
+| The stated switch held back where a household was reached by the browser's Back or Forward, from one the member chose in the switcher | A page is not told a history move from a link followed: the router's word for the first page a tab loads is the same, and the entry gone back to carries the state it was made with, which says nothing of the choice that left it. Telling them apart is a mark written into each household's history entry as it opens, a second navigation at every opening, for a sentence that is true of the tab, whose household did change with its address, that one press puts away and whose control leads back |
+| What a browser kept removed without emptying the query cache under a screen that is drawn, or a visitor's screen drawn again once it is removed | Emptying the cache tells no screen (`queries.clear()`): a sign-in screen drawn before a kept account was read from storage and found without a session has its question of which providers the server signs in with cancelled, and draws none until it is drawn again, which the next key typed does. A browser comes to it only by its cookies being cleared alone, since their thirty idle days outlast the day the cache is kept, and only where the screen's file arrives before the cache is read. Resetting the queries in place asks each again at once, the account's among them, of a session that has just ended, which a sign-out would then read as a session that expired; a second way to empty the cache is one more to keep in step with the first |
 | Every granted module listed, with a screen that says it is not built | A link to nothing (D-160) |
 | The arrangement in a synced entity now | A server item's work inside this one (D-155) |
 | The suite against a stand-in API, or with requests answered by the test | The Done-when is the flow through the server: its mail, its throttles, its cookies. A stand-in would be a second server kept in step by hand |
@@ -236,6 +252,11 @@ every other console error still fails its test.
 - A screen that draws the page's `<h1>` says the same words to `usePageTitle` (`app/title.ts`),
   where it draws them; `Screen` and `SettingsPage` do for the screens they frame. The walk of the
   routes fails a route whose title does not name its heading (D-165).
+- A form gives its `<form>` the ref `useRefusedField` answers (`auth/fields.tsx`), with what it
+  was last refused with, a new value for each refusal: the screens before sign-in through
+  `Form`. A refusal that is no field's, and one of a control that saves as it is changed, is a
+  `Banner` with `announce`, and a screen that removes the row a dialog was opened from says
+  where the focus goes (D-166).
 - A write of a screen before sign-in or of a member's own account spreads `askedNow`
   (`api/query.ts`), and a test holds every one of them to it. A module's screens say for
   themselves which of their writes wait for a connection.

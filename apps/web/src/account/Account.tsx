@@ -26,7 +26,7 @@ import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
-import { fieldCodes } from '../auth/fields.tsx'
+import { fieldCodes, useRefusedField } from '../auth/fields.tsx'
 import { useDisplay } from '../display/DisplayProvider.tsx'
 import { densities, motions, scales, themes } from '../display/modes.ts'
 import { useHouseholds, useRoleWord } from '../household/households.ts'
@@ -69,23 +69,30 @@ function Name({ me }: { readonly me: Me }) {
   const say = useProblemText(useOwnZone())
   const save = useSaveMe()
   const [name, setName] = useState(me.display_name)
-  const [missing, setMissing] = useState(false)
+  // Set, anew, each time a name of nothing is submitted: it is not sent.
+  const [missing, setMissing] = useState<object>()
   const refused = fieldCodes(save.error).has('/display_name')
+  const form = useRefusedField(missing ?? save.error)
   const error =
-    missing || refused
+    missing !== undefined || refused
       ? t('account.profile.name.missing')
       : save.isError
         ? say(save.error)
         : undefined
   return (
     <form
+      ref={form}
       className={styles.form}
       noValidate
       onSubmit={(event) => {
         event.preventDefault()
         const trimmed = name.trim()
-        setMissing(trimmed === '')
-        if (trimmed === '') return
+        if (trimmed === '') {
+          save.reset()
+          setMissing({})
+          return
+        }
+        setMissing(undefined)
         save.mutate(
           { display_name: trimmed },
           {
@@ -315,6 +322,11 @@ function Language({ me }: { readonly me: Me }) {
       },
     )
   }
+  const failure = unfetched
+    ? t('account.profile.language.unfetched')
+    : save.isError
+      ? say(save.error)
+      : undefined
   return (
     <div className={styles.form}>
       <Select
@@ -322,18 +334,17 @@ function Language({ me }: { readonly me: Me }) {
         help={t('account.profile.language.help')}
         value={chosen ?? matchLocale([me.locale ?? ''])}
         options={options}
-        error={
-          unfetched
-            ? t('account.profile.language.unfetched')
-            : save.isError
-              ? say(save.error)
-              : undefined
-        }
         onChange={(event) => {
           const next = event.currentTarget.value
           if (isLocale(next)) choose(next)
         }}
       />
+      {/* Under the control, which is put back and holds the focus: said as it arrives. */}
+      {failure === undefined ? null : (
+        <Banner tone="danger" announce>
+          {failure}
+        </Banner>
+      )}
     </div>
   )
 }
@@ -444,22 +455,31 @@ function DatesAndTimes({ me }: { readonly me: Me }) {
             { value: '', label: t('account.dates.timezone.household') },
             ...zones.map((name) => ({ value: name, label: name })),
           ]}
-          error={saveZone.isError ? why(saveZone.error) : undefined}
           onChange={(event) => {
             const next = event.currentTarget.value
             saveZone.mutate({ timezone: next === '' ? null : next })
           }}
         />
+        {/* The control is put back, and holds the focus: why is said under it, as it arrives. */}
+        {saveZone.isError ? (
+          <Banner tone="danger" announce>
+            {why(saveZone.error)}
+          </Banner>
+        ) : null}
         <Select
           label={t('account.dates.first_day.label')}
           value={firstDay === null ? '' : String(firstDay)}
           options={[{ value: '', label: t('account.dates.first_day.locale') }, ...days]}
-          error={saveDay.isError ? why(saveDay.error) : undefined}
           onChange={(event) => {
             const next = event.currentTarget.value
             saveDay.mutate({ first_day_of_week: next === '' ? null : Number(next) })
           }}
         />
+        {saveDay.isError ? (
+          <Banner tone="danger" announce>
+            {why(saveDay.error)}
+          </Banner>
+        ) : null}
       </div>
     </Section>
   )

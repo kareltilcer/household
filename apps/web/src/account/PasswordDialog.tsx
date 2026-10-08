@@ -3,10 +3,11 @@
 // each of them, since a session alone, one left open on a shared computer or stolen, must not be
 // enough to bind an authenticator of its own or take the codes. It is asked in a confirmation,
 // which names what is about to happen and says what goes with it; a wrong password is said
-// beside the field, and what was typed stays.
+// beside the field, which takes the focus, and what was typed stays.
 import { useId, useState } from 'react'
 import { problemIn } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
+import { useRefusedField } from '../auth/fields.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import { Button } from '../ui/Button.tsx'
@@ -43,27 +44,31 @@ function Ask({
   const me = useMe()
   const say = useProblemText(useOwnZone())
   const [password, setPassword] = useState('')
-  const [missing, setMissing] = useState(false)
+  // Set, anew, each time nothing was typed: it is not sent.
+  const [missing, setMissing] = useState<object>()
+  const form = useRefusedField(missing ?? error)
   const wrong = problemIn(error)?.code === 'invalid_credentials'
-  const said = missing
-    ? t('account.password.missing')
-    : error === null || error === undefined
-      ? undefined
-      : wrong
-        ? t('account.password.wrong')
-        : say(error)
+  const said =
+    missing !== undefined
+      ? t('account.password.missing')
+      : error === null || error === undefined
+        ? undefined
+        : wrong
+          ? t('account.password.wrong')
+          : say(error)
   return (
     <form
       id={id}
+      ref={form}
       className={styles.form}
       noValidate
       onSubmit={(event) => {
         event.preventDefault()
         if (password === '') {
-          setMissing(true)
+          setMissing({})
           return
         }
-        setMissing(false)
+        setMissing(undefined)
         onSubmit(password)
       }}
     >

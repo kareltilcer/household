@@ -23,11 +23,12 @@
 // *read-only* changes nothing, one's own devices being no household's write.
 import type { components } from '@household/api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
+import { useRefusedField } from '../auth/fields.tsx'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe, useSession } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -180,6 +181,7 @@ function Rename({
       onDone()
     },
   })
+  const refused = useRefusedField(rename.error)
   const close = () => {
     if (!rename.isPending) onClose()
   }
@@ -200,6 +202,7 @@ function Rename({
     >
       <form
         id={form}
+        ref={refused}
         className={styles.form}
         noValidate
         onSubmit={(event) => {
@@ -253,6 +256,20 @@ export function Devices() {
   })
   const refresh = () => queries.invalidateQueries({ queryKey: signedInKey })
 
+  // The row a confirmation was opened from is gone once what it names is signed out, and the
+  // focus the confirmation gave back went with it: it is put on the lists' own place.
+  const view = useRef<HTMLDivElement>(null)
+  const leaving = useRef<string | null>(null)
+  const listed = read.data
+  useEffect(() => {
+    const id = leaving.current
+    if (id === null || listed === undefined) return
+    if ([...listed.sessions, ...listed.devices].some((each) => each.id === id)) return
+    leaving.current = null
+    const focused = document.activeElement
+    if (focused === null || focused === document.body) view.current?.focus()
+  }, [listed])
+
   const [target, setTarget] = useState<Target | null>(null)
   const [everywhere, setEverywhere] = useState(false)
   const [renaming, setRenaming] = useState<Device | null>(null)
@@ -275,14 +292,16 @@ export function Devices() {
       }
     },
     onSuccess: (_answer, given) => {
+      leaving.current = given.id
       setTarget(null)
       // No undo: a session ended is ended.
       toast({ message: t('account.devices.revoke.done', { name: given.name }) })
       void refresh()
     },
-    onError: (error) => {
+    onError: (error, given) => {
       // Signed out from somewhere else since the list was read: what was asked for is so.
       if (problemIn(error)?.status !== 404) return
+      leaving.current = given.id
       setTarget(null)
       toast({ message: t('account.devices.revoke.already') })
       void refresh()
@@ -321,142 +340,144 @@ export function Devices() {
 
   return (
     <SettingsPage title={t('account.devices.title')}>
-      <StateFrame
-        state={revoke.isPending ? 'syncing' : readState(read, online, alone)}
-        skeleton={
-          <Skeleton
-            bars={[
-              [45, 1.25],
-              [70, 1],
-              [50, 1.25],
-              [65, 1],
-            ]}
-          />
-        }
-        // One row, and no teaching state: there is nothing to set up.
-        empty={
-          <div className={styles.group}>
-            <p className={styles.strong}>{t('account.devices.only.title')}</p>
-            <List label={t('account.devices.browsers.title')}>
-              <ListRow
-                title={names.ofAgent(current?.user_agent ?? window.navigator.userAgent)}
-                secondary={seen(current?.last_seen_at, current?.approximate_location)}
-                trailing={thisBrowser}
-              />
-            </List>
-            <p className={styles.note}>{t('account.devices.only.body')}</p>
-          </div>
-        }
-        texts={{
-          error: {
-            title: t('account.devices.error.title'),
-            text: t('account.devices.error.body'),
-            actions: (
-              <Button
-                onClick={() => {
-                  void read.refetch()
-                }}
-              >
-                {t('ui.retry')}
-              </Button>
-            ),
-          },
-          withdrawn,
-        }}
-      >
-        {({ mark, writes }) => {
-          const marked = (kind: Target['kind'], id: string) =>
-            revoke.variables?.kind === kind && revoke.variables.id === id ? mark : undefined
-          return (
-            <>
-              <Section title={t('account.devices.browsers.title')}>
-                <List label={t('account.devices.browsers.title')}>
-                  {sessions.map((each) => {
-                    const name = names.ofAgent(each.user_agent)
-                    return (
-                      <ListRow
-                        key={each.id}
-                        title={name}
-                        secondary={seen(each.last_seen_at, each.approximate_location)}
-                        mark={marked('session', each.id)}
-                        trailing={
-                          each.is_current === true ? (
-                            thisBrowser
-                          ) : writes ? (
-                            <RowAction
-                              name={t('account.devices.sign_out_named', { name })}
-                              word={t('account.devices.sign_out')}
-                              onPress={() => {
-                                revoke.reset()
-                                setTarget({ kind: 'session', id: each.id, name })
-                              }}
-                            />
-                          ) : undefined
-                        }
-                      />
-                    )
-                  })}
-                </List>
-              </Section>
-              <Section title={t('account.devices.devices.title')}>
-                {devices.length === 0 ? (
-                  <p className={styles.note}>{t('account.devices.devices.none')}</p>
-                ) : (
-                  <List label={t('account.devices.devices.title')}>
-                    {devices.map((each) => {
-                      const name = names.ofDevice(each)
+      <div ref={view} tabIndex={-1} className={styles.view}>
+        <StateFrame
+          state={revoke.isPending ? 'syncing' : readState(read, online, alone)}
+          skeleton={
+            <Skeleton
+              bars={[
+                [45, 1.25],
+                [70, 1],
+                [50, 1.25],
+                [65, 1],
+              ]}
+            />
+          }
+          // One row, and no teaching state: there is nothing to set up.
+          empty={
+            <div className={styles.group}>
+              <p className={styles.strong}>{t('account.devices.only.title')}</p>
+              <List label={t('account.devices.browsers.title')}>
+                <ListRow
+                  title={names.ofAgent(current?.user_agent ?? window.navigator.userAgent)}
+                  secondary={seen(current?.last_seen_at, current?.approximate_location)}
+                  trailing={thisBrowser}
+                />
+              </List>
+              <p className={styles.note}>{t('account.devices.only.body')}</p>
+            </div>
+          }
+          texts={{
+            error: {
+              title: t('account.devices.error.title'),
+              text: t('account.devices.error.body'),
+              actions: (
+                <Button
+                  onClick={() => {
+                    void read.refetch()
+                  }}
+                >
+                  {t('ui.retry')}
+                </Button>
+              ),
+            },
+            withdrawn,
+          }}
+        >
+          {({ mark, writes }) => {
+            const marked = (kind: Target['kind'], id: string) =>
+              revoke.variables?.kind === kind && revoke.variables.id === id ? mark : undefined
+            return (
+              <>
+                <Section title={t('account.devices.browsers.title')}>
+                  <List label={t('account.devices.browsers.title')}>
+                    {sessions.map((each) => {
+                      const name = names.ofAgent(each.user_agent)
                       return (
                         <ListRow
                           key={each.id}
                           title={name}
-                          secondary={seen(each.last_seen_at)}
-                          mark={marked('device', each.id)}
+                          secondary={seen(each.last_seen_at, each.approximate_location)}
+                          mark={marked('session', each.id)}
                           trailing={
-                            writes ? (
-                              <>
-                                <RowAction
-                                  name={t('account.devices.rename.named', { name })}
-                                  word={t('account.devices.rename.action')}
-                                  onPress={() => {
-                                    setRenaming(each)
-                                  }}
-                                />
-                                <RowAction
-                                  name={t('account.devices.sign_out_named', { name })}
-                                  word={t('account.devices.sign_out')}
-                                  onPress={() => {
-                                    revoke.reset()
-                                    setTarget({ kind: 'device', id: each.id, name })
-                                  }}
-                                />
-                              </>
+                            each.is_current === true ? (
+                              thisBrowser
+                            ) : writes ? (
+                              <RowAction
+                                name={t('account.devices.sign_out_named', { name })}
+                                word={t('account.devices.sign_out')}
+                                onPress={() => {
+                                  revoke.reset()
+                                  setTarget({ kind: 'session', id: each.id, name })
+                                }}
+                              />
                             ) : undefined
                           }
                         />
                       )
                     })}
                   </List>
-                )}
-              </Section>
-              {writes ? (
-                <div className={styles.section}>
-                  <p className={styles.note}>{t('account.devices.note')}</p>
-                  <div className={styles.actions}>
-                    <Button
-                      onClick={() => {
-                        all.reset()
-                        setEverywhere(true)
-                      }}
-                    >
-                      {t('account.devices.everywhere.action')}
-                    </Button>
+                </Section>
+                <Section title={t('account.devices.devices.title')}>
+                  {devices.length === 0 ? (
+                    <p className={styles.note}>{t('account.devices.devices.none')}</p>
+                  ) : (
+                    <List label={t('account.devices.devices.title')}>
+                      {devices.map((each) => {
+                        const name = names.ofDevice(each)
+                        return (
+                          <ListRow
+                            key={each.id}
+                            title={name}
+                            secondary={seen(each.last_seen_at)}
+                            mark={marked('device', each.id)}
+                            trailing={
+                              writes ? (
+                                <>
+                                  <RowAction
+                                    name={t('account.devices.rename.named', { name })}
+                                    word={t('account.devices.rename.action')}
+                                    onPress={() => {
+                                      setRenaming(each)
+                                    }}
+                                  />
+                                  <RowAction
+                                    name={t('account.devices.sign_out_named', { name })}
+                                    word={t('account.devices.sign_out')}
+                                    onPress={() => {
+                                      revoke.reset()
+                                      setTarget({ kind: 'device', id: each.id, name })
+                                    }}
+                                  />
+                                </>
+                              ) : undefined
+                            }
+                          />
+                        )
+                      })}
+                    </List>
+                  )}
+                </Section>
+                {writes ? (
+                  <div className={styles.section}>
+                    <p className={styles.note}>{t('account.devices.note')}</p>
+                    <div className={styles.actions}>
+                      <Button
+                        onClick={() => {
+                          all.reset()
+                          setEverywhere(true)
+                        }}
+                      >
+                        {t('account.devices.everywhere.action')}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ) : null}
-            </>
-          )
-        }}
-      </StateFrame>
+                ) : null}
+              </>
+            )
+          }}
+        </StateFrame>
+      </div>
 
       {target === null ? null : (
         <Dialog

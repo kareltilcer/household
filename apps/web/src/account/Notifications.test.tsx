@@ -306,12 +306,10 @@ describe('the preferences', () => {
       })
     })
 
-    // The same time twice is no window: said here, and not sent.
+    // The same time twice is no window: said under the two as it comes to be so, and not sent.
     fireEvent.change(until, { target: { value: '23:30' } })
     fireEvent.blur(until)
-    expect(until).toHaveAccessibleDescription(
-      expect.stringContaining('Choose two different times.'),
-    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose two different times.')
     expect(server.to('PATCH /me/notification-preferences')).toHaveLength(2)
 
     await user.click(screen.getByRole('switch', { name: 'Hold notifications during quiet hours' }))

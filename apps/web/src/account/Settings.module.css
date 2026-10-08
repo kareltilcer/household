@@ -71,6 +71,16 @@
   min-width: 0;
 }
 
+/* Where the focus goes once the row a confirmation was opened from has left its list: no
+   control, and so it shows no ring of its own. */
+.view {
+  min-width: 0;
+}
+
+.view:focus {
+  outline: none;
+}
+
 /* A control with the sentence that goes with it. */
 .group {
   display: flex;

@@ -2,9 +2,10 @@
 // under it, a form, and the ways on from it. The frame around it, the product's name and the
 // page's one landmark, is `app/Public.tsx`'s; a screen here is one column inside that, and says
 // nothing of a household, since nobody is signed in to one.
-import { useEffect, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link, type To } from 'react-router'
 import { usePageTitle } from '../app/title.ts'
+import { useRefusedField } from './fields.tsx'
 import styles from './Screen.module.css'
 
 export interface ScreenProps {
@@ -67,11 +68,7 @@ export interface FormProps {
  * field submits it, as the primary button does.
  */
 export function Form({ onSubmit, busy = false, refused, children }: FormProps) {
-  const form = useRef<HTMLFormElement>(null)
-  useEffect(() => {
-    if (refused === undefined || refused === null) return
-    form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
-  }, [refused])
+  const form = useRefusedField(refused)
   return (
     <form
       ref={form}

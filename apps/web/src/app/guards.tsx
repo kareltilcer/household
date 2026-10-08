@@ -43,13 +43,15 @@ export interface UnreadProps {
 /**
  * In a screen's place where what it is drawn from could not be read, and nothing is kept of it:
  * said, with the way to ask again. A read that waits for a connection is one of these to a
- * member, and no skeleton.
+ * member, and no skeleton. It is said as it arrives, as a body's failure is (ui/StateFrame): it
+ * takes the place of a skeleton, and asked again to no avail it is drawn anew, where a screen
+ * that came back without a word would tell whoever cannot see it nothing of the press.
  */
 export function Unread({ title, body, retry }: UnreadProps) {
   const t = useTranslate()
   usePageTitle(title)
   return (
-    <div className={styles.page}>
+    <div className={styles.page} role="alert">
       <h1 className={styles.title}>{title}</h1>
       <p className={styles.lead}>{body}</p>
       <Button

@@ -74,6 +74,11 @@ describe('the account screen', () => {
     const missing = 'Add a name — it’s what appears on things you do.'
     expect(name).toHaveAccessibleDescription(expect.stringContaining(missing))
     expect(server.to('PATCH /me')).toHaveLength(0)
+    // The focus is on the field to put right, and its sentence is read with it: beside a
+    // field the focus is not on, it would be said to nobody who cannot see it.
+    await waitFor(() => {
+      expect(name).toHaveFocus()
+    })
 
     server.on('PATCH /me', () => invalid('/display_name', 'min_length'))
     await user.type(name, 'x')
@@ -82,6 +87,9 @@ describe('the account screen', () => {
       expect(server.to('PATCH /me')).toHaveLength(1)
     })
     expect(name).toHaveAccessibleDescription(expect.stringContaining(missing))
+    await waitFor(() => {
+      expect(name).toHaveFocus()
+    })
   })
 
   it('says a save could not reach the server, and loses nothing that was typed', async () => {
@@ -262,9 +270,8 @@ describe('the account screen', () => {
     expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument()
     const language = screen.getByRole('combobox', { name: 'Language' })
     expect(language).toHaveValue('en')
-    expect(language).toHaveAccessibleDescription(
-      expect.stringContaining('Something went wrong at our end.'),
-    )
+    // Said as it arrives: the control is as it was, and holds the focus already.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)
   })
 
   it('keeps the appearance in this browser alone, and says so', async () => {
@@ -335,11 +342,10 @@ describe('the account screen', () => {
     const { user } = await account(server)
     const zone = screen.getByRole('combobox', { name: 'Timezone' })
     await user.selectOptions(zone, 'Europe/Vienna')
-    await waitFor(() => {
-      expect(zone).toHaveAccessibleDescription(
-        expect.stringContaining('That change wasn’t accepted, and the setting is as it was.'),
-      )
-    })
+    // Said as it arrives, under the control it is of.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'That change wasn’t accepted, and the setting is as it was.',
+    )
     expect(zone).toHaveValue('Europe/Prague')
   })
 

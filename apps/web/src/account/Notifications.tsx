@@ -162,27 +162,35 @@ function QuietTimes({
     if (whole && !same && (from !== held.from || to !== held.to)) onChange({ from, to })
   }
   return (
-    <div className={styles.pair}>
-      <TextField
-        type="time"
-        label={t('account.notifications.quiet.from')}
-        value={from}
-        onChange={(event) => {
-          setFrom(event.currentTarget.value)
-        }}
-        onBlur={settle}
-      />
-      <TextField
-        type="time"
-        label={t('account.notifications.quiet.until')}
-        value={to}
-        error={same ? t('account.notifications.quiet.same') : undefined}
-        onChange={(event) => {
-          setTo(event.currentTarget.value)
-        }}
-        onBlur={settle}
-      />
-    </div>
+    <>
+      <div className={styles.pair}>
+        <TextField
+          type="time"
+          label={t('account.notifications.quiet.from')}
+          value={from}
+          onChange={(event) => {
+            setFrom(event.currentTarget.value)
+          }}
+          onBlur={settle}
+        />
+        <TextField
+          type="time"
+          label={t('account.notifications.quiet.until')}
+          value={to}
+          onChange={(event) => {
+            setTo(event.currentTarget.value)
+          }}
+          onBlur={settle}
+        />
+      </div>
+      {/* Of the two together, and of neither alone: said under them as it comes to be so,
+          whichever of them holds the focus. */}
+      {same ? (
+        <Banner tone="danger" announce>
+          {t('account.notifications.quiet.same')}
+        </Banner>
+      ) : null}
+    </>
   )
 }
 

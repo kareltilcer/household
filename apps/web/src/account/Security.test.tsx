@@ -77,6 +77,10 @@ describe('changing the password', () => {
         expect.stringContaining('That isn’t your current password.'),
       )
     })
+    // The focus is on the field that was refused, whose sentence is read with it.
+    await waitFor(() => {
+      expect(screen.getByLabelText('Current password')).toHaveFocus()
+    })
     // A wrong password is not a session that ended: the member is where they were.
     expect(router.state.location.pathname).toBe('/account/security')
     expect(screen.getByLabelText('New password')).toHaveValue('a much longer new one')
@@ -225,12 +229,19 @@ describe('the second step', () => {
     expect(within(dialog).getByLabelText('Password')).toHaveAccessibleDescription(
       expect.stringContaining('Enter your password.'),
     )
+    // The focus is on the field each time it is refused, from the control that asked.
+    await waitFor(() => {
+      expect(within(dialog).getByLabelText('Password')).toHaveFocus()
+    })
     await user.type(within(dialog).getByLabelText('Password'), 'not it')
     await user.click(within(dialog).getByRole('button', { name: 'Make new codes' }))
     await waitFor(() => {
       expect(within(dialog).getByLabelText('Password')).toHaveAccessibleDescription(
         expect.stringContaining('That isn’t your password.'),
       )
+    })
+    await waitFor(() => {
+      expect(within(dialog).getByLabelText('Password')).toHaveFocus()
     })
     expect(within(dialog).getByLabelText('Password')).toHaveValue('not it')
   })

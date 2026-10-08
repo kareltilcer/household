@@ -35,6 +35,7 @@ import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
+import { useRefusedField } from '../auth/fields.tsx'
 import { householdsKey, membersKey, useHouseholds } from '../household/households.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe, useSession, type Me } from '../session/SessionProvider.tsx'
@@ -164,7 +165,8 @@ function Deletion({ me }: { readonly me: Me }) {
 
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set())
   const [proof, setProof] = useState('')
-  const [unproven, setUnproven] = useState<'missing' | 'wrong' | null>(null)
+  // What was typed that is not sent, set anew each time: nothing, or an address not the account's.
+  const [unproven, setUnproven] = useState<{ readonly fault: 'missing' | 'wrong' }>()
   // The day the page was opened on: the date on the button does not move under a press.
   const [opened] = useState(() => Date.now())
   const held = standings.some((standing) => blocks(standing, chosen))
@@ -211,10 +213,11 @@ function Deletion({ me }: { readonly me: Me }) {
 
   const password = (me.credentials ?? []).includes('password')
   const email = me.email ?? ''
+  const form = useRefusedField(unproven ?? schedule.error)
   const problem = problemIn(schedule.error)
-  const wrong = unproven === 'wrong' || problem?.code === 'invalid_credentials'
+  const wrong = unproven?.fault === 'wrong' || problem?.code === 'invalid_credentials'
   const proofError =
-    unproven === 'missing'
+    unproven?.fault === 'missing'
       ? password
         ? t('account.password.missing')
         : t('account.delete.confirm.email_missing')
@@ -331,6 +334,7 @@ function Deletion({ me }: { readonly me: Me }) {
               </>
             ) : (
               <form
+                ref={form}
                 className={styles.form}
                 noValidate
                 onSubmit={(event) => {
@@ -338,16 +342,16 @@ function Deletion({ me }: { readonly me: Me }) {
                   const typed = password ? proof : proof.trim()
                   schedule.reset()
                   if (typed === '') {
-                    setUnproven('missing')
+                    setUnproven({ fault: 'missing' })
                     return
                   }
                   // An address that is not the account's is not sent to be counted as a failed
                   // sign-in: it is said here.
                   if (!password && typed.toLowerCase() !== email.toLowerCase()) {
-                    setUnproven('wrong')
+                    setUnproven({ fault: 'wrong' })
                     return
                   }
-                  setUnproven(null)
+                  setUnproven(undefined)
                   schedule.mutate({
                     password_or_confirmation: typed,
                     delete_sole_owned_households: standings.flatMap((standing) =>

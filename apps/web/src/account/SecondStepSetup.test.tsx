@@ -164,7 +164,11 @@ describe('turning the second step on', () => {
     await user.type(within(dialog).getByLabelText('Password'), 'the password')
     await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
 
-    expect(await screen.findByText('Verify your email first')).toBeInTheDocument()
+    // The answer to the password just given, the question having closed: said as it arrives,
+    // its words drawn a moment after the region that says them.
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/^Verify your email first/)
+    })
     expect(
       screen.getByText(
         'A second step bound to an address nobody has proven would outlive the password reset that proves it, and lock the address’s owner out. Everything else works as normal.',
@@ -188,6 +192,8 @@ describe('turning the second step on', () => {
     const server = createServer({ ...jana, email_verified: false })
     await setup(server)
     expect(screen.getByText('Verify your email first')).toBeInTheDocument()
+    // There as the screen opened: read in its place, and announced as nothing that arrived.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Set it up' })).not.toBeInTheDocument()
     expect(server.to('POST /auth/mfa/enroll')).toHaveLength(0)
   })
@@ -206,6 +212,9 @@ describe('turning the second step on', () => {
         ),
       )
     })
+    await waitFor(() => {
+      expect(code).toHaveFocus()
+    })
     expect(code).toHaveValue('000000')
   })
 
@@ -218,6 +227,9 @@ describe('turning the second step on', () => {
     expect(code).toHaveAccessibleDescription(
       expect.stringContaining('Enter the six digits the app shows.'),
     )
+    await waitFor(() => {
+      expect(code).toHaveFocus()
+    })
     expect(server.to('POST /auth/mfa/activate')).toHaveLength(0)
   })
 
@@ -243,7 +255,10 @@ describe('turning the second step on', () => {
     const { user } = await scanning(server)
     await user.type(screen.getByRole('textbox', { name: 'Code from the app' }), '417902')
     await user.click(screen.getByRole('button', { name: 'Turn it on' }))
-    expect(await screen.findByText('The answer did not reach this page')).toBeInTheDocument()
+    // What became of the press, the form having gone: said as it arrives.
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/^The answer did not reach this page/)
+    })
     expect(screen.getByRole('link', { name: 'Go to Signing in' })).toHaveAttribute(
       'href',
       '/account/security',

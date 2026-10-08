@@ -143,8 +143,14 @@ describe('where an account is signed in', () => {
     expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
     expect(server.to(`DELETE /me/sessions/${laptop.id}`)).toHaveLength(1)
     // The list is read again: only this browser is left.
-    expect(await screen.findByText('Only this browser')).toBeInTheDocument()
+    const left = await screen.findByText('Only this browser')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // The row the question was opened from went with what it named, and the focus the question
+    // gave back with it: it is on the lists' own place, and not dropped to the page.
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body)
+    })
+    expect(document.activeElement).toContainElement(left)
   })
 
   it('signs a device out, and says every trust goes where the account has a second step', async () => {
@@ -275,6 +281,27 @@ describe('where an account is signed in', () => {
     })
     expect(await screen.findByRole('button', { name: 'Sign out Pixel 6' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('says a name could not be saved on its field, which takes the focus', async () => {
+    const server = createServer()
+    signedIn(server, [here], [phone])
+    server.on(`PATCH /me/devices/${phone.id}`, () => Promise.reject(new TypeError('offline')))
+    const { user } = await devices(server)
+    await user.click(await screen.findByRole('button', { name: 'Rename Android phone or tablet' }))
+    const sheet = screen.getByRole('dialog', { name: 'Rename Android phone or tablet' })
+    const name = within(sheet).getByRole('textbox', { name: 'Name' })
+    await user.type(name, 'Pixel 6')
+    await user.click(within(sheet).getByRole('button', { name: 'Save name' }))
+    await waitFor(() => {
+      expect(name).toHaveAccessibleDescription(
+        expect.stringContaining('We couldn’t reach Household.'),
+      )
+    })
+    await waitFor(() => {
+      expect(name).toHaveFocus()
+    })
+    expect(name).toHaveValue('Pixel 6')
   })
 })
 

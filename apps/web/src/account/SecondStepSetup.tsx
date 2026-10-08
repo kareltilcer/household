@@ -27,6 +27,7 @@ import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
+import { useRefusedField } from '../auth/fields.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { meKey, useMe, type Me } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -66,7 +67,8 @@ function Scan({
   const toast = useToast()
   const say = useProblemText(useOwnZone())
   const [code, setCode] = useState('')
-  const [malformed, setMalformed] = useState(false)
+  // Set, anew, each time what was typed is no six digits: it is not sent.
+  const [malformed, setMalformed] = useState<object>()
   const activate = useMutation({
     ...askedNow,
     mutationFn: async (digits: string) =>
@@ -83,18 +85,21 @@ function Scan({
   // answer was lost, and which the transport sent again, is told only that the first is done.
   const lost = problemIn(activate.error)?.code === 'idempotency_in_progress'
   const wrong = isRefusedAsSent(activate.error)
-  const error = malformed
-    ? t('account.second_step.code.malformed')
-    : wrong
-      ? t('account.second_step.code.wrong')
-      : activate.isError && !lost
-        ? say(activate.error)
-        : undefined
+  const form = useRefusedField(malformed ?? activate.error)
+  const error =
+    malformed !== undefined
+      ? t('account.second_step.code.malformed')
+      : wrong
+        ? t('account.second_step.code.wrong')
+        : activate.isError && !lost
+          ? say(activate.error)
+          : undefined
 
   if (lost) {
     return (
       <SettingsPage title={t('account.second_step.title')}>
-        <Banner tone="warning" title={t('account.second_step.lost.title')}>
+        {/* What became of the press that asked: said as it arrives, the form having gone. */}
+        <Banner tone="warning" title={t('account.second_step.lost.title')} announce>
           {t('account.second_step.lost.body')}
         </Banner>
         <Link className={styles.link} to={paths.accountSecurity.path}>
@@ -138,6 +143,7 @@ function Scan({
       </Section>
       <Section title={t('account.second_step.code.title')}>
         <form
+          ref={form}
           className={styles.form}
           noValidate
           onSubmit={(event) => {
@@ -146,7 +152,7 @@ function Scan({
             // A code that is not six digits is no code of the app's: said here, and not spent
             // as one of the five tries the server allows in five minutes.
             const shaped = /^\d{6}$/.test(digits)
-            setMalformed(!shaped)
+            setMalformed(shaped ? undefined : {})
             activate.reset()
             if (shaped) activate.mutate(digits)
           }}
@@ -229,7 +235,13 @@ function Start({
   if (!me.email_verified && email !== null) {
     return (
       <SettingsPage title={t('account.second_step.title')} lead={t('account.second_step.lead')}>
-        <Banner tone="warning" title={t('account.second_step.unverified.title')}>
+        <Banner
+          tone="warning"
+          title={t('account.second_step.unverified.title')}
+          // Said as it arrives where it is the server's answer to the password just given, the
+          // question having closed; read in its place where the screen opened with it.
+          announce={problemIn(enrol.error)?.code === 'account_unverified'}
+        >
           {t('account.second_step.unverified.body')}
         </Banner>
         <VerifyResend email={email} />
