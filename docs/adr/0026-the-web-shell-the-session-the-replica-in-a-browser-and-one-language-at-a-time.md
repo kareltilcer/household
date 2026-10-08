@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-08
 - **Plan item:** 25
-- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §5–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-164; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
+- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §2, §9; [06-clients](../prd/06-clients.md) §2, §4–§8; [07-nonfunctional](../prd/07-nonfunctional.md) §4; design [04-navigation](../design/04-navigation.md), [03-patterns](../design/03-patterns.md) §1, §2, §8; D-38, D-105, D-153, D-155 to D-165; PL-4; the consequences of [ADR 0009](0009-accounts-sessions-throttles-and-the-breach-corpus.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md) and [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md) for item 25
 
 ## Context
 
@@ -43,15 +43,20 @@ client a hand-over, and these questions came with them:
 session's cookie and the readable cookie that carries its CSRF token together and takes them
 away together, so a browser without the second holds no session and is not asked whose it is: a
 visitor's page asks the server nothing it would refuse. Otherwise the app asks `GET /me`, kept in
-the persisted cache so that a member with no connection is still a member. Every problem a query
-or a mutation meets is told to one hub (`api/problems.ts`), and so is one the replica's own
-requests meet; the session answers three of them (D-156, D-158). A `401` on a member's session
-means it ended and has nothing to renew: what the browser kept of their households, the
-persisted cache and every replica's database, is removed, and the address they were at is held
-for the sign-in that follows. A `403 csrf_failed` signs them in again and removes nothing. A `400
-update_required` draws one screen in every route's place, whose action reloads the page. Signing
-out ends the session at the server first, and removes the same only once it has: unreached, the
-member is still signed in and is told so, and a session the server ended already is signed out.
+the persisted cache so that a member with no connection is still a member, and asks again each
+time the page is looked at again, however lately it read: that is when a session ended from
+elsewhere is noticed, and an address proven in the tab its email's link opened. Asked with the
+browser offline and nothing kept, the question waits for a connection, neither answered nor
+failed: the page says the server could not be asked, with the way to ask again, and draws no
+skeleton for it. Every problem a query or a mutation meets is told to one hub
+(`api/problems.ts`), and so is one the replica's own requests meet; the session answers three
+of them (D-156, D-158). A `401` on a member's session means it ended and has nothing to renew:
+what the browser kept of their households, the persisted cache and every replica's database, is
+removed, and the address they were at is held for the sign-in that follows. A `403 csrf_failed`
+signs them in again and removes nothing. A `400 update_required` draws one screen in every
+route's place, whose action reloads the page. Signing out ends the session at the server first,
+and removes the same only once it has: unreached, the member is still signed in and is told so,
+and a session the server ended already is signed out.
 
 **What a browser keeps is its member's, and for no longer than their session** (D-161). The
 account it keeps is kept for a day and for one build, and the session's cookies lapse with the
@@ -156,6 +161,14 @@ above `none` on, of those the build has screens for (`modules/registry.ts`), in 
 order. The order, the pins and what the member put away are kept in the browser, for each member
 and household (D-155). The dev page `/dev/shell` draws the list from a registry of its own.
 
+**A page is titled for the screen it shows** (D-165). The document's title is the screen's one
+heading and then the app's name, in the member's language (`app/title.ts`): *Sign in · Household*.
+A screen says its name where it draws that heading, and the name goes with the screen, so
+between two screens, and while one has no name yet, the page is called by the app's name alone,
+as `index.html` calls it. Nothing above the screens sets a title: an effect of `Root`'s runs
+after its screens' own, and would stand over theirs. axe holds only that a page has a title, so
+the suite's walk of the routes holds each route's title to its heading.
+
 **The end-to-end suite starts the API itself, on the development services, and each test is a
 network of its own.** The preview server proxies `/api` to it, so a page is same-origin with the
 API as a deployment's is; `__Host-` cookies are set on `http://127.0.0.1`, which a browser takes
@@ -181,9 +194,13 @@ every other console error still fails its test.
 | A household drawn from what the browser kept while the server answers `404` for it | A kept read stands in for a server that cannot be asked, not for one that answered: a member taken out of a household would be drawn its shell for as long as the cache lasts (F-17) |
 | Where the app opens waiting on the list of households being read again, every time | A round trip before every opening, and seconds of it on a connection that fails, to cover a list that named a household since left: that list is dropped by the `404` that found it out |
 | A `fetch` that turns the library's bearer into a cookie on the server's side, or a web-session token minted for the replica | The first is the server reading a credential it was not sent. The second is a second credential for a browser that has one, with its own lifetime and revocation to keep in step |
+| A replica's removal waited on, or taken back where its member signs in again before the tab that holds it has let go | The removal is asked for and not waited on, since a tab that never closes its replica would hold up the sign-in that follows, and a browser gives a page no way to take a removal back once it is asked. One that another tab blocks is carried out when that tab closes its replica, whoever is signed in by then: where that is the same member, signed in again in another tab before this one was looked at, what goes is a copy read again when the household is next opened, and nothing queued. What a removal owes a replica that has queued something is the first module written offline's to settle (Consequences) |
+| The replica closed by the page that finds another member signed in, before it asks for the removal and loads itself again | The removal is carried out once the page's own connection has closed, which is as the page goes. Chromium keeps a removal whose page has gone (tried in review round 6), and the suite runs no other engine, so nothing here holds Firefox or Safari to it. Closing first is a second way to close a replica, beside the household leaving the screen, to keep in step with it, for a copy only another member of the same household would open on the same browser, which PowerSync holds to what is theirs at its first checkpoint and no screen reads yet. It is settled with what a removal owes a queue (Consequences) |
+| The household's lock told apart as this tab's own, where a replica left a moment ago is still closing | A page cannot ask the browser whether a lock is its own: a household left and opened again within the moment its replica takes to close reads its own lock as another tab's, and says so until the lock is its own again, which is that moment. Telling them apart is a list of the locks this page holds, kept in step with the browser's, for a sentence that is gone before it is read |
 | PowerSync's shared worker (`multiTab`) in place of the lock | It shares the connection, not the connector: two tabs would still each push the queue (ADR 0019) |
 | A `BroadcastChannel` election of the tab that holds the replica | A lock the browser releases when a tab dies, with no heartbeat to time out |
 | Whether a replica is receiving read off the SDK's `connecting` and `hasSynced`, as item 25 first had it | A replica opened again has synced before and has not tried yet, so every household opened a second time was said, and announced, not to be receiving until its connection was made. And `connecting` is true for the length of every attempt, so with the sync service gone the bar was taken away and said anew at each, every five seconds. The failure of the last attempt, which the SDK keeps until one succeeds, is neither |
+| The sentence that a household is not receiving held back, after the browser was offline, until an attempt made with the connection back has failed; or the replica told to connect as the browser comes back | The failure the replica met with no connection is the SDK's last word until an attempt succeeds, and the SDK tries again on its own five seconds, not when the browser comes back: for those seconds the household is not receiving, and the bar says so where it said that the browser was offline. Holding it back is telling an attempt made before the connection returned from one made after, a clock kept beside the SDK's, as reading `connecting` was. A page that told the replica to connect would be a second caller of a connection the replica keeps trying by itself |
 | `'unsafe-eval'`, or the SDK built without WebAssembly | The first is what PRD 07 §4 forbids. There is no SQLite for the browser that is not WebAssembly |
 | The sync service's origin as a wildcard, or `connect-src *` | A policy is widened for one origin. A page that could connect anywhere could send what it reads anywhere |
 | The sync origin read at run time from the API's answer | The policy is in the page before any script runs: a script cannot widen it |
@@ -199,9 +216,12 @@ every other console error still fails its test.
 | Asking at once made the query client's rule for every write | A household's write made with no connection is queued on the web (06-clients), and waits in the page until a replica keeps it (ADR 0025). Which of a module's writes wait is its screens' to say: a sign-in's and an account's are no household's |
 | A provider's control busy only while its start is asked, and idle again once it is answered | The page is on its way to the provider's for as long as that page takes to answer, and a control idle meanwhile takes a second press, which begins a second flow. It stays busy, and a page the browser kept and shows again, back from the provider's, puts its start back |
 | The file of recovery codes let go of in the press that hands it over, or by a timer after it | A browser may begin reading the file only once the press has returned, and how long after is its own affair. It is let go of with the screen that showed the codes |
+| The answer to an earlier save of a language kept from the account, once a later one is chosen | Two languages chosen within one round trip show the first again for as long as the second's save takes, and end in the second, on the page and in the account. Keeping the first answer from the account is a second word on which answer counts, with the second's failure to put right beside it, where the server holds the first and the page was never told. A flicker that ends where it should is less than that |
 | A catalog that failed to load imported again when the connection is back | Chromium keeps an import that failed and answers the next one of the same file with that failure, asking the network nothing: the page stayed blank until it was reloaded by hand. The page is loaded again, which asks for every file of its own anew, and a language chosen later says to reload |
 | The catalogs fetched as data, which can be asked for again, and not imported | A second way to load and to name a build's files, and to count them in the budget, for a failure that loading the page again answers |
 | English in the entry as a fallback for a catalog that fails to load | Counted on every visit of members who do not read it (D-159) |
+| One title, the app's name, for every route, as item 25 first had it | A tab, a history entry and a screen reader's list of windows name a page by its title: with one for all, three tabs of the app read alike, and going from a profile to signing in changes nothing a title says. It is level A of the gate 06-clients §4 sets (WCAG 2.1, 2.4.2), and axe passes any title at all (D-165) |
+| A table of titles beside `paths.ts`, or the title read off the page's `<h1>` by an observer | The first is a second name for each screen, kept in step with its heading by hand, with no word for a screen that changes what it says as it opens, a link's page or a provider's return. The second watches the document for what the screen that draws the heading already holds as a value. The screen says it, once, where it draws it |
 | Every granted module listed, with a screen that says it is not built | A link to nothing (D-160) |
 | The arrangement in a synced entity now | A server item's work inside this one (D-155) |
 | The suite against a stand-in API, or with requests answered by the test | The Done-when is the flow through the server: its mail, its throttles, its cookies. A stand-in would be a second server kept in step by hand |
@@ -213,6 +233,9 @@ every other console error still fails its test.
   the session hears of the three answers. A request made outside it tells the hub itself, as
   the renewal of a browser's push does (`push/worker.ts`); the one that does not is the removal
   a sign-out follows, whose own refusal is told (above).
+- A screen that draws the page's `<h1>` says the same words to `usePageTitle` (`app/title.ts`),
+  where it draws them; `Screen` and `SettingsPage` do for the screens they frame. The walk of the
+  routes fails a route whose title does not name its heading (D-165).
 - A write of a screen before sign-in or of a member's own account spreads `askedNow`
   (`api/query.ts`), and a test holds every one of them to it. A module's screens say for
   themselves which of their writes wait for a connection.
@@ -237,6 +260,12 @@ every other console error still fails its test.
   are held by their tests and by `/dev/sync`. Signing out removes a replica with whatever it had
   queued, and today it can have queued nothing: the first module written offline adds, to the
   sign-out, the count of changes not yet sent and the question that names them.
+- A replica's removal is asked for and not waited on (`sync/databases.ts`): the browser carries
+  it out once every connection to the database has closed, which for one another tab holds is
+  when that tab lets go, and for one the asking page holds itself and then loads itself again is
+  after the page has gone. The second is tried in Chromium alone, the one engine the suite runs.
+  The first module written offline settles what a removal owes a replica that has queued
+  something, and with it whether a page closes its replica before it asks.
 - The arrange screen moves a row by its handle's arrow keys and by its menu. Dragging a row is
   not built: PL-4's dnd-kit comes with the first board.
 - The first download is 180 kB of its 200 kB (D-153), 19 of them a language's whole catalog,

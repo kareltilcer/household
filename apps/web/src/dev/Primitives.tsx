@@ -8,6 +8,7 @@
 import { controls, statusGlyphs, type StatusId } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { useRef, useState, type ReactNode } from 'react'
+import { usePageTitle } from '../app/title.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner, OfflineBar } from '../ui/Banner.tsx'
 import { Button, IconButton, type ButtonVariant } from '../ui/Button.tsx'
@@ -36,6 +37,7 @@ function Section({ name, children }: { readonly name: string; readonly children:
 
 export function Primitives() {
   const sample = useSample()
+  usePageTitle(sample('Primitives'))
   const t = useTranslate()
   const toast = useToast()
   const [confirm, setConfirm] = useState(false)

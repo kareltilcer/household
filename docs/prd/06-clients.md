@@ -119,6 +119,7 @@ applies to consumer services from June 2025, and this is a consumer service sold
 | Contrast ≥ 4.5:1 body, 3:1 large text and UI components | Token pairs are contrast-tested in CI; a failing pair fails the build |
 | Every interactive element reachable and operable by keyboard | Automated axe pass on every route, both themes, in CI |
 | Screen reader | VoiceOver and TalkBack manual passes per release on the primary flows; every icon-only control has a label |
+| Page titles (web) | Each screen names the page in its title, before the app's name; the end-to-end walk of the routes holds each route's title to its heading (**D-165**) |
 | Dynamic type | Layouts survive 200 % text scaling without clipping or loss of function |
 | Motion | `prefers-reduced-motion` respected; no essential information conveyed by motion alone |
 | Colour | Never the sole carrier of meaning — status is always colour **and** icon **and** text |

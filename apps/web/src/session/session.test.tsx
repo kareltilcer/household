@@ -1,4 +1,4 @@
-import { focusManager, useMutation } from '@tanstack/react-query'
+import { focusManager, onlineManager, useMutation } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -19,9 +19,11 @@ import { useSession } from './SessionProvider.tsx'
 
 const origin = 'https://household.example'
 
-// A test that says the page is looked at again leaves the next one a page nobody has looked at.
+// A test that says the page is looked at again leaves the next one a page nobody has looked at,
+// and one that takes the connection away gives it back.
 afterEach(() => {
   focusManager.setFocused(undefined)
+  onlineManager.setOnline(true)
 })
 const signedIn = `${csrfCookie}=token`
 
@@ -148,6 +150,51 @@ describe('who is signed in', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     await waitFor(() => {
       expect(screen.queryByText('Household can’t be reached')).not.toBeInTheDocument()
+    })
+  })
+
+  it('is not known, and is said so, where the browser has no connection to ask with', async () => {
+    onlineManager.setOnline(false)
+    const at = server(() => Response.json(me))
+    const router = createMemoryRouter(routes, { initialEntries: [paths.account.path] })
+    render(
+      <Providers persist={false} client={at.client} cookies={at.cookies}>
+        <RouterProvider router={router} />
+      </Providers>,
+    )
+    // Asked with no connection, the question waits for one: no skeleton stands for it meanwhile.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Household can’t be reached' }),
+    ).toBeInTheDocument()
+    // Asked again with none, it waits still, and the sentence stays where it was.
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Household can’t be reached' }),
+    ).toBeInTheDocument()
+    expect(at.asked).toEqual([])
+    act(() => {
+      onlineManager.setOnline(true)
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('Household can’t be reached')).not.toBeInTheDocument()
+    })
+    expect(at.asked).toContain('GET /me')
+  })
+
+  // An address proven by the link its email carried is proven in the tab the mail opened, and a
+  // session is ended from elsewhere: the page that is looked at again learns of either then.
+  it('is asked again each time the page is looked at again, however lately it was read', async () => {
+    const at = server(() => Response.json(me))
+    open(at)
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('member Jana')
+    })
+    expect(at.asked).toEqual(['GET /me'])
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(at.asked).toEqual(['GET /me', 'GET /me'])
     })
   })
 

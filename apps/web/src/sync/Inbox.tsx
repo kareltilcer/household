@@ -13,6 +13,7 @@
 // empty state teaches nothing: it is one calm sentence.
 import type { RecordedOutcome } from '@household/sync'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { usePageTitle } from '../app/title.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
@@ -279,6 +280,7 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
 export function Inbox() {
   const t = useTranslate()
   const setting = useSetting()
+  usePageTitle(t('sync.inbox.title'))
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>{t('sync.inbox.title')}</h1>

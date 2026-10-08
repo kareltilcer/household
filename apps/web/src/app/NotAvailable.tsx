@@ -9,6 +9,7 @@ import { Link } from 'react-router'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { paths } from './paths.ts'
 import styles from './Root.module.css'
+import { usePageTitle } from './title.ts'
 
 export interface NotAvailableProps {
   /** Where its one way out leads: the household the member is in, or where the app opens. */
@@ -17,6 +18,7 @@ export interface NotAvailableProps {
 
 export function NotAvailable({ home = paths.home.path }: NotAvailableProps) {
   const t = useTranslate()
+  usePageTitle(t('ui.not_available.title'))
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>{t('ui.not_available.title')}</h1>

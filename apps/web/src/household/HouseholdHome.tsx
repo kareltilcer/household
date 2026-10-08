@@ -4,6 +4,7 @@
 // their own order, as the sidebar lists them. A module they do not hold is not here either.
 import { ModuleIcon } from '@household/icons/web'
 import { inHousehold } from '../app/paths.ts'
+import { usePageTitle } from '../app/title.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { modules } from '../modules/registry.ts'
 import { useMe } from '../session/SessionProvider.tsx'
@@ -21,6 +22,7 @@ export function HouseholdHome() {
   const [arrangement] = useArrangement(me.id, household.id)
   const navigation = navigationOf(household, modules, arrangement)
   const open = [...navigation.pinned, ...navigation.listed]
+  usePageTitle(t('nav.home'))
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>{t('nav.home')}</h1>

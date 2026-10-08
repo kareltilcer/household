@@ -11,6 +11,7 @@ import { Button } from '../ui/Button.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { paths } from './paths.ts'
 import styles from './Root.module.css'
+import { usePageTitle } from './title.ts'
 
 /**
  * In a screen's place while it is not yet known who is signed in: the shape of a page. It is
@@ -30,13 +31,27 @@ export function Waiting() {
   )
 }
 
-/** In a screen's place where the server could not be asked who is signed in, and nothing is kept. */
-export function Unreachable({ retry }: { readonly retry: () => void }) {
+export interface UnreadProps {
+  /** What could not be read: the page's one title. */
+  readonly title: string
+  /** What became of it, and what to do. */
+  readonly body: string
+  /** Asks again. */
+  readonly retry: () => void
+}
+
+/**
+ * In a screen's place where what it is drawn from could not be read, and nothing is kept of it:
+ * said, with the way to ask again. A read that waits for a connection is one of these to a
+ * member, and no skeleton.
+ */
+export function Unread({ title, body, retry }: UnreadProps) {
   const t = useTranslate()
+  usePageTitle(title)
   return (
     <div className={styles.page}>
-      <h1 className={styles.title}>{t('session.unreachable.title')}</h1>
-      <p className={styles.lead}>{t('session.unreachable.body')}</p>
+      <h1 className={styles.title}>{title}</h1>
+      <p className={styles.lead}>{body}</p>
       <Button
         variant="primary"
         onClick={() => {
@@ -46,6 +61,18 @@ export function Unreachable({ retry }: { readonly retry: () => void }) {
         {t('ui.retry')}
       </Button>
     </div>
+  )
+}
+
+/** In a screen's place where the server could not be asked who is signed in, and nothing is kept. */
+export function Unreachable({ retry }: { readonly retry: () => void }) {
+  const t = useTranslate()
+  return (
+    <Unread
+      title={t('session.unreachable.title')}
+      body={t('session.unreachable.body')}
+      retry={retry}
+    />
   )
 }
 

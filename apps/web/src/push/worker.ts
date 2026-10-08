@@ -64,7 +64,10 @@ function keepTurnedOff(off: boolean): void {
   }
 }
 
-/** `bytes` in base64url without padding, as the contract carries a subscription's keys. */
+/**
+ * `bytes` in base64url without padding: as the contract carries a subscription's keys, and as a
+ * provider's sign-in carries its challenge (auth/provider.ts).
+ */
 export function base64url(bytes: ArrayBuffer): string {
   let binary = ''
   for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte)

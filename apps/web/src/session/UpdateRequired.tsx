@@ -5,11 +5,13 @@
 // build is what the address serves now. Nothing is lost by it: what a member queued is kept in
 // this browser and sent by the build that loads.
 import styles from '../app/Root.module.css'
+import { usePageTitle } from '../app/title.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Button } from '../ui/Button.tsx'
 
 export function UpdateRequired() {
   const t = useTranslate()
+  usePageTitle(t('ui.update.required.title'))
   return (
     <main className={styles.page}>
       <h1 className={styles.title}>{t('ui.update.required.title')}</h1>

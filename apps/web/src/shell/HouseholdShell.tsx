@@ -9,14 +9,12 @@ import { useEffect } from 'react'
 import { Outlet, useParams } from 'react-router'
 import { problemIn } from '../api/problem.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
-import { Waiting } from '../app/guards.tsx'
-import styles from '../app/Root.module.css'
+import { Unread, Waiting } from '../app/guards.tsx'
 import { HouseholdContext } from '../household/HouseholdContext.tsx'
 import { householdsKey, rememberHousehold, useHouseholdQuery } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import { ReplicaProvider } from '../sync/ReplicaProvider.tsx'
-import { Button } from '../ui/Button.tsx'
 import { AccountNavigation } from './AccountNavigation.tsx'
 import { Frame } from './Frame.tsx'
 import { HouseholdBars } from './HouseholdBars.tsx'
@@ -75,18 +73,13 @@ function Opened({ id }: { readonly id: string }) {
     }
     return (
       <Outside>
-        <div className={styles.page}>
-          <h1 className={styles.title}>{t('shell.household.error.title')}</h1>
-          <p className={styles.lead}>{t('shell.household.error.body')}</p>
-          <Button
-            variant="primary"
-            onClick={() => {
-              void household.refetch()
-            }}
-          >
-            {t('ui.retry')}
-          </Button>
-        </div>
+        <Unread
+          title={t('shell.household.error.title')}
+          body={t('shell.household.error.body')}
+          retry={() => {
+            void household.refetch()
+          }}
+        />
       </Outside>
     )
   }

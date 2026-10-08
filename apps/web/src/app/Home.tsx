@@ -10,10 +10,8 @@ import { Navigate } from 'react-router'
 import { lastHousehold, useHouseholds } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useSession, type Me } from '../session/SessionProvider.tsx'
-import { Button } from '../ui/Button.tsx'
-import { Unreachable, Waiting } from './guards.tsx'
+import { Unreachable, Unread, Waiting } from './guards.tsx'
 import { inHousehold, paths } from './paths.ts'
-import styles from './Root.module.css'
 
 function MemberHome({ me }: { readonly me: Me }) {
   const t = useTranslate()
@@ -22,18 +20,13 @@ function MemberHome({ me }: { readonly me: Me }) {
     // A read that waits for a connection could not be made, to a member: it is said so.
     if (!households.isError && households.fetchStatus !== 'paused') return <Waiting />
     return (
-      <div className={styles.page}>
-        <h1 className={styles.title}>{t('shell.households.error.title')}</h1>
-        <p className={styles.lead}>{t('shell.households.error.body')}</p>
-        <Button
-          variant="primary"
-          onClick={() => {
-            void households.refetch()
-          }}
-        >
-          {t('ui.retry')}
-        </Button>
-      </div>
+      <Unread
+        title={t('shell.households.error.title')}
+        body={t('shell.households.error.body')}
+        retry={() => {
+          void households.refetch()
+        }}
+      />
     )
   }
   const last = lastHousehold(me.id)

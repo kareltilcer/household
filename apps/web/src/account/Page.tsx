@@ -3,6 +3,7 @@
 // account's navigation and the page's one landmark around it (shell/AccountShell.tsx); a screen
 // is its title and its sections.
 import { useId, type ReactNode } from 'react'
+import { usePageTitle } from '../app/title.ts'
 import styles from './Settings.module.css'
 
 export interface SettingsPageProps {
@@ -14,6 +15,7 @@ export interface SettingsPageProps {
 }
 
 export function SettingsPage({ title, lead, children }: SettingsPageProps) {
+  usePageTitle(title)
   return (
     <div className={styles.page}>
       <div className={styles.head}>

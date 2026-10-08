@@ -1,9 +1,25 @@
-// Accessibility: axe on every route, in both themes (06-clients §4 and §8). The routes are the
-// app's own list (src/app/paths.ts), which the router is built from, so a route added there is
-// checked here with no further word.
+// Accessibility: axe on every route, in both themes (06-clients §4 and §8), and each route's
+// title, which axe does not read past its presence. The routes are the app's own list
+// (src/app/paths.ts), which the router is built from, so a route added there is checked here
+// with no further word.
 import type { Page } from '@playwright/test'
 import { paths, routeIds } from '../src/app/paths.ts'
 import { displayKey, expect, expectAccessible, open, reach, test } from './fixtures.ts'
+
+/**
+ * Holds the page's title to the screen it shows: its one `<h1>`'s words, before the app's name
+ * (WCAG 2.1, 2.4.2; D-165). axe asks only that a page has a title, and one title for every
+ * screen would pass it. The two are read together until they agree: a screen that does
+ * something as it opens changes its heading, and its title with it.
+ */
+async function expectNamed(page: Page): Promise<void> {
+  await expect
+    .poll(async () => {
+      const heading = (await page.getByRole('heading', { level: 1 }).innerText()).trim()
+      return (await page.title()) === `${heading} · Household`
+    })
+    .toBe(true)
+}
 
 // Each route as whoever it is drawn for sees it on opening its address: a visitor for the
 // screens before sign-in, a member with a household for the shell's. What a route goes on to
@@ -15,6 +31,8 @@ for (const id of routeIds) {
       test.slow(id === 'harness')
       await open(page, await reach(id, enter), { theme })
       await expectAccessible(page)
+      // A route added to the list with a screen that does not say its name fails here.
+      await expectNamed(page)
     })
   }
 }
@@ -22,7 +40,9 @@ for (const id of routeIds) {
 test('a page says what language it is in, and what it is', async ({ page }) => {
   await open(page, paths.home.example, { locale: 'cs' })
   await expect(page.locator('html')).toHaveAttribute('lang', 'cs')
-  await expect(page).toHaveTitle('Household')
+  // A visitor is opened at the way in, and the page is named for it in their language.
+  await expect(page).toHaveTitle('Přihlásit se · Household')
+  await expectNamed(page)
 })
 
 test('a page whose language could not be fetched is loaded again when the connection is back', async ({

@@ -9,6 +9,7 @@
 // 100 % under `?scale=100`.
 import { useEffect, useId } from 'react'
 import { useSearchParams } from 'react-router'
+import { usePageTitle } from '../../app/title.ts'
 import { useDisplay } from '../../display/DisplayProvider.tsx'
 import { Button } from '../../ui/Button.tsx'
 import { EmptyState } from '../../ui/EmptyState.tsx'
@@ -133,6 +134,7 @@ function Pair({
 
 export function Harness() {
   const sample = useSample()
+  usePageTitle(sample('Twelve-state harness'))
   const { hold } = useDisplay()
   const [params] = useSearchParams()
   const scale = params.get('scale') === '100' ? '100' : '200'

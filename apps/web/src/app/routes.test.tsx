@@ -106,6 +106,24 @@ describe('the app', () => {
     await screen.findByRole('heading', { level: 1 })
     expect(router.state.location.pathname).toBe(paths.signIn.path)
     expect(screen.getAllByRole('main')).toHaveLength(1)
+  })
+
+  // A tab, a history entry and a screen reader's list of windows name a page by its title: one
+  // title for every screen would tell none of them apart (WCAG 2.1, 2.4.2; D-165).
+  it('names the page for the screen it shows, and for the app alone once that screen has gone', async () => {
+    const router = createMemoryRouter(routes, { initialEntries: [paths.signIn.path] })
+    const { unmount } = render(
+      <Providers persist={false} client={client}>
+        <RouterProvider router={router} />
+      </Providers>,
+    )
+    await screen.findByRole('heading', { level: 1, name: 'Sign in' })
+    expect(document.title).toBe('Sign in · Household')
+    await act(() => router.navigate(paths.notFound.example))
+    const nothing = 'This link doesn’t open anything here.'
+    await screen.findByRole('heading', { level: 1, name: nothing })
+    expect(document.title).toBe(`${nothing} · Household`)
+    unmount()
     expect(document.title).toBe('Household')
   })
 

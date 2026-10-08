@@ -159,7 +159,7 @@ describe('a return from a provider, to sign in', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'An account already uses the email address Google gave us. Sign in with your password, then connect Google from your account.',
+        'An account already uses the email address Google gave us. Sign in the way you usually do, then connect Google from your account.',
       ),
     ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Go to sign in' })).toHaveAttribute(

@@ -14,6 +14,7 @@
 // end-to-end suite opens each from a cell it finds by `data-sync-cell` (model.ts).
 import type { RecordedOutcome } from '@household/sync'
 import { useId, useMemo, useState, type ReactNode } from 'react'
+import { usePageTitle } from '../../app/title.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import type { Describers } from '../../sync/describe.ts'
 import { InboxView } from '../../sync/Inbox.tsx'
@@ -275,6 +276,7 @@ function WatchedRow({ sample, describers }: Fixtures) {
 
 export function DevSync() {
   const sample = useSample()
+  usePageTitle(sample('Sync UI'))
   const t = useTranslate()
   const format = useFormat()
   const describers = useMemo(() => describersFor(sample), [sample])

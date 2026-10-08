@@ -10,6 +10,7 @@
 // shell says itself are the catalogs'.
 import type { ReactNode } from 'react'
 import { Placeholder } from '../../app/Placeholder.tsx'
+import { usePageTitle } from '../../app/title.ts'
 import { HouseholdContext } from '../../household/HouseholdContext.tsx'
 import type { Household, HouseholdSummary } from '../../household/households.ts'
 import { useTranslate } from '../../i18n/I18nProvider.tsx'
@@ -113,6 +114,7 @@ function Case({ title, children }: { readonly title: string; readonly children: 
 export function DevShell() {
   const t = useTranslate()
   const sample = useSample()
+  usePageTitle(sample('Shell'))
   arrange()
   const first = household(home, sample('Tilcerovi'), grants)
   const empty = household(none, sample('Babička'), { dashboard: 'view' })

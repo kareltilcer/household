@@ -16,6 +16,7 @@ import { useApi } from '../api/ApiProvider.tsx'
 import { apiPath } from '../api/client.ts'
 import { unwrap } from '../api/problem.ts'
 import { fill, paths } from '../app/paths.ts'
+import { base64url } from '../push/worker.ts'
 
 export const providers = ['google', 'apple'] as const
 export type Provider = (typeof providers)[number]
@@ -77,10 +78,7 @@ export function newVerifier(): string {
 
 /** The S256 challenge of `verifier`: the base64url of its SHA-256, without padding. */
 export async function challengeOf(verifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
-  let binary = ''
-  for (const byte of new Uint8Array(digest)) binary += String.fromCharCode(byte)
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+  return base64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)))
 }
 
 function keep(flow: PendingFlow): void {

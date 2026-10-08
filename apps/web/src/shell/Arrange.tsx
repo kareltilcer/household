@@ -18,6 +18,7 @@ import { controls } from '@household/icons'
 import { BaseIcon, ModuleIcon } from '@household/icons/web'
 import { useId, useState, type KeyboardEvent } from 'react'
 import styles from './Arrange.module.css'
+import { usePageTitle } from '../app/title.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import type { Household, ModuleKey } from '../household/households.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -222,6 +223,7 @@ export function ArrangeLists({ household, user, registry }: ArrangeListsProps) {
 /** The screen: its title, what it is and where it is kept, and the lists. */
 export function ArrangeView(props: ArrangeListsProps) {
   const t = useTranslate()
+  usePageTitle(t('shell.arrange.title'))
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>{t('shell.arrange.title')}</h1>

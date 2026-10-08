@@ -4,6 +4,7 @@
 // nothing of a household, since nobody is signed in to one.
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Link, type To } from 'react-router'
+import { usePageTitle } from '../app/title.ts'
 import styles from './Screen.module.css'
 
 export interface ScreenProps {
@@ -22,6 +23,7 @@ export interface ScreenProps {
 }
 
 export function Screen({ title, lede, live = false, children }: ScreenProps) {
+  usePageTitle(title)
   return (
     <div className={styles.screen}>
       <div className={styles.head} aria-live={live ? 'polite' : undefined}>

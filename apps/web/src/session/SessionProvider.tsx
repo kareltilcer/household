@@ -121,20 +121,26 @@ export function SessionProvider({
   const account = useQuery({
     queryKey: meKey,
     queryFn: async ({ signal }) => unwrap(await api.GET('/me', { signal })),
-    // The account is asked for again when the page is looked at again, which is when a session
-    // ended from elsewhere is noticed.
+    // The account is asked for again each time the page is looked at again, however lately it
+    // was read: that is when a session ended from elsewhere is noticed, and an address proven
+    // by the link its email carried, which is opened in another tab. Read a moment ago it is
+    // not asked for again by anything else: a sign-in has just asked (`entered`).
     staleTime: 60_000,
+    refetchOnWindowFocus: 'always',
     // A session the server said is gone is not asked about again until someone signs in, though
     // its cookies are still here: forgetting empties this query, which would ask at once.
     enabled: hinted && minimumVersion === null && ended === null && !left,
   })
   const refused = problemIn(account.error)?.code === 'unauthenticated'
+  // Asked with the browser offline, the question waits for a connection, neither answered nor
+  // failed: with nothing kept, the server could not be asked, and no skeleton says otherwise.
+  const unasked = account.isError || account.fetchStatus === 'paused'
 
   const state = useMemo<SessionState>(() => {
     if (left || ended !== null || refused || !hinted) return { status: 'visitor' }
     if (account.data !== undefined) return { status: 'member', me: account.data }
-    return account.isError ? { status: 'unreachable' } : { status: 'unknown' }
-  }, [left, ended, refused, hinted, account.data, account.isError])
+    return unasked ? { status: 'unreachable' } : { status: 'unknown' }
+  }, [left, ended, refused, hinted, account.data, unasked])
 
   // A member is read here as they are known to the listener below, which is told of a problem
   // outside any render.
@@ -249,9 +255,12 @@ export function SessionProvider({
     await forgetOnce()
   }, [api, problems, forgetOnce])
 
+  // The query's own, which is the same function for as long as the query is observed: what the
+  // query answers is new at each render, and a `retry` made of it would be too.
+  const { refetch } = account
   const retry = useCallback(() => {
-    void account.refetch()
-  }, [account])
+    void refetch()
+  }, [refetch])
 
   const value = useMemo<Session>(
     () => ({ state, ended, signedOut: left, entered, signOut, retry, minimumVersion }),
