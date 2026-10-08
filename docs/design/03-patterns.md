@@ -111,6 +111,12 @@ out.
 Navigation is the tenth surface and it is the client's own: a module a member has `none` on **is
 not in the list**. Not greyed, not locked, not upsold ([D-38](../prd/06-clients.md)).
 
+**Household settings is listed for every member**, whatever level they hold on it: its profile,
+its members with what each of them holds, and its modules are every member's to read, and there
+is nothing for absence to keep, every household having settings. `none` on it takes away what
+`view` unlocks, the invitations, whose way in and whose address are then absent; and every
+control that changes something is an owner's ([D-167](../prd/09-decisions.md)).
+
 **No upsell, no teaser, no lock icon.** `403` would be an existence oracle
 ([D-16](../prd/02-identity-and-access.md)); a lock icon in the UI is the same disclosure by
 another route. A member who was deliberately excluded from Finance must not learn that the
@@ -293,7 +299,10 @@ not: nothing is disabled by the answer, every module stays on, and the choice is
 by opening a different module. What it buys is a dashboard that is useful on day one instead of
 seventeen widgets nobody chose ([FR-DB4](../prd/modules/01-dashboard.md)), and an app that opens
 where the member's actual reason for arriving lives. Copy it as *"what brought you here?"*, never
-as *"choose your modules"*, and offer a skip that lands on the household default layout.
+as *"choose your modules"*, and offer a skip that lands on the household default layout. A
+client asks it over the modules it has a capture surface for, and passes it over while it has
+none: a question whose every answer leads to the same place is not asked
+([D-169](../prd/09-decisions.md)).
 
 An unverified account can do all of this. Verification gates **what leaves the household** —
 inviting, becoming the billing payer — not what happens inside it

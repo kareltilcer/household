@@ -194,7 +194,8 @@ member, and another owner may send an email invitation again, as theirs (**D-103
 are being given (household name, inviter, role, the list of modules and levels), and accepts or
 declines. Accepting needs a verified address, and an email invitation's is the one it was sent to:
 joining a household is trust extended beyond the account (FR-ID1). Declining is recorded, closes
-the invitation, and the inviter is told.
+the invitation, and the inviter is told: by a notification, and on the household's invitations
+for as long as the invitation stands declined (**D-171**).
 
 **FR-HH4 — Leave a household.** Any member may leave at any time. Content they created stays
 with the household (it is household data, not personal data they own), except items in their

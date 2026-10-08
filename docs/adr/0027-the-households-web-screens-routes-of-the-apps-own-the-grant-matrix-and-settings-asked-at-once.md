@@ -1,0 +1,181 @@
+# 0027 — A household's web screens are routes of the app's own, a role's levels are the rule both sides compute, and household settings is every member's to open and is changed on the server or not at all
+
+- **Status:** Accepted
+- **Date:** 2026-10-08
+- **Plan item:** 26
+- **Decides for:** [02-identity](../prd/02-identity-and-access.md) §3 to §6; [06-clients](../prd/06-clients.md) §2; [17-household-admin](../prd/modules/17-household-admin.md) §1 to §3, Sync and Permissions; design [03-patterns](../design/03-patterns.md) §2, §6 and §9, [02-components](../design/02-components.md) §4.5, DD-6; D-78, D-80, D-103, D-104, D-153, D-159, D-160, D-164 to D-171; the consequences of [ADR 0011](0011-households-as-the-platforms-own-module.md), [ADR 0012](0012-child-profiles-pins-and-graduation.md) and [ADR 0026](0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md) for item 26
+
+## Context
+
+Item 26 builds the first screens of a household on the web: making one, inviting into it, its
+members with what each holds, its child profiles, its modules, its profile, and leaving it. Items
+10, 11 and 25 each left it a hand-over, and these questions came with them:
+
+1. **How a module's screens are routed and held to the gates.** Item 25 gave the registry a
+   `load` for a module's screens, "everything under its address, routed by the module itself",
+   and the end-to-end suite walks `paths.ts`, where such screens would not be.
+2. **Where the settings stand in the address space.** The server's notifications already link
+   into them: `/households/{id}/invitations`, `/households/{id}/members/{user_id}`, and
+   storage's `/households/{id}/settings/storage`.
+3. **Who household settings is listed for.** The sidebar lists a module the member holds above
+   `none` (D-160); PRD 17's Permissions give every member the member list, the profile and the
+   modules, and the prototype's own build draws none of them for a member at `none`.
+4. **Where a client learns a role's defaults and what a role may hold.** The composer shows
+   seventeen levels "already answered" before the server is asked, and a level a child may not
+   hold is to be unavailable by construction (design 03-patterns §9). No operation answers
+   either.
+5. **How seventeen modules by four levels read on a phone without a legend**, which is this
+   item's second Done-when.
+6. **Whether a change to the settings waits for a connection.** The web queues a household's
+   writes (D-164); PRD 17's sync table says these entities are never written offline, and the
+   prototype draws a module switched off as *pending*.
+7. **How an invitation's token outlives the sign-in of whoever opened its link**, and what a
+   visitor is shown before they sign in.
+8. **What the first run does** where DD-6's third step leads to a module's capture surface and
+   no module has a screen, and where the app opens for a member who is in no household.
+9. **How the screen that leaves a household knows what stands in the way before it asks**,
+   which FR-HH4 has it say at once.
+10. **What the inviter's notice of a decline (A-25) is** on a client with no list of
+    notifications.
+11. **Whether this item's words take the first download past its budget** (D-153), which
+    ADR 0026 left it to answer.
+
+## Decision
+
+**A module's screens are routes of the app's own.** Each is a line of `app/paths.ts`, drawn by
+the router in the household's shell, so that the walk of the routes holds it to axe in both
+themes, its title, the pseudo-locale and a phone's width at 200 % text with no further word
+(06-clients §8). The registry (`modules/registry.ts`) says of a module only where it opens,
+`home`, and where it takes a first record, `capture`; `/households/{id}/modules/<module>` leads
+to the first for a module the member holds and this build has screens for, and opens nothing
+for any other. The sidebar links straight to a module's home, so that it is drawn as open on
+every screen under that address.
+
+**Household settings are under `/households/{id}/settings`**: the profile at the address
+itself, then `members`, `members/{user_id}`, `invitations`, `invitations/new` and `modules`.
+Leaving is beside them, at `/households/{id}/leave`, being no setting and every member's. The
+server's two notifications that link into these screens name them so (`invitations.go`,
+`children.go`), as storage's already did. The screens share one frame
+(`household/settings/Page.tsx`): the way between them above the title, and under it the one
+sentence that says where the member stands, that the household takes no writes, or that changing
+what is here is an owner's, or that a change needs a connection.
+
+**Household settings is listed for every member** (D-167). `shell/navigation.ts` holds it among
+the modules a member holds whatever the household's answer gives them on it; what a level on it
+decides is whether the invitations are theirs to read (`useStanding().invitations`), whose way
+in and whose two screens are absent at `none`. A control that changes something is drawn where
+`useStanding().changes`: an owner's, in a household that takes writes.
+
+**A role's defaults and its ceiling are a rule both sides compute, held to one vector file**
+(D-37). `@household/domain` has `grantDefaults` and `grantCeiling`; the server's twins are
+`household.Defaults` and `access.Ceiling`; `vectors/grants.json` is run by both. The web's
+matrix offers each row the levels its role may hold and no other, so a child profile is never
+shown *Can set it up*, nor more than *Can see* on Finance, and the composer starts from the
+defaults the server would write.
+
+**The matrix is drawn two ways, and each says what its levels mean where it draws them**
+(`household/GrantMatrix.tsx`). An owner fills in `GrantMatrix`: a row a module, in the order of
+FR-AC3's own table, each the platform's own select named for its module, with the chosen level's
+sentence under it, and what it was changed from. Everybody else reads `GrantSummary`: the
+modules gathered under each level, highest first, each level with its sentence; in a list of
+members it is a line a level, with what is off counted and not named, since the comparison there
+is across rows. A level is never shown by the contract's word for it: *Off*, *Can see*, *Can add
+and edit*, *Can set it up*. Neither has a legend, a second column or a width of its own, so
+both are one column at a phone's width.
+
+**Every write of these screens is asked at once** (D-170): each mutation spreads `askedNow`
+(ADR 0026), a test holds them to it, and a write pressed with no connection says the server
+could not be reached and that nothing was changed. Reads are TanStack queries filed under the
+household's own key (`household/data.ts`), so that what the browser kept is drawn offline, and a
+write that was answered reads the household, its members, its modules, its invitations and the
+member's list of households again (`useReread`). The screens read the API and not the replica:
+admin's entities reach a replica without a member's name or address, and no screen here is
+written offline, so there is nothing a replica would add.
+
+**An invitation is answered on a public page, and its token is kept in the page's memory**
+(`household/Invitation.tsx`, `invitationToken.ts`). The link is `/invitation#token=…`, as the
+server's email writes it; the token is read from the fragment and taken out of the address
+(`auth/fragment.ts`), and the page shows the whole of what is given to whoever holds the link,
+since the contract's preview asks for no session: the household, the inviter, the role and every
+module with its level, with what is off named aloud this once. A visitor is sent to sign in with
+this page as the address held for them, and the token waits in a variable and in no storage, as
+a challenged sign-in's does (ADR 0026); a reload, or an account made in another tab, loses it,
+and the person opens their link again, an email invitation being listed on their account
+meanwhile (`getMeInvitations`). The query that reads it is kept out of the stored cache.
+
+**A member in no household is opened at making one** (D-168), and **the first run's question is
+asked where it leads somewhere** (D-169): `household/Start.tsx` offers the modules whose registry
+entry has a `capture`, of those the member holds, and passes on to Home while none has.
+
+**The screen that leaves says what stands in the way before it asks, from the members it reads,
+and takes the server's word over its own.** A member who is the household's only owner, and one
+who is its payer of record, are told so as the screen opens, both at once where both hold, each
+with what unblocks it, and the control that leaves is absent meanwhile; the server's `409`, which
+names the same reasons in `blocked_by`, is drawn the same way where it disagrees with what was
+read.
+
+**The inviter's notice of a decline stands on the invitations** (D-171), drawn from each
+invitation's own status.
+
+**The catalog is not split yet.** This item's words are keys under `household.*`, and with
+them the first download is under its 200 kB; the split ADR 0026 describes, a module's words
+fetched with its screens, is left to the item that would pass the budget, and is by key prefix
+when it comes (Consequences).
+
+## Alternatives rejected
+
+| Alternative | Why not |
+|---|---|
+| A module's screens as one file the module routes itself, as item 25's registry had it (`load`), with a list of their addresses beside `paths.ts` for the suite to walk | Two lists of the app's routes to keep in step, and the second is the one nothing fails when a screen is added: the walk's worth is that a route in the router is a route it checks. A module's own `<Routes>` also loads every screen of the module with the first, where each is fetched when its address is opened (D-153) |
+| The settings at the addresses the server's notifications already named, `/households/{id}/invitations` and `/households/{id}/members/{user_id}`, beside `/settings` | The sidebar draws a module as open on the screens under its home: two of the settings' screens would stand outside it. Storage's notification already linked under `/settings`; the two that did not are two constants |
+| Household settings absent for a member who holds `none` on it | D-167: the member list is written for exactly that member, the server answers it to them, and nothing is kept by hiding that a household has settings |
+| The three screens every member reads kept open by their addresses and out of the list at `none` | A screen nobody can find. The sidebar is the product's navigation (D-160) |
+| The defaults and the ceilings written out in the web app, from the PRD's tables | A second statement of a rule the server enforces, which drifts with the first change to either: the composer would show levels the server does not write, or offer one it refuses. One vector file is how every rule both sides compute is held (D-37) |
+| An operation that answers a role's defaults | A round trip, and a loading state, in front of a form that is to open "already answered"; and the ceiling would still be the client's to know, to leave a level out before a save |
+| The matrix as a grid, modules down and levels across, a radio a cell | Sixty-eight targets of 44 px do not fit four across at a phone's width with 200 % text, and a column's heading is a legend: what *Can see* means would be read once at the top and not where it is chosen |
+| A row that opens a sheet to change its level, as the prototype has it | Seventeen sheets to fill in one invitation. The platform's select is one control a row, which a phone and a screen reader already know, and the sentence under it says what was chosen |
+| A change to a member's levels saved a row at a time, as each is chosen | Lowering a level is told to the member as it happens (D-78): five rows changed would be five notifications' worth of change made one press at a time, with no moment at which the owner sees what the whole comes to. The form says it, and one write carries it |
+| The settings' writes held in the page until a connection returns | D-170 |
+| The settings read from the household's replica | The replica's membership rows carry neither a member's name nor their address, which the list is made of, and an invitation's reaches only members who hold `view`: every screen would join the replica to the API. Nothing here is written offline, which is what a replica is for |
+| An invitation's token kept in the tab's storage across the sign-in, or left in the address | A link invitation's token admits whoever holds it, once: in storage it is read by any script of the origin for as long as the tab lives, and in the address it is in the history and in whatever the address is copied to (ADR 0009). What a reload costs is opening the link again |
+| The invitation shown only after its reader has signed in | The contract's preview asks for no session (ADR 0011), and "see exactly what you are being given" is what decides whether to make an account at all (FR-HH3). A wall first asks for an address before it has said what for |
+| A visitor's account made on the invitation's own page | A second registration form, with its own screening of passwords and its own verification, beside the one item 25 built |
+| A member in no household opened at their account | D-168 |
+| The first run's question asked now over every module the member holds | D-169 |
+| The leave screen asking the server first, with a request that changes nothing, to learn what stands in the way | No such operation exists, and a `POST` that might succeed is not a question. The members the screen reads say who the owners are and who pays; the one thing they do not say, an owner whose account is scheduled for deletion and counts as none (D-137), is what the server's `409` is drawn for |
+| The control that leaves drawn and disabled while something stands in the way | Absence, not disabling (design 03-patterns §2): a disabled control says a thing can be done and not why it cannot. The two refusals are the screen's content, each with what unblocks it |
+| A notice of a decline with the time it was declined, or one a control puts away | D-171: the contract keeps no such time, and a dismissal kept in one browser is true in that browser alone |
+| The catalog split in this item, a module's words fetched with its screens | The first download is under its budget with this item's words in it. The split is a second way for a screen to be without its words, a failure to say for each route, and a guard that no screen outside a module reads the module's keys: machinery the budget does not yet ask for (D-159) |
+
+## Consequences
+
+- A module's web item adds its screens as lines of `paths.ts` and its line of the registry, and
+  the walk checks them with no further word. **Item 32** is the first to register a `capture`,
+  with which the first run's question is first asked, and brings the offer to invite somebody
+  once a first record exists (DD-6's fifth step).
+- A screen of household settings is set in `HouseholdSettingsPage`, asks `useStanding()` whether
+  to draw a control that changes something, reads through `household/data.ts` and writes with
+  `askedNow`. **Item 27** adds its sections to the settings' navigation (storage, billing, data,
+  sync health, clients), draws the entitlement's banner where this item's frame says only that
+  the household takes no writes, and gives the payer's refusal on the leave screen, and on a
+  member's page, its way to hand billing over (A-29), which this item can only name.
+- The contract keeps nothing of these, and the screens say only what it keeps (plan Q11):
+  whether a child profile's Home is locked is chosen when the profile is made and changed by
+  no operation, nor is its name or its year of birth by an owner; an invitation has no time of
+  its answer, its message is not read back, and what an invitee is shown names neither its kind
+  nor the address it was sent to, so an account that is not the addressee learns of it from the
+  `404` to its answer; no operation sets a household's picture; a module's `needs_setup` and
+  `entity_count` are never set, so a module turned off says only that its data is kept, and no
+  setup is offered again (FR-HA9); the base currency changes with item 62; and an invitation's
+  starting dashboard layout comes with the dashboard (item 36).
+- FR-HH4 has the payer unblocked by handing billing over *or cancelling the subscription*; the
+  server refuses a payer of record whatever the subscription's state. The leave screen says what
+  the server does. Which of the two is meant is the PRD's to settle with item 27.
+- The first download is counted in the pull request that added these words. The item whose
+  words would pass 200 kB splits a language's catalog by key prefix, `household.*` first, each
+  part fetched with the screens that read it (D-159).
+- **Item 29** builds the same screens on mobile from the same rule (`@household/domain`'s
+  grants) and the same decisions (D-167 to D-171).
+- **What would make this worth revisiting**: a module whose screens cannot each be a route (a
+  wizard that must not be entered half-way); a member's name on the replica, which would let the
+  member list be drawn from it; or an operation that lists what a member was notified of.
