@@ -967,7 +967,7 @@ Phase 0 · after 25, 10, 11 · size L
 - **Done when**
   - Critical path 1 passes E2E: register → create household → invite → accept ([06 §8](prd/06-clients.md)).
   - The grant matrix reads without a legend at phone width.
-- **PR:** —
+- **PR:** [#32](https://github.com/kareltilcer/household/pull/32)
 
 ### 27 · Web billing, storage, data, privacy and sync health · `planned`
 
