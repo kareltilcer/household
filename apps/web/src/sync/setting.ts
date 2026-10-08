@@ -11,7 +11,8 @@ import { useMemo } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
-import { householdKey } from '../household/households.ts'
+import { membersKey } from '../household/households.ts'
+import { useTimeZone } from '../household/timezone.ts'
 import { useMe } from '../session/SessionProvider.tsx'
 
 /** Who wrote a version of a row, as far as this browser can say. */
@@ -25,7 +26,7 @@ export type Author =
 export interface Setting {
   /** The household's id, which the address of a row is made with. */
   readonly household: string
-  /** The zone an instant is shown in: the household's. */
+  /** The zone an instant is shown in: the member's own, or the household's (household/timezone.ts). */
   readonly timezone: string
   /**
    * Whether the household writes. One that does not, read-only or restricted, holds what its
@@ -36,19 +37,12 @@ export interface Setting {
   readonly author: (user: unknown) => Author
 }
 
-/**
- * A household's members, as the API lists them: under the household's own key, so that what
- * clears the household's representation clears its members too.
- */
-export function membersKey(household: string) {
-  return [...householdKey(household), 'members'] as const
-}
-
 /** The setting of the household this screen is in. */
 export function useSetting(): Setting {
   const api = useApi()
   const household = useHousehold()
   const me = useMe().id.toLowerCase()
+  const timezone = useTimeZone()
   const members = useQuery({
     queryKey: membersKey(household.id),
     queryFn: async ({ signal }) =>
@@ -70,7 +64,7 @@ export function useSetting(): Setting {
     }
     return {
       household: household.id,
-      timezone: household.timezone,
+      timezone,
       writes,
       author: (user) => {
         if (typeof user !== 'string') return { kind: 'unknown' }
@@ -80,5 +74,5 @@ export function useSetting(): Setting {
         return name === undefined ? { kind: 'unknown' } : { kind: 'member', name }
       },
     }
-  }, [household.id, household.timezone, writes, me, listed])
+  }, [household.id, timezone, writes, me, listed])
 }

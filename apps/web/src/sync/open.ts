@@ -30,10 +30,9 @@ export interface Opened {
   readonly watchInbox: (listener: (entries: readonly RecordedOutcome[]) => void) => () => void
   /**
    * Whether `error` is the library's refusal of a write to an entity that is not written offline
-   * (D-84): what a screen that tried one says needs a connection (rowState.ts). A stand-in that
-   * makes no write may leave it out, and then no error is taken for that refusal.
+   * (D-84): what a screen that tried one says needs a connection (rowState.ts).
    */
-  readonly needsConnection?: (error: unknown) => boolean
+  readonly needsConnection: (error: unknown) => boolean
 }
 
 /** `replica` with what the app's screens watch it by. */

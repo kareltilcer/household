@@ -55,6 +55,14 @@ export function householdKey(household: string) {
   return ['households', household.toLowerCase()] as const
 }
 
+/**
+ * A household's members, as the API lists them (`getMembers`): under the household's own key, so
+ * that what clears the household's representation clears its members with it.
+ */
+export function membersKey(household: string) {
+  return [...householdKey(household), 'members'] as const
+}
+
 /** The households the member belongs to, a `suspended` one among them, in the server's order. */
 export function useHouseholds(): UseQueryResult<HouseholdSummary[]> {
   const api = useApi()

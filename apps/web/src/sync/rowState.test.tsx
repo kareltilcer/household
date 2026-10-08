@@ -204,9 +204,9 @@ describe('a write that needs a connection', () => {
   it('is the library’s own refusal, as an opened replica tells it', () => {
     // The replica itself is not asked: what tells the refusal is the library's class.
     const { needsConnection } = opened({} as Replica)
-    expect(needsConnection?.(new NeedsConnection('admin.membership'))).toBe(true)
-    expect(needsConnection?.(new Error('admin.membership'))).toBe(false)
-    expect(needsConnection?.(undefined)).toBe(false)
+    expect(needsConnection(new NeedsConnection('admin.membership'))).toBe(true)
+    expect(needsConnection(new Error('admin.membership'))).toBe(false)
+    expect(needsConnection(undefined)).toBe(false)
   })
 
   it('says so in a sentence, and that nothing was changed', () => {

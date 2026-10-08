@@ -117,6 +117,7 @@ function replica() {
       connect,
       close,
     } as unknown as Replica,
+    needsConnection: () => false,
     watchInbox: (listener) => {
       inbox = listener
       listener([])
