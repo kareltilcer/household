@@ -1,0 +1,11 @@
+/* A row's own way on, drawn as a word or two: a target of a row's height both ways, however
+   short the word is. Where the row is narrower than its words, at a phone's width with the text
+   doubled, they wrap inside it and nothing is pushed off the side. */
+.link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--dens-row-min);
+  min-height: var(--dens-row-min);
+  overflow-wrap: anywhere;
+}
