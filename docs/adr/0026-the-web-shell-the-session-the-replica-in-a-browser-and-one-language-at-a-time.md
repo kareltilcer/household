@@ -90,6 +90,16 @@ form, so Apple's origin is admitted to that route and to no other (`session.Orig
 **`GET /auth/oauth` names the providers the server is configured for**, and a sign-in screen
 draws those and no other.
 
+**What a sign-in keeps between its screens is in the page's memory, and what a link carried
+leaves the address.** A challenged sign-in's token (`auth/challenge.ts`) is held in a variable
+and in no storage: a reload loses it and the member signs in again, which costs them a password
+and keeps a token that stands for one out of what any script of the origin reads. A token an
+email's link carried is read from the fragment and then taken out of the address by the router's
+own replace (`auth/fragment.ts`), so that it is in no history entry and no copied address. The
+screens say what the server does where the prototype says otherwise: twelve characters, a
+password checked at the server against its own copy of the breach list, limits by address and
+network, each link's own lifetime, and a deletion only its link cancels.
+
 **The service worker shows a Web Push and does nothing else.** The build writes it as one file
 at the origin's root (`build/pushWorker.ts`), part of the build's id: it handles `push` and
 `notificationclick`, has no `fetch` handler and keeps no cache, so it serves no file of any
