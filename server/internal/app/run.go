@@ -335,6 +335,8 @@ func newNotify(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool, 
 
 // newBilling builds billing (item 19) from cfg: Stripe when its keys are configured, and no processor
 // when they are not, as development may leave them, when every route that would ask it answers 503.
+// Stripe is asked at its own address, but where development names a stand-in for it (config), which
+// is said as the server starts: nothing it then takes is a payment.
 func newBilling(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool, catalog *module.Registry, notifier *notify.Service,
 ) (*billing.Service, error) {
 	catalogs, err := i18n.Default()
@@ -343,8 +345,14 @@ func newBilling(cfg *config.Config, log *slog.Logger, pool, meter *pgxpool.Pool,
 	}
 	var processor billing.Processor
 	if cfg.StripeSecretKey != "" {
-		if processor, err = billing.NewStripe(billing.StripeConfig{SecretKey: cfg.StripeSecretKey, WebhookSecret: cfg.StripeWebhookSecret}); err != nil {
+		if processor, err = billing.NewStripe(billing.StripeConfig{
+			SecretKey: cfg.StripeSecretKey, WebhookSecret: cfg.StripeWebhookSecret, URL: cfg.StripeAPIURL,
+		}); err != nil {
 			return nil, err
+		}
+		if cfg.StripeAPIURL != "" {
+			log.LogAttrs(context.Background(), slog.LevelWarn, "billing asks a stand-in for Stripe: it takes no payments",
+				slog.String("env", string(cfg.Env)))
 		}
 	} else {
 		// Only development gets this far without one (config).
