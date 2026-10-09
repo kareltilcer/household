@@ -100,6 +100,9 @@ paths:
   /households/{household_id}/sync/state:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     get: { operationId: getSyncState, responses: { '200': { description: State }, default: { $ref: '#/components/responses/Problem' } } }
+  /households/{household_id}/clients:
+    parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+    get: { operationId: getClients, responses: { '200': { description: The clients }, default: { $ref: '#/components/responses/Problem' } } }
   /households/{household_id}/join-code:
     parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
     post: { operationId: postHouseholdsByHouseholdIdJoinCode, responses: { '200': { description: Made }, default: { $ref: '#/components/responses/Problem' } } }

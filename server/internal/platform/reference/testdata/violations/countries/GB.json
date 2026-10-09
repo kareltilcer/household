@@ -1,0 +1,11 @@
+{
+  "code": "GB",
+  "name": { "value": { "en": "United Kingdom", "cs": "Spojené království", "sk": "Spojené kráľovstvo", "de": "Vereinigtes Königreich", "pl": "Wielka Brytania" }, "source": "a-source" },
+  "currency": { "value": "GBP", "source": "a-source" },
+  "vat_standard_percent": { "value": "20", "source": "a-source" },
+  "default_units": { "value": "metric", "source": "a-source" },
+  "first_day_of_week": { "value": 1, "source": "a-source" },
+  "holiday_set": { "value": "gb", "source": "a-source" },
+  "inspection_label": { "value": "MOT", "source": "a-source" },
+  "document_type_set": { "value": "gb", "source": "a-source" }
+}

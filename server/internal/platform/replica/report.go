@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/kareltilcer/household/server/internal/platform/clientversion"
 	"github.com/kareltilcer/household/server/internal/platform/device"
 	"github.com/kareltilcer/household/server/internal/platform/httpx"
 	"github.com/kareltilcer/household/server/internal/platform/idempotency"
@@ -31,8 +32,13 @@ import (
 // would have received in that time any row the server held still for it.
 const ConfirmAfter = time.Minute
 
-// maxLabel is the longest label a replica keeps, in characters, the sync_replicas column's.
-const maxLabel = 256
+// maxLabel is the longest label a replica keeps, in characters, and maxVersion the longest version
+// of its client: the sync_replicas columns'. A version the Household-Client header admits is
+// shorter than that (clientversion.ParseVersion).
+const (
+	maxLabel   = 256
+	maxVersion = 160
+)
 
 // The stages of a replica's downloading itself again (sync_replicas.resnapshot).
 const (
@@ -49,6 +55,9 @@ type ReportsConfig struct {
 	// Metrics is told of each report's queue and of each divergence it finds; sync.LogMetrics on Logger
 	// when nil.
 	Metrics sync.Metrics
+	// MinClients are the oldest clients the deployment serves, the ones the client-version middleware
+	// refuses below, which an owner reads beside the household's clients (getClients); none when nil.
+	MinClients clientversion.Minimums
 	// Now is the clock, time.Now when nil.
 	Now func() time.Time
 }
@@ -56,11 +65,13 @@ type ReportsConfig struct {
 // Reports are the replicas' reports of themselves (plan item 18, D-125, ADR 0019): a replica reports
 // at rest what it holds and its health, the server answers whether it holds what its member may see
 // and whether it must download itself again, and the member reads each of their replicas' last
-// report on the sync-health screen.
+// report on the sync-health screen. A report also says which client sent it, and an owner reads the
+// household's clients and their versions off the reports (plan item 27, FR-HA18, ADR 0028).
 type Reports struct {
 	entities []sync.Entity
 	log      *slog.Logger
 	metrics  sync.Metrics
+	minimums minimumsJSON
 	now      func() time.Time
 }
 
@@ -75,7 +86,9 @@ func NewReports(cfg ReportsConfig) (*Reports, error) {
 	if cfg.Metrics == nil {
 		cfg.Metrics = sync.LogMetrics{Log: cfg.Logger}
 	}
-	return &Reports{entities: cfg.Registry.Entities(), log: cfg.Logger, metrics: cfg.Metrics, now: cfg.Now}, nil
+	return &Reports{
+		entities: cfg.Registry.Entities(), log: cfg.Logger, metrics: cfg.Metrics, minimums: minimumsOf(cfg.MinClients), now: cfg.Now,
+	}, nil
 }
 
 // Routes registers the reports, which the router mounts in the household, behind the tenant
@@ -84,10 +97,12 @@ func NewReports(cfg ReportsConfig) (*Reports, error) {
 //	POST /households/{household_id}/sync/digest   postSyncDigest
 //	POST /households/{household_id}/sync/reset    postSyncReset
 //	GET  /households/{household_id}/sync/state    getSyncState
+//	GET  /households/{household_id}/clients       getClients
 func (s *Reports) Routes(r chi.Router) {
 	r.Post("/households/{"+tenant.Param+"}/sync/digest", s.digest)
 	r.Post("/households/{"+tenant.Param+"}/sync/reset", s.reset)
 	r.Get("/households/{"+tenant.Param+"}/sync/state", s.state)
+	r.Get("/households/{"+tenant.Param+"}/clients", s.clients)
 }
 
 // reportIn is the contract's ReplicaDigest.
@@ -133,7 +148,8 @@ type mismatch struct {
 // type the replica does not report is not compared, since an app older than the server subscribes to
 // fewer streams; one the server does not sync is answered as disagreeing, and never as divergence,
 // which downloading again cannot mend. The report is kept, for the sync-health screen and the next
-// report's comparison, and its queue and any checksum failures are told to the metrics.
+// report's comparison, with the client that sent it, as its Household-Client header named it, and
+// its queue and any checksum failures are told to the metrics.
 func (s *Reports) digest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	requestID := reqctx.RequestID(ctx)
@@ -244,20 +260,24 @@ func (s *Reports) digest(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		clientType, clientVersion := reportedBy(ctx)
 		// A replica's first report inserts it; two first reports racing write one after the other, the
 		// later over the earlier, since neither held a row to lock. A replica another member reported
-		// first is not theirs to write.
+		// first is not theirs to write. Each report says anew which client sent it: an app updated since
+		// its replica's last report is listed at the version it is now.
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO sync_replicas (household_id, id, user_id, device_id, label, checkpoint, reported_at,
-			  pending_mutations, unresolved, checksum_failures, mismatched, mismatches, resnapshot)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			  pending_mutations, unresolved, checksum_failures, mismatched, mismatches, resnapshot, client_type, client_version)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 			ON CONFLICT (household_id, id) DO UPDATE SET device_id = EXCLUDED.device_id, label = EXCLUDED.label,
 			  checkpoint = EXCLUDED.checkpoint, reported_at = EXCLUDED.reported_at, pending_mutations = EXCLUDED.pending_mutations,
 			  unresolved = EXCLUDED.unresolved, checksum_failures = EXCLUDED.checksum_failures, mismatched = EXCLUDED.mismatched,
-			  mismatches = EXCLUDED.mismatches, resnapshot = EXCLUDED.resnapshot
+			  mismatches = EXCLUDED.mismatches, resnapshot = EXCLUDED.resnapshot, client_type = EXCLUDED.client_type,
+			  client_version = EXCLUDED.client_version
 			WHERE sync_replicas.user_id = EXCLUDED.user_id`,
 			scope.HouseholdID(), in.ReplicaID, scope.UserID(), deviceID, label, nullable(in.Checkpoint), now,
-			in.Health.PendingMutations, in.Health.Unresolved, in.Health.ChecksumFailures, mismatched, encoded, stage)
+			in.Health.PendingMutations, in.Health.Unresolved, in.Health.ChecksumFailures, mismatched, encoded, stage,
+			clientType, clientVersion)
 		if err != nil {
 			return err
 		}
@@ -305,7 +325,7 @@ func (s *Reports) reporter(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, 
 			return nil, "", err
 		}
 		id := current.Device
-		return &id, cut(label), nil
+		return &id, cut(label, maxLabel), nil
 	}
 	if sid, ok := session.Current(ctx); ok {
 		err := tx.QueryRow(ctx, `SELECT user_agent FROM sessions WHERE id = $1`, sid).Scan(&label)
@@ -313,15 +333,28 @@ func (s *Reports) reporter(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, 
 			return nil, "", err
 		}
 	}
-	return nil, cut(label), nil
+	return nil, cut(label, maxLabel), nil
 }
 
-// cut is label as the column keeps it: at most maxLabel characters.
-func cut(label string) string {
-	if r := []rune(label); len(r) > maxLabel {
-		return string(r[:maxLabel])
+// reportedBy is the client ctx's request named in Household-Client (clientversion), as a report
+// keeps it: its type, and its version as the client wrote it, the build after a "+" included, which
+// tells one build of the web app from another. Both are nil for a request that named no client,
+// which is none of Household's own.
+func reportedBy(ctx context.Context) (clientType, version *string) {
+	c, named := clientversion.From(ctx)
+	if !named {
+		return nil, nil
 	}
-	return label
+	raw := cut(c.Raw, maxVersion)
+	return &c.Type, &raw
+}
+
+// cut is s as a column keeps it: at most limit characters.
+func cut(s string, limit int) string {
+	if r := []rune(s); len(r) > limit {
+		return string(r[:limit])
+	}
+	return s
 }
 
 // nullable is s, or nil when it is empty.

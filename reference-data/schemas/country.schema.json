@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "A country profile",
-  "description": "What a household in the country is offered (PRD 03 §9): the defaults it starts from, and the pointers to the country's own sets of public holidays and document types, which Calendar and Documents define. One file per country, countries/<code>.json. Changing a household's country changes what it is offered from then on, never what it has recorded (FR-HA1).",
+  "description": "What a household in the country is offered (PRD 03 §9): the defaults it starts from, and the pointers to the country's own sets of public holidays and document types, which Calendar and Documents define; and the authority its people complain to about their personal data (PRD 05 §3). One file per country, countries/<code>.json. Changing a household's country changes what it is offered from then on, never what it has recorded (FR-HA1).",
   "type": "object",
   "required": [
     "code",
@@ -12,7 +12,8 @@
     "first_day_of_week",
     "holiday_set",
     "inspection_label",
-    "document_type_set"
+    "document_type_set",
+    "supervisory_authority"
   ],
   "properties": {
     "$schema": { "type": "string" },
@@ -54,6 +55,23 @@
     "document_type_set": {
       "description": "The key of the country's set of document types, which Documents offers (plan item 46).",
       "$ref": "defs.schema.json#/$defs/keyField"
+    },
+    "supervisory_authority": {
+      "description": "The authority a person in the country complains to about how their personal data is handled (GDPR Art. 77), which the privacy centre links to (PRD 05 §3). Where a country has several, the one that says which of them is competent.",
+      "type": "object",
+      "required": ["name", "url"],
+      "properties": {
+        "name": {
+          "description": "The authority's name. In a language with no established translation of it, its official name in its own language.",
+          "$ref": "defs.schema.json#/$defs/localizedField"
+        },
+        "url": {
+          "description": "The address of the authority's own page where a person lodges a complaint, or which says how: https, and the same in every language.",
+          "$ref": "defs.schema.json#/$defs/field",
+          "properties": { "value": { "type": "string", "pattern": "^https://[^\\s]+$" } }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

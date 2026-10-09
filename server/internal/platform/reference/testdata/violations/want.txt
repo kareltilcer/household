@@ -1,15 +1,21 @@
 # Every problem Read must report for the files beside this one, in order. Plan item 7's Done-when
-# is the first two: a record missing a language, and a field missing its source.
+# is the first two: a record missing a language, and a field missing its source. Plan item 27's are
+# a country's supervisory authority: GB has none, PL's address has no host, and SK's name misses a
+# language and its address is not https.
 countries/CZ.json#/name/value: missing property 'pl'
 countries/DE.json#/currency: missing property 'source'
+countries/GB.json#: missing property 'supervisory_authority'
 countries/PL.json#/code: is PX, so the file is PX.json
 countries/PL.json#/currency/value: XYZ is not an ISO 4217 currency
+countries/PL.json#/supervisory_authority/url/value: https:///complaints is not the https address of a page
 countries/PL.json#/vat_standard_percent/source: names nowhere, which sources.json does not list
 countries/README.md#: is not a record: countries holds one <key>.json file per record
 countries/SK.json#/currency/drafted: value must be true
 countries/SK.json#/default_units/value: value must be one of 'metric', 'imperial'
 countries/SK.json#/first_day_of_week/value: maximum: got 7, want 6
 countries/SK.json#/name/value/en: ' Slovakia' does not match pattern '^\\S(.*\\S)?$'
+countries/SK.json#/supervisory_authority/name/value: missing property 'pl'
+countries/SK.json#/supervisory_authority/url/value: 'http://example.com/complaints' does not match pattern '^https://[^\\s]+$'
 countries/SK.json#: additional properties 'motto' not allowed
 units/length.json#/units/0/to_base/value: is the base unit's, so it converts to itself: offset 0, numerator 1, denominator 1
 units/length.json#/units/1/counterpart/value: kg is a unit of weight, not of length

@@ -7,5 +7,9 @@
   "first_day_of_week": { "value": 1, "source": "cited" },
   "holiday_set": { "value": "cz", "source": "cited" },
   "inspection_label": { "value": "STK", "source": "cited" },
-  "document_type_set": { "value": "cz", "source": "cited" }
+  "document_type_set": { "value": "cz", "source": "cited" },
+  "supervisory_authority": {
+    "name": { "value": { "en": "An authority", "cs": "Úřad", "sk": "Úrad", "de": "Eine Behörde", "pl": "Urząd" }, "source": "cited" },
+    "url": { "value": "https://example.com/complaints", "source": "cited" }
+  }
 }

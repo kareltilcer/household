@@ -17,5 +17,25 @@
     "drafted": true,
     "note": "The act calls it badanie techniczne pojazdu; everyday Polish, and PRD 13, call it przegląd techniczny."
   },
-  "document_type_set": { "value": "pl", "source": "prd-documents", "drafted": true }
+  "document_type_set": { "value": "pl", "source": "prd-documents", "drafted": true },
+  "supervisory_authority": {
+    "name": {
+      "value": {
+        "en": "Personal Data Protection Office",
+        "cs": "Urząd Ochrony Danych Osobowych",
+        "sk": "Urząd Ochrony Danych Osobowych",
+        "de": "Urząd Ochrony Danych Osobowych",
+        "pl": "Urząd Ochrony Danych Osobowych"
+      },
+      "source": "pl-uodo",
+      "drafted": true,
+      "note": "The English is the name the Office's English pages and the European Data Protection Board's list of its members give it. Czech, Slovak and German have no established name for it, and carry the Polish one. A complaint is decided by the Office's President, Prezes Urzędu Ochrony Danych Osobowych, whom the page names."
+    },
+    "url": {
+      "value": "https://uodo.gov.pl/pl/492/2464",
+      "source": "pl-uodo",
+      "drafted": true,
+      "note": "The Office's page Składanie skarg: a complaint is made in writing or through e-Doręczenia, each of which it links to, after asking the controller first. In Polish only."
+    }
+  }
 }

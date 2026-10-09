@@ -8,5 +8,9 @@
   "first_day_of_week": { "value": 7, "source": "a-source" },
   "holiday_set": { "value": "sk", "source": "a-source" },
   "inspection_label": { "value": "TK", "source": "a-source" },
-  "document_type_set": { "value": "sk", "source": "a-source" }
+  "document_type_set": { "value": "sk", "source": "a-source" },
+  "supervisory_authority": {
+    "name": { "value": { "en": "An authority", "cs": "Úřad", "sk": "Úrad", "de": "Eine Behörde" }, "source": "a-source" },
+    "url": { "value": "http://example.com/complaints", "source": "a-source" }
+  }
 }

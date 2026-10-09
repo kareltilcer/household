@@ -53,7 +53,8 @@ func TestTheShippedDataIsValid(t *testing.T) {
 // Plan item 7's Done-when: CI rejects a record missing a language or a source. Each directory in
 // testdata holds reference data that breaks the rules, and its want.txt is every problem Read
 // must report, all of them at once: in violations/, countries/CZ.json misses a language and
-// countries/DE.json a source.
+// countries/DE.json a source. Plan item 27's are there too: a country with no supervisory
+// authority, and one whose authority's address is not https.
 func TestReadCatchesEachViolation(t *testing.T) {
 	for _, dir := range []string{"violations", "sources"} {
 		t.Run(dir, func(t *testing.T) {

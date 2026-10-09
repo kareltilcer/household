@@ -182,7 +182,9 @@ func Finish(ctx context.Context, tx pgx.Tx, r *Report, tables ...Held) error {
 		RETURNING version`, r.Dataset).Scan(&r.Version)
 }
 
-// loadCountries writes the country profiles.
+// loadCountries writes the country profiles. A profile made before it carried a supervisory
+// authority has none (migration 01026) until this writes its file's: a value that differs, as any
+// other, so the row's version and the dataset's move on, and a client that cached either asks again.
 func loadCountries(ctx context.Context, tx pgx.Tx, countries []Country) (Report, error) {
 	r := Report{Dataset: Countries}
 	codes := make([]string, 0, len(countries))
@@ -190,23 +192,29 @@ func loadCountries(ctx context.Context, tx pgx.Tx, countries []Country) (Report,
 		codes = append(codes, c.Code)
 		if err := Upsert(ctx, tx, &r, `
 			INSERT INTO country_profiles AS t (code, name, currency, vat_standard_percent, default_units,
-			  first_day_of_week, holiday_set, inspection_label, document_type_set)
-			VALUES ($1, $2::jsonb, $3, $4::text::numeric, $5::unit_system, $6, $7, $8, $9)
+			  first_day_of_week, holiday_set, inspection_label, document_type_set,
+			  supervisory_authority_name, supervisory_authority_url)
+			VALUES ($1, $2::jsonb, $3, $4::text::numeric, $5::unit_system, $6, $7, $8, $9, $10::jsonb, $11)
 			ON CONFLICT (code) DO UPDATE SET
 			  name = EXCLUDED.name, currency = EXCLUDED.currency,
 			  vat_standard_percent = EXCLUDED.vat_standard_percent, default_units = EXCLUDED.default_units,
 			  first_day_of_week = EXCLUDED.first_day_of_week, holiday_set = EXCLUDED.holiday_set,
 			  inspection_label = EXCLUDED.inspection_label, document_type_set = EXCLUDED.document_type_set,
+			  supervisory_authority_name = EXCLUDED.supervisory_authority_name,
+			  supervisory_authority_url = EXCLUDED.supervisory_authority_url,
 			  version = `+Bumped+`, edited_at = NULL
 			WHERE `+Theirs(`(t.name, t.currency, t.vat_standard_percent, t.default_units, t.first_day_of_week,
-			       t.holiday_set, t.inspection_label, t.document_type_set)
+			       t.holiday_set, t.inspection_label, t.document_type_set, t.supervisory_authority_name,
+			       t.supervisory_authority_url)
 			  IS DISTINCT FROM
 			      (EXCLUDED.name, EXCLUDED.currency, EXCLUDED.vat_standard_percent, EXCLUDED.default_units,
 			       EXCLUDED.first_day_of_week, EXCLUDED.holiday_set, EXCLUDED.inspection_label,
-			       EXCLUDED.document_type_set)`)+`
+			       EXCLUDED.document_type_set, EXCLUDED.supervisory_authority_name,
+			       EXCLUDED.supervisory_authority_url)`)+`
 			RETURNING (xmax = 0), `+Released("country_profiles", "code"),
 			c.Code, c.Name.Value, c.Currency.Value, c.VATStandardPercent.Value, c.DefaultUnits.Value,
 			c.FirstDayOfWeek.Value, c.HolidaySet.Value, c.InspectionLabel.Value, c.DocumentTypeSet.Value,
+			c.SupervisoryAuthority.Name.Value, c.SupervisoryAuthority.URL.Value,
 		); err != nil {
 			return r, fmt.Errorf("%s: %w", c.Code, err)
 		}

@@ -60,6 +60,19 @@ type Country struct {
 	InspectionLabel Field[string] `json:"inspection_label"`
 	// DocumentTypeSet names the country's document types, which Documents defines (plan item 46).
 	DocumentTypeSet Field[string] `json:"document_type_set"`
+	// SupervisoryAuthority is whom a person in the country complains to about their personal data.
+	SupervisoryAuthority Authority `json:"supervisory_authority"`
+}
+
+// Authority is a country's supervisory authority for personal data (GDPR Art. 77, PRD 05 §3): two
+// fields of the country's record, each with its own source.
+type Authority struct {
+	// Name is the authority's name: its official one, in its own language, wherever a language has
+	// no established name for it.
+	Name Field[Localized] `json:"name"`
+	// URL is the address of the authority's own page where a complaint is lodged, or which says
+	// how: https.
+	URL Field[string] `json:"url"`
 }
 
 // Dimension is a kind of quantity and its units, in the name of the dimension's file.
