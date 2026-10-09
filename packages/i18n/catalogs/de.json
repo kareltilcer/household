@@ -98,6 +98,7 @@
   "account.delete.renews": "Sie bezahlen für ihn. Wenn sich sein Abonnement noch verlängern würde, kündigen Sie es zuerst: Bis dahin wird die Löschung abgelehnt.",
   "account.delete.schedule": "Löschung für den {date} planen",
   "account.delete.sole.body": "Sie sind sein einziger Inhaber, und andere Personen sind Mitglieder. Bevor Sie gehen können, muss jemand anderes Inhaber sein, sonst könnte niemand einladen, entfernen oder ändern, was jemand sieht. Machen Sie in der Mitgliederliste des Haushalts jemanden zum Inhaber, oder setzen Sie das Häkchen, und er wird mit Ihrem Konto gelöscht.",
+  "account.delete.sole.children": "Sie sind sein einziger Inhaber, und niemand sonst darin kann Inhaber werden: Ein Kinderprofil kann kein Inhaber sein. Bevor Sie gehen können, muss jemand anderes Inhaber sein, sonst könnte niemand einladen, entfernen oder ändern, was jemand sieht. Laden Sie jemanden als Inhaber ein, oder setzen Sie das Häkchen, und er wird mit Ihrem Konto gelöscht.",
   "account.delete.sole.choose": "{household} mit meinem Konto löschen",
   "account.delete.sole.chosen": "Seine Löschung wird zusammen mit der Ihres Kontos geplant, und seine Mitglieder erfahren es sofort. Wenn Sie die Löschung Ihres Kontos abbrechen, wird auch seine abgebrochen.",
   "account.delete.sole.payer": "Sie bezahlen auch für ihn: Sobald jemand anderes Inhaber ist, übergeben Sie ihm die Abrechnung oder kündigen Sie das Abonnement.",

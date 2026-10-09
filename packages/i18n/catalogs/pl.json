@@ -98,6 +98,7 @@
   "account.delete.renews": "Płacisz za nie. Jeśli jego subskrypcja ma się jeszcze odnowić, najpierw ją anuluj: do tego czasu usunięcie będzie odrzucane.",
   "account.delete.schedule": "Zaplanuj usunięcie na {date}",
   "account.delete.sole.body": "Jesteś jego jedynym właścicielem, a należą do niego inne osoby. Zanim odejdziesz, właścicielem musi zostać ktoś jeszcze, inaczej nikt nie mógłby zapraszać, usuwać ani zmieniać tego, co kto widzi. Nadaj komuś rolę właściciela na liście członków gospodarstwa albo zaznacz pole, a zostanie ono usunięte razem z twoim kontem.",
+  "account.delete.sole.children": "Jesteś jego jedynym właścicielem i nikomu innemu w nim nie można nadać tej roli: profil dziecka nie może być właścicielem. Zanim odejdziesz, właścicielem musi zostać ktoś jeszcze, inaczej nikt nie mógłby zapraszać, usuwać ani zmieniać tego, co kto widzi. Zaproś kogoś jako właściciela albo zaznacz pole, a zostanie ono usunięte razem z twoim kontem.",
   "account.delete.sole.choose": "Usuń gospodarstwo {household} razem z moim kontem",
   "account.delete.sole.chosen": "Jego usunięcie zostanie zaplanowane razem z twoim kontem, a jego członkowie dowiedzą się o tym od razu. Anulowanie usunięcia konta anuluje też usunięcie gospodarstwa.",
   "account.delete.sole.payer": "Płacisz też za nie: gdy właścicielem będzie ktoś jeszcze, przekaż tej osobie płatności albo anuluj subskrypcję.",
