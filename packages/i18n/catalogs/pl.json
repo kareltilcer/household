@@ -1705,6 +1705,7 @@
   "ui.password.show": "Pokaż",
   "ui.problem.rate_limited": "Zbyt wiele prób. Spróbuj ponownie za chwilę.",
   "ui.problem.rate_limited_until": "Zbyt wiele prób. Spróbuj ponownie o {time}.",
+  "ui.problem.rate_limited_until_day": "Zbyt wiele prób. Spróbuj ponownie {day} o {time}.",
   "ui.problem.server": "Coś poszło nie tak po naszej stronie. Nic z tego, co wpisano, nie przepadło. Spróbuj ponownie.",
   "ui.problem.unreachable": "Nie udało się połączyć z Household. Nic z tego, co wpisano, nie przepadło. Sprawdź połączenie i spróbuj ponownie.",
   "ui.reload": "Załaduj ponownie",

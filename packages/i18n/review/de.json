@@ -1705,6 +1705,7 @@
   "ui.password.show": "Show",
   "ui.problem.rate_limited": "Too many attempts. Try again in a little while.",
   "ui.problem.rate_limited_until": "Too many attempts. Try again at {time}.",
+  "ui.problem.rate_limited_until_day": "Too many attempts. Try again at {time} on {day}.",
   "ui.problem.server": "Something went wrong at our end. Nothing you typed was lost. Try again.",
   "ui.problem.unreachable": "We couldn’t reach Household. Nothing you typed was lost. Check your connection and try again.",
   "ui.reload": "Reload",

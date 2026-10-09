@@ -1705,6 +1705,7 @@
   "ui.password.show": "Anzeigen",
   "ui.problem.rate_limited": "Zu viele Versuche. Versuchen Sie es in Kürze erneut.",
   "ui.problem.rate_limited_until": "Zu viele Versuche. Versuchen Sie es um {time} erneut.",
+  "ui.problem.rate_limited_until_day": "Zu viele Versuche. Versuchen Sie es am {day} um {time} erneut.",
   "ui.problem.server": "Bei uns ist etwas schiefgegangen. Nichts von dem, was Sie eingegeben haben, ist verloren. Versuchen Sie es erneut.",
   "ui.problem.unreachable": "Household war nicht erreichbar. Nichts von dem, was Sie eingegeben haben, ist verloren. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
   "ui.reload": "Neu laden",

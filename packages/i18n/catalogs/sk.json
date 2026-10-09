@@ -1705,6 +1705,7 @@
   "ui.password.show": "Zobraziť",
   "ui.problem.rate_limited": "Príliš veľa pokusov. Skúste to znova o chvíľu.",
   "ui.problem.rate_limited_until": "Príliš veľa pokusov. Skúste to znova o {time}.",
+  "ui.problem.rate_limited_until_day": "Príliš veľa pokusov. Skúste to znova {day} o {time}.",
   "ui.problem.server": "Na našej strane sa niečo pokazilo. O nič z toho, čo ste napísali, ste neprišli. Skúste to znova.",
   "ui.problem.unreachable": "Nepodarilo sa spojiť so službou Household. O nič z toho, čo ste napísali, ste neprišli. Skontrolujte pripojenie a skúste to znova.",
   "ui.reload": "Načítať znova",
