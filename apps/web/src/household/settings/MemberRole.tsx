@@ -9,9 +9,10 @@
 //
 // What is left out, and why:
 // - The payer has no control here. Billing moves only between owners (FR-HH6), so the server
-//   would refuse, and a button that could only be refused is not drawn: the sentence in its
-//   place says what has to happen first. Handing billing over is billing's own screen (plan
-//   item 27), which is not built: the sentence links nowhere.
+//   would refuse, whatever the subscription's state, and a button that could only be refused is
+//   not drawn: the sentence in its place says what has to happen first, and that it is the
+//   payer's to do. It leads to the billing screen, which says who pays and is where the payer
+//   offers billing to another owner (billing/Handover.tsx).
 // - Nobody's own role is changed from their own page, an owner's included: they leave, which is
 //   a screen of its own and says what stands in the way. The page leads there.
 // - A child profile has no role control. A role is never changed to or from child (FR-CH1):
@@ -136,7 +137,13 @@ export function MemberRole({ subject }: { readonly subject: Subject }) {
   return (
     <Section title={t('household.member.role.title')}>
       {owner && subject.payer ? (
-        <p className={styles.text}>{t('household.member.role.payer', { name })}</p>
+        <>
+          <p className={styles.text}>{t('household.member.role.payer', { name })}</p>
+          {/* Billing says who pays, and is where the one who pays offers it to another. */}
+          <Link className={styles.link} to={inHousehold.billing(household.id)}>
+            {t('household.settings.billing.title')}
+          </Link>
+        </>
       ) : (
         <div className={styles.actions}>
           <Button

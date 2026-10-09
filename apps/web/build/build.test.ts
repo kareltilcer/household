@@ -25,6 +25,7 @@ import {
   headerPolicyFor,
   metaPolicy,
   metaPolicyFor,
+  processor,
   unsafeSources,
   wasm,
 } from './csp.ts'
@@ -55,10 +56,32 @@ describe('the policy', () => {
       for (const source of unsafeSources) expect(policy).not.toContain(source)
     }
     expect(directives['default-src']).toEqual(["'none'"])
-    // Scripts and styles from the app's own origin alone: no scheme, no wildcard, no other host.
-    // A script may compile WebAssembly, which the replica's SQLite is, and nothing more.
-    expect(directives['script-src']).toEqual(["'self'", wasm])
+    // Scripts from the app's own origin and the payment processor's, which serves the script of
+    // its payment form and lets nobody else serve it; styles from the app's own alone. A script
+    // may compile WebAssembly, which the replica's SQLite is, and nothing more.
+    expect(directives['script-src']).toEqual(["'self'", wasm, ...processor.script])
     expect(directives['style-src']).toEqual(["'self'"])
+  })
+
+  // What Stripe states Stripe.js needs under a policy (docs.stripe.com/security/guide), and
+  // nothing more of it: no Google Maps, which only its address form asks for, and no Link.
+  it('admits the payment processor’s script, its frames and its API, and nothing else of it', () => {
+    expect(processor).toEqual({
+      script: ['https://js.stripe.com', 'https://*.js.stripe.com'],
+      frame: ['https://js.stripe.com', 'https://*.js.stripe.com', 'https://hooks.stripe.com'],
+      connect: ['https://api.stripe.com'],
+    })
+    expect(directives['frame-src']).toEqual(processor.frame)
+    expect(directives['connect-src']).toEqual(["'self'", ...processor.connect])
+    // Its form is a frame of its own, with its own styles, pictures and fonts: the page's
+    // directives for those name nothing of the processor's.
+    for (const directive of ['style-src', 'img-src', 'font-src', 'form-action'] as const) {
+      expect(directives[directive].join(' ')).not.toContain('stripe')
+    }
+    // Every source of it is one origin over TLS, or the origins under Stripe.js's own.
+    for (const source of Object.values(processor).flat()) {
+      expect(source).toMatch(/^https:\/\/(\*\.js|js|hooks|api)\.stripe\.com$/)
+    }
   })
 
   it('names every source as itself or nothing, but for the origins a build is told of', () => {
@@ -69,14 +92,29 @@ describe('the policy', () => {
         sources.filter((source) => !own(source)).map((source) => `${directive} ${source}`),
       )
     }
-    expect(other(directivesFor(sameOrigin))).toEqual([`script-src ${wasm}`])
+    // The payment processor's origins are in every build's policy: they are its own, and no
+    // deployment's to name.
+    const processors = {
+      script: processor.script.map((source) => `script-src ${source}`),
+      connect: processor.connect.map((source) => `connect-src ${source}`),
+      frame: processor.frame.map((source) => `frame-src ${source}`),
+    }
+    expect(other(directivesFor(sameOrigin))).toEqual([
+      `script-src ${wasm}`,
+      ...processors.script,
+      ...processors.connect,
+      ...processors.frame,
+    ])
     // The object store's origin is drawn from, the sync service's is connected to, and nothing
     // else of either is loaded: no script, no style, no frame.
     expect(other(directivesFor(told))).toEqual([
       `script-src ${wasm}`,
+      ...processors.script,
       'img-src https://files.household.example',
       'connect-src https://sync.household.example',
       'connect-src wss://sync.household.example',
+      ...processors.connect,
+      ...processors.frame,
     ])
   })
 

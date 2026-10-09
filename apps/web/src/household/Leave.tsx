@@ -12,8 +12,11 @@
 // since the members were read, and an owner whose account is being deleted counts as none
 // (D-137), which no member can read.
 //
-// What the prototype drew and this does not: *Hand billing over* leads nowhere yet, billing's
-// screens being plan item 27's, so what has to happen is named and nothing is linked; and
+// *Hand billing over* leads to the billing screen, where whoever pays offers billing to another
+// owner and it moves once they accept (billing/Handover.tsx; FR-BI6). The server refuses a payer
+// of record whatever the subscription's state, a trial that never subscribed among them, so
+// cancelling the subscription is no way out and is said not to be. What the prototype drew and
+// this does not:
 // deleting the household, the last owner's other way out, is not built, so only making somebody
 // else an owner is offered. A member who is the only one in the household is told that leaving
 // would leave it with nobody in it, and one whose only company is child profiles, which are
@@ -280,6 +283,13 @@ function Leaving({ me }: { readonly me: Me }) {
               {payer ? (
                 <Section title={t('household.leave.payer.title')}>
                   <p className={styles.text}>{t('household.leave.payer.body')}</p>
+                  {/* Billing is an owner's screen, and whoever pays is one (FR-HH6): the way
+                      to where it is offered to another. */}
+                  {household.my_role === 'owner' ? (
+                    <Link className={styles.link} to={inHousehold.billing(id)}>
+                      {t('household.leave.payer.action')}
+                    </Link>
+                  ) : null}
                 </Section>
               ) : null}
               <Section title={t('household.leave.behind.title')}>

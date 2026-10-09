@@ -47,6 +47,8 @@ const behind =
   'What you added stays with the household, with your name on it: it is the household’s record. Your private notes and documents are deleted after thirty days, and you can export them until then.'
 const two = 'Two things have to be settled first, and here they both are.'
 const one = 'One thing has to be settled first.'
+const paying =
+  'Whoever pays stays in the household until billing has moved to another owner: you offer it on the billing page, and it moves once they accept. Cancelling the subscription does not change who pays. Where the household has no subscription, they are asked for no card.'
 
 /** The household's members with `changes` made to the ones it names. */
 function membersWith(changes: Readonly<Record<string, Partial<Membership>>>): Membership[] {
@@ -217,7 +219,7 @@ describe('leaving a household', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(sections()).toEqual([
       'You are the only owner',
-      'You pay for the subscription',
+      'You pay for the household',
       'What you leave behind',
     ])
     expect(
@@ -230,13 +232,14 @@ describe('leaving a household', () => {
       'href',
       inHousehold.members(home),
     )
-    // Billing's screens are not built: what has to happen is named, and leads nowhere.
-    expect(
-      screen.getByText(
-        'Billing has to be handed to another owner before you go. A household whose payer has left lapses for a reason nobody in it can fix.',
-      ),
-    ).toBeInTheDocument()
-    expect(screen.getAllByRole('link')).toHaveLength(1)
+    // What unblocks the second is said as the server has it, cancelling being no way out
+    // (FR-HH4), and leads to where billing is offered to another owner.
+    expect(screen.getByText(paying)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Hand billing over' })).toHaveAttribute(
+      'href',
+      inHousehold.billing(home),
+    )
+    expect(screen.getAllByRole('link')).toHaveLength(2)
     // Absent, and not disabled.
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.getByText(behind)).toBeInTheDocument()
@@ -256,8 +259,12 @@ describe('leaving a household', () => {
     server.members = membersWith({ [petr]: { role: 'owner' } })
     await read(server)
     expect(screen.getByText(one)).toBeInTheDocument()
-    expect(sections()).toEqual(['You pay for the subscription', 'What you leave behind'])
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(sections()).toEqual(['You pay for the household', 'What you leave behind'])
+    expect(screen.getByText(paying)).toBeInTheDocument()
+    // The one way on: to billing, where it is offered to the other owner.
+    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      inHousehold.billing(home),
+    ])
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
@@ -268,7 +275,7 @@ describe('leaving a household', () => {
     expect(screen.getByText(two)).toBeInTheDocument()
     expect(sections()).toEqual([
       'You are the only member',
-      'You pay for the subscription',
+      'You pay for the household',
       'What you leave behind',
     ])
     expect(
@@ -276,8 +283,11 @@ describe('leaving a household', () => {
         'Leaving would leave Tilcerovi with nobody in it. Deleting the household is what ends it.',
       ),
     ).toBeInTheDocument()
-    // There is nobody to make an owner, and deleting the household is not built: no link.
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    // There is nobody to make an owner, and no way to a list that could give none: the one
+    // link is billing's, which says the same of handing it over.
+    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      inHousehold.billing(home),
+    ])
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
@@ -398,7 +408,7 @@ describe('the server’s own word on leaving', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(sections()).toEqual([
       'You are the only owner',
-      'You pay for the subscription',
+      'You pay for the household',
       'What you leave behind',
     ])
     // The focus the question held is on the screen's own place, where it is all drawn.
@@ -419,7 +429,7 @@ describe('the server’s own word on leaving', () => {
     const { user } = await read(server)
     await confirmLeaving(user)
     expect(await screen.findByRole('alert')).toHaveTextContent(one)
-    expect(sections()).toEqual(['You pay for the subscription', 'What you leave behind'])
+    expect(sections()).toEqual(['You pay for the household', 'What you leave behind'])
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
