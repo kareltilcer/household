@@ -7,6 +7,13 @@
 //
 // The objects are shaped as the API version stripe-go is pinned to renders them. They were written
 // from that version's types, not captured from a Stripe account.
+//
+// It stands in for Stripe for the web's end-to-end suite too, as a process the suite starts
+// (cmd/stripe-standin), which is why it asks no more of whoever runs it than TB: served on a listener
+// of the process's own (Serve), at an address a development server is told (URL), with what drives
+// it answered beside Stripe's API (Handle). Nobody posts a webhook for a process, so the stand-in
+// keeps the events Stripe would send of everything that changes in it (Changes), for the process to
+// deliver.
 package billingtest
 
 import (
@@ -14,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -21,7 +29,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"testing"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,10 +61,26 @@ type Request struct {
 	IdempotencyKey string
 }
 
+// TB is what the stand-in asks of whoever runs it, the part of testing.TB it uses: a test, whose
+// *testing.T it is, or a process, which has none. Errorf is told what the server asked that Stripe
+// would not have taken, and Fatalf what was asked of the stand-in that it cannot do, which does not
+// return: a test ends there, and a process ends the request that asked. Cleanup is given what stops
+// the stand-in.
+type TB interface {
+	Helper()
+	Errorf(format string, args ...any)
+	Fatalf(format string, args ...any)
+	Cleanup(func())
+}
+
 // Stripe is the stand-in.
 type Stripe struct {
-	t      testing.TB
-	server *httptest.Server
+	t   TB
+	mux *http.ServeMux
+	// url is where the stand-in answers, and client what a processor asks it with, the default when
+	// nil.
+	url    string
+	client *http.Client
 	now    func() time.Time
 
 	// account marks every id the stand-in mints as its own: the tests of a package share one
@@ -87,15 +110,51 @@ type Stripe struct {
 	// payAfter is, by subscription, how many more of the server's reads of it pass before its
 	// customer's payment goes through (PayAfter).
 	payAfter map[string]int
+	// changes are, by household, the events Stripe would send of what changed and nobody has asked
+	// for yet (Changes).
+	changes map[string][]Change
 }
 
 // New starts a stand-in that reads the time from now, and stops it when t ends.
-func New(t testing.TB, now func() time.Time) *Stripe {
+func New(t TB, now func() time.Time) *Stripe {
 	t.Helper()
+	s := unserved(t, now)
+	server := httptest.NewServer(s.mux)
+	t.Cleanup(server.Close)
+	s.url, s.client = server.URL, server.Client()
+	return s
+}
+
+// Serve starts a stand-in on ln, a listener of the caller's own, that reads the time from now, and
+// stops it, closing ln, when t ends: the stand-in as a process serves it, at an address chosen for
+// it (cmd/stripe-standin). drive, when not nil, is given the stand-in before it answers anything, to
+// have it answer what drives it too (Handle).
+func Serve(t TB, ln net.Listener, now func() time.Time, drive func(*Stripe)) *Stripe {
+	t.Helper()
+	s := unserved(t, now)
+	s.url = "http://" + ln.Addr().String()
+	if drive != nil {
+		drive(s)
+	}
+	server := &http.Server{Handler: s.mux, ReadHeaderTimeout: 10 * time.Second}
+	go func() { _ = server.Serve(ln) }()
+	t.Cleanup(func() { _ = server.Close() })
+	return s
+}
+
+// URL is where the stand-in answers: what billing.StripeConfig's URL is given.
+func (s *Stripe) URL() string { return s.url }
+
+// Handle has the stand-in answer pattern with handler, beside Stripe's API: what drives a stand-in
+// that runs as a process, at paths Stripe's API has nothing at.
+func (s *Stripe) Handle(pattern string, handler http.Handler) { s.mux.Handle(pattern, handler) }
+
+// unserved is a stand-in that reads the time from now, which nothing serves yet.
+func unserved(t TB, now func() time.Time) *Stripe {
 	s := &Stripe{
 		t: t, now: now, account: strings.ReplaceAll(uuid.NewString(), "-", "")[:12], subscriptions: map[string]object{}, invoices: map[string]object{}, lines: map[string][]object{},
 		setups: map[string]object{}, methods: map[string]object{}, keyed: map[string]string{}, payAfter: map[string]int{},
-		deleted: map[string]bool{},
+		deleted: map[string]bool{}, changes: map[string][]Change{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/customers", s.handle(s.createCustomer))
@@ -117,8 +176,7 @@ func New(t testing.TB, now func() time.Time) *Stripe {
 		t.Errorf("billingtest: the server asked Stripe for %s %s, which the stand-in does not answer", r.Method, r.URL.Path)
 		fail(w, http.StatusNotFound, "invalid_request_error", "", "no such route")
 	})
-	s.server = httptest.NewServer(mux)
-	t.Cleanup(s.server.Close)
+	s.mux = mux
 	return s
 }
 
@@ -139,10 +197,10 @@ func (s *Stripe) Processor() billing.Processor {
 	s.t.Helper()
 	none := int64(0)
 	p, err := billing.NewStripe(billing.StripeConfig{
-		SecretKey: SecretKey, WebhookSecret: WebhookSecret, URL: s.server.URL, HTTPClient: s.server.Client(), MaxNetworkRetries: &none,
+		SecretKey: SecretKey, WebhookSecret: WebhookSecret, URL: s.url, HTTPClient: s.client, MaxNetworkRetries: &none,
 	})
 	if err != nil {
-		s.t.Fatal(err)
+		s.t.Fatalf("billingtest: %v", err)
 	}
 	return p
 }
@@ -194,12 +252,54 @@ func fail(w http.ResponseWriter, status int, kind, code, message string) {
 func (s *Stripe) fixture(name string) object {
 	raw, err := fixtures.ReadFile("testdata/" + name + ".json")
 	if err != nil {
-		s.t.Fatal(err)
+		s.t.Fatalf("billingtest: %v", err)
 	}
 	var out object
 	if err := json.Unmarshal(raw, &out); err != nil {
-		s.t.Fatal(err)
+		s.t.Fatalf("billingtest: %v", err)
 	}
+	return out
+}
+
+// Change is an event Stripe sends of something that changed in its account: its type, and the id of
+// the subscription, the invoice or the setup it is about, which Event makes its payload from.
+type Change struct{ Kind, Object string }
+
+// told keeps the event of kind that Stripe sends about obj, for the household obj is for (Changes).
+// One that is for none is nobody's to be told of.
+func (s *Stripe) told(kind string, obj object) {
+	h := householdOf(obj)
+	if h == "" {
+		return
+	}
+	id, _ := obj["id"].(string)
+	s.changes[h] = append(s.changes[h], Change{Kind: kind, Object: id})
+}
+
+// householdOf is the household obj is for, as the server's metadata names it: a subscription's own
+// or a setup's, and for an invoice its subscription's. "" when it names none.
+func householdOf(obj object) string {
+	if m, ok := obj["metadata"].(object); ok {
+		if h, _ := m["household_id"].(string); h != "" {
+			return h
+		}
+	}
+	parent, _ := obj["parent"].(object)
+	details, _ := parent["subscription_details"].(object)
+	m, _ := details["metadata"].(object)
+	h, _ := m["household_id"].(string)
+	return h
+}
+
+// Changes are the events Stripe sends about household's subscriptions, invoices and setups for what
+// has changed at the stand-in since they were last asked for, whoever changed it, a customer, Stripe
+// on its own or the server through the API, in the order Stripe sends them; asked for, they are
+// forgotten. A test delivers the events it means to itself (Event) and never asks.
+func (s *Stripe) Changes(household string) []Change {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := s.changes[household]
+	delete(s.changes, household)
 	return out
 }
 
@@ -250,6 +350,7 @@ func (s *Stripe) deleteCustomer(r *http.Request, _ url.Values) (any, *apiError) 
 	for _, sub := range s.subscriptions {
 		if sub["customer"] == id && sub["status"] != "canceled" && sub["status"] != "incomplete_expired" {
 			sub["status"] = "canceled"
+			s.told("customer.subscription.deleted", sub)
 		}
 	}
 	return object{"id": id, "object": "customer", "deleted": true}, nil
@@ -327,6 +428,10 @@ func (s *Stripe) invoice(sub object, amount int64, status string) object {
 		s.lines[id] = []object{line}
 	}
 	sub["latest_invoice"] = id
+	s.told("invoice.finalized", inv)
+	if status == "paid" {
+		s.told("invoice.paid", inv)
+	}
 	return inv
 }
 
@@ -346,6 +451,7 @@ func (s *Stripe) createSubscription(r *http.Request, form url.Values) (any, *api
 		}
 		amount := item(sub)["price"].(object)["unit_amount"].(int64) //nolint:forcetypeassert // setPrice's.
 		s.subscriptions[id] = sub
+		s.told("customer.subscription.created", sub)
 		method := form.Get("default_payment_method")
 		switch {
 		case method == "":
@@ -476,6 +582,7 @@ func (s *Stripe) updateSubscription(r *http.Request, form url.Values) (any, *api
 	} else if v, ok := form["pending_invoice_item_interval"]; ok && v[0] == "" {
 		sub["pending_invoice_item_interval"] = nil
 	}
+	s.told("customer.subscription.updated", sub)
 	return s.render(sub, form), nil
 }
 
@@ -486,6 +593,7 @@ func (s *Stripe) cancelSubscription(r *http.Request, _ url.Values) (any, *apiErr
 	}
 	sub["status"] = "canceled"
 	sub["cancellation_details"] = object{"reason": "cancellation_requested"}
+	s.told("customer.subscription.deleted", sub)
 	return s.render(sub, r.Form), nil
 }
 
@@ -540,7 +648,8 @@ func (s *Stripe) payInvoice(r *http.Request, _ url.Values) (any, *apiError) {
 	return inv, nil
 }
 
-// paid marks inv paid, and its subscription active.
+// paid marks inv paid, and its subscription active. Stripe says so of the subscription only where
+// that changes it: a bank debit that clears leaves it as it was.
 func (s *Stripe) paid(inv object) {
 	inv["status"], inv["next_payment_attempt"] = "paid", nil
 	inv["status_transitions"].(object)["paid_at"] = s.now().Unix() //nolint:forcetypeassert // The fixture's shape.
@@ -549,9 +658,13 @@ func (s *Stripe) paid(inv object) {
 	}
 	for _, sub := range s.subscriptions {
 		if sub["latest_invoice"] == inv["id"] && sub["status"] != "canceled" {
+			if sub["status"] != "active" {
+				s.told("customer.subscription.updated", sub)
+			}
 			sub["status"] = "active"
 		}
 	}
+	s.told("invoice.paid", inv)
 }
 
 func (s *Stripe) voidInvoice(r *http.Request, _ url.Values) (any, *apiError) {
@@ -560,6 +673,7 @@ func (s *Stripe) voidInvoice(r *http.Request, _ url.Values) (any, *apiError) {
 		return nil, notFound("invoice", r.PathValue("id"))
 	}
 	inv["status"] = "void"
+	s.told("invoice.voided", inv)
 	return inv, nil
 }
 
@@ -674,6 +788,7 @@ func (s *Stripe) ConfirmDebit(secret string) (subscription, invoice string) {
 	sub["status"], sub["default_payment_method"] = "active", s.method(s.id("pm"))
 	s.iban = card
 	s.invoices[invoice]["attempt_count"] = 1
+	s.told("customer.subscription.updated", sub)
 	return subscription, invoice
 }
 
@@ -700,6 +815,7 @@ func (s *Stripe) FailDebit(id string) {
 		s.t.Fatalf("billingtest: no debit is on its way for invoice %s", id)
 	}
 	inv["status"], inv["next_payment_attempt"] = "void", nil
+	s.told("invoice.voided", inv)
 }
 
 // ConfirmSetup is the customer confirming the payment method whose setup's secret they were handed:
@@ -712,6 +828,7 @@ func (s *Stripe) ConfirmSetup(secret string) string {
 		if setup["client_secret"] == secret {
 			method := s.method(s.id("pm"))
 			setup["status"], setup["payment_method"] = "succeeded", method["id"]
+			s.told("setup_intent.succeeded", setup)
 			return id
 		}
 	}
@@ -737,7 +854,11 @@ func (s *Stripe) FailPayment(id string, again bool) string {
 	if again {
 		inv["next_payment_attempt"] = s.now().Add(24 * time.Hour).Unix()
 	}
+	if sub["status"] != "past_due" {
+		s.told("customer.subscription.updated", sub)
+	}
 	sub["status"] = "past_due"
+	s.told("invoice.payment_failed", inv)
 	return inv["id"].(string) //nolint:forcetypeassert // An id.
 }
 
@@ -748,6 +869,7 @@ func (s *Stripe) GiveUp(id string) {
 	defer s.mu.Unlock()
 	sub := s.subscription(id)
 	sub["status"], sub["cancellation_details"] = "canceled", object{"reason": "payment_failed"}
+	s.told("customer.subscription.deleted", sub)
 }
 
 // LeaveUnpaid is Stripe giving up on the subscription id as an account set to mark it unpaid does:
@@ -756,7 +878,9 @@ func (s *Stripe) LeaveUnpaid(id string) {
 	s.t.Helper()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.subscription(id)["status"] = "unpaid"
+	sub := s.subscription(id)
+	sub["status"] = "unpaid"
+	s.told("customer.subscription.updated", sub)
 }
 
 // WriteOff is Stripe marking the invoice id uncollectible, as an account set to write off what its
@@ -770,6 +894,7 @@ func (s *Stripe) WriteOff(id string) {
 		s.t.Fatalf("billingtest: no invoice %s", id)
 	}
 	inv["status"], inv["next_payment_attempt"] = "uncollectible", nil
+	s.told("invoice.marked_uncollectible", inv)
 }
 
 // Expire is Stripe ending the subscription id, whose first payment was never confirmed.
@@ -777,7 +902,9 @@ func (s *Stripe) Expire(id string) {
 	s.t.Helper()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.subscription(id)["status"] = "incomplete_expired"
+	sub := s.subscription(id)
+	sub["status"] = "incomplete_expired"
+	s.told("customer.subscription.updated", sub)
 }
 
 // EndPeriod is the subscription id's period ending: one set to cancel then is cancelled, as its
@@ -791,12 +918,14 @@ func (s *Stripe) EndPeriod(id string) string {
 	sub := s.subscription(id)
 	if sub["cancel_at_period_end"] == true {
 		sub["status"], sub["cancellation_details"] = "canceled", object{"reason": "cancellation_requested"}
+		s.told("customer.subscription.deleted", sub)
 		return ""
 	}
 	it := item(sub)
 	if err := setPrice(sub, it["price"].(object)["id"].(string), s.now()); err != nil { //nolint:forcetypeassert // setPrice's.
-		s.t.Fatal(err.message)
+		s.t.Fatalf("billingtest: %s", err.message)
 	}
+	s.told("customer.subscription.updated", sub)
 	amount := it["price"].(object)["unit_amount"].(int64) //nolint:forcetypeassert // setPrice's.
 	inv := s.invoice(sub, amount, "open")
 	inv["billing_reason"] = "subscription_cycle"
@@ -845,7 +974,11 @@ func (s *Stripe) FailItems(id string) string {
 	}
 	inv["billing_reason"], inv["total"], inv["amount_due"] = "automatic_pending_invoice_item_invoice", total, total
 	inv["attempt_count"], inv["next_payment_attempt"] = 1, s.now().Add(24*time.Hour).Unix()
+	if sub["status"] != "past_due" {
+		s.told("customer.subscription.updated", sub)
+	}
 	sub["status"] = "past_due"
+	s.told("invoice.payment_failed", inv)
 	return inv["id"].(string) //nolint:forcetypeassert // An id.
 }
 
@@ -896,6 +1029,103 @@ func (s *Stripe) Subscription(id string) (status string, cancelAtPeriodEnd bool,
 	status, _ = sub["status"].(string)
 	cancelAtPeriodEnd, _ = sub["cancel_at_period_end"].(bool)
 	return status, cancelAtPeriodEnd, pendingInterval
+}
+
+// Intent is what a client secret the stand-in answered names, for whoever confirms it without
+// knowing which it was handed, as the payment form does.
+type Intent struct {
+	// Kind is billing.IntentPayment for a subscription's first payment, which ConfirmPayment and
+	// ConfirmDebit take, and billing.IntentSetup for a payment method's setup, which ConfirmSetup takes.
+	Kind string
+	// Household is the household it is for.
+	Household string
+	// Waits reports whether it is still to be confirmed: a payment whose subscription is unpaid still,
+	// and a setup that has not succeeded.
+	Waits bool
+}
+
+// Intent is what secret names, and whether the stand-in answered it at all.
+func (s *Stripe) Intent(secret string) (Intent, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if secret == "" {
+		return Intent{}, false
+	}
+	for id, inv := range s.invoices {
+		if c, _ := inv["confirmation_secret"].(object); c == nil || c["client_secret"] != secret {
+			continue
+		}
+		out := Intent{Kind: billing.IntentPayment, Household: householdOf(inv)}
+		for _, sub := range s.subscriptions {
+			if sub["latest_invoice"] == id {
+				out.Waits = sub["status"] == "incomplete" && inv["status"] == "open"
+			}
+		}
+		return out, true
+	}
+	for _, setup := range s.setups {
+		if setup["client_secret"] == secret {
+			return Intent{Kind: billing.IntentSetup, Household: householdOf(setup), Waits: setup["status"] != "succeeded"}, true
+		}
+	}
+	return Intent{}, false
+}
+
+// Holding is a subscription as the stand-in holds it, for whoever reads the stand-in back.
+type Holding struct {
+	ID, Status        string
+	CancelAtPeriodEnd bool
+	// Interval is what its price is billed each, year or month, and Currency what it charges in, in
+	// lower case as Stripe writes it.
+	Interval, Currency string
+	// Payer is the member its metadata names.
+	Payer string
+	// PaymentMethod is the type of the method it is charged with, card or sepa_debit, "" while it has
+	// none.
+	PaymentMethod string
+	PeriodEnd     time.Time
+	// Invoice is its latest invoice, InvoiceStatus that invoice's status, and Attempts how many times
+	// Stripe has tried to collect it.
+	Invoice, InvoiceStatus string
+	Attempts               int
+}
+
+// Holds are the subscriptions the stand-in holds for household, in the order they were made.
+func (s *Stripe) Holds(household string) []Holding {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Holding
+	for id, sub := range s.subscriptions {
+		if household == "" || householdOf(sub) != household {
+			continue
+		}
+		h := Holding{ID: id}
+		h.Status, _ = sub["status"].(string)
+		h.CancelAtPeriodEnd, _ = sub["cancel_at_period_end"].(bool)
+		h.Currency, _ = sub["currency"].(string)
+		if m, ok := sub["metadata"].(object); ok {
+			h.Payer, _ = m["user_id"].(string)
+		}
+		if method, ok := sub["default_payment_method"].(object); ok {
+			h.PaymentMethod, _ = method["type"].(string)
+		}
+		it := item(sub)
+		if price, ok := it["price"].(object); ok {
+			recurring, _ := price["recurring"].(object)
+			h.Interval, _ = recurring["interval"].(string)
+		}
+		if end, ok := it["current_period_end"].(int64); ok {
+			h.PeriodEnd = time.Unix(end, 0).UTC()
+		}
+		if h.Invoice, _ = sub["latest_invoice"].(string); h.Invoice != "" {
+			inv := s.invoices[h.Invoice]
+			h.InvoiceStatus, _ = inv["status"].(string)
+			h.Attempts, _ = inv["attempt_count"].(int)
+		}
+		out = append(out, h)
+	}
+	slices.SortFunc(out, func(a, b Holding) int { return number(a.ID) - number(b.ID) })
+	return out
 }
 
 // Deleted are the customers the server deleted, sorted.
@@ -977,7 +1207,7 @@ func (s *Stripe) Event(kind, id string, at time.Time) (payload []byte, signature
 		"type": kind, "data": object{"object": about}, "pending_webhooks": 1, "request": nil,
 	})
 	if err != nil {
-		s.t.Fatal(err)
+		s.t.Fatalf("billingtest: %v", err)
 	}
 	return payload, Sign(payload, WebhookSecret, at)
 }

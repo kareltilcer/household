@@ -4,10 +4,15 @@
 // harness among them. `pnpm run e2e` writes it and then runs the suite, so that no run is of an
 // older build's files: the preview server below serves whatever `dist/e2e` holds.
 //
-// Both servers are the suite's own, started for the run and stopped after it: one found
+// The three servers are the suite's own, started for the run and stopped after it: one found
 // listening already is refused and not used, since nothing says which build, or which
 // configuration, it serves. The API runs on the development services, which the suite does not
 // start: `pnpm run up`, `pnpm run db:setup` and `pnpm run up:sync` come first (e2e/stack.ts).
+//
+// The third stands in for Stripe (server/cmd/stripe-standin): the API asks it where it would ask
+// Stripe, and it tells the API what Stripe would, so the suite pays with no account at Stripe, no
+// secret and no network to it. A payment in Stripe's own test mode is staging's
+// (docs/runbooks/billing.md).
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
 import { api, apiOrigin, previewOrigin } from './build/preview.ts'
@@ -23,6 +28,37 @@ const ci = process.env.CI !== undefined
  * loopback, so CI has it listen on every interface, as the conformance suite's does.
  */
 const apiAddress = process.env.HOUSEHOLD_E2E_API_ADDR ?? `${api.host}:${String(api.port)}`
+
+/** The server's sources, which both of its commands the suite starts are run from. */
+const server = fileURLToPath(new URL('../../server', import.meta.url))
+
+/**
+ * Where the stand-in for Stripe listens: the loopback, which is all it listens on, at the port
+ * beside stripe-mock's (docker-compose.yml). Stripe's API is under `/v1` there, and what drives
+ * the stand-in, the payment form's confirmation and what Stripe does on its own, under
+ * `/_standin` (server/cmd/stripe-standin/control.go).
+ */
+const stripeStandIn = { host: '127.0.0.1', port: 12112 } as const
+const stripeStandInOrigin = `http://${stripeStandIn.host}:${String(stripeStandIn.port)}`
+
+/**
+ * The plans of the stand-in's account, as `go run ./cmd/stripe-standin prices` prints them from
+ * `server/`: PRD 04 §1's figures, each with the price the stand-in charges it by. The API is given
+ * them, so that what it shows is what the stand-in charges, and so is the stand-in, which does
+ * not start on plans that are not its own: figures that drift apart stop the run here.
+ */
+const stripeStandInPrices = JSON.stringify({
+  EUR: {
+    year: { amount_minor: 5988, price: 'price_eur_year' },
+    month: { amount_minor: 599, price: 'price_eur_month' },
+    block: { amount_minor: 100, price: 'price_eur_block' },
+  },
+  GBP: {
+    year: { amount_minor: 5388, price: 'price_gbp_year' },
+    month: { amount_minor: 549, price: 'price_gbp_month' },
+    block: { amount_minor: 100, price: 'price_gbp_block' },
+  },
+})
 
 export default defineConfig({
   testDir: 'e2e',
@@ -50,18 +86,46 @@ export default defineConfig({
       // web client is, which is the origin it takes an unsafe request from and the address its
       // emails link to; and that the preview server's proxy is one, whose word for where a
       // request came from it takes, so that each test is a network of its own (e2e/stack.ts).
+      //
+      // And it is told of billing: that Stripe is the stand-in below, which only a development
+      // server may be told, and then only with test-mode keys; the stand-in's own three keys, the
+      // published ones of the server's tests (internal/platform/billing/billingtest), which open
+      // nothing anywhere else; and the stand-in's plans, since a server with keys takes no plan
+      // that names no price.
       command: 'go run ./cmd/household-api serve',
-      cwd: fileURLToPath(new URL('../../server', import.meta.url)),
+      cwd: server,
       env: {
         HOUSEHOLD_ENV: 'development',
         HOUSEHOLD_HTTP_ADDR: apiAddress,
         HOUSEHOLD_WEB_URL: previewOrigin,
         HOUSEHOLD_TRUSTED_PROXIES: '127.0.0.1/32',
         HOUSEHOLD_LOG_LEVEL: 'warn',
+        HOUSEHOLD_STRIPE_API_URL: stripeStandInOrigin,
+        HOUSEHOLD_STRIPE_SECRET_KEY: 'sk_test_standin',
+        HOUSEHOLD_STRIPE_PUBLISHABLE_KEY: 'pk_test_standin',
+        HOUSEHOLD_STRIPE_WEBHOOK_SECRET: 'whsec_standin',
+        HOUSEHOLD_BILLING_PRICES: stripeStandInPrices,
       },
       url: `${apiOrigin}${apiPath}/readyz`,
       reuseExistingServer: false,
       // The first run compiles the server.
+      timeout: 5 * 60_000,
+    },
+    {
+      // The stand-in for Stripe, which is told three things: where it listens, which is where the
+      // API above asks it; where the API's webhook is, on the loopback however the API listens,
+      // which it posts Stripe's events to itself, each before the request that caused it is
+      // answered; and the plans the API was given, which it holds to its own.
+      command: 'go run ./cmd/stripe-standin serve',
+      cwd: server,
+      env: {
+        STRIPE_STANDIN_ADDR: `${stripeStandIn.host}:${String(stripeStandIn.port)}`,
+        STRIPE_STANDIN_WEBHOOK_URL: `${apiOrigin}${apiPath}/webhooks/stripe`,
+        HOUSEHOLD_BILLING_PRICES: stripeStandInPrices,
+      },
+      url: `${stripeStandInOrigin}/_standin/health`,
+      reuseExistingServer: false,
+      // The first run compiles it.
       timeout: 5 * 60_000,
     },
     {

@@ -45,7 +45,8 @@ const DefaultTimeout = 20 * time.Second
 type StripeConfig struct {
 	// SecretKey is the API key, a restricted or secret key; WebhookSecret signs the webhooks.
 	SecretKey, WebhookSecret string
-	// URL is where the API is reached, Stripe's own when "": a test's stand-in.
+	// URL is where the API is reached, Stripe's own when "": a stand-in's (billingtest), which a test
+	// asks and a development server may be told to (HOUSEHOLD_STRIPE_API_URL), and no deployment is.
 	URL string
 	// HTTPClient makes the requests, one that gives each Timeout when nil.
 	HTTPClient *http.Client
