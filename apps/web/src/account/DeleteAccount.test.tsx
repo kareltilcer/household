@@ -111,6 +111,19 @@ describe('where a member stands in a household', () => {
         member(petr, 'member'),
       ]),
     ).toMatchObject({ kind: 'sole', successor: true })
+    // Named by the server as theirs alone, it is read the same way: an owner it did not count is
+    // an adult, and its owner still if they come back; child profiles alone give none.
+    expect(
+      standingOf(
+        tilcerovi,
+        me,
+        [member(me, 'owner'), member(petr, 'owner'), member(adam, 'child')],
+        true,
+      ),
+    ).toMatchObject({ kind: 'sole', uncounted: true, successor: true })
+    expect(
+      standingOf(tilcerovi, me, [member(me, 'owner'), member(adam, 'child')], true),
+    ).toMatchObject({ kind: 'sole', uncounted: false, successor: false })
   })
 
   it('is that billing is settled first, for a payer whose household goes on', () => {
