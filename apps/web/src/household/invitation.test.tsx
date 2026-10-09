@@ -337,6 +337,24 @@ describe('the token an invitation’s link carries', () => {
     expect(server.to(`GET /me/invitations/${other}`)).toHaveLength(1)
   })
 
+  // The link the page already read, opened where the page says what became of it: an arrival
+  // as any other, since a load would ask again too, and the server says what it is good for now.
+  it('begins again for the link it read before, and says what the server says of it now', async () => {
+    const server = serving()
+    server.on(declining, noContent)
+    const { user, router } = open(link, server)
+    await user.click(await screen.findByRole('button', { name: 'Decline' }))
+    await titled('You declined the invitation to Tilcerovi')
+    expect(server.to(reading)).toHaveLength(1)
+
+    server.on(reading, () => problem(410, 'token_already_used'))
+    await act(() => router.navigate(link))
+    expect(await titled('This invitation has already been answered')).toBeInTheDocument()
+    expect(server.to(reading)).toHaveLength(2)
+    expect(server.to(declining)).toHaveLength(1)
+    expect(router.state.location.hash).toBe('')
+  })
+
   it('goes on holding the link opened since, when the one before it is answered', async () => {
     const other = 'r8t5-2hjw-6bn4'
     const server = serving()

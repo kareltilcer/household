@@ -48,7 +48,7 @@
 // membership exists.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { readState, refocus, useNoWithdrawal } from '../account/common.ts'
 import settings from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
@@ -148,7 +148,12 @@ function Offer({
   )
 }
 
-function Opened() {
+interface OpenedProps {
+  /** The token the link that reached the page last carried, or none. */
+  readonly carried: string
+}
+
+function Opened({ carried }: OpenedProps) {
   const t = useTranslate()
   const api = useApi()
   const queries = useQueryClient()
@@ -162,7 +167,6 @@ function Opened() {
 
   // The token its link carried, or the one held since a visitor left here to sign in. Read once,
   // as the page opens: what becomes of the held one afterwards is this page's own doing.
-  const carried = useFragment().fragment.get('token') ?? ''
   const [token] = useState(() => (carried === '' ? (heldInvitationToken() ?? '') : carried))
   useEffect(() => {
     if (token !== '') holdInvitationToken(token)
@@ -554,15 +558,14 @@ function Opened() {
 }
 
 /**
- * The page, begun anew for each link that opens it. A link opened in a tab that is on this page
- * already changes the address's fragment and loads nothing: the page that was drawn would go on
- * showing the invitation it had, or that it has none, and take the token that arrived out of
- * the address unread. So it is begun again for a token that arrives, as a load would begin it:
- * which is what "open the link again" comes to for somebody who pastes it where they are.
+ * The page, begun anew for each link that opens it, drawn already or not (auth/fragment.ts). A
+ * link opened in a tab that is on this page already changes the address's fragment and loads
+ * nothing: the page that was drawn would go on showing the invitation it had, or that it has
+ * none. So it is begun again for each link that arrives, the same one's second time among them,
+ * as a load would begin it: which is what "open the link again" comes to for somebody who
+ * pastes it where they are.
  */
 export function Invitation() {
-  const arriving = new URLSearchParams(useLocation().hash.slice(1)).get('token') ?? ''
-  const [arrived, setArrived] = useState(arriving)
-  if (arriving !== '' && arriving !== arrived) setArrived(arriving)
-  return <Opened key={arrived} />
+  const { arrival, fragment } = useFragment()
+  return <Opened key={arrival} carried={fragment.get('token') ?? ''} />
 }

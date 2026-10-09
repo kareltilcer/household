@@ -132,8 +132,10 @@ this page as the address held for them, and the token waits in a variable and in
 a challenged sign-in's does (ADR 0026); a reload, or an account made in another tab, loses it,
 and the person opens their link again, an email invitation being listed on their account
 meanwhile (`getMeInvitations`). A link opened in a tab that is on the page already loads nothing
-and only changes the fragment under it, so the page is begun again for a token that arrives
-while it is drawn: opening the link again is then the same thing wherever it is opened. The
+and only changes the fragment under it, so the page is begun again for each link that arrives
+while it is drawn, its screen keyed by the arrival that `auth/fragment.ts` counts, as the pages
+of `auth/` are (ADR 0026), and the link it read already arrives as any other: opening the link
+again is then the same thing wherever it is opened. The
 query that reads it is kept out of the stored cache.
 
 **A member in no household is opened at making one** (D-168), and **the first run's question is

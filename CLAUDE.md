@@ -259,9 +259,10 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   it left is put back through `refocus` (`account/common.ts`). A write on its way keeps its
   control busy until it is answered: its mutation is not `reset()` while it is pending, and rows
   that share one say for themselves which of them is asked. The page an invitation's link opens
-  is begun again for a fragment that arrives while it is drawn, since a link opened in the tab
-  already on its page loads nothing; the pages of `auth/` that read a fragment (`useFragment`)
-  do not yet. A write that leads to another screen goes there from `mutate`'s own callback,
+  is begun again for a link that arrives while it is drawn, as the pages of `auth/` that read a
+  fragment are: its screen is keyed by the `arrival` that `useFragment` counts, and the link it
+  read already arrives as any other.
+  A write that leads to another screen goes there from `mutate`'s own callback,
   which is dropped with its screen, where the mutation's `onSuccess` would lead a member away
   from wherever they had gone meanwhile; what is kept and what is said of a success are the
   mutation's own (`onSuccess` at the hook), which holds whether or not its screen is still

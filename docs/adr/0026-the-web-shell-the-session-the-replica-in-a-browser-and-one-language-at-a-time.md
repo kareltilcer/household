@@ -138,7 +138,7 @@ them, as a load would begin it, with nothing in it of the one before. What arriv
 the first was, in the page and in no storage. A fragment that carries no value, the name of a
 place on the page, is taken out as any other and begins nothing. A provider's return that
 arrives so is held to the flow the tab kept, which the first one took, and completes nothing
-without one. The
+without one. The page an invitation's link opens is a sixth, drawn the same way (ADR 0027). The
 screens say what the server does where the prototype says otherwise: twelve characters, a
 password checked at the server against its own copy of the breach list, limits by address and
 network, each link's own lifetime, and a deletion only its link cancels.
