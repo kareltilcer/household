@@ -275,18 +275,25 @@ function SignInWith({ me }: { readonly me: Me }) {
   // Back from the provider's page with no link made, to this one as the browser kept it: the
   // control that stayed busy while the page was leaving is put back.
   useShownAgain(connect.reset)
+  // A provider that is disconnected is said to be, and the account read again, which is what
+  // its row says so from. The row offers to disconnect it until then, so the disconnection
+  // stays on its way for as long, its control busy: no second one is asked for meanwhile, of
+  // what the account holds no longer.
+  const disconnected = (provider: Provider) => {
+    toast({ message: t('account.security.providers.disconnected', { provider: name(provider) }) })
+    return queries.invalidateQueries({ queryKey: meKey, exact: true })
+  }
   const disconnect = useMutation({
     ...askedNow,
     mutationFn: async (provider: Provider) => {
       unwrap(await api.DELETE('/auth/oauth/{provider}', { params: { path: { provider } } }))
     },
-    // The row offers to disconnect a provider until the account is read again, which is what
-    // says it is disconnected. The disconnection stays on its way for as long, its control
-    // busy: a second one, of what the account holds no longer, would be refused just after the
-    // first was said to be done.
-    onSuccess: (_answer, provider) => {
-      toast({ message: t('account.security.providers.disconnected', { provider: name(provider) }) })
-      return queries.invalidateQueries({ queryKey: meKey, exact: true })
+    onSuccess: (_answer, provider) => disconnected(provider),
+    onError: async (error, provider) => {
+      // The server's word that the account holds none of it: disconnected from somewhere else
+      // since this page read the account, or by a press before this one, after which the
+      // account could not be read. What was asked for is so.
+      if (problemIn(error)?.code === 'not_found') await disconnected(provider)
     },
   })
 
@@ -376,7 +383,7 @@ function SignInWith({ me }: { readonly me: Me }) {
         })}
       </List>
       <p className={styles.note}>{t('account.security.providers.note')}</p>
-      {disconnect.isError ? (
+      {disconnect.isError && problemIn(disconnect.error)?.code !== 'not_found' ? (
         <Banner
           tone="danger"
           announce

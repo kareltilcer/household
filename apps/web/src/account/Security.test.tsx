@@ -284,6 +284,16 @@ describe('Google and Apple', () => {
     server.on('GET /auth/oauth', () => Response.json({ providers }))
   }
 
+  /** Disconnects Google as the server does: an account that holds none of it is told so. */
+  function disconnects(server: Server) {
+    server.on('DELETE /auth/oauth/google', () => {
+      const held = server.me.credentials ?? []
+      if (!held.includes('google')) return problem(404, 'not_found')
+      server.me = { ...server.me, credentials: held.filter((each) => each !== 'google') }
+      return noContent()
+    })
+  }
+
   it('are offered only where the server signs in with them', async () => {
     const server = createServer()
     configured(server, ['google'])
@@ -385,12 +395,7 @@ describe('Google and Apple', () => {
   it('take no second press on one that is disconnected until the account is read again', async () => {
     const server = createServer({ ...jana, credentials: ['password', 'google'] })
     configured(server, ['google', 'apple'])
-    // As the server answers: an account that holds none of a provider is told so.
-    server.on('DELETE /auth/oauth/google', () => {
-      if (!(server.me.credentials ?? []).includes('google')) return problem(404, 'not_found')
-      server.me = { ...server.me, credentials: ['password'] }
-      return noContent()
-    })
+    disconnects(server)
     const { user } = await security(server)
     const disconnect = await screen.findByRole('button', { name: 'Disconnect Google' })
     const connect = screen.getByRole('button', { name: 'Connect Apple' })
@@ -429,6 +434,100 @@ describe('Google and Apple', () => {
       expect(again).not.toHaveAttribute('aria-disabled')
     })
     expect(connect).not.toHaveAttribute('aria-disabled')
+  })
+
+  // Disconnected from another browser since this one read the account: what was asked for is
+  // so. It is said as done and no failure, and the account read again as after any other.
+  it('say one that was disconnected somewhere else is disconnected, and not that it failed', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google'] })
+    configured(server, ['google', 'apple'])
+    disconnects(server)
+    const { user } = await security(server)
+    const disconnect = await screen.findByRole('button', { name: 'Disconnect Google' })
+    // From somewhere else, and from here on the account is read when the test says it is.
+    server.me = { ...server.me, credentials: ['password'] }
+    const read = server.to('GET /me').length
+    let answer: () => void = () => undefined
+    server.on(
+      'GET /me',
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = () => {
+            resolve(Response.json(server.me))
+          }
+        }),
+    )
+    await user.click(disconnect)
+    expect(
+      await screen.findByText('Google is disconnected and no longer signs you in.'),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(server.to('GET /me')).toHaveLength(read + 1)
+    })
+    // Busy until its row says so, as one that this press disconnected is.
+    expect(disconnect).toHaveAttribute('aria-busy', 'true')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    answer()
+    const again = await screen.findByRole('button', { name: 'Connect Google' })
+    await waitFor(() => {
+      expect(again).not.toHaveAttribute('aria-disabled')
+    })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(server.to('DELETE /auth/oauth/google')).toHaveLength(1)
+  })
+
+  // The account could not be read after a disconnection, so its row offers to disconnect the
+  // provider still. The press that takes the offer is told what is so, and the row then says it.
+  it('say one is disconnected to a press on a row the account could not be read again for', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google'] })
+    configured(server, ['google'])
+    disconnects(server)
+    const { user } = await security(server)
+    const disconnect = await screen.findByRole('button', { name: 'Disconnect Google' })
+    // The server cannot be reached for the account, this once.
+    const read = server.to('GET /me').length
+    server.on('GET /me', () => Promise.reject(new TypeError('offline')))
+    await user.click(disconnect)
+    expect(
+      await screen.findByText('Google is disconnected and no longer signs you in.'),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(server.to('GET /me')).toHaveLength(read + 1)
+    })
+    // The wait is over, and the row is as it was.
+    await waitFor(() => {
+      expect(disconnect).not.toHaveAttribute('aria-busy')
+    })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    server.on('GET /me', () => Response.json(server.me))
+    await user.click(disconnect)
+    const again = await screen.findByRole('button', { name: 'Connect Google' })
+    await waitFor(() => {
+      expect(again).not.toHaveAttribute('aria-disabled')
+    })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(server.to('DELETE /auth/oauth/google')).toHaveLength(2)
+  })
+
+  // Only the server's own word is read so: a `404` from whatever stands before it says nothing
+  // of what the account holds.
+  it('say a disconnection failed where a `404` is not the server’s answer', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google'] })
+    configured(server, ['google'])
+    server.on(
+      'DELETE /auth/oauth/google',
+      () => new Response('<html>Not Found</html>', { status: 404 }),
+    )
+    const { user } = await security(server)
+    const disconnect = await screen.findByRole('button', { name: 'Disconnect Google' })
+    await user.click(disconnect)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)
+    expect(
+      screen.queryByText('Google is disconnected and no longer signs you in.'),
+    ).not.toBeInTheDocument()
+    expect(disconnect).not.toHaveAttribute('aria-busy')
   })
 
   it('refuse to disconnect the only way an account signs in, and say what to do first', async () => {
