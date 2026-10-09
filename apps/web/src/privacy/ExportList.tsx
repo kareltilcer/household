@@ -309,6 +309,14 @@ export function ExportList({
     pressed.current = false
     refocus(view.current)
   }, [making])
+  // So does a row's own control, where the job read at its press carries no link or is gone:
+  // the row is drawn again without it, or leaves the list, and the focus goes the same way.
+  const unlinking = useRef(false)
+  useEffect(() => {
+    if (!unlinking.current) return
+    unlinking.current = false
+    refocus(view.current)
+  }, [list])
 
   const asking = useMutation({
     ...askedNow,
@@ -332,11 +340,13 @@ export function ExportList({
     // The link a list would keep is good for minutes: it is read as it is needed.
     mutationFn: (id: string) => source.read(id),
     onSuccess: (job) => {
+      const link = job.download_url
+      const linked = typeof link === 'string' && link !== ''
+      unlinking.current = !linked
       queries.setQueryData<Listed[]>(source.key, (was) =>
         was?.map((each) => (each.id === job.id ? listed(job) : each)),
       )
-      const link = job.download_url
-      if (typeof link === 'string' && link !== '') {
+      if (linked) {
         leaveFor(link)
         toast({ message: t('data.exports.download.started') })
         return
@@ -354,6 +364,7 @@ export function ExportList({
         return
       }
       // Its row was kept thirty days and is gone: the list is read again without it.
+      unlinking.current = true
       refuse(t('data.exports.download.gone'))
       void source.reread()
     },

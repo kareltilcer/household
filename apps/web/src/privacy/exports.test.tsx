@@ -514,6 +514,11 @@ describe('downloading an export', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: download })).not.toBeInTheDocument()
     })
+    // The control that was pressed is gone: the focus is on the list's own place.
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body)
+    })
+    expect(document.activeElement).toContainElement(await list())
   })
 
   it('says one that has expired since can no longer be downloaded', async () => {
@@ -543,6 +548,13 @@ describe('downloading an export', () => {
     await waitFor(() => {
       expect(screen.queryByText(/^Asked for on/)).not.toBeInTheDocument()
     })
+    // Its row left the list with the control that was pressed, and the focus is not dropped.
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body)
+    })
+    expect(document.activeElement).toContainElement(
+      screen.getByRole('button', { name: 'Make an export' }),
+    )
   })
 
   it('is asked at once with no connection, and says the server was not reached', async () => {
