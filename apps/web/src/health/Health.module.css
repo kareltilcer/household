@@ -1,0 +1,159 @@
+/* The screens of a household's sync (A-32, A-33, C-57): a replica or a client as a row of a list,
+   and a diagnostic bundle part by part. What a row says stands one sentence under another; the
+   words take the room and wrap inside it, and its one action keeps its size and goes under the
+   words where the window is too narrow for both, so that nothing in a row has a width of its
+   own. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-15);
+  align-items: flex-start;
+  min-width: 0;
+  min-height: var(--dens-row-min);
+  padding: var(--dens-pad-y) var(--dens-pad-x);
+  border-block-end: 1px solid var(--dens-rule);
+}
+
+.row:last-child {
+  border-block-end: 0;
+}
+
+.about {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+/* What the row is, and beside its name that it is this browser. */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.whose {
+  overflow-wrap: anywhere;
+}
+
+/* How it stands: a status's glyph in the status's own colour, and the words that say it. The
+   three go together, and the words alone would say all of it. */
+.standing {
+  display: flex;
+  gap: var(--space-05);
+  align-items: flex-start;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+}
+
+.synced {
+  color: var(--status-synced);
+}
+
+.pending {
+  color: var(--status-pending);
+}
+
+.syncing {
+  color: var(--status-syncing);
+}
+
+.conflict {
+  color: var(--status-conflict);
+}
+
+.offline {
+  color: var(--status-offline);
+}
+
+.stale {
+  color: var(--status-stale);
+}
+
+.blocked {
+  color: var(--status-blocked);
+}
+
+.detail {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* A sentence of a row that is the way to what it counts: a target of a row's height. */
+.way {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: var(--dens-row-min);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+/* A part of a bundle: whether it is sent, and under that what it holds. */
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+  padding: var(--dens-pad-y) 0;
+  border-block-end: 1px solid var(--dens-rule);
+}
+
+.part:last-child {
+  border-block-end: 0;
+}
+
+/* A part that was taken out: still read, and plainly not sent. */
+.out {
+  color: var(--text-muted);
+}
+
+/* The bundle as text, exactly as it is sent: the mono face, its lines kept as they are written
+   and broken wherever the window ends, so that it never scrolls sideways. */
+.exact {
+  composes: numSm from '../styles/type.module.css';
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-2);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* What is data and no word: an id, a version, a checkpoint. */
+.figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: var(--figures-tabular);
+  overflow-wrap: anywhere;
+}
