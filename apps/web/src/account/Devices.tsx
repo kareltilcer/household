@@ -32,14 +32,13 @@ import { useRefusedField } from '../auth/fields.tsx'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe, useSession } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
-import { Button } from '../ui/Button.tsx'
+import { Button, RowAction } from '../ui/Button.tsx'
 import { Dialog, Sheet } from '../ui/Dialog.tsx'
 import { TextField } from '../ui/Field.tsx'
 import { List, ListRow } from '../ui/ListRow.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { useToast } from '../ui/Toast.tsx'
-import a11y from '../ui/a11y.module.css'
 import { readState, signedInKey, useNoWithdrawal, useOwnZone } from './common.ts'
 import { useOnline } from '../ui/online.ts'
 import { Section, SettingsPage } from './Page.tsx'
@@ -122,28 +121,6 @@ function useNames() {
       }
     },
   }
-}
-
-/** A row's own control, named for what it acts on and drawn as the one word. */
-function RowAction({
-  name,
-  word,
-  onPress,
-}: {
-  readonly name: string
-  readonly word: string
-  readonly onPress: () => void
-}) {
-  return (
-    <Button
-      onClick={() => {
-        onPress()
-      }}
-    >
-      <span className={a11y.visuallyHidden}>{name}</span>
-      <span aria-hidden="true">{word}</span>
-    </Button>
-  )
 }
 
 function Rename({

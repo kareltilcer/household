@@ -50,3 +50,70 @@ describe('what an address carries for the page it opens', () => {
     expect(window.history.length).toBe(entries)
   })
 })
+
+// A link opened in a tab that is on its page already: the browser changes the fragment under
+// the document, adds an entry for it, and loads nothing.
+describe('what arrives where its page is drawn already', () => {
+  it('is read as the page’s own, and taken out of the entry the browser gave it', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    backend.on('POST /auth/password-reset/confirm', () => empty(204))
+    openInBrowser(paths.resetSet.path, { backend })
+    await screen.findByRole('heading', { level: 1, name: 'This link doesn’t open anything' })
+    const entries = window.history.length
+
+    window.location.hash = 'token=r2'
+    await screen.findByRole('heading', { level: 1, name: 'Choose a new password' })
+    await waitFor(() => {
+      expect(window.location.hash).toBe('')
+    })
+    // The entry is the browser's doing, and the token is in it no longer: Back finds none.
+    expect(window.history.length).toBe(entries + 1)
+    expect(window.location.pathname).toBe(paths.resetSet.path)
+
+    await user.type(screen.getByLabelText('New password'), 'a long enough password')
+    await user.click(screen.getByRole('button', { name: 'Set password and sign out everywhere' }))
+    await waitFor(() => {
+      expect(backend.to('POST /auth/password-reset/confirm')).toHaveLength(1)
+    })
+    expect(backend.to('POST /auth/password-reset/confirm')[0]?.body).toMatchObject({ token: 'r2' })
+  })
+
+  it('is kept nowhere but in the page: no storage holds it once it is read', async () => {
+    openInBrowser(paths.graduate.path)
+    await screen.findByRole('heading', { level: 1, name: 'This link doesn’t open anything' })
+    window.location.hash = 'token=g-arrived'
+    await screen.findByRole('heading', { level: 1, name: 'Choose your password' })
+    await waitFor(() => {
+      expect(window.location.hash).toBe('')
+    })
+    const stored = [window.localStorage, window.sessionStorage].flatMap((storage) =>
+      Array.from({ length: storage.length }, (_, at) => {
+        const key = storage.key(at) ?? ''
+        return `${key}=${storage.getItem(key) ?? ''}`
+      }),
+    )
+    expect(stored.join('\n')).not.toContain('g-arrived')
+    expect(document.cookie).not.toContain('g-arrived')
+  })
+
+  it('begins nothing again for a fragment that names a place on the page, and leaves none in the address', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    backend.on('POST /auth/password-reset/confirm', () => empty(204))
+    openInBrowser(`${paths.resetSet.path}#token=r1`, { backend })
+    await user.type(await screen.findByLabelText('New password'), 'a long enough password')
+
+    window.location.hash = 'main'
+    await waitFor(() => {
+      expect(window.location.hash).toBe('')
+    })
+    // The page is the one that was drawn: what was typed is in it, and the link it was opened with.
+    expect(screen.getByLabelText('New password')).toHaveValue('a long enough password')
+    await user.click(screen.getByRole('button', { name: 'Set password and sign out everywhere' }))
+    await waitFor(() => {
+      expect(backend.to('POST /auth/password-reset/confirm')).toHaveLength(1)
+    })
+    expect(backend.to('POST /auth/password-reset/confirm')[0]?.body).toMatchObject({ token: 'r1' })
+  })
+})

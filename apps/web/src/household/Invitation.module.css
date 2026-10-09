@@ -1,0 +1,81 @@
+/* What an invitation's link opens (A-24), inside the column of the screens before sign-in
+   (auth/Screen.module.css). It is read on a phone first: everything is one under another, nothing
+   has a width of its own, and at 200 % text the column is the window's and still one column. */
+
+/* The screen's own place, where the focus is put once an answer took away the control that was
+   pressed: no control, and so it shows no ring of its own. */
+.place {
+  min-width: 0;
+}
+
+.place:focus {
+  outline: none;
+}
+
+/* The invitation as it is read, its parts as far apart as a screen's own are. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* What the inviter wrote, marked as theirs: a rule down its side and their name over it. Their
+   words are drawn as they typed them, line breaks and all, and broken wherever the column ends. */
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+  padding-inline-start: var(--space-2);
+  border-inline-start: 4px solid var(--border-strong);
+}
+
+.from {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.words {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* What is being given: the role in words, and under it the modules gathered by level. */
+.gives {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.role {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+.heading {
+  composes: title3 from '../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+/* What whoever is looking can do about it: what was refused, the answers, and what one does. */
+.answering {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The two answers, each the column's whole width, the one that joins first: a thumb reaches
+   either, and neither is beside the other to be pressed for it. */
+.answers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}

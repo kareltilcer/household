@@ -637,7 +637,7 @@ func TestDecliningTellsTheInviter(t *testing.T) {
 	// By a push, as someone who means her (D-111), no longer by email.
 	told := s.pushes.To(jana.me().ID)
 	if len(told) != 1 || told[0].Push.Title != "Petr declined your invitation" ||
-		told[0].Push.Link != "/households/"+h.ID.String()+"/invitations" {
+		told[0].Push.Link != "/households/"+h.ID.String()+"/settings/invitations" {
 		t.Fatalf("the inviter was told: %+v", told)
 	}
 	expect(t, petrs.post("/me/invitations/"+link+"/decline", ""), http.StatusNotFound, problem.CodeNotFound)

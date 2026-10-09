@@ -1,0 +1,16 @@
+/* One member's page (PRD 17 §2). What it adds to the settings' own sheet is sentences that stand
+   one under another with no bullets: what a change of levels comes to, and what a panel says of
+   what it is about to do. */
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.points > li {
+  overflow-wrap: anywhere;
+}

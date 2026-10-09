@@ -6,7 +6,9 @@
 //
 // The handle is a button: the arrow keys move its row, and where the row has come to is said.
 // The same moves are in the row's menu, for a pointer. A change is the member's at once, here
-// and in the sidebar.
+// and in the sidebar. A row that is pinned, unpinned, put away or shown again leaves the list it
+// was in for another: that is said too, and the focus goes with the row to where it now is, the
+// control that held it having left with the row's old place (D-166).
 //
 // The arrangement is kept in this browser (D-155, arrangement.ts), which decides this screen's
 // states. It is read where it is written, so it is never loading, and never fails to load; it is
@@ -16,7 +18,7 @@
 // its list with no word said beside it: this is not where a member learns of a change of access.
 import { controls } from '@household/icons'
 import { BaseIcon, ModuleIcon } from '@household/icons/web'
-import { useId, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import styles from './Arrange.module.css'
 import { usePageTitle } from '../app/title.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
@@ -28,7 +30,15 @@ import a11y from '../ui/a11y.module.css'
 import { Button, IconButton } from '../ui/Button.tsx'
 import { Menu, type MenuItem } from '../ui/Menu.tsx'
 import { useArrangement } from './arrangement.ts'
-import { hidden, moved, navigationOf, pinned, shown, unpinned } from './navigation.ts'
+import {
+  hidden,
+  moved,
+  navigationOf,
+  pinned,
+  shown,
+  unpinned,
+  type Arrangement,
+} from './navigation.ts'
 
 export interface ArrangeListsProps {
   readonly household: Pick<Household, 'id' | 'my_grants'>
@@ -46,8 +56,31 @@ export function ArrangeLists({ household, user, registry }: ArrangeListsProps) {
   const navigation = navigationOf(household, registry, arrangement)
   // Where the row last moved has come to, said once: the region is on the page from the first.
   const [said, setSaid] = useState('')
+  // The row that last went from one list to another, to be followed there: a new value for each
+  // such change, so that a row that goes back and forth is followed each time.
+  const [followed, setFollowed] = useState<{ readonly module: ModuleKey } | null>(null)
+  // Each row's first control, by its module: its handle in a list that has an order, and what
+  // shows it again in the one that has none.
+  const firsts = useRef(new Map<ModuleKey, HTMLButtonElement>())
+  const first = (module: ModuleKey) => (control: HTMLButtonElement | null) => {
+    if (control === null) return undefined
+    firsts.current.set(module, control)
+    return () => {
+      if (firsts.current.get(module) === control) firsts.current.delete(module)
+    }
+  }
+  useEffect(() => {
+    if (followed !== null) firsts.current.get(followed.module)?.focus()
+  }, [followed])
   const id = useId()
   const name = (module: ModuleKey) => t(`module.${module}.name`)
+
+  /** Takes `module` to another list: it is said, and the focus follows the row there. */
+  const went = (module: ModuleKey, next: Arrangement, sentence: string) => {
+    setArrangement(next)
+    setSaid(sentence)
+    setFollowed({ module })
+  }
 
   const move = (module: ModuleKey, list: readonly ModuleKey[], by: number) => {
     const next = moved(arrangement, navigation, module, by)
@@ -102,6 +135,7 @@ export function ArrangeLists({ household, user, registry }: ArrangeListsProps) {
     return (
       <li key={module} className={styles.row}>
         <IconButton
+          ref={first(module)}
           label={t(controls.reorder.labelKey, { name: name(module) })}
           icon={<BaseIcon name={controls.reorder.glyph.id} />}
           onKeyDown={byArrow(module, list)}
@@ -149,7 +183,11 @@ export function ArrangeLists({ household, user, registry }: ArrangeListsProps) {
                       id: 'unpin',
                       label: t('shell.arrange.unpin'),
                       onSelect: () => {
-                        setArrangement(unpinned(arrangement, navigation, module))
+                        went(
+                          module,
+                          unpinned(arrangement, navigation, module),
+                          t('shell.arrange.said.unpinned', { name: name(module) }),
+                        )
                       },
                     },
                   ]),
@@ -169,14 +207,22 @@ export function ArrangeLists({ household, user, registry }: ArrangeListsProps) {
                       id: 'pin',
                       label: t('shell.arrange.pin'),
                       onSelect: () => {
-                        setArrangement(pinned(arrangement, navigation, module))
+                        went(
+                          module,
+                          pinned(arrangement, navigation, module),
+                          t('shell.arrange.said.pinned', { name: name(module) }),
+                        )
                       },
                     },
                     {
                       id: 'hide',
                       label: t('shell.arrange.hide'),
                       onSelect: () => {
-                        setArrangement(hidden(arrangement, navigation, module))
+                        went(
+                          module,
+                          hidden(arrangement, navigation, module),
+                          t('shell.arrange.said.hidden', { name: name(module) }),
+                        )
                       },
                     },
                   ]),
@@ -199,9 +245,14 @@ export function ArrangeLists({ household, user, registry }: ArrangeListsProps) {
                       <span className={styles.name}>{name(module)}</span>
                     </span>
                     <Button
+                      ref={first(module)}
                       variant="secondary"
                       onClick={() => {
-                        setArrangement(shown(arrangement, navigation, module))
+                        went(
+                          module,
+                          shown(arrangement, navigation, module),
+                          t('shell.arrange.said.shown', { name: name(module) }),
+                        )
                       }}
                     >
                       <span aria-hidden="true">{t('shell.arrange.show')}</span>

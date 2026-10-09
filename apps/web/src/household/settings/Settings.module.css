@@ -1,0 +1,34 @@
+/* The way between the screens of household settings: a row of destinations above the title,
+   which wraps where the window is narrower than the row, each a target of a row's height. */
+.destinations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.destination {
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--dens-row-min);
+  min-height: var(--dens-row-min);
+  padding: var(--space-05) var(--space-15);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.destination:hover {
+  background: var(--surface-raised);
+}
+
+/* The one that is open: a rule under it and a heavier name, beside its ground. */
+.destination[aria-current='page'] {
+  background: var(--surface-raised);
+  box-shadow: inset 0 -3px 0 var(--accent);
+  font-weight: 600;
+}

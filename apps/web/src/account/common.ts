@@ -64,6 +64,19 @@ export function isRefusedAsSent(error: unknown): boolean {
   return problemIn(error)?.code === 'validation_failed'
 }
 
+/** The images the server makes a picture of (`putMeAvatar`, `putChildrenByUserIdAvatar`). */
+export const pictureTypes = 'image/jpeg,image/png,image/gif,image/webp'
+
+/**
+ * Puts the focus on `target` where it has dropped to the page: the control that held it left
+ * with what it stood in, and nothing else says where the member is (D-166). A focus that is
+ * anywhere else is its member's, and is left alone.
+ */
+export function refocus(target: HTMLElement | null): void {
+  const focused = document.activeElement
+  if (focused === null || focused === document.body) target?.focus()
+}
+
 /**
  * Puts `text` on the clipboard. It rejects where the browser has none to give, a page that is
  * not served securely, or refuses.

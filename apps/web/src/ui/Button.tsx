@@ -1,8 +1,10 @@
 // Button and icon button (02-components §1): primary, secondary, ghost and danger, each at
 // default, hover, focus-visible, pressed, loading and disabled, never under 44 × 44 pt. An icon
 // button has a label, with no exception for an obvious glyph: its type has no way to leave one out.
+// A row's own action is a button named in full for what it acts on, and drawn as one word.
 import { StatusIcon } from '@household/icons/web'
 import type { ComponentProps, MouseEvent, ReactNode } from 'react'
+import a11y from './a11y.module.css'
 import styles from './Button.module.css'
 import { cx } from './cx.ts'
 
@@ -79,6 +81,30 @@ export function Button({ variant = 'secondary', icon, children, className, ...re
       {rest.loading === true ? <Busy /> : icon}
       <span className={styles.words}>{children}</span>
     </button>
+  )
+}
+
+export interface RowActionProps {
+  /** What it does and to what, for assistive technology: *Sign out Firefox on Linux*. */
+  readonly name: string
+  /** The one word that is drawn: *Sign out*. */
+  readonly word: string
+  readonly loading?: boolean
+  readonly onPress: () => void
+}
+
+/** A row's own control, named for what it acts on and drawn as the one word. */
+export function RowAction({ name, word, loading = false, onPress }: RowActionProps) {
+  return (
+    <Button
+      loading={loading}
+      onClick={() => {
+        onPress()
+      }}
+    >
+      <span className={a11y.visuallyHidden}>{name}</span>
+      <span aria-hidden="true">{word}</span>
+    </Button>
   )
 }
 

@@ -468,7 +468,8 @@ func TestTheOwnersAreToldWhenAChildProfileLocks(t *testing.T) {
 		phone.childLogin(h.JoinCode, adam.UserID, "0000")
 	}
 	told := s.pushes.To(janaID)
-	if len(told) != 1 || told[0].Push.Title != "Adam’s profile is locked" || !strings.Contains(told[0].Push.Link, adam.UserID.String()) {
+	if len(told) != 1 || told[0].Push.Title != "Adam’s profile is locked" ||
+		told[0].Push.Link != "/households/"+h.ID.String()+"/settings/members/"+adam.UserID.String() {
 		t.Fatalf("Jana was told: %+v", told)
 	}
 	if n := len(s.pushes.To(petr)); n != 0 {
