@@ -280,9 +280,13 @@ function SignInWith({ me }: { readonly me: Me }) {
     mutationFn: async (provider: Provider) => {
       unwrap(await api.DELETE('/auth/oauth/{provider}', { params: { path: { provider } } }))
     },
+    // The row offers to disconnect a provider until the account is read again, which is what
+    // says it is disconnected. The disconnection stays on its way for as long, its control
+    // busy: a second one, of what the account holds no longer, would be refused just after the
+    // first was said to be done.
     onSuccess: (_answer, provider) => {
       toast({ message: t('account.security.providers.disconnected', { provider: name(provider) }) })
-      void queries.invalidateQueries({ queryKey: meKey, exact: true })
+      return queries.invalidateQueries({ queryKey: meKey, exact: true })
     },
   })
 
