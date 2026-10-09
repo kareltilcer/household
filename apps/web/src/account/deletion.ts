@@ -17,6 +17,12 @@
 // One household's members a member cannot read: a suspended one's, whose every route answers
 // `404` (D-115) while the list still names it. Where they stand in one they own is then the
 // server's alone to say, but for its only member, whom the list itself counts.
+//
+// And one thing the members that were read do not say: an owner whose own account is scheduled
+// for deletion counts as no owner (D-137), and is listed as one all the same. To the server the
+// other owner of their household is its only owner, which it says when it is asked: a household
+// its refusal names as the member's alone to own is that, whoever its members say owns it
+// (D-173).
 import type { components } from '@household/api'
 import type { HouseholdSummary } from '../household/households.ts'
 
@@ -25,8 +31,16 @@ export type Membership = components['schemas']['Membership']
 export type Standing =
   /** The member is its only member: it goes with the account. */
   | { readonly kind: 'alone'; readonly household: HouseholdSummary; readonly payer: boolean }
-  /** The member is its only owner, and other people are in it. */
-  | { readonly kind: 'sole'; readonly household: HouseholdSummary; readonly payer: boolean }
+  /**
+   * The member is its only owner, and other people are in it. `uncounted` is whether its members
+   * name another owner all the same, where it is the server that said so: one it did not count.
+   */
+  | {
+      readonly kind: 'sole'
+      readonly household: HouseholdSummary
+      readonly payer: boolean
+      readonly uncounted: boolean
+    }
   /** It has another owner, and the member pays for it: billing is settled first. */
   | { readonly kind: 'payer'; readonly household: HouseholdSummary }
   /** The membership ends, and the household goes on. */
@@ -45,12 +59,16 @@ function same(one: string | undefined, other: string): boolean {
 /**
  * Where `user` stands in `household`. `members` is the household's members as its member reads
  * them, which a household the member owns needs and any other does not: only an owner can be the
- * last owner, or pay. Left out for a household they own, its members could not be read.
+ * last owner, or pay. Left out for a household they own, its members could not be read. `named`
+ * is whether the server, refusing a deletion, named the household as one they are the only owner
+ * of: its word on who owns it stands over the members', who list an owner it does not count as
+ * they list any other.
  */
 export function standingOf(
   household: HouseholdSummary,
   user: string,
   members: readonly Membership[] | undefined,
+  named = false,
 ): Standing {
   if (household.my_role !== 'owner') return { kind: 'leaves', household }
   if (members === undefined) {
@@ -61,7 +79,10 @@ export function standingOf(
   const payer = members.some((member) => same(member.user_id, user) && member.is_billing_payer)
   const others = members.filter((member) => !same(member.user_id, user))
   if (others.length === 0) return { kind: 'alone', household, payer }
-  if (!others.some((member) => member.role === 'owner')) return { kind: 'sole', household, payer }
+  // Another owner the members name where the server named the household as this member's alone
+  // is one it did not count.
+  const uncounted = others.some((member) => member.role === 'owner')
+  if (named || !uncounted) return { kind: 'sole', household, payer, uncounted }
   return payer ? { kind: 'payer', household } : { kind: 'leaves', household }
 }
 
