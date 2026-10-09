@@ -7,7 +7,7 @@
 // a screen leads is the test's to say, and what the shell draws there is not.
 import type { components } from '@household/api'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { render, type RenderResult } from '@testing-library/react'
+import { act, render, type RenderResult } from '@testing-library/react'
 import { useEffect } from 'react'
 import {
   createBrowserRouter,
@@ -257,6 +257,14 @@ export function openInBrowser(address: string, opening: Opening = {}): Opened {
   const router = createBrowserRouter(table)
   listening.push(router)
   return draw(router, opening)
+}
+
+/**
+ * Opens `address` in the tab `page` is drawn in, as a link pasted into the address of a tab that
+ * is on its page already: the address changes under the page, and nothing is loaded.
+ */
+export function arrive(page: Opened, address: string): Promise<void> {
+  return act(() => page.router.navigate(address))
 }
 
 function draw(

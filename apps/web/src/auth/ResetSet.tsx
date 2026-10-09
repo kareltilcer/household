@@ -35,13 +35,18 @@ import { useFragment } from './fragment.ts'
 import { noticeState } from './notice.ts'
 import { Form, Notices, Screen, Way, Ways } from './Screen.tsx'
 
+/** The page, begun anew for each link that opens it, drawn already or not (fragment.ts). */
 export function ResetSet() {
+  const { arrival, fragment } = useFragment()
+  return <Opened key={arrival} token={fragment.get('token') ?? ''} />
+}
+
+function Opened({ token }: { readonly token: string }) {
   const t = useTranslate()
   const api = useApi()
   const queries = useQueryClient()
   const navigate = useNavigate()
   const problemText = useProblemText()
-  const token = useFragment().get('token') ?? ''
   const [password, setPassword] = useState('')
   const [fault, setFault] = useState<{ readonly password: PasswordFault }>()
 

@@ -127,7 +127,18 @@ leaves the address.** A challenged sign-in's token (`auth/challenge.ts`) is held
 and in no storage: a reload loses it and the member signs in again, which costs them a password
 and keeps a token that stands for one out of what any script of the origin reads. A token an
 email's link carried is read from the fragment and then taken out of the address by the router's
-own replace (`auth/fragment.ts`), so that it is in no history entry and no copied address. The
+own replace (`auth/fragment.ts`), so that it is in no history entry and no copied address. A
+link opened in a tab that is on its page already, pasted into the address or taken from a
+bookmark, loads nothing and only changes the fragment under the page: each of the five pages a
+link or a provider's return opens went on saying what it said, of the link before or of none,
+and took what arrived out of the address unread, where a reload no longer found it (tried in
+Chromium). So the hook that reads the address counts what arrives, and a page draws its screen
+keyed by the count: the screen is begun again for each arrival, the same link's second among
+them, as a load would begin it, with nothing in it of the one before. What arrived is held as
+the first was, in the page and in no storage. A fragment that carries no value, the name of a
+place on the page, is taken out as any other and begins nothing. A provider's return that
+arrives so is held to the flow the tab kept, which the first one took, and completes nothing
+without one. The page an invitation's link opens is a sixth, drawn the same way (ADR 0027). The
 screens say what the server does where the prototype says otherwise: twelve characters, a
 password checked at the server against its own copy of the breach list, limits by address and
 network, each link's own lifetime, and a deletion only its link cancels.
@@ -246,6 +257,9 @@ every other console error still fails its test.
 | What that removal was refused with told to the problem hub, as the renewal's is and as a request outside a query otherwise owes | The sign-out follows it at once and is told its own refusal. Told of the removal's first, a session the server had ended already would be drawn as one that expired under its member, the address they pressed *Sign out* at held for whoever signs in next, where the sign-out reads the same `401` as the sign-out done |
 | A write of the screens before sign-in left to the query client's own rule, held in the page until a connection returns, as item 25 first had it | Pressed with the browser offline, a sign-in showed a busy control and no word, and was completed whenever the connection came back, with nobody at the screen and whatever screen it had been left for since; a reset's password was set, and every device signed out, minutes after its press. It is asked at once and fails at once, as the account's own writes are (D-164) |
 | Asking at once made the query client's rule for every write | A household's write made with no connection is queued on the web (06-clients), and waits in the page until a replica keeps it (ADR 0025). Which of a module's writes wait is its screens' to say: a sign-in's and an account's are no household's |
+| A link's page kept as it is drawn, and the token that arrives under it handed to it | Each page holds what the link before came to: an answer, a password typed, an arrival already acted on. Handing it another token is putting each of those back by hand, on five pages. A screen keyed by the arrival holds none of them |
+| A link's page begun again only for a token other than the one it read last | Opening a link again would then come to one thing loaded and another pasted where its page stands: nothing, though what the page says may have passed since, an answer that never came or an address since freed. Each arrival begins it, and the server says what the link is good for now |
+| The document loaded again for a fragment that arrives | A load reads the address, so the token would stay in it across the load, in the entry and the bar it is taken out of, or wait in storage for the page that follows |
 | A provider's control busy only while its start is asked, and idle again once it is answered | The page is on its way to the provider's for as long as that page takes to answer, and a control idle meanwhile takes a second press, which begins a second flow. It stays busy, and a page the browser kept and shows again, back from the provider's, puts its start back |
 | The file of recovery codes let go of in the press that hands it over, or by a timer after it | A browser may begin reading the file only once the press has returned, and how long after is its own affair. It is let go of with the screen that showed the codes |
 | The answer to an earlier save of a language kept from the account, once a later one is chosen | Two languages chosen within one round trip show the first again for as long as the second's save takes, and end in the second, on the page and in the account. Keeping the first answer from the account is a second word on which answer counts, with the second's failure to put right beside it, where the server holds the first and the page was never told. A flicker that ends where it should is less than that |
