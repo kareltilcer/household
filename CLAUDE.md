@@ -261,7 +261,7 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   controls whose presses each `reset()` the other's mutation, where a refusal is read off the
   mutation itself, take no press while the other's write is on its way (`aria-disabled`), and
   rows that share one say for themselves which of them is asked. The two controls of one picture
-  hold each other so whatever their presses put away (`household/settings/ChildPicture.tsx`):
+  hold each other too, whatever their presses put away (`household/settings/ChildPicture.tsx`):
   sent side by side, which of the two writes the server took last is not the order their answers
   come in, and the picture drawn could be another than the one kept. A control that saves as it is
   changed is no busy control: a select's later choice takes an earlier save's place (the
