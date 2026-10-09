@@ -265,14 +265,14 @@ function Deletion({ me }: { readonly me: Me }) {
           ? t('account.password.wrong')
           : t('account.delete.confirm.email_wrong')
         : undefined
-  const blocked = problem?.code === 'account_deletion_blocked'
-  const refused = blocked ? blockedBy(problem) : undefined
-  // The server's answer to a press took the control away, at once or as the households were
-  // read again: the focus it held goes to their list, where what stands in the way is drawn.
+  const refused = problem?.code === 'account_deletion_blocked' ? blockedBy(problem) : undefined
+  // What a press was refused with took the control away, at once or as the households were read
+  // again, a `409` that named one or a `422` after which they hold the deletion: the focus it
+  // held goes to their list, where what stands in the way is drawn.
   const view = useRef<HTMLUListElement>(null)
   useEffect(() => {
-    if (blocked && held) refocus(view.current)
-  }, [blocked, held])
+    if (schedule.isError && held) refocus(view.current)
+  }, [schedule.isError, held])
   const other =
     schedule.isError && problem?.code !== 'invalid_credentials' && refused === undefined
       ? problem?.status === 403

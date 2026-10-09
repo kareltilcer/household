@@ -133,8 +133,9 @@ offers to delete it with the account all the same, and the server's resolution s
 Nor can it read whose account is scheduled for deletion: such an owner is listed as an owner
 still, so the other owner of their household is told the membership ends and is then refused. The
 web draws a household the refusal names as the user's alone to own as that from then on, with the
-box that deletes it with the account, whatever its members say when they are read again
-(**D-173**).
+box that deletes it with the account, whoever its members name as an owner when they are read
+again, until the server answers that a household named to go with the account is not the user's
+alone to delete (**D-173**).
 
 **FR-PR4 — Deletion is a 30-day soft window then irreversible.** The account is disabled
 immediately, sessions and tokens are revoked (under D-93 a sync token already issued runs until it

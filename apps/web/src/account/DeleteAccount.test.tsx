@@ -339,6 +339,41 @@ describe('deleting an account', () => {
     })
   })
 
+  it('puts the focus on the households where, read again after a refusal, they hold the deletion', async () => {
+    const server = createServer()
+    // Its only owner pays for it, and chose it to go with her account.
+    withHouseholds(server, [tilcerovi], {
+      [tilcerovi.id]: [
+        member(jana.id, 'owner', { is_billing_payer: true }),
+        member(petr, 'member'),
+      ],
+    })
+    // Petr was made an owner since the page read it: it is not hers alone to delete, and read
+    // again it would go on with nobody paying.
+    server.on('POST /me/deletion', () => {
+      server.on(`GET /households/${tilcerovi.id}/members`, () =>
+        Response.json({
+          items: [member(jana.id, 'owner', { is_billing_payer: true }), member(petr, 'owner')],
+        }),
+      )
+      return invalid('/delete_sole_owned_households/0')
+    })
+    const { user } = await deleting(server)
+    const row = await situation('Tilcerovi')
+    await user.click(row.getByRole('checkbox', { name: 'Delete Tilcerovi with my account' }))
+    await user.type(screen.getByLabelText('Password'), 'the password')
+    await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+
+    // No `409` named it: the reread alone took the form away, and the control pressed with it.
+    const waits = await row.findByText(/^You pay for it\. Hand billing over to another owner/)
+    expect(screen.queryByRole('button', { name: /^Schedule deletion/ })).not.toBeInTheDocument()
+    expect(screen.getByText(/^Deletion waits for what is said above/)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body)
+    })
+    expect(document.activeElement).toContainElement(waits)
+  })
+
   describe('beside an owner whose account is being deleted', () => {
     // Petr owns the household too, by every list a member can read, and the server counts him
     // as no owner: his own account is scheduled for deletion (D-137).
@@ -387,10 +422,12 @@ describe('deleting an account', () => {
       expect(row.queryByText(/^Your membership ends\./)).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /^Schedule deletion/ })).not.toBeInTheDocument()
       expect(screen.getByText(/^Deletion waits for what is said above/)).toBeInTheDocument()
-      // The control that was pressed left with its form: the focus goes to where the box is.
+      // The control that was pressed left with its form: the focus goes to where the box is,
+      // and is not left on the page, which holds the box too.
       await waitFor(() => {
-        expect(document.activeElement).toContainElement(box)
+        expect(document.activeElement).not.toBe(document.body)
       })
+      expect(document.activeElement).toContainElement(box)
       // Why is said once the members, read again, still name another owner, and not before.
       expect(row.queryByText(uncounted)).not.toBeInTheDocument()
       answer(Response.json({ items: members }))
@@ -410,6 +447,56 @@ describe('deleting an account', () => {
       })
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
       expect(box).toBeChecked()
+
+      server.on('POST /me/deletion', () => Response.json(scheduled, { status: 202 }))
+      await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/account/deletion/cancel')
+      })
+      expect(await server.body('POST /me/deletion')).toEqual({
+        password_or_confirmation: 'the password',
+        delete_sole_owned_households: [tilcerovi.id],
+      })
+    })
+
+    it('keeps the server’s word where a later refusal names something else', async () => {
+      const server = createServer()
+      // She pays for a household of her own as well, whose subscription is still set to renew:
+      // the server names it each time it is asked, and the other only until its box is ticked.
+      withHouseholds(server, [tilcerovi, zahrada], {
+        [tilcerovi.id]: members,
+        [zahrada.id]: [member(jana.id, 'owner', { is_billing_payer: true })],
+      })
+      const waiting = (sole: readonly unknown[]) =>
+        problem(409, 'account_deletion_blocked', {
+          sole_owned_households: sole,
+          billing_payer_for: [zahrada.id],
+        })
+      server.on('POST /me/deletion', () =>
+        waiting([{ household_id: tilcerovi.id, name: 'Tilcerovi', member_count: 2 }]),
+      )
+      const { user, router } = await deleting(server)
+      await user.type(await screen.findByLabelText('Password'), 'the password')
+      await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+      const row = await situation('Tilcerovi')
+      const box = await row.findByRole('checkbox', { name: 'Delete Tilcerovi with my account' })
+      await user.click(box)
+
+      server.on('POST /me/deletion', () => waiting([]))
+      await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).not.toHaveTextContent('Tilcerovi')
+      })
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Zahrada: hand billing over, or cancel the subscription, first.',
+      )
+      // A refusal that no longer names the household says nothing against the one that did,
+      // nor do its members, read again after this one as after the first.
+      expect(await row.findByText(uncounted)).toBeInTheDocument()
+      expect(box).toBeInTheDocument()
+      expect(box).toBeChecked()
+      expect(row.getByText(/^You are its only owner, and other people are members\./)).toBeVisible()
+      expect(row.queryByText(/^Your membership ends\./)).not.toBeInTheDocument()
 
       server.on('POST /me/deletion', () => Response.json(scheduled, { status: 202 }))
       await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
