@@ -460,11 +460,12 @@ func TestAnOwnersExportOfTheHouseholdMatchesItsManifest(t *testing.T) {
 		!strings.Contains(log, "Petr,admin,member.join,") {
 		t.Errorf("the activity log reads:\n%s", log)
 	}
-	// Jana is told it is ready, with a link to where it is listed and never to the archive.
+	// Jana is told it is ready, with a link to where it is listed, in the household's settings, and
+	// never to the archive.
 	mail := p.outbox.To(p.a("jana@tilcerovi.cz"))
 	last := mail[len(mail)-1]
 	if !strings.Contains(last.Subject, "export is ready") || !strings.Contains(last.Body, "of Tilcerovi") ||
-		!strings.Contains(last.Body, "/households/"+h.ID.String()+"/exports") || strings.Contains(last.Body, "X-Amz") {
+		!strings.Contains(last.Body, apptest.WebURL+"/households/"+h.ID.String()+"/settings/exports") || strings.Contains(last.Body, "X-Amz") {
 		t.Errorf("the email reads %q: %s", last.Subject, last.Body)
 	}
 
@@ -558,6 +559,11 @@ func TestExportsAreHeldToFiveADay(t *testing.T) {
 			t.Fatalf("export %d is %q once the worker ran", i, got.Status)
 		}
 		p.clock.advance(time.Hour)
+	}
+	// Each is told of with a link to the privacy centre, where the account's own exports are listed.
+	mail := p.outbox.To(p.a("jana@tilcerovi.cz"))
+	if last := mail[len(mail)-1]; !strings.Contains(last.Subject, "export is ready") || !strings.Contains(last.Body, apptest.WebURL+"/account/privacy") {
+		t.Errorf("the email reads %q: %s", last.Subject, last.Body)
 	}
 	rec := jana.post("/me/exports", "")
 	expect(t, rec, http.StatusTooManyRequests, problem.CodeRateLimited)

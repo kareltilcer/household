@@ -880,6 +880,11 @@ func TestTakingOverBilling(t *testing.T) {
 	if n := has(s.subjects(s.a("eva@example")), "offered you billing"); n != 1 {
 		t.Fatalf("%d offers emailed, want 1", n)
 	}
+	// Its link opens the take-over screen, in the household's settings beside billing's own.
+	offers := s.outbox.To(s.a("eva@example"))
+	if body := offers[len(offers)-1].Body; !strings.Contains(body, apptest.WebURL+"/households/"+h.ID.String()+"/settings/billing/takeover") {
+		t.Fatalf("the offer's email links elsewhere: %s", body)
+	}
 	if sub := eva.subscription(h.ID); sub.Transfer == nil || sub.Transfer.OfferedTo.UserID != evaID || sub.Transfer.OfferedBy.Label != "Jana" {
 		t.Fatalf("the offer: %+v", sub.Transfer)
 	}
