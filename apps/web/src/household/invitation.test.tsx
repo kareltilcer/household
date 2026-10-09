@@ -455,8 +455,9 @@ describe('the read of an invitation', () => {
     expect(JSON.stringify(kept)).not.toContain(token)
 
     page.unmount()
+    // Whatever arrival it was filed under: no read of an invitation is left.
     await waitFor(() => {
-      expect(cache.getQueryCache().find({ queryKey: ['invitation', token] })).toBeUndefined()
+      expect(cache.getQueryCache().findAll({ queryKey: ['invitation'] })).toEqual([])
     })
   })
 
