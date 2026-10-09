@@ -19,7 +19,7 @@ import type { BaseId } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
-import { readState } from '../account/common.ts'
+import { readState, useData } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
@@ -62,7 +62,10 @@ function Row({
 }) {
   const t = useTranslate()
   const format = useFormat()
+  const asWritten = useData()
   const issued = format.day(invoice.issued_on)
+  // The processor's own number for it, which is data and no word, as is what it wrote of a line.
+  const number = invoice.number === null ? null : asWritten(invoice.number)
   // How it stands and what a line is, in words: the contract's own names are drawn nowhere.
   const stands = (status: Status): string => {
     switch (status) {
@@ -95,9 +98,9 @@ function Row({
     <li className={styles.invoice}>
       <div className={styles.about}>
         <span className={account.strong}>
-          {invoice.number === null
+          {number === null
             ? t('billing.invoices.unnumbered', { day: issued })
-            : t('billing.invoices.numbered', { number: invoice.number })}
+            : t('billing.invoices.numbered', { number })}
         </span>
         <p className={styles.status}>
           <span className={styles.statusGlyph} data-tone={mark.tone}>
@@ -118,7 +121,7 @@ function Row({
             <li key={index} className={styles.line}>
               <span className={styles.lineAbout}>
                 <span>{kind(line.kind)}</span>
-                <span className={account.note}>{line.description}</span>
+                <span className={account.note}>{asWritten(line.description)}</span>
               </span>
               <MoneyValue amount={line.amount} />
             </li>
@@ -139,9 +142,9 @@ function Row({
       <div className={account.actions}>
         <RowAction
           name={
-            invoice.number === null
+            number === null
               ? t('billing.invoices.download.named_day', { day: issued })
-              : t('billing.invoices.download.named', { number: invoice.number })
+              : t('billing.invoices.download.named', { number })
           }
           word={t('billing.invoices.download.word')}
           loading={downloading}

@@ -723,6 +723,26 @@ describe('the invoices', () => {
     ).toBeInTheDocument()
   })
 
+  it('draws what the processor wrote of an invoice as data, which the pseudo-locale tells from a word', async () => {
+    // The pseudo-locale's pass takes a run of plain letters for a word nobody translated: a
+    // number and a line's description are the processor's, and are accented as data is.
+    window.localStorage.setItem('household.locale', 'en-XA')
+    const server = createServer()
+    server.invoices = [invoice()]
+    open(address, server)
+    // The invoice's row, found by its number's figures, which are as they were written.
+    const row = await waitFor(() => {
+      const drawn = [...document.querySelectorAll('main li')].find((each) =>
+        each.textContent.includes('-0042'),
+      )
+      if (drawn === undefined) throw new Error('no invoice is drawn yet')
+      return drawn
+    })
+    expect(row.textContent).not.toContain('Household, 1 rok')
+    expect(row.textContent).not.toContain('HH-0042')
+    expect(row.textContent).not.toMatch(/[A-Za-z]{4,}/)
+  })
+
   it('reads one invoice when its file is asked for, and leaves for the processor’s link', async () => {
     const server = createServer()
     server.invoices = [invoice()]
