@@ -8,7 +8,9 @@
 //
 // - a household the member is the only member of goes with the account, unasked;
 // - one they are the only owner of, with other people in it, blocks until someone else is an
-//   owner or they choose to delete it with the account;
+//   owner or they choose to delete it with the account, whoever the others are: whether any of
+//   them could be made an owner is the screen's to read, so that it sends nobody to a list of
+//   child profiles for one;
 // - one they pay for blocks while it goes on without them; where it goes with the account it
 //   blocks only while its subscription will charge again, which nothing here can read, so that
 //   is said as a condition and left to the server to refuse;
@@ -34,12 +36,16 @@ export type Standing =
   /**
    * The member is its only owner, and other people are in it. `uncounted` is whether its members
    * name another owner all the same, where it is the server that said so: one it did not count.
+   * `successor` is whether any of them could own it, which is read off their role and not off
+   * their being a member: a child profile never is an owner (PRD 02 §4), so among child profiles
+   * alone nobody could.
    */
   | {
       readonly kind: 'sole'
       readonly household: HouseholdSummary
       readonly payer: boolean
       readonly uncounted: boolean
+      readonly successor: boolean
     }
   /** It has another owner, and the member pays for it: billing is settled first. */
   | { readonly kind: 'payer'; readonly household: HouseholdSummary }
@@ -82,7 +88,12 @@ export function standingOf(
   // Another owner the members name where the server named the household as this member's alone
   // is one it did not count.
   const uncounted = others.some((member) => member.role === 'owner')
-  if (named || !uncounted) return { kind: 'sole', household, payer, uncounted }
+  if (named || !uncounted) {
+    // Who could own it is an adult, a member or the owner the server did not count, who is its
+    // owner still if they come back: never a child profile.
+    const successor = others.some((member) => member.role === 'member' || member.role === 'owner')
+    return { kind: 'sole', household, payer, uncounted, successor }
+  }
   return payer ? { kind: 'payer', household } : { kind: 'leaves', household }
 }
 

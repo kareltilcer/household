@@ -21,6 +21,7 @@ const title = 'Delete your account'
 
 const petr = '0190a000-0000-7000-8000-000000000002'
 const adam = '0190a000-0000-7000-8000-000000000003'
+const klara = '0190a000-0000-7000-8000-000000000004'
 
 function member(
   user: string,
@@ -85,9 +86,44 @@ describe('where a member stands in a household', () => {
       member(petr, 'member'),
       member(adam, 'child'),
     ])
-    expect(standing).toMatchObject({ kind: 'sole', payer: true })
+    expect(standing).toMatchObject({ kind: 'sole', payer: true, successor: true })
     expect(blocks(standing, new Set())).toBe(true)
     expect(blocks(standing, new Set([tilcerovi.id]))).toBe(false)
+  })
+
+  it('is that nobody there could be made an owner, for its only owner among child profiles', () => {
+    // Who could own is read off their role, and not off their being a member: a child profile
+    // is never made an owner (PRD 02 §4).
+    const standing = standingOf(tilcerovi, me, [
+      member(me, 'owner'),
+      member(adam, 'child'),
+      member(klara, 'child'),
+    ])
+    expect(standing).toMatchObject({ kind: 'sole', payer: false, successor: false })
+    // The server holds it as it does any household with one owner, until its box is ticked.
+    expect(blocks(standing, new Set())).toBe(true)
+    expect(blocks(standing, new Set([tilcerovi.id]))).toBe(false)
+    // One adult among them is somebody who could.
+    expect(
+      standingOf(tilcerovi, me, [
+        member(me, 'owner'),
+        member(adam, 'child'),
+        member(petr, 'member'),
+      ]),
+    ).toMatchObject({ kind: 'sole', successor: true })
+    // Named by the server as theirs alone, it is read the same way: an owner it did not count is
+    // an adult, and its owner still if they come back; child profiles alone give none.
+    expect(
+      standingOf(
+        tilcerovi,
+        me,
+        [member(me, 'owner'), member(petr, 'owner'), member(adam, 'child')],
+        true,
+      ),
+    ).toMatchObject({ kind: 'sole', uncounted: true, successor: true })
+    expect(
+      standingOf(tilcerovi, me, [member(me, 'owner'), member(adam, 'child')], true),
+    ).toMatchObject({ kind: 'sole', uncounted: false, successor: false })
   })
 
   it('is that billing is settled first, for a payer whose household goes on', () => {
@@ -243,6 +279,43 @@ describe('deleting an account', () => {
     expect(kept.get('token')).toBe('the-token')
     expect(kept.get('at')).toBe('2026-11-07T07:30:00Z')
     expect(router.state.location.hash.startsWith('#token=')).toBe(true)
+  })
+
+  it('sends the only owner among child profiles to invite an owner, and offers the box all the same', async () => {
+    const server = createServer()
+    withHouseholds(server, [tilcerovi], {
+      [tilcerovi.id]: [member(jana.id, 'owner'), member(adam, 'child'), member(klara, 'child')],
+    })
+    server.on('POST /me/deletion', () => Response.json(scheduled, { status: 202 }))
+    const { user, router } = await deleting(server)
+    const row = await situation('Tilcerovi')
+    expect(
+      row.getByText(
+        'You are its only owner, and nobody else in it can be made one: a child profile can’t be an owner. Somebody else has to be an owner before you can go, or nobody could invite, remove or change what anyone sees. Invite somebody as an owner, or tick the box and it is deleted with your account.',
+      ),
+    ).toBeInTheDocument()
+    // Nobody among its members could be made an owner, and the member is not sent to them.
+    expect(row.queryByText(/Make someone an owner/)).not.toBeInTheDocument()
+    // The server holds it as it does any household with one owner: no button until its box is
+    // ticked, which is the way on that needs nobody else.
+    expect(screen.queryByRole('button', { name: /^Schedule deletion/ })).not.toBeInTheDocument()
+    expect(screen.getByText(/^Deletion waits for what is said above/)).toBeInTheDocument()
+
+    await user.click(row.getByRole('checkbox', { name: 'Delete Tilcerovi with my account' }))
+    expect(
+      row.getByText(
+        /^It is scheduled for deletion with your account, and its members are told now\./,
+      ),
+    ).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Password'), 'the password')
+    await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/account/deletion/cancel')
+    })
+    expect(await server.body('POST /me/deletion')).toEqual({
+      password_or_confirmation: 'the password',
+      delete_sole_owned_households: [tilcerovi.id],
+    })
   })
 
   it('asks who is signed in once it is scheduled, and not before the next page is open', async () => {

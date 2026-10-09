@@ -98,6 +98,7 @@
   "account.delete.renews": "Platíte její předplatné. Pokud se má předplatné ještě obnovit, nejdřív ho zrušte: do té doby bude smazání odmítnuto.",
   "account.delete.schedule": "Naplánovat smazání na {date}",
   "account.delete.sole.body": "Jste jejím jediným vlastníkem a jsou v ní další členové. Než odejdete, musí být vlastníkem někdo další, jinak by nikdo nemohl zvát, odebírat ani měnit, co kdo vidí. Udělejte z někoho vlastníka v seznamu členů domácnosti, nebo zaškrtněte políčko a domácnost se smaže s vaším účtem.",
+  "account.delete.sole.children": "Jste jejím jediným vlastníkem a nikoho dalšího v ní vlastníkem udělat nelze: dětský profil vlastníkem být nemůže. Než odejdete, musí být vlastníkem někdo další, jinak by nikdo nemohl zvát, odebírat ani měnit, co kdo vidí. Pozvěte někoho jako vlastníka, nebo zaškrtněte políčko a domácnost se smaže s vaším účtem.",
   "account.delete.sole.choose": "Smazat domácnost {household} s mým účtem",
   "account.delete.sole.chosen": "Její smazání se naplánuje spolu s vaším účtem a její členové se to dozvědí hned. Zrušením smazání účtu zrušíte i smazání domácnosti.",
   "account.delete.sole.payer": "Platíte také její předplatné: až bude vlastníkem někdo další, předejte mu placení, nebo předplatné zrušte.",
