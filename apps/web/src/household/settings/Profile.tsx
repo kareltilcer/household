@@ -39,6 +39,7 @@ import styles from '../../account/Settings.module.css'
 import { inHousehold, paths } from '../../app/paths.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { dayName, ownName } from '../../i18n/names.ts'
+import { DeletionNotice } from '../../privacy/DeletionNotice.tsx'
 import { Banner } from '../../ui/Banner.tsx'
 import { Button } from '../../ui/Button.tsx'
 import { KeyValue } from '../../ui/KeyValue.tsx'
@@ -95,6 +96,9 @@ export function Profile() {
           {said.text}
         </Banner>
       )}
+      {/* A deletion that is scheduled is said on the screen every member opens first (D-138),
+          with the control that keeps the household for an owner. */}
+      <DeletionNotice after={view} />
       {/* Where the focus goes when the controls that held it have left (profile.ts). */}
       <div ref={view} tabIndex={-1} className={styles.view}>
         <Section title={t('household.profile.household.title')}>
